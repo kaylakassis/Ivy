@@ -1,0 +1,265 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>THRYVE — Business OS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;450;500;550;600;700&family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="src/icons.jsx"></script>
+<script type="text/babel" src="src/data.jsx"></script>
+<script type="text/babel" src="frames/ios-frame.jsx"></script>
+<script type="text/babel" src="src/shell.jsx"></script>
+<script type="text/babel" src="src/dashboard.jsx"></script>
+<script type="text/babel" src="src/screens.jsx"></script>
+<script type="text/babel" src="src/calendar.jsx"></script>
+<script type="text/babel" src="src/messages.jsx"></script>
+<script type="text/babel" src="src/documents.jsx"></script>
+<script type="text/babel" src="src/mobile.jsx"></script>
+<script type="text/babel" src="src/paywall.jsx"></script>
+<script type="text/babel" src="src/rewards.jsx"></script>
+<script type="text/babel" src="src/finance.jsx"></script>
+<script type="text/babel" src="src/invoices.jsx"></script>
+<script type="text/babel" src="src/goals.jsx"></script>
+<script type="text/babel" src="src/clients.jsx"></script>
+<script type="text/babel" src="src/ivy-pro.jsx"></script>
+<script type="text/babel" src="src/client-view.jsx"></script>
+
+<script type="text/babel">
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "direction": "bold",
+  "layout": "desktop",
+  "view": "business",
+  "trialState": "paid"
+}/*EDITMODE-END*/;
+
+function loadTweaks() {
+  try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('thryve:tweaks') || '{}') }; }
+  catch { return TWEAK_DEFAULTS; }
+}
+
+function App() {
+  // Public booking page route (?book=slug)
+  if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('book')) {
+    const tweaks = (()=>{ try { return JSON.parse(localStorage.getItem('thryve:tweaks')||'{}'); } catch { return {}; } })();
+    const dir = tweaks.direction || 'bold';
+    return <div className={`app-root dir-${dir}`}><PublicBookingPage /></div>;
+  }
+
+  const [tweaks, setTweaks] = React.useState(loadTweaks);
+  const [current, setCurrent] = React.useState(() => localStorage.getItem('thryve:nav') || 'dashboard');
+  const [ivyOpen, setIvyOpen] = React.useState(false);
+  const [editMode, setEditMode] = React.useState(false);
+
+  React.useEffect(() => {
+    localStorage.setItem('thryve:tweaks', JSON.stringify(tweaks));
+  }, [tweaks]);
+  React.useEffect(() => {
+    localStorage.setItem('thryve:nav', current);
+  }, [current]);
+
+  // Edit mode wiring
+  React.useEffect(() => {
+    const onMsg = (e) => {
+      const d = e.data || {};
+      if (d.type === '__activate_edit_mode') setEditMode(true);
+      if (d.type === '__deactivate_edit_mode') setEditMode(false);
+    };
+    window.addEventListener('message', onMsg);
+    window.parent.postMessage({ type: '__edit_mode_available' }, '*');
+    return () => window.removeEventListener('message', onMsg);
+  }, []);
+
+  const setKey = (k, v) => {
+    const next = { ...tweaks, [k]: v };
+    setTweaks(next);
+    window.parent.postMessage({ type: '__edit_mode_set_keys', edits: { [k]: v } }, '*');
+  };
+
+  const { direction, layout, view, trialState } = tweaks;
+  const [paywallOpen, setPaywallOpen] = React.useState(false);
+  const trial = window.computeTrial ? window.computeTrial(trialState) : { paid: true, expired: false };
+
+  // Auto-open paywall once when trial is expired (Business view only)
+  React.useEffect(() => {
+    if (view === 'business' && trial.expired && !trial.paid) setPaywallOpen(true);
+    else if (!trial.expired) setPaywallOpen(false);
+  }, [view, trialState]);
+  const titles = {
+    dashboard: { title: 'Dashboard', subtitle: 'Home' },
+    clients:   { title: 'Clients',   subtitle: 'Your people' },
+    calendar:  { title: 'Calendar',  subtitle: 'This week' },
+    finance:   { title: 'Finance',   subtitle: 'Money in, money out' },
+    goals:     { title: 'Goals & Tasks', subtitle: 'Stay on track' },
+    rewards:   { title: 'Rewards',   subtitle: 'Loyalty & referrals' },
+    comms:     { title: 'Messages',  subtitle: 'Inbox' },
+    docs:      { title: 'Documents', subtitle: 'Notes & files' },
+    website:   { title: 'Website',   subtitle: 'Public presence' },
+    ivy:       { title: 'Ivy Pro',   subtitle: 'Your AI coach' },
+  };
+
+  const renderScreen = () => {
+    switch (current) {
+      case 'dashboard': return <Dashboard direction={direction} />;
+      case 'clients':   return <ClientsView />;
+      case 'calendar':  return <CalendarView />;
+      case 'finance':   return <FinanceView direction={direction} />;
+      case 'goals':     return <GoalsView />;
+      case 'rewards':   return <RewardsView direction={direction} />;
+      case 'comms':     return <BusinessMessagesView direction={direction} />;
+      case 'docs':      return <DocumentsView direction={direction} />;
+      case 'website':   return <StubView icon="Globe" title="Your public website" hint="A clean profile page your clients can bookmark."/>;
+      case 'ivy':       return <IvyProView direction={direction}/>;
+      default:          return <Dashboard direction={direction} />;
+    }
+  };
+
+  const t = titles[current] || titles.dashboard;
+
+  if (layout === 'mobile') {
+    return (
+      <div className={`app-root dir-${direction}`} style={{
+        minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: '40px 20px', background: direction === 'bold' ? '#0A0B09' : '#ECEAE3',
+        gap: 32, flexWrap: 'wrap',
+      }}>
+        <IOSDevice width={402} height={874} dark={direction === 'bold'}>
+          <div className={`dir-${direction}`} style={{ height: '100%', position: 'relative' }}>
+            <MobileDashboard direction={direction} />
+          </div>
+        </IOSDevice>
+        {editMode && <TweaksPanel tweaks={tweaks} setKey={setKey} />}
+      </div>
+    );
+  }
+
+  // --- CLIENT VIEW ---
+  if (view === 'client') {
+    return (
+      <div className={`app-root dir-${direction}`}>
+        <ClientApp direction={direction} />
+        <ViewSwitcher view={view} setView={(v)=>setKey('view',v)} direction={direction} />
+        <SigningPortal />
+        {editMode && <TweaksPanel tweaks={tweaks} setKey={setKey} />}
+      </div>
+    );
+  }
+
+  // --- BUSINESS VIEW ---
+  const locked = trial.expired && !trial.paid;
+  return (
+    <div className={`app-root dir-${direction}`}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', minHeight: '100vh' }}>
+        <Sidebar current={current} onNav={setCurrent} direction={direction} />
+        <main style={{ flex: 1, minWidth: 0, minHeight: '100vh' }}>
+          <TrialBanner trialState={trialState} onUpgrade={() => setPaywallOpen(true)} />
+          <Topbar title={t.title} subtitle={t.subtitle} direction={direction} />
+          <div style={{ position: 'relative' }}>
+            {renderScreen()}
+            {locked && (
+              <div style={{
+                position: 'absolute', inset: 0, background: 'var(--page)',
+                opacity: 0.65, pointerEvents: 'none', zIndex: 5,
+              }}/>
+            )}
+          </div>
+        </main>
+      </div>
+
+      <IvyFab onClick={() => setIvyOpen(true)} direction={direction} />
+      <IvyPanel open={ivyOpen} onClose={() => setIvyOpen(false)} direction={direction} />
+
+      <Paywall open={paywallOpen} expired={trial.expired}
+        onClose={() => setPaywallOpen(false)}
+        onSubscribe={() => {
+          localStorage.setItem('thryve:trial-paid','1');
+          setKey('trialState','paid');
+          setPaywallOpen(false);
+        }}
+      />
+
+      <ViewSwitcher view={view} setView={(v)=>setKey('view',v)} direction={direction} />
+      {editMode && <TweaksPanel tweaks={tweaks} setKey={setKey} />}
+    </div>
+  );
+}
+
+function ViewSwitcher({ view, setView, direction }) {
+  return (
+    <div style={{
+      position: 'fixed', left: '50%', bottom: 18, transform: 'translateX(-50%)',
+      zIndex: 70, display: 'flex', alignItems: 'center', gap: 4,
+      padding: 4, borderRadius: 999,
+      background: 'var(--surface)', border: '1px solid var(--border-strong)',
+      boxShadow: '0 10px 28px -10px rgba(0,0,0,0.25)',
+      fontSize: 12, fontWeight: 550,
+    }}>
+      <span style={{ padding: '0 10px 0 12px', color: 'var(--muted)', fontSize: 11,
+        letterSpacing: '0.08em', textTransform: 'uppercase' }}>View</span>
+      <button onClick={() => setView('business')} style={{
+        padding: '6px 14px', borderRadius: 999,
+        background: view==='business' ? 'var(--fg)' : 'transparent',
+        color:      view==='business' ? 'var(--page)' : 'var(--fg-2)',
+      }}>Business</button>
+      <button onClick={() => setView('client')} style={{
+        padding: '6px 14px', borderRadius: 999,
+        background: view==='client' ? 'var(--fg)' : 'transparent',
+        color:      view==='client' ? 'var(--page)' : 'var(--fg-2)',
+      }}>Client</button>
+    </div>
+  );
+}
+
+function TweaksPanel({ tweaks, setKey }) {
+  return (
+    <div className="tweaks-panel">
+      <h4>Tweaks</h4>
+      <div className="tweak-row">
+        <label>Visual direction</label>
+        <div className="seg">
+          <button className={tweaks.direction==='calm'?'on':''} onClick={()=>setKey('direction','calm')}>Calm</button>
+          <button className={tweaks.direction==='bold'?'on':''} onClick={()=>setKey('direction','bold')}>Bold</button>
+        </div>
+      </div>
+      <div className="tweak-row">
+        <label>Layout</label>
+        <div className="seg">
+          <button className={tweaks.layout==='desktop'?'on':''} onClick={()=>setKey('layout','desktop')}>Desktop</button>
+          <button className={tweaks.layout==='mobile'?'on':''} onClick={()=>setKey('layout','mobile')}>Mobile</button>
+        </div>
+      </div>
+      <div className="tweak-row">
+        <label>View</label>
+        <div className="seg">
+          <button className={tweaks.view==='business'?'on':''} onClick={()=>setKey('view','business')}>Business</button>
+          <button className={tweaks.view==='client'?'on':''} onClick={()=>setKey('view','client')}>Client</button>
+        </div>
+      </div>
+      <div className="tweak-row">
+        <label>Trial state (business)</label>
+        <div className="seg">
+          <button className={tweaks.trialState==='fresh'?'on':''} onClick={()=>setKey('trialState','fresh')}>Day 1</button>
+          <button className={tweaks.trialState==='warning'?'on':''} onClick={()=>setKey('trialState','warning')}>Day 25</button>
+          <button className={tweaks.trialState==='expired'?'on':''} onClick={()=>setKey('trialState','expired')}>Expired</button>
+          <button className={tweaks.trialState==='paid'?'on':''} onClick={()=>setKey('trialState','paid')}>Paid</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>
