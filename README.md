@@ -1,25 +1,108 @@
-# CODING AGENTS: READ THIS FIRST
+# THRYVE — Business OS
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+All-in-one business OS for solo owners and small teams. Vite + React frontend, Vercel serverless backend, Vercel Postgres for persistence.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+## Stack
 
-## What you should do — IMPORTANT
+- **Frontend:** Vite + React 18 + React Router 6
+- **Styling:** CSS custom properties (two visual directions — Calm / Bold), Inter + Fraunces + Space Grotesk
+- **Backend:** Vercel serverless functions (`/api/**/*.js`)
+- **Database:** Neon serverless Postgres (`@neondatabase/serverless`)
+- **Deployment:** Vercel (framework preset: Vite)
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+## Project layout
 
-**Read `project/THRYVE Business OS.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+```
+.
+├── index.html                    # Vite entry
+├── package.json
+├── vite.config.js
+├── vercel.json                   # Vercel framework config + SPA rewrites
+├── .env.example
+├── api/                          # Vercel serverless functions → deployed at /api/*
+│   ├── health.js                 # GET /api/health
+│   └── _lib/
+│       ├── db.js                 # Vercel Postgres client
+│       └── json.js               # response helpers
+├── src/
+│   ├── main.jsx                  # React entry — mounts <App />
+│   ├── App.jsx                   # Route definitions
+│   ├── styles/
+│   │   ├── tokens.css            # design tokens (dir-calm / dir-bold)
+│   │   └── global.css            # base styles, primitives (.btn, .card, .chip, .nav-item)
+│   ├── components/
+│   │   ├── Icons.jsx             # stroke-based icon set
+│   │   ├── EmptyNote.jsx
+│   │   └── layout/
+│   │       ├── AppShell.jsx      # <Sidebar /> + <Topbar /> + <Outlet />
+│   │       ├── Sidebar.jsx
+│   │       └── Topbar.jsx
+│   ├── lib/
+│   │   ├── api.js                # fetch wrapper against /api
+│   │   ├── nav.js                # nav items + page titles
+│   │   └── tweaks.js             # visual direction (localStorage-backed)
+│   └── features/                 # one folder per top-level feature
+│       ├── dashboard/
+│       ├── clients/
+│       ├── calendar/             # + PublicBooking.jsx (route /book/:slug)
+│       ├── finance/
+│       ├── goals/
+│       ├── rewards/
+│       ├── messages/
+│       ├── documents/
+│       ├── website/              # + PublicSite.jsx (route /site/:handle)
+│       └── ivy/
+├── project/                      # original HTML/Babel prototype (reference only)
+│   ├── THRYVE Business OS.html
+│   └── src/                      # feature source used by the prototype
+└── chats/                        # design chat transcripts
+```
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+## Getting started
 
-## About the design files
+```bash
+npm install
+cp .env.example .env            # then fill in JWT_SECRET + ADMIN_SECRET
+npm run dev
+```
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+App runs on http://localhost:5173. For the API routes, you'll need `vercel dev` (or deploy
+to Vercel) — plain `vite dev` serves only the frontend.
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+## Deploying to Vercel
 
-## Bundle contents
+1. Push this repo to GitHub.
+2. In Vercel → Add New Project → import the GitHub repo. Framework preset: **Vite**.
+3. In the project's **Storage** tab, add a **Neon** database (this is the native
+   Vercel Postgres replacement). Vercel will auto-inject `DATABASE_URL`.
+4. Add the rest of the env vars from `.env.example` (`JWT_SECRET`, `ADMIN_SECRET`).
+5. Deploy. `/api/**` files are deployed as serverless functions automatically.
+6. **Run the one-time migration** to create tables:
+   ```bash
+   curl -X POST https://<your-app>.vercel.app/api/admin/migrate \
+     -H "x-admin-secret: $ADMIN_SECRET"
+   ```
+   → responds with `{ "applied": N }` once tables are created.
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `THRYVE` project files (HTML prototypes, assets, components)
+## Auth + data model
+
+- `users`      — email + bcrypt password hash + name
+- `workspaces` — 1 per user (ownership)
+- `websites`   — 1 per workspace; `{ handle, business_name, template, sections (jsonb), launched, published_at }`
+
+Session is a JWT in an httpOnly cookie (`thryve_session`, 30-day expiry). Routes under
+`/api/auth/*` handle signup/login/logout/me. All other `/api/*` routes call `requireUser()`
+to authenticate, except `/api/website/public/:handle` which serves published sites.
+
+## Current status
+
+- ✅ Project scaffold (routing, shell, design tokens, icons, API skeleton)
+- ✅ Auth (Postgres users + workspaces, JWT cookie, signup/signin/signout)
+- ✅ Website builder: editor UI + API persistence + public read route
+- ⏳ Port remaining features from `project/` (Clients, Calendar, Finance, Goals, Rewards, Messages, Documents, Ivy)
+- ⏳ Website builder polish (drag-and-drop, image uploads via Vercel Blob, custom colors)
+- ⏳ Calendar API (unblocks live Booking block on the website)
+
+## Reference: the prototype
+
+`project/THRYVE Business OS.html` is the original design prototype (React + Babel in-browser). Every feature was designed and iterated there — treat it as the source of truth for visuals and UX. The feature stubs in `src/features/*` will be fleshed out to match, then wired to the Postgres-backed API.
