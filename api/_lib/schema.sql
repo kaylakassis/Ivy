@@ -32,3 +32,12 @@ CREATE TABLE IF NOT EXISTS websites (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_websites_handle ON websites(handle);
+
+-- Sliding-window rate limiter: each (key, time) row is one attempt.
+-- "key" is shaped like "login:ip:1.2.3.4" or "signup:email:foo@bar.com".
+CREATE TABLE IF NOT EXISTS rate_limits (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  key TEXT NOT NULL,
+  attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_rate_limits_key_time ON rate_limits(key, attempted_at DESC);
