@@ -41,3 +41,19 @@ CREATE TABLE IF NOT EXISTS rate_limits (
   attempted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_rate_limits_key_time ON rate_limits(key, attempted_at DESC);
+
+-- Email verification + password reset tokens. We store only a hash, never the
+-- raw token, so a DB leak alone can't be used to compromise accounts.
+CREATE TABLE IF NOT EXISTS auth_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,                  -- 'verify_email' | 'reset_password'
+  token_hash TEXT NOT NULL UNIQUE,     -- sha256 of the raw token
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
+
+-- Email verification flag on users. NULL = unverified.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;

@@ -79,6 +79,13 @@ export default function AuthPage({ mode = 'signin' }) {
             value={password} onChange={(e) => setPassword(e.target.value)}
             autoComplete={isSignUp ? 'new-password' : 'current-password'} style={inputS} />
         </Field>
+        {!isSignUp && (
+          <div style={{ marginTop: -10, textAlign: 'right' }}>
+            <Link to="/forgot-password" style={{ fontSize: 12, color: 'var(--muted)' }}>
+              Forgot your password?
+            </Link>
+          </div>
+        )}
 
         {err && (
           <div style={{

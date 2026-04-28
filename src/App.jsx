@@ -3,6 +3,8 @@ import { Routes, Route } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
 import RequireAuth from './features/auth/RequireAuth.jsx';
 import AuthPage from './features/auth/AuthPage.jsx';
+import ForgotPasswordPage from './features/auth/ForgotPasswordPage.jsx';
+import ResetPasswordPage from './features/auth/ResetPasswordPage.jsx';
 import Dashboard from './features/dashboard/Dashboard.jsx';
 import Clients from './features/clients/Clients.jsx';
 import Calendar from './features/calendar/Calendar.jsx';
@@ -20,8 +22,10 @@ export default function App() {
   return (
     <Routes>
       {/* Auth */}
-      <Route path="/signin" element={<AuthPage mode="signin" />} />
-      <Route path="/signup" element={<AuthPage mode="signup" />} />
+      <Route path="/signin"          element={<AuthPage mode="signin" />} />
+      <Route path="/signup"          element={<AuthPage mode="signup" />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password"  element={<ResetPasswordPage />} />
 
       {/* Public */}
       <Route path="/book/:slug"   element={<PublicBooking />} />
