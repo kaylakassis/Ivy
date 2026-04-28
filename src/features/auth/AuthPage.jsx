@@ -80,8 +80,8 @@ export default function AuthPage({ mode = 'signin' }) {
             autoComplete={isSignUp ? 'new-password' : 'current-password'} style={inputS} />
         </Field>
         {!isSignUp && (
-          <div style={{ marginTop: -10, textAlign: 'right' }}>
-            <Link to="/forgot-password" style={{ fontSize: 12, color: 'var(--muted)' }}>
+          <div style={{ marginTop: -8, textAlign: 'right' }}>
+            <Link to="/forgot-password" style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}>
               Forgot your password?
             </Link>
           </div>
