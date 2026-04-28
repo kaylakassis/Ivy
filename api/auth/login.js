@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     if (blocked) return;
 
     const { rows } = await sql`
-      SELECT id, email, name, password_hash, created_at
+      SELECT id, email, name, password_hash, created_at, email_verified_at
       FROM users WHERE email = ${emailKey}
     `;
     if (rows.length === 0) return unauthorized(res, 'Invalid email or password');

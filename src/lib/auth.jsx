@@ -34,8 +34,20 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  // Refresh the user (e.g. after email verification) so UI flips immediately.
+  const refresh = useCallback(async () => {
+    try {
+      const r = await api.get('/auth/me');
+      setUser(r.user);
+      return r.user;
+    } catch {
+      setUser(null);
+      return null;
+    }
+  }, []);
+
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut }}>
+    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut, refresh }}>
       {children}
     </Ctx.Provider>
   );

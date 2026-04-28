@@ -2,6 +2,7 @@ import React from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
+import VerifyEmailBanner from '../VerifyEmailBanner.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 
@@ -20,6 +21,7 @@ export default function AppShell() {
           display: 'flex', flexDirection: 'column',
           minHeight: '100vh',
         }}>
+          <VerifyEmailBanner />
           <Topbar title={t.title} subtitle={t.subtitle} />
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
             <Outlet />

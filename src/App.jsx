@@ -5,6 +5,7 @@ import RequireAuth from './features/auth/RequireAuth.jsx';
 import AuthPage from './features/auth/AuthPage.jsx';
 import ForgotPasswordPage from './features/auth/ForgotPasswordPage.jsx';
 import ResetPasswordPage from './features/auth/ResetPasswordPage.jsx';
+import VerifyEmailPage from './features/auth/VerifyEmailPage.jsx';
 import Dashboard from './features/dashboard/Dashboard.jsx';
 import Clients from './features/clients/Clients.jsx';
 import Calendar from './features/calendar/Calendar.jsx';
@@ -26,6 +27,7 @@ export default function App() {
       <Route path="/signup"          element={<AuthPage mode="signup" />} />
       <Route path="/forgot-password" element={<ForgotPasswordPage />} />
       <Route path="/reset-password"  element={<ResetPasswordPage />} />
+      <Route path="/verify-email"    element={<VerifyEmailPage />} />
 
       {/* Public */}
       <Route path="/book/:slug"   element={<PublicBooking />} />
