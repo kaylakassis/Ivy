@@ -57,3 +57,21 @@ CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
 
 -- Email verification flag on users. NULL = unverified.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+
+-- Clients (CRM): leads / actives / paused, with LTV, tags, notes.
+CREATE TABLE IF NOT EXISTS clients (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  email TEXT,
+  stage TEXT NOT NULL DEFAULT 'lead' CHECK (stage IN ('lead', 'active', 'paused')),
+  tags TEXT[] NOT NULL DEFAULT '{}'::text[],
+  notes TEXT,
+  lifetime_value NUMERIC(12,2) NOT NULL DEFAULT 0,
+  source TEXT,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_seen_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_clients_workspace_stage ON clients(workspace_id, stage);
