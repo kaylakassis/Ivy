@@ -261,4 +261,36 @@ CREATE TABLE IF NOT EXISTS goals (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_goals_workspace ON goals(workspace_id, deadline);
+
+-- Rewards: per-workspace launched flag, rules, and redemptions log.
+CREATE TABLE IF NOT EXISTS reward_settings (
+  workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  launched_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS reward_rules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  type TEXT NOT NULL CHECK (type IN ('visit', 'spend', 'referral', 'custom')),
+  name TEXT NOT NULL,
+  trigger_text TEXT,
+  reward_text TEXT,
+  threshold NUMERIC(12,2) NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_reward_rules_workspace ON reward_rules(workspace_id, active);
+
+CREATE TABLE IF NOT EXISTS reward_redemptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  rule_id UUID REFERENCES reward_rules(id) ON DELETE SET NULL,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  client_name TEXT,
+  reward_text TEXT,
+  notes TEXT,
+  redeemed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_redemptions_workspace ON reward_redemptions(workspace_id, redeemed_at DESC);
 `;
