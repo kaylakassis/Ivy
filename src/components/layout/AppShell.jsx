@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
@@ -11,6 +11,14 @@ export default function AppShell() {
   const location = useLocation();
   const current = NAV.find(n => n.to === location.pathname) || NAV[0];
   const t = TITLES[current.id] || TITLES.dashboard;
+
+  // Mirror the direction class onto <body> so React portals (dropdowns, modals)
+  // rendered into document.body inherit the same CSS variables we use everywhere.
+  useEffect(() => {
+    document.body.classList.remove('dir-calm', 'dir-bold');
+    document.body.classList.add(`dir-${tweaks.direction}`);
+    return () => document.body.classList.remove(`dir-${tweaks.direction}`);
+  }, [tweaks.direction]);
 
   return (
     <div className={`app-root dir-${tweaks.direction}`}>
