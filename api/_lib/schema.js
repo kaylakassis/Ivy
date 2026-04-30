@@ -166,4 +166,28 @@ CREATE TABLE IF NOT EXISTS messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, created_at);
+
+-- Documents: e-sign workflow. PDF upload + drag-drop field placement land in
+-- later phases; the schema accommodates them now via kind/file_url/page_count.
+CREATE TABLE IF NOT EXISTS documents (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  kind TEXT NOT NULL DEFAULT 'written' CHECK (kind IN ('pdf', 'written')),
+  content_html TEXT,
+  file_url TEXT,
+  page_count INT NOT NULL DEFAULT 1,
+  fields JSONB NOT NULL DEFAULT '[]'::jsonb,
+  recipient_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  recipient_name TEXT,
+  recipient_email TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'completed', 'voided')),
+  sign_token_hash TEXT UNIQUE,
+  sent_at TIMESTAMPTZ,
+  completed_at TIMESTAMPTZ,
+  activity JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id, status);
 `;
