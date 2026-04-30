@@ -5,11 +5,16 @@
 // includes the HTTP status because Vercel runs HTTP/2 which omits the
 // reason-phrase (statusText is empty).
 async function req(method, path, body) {
+  // Only set Content-Type when there's an actual body. Sending json content-type
+  // on a bodiless DELETE/GET makes some serverless routing layers cranky.
+  const headers = {};
+  if (body !== undefined && body !== null) headers['Content-Type'] = 'application/json';
+
   let res;
   try {
     res = await fetch(`/api${path}`, {
       method,
-      headers: { 'Content-Type': 'application/json' },
+      headers,
       credentials: 'include',
       body: body ? JSON.stringify(body) : undefined,
     });
