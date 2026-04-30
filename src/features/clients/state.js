@@ -37,8 +37,11 @@ export function useClients() {
   }, []);
 
   const remove = useCallback(async (id) => {
-    setClients((cs) => cs.filter((c) => c.id !== id));
+    // Wait for the server to confirm BEFORE removing locally — otherwise a
+    // failure leaves the row hidden in the UI but still in the DB, and the
+    // next page load brings it back.
     await api.del('/clients/' + id);
+    setClients((cs) => cs.filter((c) => c.id !== id));
   }, []);
 
   return { clients, loading, error, create, update, remove };

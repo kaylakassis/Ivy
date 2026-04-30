@@ -1,5 +1,6 @@
 // Full Clients view: header + analytics + tabs + search + table + detail drawer + add modal.
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useClients } from './state.js';
@@ -168,7 +169,9 @@ export default function Clients() {
           </div>
         ) : rows.map((c, i) => (
           <ClientRow key={c.id} client={c} first={i === 0}
-            onOpen={() => setOpenId(c.id)} onStage={(st) => setStage(c.id, st)}/>
+            onOpen={() => setOpenId(c.id)}
+            onStage={(st) => setStage(c.id, st)}
+            onDelete={() => remove(c.id)}/>
         ))}
       </div>
 
@@ -185,7 +188,7 @@ export default function Clients() {
   );
 }
 
-function ClientRow({ client, first, onOpen, onStage }) {
+function ClientRow({ client, first, onOpen, onStage, onDelete }) {
   const initials = client.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
   const since    = timeAgo(client.joinedAt);
   const lastSeen = timeAgo(client.lastSeenAt);
@@ -224,49 +227,123 @@ function ClientRow({ client, first, onOpen, onStage }) {
         {client.lifetimeValue > 0 ? '$' + client.lifetimeValue.toLocaleString() : '—'}
       </div>
       <div style={{ textAlign: 'right', color: 'var(--muted)' }} onClick={(e) => e.stopPropagation()}>
-        <RowMenu client={client} onStage={onStage}/>
+        <RowMenu client={client} onStage={onStage} onOpen={onOpen} onDelete={onDelete}/>
       </div>
     </div>
   );
 }
 
-function RowMenu({ client, onStage }) {
-  const [open, setOpen] = useState(false);
-  const ref = React.useRef();
-  React.useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
-    document.addEventListener('click', h);
-    return () => document.removeEventListener('click', h);
-  }, []);
-  const opts = [
+// Renders the menu via React portal so it escapes the table card's overflow:hidden.
+// Position is computed from the trigger button's bounding rect on each open.
+function RowMenu({ client, onStage, onOpen, onDelete }) {
+  const [open, setOpen]   = useState(false);
+  const [pos, setPos]     = useState({ top: 0, left: 0 });
+  const [confirmDel, setConfirmDel] = useState(false);
+  const btnRef = useRef(null);
+  const menuRef = useRef(null);
+
+  const place = () => {
+    if (!btnRef.current) return;
+    const r = btnRef.current.getBoundingClientRect();
+    const menuW = 180;
+    setPos({
+      top:  r.bottom + 4,
+      left: Math.max(8, r.right - menuW),
+    });
+  };
+
+  const toggle = () => {
+    if (!open) { place(); setConfirmDel(false); }
+    setOpen((o) => !o);
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    const onClick = (e) => {
+      if (btnRef.current?.contains(e.target)) return;
+      if (menuRef.current?.contains(e.target)) return;
+      setOpen(false);
+    };
+    const onScroll = () => setOpen(false);
+    document.addEventListener('mousedown', onClick);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', onScroll);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', onScroll);
+    };
+  }, [open]);
+
+  const stageOpts = [
     { stage: 'active', label: 'Mark active' },
     { stage: 'paused', label: 'Mark paused' },
     { stage: 'lead',   label: 'Mark as lead' },
   ].filter((o) => o.stage !== client.stage);
 
   return (
-    <div ref={ref} style={{ position: 'relative', display: 'inline-block' }}>
-      <button onClick={() => setOpen(!open)} className="btn btn-ghost" style={{ padding: 6 }}>
+    <>
+      <button ref={btnRef} onClick={toggle} className="btn btn-ghost" style={{ padding: 6 }}>
         <Icons.More size={14}/>
       </button>
-      {open && (
-        <div style={{
-          position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 10,
+      {open && createPortal(
+        <div ref={menuRef} style={{
+          position: 'fixed', top: pos.top, left: pos.left, zIndex: 200,
           background: 'var(--surface)', border: '1px solid var(--border-strong)',
-          borderRadius: 10, boxShadow: 'var(--shadow)', minWidth: 160, padding: 4,
+          borderRadius: 10, boxShadow: 'var(--shadow)', minWidth: 180, padding: 4,
         }}>
-          {opts.map((o) => (
-            <button key={o.stage} onClick={() => { onStage(o.stage); setOpen(false); }} style={{
-              display: 'block', width: '100%', padding: '8px 12px', border: 0, background: 'transparent',
-              fontSize: 12.5, color: 'var(--fg)', cursor: 'pointer', textAlign: 'left', borderRadius: 6,
-            }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
-            >{o.label}</button>
+          <MenuItem onClick={() => { onOpen(); setOpen(false); }} icon={<Icons.Edit size={13}/>}>
+            Open details
+          </MenuItem>
+          {stageOpts.map((o) => (
+            <MenuItem key={o.stage} onClick={() => { onStage(o.stage); setOpen(false); }}>
+              {o.label}
+            </MenuItem>
           ))}
-        </div>
+          <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}/>
+          {confirmDel ? (
+            <div style={{ padding: '6px 10px' }}>
+              <div style={{ fontSize: 11.5, color: 'var(--danger)', marginBottom: 6 }}>
+                Delete {client.name}? This can't be undone.
+              </div>
+              <div style={{ display: 'flex', gap: 6 }}>
+                <button className="btn btn-ghost" style={{ flex: 1, padding: '5px 8px', fontSize: 12, justifyContent: 'center' }}
+                  onClick={() => setConfirmDel(false)}>
+                  Cancel
+                </button>
+                <button className="btn btn-primary" style={{ flex: 1, padding: '5px 8px', fontSize: 12, justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
+                  onClick={async () => {
+                    try { await onDelete(); } finally { setOpen(false); }
+                  }}>
+                  Delete
+                </button>
+              </div>
+            </div>
+          ) : (
+            <MenuItem danger onClick={() => setConfirmDel(true)} icon={<Icons.Trash size={13}/>}>
+              Delete client
+            </MenuItem>
+          )}
+        </div>,
+        document.body,
       )}
-    </div>
+    </>
+  );
+}
+
+function MenuItem({ children, onClick, icon, danger }) {
+  return (
+    <button onClick={onClick} style={{
+      display: 'flex', alignItems: 'center', gap: 8,
+      width: '100%', padding: '8px 12px', border: 0, background: 'transparent',
+      fontSize: 12.5, color: danger ? 'var(--danger)' : 'var(--fg)',
+      cursor: 'pointer', textAlign: 'left', borderRadius: 6,
+    }}
+      onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+      onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+    >
+      {icon}{children}
+    </button>
   );
 }
 
