@@ -1,0 +1,101 @@
+// Edit weekly availability windows.
+import React, { useState } from 'react';
+import { Icons } from '../../components/Icons.jsx';
+import Drawer, { TimeInput } from './Drawer.jsx';
+import { WEEKDAYS_LONG, minToHM } from './utils.js';
+
+export default function AvailabilityDrawer({ initial, onSave, onClose }) {
+  const [avail, setAvail] = useState(initial || {});
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const setDay = (day, windows) => setAvail({ ...avail, [day]: windows });
+
+  const submit = async () => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await onSave(avail);
+      onClose();
+    } catch (e) {
+      setErr(e.message || 'Could not save');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Drawer title="Weekly availability" subtitle="Clients can only book inside these hours" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {[1, 2, 3, 4, 5, 6, 0].map((d) => (
+          <DayRow key={d} dayIdx={d} windows={avail[d] || []} onChange={(w) => setDay(d, w)}/>
+        ))}
+      </div>
+
+      {err && (
+        <div style={{
+          marginTop: 14, padding: '8px 12px', borderRadius: 8,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12.5,
+        }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, marginTop: 22 }}>
+        <button className="btn btn-outline" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+        <button className="btn btn-primary" onClick={submit} disabled={busy}
+          style={{ flex: 2, justifyContent: 'center', opacity: busy ? 0.6 : 1 }}>
+          {busy ? 'Saving…' : 'Save availability'}
+        </button>
+      </div>
+    </Drawer>
+  );
+}
+
+function DayRow({ dayIdx, windows, onChange }) {
+  const on = windows.length > 0;
+  return (
+    <div style={{
+      padding: 14, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ fontWeight: 600, fontSize: 14, minWidth: 90 }}>{WEEKDAYS_LONG[dayIdx]}</div>
+        <button onClick={() => (on ? onChange([]) : onChange([{ start: 9 * 60, end: 17 * 60 }]))} style={{
+          width: 38, height: 22, borderRadius: 99,
+          background: on ? 'var(--accent)' : 'var(--surface-2)',
+          border: `1px solid ${on ? 'var(--accent)' : 'var(--border-strong)'}`,
+          position: 'relative', cursor: 'pointer',
+        }}>
+          <span style={{
+            position: 'absolute', top: 2, left: on ? 18 : 2,
+            width: 16, height: 16, borderRadius: 99, background: on ? 'var(--accent-ink)' : '#fff',
+            transition: 'left .12s',
+          }}/>
+        </button>
+        <span style={{ fontSize: 12, color: 'var(--muted)', flex: 1 }}>
+          {on ? windows.map((w) => `${minToHM(w.start)}–${minToHM(w.end)}`).join(', ') : 'Unavailable'}
+        </span>
+        {on && (
+          <button className="btn btn-ghost" style={{ fontSize: 11, padding: '4px 8px' }}
+            onClick={() => onChange([...windows, { start: 14 * 60, end: 17 * 60 }])}>+ Add window</button>
+        )}
+      </div>
+      {on && (
+        <div style={{ marginTop: 10, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {windows.map((w, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <TimeInput minutes={w.start} onChange={(v) => onChange(windows.map((x, j) => j === i ? { ...x, start: v } : x))}/>
+              <span style={{ color: 'var(--muted)', fontSize: 12 }}>to</span>
+              <TimeInput minutes={w.end} onChange={(v) => onChange(windows.map((x, j) => j === i ? { ...x, end: v } : x))}/>
+              {windows.length > 1 && (
+                <button className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }}
+                  onClick={() => onChange(windows.filter((_, j) => j !== i))}>
+                  <Icons.X size={14}/>
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
