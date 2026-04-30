@@ -29,13 +29,21 @@ export function serializeSettings(row) {
 export function serializeService(row) {
   if (!row) return null;
   return {
-    id:               row.id,
-    name:             row.name,
-    durationMinutes:  row.duration_minutes,
-    price:            Number(row.price || 0),
-    displayOrder:     row.display_order,
+    id:                row.id,
+    name:              row.name,
+    durationMinutes:   row.duration_minutes,
+    price:             Number(row.price || 0),
+    displayOrder:      row.display_order,
+    description:       row.description || '',
+    photoUrl:          row.photo_url || '',
+    prepInstructions:  row.prep_instructions || '',
+    reminderMinutes:   row.reminder_minutes || DEFAULT_REMINDERS.slice(),
   };
 }
+
+// Default reminder schedule in minutes-before-appointment.
+// 10080 = 7 days, 2880 = 2 days, 1440 = 1 day, 120 = 2 hours.
+export const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
 
 export function serializeBlock(row) {
   if (!row) return null;

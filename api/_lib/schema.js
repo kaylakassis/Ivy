@@ -94,8 +94,16 @@ CREATE TABLE IF NOT EXISTS services (
   duration_minutes INT NOT NULL,
   price NUMERIC(12,2) NOT NULL DEFAULT 0,
   display_order INT NOT NULL DEFAULT 0,
+  description TEXT,
+  photo_url TEXT,
+  prep_instructions TEXT,
+  reminder_minutes INT[] NOT NULL DEFAULT ARRAY[10080, 2880, 1440, 120]::int[],
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE services ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS photo_url TEXT;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS prep_instructions TEXT;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS reminder_minutes INT[] NOT NULL DEFAULT ARRAY[10080, 2880, 1440, 120]::int[];
 CREATE INDEX IF NOT EXISTS idx_services_workspace ON services(workspace_id, display_order);
 
 CREATE TABLE IF NOT EXISTS calendar_blocks (

@@ -91,18 +91,31 @@ export default function PublicBooking() {
       <Header bizName={cal.settings.bizName}/>
 
       {step === 'confirmed' ? (
-        <div className="card" style={{ padding: 36, textAlign: 'center' }}>
-          <div style={{
-            width: 56, height: 56, borderRadius: 99, background: 'var(--ok)', color: '#fff',
-            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-          }}><Icons.Check size={26} sw={2.4}/></div>
-          <h2 className="page-title" style={{ fontSize: 24, margin: '0 0 8px' }}>You're booked.</h2>
-          <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
-            A confirmation is on its way to <b style={{ color: 'var(--fg-2)' }}>{email}</b>. See you on{' '}
-            <b style={{ color: 'var(--fg-2)' }}>
-              {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
-            </b>{' '}at <b style={{ color: 'var(--fg-2)' }}>{minToHM(slot.start)}</b>.
-          </p>
+        <div className="card" style={{ padding: 36 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 99, background: 'var(--ok)', color: '#fff',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+            }}><Icons.Check size={26} sw={2.4}/></div>
+            <h2 className="page-title" style={{ fontSize: 24, margin: '0 0 8px' }}>You're booked.</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+              A confirmation is on its way to <b style={{ color: 'var(--fg-2)' }}>{email}</b>. See you on{' '}
+              <b style={{ color: 'var(--fg-2)' }}>
+                {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </b>{' '}at <b style={{ color: 'var(--fg-2)' }}>{minToHM(slot.start)}</b>.
+            </p>
+          </div>
+          {svc?.prepInstructions && (
+            <div style={{
+              marginTop: 28, padding: 18,
+              background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12,
+            }}>
+              <div className="metric-label" style={{ marginBottom: 8 }}>Before your appointment</div>
+              <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.6, whiteSpace: 'pre-wrap' }}>
+                {svc.prepInstructions}
+              </div>
+            </div>
+          )}
         </div>
       ) : step === 'details' ? (
         <div className="card" style={{ padding: 28 }}>
@@ -143,19 +156,38 @@ export default function PublicBooking() {
                 This business hasn't published any services yet.
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))', gap: 8 }}>
-                {cal.services.map((s) => (
-                  <button key={s.id} onClick={() => setServiceId(s.id)} style={{
-                    padding: 12, borderRadius: 10, textAlign: 'left', cursor: 'pointer',
-                    background: serviceId === s.id ? 'var(--accent-soft)' : 'var(--surface-2)',
-                    border: `1px solid ${serviceId === s.id ? 'var(--accent)' : 'var(--border)'}`,
-                  }}>
-                    <div style={{ fontWeight: 600, fontSize: 13 }}>{s.name}</div>
-                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                      {s.durationMinutes} min · ${Number(s.price).toLocaleString()}
-                    </div>
-                  </button>
-                ))}
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+                {cal.services.map((s) => {
+                  const selected = serviceId === s.id;
+                  return (
+                    <button key={s.id} onClick={() => setServiceId(s.id)} style={{
+                      padding: 0, borderRadius: 12, textAlign: 'left', cursor: 'pointer',
+                      background: selected ? 'var(--accent-soft)' : 'var(--surface-2)',
+                      border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                      overflow: 'hidden',
+                      display: 'flex', flexDirection: 'column',
+                    }}>
+                      {s.photoUrl ? (
+                        <div style={{
+                          height: 90, background: `url(${s.photoUrl}) center/cover`,
+                          borderBottom: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                        }}/>
+                      ) : null}
+                      <div style={{ padding: 12 }}>
+                        <div style={{ fontWeight: 600, fontSize: 13, color: selected ? 'var(--accent)' : 'var(--fg)' }}>{s.name}</div>
+                        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                          {s.durationMinutes} min · ${Number(s.price).toLocaleString()}
+                        </div>
+                        {s.description && (
+                          <p style={{
+                            margin: '8px 0 0', fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.45,
+                            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+                          }}>{s.description}</p>
+                        )}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
             )}
           </div>
