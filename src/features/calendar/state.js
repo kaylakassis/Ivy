@@ -76,9 +76,34 @@ export function useCalendar() {
     setCal((c) => ({ ...c, bookings: c.bookings.filter((b) => b.id !== id) }));
   }, []);
 
+  const cancelOccurrence = useCallback(async (id, dateISO) => {
+    const r = await api.patch('/calendar/bookings/' + id, { cancelOccurrence: dateISO });
+    setCal((c) => ({
+      ...c,
+      bookings: c.bookings.map((b) => b.id === id ? r.booking : b),
+    }));
+    return r.booking;
+  }, []);
+
+  const updateBooking = useCallback(async (id, patch) => {
+    const r = await api.patch('/calendar/bookings/' + id, patch);
+    setCal((c) => ({
+      ...c,
+      bookings: c.bookings.map((b) => b.id === id ? r.booking : b),
+    }));
+    return r.booking;
+  }, []);
+
+  const createBooking = useCallback(async (input) => {
+    const r = await api.post('/calendar/bookings', input);
+    setCal((c) => ({ ...c, bookings: [...c.bookings, r.booking] }));
+    return r.booking;
+  }, []);
+
   return {
     cal, loading, error, refresh,
     patchSettings, saveServices, saveAvailability,
-    addBlock, updateBlock, removeBlock, cancelBooking,
+    addBlock, updateBlock, removeBlock,
+    createBooking, updateBooking, cancelBooking, cancelOccurrence,
   };
 }

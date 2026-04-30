@@ -89,3 +89,69 @@ export function slugify(s) {
     .replace(/-+/g, '-')
     .slice(0, 40);
 }
+
+// Expand recurring bookings into virtual occurrences within [rangeStart, rangeEnd].
+// Each output entry references its master via `recurrenceMasterId` and carries
+// the same fields, with `date` shifted to the occurrence date.
+export function expandBookings(bookings, rangeStart, rangeEnd) {
+  const out = [];
+  const startISO = fmtDateISO(rangeStart);
+  const endISO   = fmtDateISO(rangeEnd);
+
+  for (const b of bookings) {
+    if (!b.recurrenceRule) {
+      // Single occurrence — include if it lands in range.
+      if (b.date >= startISO && b.date <= endISO) out.push({ ...b, occurrenceDate: b.date });
+      continue;
+    }
+
+    const stop = b.recurrenceUntil
+      ? Math.min(parseISO(b.recurrenceUntil).getTime(), rangeEnd.getTime())
+      : rangeEnd.getTime();
+    const cancelledSet = new Set(b.cancelledOccurrences || []);
+
+    let cursor = parseISO(b.date);
+    let safety = 0;
+
+    while (cursor.getTime() <= stop && safety < 1000) {
+      safety += 1;
+      const iso = fmtDateISO(cursor);
+      if (iso >= startISO && iso <= endISO && !cancelledSet.has(iso)) {
+        out.push({
+          ...b,
+          // Stamp the occurrence date so the renderer drops it in the right cell.
+          date: iso,
+          occurrenceDate: iso,
+          isRecurringOccurrence: true,
+          recurrenceMasterId: b.id,
+        });
+      }
+      // Step forward by the rule.
+      if (b.recurrenceRule === 'weekly')   cursor = addDays(cursor, 7);
+      else if (b.recurrenceRule === 'biweekly') cursor = addDays(cursor, 14);
+      else if (b.recurrenceRule === 'monthly') {
+        const next = new Date(cursor);
+        next.setMonth(next.getMonth() + 1);
+        cursor = next;
+      }
+      else break;
+    }
+  }
+  return out;
+}
+
+// Convenience for components: returns bookings expanded to cover a window
+// starting `daysBack` before today and ending `daysAhead` after.
+export function expandedBookings(bookings, { daysBack = 7, daysAhead = 90 } = {}) {
+  const now = new Date();
+  const rangeStart = addDays(now, -daysBack);
+  const rangeEnd   = addDays(now, daysAhead);
+  return expandBookings(bookings, rangeStart, rangeEnd);
+}
+
+export const RECURRENCE_OPTIONS = [
+  { value: null,        label: "Doesn't repeat" },
+  { value: 'weekly',    label: 'Weekly' },
+  { value: 'biweekly',  label: 'Every 2 weeks' },
+  { value: 'monthly',   label: 'Monthly' },
+];

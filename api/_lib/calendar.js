@@ -59,19 +59,30 @@ export function serializeBlock(row) {
 export function serializeBooking(row, opts = {}) {
   if (!row) return null;
   const { redactClient = false } = opts;
+  const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : row.date;
+  const cancelledOccurrences = (row.cancelled_occurrences || []).map((d) =>
+    d instanceof Date ? d.toISOString().slice(0, 10) : d,
+  );
   return {
-    id:           row.id,
-    serviceId:    row.service_id,
-    clientId:     row.client_id,
-    clientName:   redactClient ? null : row.client_name,
-    clientEmail:  redactClient ? null : row.client_email,
-    date:         row.date instanceof Date ? row.date.toISOString().slice(0, 10) : row.date,
-    startMin:     row.start_min,
-    endMin:       row.end_min,
-    notes:        redactClient ? null : row.notes,
-    cancelledAt:  row.cancelled_at,
+    id:                  row.id,
+    serviceId:           row.service_id,
+    clientId:            row.client_id,
+    clientName:          redactClient ? null : row.client_name,
+    clientEmail:         redactClient ? null : row.client_email,
+    date:                dateStr,
+    startMin:            row.start_min,
+    endMin:              row.end_min,
+    notes:               redactClient ? null : row.notes,
+    cancelledAt:         row.cancelled_at,
+    recurrenceRule:      row.recurrence_rule || null,
+    recurrenceUntil:     row.recurrence_until instanceof Date
+      ? row.recurrence_until.toISOString().slice(0, 10)
+      : (row.recurrence_until || null),
+    cancelledOccurrences,
   };
 }
+
+export const VALID_RECURRENCE = new Set([null, 'weekly', 'biweekly', 'monthly']);
 
 // Returns true if [start, end) overlaps any availability window for the given weekday.
 export function withinAvailability(availability, weekday, start, end) {

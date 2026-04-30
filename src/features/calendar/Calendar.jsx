@@ -1,15 +1,17 @@
 // Owner-side Calendar: Day / Week / Month views with shared toolbar.
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useCalendar } from './state.js';
 import {
   WEEKDAYS_SHORT, addDays, fmtDateISO, minToHM, parseISO, startOfWeek,
+  expandedBookings,
 } from './utils.js';
 import AvailabilityDrawer from './AvailabilityDrawer.jsx';
 import ShareDrawer from './ShareDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
 import ServicesDrawer from './ServicesDrawer.jsx';
+import AddBookingModal from './AddBookingModal.jsx';
 import DayView from './DayView.jsx';
 import MonthView from './MonthView.jsx';
 
@@ -19,13 +21,23 @@ export default function Calendar() {
   const {
     cal, loading, error,
     patchSettings, saveAvailability, saveServices,
-    addBlock, updateBlock, removeBlock, cancelBooking,
+    addBlock, updateBlock, removeBlock,
+    createBooking, updateBooking, cancelBooking, cancelOccurrence,
   } = useCalendar();
 
   const [view, setView]     = useState(() => localStorage.getItem(VIEW_KEY) || 'week'); // 'day' | 'week' | 'month'
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [drawer, setDrawer] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
+  const [addBookingOpen, setAddBookingOpen] = useState(false);
+
+  // Expand recurring bookings into per-occurrence rows for the views to render.
+  // The hook is stable as long as the bookings array reference doesn't change.
+  const expanded = useMemo(() =>
+    expandedBookings(cal.bookings || [], { daysBack: 14, daysAhead: 365 }),
+    [cal.bookings],
+  );
+  const calForViews = useMemo(() => ({ ...cal, bookings: expanded }), [cal, expanded]);
 
   useEffect(() => { localStorage.setItem(VIEW_KEY, view); }, [view]);
 
@@ -132,11 +144,14 @@ export default function Calendar() {
         <button className="btn btn-outline" onClick={() => setDrawer('share')}>
           <Icons.Globe size={14}/> Share booking link
         </button>
-        <button className="btn btn-primary" onClick={() => {
+        <button className="btn btn-outline" onClick={() => {
           setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '' });
           setDrawer('event');
         }}>
-          <Icons.Plus size={14}/> Block time
+          <Icons.Clock size={14}/> Block time
+        </button>
+        <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}>
+          <Icons.Plus size={14}/> New booking
         </button>
       </div>
 
@@ -149,9 +164,9 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* Active view */}
+      {/* Active view (uses expanded bookings so recurring instances show) */}
       {view === 'week' && (
-        <WeekGrid anchor={startOfWeek(anchor)} cal={cal}
+        <WeekGrid anchor={startOfWeek(anchor)} cal={calForViews}
           onPickBlock={(date, start, end) => {
             setSelectedEvent({ kind: 'block', date, startMin: start, endMin: end, label: '' });
             setDrawer('event');
@@ -160,7 +175,7 @@ export default function Calendar() {
       )}
 
       {view === 'day' && (
-        <DayView date={anchor} cal={cal}
+        <DayView date={anchor} cal={calForViews}
           onPickBlock={(date, start, end) => {
             setSelectedEvent({ kind: 'block', date, startMin: start, endMin: end, label: '' });
             setDrawer('event');
@@ -169,7 +184,7 @@ export default function Calendar() {
       )}
 
       {view === 'month' && (
-        <MonthView anchor={anchor} cal={cal}
+        <MonthView anchor={anchor} cal={calForViews}
           onPickDay={(d) => { setView('day'); setAnchor(d); }}
           onOpenEvent={openEvent}/>
       )}
@@ -249,11 +264,21 @@ export default function Calendar() {
             if (e.id) await updateBlock(e.id, { date: e.date, startMin: e.startMin, endMin: e.endMin, label: e.label });
             else await addBlock({ date: e.date, startMin: e.startMin, endMin: e.endMin, label: e.label });
           }}
+          onUpdateBooking={updateBooking}
+          onCancelOccurrence={cancelOccurrence}
           onDelete={async (e) => {
-            if (e.kind === 'booking') await cancelBooking(e.id);
+            if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id);
             else if (e.id) await removeBlock(e.id);
           }}
           onClose={() => { setDrawer(null); setSelectedEvent(null); }}
+        />
+      )}
+      {addBookingOpen && (
+        <AddBookingModal
+          services={cal.services}
+          defaultDate={fmtDateISO(anchor)}
+          onSubmit={createBooking}
+          onClose={() => setAddBookingOpen(false)}
         />
       )}
     </div>

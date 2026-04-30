@@ -1,56 +1,173 @@
-// Event drawer — for both blocks (editable) and bookings (view-only + cancel).
+// Event drawer — for both blocks (editable) and bookings (view + cancel options).
 import React, { useState } from 'react';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
-import { minToHM, parseISO } from './utils.js';
+import { minToHM, parseISO, RECURRENCE_OPTIONS } from './utils.js';
 
-export default function EventDrawer({ event, services, onSaveBlock, onDelete, onClose }) {
+export default function EventDrawer({
+  event, services,
+  onSaveBlock, onUpdateBooking, onCancelOccurrence,
+  onDelete, onClose,
+}) {
   if (event.kind === 'booking') {
-    return <BookingView event={event} services={services} onCancel={onDelete} onClose={onClose}/>;
+    return (
+      <BookingView
+        event={event}
+        services={services}
+        onUpdateBooking={onUpdateBooking}
+        onCancelOccurrence={onCancelOccurrence}
+        onCancelSeries={onDelete}
+        onClose={onClose}
+      />
+    );
   }
   return <BlockEdit event={event} onSave={onSaveBlock} onDelete={onDelete} onClose={onClose}/>;
 }
 
-function BookingView({ event, services, onCancel, onClose }) {
+function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onCancelSeries, onClose }) {
   const svc = services.find((s) => s.id === event.serviceId);
-  const [busy, setBusy] = useState(false);
-  const [confirm, setConfirm] = useState(false);
+  const isRecurring = !!event.recurrenceRule;
+  const masterId = event.recurrenceMasterId || event.id;
+  const occurrenceISO = event.occurrenceDate || event.date;
 
-  const cancel = async () => {
+  const [busy, setBusy] = useState(false);
+  const [confirmKind, setConfirmKind] = useState(null); // 'occurrence' | 'series'
+  const [editingRecurrence, setEditingRecurrence] = useState(false);
+  const [draftRule, setDraftRule]   = useState(event.recurrenceRule || null);
+  const [draftUntil, setDraftUntil] = useState(event.recurrenceUntil || '');
+
+  const cancelOccurrence = async () => {
     setBusy(true);
-    try { await onCancel(event); onClose(); } finally { setBusy(false); }
+    try { await onCancelOccurrence(masterId, occurrenceISO); onClose(); } finally { setBusy(false); }
+  };
+  const cancelSeries = async () => {
+    setBusy(true);
+    try { await onCancelSeries({ ...event, id: masterId }); onClose(); } finally { setBusy(false); }
+  };
+  const saveRecurrence = async () => {
+    setBusy(true);
+    try {
+      await onUpdateBooking(masterId, {
+        recurrenceRule: draftRule,
+        recurrenceUntil: draftUntil || null,
+      });
+      setEditingRecurrence(false);
+    } finally { setBusy(false); }
   };
 
   return (
-    <Drawer title="Booking details" onClose={onClose}>
+    <Drawer title="Booking details" subtitle={isRecurring ? 'Part of a recurring series.' : null} onClose={onClose}>
       <InfoRow label="Client"  value={event.clientName}/>
       <InfoRow label="Email"   value={event.clientEmail}/>
       <InfoRow label="Service" value={svc?.name || '—'}/>
-      <InfoRow label="Date"    value={parseISO(event.date).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
+      <InfoRow label="Date"    value={parseISO(occurrenceISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
       <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
       <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '—'}/>
       {event.notes && <InfoRow label="Notes" value={event.notes}/>}
 
-      <div style={{ display: 'flex', gap: 10, marginTop: 24 }}>
-        {confirm ? (
-          <>
-            <span style={{ flex: 1, fontSize: 12, color: 'var(--danger)' }}>
-              Cancel this booking? This can't be undone.
+      {/* Recurrence editor */}
+      <div style={{ marginTop: 18 }}>
+        <div className="metric-label" style={{ marginBottom: 8 }}>Recurrence</div>
+        {!editingRecurrence ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '10px 12px', borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+          }}>
+            <span style={{ fontSize: 13, color: 'var(--fg-2)', flex: 1 }}>
+              {isRecurring
+                ? `${ruleLabel(event.recurrenceRule)}${event.recurrenceUntil ? `, until ${event.recurrenceUntil}` : ', no end date'}`
+                : "Doesn't repeat"}
             </span>
-            <button className="btn btn-outline" onClick={() => setConfirm(false)} disabled={busy}>Keep it</button>
-            <button className="btn btn-primary" disabled={busy} onClick={cancel}
-              style={{ background: 'var(--danger)', color: '#fff', opacity: busy ? 0.6 : 1 }}>
-              {busy ? 'Cancelling…' : 'Cancel booking'}
+            <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }}
+              onClick={() => setEditingRecurrence(true)}>
+              {isRecurring ? 'Change' : 'Add recurrence'}
             </button>
-          </>
+          </div>
+        ) : (
+          <div style={{
+            padding: 12, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)',
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <select value={draftRule || ''} onChange={(e) => setDraftRule(e.target.value || null)} style={inputSty}>
+              {RECURRENCE_OPTIONS.map((r) => (
+                <option key={r.value || 'none'} value={r.value || ''}>{r.label}</option>
+              ))}
+            </select>
+            {draftRule && (
+              <input type="date" value={draftUntil} onChange={(e) => setDraftUntil(e.target.value)}
+                placeholder="Until (optional)" style={inputSty}/>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button className="btn btn-ghost" onClick={() => { setEditingRecurrence(false); setDraftRule(event.recurrenceRule || null); setDraftUntil(event.recurrenceUntil || ''); }} disabled={busy}>
+                Cancel
+              </button>
+              <button className="btn btn-primary" onClick={saveRecurrence} disabled={busy}>
+                {busy ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Actions */}
+      <div style={{ display: 'flex', gap: 10, marginTop: 24, flexDirection: 'column' }}>
+        {confirmKind === 'occurrence' ? (
+          <ConfirmRow
+            text={`Cancel just this appointment on ${parseISO(occurrenceISO).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}?`}
+            onCancel={() => setConfirmKind(null)}
+            onConfirm={cancelOccurrence}
+            busy={busy}
+          />
+        ) : confirmKind === 'series' ? (
+          <ConfirmRow
+            text={isRecurring
+              ? 'Cancel this booking AND every future occurrence in the series?'
+              : "Cancel this booking? This can't be undone."}
+            onCancel={() => setConfirmKind(null)}
+            onConfirm={cancelSeries}
+            busy={busy}
+          />
         ) : (
           <>
-            <button className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>Close</button>
-            <button className="btn btn-primary" style={{ flex: 1, justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
-              onClick={() => setConfirm(true)}>Cancel booking</button>
+            <button className="btn btn-outline" style={{ justifyContent: 'center' }} onClick={onClose}>Close</button>
+            {isRecurring && (
+              <button className="btn btn-primary"
+                style={{ justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
+                onClick={() => setConfirmKind('occurrence')}>
+                Cancel just this appointment
+              </button>
+            )}
+            <button className="btn btn-primary"
+              style={{ justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
+              onClick={() => setConfirmKind('series')}>
+              {isRecurring ? 'Cancel entire series' : 'Cancel booking'}
+            </button>
           </>
         )}
       </div>
     </Drawer>
+  );
+}
+
+function ruleLabel(rule) {
+  return RECURRENCE_OPTIONS.find((r) => r.value === rule)?.label || rule;
+}
+
+function ConfirmRow({ text, onCancel, onConfirm, busy }) {
+  return (
+    <>
+      <div style={{ fontSize: 12.5, color: 'var(--danger)', marginBottom: 4 }}>{text}</div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <button className="btn btn-outline" onClick={onCancel} disabled={busy} style={{ flex: 1, justifyContent: 'center' }}>
+          Keep it
+        </button>
+        <button className="btn btn-primary" disabled={busy}
+          style={{ flex: 1, justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
+          onClick={onConfirm}>
+          {busy ? 'Cancelling…' : 'Confirm cancel'}
+        </button>
+      </div>
+    </>
   );
 }
 

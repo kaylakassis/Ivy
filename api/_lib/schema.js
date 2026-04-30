@@ -129,7 +129,13 @@ CREATE TABLE IF NOT EXISTS bookings (
   end_min INT NOT NULL,
   notes TEXT,
   cancelled_at TIMESTAMPTZ,
+  recurrence_rule TEXT,
+  recurrence_until DATE,
+  cancelled_occurrences DATE[] NOT NULL DEFAULT '{}'::date[],
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS recurrence_rule TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS recurrence_until DATE;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_occurrences DATE[] NOT NULL DEFAULT '{}'::date[];
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
 `;
