@@ -140,6 +140,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
             <Icons.Arrow size={14}/> Open
           </a>
         </div>
+        {isPublished && <LinkTest slug={savedSlug}/>}
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
@@ -157,5 +158,45 @@ function Field({ label, hint, children }) {
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>{hint}</div>}
     </div>
+  );
+}
+
+// Hits /api/calendar/public/<slug> directly so the owner can see whether the
+// public booking page is actually serving — useful when the deploy is lagging
+// or schema isn't migrated.
+function LinkTest({ slug }) {
+  const [state, setState] = useState({ kind: 'idle' });
+
+  const test = async () => {
+    setState({ kind: 'pending' });
+    try {
+      const res = await fetch('/api/calendar/public/' + encodeURIComponent(slug), { credentials: 'omit' });
+      if (res.ok) {
+        const j = await res.json();
+        const services = j.calendar?.services?.length || 0;
+        setState({ kind: 'ok', text: `Live · ${services} service${services === 1 ? '' : 's'} published` });
+      } else {
+        const txt = await res.text().catch(() => '');
+        let detail = '';
+        try { detail = JSON.parse(txt).error || ''; } catch { detail = txt.slice(0, 200); }
+        setState({ kind: 'error', status: res.status, text: detail || res.statusText });
+      }
+    } catch (e) {
+      setState({ kind: 'error', text: e.message || 'Network error' });
+    }
+  };
+
+  return (
+    <>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 10 }}>
+        <button className="btn btn-ghost" onClick={test}
+          style={{ fontSize: 12, padding: '4px 8px' }}>
+          <Icons.Globe size={12}/> Test link
+        </button>
+        {state.kind === 'pending' && <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Checking…</span>}
+        {state.kind === 'ok'      && <span style={{ fontSize: 11.5, color: 'var(--ok)', display: 'inline-flex', alignItems: 'center', gap: 4 }}><Icons.Check size={12} sw={2.4}/>{state.text}</span>}
+        {state.kind === 'error'   && <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{state.status ? `${state.status}: ` : ''}{state.text}</span>}
+      </div>
+    </>
   );
 }

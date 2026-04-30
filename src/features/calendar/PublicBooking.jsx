@@ -49,14 +49,28 @@ export default function PublicBooking() {
   }
 
   if (loadErr || !cal) {
+    const status = loadErr?.status;
+    const title  = status === 404
+      ? "Booking page not found"
+      : status >= 500
+        ? "Booking page is having trouble"
+        : "Couldn't load this booking page";
+    const hint = status === 404
+      ? `No public calendar for "${slug}". The owner may not have published their handle yet.`
+      : (loadErr?.message || `Status ${status || 'unknown'}.`);
     return (
       <PageWrap tweaks={tweaks}>
         <div className="card" style={{ padding: 36 }}>
-          <EmptyNote
-            icon="Calendar"
-            title="Booking page not found"
-            hint={`No public calendar for "${slug}".`}
-          />
+          <EmptyNote icon="Calendar" title={title} hint={hint}/>
+          {status >= 500 && loadErr?.message && (
+            <div style={{
+              marginTop: 14, padding: 10, borderRadius: 8,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+              fontSize: 11, color: 'var(--muted)', fontFamily: 'ui-monospace, monospace',
+            }}>
+              {loadErr.message}
+            </div>
+          )}
         </div>
       </PageWrap>
     );
