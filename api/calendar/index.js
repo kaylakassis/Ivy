@@ -10,8 +10,10 @@ import {
   serializeBooking, VALID_HANDLE,
 } from '../_lib/calendar.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { requireSameOrigin } from "../_lib/security.js";
 
 export default async function handler(req, res) {
+  if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;

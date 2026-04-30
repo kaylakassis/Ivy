@@ -4,6 +4,7 @@ import { sql } from '../_lib/db.js';
 import { validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { requireSameOrigin } from '../_lib/security.js';
 import { createToken, KIND_RESET, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -12,6 +13,7 @@ const TTL_MINUTES = 60; // reset links last 1 hour
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  if (!requireSameOrigin(req, res)) return;
   try {
     const { email } = await readBody(req);
     const emailKey = typeof email === 'string' ? email.toLowerCase().trim() : '';

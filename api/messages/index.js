@@ -7,8 +7,10 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { serializeThread } from '../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { requireSameOrigin } from "../_lib/security.js";
 
 export default async function handler(req, res) {
+  if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;

@@ -2,6 +2,7 @@
 // to the current user. No-op if already verified.
 import { requireUser } from '../_lib/auth.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { requireSameOrigin } from '../_lib/security.js';
 import { createToken, invalidateUserTokens, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -10,6 +11,7 @@ const VERIFY_TTL_MIN = 60 * 24;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;

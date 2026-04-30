@@ -1,4 +1,6 @@
 // Small helpers for serverless handlers.
+import { safeErrorMessage } from './security.js';
+
 export function ok(res, body = {}) {
   return res.status(200).json(body);
 }
@@ -22,5 +24,9 @@ export function methodNotAllowed(res, allowed = []) {
   return res.status(405).json({ error: 'Method not allowed' });
 }
 export function serverError(res, err) {
-  return res.status(500).json({ error: 'Server error', message: err?.message });
+  // Log the full error server-side (Vercel captures console.error in logs)
+  // but never let raw internals reach the client in production.
+  // eslint-disable-next-line no-console
+  console.error('[api] server error:', err);
+  return res.status(500).json({ error: safeErrorMessage(err) });
 }

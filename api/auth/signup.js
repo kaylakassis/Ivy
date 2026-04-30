@@ -3,6 +3,7 @@ import { sql } from '../_lib/db.js';
 import { hashPassword, signSession, setSessionCookie, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { requireSameOrigin } from '../_lib/security.js';
 import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
@@ -11,6 +12,7 @@ const VERIFY_TTL_MIN = 60 * 24; // 24 hours
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  if (!requireSameOrigin(req, res)) return;
   try {
     const { email, password, name } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');

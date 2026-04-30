@@ -94,14 +94,30 @@ Session is a JWT in an httpOnly cookie (`thryve_session`, 30-day expiry). Routes
 `/api/auth/*` handle signup/login/logout/me. All other `/api/*` routes call `requireUser()`
 to authenticate, except `/api/website/public/:handle` which serves published sites.
 
+## Security
+
+See [SECURITY.md](./SECURITY.md) for the threat model, tenancy guarantees,
+CSRF/CORS posture, rate limits, and the operator checklist before onboarding
+real users. Short version: every authenticated endpoint is workspace-scoped,
+session is an httpOnly + secure + sameSite-lax JWT cookie, every state-changing
+endpoint additionally enforces same-origin via Origin/Referer check, no
+analytics or tracking is loaded, all queries are parameter-bound. Run the
+migrate endpoint once after first deploy to create tables.
+
 ## Current status
 
 - ✅ Project scaffold (routing, shell, design tokens, icons, API skeleton)
-- ✅ Auth (Postgres users + workspaces, JWT cookie, signup/signin/signout)
+- ✅ Auth (Postgres users + workspaces, JWT cookie, signup / signin / signout,
+      password reset, email verification, rate limiting)
 - ✅ Website builder: editor UI + API persistence + public read route
-- ⏳ Port remaining features from `project/` (Clients, Calendar, Finance, Goals, Rewards, Messages, Documents, Ivy)
-- ⏳ Website builder polish (drag-and-drop, image uploads via Vercel Blob, custom colors)
-- ⏳ Calendar API (unblocks live Booking block on the website)
+- ✅ Clients (CRM): full CRUD, analytics, drawer with inline edit
+- ✅ Calendar: D/W/M views, services with photos + reminders + prep
+      instructions, recurring appointments, public booking page
+- ✅ Messages: text chat between owner and clients with two-way / broadcast modes
+- ✅ Security hardening: CSRF, headers, error sanitisation, SECURITY.md
+- ⏳ Port remaining features (Documents, Finance, Goals, Rewards, Ivy)
+- ⏳ Messages attachments (images / files via Vercel Blob)
+- ⏳ Reminders delivery (cron + email after Documents/Messages glue lands)
 
 ## Reference: the prototype
 

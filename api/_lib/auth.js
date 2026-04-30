@@ -27,22 +27,25 @@ export function signSession(userId) {
   return jwt.sign({ sub: userId }, secret(), { expiresIn: `${MAX_AGE}s` });
 }
 
+// Vercel runs all deployments over HTTPS, so secure: always-on. NODE_ENV check
+// would silently disable secure for any custom environment that doesn't set it.
+const COOKIE_BASE = {
+  httpOnly: true,    // Not readable by JavaScript — XSS can't exfil the session.
+  secure: true,      // Only sent over HTTPS.
+  sameSite: 'lax',   // Blocks cross-site POST/PATCH/DELETE under default rules.
+  path: '/',
+};
+
 export function setSessionCookie(res, token) {
   res.setHeader('Set-Cookie', cookie.serialize(COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
+    ...COOKIE_BASE,
     maxAge: MAX_AGE,
   }));
 }
 
 export function clearSessionCookie(res) {
   res.setHeader('Set-Cookie', cookie.serialize(COOKIE, '', {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
+    ...COOKIE_BASE,
     maxAge: 0,
   }));
 }

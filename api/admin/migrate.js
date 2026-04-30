@@ -7,10 +7,12 @@
 
 import { sql } from '../_lib/db.js';
 import { SCHEMA_SQL } from '../_lib/schema.js';
+import { requireSameOrigin } from '../_lib/security.js';
 import { ok, methodNotAllowed, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  if (!requireSameOrigin(req, res)) return;
   const secret = process.env.ADMIN_SECRET;
   if (!secret) return res.status(500).json({ error: 'ADMIN_SECRET not set' });
   if (req.headers['x-admin-secret'] !== secret) return unauthorized(res);

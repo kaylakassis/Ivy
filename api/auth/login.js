@@ -3,10 +3,12 @@ import { sql } from '../_lib/db.js';
 import { verifyPassword, signSession, setSessionCookie, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { requireSameOrigin } from '../_lib/security.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  if (!requireSameOrigin(req, res)) return;
   try {
     const { email, password } = await readBody(req);
     if (!validEmail(email) || typeof password !== 'string') {

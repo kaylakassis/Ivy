@@ -6,6 +6,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { requireSameOrigin } from "../_lib/security.js";
 
 const ALLOWED_TEMPLATES = new Set(['clean', 'warm', 'bold']);
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
@@ -35,6 +36,7 @@ async function getOrCreate(workspaceId) {
 }
 
 export default async function handler(req, res) {
+  if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;

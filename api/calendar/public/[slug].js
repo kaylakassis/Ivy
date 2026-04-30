@@ -7,6 +7,7 @@
 import { sql } from '../../_lib/db.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { requireSameOrigin } from '../../_lib/security.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
   hasConflict, withinAvailability,
@@ -17,6 +18,7 @@ import {
 } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
+  if (!requireSameOrigin(req, res)) return;
   if (req.method === 'GET')  return getCalendar(req, res);
   if (req.method === 'POST') return createBooking(req, res);
   return methodNotAllowed(res, ['GET', 'POST']);
