@@ -138,4 +138,32 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS recurrence_rule TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS recurrence_until DATE;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_occurrences DATE[] NOT NULL DEFAULT '{}'::date[];
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
+
+-- Messaging: one thread per (workspace, client). Mode controls whether the
+-- client can reply (two-way) or only receive announcements (one-way / broadcast).
+CREATE TABLE IF NOT EXISTS message_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  mode TEXT NOT NULL DEFAULT 'two-way' CHECK (mode IN ('two-way', 'one-way')),
+  unread_biz INT NOT NULL DEFAULT 0,
+  unread_client INT NOT NULL DEFAULT 0,
+  last_message_at TIMESTAMPTZ,
+  last_message_preview TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (workspace_id, client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_threads_workspace_recent ON message_threads(workspace_id, last_message_at DESC NULLS LAST);
+
+CREATE TABLE IF NOT EXISTS messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES message_threads(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('biz', 'client', 'system')),
+  text TEXT,
+  attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  kind TEXT,
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_messages_thread ON messages(thread_id, created_at);
 `;
