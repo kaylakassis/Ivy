@@ -190,4 +190,40 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id, status);
+
+-- Per-workspace finance settings (next invoice number, default tax, currency).
+CREATE TABLE IF NOT EXISTS finance_settings (
+  workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  next_invoice_number INT NOT NULL DEFAULT 1001,
+  default_tax_rate NUMERIC(6,3) NOT NULL DEFAULT 0,
+  currency TEXT NOT NULL DEFAULT 'USD'
+);
+
+-- Invoices. Line items live in JSONB to keep editing transactional and simple
+-- (each item: { id, description, quantity, rate }).
+CREATE TABLE IF NOT EXISTS invoices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  number TEXT NOT NULL,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  client_name TEXT,
+  client_email TEXT,
+  issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  due_date DATE,
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  tax_rate NUMERIC(6,3) NOT NULL DEFAULT 0,
+  discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'voided')),
+  view_token_hash TEXT UNIQUE,
+  sent_at TIMESTAMPTZ,
+  paid_at TIMESTAMPTZ,
+  paid_method TEXT,
+  activity JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (workspace_id, number)
+);
+CREATE INDEX IF NOT EXISTS idx_invoices_workspace_status ON invoices(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_invoices_workspace_issued ON invoices(workspace_id, issue_date DESC);
 `;

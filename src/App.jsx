@@ -15,6 +15,7 @@ import Rewards from './features/rewards/Rewards.jsx';
 import Messages from './features/messages/Messages.jsx';
 import Documents from './features/documents/Documents.jsx';
 import SignPage from './features/documents/SignPage.jsx';
+import PublicInvoice from './features/finance/PublicInvoice.jsx';
 import Website from './features/website/Website.jsx';
 import IvyPro from './features/ivy/IvyPro.jsx';
 import PublicBooking from './features/calendar/PublicBooking.jsx';
@@ -33,7 +34,8 @@ export default function App() {
       {/* Public */}
       <Route path="/book/:slug"   element={<PublicBooking />} />
       <Route path="/site/:handle" element={<PublicSite />} />
-      <Route path="/sign/:token"  element={<SignPage />} />
+      <Route path="/sign/:token"     element={<SignPage />} />
+      <Route path="/invoice/:token"  element={<PublicInvoice />} />
 
       {/* App shell (auth-gated) */}
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>
