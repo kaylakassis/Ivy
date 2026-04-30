@@ -1,14 +1,43 @@
 // Lightweight fetch wrapper against /api on Vercel serverless.
+//
+// Surfaces useful error messages: tries the JSON body first (our endpoints
+// return { error, message } shapes), falls back to plain text, and always
+// includes the HTTP status because Vercel runs HTTP/2 which omits the
+// reason-phrase (statusText is empty).
 async function req(method, path, body) {
-  const res = await fetch(`/api${path}`, {
-    method,
-    headers: { 'Content-Type': 'application/json' },
-    credentials: 'include',
-    body: body ? JSON.stringify(body) : undefined,
-  });
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+    });
+  } catch (networkErr) {
+    throw Object.assign(new Error(networkErr.message || 'Network error'), {
+      status: 0,
+    });
+  }
+
   if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw Object.assign(new Error(err.error || res.statusText), { status: res.status, details: err });
+    let detail = '';
+    let parsed = null;
+    try {
+      const text = await res.text();
+      try {
+        parsed = JSON.parse(text);
+        detail = parsed.error || parsed.message || '';
+      } catch {
+        // Not JSON (could be a Vercel error page or empty body).
+        detail = text.slice(0, 280);
+      }
+    } catch { /* ignore body read errors */ }
+
+    if (!detail && res.statusText) detail = res.statusText;
+    if (!detail) detail = `HTTP ${res.status}`;
+
+    const message = `${res.status}: ${detail}`;
+    throw Object.assign(new Error(message), { status: res.status, details: parsed });
   }
   if (res.status === 204) return null;
   return res.json();
