@@ -3,7 +3,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedTask, serializeTask, VALID_TASK_TYPES } from '../_lib/goals.js';
+import { fetchOwnedTask, fetchOwnedTaskWithProgress, serializeTask, VALID_TASK_TYPES } from '../_lib/goals.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -17,7 +17,10 @@ export default async function handler(req, res) {
     const task = await fetchOwnedTask({ id, workspaceId });
     if (!task) return notFound(res, 'Task not found');
 
-    if (req.method === 'GET') return ok(res, { task: serializeTask(task) });
+    if (req.method === 'GET') {
+      const withProgress = await fetchOwnedTaskWithProgress({ id, workspaceId });
+      return ok(res, { task: serializeTask(withProgress || task) });
+    }
 
     if (req.method === 'PATCH') {
       const body = await readBody(req);
@@ -63,8 +66,9 @@ export default async function handler(req, res) {
         WHERE id = $${values.length - 1} AND workspace_id = $${values.length}
         RETURNING *
       `;
-      const { rows } = await sql.query(queryText, values);
-      return ok(res, { task: serializeTask(rows[0]) });
+      await sql.query(queryText, values);
+      const refreshed = await fetchOwnedTaskWithProgress({ id, workspaceId });
+      return ok(res, { task: serializeTask(refreshed) });
     }
 
     if (req.method === 'DELETE') {

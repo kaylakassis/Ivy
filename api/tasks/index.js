@@ -6,7 +6,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeTask, VALID_TASK_TYPES } from '../_lib/goals.js';
+import { serializeTask, VALID_TASK_TYPES, listTasksWithProgress } from '../_lib/goals.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -17,30 +17,7 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const filter = req.query.done;
-      let rows;
-      if (filter === 'true') {
-        const r = await sql`
-          SELECT * FROM tasks
-          WHERE workspace_id = ${workspaceId} AND done = TRUE
-          ORDER BY completed_at DESC NULLS LAST
-        `;
-        rows = r.rows;
-      } else if (filter === 'false') {
-        const r = await sql`
-          SELECT * FROM tasks
-          WHERE workspace_id = ${workspaceId} AND done = FALSE
-          ORDER BY due_date NULLS LAST, created_at
-        `;
-        rows = r.rows;
-      } else {
-        const r = await sql`
-          SELECT * FROM tasks
-          WHERE workspace_id = ${workspaceId}
-          ORDER BY done, due_date NULLS LAST, created_at
-        `;
-        rows = r.rows;
-      }
+      const rows = await listTasksWithProgress(workspaceId, req.query.done);
       return ok(res, { tasks: rows.map(serializeTask) });
     }
 

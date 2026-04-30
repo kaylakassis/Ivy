@@ -164,51 +164,69 @@ function TaskRow({ task, onToggle, onUpdate, onRemove }) {
 
   const isOverdue = !task.done && task.dueDate && task.dueDate < new Date().toISOString().slice(0, 10);
   const dueLabel = task.dueDate ? formatDue(task.dueDate, task.done) : '';
+  const progress = Number(task.progress || 0);
+  const isSmart = task.type && task.type !== 'generic';
+  const readyToTick = isSmart && !task.done && progress >= 100;
 
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 10,
+    <div className={readyToTick ? 'glow-ready' : ''} style={{
+      display: 'flex', flexDirection: 'column', gap: 6,
       padding: '8px 10px', borderRadius: 10,
       background: task.done ? 'transparent' : 'var(--surface-2)',
       border: '1px solid ' + (task.done ? 'transparent' : 'var(--border)'),
     }}>
-      <button onClick={() => onToggle(task)}
-        style={{
-          width: 20, height: 20, flexShrink: 0,
-          borderRadius: 6,
-          border: '1.5px solid ' + (task.done ? 'var(--accent)' : 'var(--border-strong)'),
-          background: task.done ? 'var(--accent)' : 'transparent',
-          color: 'var(--accent-ink)', cursor: 'pointer',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>
-        {task.done && <Icons.Check size={12} sw={2.4}/>}
-      </button>
-
-      {editing ? (
-        <input value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
-          onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setDraft(task.title); setEditing(false); } }}
-          style={{ ...inputS, flex: 1 }}/>
-      ) : (
-        <div onClick={() => !task.done && setEditing(true)}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <button onClick={() => onToggle(task)}
+          title={readyToTick ? 'Ready — tap to mark done' : ''}
           style={{
-            flex: 1, fontSize: 13.5, cursor: task.done ? 'default' : 'text',
-            textDecoration: task.done ? 'line-through' : 'none',
-            color: task.done ? 'var(--muted)' : 'var(--fg)',
+            width: 20, height: 20, flexShrink: 0,
+            borderRadius: 6,
+            border: '1.5px solid ' + (task.done ? 'var(--accent)' : readyToTick ? 'var(--ok)' : 'var(--border-strong)'),
+            background: task.done ? 'var(--accent)' : 'transparent',
+            color: 'var(--accent-ink)', cursor: 'pointer',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
-          {task.title}
-          {task.completedAuto && <span style={chipS} title="Auto-completed by app activity">auto</span>}
-        </div>
-      )}
+          {task.done && <Icons.Check size={12} sw={2.4}/>}
+        </button>
 
-      {dueLabel && (
-        <span style={{
-          fontSize: 11, color: isOverdue ? 'var(--danger)' : 'var(--muted)',
-          fontWeight: isOverdue ? 600 : 400, whiteSpace: 'nowrap',
-        }}>{dueLabel}</span>
-      )}
-      <button className="btn btn-ghost" onClick={() => onRemove(task.id)} style={{ padding: 4, color: 'var(--muted)' }}>
-        <Icons.X size={12}/>
-      </button>
+        {editing ? (
+          <input value={draft} autoFocus onChange={(e) => setDraft(e.target.value)}
+            onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setDraft(task.title); setEditing(false); } }}
+            style={{ ...inputS, flex: 1 }}/>
+        ) : (
+          <div onClick={() => !task.done && setEditing(true)}
+            style={{
+              flex: 1, fontSize: 13.5, cursor: task.done ? 'default' : 'text',
+              textDecoration: task.done ? 'line-through' : 'none',
+              color: task.done ? 'var(--muted)' : 'var(--fg)',
+            }}>
+            {task.title}
+            {task.completedAuto && <span style={chipS} title="Auto-completed by app activity">auto</span>}
+            {readyToTick && <span style={{ ...chipS, background: 'transparent', color: 'var(--ok)', border: '1px solid var(--ok)' }} title="App data shows this is done">ready</span>}
+          </div>
+        )}
+
+        {dueLabel && (
+          <span style={{
+            fontSize: 11, color: isOverdue ? 'var(--danger)' : 'var(--muted)',
+            fontWeight: isOverdue ? 600 : 400, whiteSpace: 'nowrap',
+          }}>{dueLabel}</span>
+        )}
+        <button className="btn btn-ghost" onClick={() => onRemove(task.id)} style={{ padding: 4, color: 'var(--muted)' }}>
+          <Icons.X size={12}/>
+        </button>
+      </div>
+
+      <div style={{
+        height: 4, borderRadius: 99,
+        background: 'var(--surface)', overflow: 'hidden',
+      }}>
+        <div style={{
+          width: `${progress}%`, height: '100%',
+          background: progress >= 100 ? 'var(--ok)' : 'var(--accent)',
+          transition: 'width .3s ease',
+        }}/>
+      </div>
     </div>
   );
 }
@@ -342,8 +360,10 @@ function GoalCard({ goal, onUpdate, onRemove }) {
     }
   };
 
+  const reached = pct >= 100;
+
   return (
-    <div style={{
+    <div className={reached ? 'glow-ready' : ''} style={{
       padding: 14, borderRadius: 12,
       background: 'var(--surface-2)', border: '1px solid var(--border)',
     }}>
