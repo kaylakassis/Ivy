@@ -84,7 +84,9 @@ export default function PublicBooking() {
     setBusy(true);
     setBookErr(null);
     try {
-      await api.post('/calendar/public/' + encodeURIComponent(slug) + '/book', {
+      // Same URL as the GET; method is POST. Avoids a sibling [slug]/ dir
+      // that would conflict with [slug].js in Vercel's function bundling.
+      await api.post('/calendar/public/' + encodeURIComponent(slug), {
         serviceId: svc.id,
         date: slot.dateISO,
         startMin: slot.start,
