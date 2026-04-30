@@ -293,4 +293,28 @@ CREATE TABLE IF NOT EXISTS reward_redemptions (
   redeemed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_redemptions_workspace ON reward_redemptions(workspace_id, redeemed_at DESC);
+
+-- Ivy Pro: AI coach chat history. Each workspace owns its sessions; messages
+-- live in a child table so we can stream and paginate later. Replies are
+-- generated server-side (mock now, real Anthropic API later) so the secret
+-- never reaches the browser.
+CREATE TABLE IF NOT EXISTS ivy_sessions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  title TEXT NOT NULL DEFAULT 'New chat',
+  last_message_at TIMESTAMPTZ,
+  last_message_preview TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_sessions_workspace ON ivy_sessions(workspace_id, last_message_at DESC NULLS LAST);
+
+CREATE TABLE IF NOT EXISTS ivy_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  session_id UUID NOT NULL REFERENCES ivy_sessions(id) ON DELETE CASCADE,
+  role TEXT NOT NULL CHECK (role IN ('me', 'ivy')),
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_messages_session ON ivy_messages(session_id, created_at);
 `;
