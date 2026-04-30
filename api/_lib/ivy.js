@@ -114,7 +114,7 @@ export function generateReply(text, ctx) {
     if (ctx.openInvoices > 0) moves.push(`Chase the ${ctx.openInvoices} open invoice${ctx.openInvoices === 1 ? '' : 's'} (${fmt$(ctx.revenueThisMonth)} booked so far this month).`);
     if (ctx.quietClients > 0)  moves.push(`Send a check-in to ${ctx.quietClients} quiet client${ctx.quietClients === 1 ? '' : 's'} — they're at risk.`);
     if (ctx.upcomingSessions > 0) moves.push(`Pre-confirm your ${ctx.upcomingSessions} upcoming session${ctx.upcomingSessions === 1 ? '' : 's'} the day before — reduces no-shows.`);
-    while (moves.length < 3) moves.push('Pick one piece of content to ship — the smallest one you've been putting off.');
+    while (moves.length < 3) moves.push(`Pick one piece of content to ship — the smallest one you've been putting off.`);
     return `Three things this week:\n\n${moves.slice(0, 3).map((m, i) => `${i + 1}. ${m}`).join('\n')}\n\nWant me to break any of these down?`;
   }
   if (t.includes('analyze') && (t.includes('report') || t.includes('upload'))) {
