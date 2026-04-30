@@ -239,13 +239,15 @@ function RowMenu({ client, onStage, onOpen, onDelete }) {
   const [open, setOpen]   = useState(false);
   const [pos, setPos]     = useState({ top: 0, left: 0 });
   const [confirmDel, setConfirmDel] = useState(false);
+  const [busyDel, setBusyDel] = useState(false);
+  const [delErr, setDelErr] = useState(null);
   const btnRef = useRef(null);
   const menuRef = useRef(null);
 
   const place = () => {
     if (!btnRef.current) return;
     const r = btnRef.current.getBoundingClientRect();
-    const menuW = 180;
+    const menuW = 200;
     setPos({
       top:  r.bottom + 4,
       left: Math.max(8, r.right - menuW),
@@ -253,7 +255,7 @@ function RowMenu({ client, onStage, onOpen, onDelete }) {
   };
 
   const toggle = () => {
-    if (!open) { place(); setConfirmDel(false); }
+    if (!open) { place(); setConfirmDel(false); setDelErr(null); }
     setOpen((o) => !o);
   };
 
@@ -281,6 +283,19 @@ function RowMenu({ client, onStage, onOpen, onDelete }) {
     { stage: 'lead',   label: 'Mark as lead' },
   ].filter((o) => o.stage !== client.stage);
 
+  const doDelete = async () => {
+    setBusyDel(true);
+    setDelErr(null);
+    try {
+      await onDelete();
+      setOpen(false);
+    } catch (e) {
+      setDelErr(e.message || 'Delete failed');
+    } finally {
+      setBusyDel(false);
+    }
+  };
+
   return (
     <>
       <button ref={btnRef} onClick={toggle} className="btn btn-ghost" style={{ padding: 6 }}>
@@ -290,7 +305,7 @@ function RowMenu({ client, onStage, onOpen, onDelete }) {
         <div ref={menuRef} style={{
           position: 'fixed', top: pos.top, left: pos.left, zIndex: 200,
           background: 'var(--surface)', border: '1px solid var(--border-strong)',
-          borderRadius: 10, boxShadow: 'var(--shadow)', minWidth: 180, padding: 4,
+          borderRadius: 10, boxShadow: 'var(--shadow)', minWidth: 200, padding: 4,
         }}>
           <MenuItem onClick={() => { onOpen(); setOpen(false); }} icon={<Icons.Edit size={13}/>}>
             Open details
@@ -306,16 +321,21 @@ function RowMenu({ client, onStage, onOpen, onDelete }) {
               <div style={{ fontSize: 11.5, color: 'var(--danger)', marginBottom: 6 }}>
                 Delete {client.name}? This can't be undone.
               </div>
+              {delErr && (
+                <div style={{ fontSize: 11, color: 'var(--danger)', marginBottom: 6, lineHeight: 1.4 }}>
+                  {delErr}
+                </div>
+              )}
               <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn btn-ghost" style={{ flex: 1, padding: '5px 8px', fontSize: 12, justifyContent: 'center' }}
+                <button className="btn btn-ghost" disabled={busyDel}
+                  style={{ flex: 1, padding: '5px 8px', fontSize: 12, justifyContent: 'center' }}
                   onClick={() => setConfirmDel(false)}>
                   Cancel
                 </button>
-                <button className="btn btn-primary" style={{ flex: 1, padding: '5px 8px', fontSize: 12, justifyContent: 'center', background: 'var(--danger)', color: '#fff' }}
-                  onClick={async () => {
-                    try { await onDelete(); } finally { setOpen(false); }
-                  }}>
-                  Delete
+                <button className="btn btn-primary" disabled={busyDel}
+                  style={{ flex: 1, padding: '5px 8px', fontSize: 12, justifyContent: 'center', background: 'var(--danger)', color: '#fff', opacity: busyDel ? 0.6 : 1 }}
+                  onClick={doDelete}>
+                  {busyDel ? 'Deleting…' : 'Delete'}
                 </button>
               </div>
             </div>
