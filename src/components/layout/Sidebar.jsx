@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 import { NAV } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
@@ -158,7 +158,19 @@ export default function Sidebar({ direction, variant = 'full' }) {
             padding: 4, borderRadius: 10,
             background: 'var(--surface)', border: '1px solid var(--border-strong)',
             boxShadow: 'var(--shadow)', zIndex: 50,
+            display: 'flex', flexDirection: 'column', gap: 2,
           }}>
+            <Link
+              to="/account"
+              onClick={() => setMenuOpen(false)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 8, textAlign: 'left',
+                fontSize: 13, color: 'var(--fg)', textDecoration: 'none',
+              }}
+            >
+              <Icons.Settings size={13}/> Account settings
+            </Link>
             <button
               onClick={doSignOut}
               style={{

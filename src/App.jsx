@@ -18,6 +18,7 @@ import SignPage from './features/documents/SignPage.jsx';
 import PublicInvoice from './features/finance/PublicInvoice.jsx';
 import Website from './features/website/Website.jsx';
 import IvyPro from './features/ivy/IvyPro.jsx';
+import AccountPage from './features/account/AccountPage.jsx';
 import PublicBooking from './features/calendar/PublicBooking.jsx';
 import PublicSite from './features/website/PublicSite.jsx';
 import PrivacyPage from './features/legal/PrivacyPage.jsx';
@@ -55,6 +56,7 @@ export default function App() {
         <Route path="/documents"  element={<Documents />} />
         <Route path="/website"    element={<Website />} />
         <Route path="/ivy"        element={<IvyPro />} />
+        <Route path="/account"    element={<AccountPage />} />
       </Route>
     </Routes>
   );

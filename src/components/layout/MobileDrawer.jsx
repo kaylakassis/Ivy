@@ -93,29 +93,39 @@ export default function MobileDrawer({ direction, onClose }) {
 
         <div style={{
           padding: 12, borderTop: '1px solid var(--border)',
-          display: 'flex', alignItems: 'center', gap: 10,
+          display: 'flex', flexDirection: 'column', gap: 10,
         }}>
+          <NavLink to="/account"
+            className="nav-item"
+            style={{ padding: '10px 12px' }}>
+            <Icons.Settings size={16} sw={1.6}/> Account settings
+          </NavLink>
           <div style={{
-            width: 34, height: 34, borderRadius: 99,
-            background: 'var(--accent)', color: 'var(--accent-ink)',
-            fontSize: 12, fontWeight: 600,
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}>{initialsOf(user)}</div>
-          <div style={{ flex: 1, minWidth: 0 }}>
+            display: 'flex', alignItems: 'center', gap: 10,
+            paddingTop: 4, borderTop: '1px solid var(--border)',
+          }}>
             <div style={{
-              fontSize: 13, fontWeight: 500, color: 'var(--sidebar-fg)',
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>{user?.name || user?.email?.split('@')[0] || 'Signed in'}</div>
-            <div style={{
-              fontSize: 11, color: 'var(--muted)', marginTop: 2,
-              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-            }}>{user?.email || ''}</div>
+              width: 34, height: 34, borderRadius: 99,
+              background: 'var(--accent)', color: 'var(--accent-ink)',
+              fontSize: 12, fontWeight: 600,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>{initialsOf(user)}</div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 13, fontWeight: 500, color: 'var(--sidebar-fg)',
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{user?.name || user?.email?.split('@')[0] || 'Signed in'}</div>
+              <div style={{
+                fontSize: 11, color: 'var(--muted)', marginTop: 2,
+                overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+              }}>{user?.email || ''}</div>
+            </div>
+            <button onClick={doSignOut}
+              className="btn btn-ghost"
+              style={{ padding: '6px 10px', fontSize: 12.5 }}>
+              Sign out
+            </button>
           </div>
-          <button onClick={doSignOut}
-            className="btn btn-ghost"
-            style={{ padding: '6px 10px', fontSize: 12.5 }}>
-            Sign out
-          </button>
         </div>
       </aside>
     </>
