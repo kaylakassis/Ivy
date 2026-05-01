@@ -20,6 +20,8 @@ import Website from './features/website/Website.jsx';
 import IvyPro from './features/ivy/IvyPro.jsx';
 import PublicBooking from './features/calendar/PublicBooking.jsx';
 import PublicSite from './features/website/PublicSite.jsx';
+import PrivacyPage from './features/legal/PrivacyPage.jsx';
+import TermsPage from './features/legal/TermsPage.jsx';
 
 export default function App() {
   return (
@@ -36,6 +38,10 @@ export default function App() {
       <Route path="/site/:handle" element={<PublicSite />} />
       <Route path="/sign/:token"     element={<SignPage />} />
       <Route path="/invoice/:token"  element={<PublicInvoice />} />
+
+      {/* Legal (public, no auth) */}
+      <Route path="/privacy" element={<PrivacyPage />} />
+      <Route path="/terms"   element={<TermsPage />} />
 
       {/* App shell (auth-gated) */}
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>

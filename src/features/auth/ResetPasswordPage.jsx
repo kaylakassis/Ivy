@@ -4,6 +4,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { api } from '../../lib/api.js';
+import { PasswordInput } from './AuthPage.jsx';
 
 export default function ResetPasswordPage() {
   const [tweaks] = useTweaks();
@@ -16,13 +17,14 @@ export default function ResetPasswordPage() {
   const [busy, setBusy] = useState(false);
   const [err,  setErr]  = useState(null);
 
+  const mismatch = confirm.length > 0 && confirm !== password;
+  const canSubmit = !busy && token && password.length >= 8 && confirm === password;
+
   const submit = async (e) => {
     e.preventDefault();
     setErr(null);
-    if (password !== confirm) {
-      setErr('Passwords do not match');
-      return;
-    }
+    if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
+    if (password !== confirm) { setErr("Passwords don't match"); return; }
     setBusy(true);
     try {
       await api.post('/auth/reset-password', { token, password });
@@ -62,12 +64,22 @@ export default function ResetPasswordPage() {
         )}
 
         <Field label="New password">
-          <input type="password" required minLength={8} value={password}
-            onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" style={inputS} />
+          <PasswordInput value={password} onChange={setPassword}
+            required minLength={8} autoComplete="new-password"/>
         </Field>
         <Field label="Confirm password">
-          <input type="password" required minLength={8} value={confirm}
-            onChange={(e) => setConfirm(e.target.value)} autoComplete="new-password" style={inputS} />
+          <PasswordInput value={confirm} onChange={setConfirm}
+            required minLength={8} autoComplete="new-password" invalid={mismatch}/>
+          {mismatch && (
+            <span style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 4 }}>
+              Passwords don&apos;t match
+            </span>
+          )}
+          {!mismatch && confirm.length > 0 && confirm === password && (
+            <span style={{ fontSize: 11.5, color: 'var(--ok)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+              <Icons.Check size={11} sw={2.4}/> Passwords match
+            </span>
+          )}
         </Field>
 
         {err && (
@@ -78,8 +90,8 @@ export default function ResetPasswordPage() {
           }}>{err}</div>
         )}
 
-        <button className="btn btn-primary" type="submit" disabled={busy || !token}
-          style={{ justifyContent: 'center', padding: '12px 14px', opacity: (busy || !token) ? 0.6 : 1 }}>
+        <button className="btn btn-primary" type="submit" disabled={!canSubmit}
+          style={{ justifyContent: 'center', padding: '12px 14px', opacity: !canSubmit ? 0.6 : 1 }}>
           {busy ? 'Saving…' : 'Save new password'}
           {!busy && <Icons.Arrow size={14} sw={2} />}
         </button>

@@ -12,7 +12,7 @@ export default function IvyPro() {
   const direction = tweaks.direction;
   const {
     sessions, activeId, messages, context,
-    loading, thinking, error, mode, modeError,
+    loading, thinking, error, mode, modeError, usage,
     openSession, newChat, send, removeSession,
   } = useIvy();
 
@@ -54,6 +54,7 @@ export default function IvyPro() {
             </div>
           </div>
           {mode && <ModeChip mode={mode} modeError={modeError}/>}
+          {mode === 'live' && usage && <UsageMeter usage={usage}/>}
           <button className="btn btn-primary" onClick={newChat}
             style={{ width: '100%', justifyContent: 'center', marginTop: 12 }}>
             <Icons.Plus size={13} sw={2.2}/> New chat
@@ -171,6 +172,25 @@ function ModeChip({ mode, modeError }) {
       <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.8 }}>
         {live ? 'opus 4.7' : 'no API key'}
       </span>
+    </div>
+  );
+}
+
+function UsageMeter({ usage }) {
+  const reqPct = Math.min(100, Math.round((usage.requests / usage.requestCap) * 100)) || 0;
+  const tokPct = Math.min(100, Math.round((usage.outputTokens / usage.outputTokenCap) * 100)) || 0;
+  const pct = Math.max(reqPct, tokPct);
+  const color = pct >= 90 ? 'var(--danger)' : pct >= 70 ? 'var(--warn)' : 'var(--muted)';
+  return (
+    <div title={`Today's Ivy usage — resets at midnight UTC.\n${usage.requests}/${usage.requestCap} messages\n${usage.outputTokens.toLocaleString()}/${usage.outputTokenCap.toLocaleString()} reply tokens`}
+      style={{ marginTop: 6, fontSize: 10, color: 'var(--muted)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+        <span>Today</span>
+        <span className="mono-num" style={{ color }}>{usage.requests}/{usage.requestCap} msgs</span>
+      </div>
+      <div style={{ height: 3, background: 'var(--surface-2)', borderRadius: 99, overflow: 'hidden' }}>
+        <div style={{ width: `${pct}%`, height: '100%', background: color, transition: 'width .3s' }}/>
+      </div>
     </div>
   );
 }

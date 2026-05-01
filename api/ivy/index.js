@@ -10,7 +10,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
   serializeSession, serializeMessage, workspaceContext,
-  generateReply, fetchOwnedSession,
+  generateReply, fetchOwnedSession, getDailyUsage,
 } from '../_lib/ivy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -34,11 +34,13 @@ export default async function handler(req, res) {
       // before the user has sent their first message. Doesn't actually
       // call Anthropic — that happens on POST.
       const hasKey = !!process.env.ANTHROPIC_API_KEY;
+      const usage = await getDailyUsage(workspaceId);
       return ok(res, {
         sessions: sessions.rows.map((r) => serializeSession(r)),
         context,
         mode: hasKey ? 'live' : 'mock',
         modeError: hasKey ? null : 'no-api-key',
+        usage,
       });
     }
 
@@ -80,7 +82,7 @@ export default async function handler(req, res) {
       `;
 
       const ctx = await workspaceContext(workspaceId);
-      const reply = await generateReply(text, ctx, history);
+      const reply = await generateReply(text, ctx, history, workspaceId);
       const replyText = reply.text;
 
       const ivyMsg = await sql`
@@ -97,12 +99,14 @@ export default async function handler(req, res) {
         RETURNING *
       `;
 
+      const usage = await getDailyUsage(workspaceId);
       return ok(res, {
         session: serializeSession(upd.rows[0]),
         messages: [serializeMessage(userMsg.rows[0]), serializeMessage(ivyMsg.rows[0])],
         context: ctx,
         mode: reply.mode,
         modeError: reply.error || null,
+        usage,
       });
     }
 

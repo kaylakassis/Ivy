@@ -329,4 +329,20 @@ CREATE TABLE IF NOT EXISTS ivy_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_messages_session ON ivy_messages(session_id, created_at);
+
+-- Per-workspace Anthropic usage tracking. One row per (workspace, day, model)
+-- so we can cap daily spend, surface usage in the UI, and later tier on plan.
+CREATE TABLE IF NOT EXISTS ivy_usage (
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  day DATE NOT NULL,
+  model TEXT NOT NULL,
+  input_tokens BIGINT NOT NULL DEFAULT 0,
+  output_tokens BIGINT NOT NULL DEFAULT 0,
+  cache_read_tokens BIGINT NOT NULL DEFAULT 0,
+  cache_creation_tokens BIGINT NOT NULL DEFAULT 0,
+  request_count INT NOT NULL DEFAULT 0,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (workspace_id, day, model)
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_usage_workspace ON ivy_usage(workspace_id, day DESC);
 `;

@@ -21,6 +21,12 @@ const IVY_MODEL = 'claude-opus-4-7';
 const IVY_MAX_TOKENS = 1024;
 const IVY_HISTORY_TURNS = 10;
 
+// Per-workspace daily caps. Hits whichever ceiling first → fall back to mock
+// with a "limit reached" message so a runaway loop or overly chatty workspace
+// can't drive real money out of our pocket. Tune up as plan tiers come online.
+const DAILY_REQUEST_CAP = 100;
+const DAILY_OUTPUT_TOKEN_CAP = 50_000;
+
 export function serializeSession(row, lastPreview) {
   if (!row) return null;
   return {
@@ -98,18 +104,42 @@ export async function workspaceContext(workspaceId) {
   };
 }
 
-// Tries Claude first, falls back to the deterministic mock on any error or
-// missing API key. `history` is the prior conversation as [{role, text}] in
-// chronological order; the latest user turn is `text`.
-// Returns `{ text, mode, error? }` so callers / the UI can surface whether
-// the reply came from real Claude or the local mock.
-export async function generateReply(text, ctx, history = []) {
+// Tries Claude first, falls back to the deterministic mock on any error,
+// missing API key, or exceeded daily cap. `history` is the prior conversation
+// as [{role, text}] in chronological order; the latest user turn is `text`.
+// Returns `{ text, mode, error?, usage? }` so callers / the UI can surface
+// whether the reply came from real Claude or the local mock.
+export async function generateReply(text, ctx, history = [], workspaceId = null) {
   const client = anthropic();
   if (!client) {
     return { text: mockReply(text, ctx), mode: 'mock', error: 'no-api-key' };
   }
+
+  // Enforce daily cap. If exceeded we explicitly tell the user (rather than
+  // silently mocking) so they understand why the answers regressed.
+  if (workspaceId) {
+    const usage = await getDailyUsage(workspaceId);
+    if (usage.requests >= DAILY_REQUEST_CAP) {
+      return {
+        text: capExceededMessage('requests', usage),
+        mode: 'mock',
+        error: 'daily-request-cap',
+        usage,
+      };
+    }
+    if (usage.outputTokens >= DAILY_OUTPUT_TOKEN_CAP) {
+      return {
+        text: capExceededMessage('tokens', usage),
+        mode: 'mock',
+        error: 'daily-token-cap',
+        usage,
+      };
+    }
+  }
+
   try {
-    const reply = await claudeReply(client, text, ctx, history);
+    const { reply, response } = await claudeReply(client, text, ctx, history);
+    if (workspaceId) await recordUsage(workspaceId, response).catch(() => {});
     return { text: reply, mode: 'live' };
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -120,6 +150,57 @@ export async function generateReply(text, ctx, history = []) {
       error: (err && err.message) ? err.message.slice(0, 200) : 'unknown-error',
     };
   }
+}
+
+function capExceededMessage(kind, usage) {
+  const reason = kind === 'requests'
+    ? `you've hit today's chat limit (${DAILY_REQUEST_CAP} messages)`
+    : `you've used today's AI quota (${DAILY_OUTPUT_TOKEN_CAP.toLocaleString()} reply tokens)`;
+  return `Just a heads up — ${reason}. Ivy will be back to full power tomorrow. In the meantime here's a quick take based on your numbers:\n\n${kind === 'requests' ? 'Pace yourself for the rest of the day; come back fresh tomorrow with the most important question on your mind.' : 'Your snapshot is in the right rail — pick the biggest red flag and act on it before tomorrow.'}`;
+}
+
+export async function getDailyUsage(workspaceId) {
+  const { rows } = await sql`
+    SELECT
+      COALESCE(SUM(request_count), 0)::int   AS requests,
+      COALESCE(SUM(input_tokens), 0)::bigint  AS input_tokens,
+      COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens
+    FROM ivy_usage
+    WHERE workspace_id = ${workspaceId}
+      AND day = CURRENT_DATE
+  `;
+  const r = rows[0] || {};
+  return {
+    requests: Number(r.requests || 0),
+    inputTokens: Number(r.input_tokens || 0),
+    outputTokens: Number(r.output_tokens || 0),
+    requestCap: DAILY_REQUEST_CAP,
+    outputTokenCap: DAILY_OUTPUT_TOKEN_CAP,
+  };
+}
+
+async function recordUsage(workspaceId, response) {
+  const u = response && response.usage;
+  if (!u) return;
+  await sql`
+    INSERT INTO ivy_usage (
+      workspace_id, day, model,
+      input_tokens, output_tokens,
+      cache_read_tokens, cache_creation_tokens, request_count
+    )
+    VALUES (
+      ${workspaceId}, CURRENT_DATE, ${IVY_MODEL},
+      ${u.input_tokens || 0}, ${u.output_tokens || 0},
+      ${u.cache_read_input_tokens || 0}, ${u.cache_creation_input_tokens || 0}, 1
+    )
+    ON CONFLICT (workspace_id, day, model) DO UPDATE SET
+      input_tokens          = ivy_usage.input_tokens          + EXCLUDED.input_tokens,
+      output_tokens         = ivy_usage.output_tokens         + EXCLUDED.output_tokens,
+      cache_read_tokens     = ivy_usage.cache_read_tokens     + EXCLUDED.cache_read_tokens,
+      cache_creation_tokens = ivy_usage.cache_creation_tokens + EXCLUDED.cache_creation_tokens,
+      request_count         = ivy_usage.request_count         + 1,
+      updated_at            = NOW()
+  `;
 }
 
 const IVY_SYSTEM = `You are Ivy, an AI business coach inside THRYVE — a small-business OS used by solo entrepreneurs, coaches, consultants, freelancers, and service providers. The owner you're talking to runs a small business and is asking you for advice.
@@ -153,14 +234,13 @@ async function claudeReply(client, text, ctx, history) {
     ],
     messages,
   });
-  // Concatenate any text blocks; ignore other block types.
   const reply = response.content
     .filter((b) => b.type === 'text')
     .map((b) => b.text)
     .join('\n')
     .trim();
   if (!reply) throw new Error('Empty reply from Claude');
-  return reply;
+  return { reply, response };
 }
 
 function fmtCtx(ctx) {

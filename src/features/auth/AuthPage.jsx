@@ -11,15 +11,22 @@ export default function AuthPage({ mode = 'signin' }) {
   const nav       = useNavigate();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
+  const [confirm,  setConfirm]  = useState('');
   const [name,     setName]     = useState('');
   const [busy, setBusy]   = useState(false);
   const [err,  setErr]    = useState(null);
 
   const isSignUp = mode === 'signup';
+  const mismatch = isSignUp && confirm.length > 0 && confirm !== password;
+  const canSubmit = !busy && (!isSignUp || (password.length >= 8 && confirm === password));
 
   const submit = async (e) => {
     e.preventDefault();
     setErr(null);
+    if (isSignUp) {
+      if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
+      if (password !== confirm) { setErr("Passwords don't match"); return; }
+    }
     setBusy(true);
     try {
       if (isSignUp) await signUp(email, password, name || null);
@@ -75,10 +82,28 @@ export default function AuthPage({ mode = 'signin' }) {
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" style={inputS} />
         </Field>
         <Field label={isSignUp ? 'Password (8+ characters)' : 'Password'}>
-          <input type="password" required minLength={isSignUp ? 8 : undefined}
-            value={password} onChange={(e) => setPassword(e.target.value)}
-            autoComplete={isSignUp ? 'new-password' : 'current-password'} style={inputS} />
+          <PasswordInput value={password} onChange={setPassword}
+            required minLength={isSignUp ? 8 : undefined}
+            autoComplete={isSignUp ? 'new-password' : 'current-password'}/>
         </Field>
+        {isSignUp && (
+          <Field label="Confirm password">
+            <PasswordInput value={confirm} onChange={setConfirm}
+              required minLength={8}
+              autoComplete="new-password"
+              invalid={mismatch}/>
+            {mismatch && (
+              <span style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 4 }}>
+                Passwords don&apos;t match
+              </span>
+            )}
+            {!mismatch && confirm.length > 0 && confirm === password && (
+              <span style={{ fontSize: 11.5, color: 'var(--ok)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                <Icons.Check size={11} sw={2.4}/> Passwords match
+              </span>
+            )}
+          </Field>
+        )}
         {!isSignUp && (
           <div style={{ marginTop: -8, textAlign: 'right' }}>
             <Link to="/forgot-password" style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}>
@@ -95,8 +120,8 @@ export default function AuthPage({ mode = 'signin' }) {
           }}>{err}</div>
         )}
 
-        <button className="btn btn-primary" type="submit" disabled={busy}
-          style={{ justifyContent: 'center', padding: '12px 14px', opacity: busy ? 0.6 : 1 }}>
+        <button className="btn btn-primary" type="submit" disabled={!canSubmit}
+          style={{ justifyContent: 'center', padding: '12px 14px', opacity: !canSubmit ? 0.6 : 1 }}>
           {busy ? 'Working…' : (isSignUp ? 'Create account' : 'Sign in')}
           {!busy && <Icons.Arrow size={14} sw={2} />}
         </button>
@@ -108,7 +133,20 @@ export default function AuthPage({ mode = 'signin' }) {
             <>New here? <Link to="/signup" style={{ color: 'var(--accent)' }}>Create an account</Link></>
           )}
         </div>
+
+        {isSignUp && (
+          <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.5 }}>
+            By creating an account you agree to our{' '}
+            <Link to="/terms" style={{ color: 'var(--fg-2)' }}>Terms</Link>{' '}and{' '}
+            <Link to="/privacy" style={{ color: 'var(--fg-2)' }}>Privacy Policy</Link>.
+          </div>
+        )}
       </form>
+
+      <div style={{ display: 'flex', gap: 14, marginTop: 18, fontSize: 11.5, color: 'var(--muted)' }}>
+        <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>
+        <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</Link>
+      </div>
     </div>
   );
 }
@@ -130,5 +168,39 @@ function Field({ label, children }) {
       <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--fg-2)' }}>{label}</span>
       {children}
     </label>
+  );
+}
+
+// Password input with a show/hide eye toggle.
+// `invalid` adds a red border so it can be used for the "doesn't match" state.
+export function PasswordInput({ value, onChange, invalid, ...rest }) {
+  const [show, setShow] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      <input
+        type={show ? 'text' : 'password'}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        {...rest}
+        style={{
+          ...inputS,
+          paddingRight: 40,
+          borderColor: invalid ? 'var(--danger)' : 'var(--border-strong)',
+        }}
+      />
+      <button type="button"
+        onClick={() => setShow((s) => !s)}
+        title={show ? 'Hide password' : 'Show password'}
+        aria-label={show ? 'Hide password' : 'Show password'}
+        tabIndex={-1}
+        style={{
+          position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+          padding: 6, borderRadius: 6, color: 'var(--muted)',
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer',
+        }}>
+        {show ? <Icons.EyeOff size={16}/> : <Icons.Eye size={16}/>}
+      </button>
+    </div>
   );
 }
