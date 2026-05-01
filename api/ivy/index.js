@@ -30,9 +30,15 @@ export default async function handler(req, res) {
         LIMIT 100
       `;
       const context = await workspaceContext(workspaceId);
+      // Cheap env-var probe so the UI can show a "mock mode" warning even
+      // before the user has sent their first message. Doesn't actually
+      // call Anthropic — that happens on POST.
+      const hasKey = !!process.env.ANTHROPIC_API_KEY;
       return ok(res, {
         sessions: sessions.rows.map((r) => serializeSession(r)),
         context,
+        mode: hasKey ? 'live' : 'mock',
+        modeError: hasKey ? null : 'no-api-key',
       });
     }
 
@@ -74,7 +80,8 @@ export default async function handler(req, res) {
       `;
 
       const ctx = await workspaceContext(workspaceId);
-      const replyText = await generateReply(text, ctx, history);
+      const reply = await generateReply(text, ctx, history);
+      const replyText = reply.text;
 
       const ivyMsg = await sql`
         INSERT INTO ivy_messages (session_id, role, text)
@@ -94,6 +101,8 @@ export default async function handler(req, res) {
         session: serializeSession(upd.rows[0]),
         messages: [serializeMessage(userMsg.rows[0]), serializeMessage(ivyMsg.rows[0])],
         context: ctx,
+        mode: reply.mode,
+        modeError: reply.error || null,
       });
     }
 

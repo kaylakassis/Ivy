@@ -17,6 +17,8 @@ export function useIvy() {
   const [loading, setLoading]     = useState(true);
   const [thinking, setThinking]   = useState(false);
   const [error, setError]         = useState(null);
+  const [mode, setMode]           = useState(null);     // 'live' | 'mock' | null (unknown)
+  const [modeError, setModeError] = useState(null);
   const msgCacheRef = useRef(new Map()); // sessionId -> messages[]
 
   useEffect(() => {
@@ -26,6 +28,8 @@ export function useIvy() {
         if (!live) return;
         setSessions(r.sessions || []);
         setContext(r.context || EMPTY_CTX);
+        if (r.mode) setMode(r.mode);
+        setModeError(r.modeError || null);
       })
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
@@ -80,6 +84,8 @@ export function useIvy() {
         if (!activeId) setActiveId(r.session.id);
       }
       if (r.context) setContext(r.context);
+      if (r.mode) setMode(r.mode);
+      setModeError(r.modeError || null);
     } catch (e) {
       setError(e);
       // Drop the optimistic bubble so the user can retry
@@ -98,7 +104,7 @@ export function useIvy() {
 
   return {
     sessions, activeId, messages, context,
-    loading, thinking, error,
+    loading, thinking, error, mode, modeError,
     openSession, newChat, send, removeSession,
   };
 }

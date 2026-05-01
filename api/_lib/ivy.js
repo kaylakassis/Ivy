@@ -101,15 +101,24 @@ export async function workspaceContext(workspaceId) {
 // Tries Claude first, falls back to the deterministic mock on any error or
 // missing API key. `history` is the prior conversation as [{role, text}] in
 // chronological order; the latest user turn is `text`.
+// Returns `{ text, mode, error? }` so callers / the UI can surface whether
+// the reply came from real Claude or the local mock.
 export async function generateReply(text, ctx, history = []) {
   const client = anthropic();
-  if (!client) return mockReply(text, ctx);
+  if (!client) {
+    return { text: mockReply(text, ctx), mode: 'mock', error: 'no-api-key' };
+  }
   try {
-    return await claudeReply(client, text, ctx, history);
+    const reply = await claudeReply(client, text, ctx, history);
+    return { text: reply, mode: 'live' };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[ivy] Anthropic call failed, falling back to mock:', err?.message || err);
-    return mockReply(text, ctx);
+    return {
+      text: mockReply(text, ctx),
+      mode: 'mock',
+      error: (err && err.message) ? err.message.slice(0, 200) : 'unknown-error',
+    };
   }
 }
 
