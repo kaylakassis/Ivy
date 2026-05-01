@@ -8,6 +8,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
   ensureRewardSettings, serializeRule, serializeRedemption, rewardKpis,
+  pendingRewards,
 } from '../_lib/rewards.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -30,6 +31,7 @@ export default async function handler(req, res) {
         LIMIT 200
       `;
       const kpis = await rewardKpis(workspaceId);
+      const pending = await pendingRewards(workspaceId);
 
       return ok(res, {
         rewards: {
@@ -37,6 +39,7 @@ export default async function handler(req, res) {
           rules: rules.rows.map(serializeRule),
           redemptions: redemptions.rows.map(serializeRedemption),
           kpis,
+          pending,
         },
       });
     }

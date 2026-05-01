@@ -12,6 +12,7 @@ export function serializeClient(row) {
     notes:         row.notes,
     lifetimeValue: Number(row.lifetime_value || 0),
     source:        row.source,
+    referredByClientId: row.referred_by_client_id,
     joinedAt:      row.joined_at,
     lastSeenAt:    row.last_seen_at,
     createdAt:     row.created_at,

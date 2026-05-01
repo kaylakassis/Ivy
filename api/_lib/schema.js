@@ -75,6 +75,8 @@ CREATE TABLE IF NOT EXISTS clients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_stage ON clients(workspace_id, stage);
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
 
 CREATE TABLE IF NOT EXISTS calendar_settings (
   workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -293,6 +295,16 @@ CREATE TABLE IF NOT EXISTS reward_redemptions (
   redeemed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_redemptions_workspace ON reward_redemptions(workspace_id, redeemed_at DESC);
+-- Rewards lifecycle: 'issued' → owner has confirmed and notified the client,
+-- but it hasn't been used yet; 'used' → client cashed it in; 'dismissed' →
+-- owner ignored the auto-detected eligibility (still counts toward the
+-- earned-vs-claimed math so the same milestone doesn't fire twice).
+ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS status TEXT NOT NULL DEFAULT 'used';
+ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
+ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ;
+ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
+ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS auto_detected BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_redemptions_rule_client ON reward_redemptions(rule_id, client_id);
 
 -- Ivy Pro: AI coach chat history. Each workspace owns its sessions; messages
 -- live in a child table so we can stream and paginate later. Replies are

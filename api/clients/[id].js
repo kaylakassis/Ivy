@@ -53,6 +53,15 @@ export default async function handler(req, res) {
         push('lifetime_value', n);
       }
       if ('source' in body) push('source', body.source ? String(body.source).slice(0, 60) : null);
+      if ('referredByClientId' in body) {
+        const ref = body.referredByClientId ? String(body.referredByClientId) : null;
+        if (ref) {
+          if (ref === id) return badRequest(res, "A client can't refer themselves");
+          const owns = await sql`SELECT id FROM clients WHERE id = ${ref} AND workspace_id = ${workspaceId}`;
+          if (owns.rows.length === 0) return badRequest(res, 'Unknown referring client');
+        }
+        push('referred_by_client_id', ref);
+      }
       if ('lastSeenAt' in body) push('last_seen_at', body.lastSeenAt ? new Date(body.lastSeenAt).toISOString() : null);
 
       if (sets.length === 0) return ok(res, { client: serializeClient(existing) });

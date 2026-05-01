@@ -8,6 +8,7 @@ export function useRewards() {
     rules: [],
     redemptions: [],
     kpis: { activeMembers: 0, rewardsRedeemed: 0, referralsConverted: 0, repeatRevenue: 0 },
+    pending: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -69,9 +70,32 @@ export function useRewards() {
     refresh().catch(() => {});
   }, [refresh]);
 
+  const markRedemptionStatus = useCallback(async (id, status) => {
+    const r = await api.patch('/rewards/redemptions/' + id, { status });
+    setData((d) => ({
+      ...d,
+      redemptions: d.redemptions.map((x) => x.id === id ? r.redemption : x),
+    }));
+    return r.redemption;
+  }, []);
+
+  // Confirms an auto-detected eligibility: writes a redemption + DMs the client.
+  // Refreshes the whole rewards payload so pending/redemptions/KPIs all settle.
+  const confirmPending = useCallback(async ({ ruleId, clientId, validityDays = 30, sendMessage = true }) => {
+    const r = await api.post('/rewards/confirm', { ruleId, clientId, validityDays, sendMessage });
+    await refresh();
+    return r.redemption;
+  }, [refresh]);
+
+  const dismissPending = useCallback(async ({ ruleId, clientId }) => {
+    await api.post('/rewards/dismiss', { ruleId, clientId });
+    await refresh();
+  }, [refresh]);
+
   return {
     ...data, loading, error, refresh,
     setLaunched, createRule, updateRule, removeRule,
-    logRedemption, removeRedemption,
+    logRedemption, removeRedemption, markRedemptionStatus,
+    confirmPending, dismissPending,
   };
 }

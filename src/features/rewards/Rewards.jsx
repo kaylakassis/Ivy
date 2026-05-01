@@ -119,6 +119,9 @@ function RewardsManager({ r }) {
   const [tab, setTab]                 = useState('rules');
   const [editingRule, setEditingRule] = useState(null);
   const [logOpen, setLogOpen]         = useState(false);
+  const [confirmTarget, setConfirmTarget] = useState(null);
+
+  const pending = r.pending || [];
 
   return (
     <div style={{ padding: '24px 32px 96px', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -145,6 +148,37 @@ function RewardsManager({ r }) {
         <Kpi label="Repeat revenue"      value={fmtMoney(r.kpis.repeatRevenue)} sub="From clients with 2+ paid invoices" tone="accent"/>
         <Kpi label="Referrals converted" value={r.kpis.referralsConverted} sub="Redemptions of referral rules" tone="ok"/>
       </div>
+
+      {/* Ready to redeem — auto-detected eligibility */}
+      {pending.length > 0 && (
+        <div className="card glow-ready-soft" style={{ overflow: 'hidden', borderColor: 'var(--ok)' }}>
+          <div style={{
+            padding: '14px 20px', borderBottom: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: 'color-mix(in srgb, var(--ok) 8%, transparent)',
+          }}>
+            <Icons.Gift size={16} sw={1.8} stroke="var(--ok)"/>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--ok)' }}>
+                {pending.length} reward{pending.length === 1 ? '' : 's'} ready to issue
+              </div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+                Auto-detected from real visits, spend, and referrals. Confirm to notify the client.
+              </div>
+            </div>
+          </div>
+          {pending.map((p, i) => (
+            <PendingRow key={`${p.rule.id}:${p.clientId}`} entry={p} first={i === 0}
+              onConfirm={() => setConfirmTarget(p)}
+              onDismiss={async () => {
+                if (confirm(`Dismiss this reward for ${p.clientName}? They won't be notified, and the same milestone won't fire again.`)) {
+                  try { await r.dismissPending({ ruleId: p.rule.id, clientId: p.clientId }); }
+                  catch (e) { alert('Could not dismiss: ' + (e.message || 'unknown error')); }
+                }
+              }}/>
+          ))}
+        </div>
+      )}
 
       {/* Tabs */}
       <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start' }}>
@@ -192,7 +226,9 @@ function RewardsManager({ r }) {
             </div>
           ) : r.redemptions.map((red, i) => (
             <RedemptionRow key={red.id} redemption={red} rule={r.rules.find((x) => x.id === red.ruleId)} first={i === 0}
-              onDelete={() => r.removeRedemption(red.id)}/>
+              onDelete={() => r.removeRedemption(red.id)}
+              onMarkUsed={() => r.markRedemptionStatus(red.id, 'used')}
+              onUnmark={() => r.markRedemptionStatus(red.id, 'issued')}/>
           ))}
         </div>
       )}
@@ -222,6 +258,137 @@ function RewardsManager({ r }) {
           onClose={() => setLogOpen(false)}
         />
       )}
+      {confirmTarget && (
+        <ConfirmRewardModal
+          entry={confirmTarget}
+          onClose={() => setConfirmTarget(null)}
+          onSubmit={async ({ validityDays, sendMessage }) => {
+            await r.confirmPending({
+              ruleId: confirmTarget.rule.id,
+              clientId: confirmTarget.clientId,
+              validityDays, sendMessage,
+            });
+            setConfirmTarget(null);
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function PendingRow({ entry, first, onConfirm, onDismiss }) {
+  const { rule, clientName, current, threshold, pending } = entry;
+  const isMoney = rule.type === 'spend';
+  const fmt = (n) => isMoney
+    ? '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 })
+    : Number(n || 0).toLocaleString();
+  const triggerNote = rule.type === 'visit'    ? 'completed visits'
+                    : rule.type === 'spend'    ? 'in paid invoices'
+                    : rule.type === 'referral' ? 'referrals brought in'
+                    : 'units';
+  return (
+    <div style={{
+      padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14,
+      borderTop: first ? 'none' : '1px solid var(--border)',
+    }}>
+      <div style={{
+        width: 36, height: 36, borderRadius: 10, flexShrink: 0,
+        background: 'var(--ok)', color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}><Icons.Gift size={16} sw={1.8}/></div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>
+          {clientName || 'Client'} · {rule.name}
+          {pending > 1 && (
+            <span style={{
+              marginLeft: 8, fontSize: 10.5, padding: '1px 7px', borderRadius: 99,
+              background: 'var(--ok)', color: '#fff', fontWeight: 700,
+            }}>{pending}× pending</span>
+          )}
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
+          {fmt(current)} {triggerNote} · threshold {fmt(threshold)}
+          {rule.rewardText && <> → <strong style={{ color: 'var(--fg-2)' }}>{rule.rewardText}</strong></>}
+        </div>
+      </div>
+      <button className="btn btn-ghost" onClick={onDismiss}
+        style={{ padding: '6px 10px', fontSize: 12, color: 'var(--muted)' }}>
+        Dismiss
+      </button>
+      <button className="btn btn-primary" onClick={onConfirm} style={{ padding: '6px 12px', fontSize: 12.5 }}>
+        Confirm & notify <Icons.Arrow size={11} sw={2.4}/>
+      </button>
+    </div>
+  );
+}
+
+function ConfirmRewardModal({ entry, onClose, onSubmit }) {
+  const [validityDays, setValidityDays] = useState(30);
+  const [sendMessage, setSendMessage]   = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setBusy(true); setErr(null);
+    try { await onSubmit({ validityDays: Number(validityDays), sendMessage }); }
+    catch (ex) { setErr(ex.message || 'Could not confirm'); setBusy(false); }
+  };
+
+  const expiry = new Date(Date.now() + Number(validityDays || 0) * 86400 * 1000);
+
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
+        className="card" style={{ padding: 24, width: '100%', maxWidth: 460 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 10, background: 'var(--ok)', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Gift size={16} sw={1.8}/></div>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>Confirm reward</h3>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
+        </div>
+
+        <div style={{
+          padding: 12, borderRadius: 10, background: 'var(--surface-2)',
+          border: '1px solid var(--border)', marginBottom: 16, fontSize: 13, lineHeight: 1.55,
+        }}>
+          <div style={{ fontWeight: 600 }}>{entry.clientName}</div>
+          <div style={{ color: 'var(--muted)', fontSize: 12, marginTop: 2 }}>
+            Earned via <strong style={{ color: 'var(--fg-2)' }}>{entry.rule.name}</strong>
+          </div>
+          {entry.rule.rewardText && (
+            <div style={{ marginTop: 8, fontSize: 13 }}>
+              Reward: <strong>{entry.rule.rewardText}</strong>
+            </div>
+          )}
+        </div>
+
+        <Field label="Valid for" hint={`Reward will expire ${expiry.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' })}.`}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input type="number" min={1} max={365} value={validityDays}
+              onChange={(e) => setValidityDays(e.target.value)} style={{ ...inputS, width: 100 }}/>
+            <span style={{ fontSize: 13, color: 'var(--muted)' }}>days</span>
+          </div>
+        </Field>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fg-2)', marginBottom: 14 }}>
+          <input type="checkbox" checked={sendMessage} onChange={(e) => setSendMessage(e.target.checked)}/>
+          Notify {entry.clientName} via in-app message
+        </label>
+
+        {err && <div style={{ color: 'var(--danger)', fontSize: 12.5, marginBottom: 12 }}>{err}</div>}
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button type="button" className="btn btn-outline" onClick={onClose} style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+          <button type="submit" className="btn btn-primary" disabled={busy} style={{ flex: 2, justifyContent: 'center' }}>
+            {busy ? 'Confirming…' : 'Issue reward'}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }
@@ -272,7 +439,20 @@ function RuleRow({ rule, first, onToggle, onEdit, onDelete }) {
   );
 }
 
-function RedemptionRow({ redemption, rule, first, onDelete }) {
+function RedemptionRow({ redemption, rule, first, onDelete, onMarkUsed, onUnmark }) {
+  const status = redemption.status || 'used';
+  const expiresAt = redemption.expiresAt ? new Date(redemption.expiresAt) : null;
+  const isExpired = expiresAt && expiresAt.getTime() < Date.now() && status === 'issued';
+  const tone = status === 'used'      ? { bg: 'var(--surface-2)', fg: 'var(--muted)',  label: 'Used' }
+             : status === 'dismissed' ? { bg: 'var(--surface-2)', fg: 'var(--muted)',  label: 'Dismissed' }
+             : isExpired              ? { bg: 'color-mix(in srgb, var(--danger) 12%, transparent)', fg: 'var(--danger)', label: 'Expired' }
+                                      : { bg: 'color-mix(in srgb, var(--ok) 14%, transparent)',    fg: 'var(--ok)',     label: 'Issued' };
+
+  const expiryLabel = !expiresAt ? null
+    : status !== 'issued' ? null
+    : isExpired ? 'Expired'
+    : 'Valid until ' + expiresAt.toLocaleDateString([], { month: 'short', day: 'numeric' });
+
   return (
     <div style={{
       padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 16,
@@ -280,19 +460,47 @@ function RedemptionRow({ redemption, rule, first, onDelete }) {
     }}>
       <div style={{
         width: 36, height: 36, borderRadius: 10, flexShrink: 0,
-        background: 'var(--surface-2)', color: 'var(--muted)',
+        background: status === 'issued' && !isExpired ? 'var(--ok)' : 'var(--surface-2)',
+        color: status === 'issued' && !isExpired ? '#fff' : 'var(--muted)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
       }}><Icons.Heart size={15} sw={1.7}/></div>
       <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{redemption.clientName || 'Client'}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <span style={{ fontSize: 13.5, fontWeight: 600 }}>{redemption.clientName || 'Client'}</span>
+          <span style={{
+            fontSize: 10, padding: '1px 7px', borderRadius: 99,
+            background: tone.bg, color: tone.fg,
+            fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+          }}>{tone.label}</span>
+          {redemption.autoDetected && status !== 'dismissed' && (
+            <span style={{
+              fontSize: 9.5, padding: '1px 6px', borderRadius: 99,
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+              fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.06em',
+            }}>auto</span>
+          )}
+        </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
           {redemption.rewardText || rule?.rewardText || rule?.name || '—'}
+          {expiryLabel && <> · <span style={{ color: isExpired ? 'var(--danger)' : 'var(--muted)' }}>{expiryLabel}</span></>}
           {redemption.notes && <> · {redemption.notes}</>}
         </div>
       </div>
       <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap' }}>
         {new Date(redemption.redeemedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
       </div>
+      {status === 'issued' && onMarkUsed && (
+        <button className="btn btn-outline" onClick={onMarkUsed}
+          style={{ padding: '4px 10px', fontSize: 11.5 }} title="Mark this reward as cashed in">
+          <Icons.Check size={12} sw={2.4}/> Mark used
+        </button>
+      )}
+      {status === 'used' && onUnmark && (
+        <button className="btn btn-ghost" onClick={onUnmark}
+          style={{ padding: '4px 8px', fontSize: 11.5, color: 'var(--muted)' }} title="Undo">
+          Undo
+        </button>
+      )}
       <button className="btn btn-ghost" onClick={() => { if (confirm('Remove this redemption record?')) onDelete(); }}
         style={{ padding: 6, color: 'var(--muted)' }}><Icons.X size={13}/></button>
     </div>
