@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useCalendar } from './state.js';
+import { useViewport } from '../../lib/viewport.js';
 import {
   WEEKDAYS_SHORT, addDays, fmtDateISO, minToHM, parseISO, startOfWeek,
   expandedBookings,
@@ -25,11 +26,20 @@ export default function Calendar() {
     createBooking, updateBooking, cancelBooking, cancelOccurrence,
   } = useCalendar();
 
+  const { isMobile, isTablet } = useViewport();
   const [view, setView]     = useState(() => localStorage.getItem(VIEW_KEY) || 'week'); // 'day' | 'week' | 'month'
   const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
   const [drawer, setDrawer] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [addBookingOpen, setAddBookingOpen] = useState(false);
+  const [actionsOpen, setActionsOpen] = useState(false);
+
+  // Force day view on phones — the 7-column week grid is illegible on narrow
+  // screens. Users can still pick week/month from the toggle if they want.
+  useEffect(() => {
+    if (isMobile && view === 'week') setView('day');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isMobile]);
 
   // Expand recurring bookings into per-occurrence rows for the views to render.
   // The hook is stable as long as the bookings array reference doesn't change.
@@ -93,67 +103,118 @@ export default function Calendar() {
     .sort((a, b) => (a.date + String(a.startMin).padStart(4, '0'))
       .localeCompare(b.date + String(b.startMin).padStart(4, '0')));
 
+  const ViewToggle = () => (
+    <div style={{
+      display: 'flex', gap: 2, padding: 3,
+      background: 'var(--surface-2)', border: '1px solid var(--border)',
+      borderRadius: 8,
+    }}>
+      {[
+        { id: 'day',   label: 'Day' },
+        { id: 'week',  label: 'Week' },
+        { id: 'month', label: 'Month' },
+      ].map((v) => {
+        const on = view === v.id;
+        return (
+          <button key={v.id} onClick={() => switchView(v.id)}
+            style={{
+              padding: isMobile ? '6px 14px' : '5px 12px', borderRadius: 6, border: 0,
+              fontSize: 12, fontWeight: 550, cursor: 'pointer',
+              background: on ? 'var(--surface)' : 'transparent',
+              color: on ? 'var(--fg)' : 'var(--muted)',
+              boxShadow: on ? 'var(--shadow-sm)' : 'none',
+              border: on ? '1px solid var(--border)' : '1px solid transparent',
+            }}>
+            {v.label}
+          </button>
+        );
+      })}
+    </div>
+  );
+
   return (
-    <div style={{ padding: '20px 32px 64px' }}>
+    <div className="page-pad" style={{ paddingTop: isMobile ? 12 : 20 }}>
       {/* Toolbar */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
-        <button className="btn btn-outline" onClick={goToday}>Today</button>
-        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(-1)}>
-          <Icons.Arrow size={14} style={{ transform: 'rotate(180deg)' }}/>
-        </button>
-        <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(1)}>
-          <Icons.Arrow size={14}/>
-        </button>
-        <h3 className="page-title" style={{ margin: 0, fontSize: 22 }}>{rangeLabel}</h3>
-
-        {/* View toggle */}
-        <div style={{
-          marginLeft: 8, display: 'flex', gap: 2, padding: 3,
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
-          borderRadius: 8,
-        }}>
-          {[
-            { id: 'day',   label: 'Day' },
-            { id: 'week',  label: 'Week' },
-            { id: 'month', label: 'Month' },
-          ].map((v) => {
-            const on = view === v.id;
-            return (
-              <button key={v.id} onClick={() => switchView(v.id)}
-                style={{
-                  padding: '5px 12px', borderRadius: 6, border: 0,
-                  fontSize: 12, fontWeight: 550, cursor: 'pointer',
-                  background: on ? 'var(--surface)' : 'transparent',
-                  color: on ? 'var(--fg)' : 'var(--muted)',
-                  boxShadow: on ? 'var(--shadow-sm)' : 'none',
-                  border: on ? '1px solid var(--border)' : '1px solid transparent',
-                }}>
-                {v.label}
-              </button>
-            );
-          })}
+      {isMobile ? (
+        // MOBILE: stacked rows so the controls don't overflow.
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 14 }}>
+          {/* Row 1: nav arrows + range label */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button className="btn btn-outline" onClick={goToday} style={{ padding: '7px 12px', fontSize: 12 }}>Today</button>
+            <button className="btn btn-ghost" style={{ padding: 8 }} onClick={() => nav(-1)} aria-label="Previous">
+              <Icons.Arrow size={14} style={{ transform: 'rotate(180deg)' }}/>
+            </button>
+            <button className="btn btn-ghost" style={{ padding: 8 }} onClick={() => nav(1)} aria-label="Next">
+              <Icons.Arrow size={14}/>
+            </button>
+            <h3 className="page-title" style={{
+              margin: 0, fontSize: 16, flex: 1, minWidth: 0,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{rangeLabel}</h3>
+          </div>
+          {/* Row 2: view toggle + actions menu + add */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <ViewToggle/>
+            <div style={{ flex: 1 }}/>
+            <button className="btn btn-outline" onClick={() => setActionsOpen((o) => !o)}
+              aria-label="Calendar settings"
+              style={{ padding: 8, position: 'relative' }}>
+              <Icons.More size={16}/>
+            </button>
+            <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}
+              style={{ padding: 8 }} aria-label="New booking">
+              <Icons.Plus size={16} sw={2.2}/>
+            </button>
+          </div>
+          {actionsOpen && (
+            <ActionSheet onClose={() => setActionsOpen(false)}
+              onPick={(action) => {
+                setActionsOpen(false);
+                if (action === 'services')      setDrawer('services');
+                if (action === 'availability')  setDrawer('availability');
+                if (action === 'share')         setDrawer('share');
+                if (action === 'block') {
+                  setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '' });
+                  setDrawer('event');
+                }
+              }}/>
+          )}
         </div>
+      ) : (
+        // DESKTOP / TABLET: original wrapping single row.
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, flexWrap: 'wrap' }}>
+          <button className="btn btn-outline" onClick={goToday}>Today</button>
+          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(-1)}>
+            <Icons.Arrow size={14} style={{ transform: 'rotate(180deg)' }}/>
+          </button>
+          <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => nav(1)}>
+            <Icons.Arrow size={14}/>
+          </button>
+          <h3 className="page-title" style={{ margin: 0, fontSize: 22 }}>{rangeLabel}</h3>
 
-        <div style={{ flex: 1 }}/>
-        <button className="btn btn-outline" onClick={() => setDrawer('services')}>
-          <Icons.Dollar size={14}/> Services
-        </button>
-        <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
-          <Icons.Clock size={14}/> Availability
-        </button>
-        <button className="btn btn-outline" onClick={() => setDrawer('share')}>
-          <Icons.Globe size={14}/> Share booking link
-        </button>
-        <button className="btn btn-outline" onClick={() => {
-          setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '' });
-          setDrawer('event');
-        }}>
-          <Icons.Clock size={14}/> Block time
-        </button>
-        <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}>
-          <Icons.Plus size={14}/> New booking
-        </button>
-      </div>
+          <div style={{ marginLeft: 8 }}><ViewToggle/></div>
+
+          <div style={{ flex: 1 }}/>
+          <button className="btn btn-outline" onClick={() => setDrawer('services')}>
+            <Icons.Dollar size={14}/> {!isTablet && 'Services'}
+          </button>
+          <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
+            <Icons.Clock size={14}/> {!isTablet && 'Availability'}
+          </button>
+          <button className="btn btn-outline" onClick={() => setDrawer('share')}>
+            <Icons.Globe size={14}/> {!isTablet && 'Share'}
+          </button>
+          <button className="btn btn-outline" onClick={() => {
+            setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '' });
+            setDrawer('event');
+          }}>
+            <Icons.Clock size={14}/> {!isTablet && 'Block time'}
+          </button>
+          <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}>
+            <Icons.Plus size={14}/> New booking
+          </button>
+        </div>
+      )}
 
       {/* Legend (week + day views only — month uses chips inline) */}
       {view !== 'month' && (
@@ -166,12 +227,16 @@ export default function Calendar() {
 
       {/* Active view (uses expanded bookings so recurring instances show) */}
       {view === 'week' && (
-        <WeekGrid anchor={startOfWeek(anchor)} cal={calForViews}
-          onPickBlock={(date, start, end) => {
-            setSelectedEvent({ kind: 'block', date, startMin: start, endMin: end, label: '' });
-            setDrawer('event');
-          }}
-          onOpenEvent={openEvent}/>
+        <div className="table-scroll" style={{ overflowX: 'auto' }}>
+          <div style={{ minWidth: isMobile ? 720 : 'auto' }}>
+            <WeekGrid anchor={startOfWeek(anchor)} cal={calForViews}
+              onPickBlock={(date, start, end) => {
+                setSelectedEvent({ kind: 'block', date, startMin: start, endMin: end, label: '' });
+                setDrawer('event');
+              }}
+              onOpenEvent={openEvent}/>
+          </div>
+        </div>
       )}
 
       {view === 'day' && (
@@ -395,6 +460,52 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
             </div>
           );
         })}
+      </div>
+    </div>
+  );
+}
+
+// Bottom-sheet menu used by the mobile toolbar to expose Services /
+// Availability / Share / Block-time without crowding the header row.
+function ActionSheet({ onClose, onPick }) {
+  const items = [
+    { id: 'services',     label: 'Services',     icon: 'Dollar' },
+    { id: 'availability', label: 'Availability', icon: 'Clock' },
+    { id: 'share',        label: 'Share booking link', icon: 'Globe' },
+    { id: 'block',        label: 'Block time',   icon: 'Clock' },
+  ];
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 80,
+      display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+    }}>
+      <div onClick={(e) => e.stopPropagation()} className="card" style={{
+        width: '100%', maxWidth: 420, margin: 12,
+        padding: 8, display: 'flex', flexDirection: 'column', gap: 2,
+      }}>
+        {items.map((it) => {
+          const Icon = Icons[it.icon];
+          return (
+            <button key={it.id} onClick={() => onPick(it.id)}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 12,
+                padding: '14px 14px', borderRadius: 8, fontSize: 14,
+                color: 'var(--fg)', textAlign: 'left',
+              }}>
+              <Icon size={16} sw={1.7} stroke="var(--muted)"/>
+              {it.label}
+            </button>
+          );
+        })}
+        <button onClick={onClose}
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: '12px 14px', borderRadius: 8, fontSize: 13.5,
+            color: 'var(--muted)', marginTop: 4,
+            borderTop: '1px solid var(--border)',
+          }}>
+          Cancel
+        </button>
       </div>
     </div>
   );

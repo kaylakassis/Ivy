@@ -3,11 +3,10 @@ import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
-import { useTweaks } from '../../lib/tweaks.js';
+import AuthShell from './AuthShell.jsx';
 
 export default function AuthPage({ mode = 'signin' }) {
   const { signIn, signUp } = useAuth();
-  const [tweaks]  = useTweaks();
   const nav       = useNavigate();
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
@@ -40,10 +39,7 @@ export default function AuthPage({ mode = 'signin' }) {
   };
 
   return (
-    <div className={`app-root dir-${tweaks.direction}`} style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
-    }}>
+    <AuthShell>
       <form onSubmit={submit} className="card" style={{
         width: '100%', maxWidth: 420, padding: 32,
         display: 'flex', flexDirection: 'column', gap: 18,
@@ -142,12 +138,7 @@ export default function AuthPage({ mode = 'signin' }) {
           </div>
         )}
       </form>
-
-      <div style={{ display: 'flex', gap: 14, marginTop: 18, fontSize: 11.5, color: 'var(--muted)' }}>
-        <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>
-        <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</Link>
-      </div>
-    </div>
+    </AuthShell>
   );
 }
 

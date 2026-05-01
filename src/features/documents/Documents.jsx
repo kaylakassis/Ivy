@@ -54,9 +54,11 @@ export default function Documents() {
   }
 
   return (
-    <div style={{ padding: '24px 32px 96px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
-        <div style={{ flex: 1 }}>
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap',
+      }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
           <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Documents</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
             Send waivers, agreements, or intake forms — clients sign with one click from their email.

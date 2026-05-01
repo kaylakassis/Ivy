@@ -3,12 +3,11 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { useTweaks } from '../../lib/tweaks.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { api } from '../../lib/api.js';
+import AuthShell from './AuthShell.jsx';
 
 export default function VerifyEmailPage() {
-  const [tweaks] = useTweaks();
   const [params] = useSearchParams();
   const nav = useNavigate();
   const { refresh } = useAuth();
@@ -37,9 +36,7 @@ export default function VerifyEmailPage() {
   }, [token]);
 
   return (
-    <div className={`app-root dir-${tweaks.direction}`} style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-    }}>
+    <AuthShell>
       <div className="card" style={{
         width: '100%', maxWidth: 420, padding: 32,
         display: 'flex', flexDirection: 'column', gap: 18, textAlign: 'center',
@@ -79,7 +76,7 @@ export default function VerifyEmailPage() {
           </>
         )}
       </div>
-    </div>
+    </AuthShell>
   );
 }
 

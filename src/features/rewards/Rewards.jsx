@@ -124,21 +124,25 @@ function RewardsManager({ r }) {
   const pending = r.pending || [];
 
   return (
-    <div style={{ padding: '24px 32px 96px', display: 'flex', flexDirection: 'column', gap: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 16 }}>
-        <div style={{ flex: 1 }}>
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <div style={{
+        display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap',
+      }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
           <div className="metric-label" style={{ color: 'var(--accent)' }}>Program live</div>
           <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Client rewards</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
             Tune your rules, track redemptions, watch repeat revenue grow.
           </div>
         </div>
-        <button className="btn btn-outline" onClick={() => setLogOpen(true)}>
-          <Icons.Plus size={13}/> Log redemption
-        </button>
-        <button className="btn btn-primary" onClick={() => setEditingRule({ /* new */ })}>
-          <Icons.Plus size={13} sw={2}/> New rule
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setLogOpen(true)}>
+            <Icons.Plus size={13}/> Log redemption
+          </button>
+          <button className="btn btn-primary" onClick={() => setEditingRule({ /* new */ })}>
+            <Icons.Plus size={13} sw={2}/> New rule
+          </button>
+        </div>
       </div>
 
       {/* KPIs */}
@@ -290,6 +294,7 @@ function PendingRow({ entry, first, onConfirm, onDismiss }) {
     <div style={{
       padding: '14px 20px', display: 'flex', alignItems: 'center', gap: 14,
       borderTop: first ? 'none' : '1px solid var(--border)',
+      flexWrap: 'wrap',
     }}>
       <div style={{
         width: 36, height: 36, borderRadius: 10, flexShrink: 0,
@@ -311,13 +316,15 @@ function PendingRow({ entry, first, onConfirm, onDismiss }) {
           {rule.rewardText && <> → <strong style={{ color: 'var(--fg-2)' }}>{rule.rewardText}</strong></>}
         </div>
       </div>
-      <button className="btn btn-ghost" onClick={onDismiss}
-        style={{ padding: '6px 10px', fontSize: 12, color: 'var(--muted)' }}>
-        Dismiss
-      </button>
-      <button className="btn btn-primary" onClick={onConfirm} style={{ padding: '6px 12px', fontSize: 12.5 }}>
-        Confirm & notify <Icons.Arrow size={11} sw={2.4}/>
-      </button>
+      <div style={{ display: 'flex', gap: 6, marginLeft: 'auto' }}>
+        <button className="btn btn-ghost" onClick={onDismiss}
+          style={{ padding: '6px 10px', fontSize: 12, color: 'var(--muted)' }}>
+          Dismiss
+        </button>
+        <button className="btn btn-primary" onClick={onConfirm} style={{ padding: '6px 12px', fontSize: 12.5 }}>
+          Confirm <Icons.Arrow size={11} sw={2.4}/>
+        </button>
+      </div>
     </div>
   );
 }

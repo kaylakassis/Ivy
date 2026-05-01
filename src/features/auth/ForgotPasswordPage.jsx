@@ -2,11 +2,10 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { useTweaks } from '../../lib/tweaks.js';
 import { api } from '../../lib/api.js';
+import AuthShell from './AuthShell.jsx';
 
 export default function ForgotPasswordPage() {
-  const [tweaks] = useTweaks();
   const [email, setEmail] = useState('');
   const [busy, setBusy]   = useState(false);
   const [sent, setSent]   = useState(false);
@@ -27,9 +26,7 @@ export default function ForgotPasswordPage() {
   };
 
   return (
-    <div className={`app-root dir-${tweaks.direction}`} style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-    }}>
+    <AuthShell>
       <form onSubmit={submit} className="card" style={{
         width: '100%', maxWidth: 420, padding: 32,
         display: 'flex', flexDirection: 'column', gap: 18,
@@ -79,7 +76,7 @@ export default function ForgotPasswordPage() {
           Remembered it? <Link to="/signin" style={{ color: 'var(--accent)' }}>Back to sign in</Link>
         </div>
       </form>
-    </div>
+    </AuthShell>
   );
 }
 

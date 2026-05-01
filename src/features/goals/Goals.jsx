@@ -39,7 +39,7 @@ export default function Goals() {
   }).length;
 
   return (
-    <div style={{ padding: '24px 32px 96px', display: 'flex', flexDirection: 'column', gap: 20 }}>
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Goals & Tasks</h2>
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>

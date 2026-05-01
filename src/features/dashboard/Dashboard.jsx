@@ -29,20 +29,20 @@ function HeroBand() {
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
   return (
-    <div style={{
-      display: 'flex', alignItems: 'center', gap: 20,
+    <div className="hero-band" style={{
+      display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap',
       padding: '24px 32px',
       background: 'var(--surface)',
       borderBottom: '1px solid var(--border)',
     }}>
-      <div style={{ flex: 1 }}>
+      <div style={{ flex: 1, minWidth: 240 }}>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, letterSpacing: '0.04em' }}>{dateStr}</div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 36 }}>{greet}.</h2>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 560 }}>
           Welcome to THRYVE. Add a client or open Ivy — she'll walk you through setup.
         </p>
       </div>
-      <div style={{ display: 'flex', gap: 8 }}>
+      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
         <button className="btn btn-outline"><Icons.Calendar size={14}/>Open calendar</button>
         <button className="btn btn-primary"><Icons.Plus size={14}/>Add client</button>
       </div>

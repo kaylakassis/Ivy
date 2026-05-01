@@ -201,6 +201,17 @@ img, svg, video { max-width: 100%; height: auto; }
   .app-root form.card {
     padding: 22px !important;
   }
+
+  /* Hero band on Dashboard tightens on mobile */
+  .hero-band { padding: 18px 16px !important; gap: 14px !important; }
+  .hero-band .page-title { font-size: 28px !important; }
+
+  /* Cap top-level page titles on mobile so headers don't wrap awkwardly.
+     Pages set inline fontSize: 32 — this overrides on small screens. */
+  .page-pad h1.page-title,
+  .page-pad h2.page-title {
+    font-size: 24px !important;
+  }
 }
 
 /* TABLET: 721-1024px ---------------------------------------- */

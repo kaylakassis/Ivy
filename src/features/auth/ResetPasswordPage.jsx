@@ -2,12 +2,11 @@
 import React, { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { useTweaks } from '../../lib/tweaks.js';
 import { api } from '../../lib/api.js';
 import { PasswordInput } from './AuthPage.jsx';
+import AuthShell from './AuthShell.jsx';
 
 export default function ResetPasswordPage() {
-  const [tweaks] = useTweaks();
   const [params] = useSearchParams();
   const nav = useNavigate();
   const token = params.get('token') || '';
@@ -37,9 +36,7 @@ export default function ResetPasswordPage() {
   };
 
   return (
-    <div className={`app-root dir-${tweaks.direction}`} style={{
-      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
-    }}>
+    <AuthShell>
       <form onSubmit={submit} className="card" style={{
         width: '100%', maxWidth: 420, padding: 32,
         display: 'flex', flexDirection: 'column', gap: 18,
@@ -100,7 +97,7 @@ export default function ResetPasswordPage() {
           <Link to="/signin" style={{ color: 'var(--accent)' }}>Back to sign in</Link>
         </div>
       </form>
-    </div>
+    </AuthShell>
   );
 }
 
