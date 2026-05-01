@@ -1,11 +1,25 @@
 // Ivy Pro: workspace data context + reply generation.
-// Today: deterministic mock replies grounded in the user's real numbers.
-// Later: same `generateReply()` signature switches to a real Anthropic call.
 //
-// Crucially, the reply runs server-side so we can (a) include private
-// workspace data without exposing API keys to the browser and (b) keep
+// Reply path: try real Claude first (api/_lib/ivy.js → generateReply), fall
+// back to a deterministic mock if ANTHROPIC_API_KEY is missing or the API
+// call fails. The reply runs server-side so we can (a) include private
+// workspace data without exposing the API key to the browser and (b) keep
 // each workspace's conversation isolated.
+import Anthropic from '@anthropic-ai/sdk';
 import { sql } from './db.js';
+
+// Single shared client. Reads ANTHROPIC_API_KEY from env automatically.
+let _client = null;
+function anthropic() {
+  if (_client) return _client;
+  if (!process.env.ANTHROPIC_API_KEY) return null;
+  _client = new Anthropic();
+  return _client;
+}
+
+const IVY_MODEL = 'claude-opus-4-7';
+const IVY_MAX_TOKENS = 1024;
+const IVY_HISTORY_TURNS = 10;
 
 export function serializeSession(row, lastPreview) {
   if (!row) return null;
@@ -84,9 +98,98 @@ export async function workspaceContext(workspaceId) {
   };
 }
 
-// Mock reply: deterministic templates that quote real numbers. Designed so the
-// later switch to Anthropic is a one-line change in api/ivy/index.js.
-export function generateReply(text, ctx) {
+// Tries Claude first, falls back to the deterministic mock on any error or
+// missing API key. `history` is the prior conversation as [{role, text}] in
+// chronological order; the latest user turn is `text`.
+export async function generateReply(text, ctx, history = []) {
+  const client = anthropic();
+  if (!client) return mockReply(text, ctx);
+  try {
+    return await claudeReply(client, text, ctx, history);
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[ivy] Anthropic call failed, falling back to mock:', err?.message || err);
+    return mockReply(text, ctx);
+  }
+}
+
+const IVY_SYSTEM = `You are Ivy, an AI business coach inside THRYVE — a small-business OS used by solo entrepreneurs, coaches, consultants, freelancers, and service providers. The owner you're talking to runs a small business and is asking you for advice.
+
+Your job: give honest, specific, immediately useful coaching grounded in their real numbers. The numbers in their workspace (revenue this month, active clients, open invoices, upcoming sessions, quiet clients) are real and current — quote them when relevant.
+
+Voice:
+- Direct and warm. Talk like a smart friend who's run a business before.
+- Concrete over abstract. Specific dollar amounts, specific clients, specific actions.
+- Short responses by default — 2 to 5 sentences for simple questions, longer only when they ask for a plan or breakdown.
+- No corporate-speak, no AI hedging ("As an AI...", "I cannot..."), no preamble ("Great question!").
+- When suggesting a next step, name the action precisely ("Send a thank-you message to your 5 highest-LTV clients" beats "consider engaging your top customers").
+
+When their question is broad, ask one focused follow-up before launching into advice. When it's specific, answer directly.
+
+You can reference: revenue this month, open invoice count, active client count, upcoming sessions in next 7 days, and clients who haven't been messaged in 3+ weeks ("quiet clients"). The current snapshot is included in the user's message. Use those numbers — don't make up data you don't have.
+
+If they ask something outside your scope (legal, medical, tax filings, personal therapy), point that out briefly and redirect to what you can help with.`;
+
+async function claudeReply(client, text, ctx, history) {
+  const messages = buildMessages(text, ctx, history);
+  const response = await client.messages.create({
+    model: IVY_MODEL,
+    max_tokens: IVY_MAX_TOKENS,
+    system: [
+      {
+        type: 'text',
+        text: IVY_SYSTEM,
+        cache_control: { type: 'ephemeral' },
+      },
+    ],
+    messages,
+  });
+  // Concatenate any text blocks; ignore other block types.
+  const reply = response.content
+    .filter((b) => b.type === 'text')
+    .map((b) => b.text)
+    .join('\n')
+    .trim();
+  if (!reply) throw new Error('Empty reply from Claude');
+  return reply;
+}
+
+function fmtCtx(ctx) {
+  const c = ctx || {};
+  const fmt$ = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+  return [
+    `Workspace snapshot (current):`,
+    `- Revenue this month (paid invoices): ${fmt$(c.revenueThisMonth)}`,
+    `- Active clients: ${c.activeClients ?? 0}`,
+    `- Open invoices (sent or overdue): ${c.openInvoices ?? 0}`,
+    `- Sessions booked next 7 days: ${c.upcomingSessions ?? 0}`,
+    `- Quiet clients (no message in 3+ weeks): ${c.quietClients ?? 0}`,
+  ].join('\n');
+}
+
+function buildMessages(text, ctx, history) {
+  // Take the last N turns (one turn ≈ 2 messages: me + ivy). Never start with
+  // an assistant message — drop a leading 'ivy' if it slipped through.
+  const trimmed = (history || []).slice(-IVY_HISTORY_TURNS * 2);
+  while (trimmed.length > 0 && trimmed[0].role !== 'me') trimmed.shift();
+
+  const out = trimmed.map((m) => ({
+    role: m.role === 'me' ? 'user' : 'assistant',
+    content: m.text,
+  }));
+
+  // The latest user turn carries the live snapshot so Ivy reasons over current
+  // numbers rather than whatever was in context when the chat started.
+  out.push({
+    role: 'user',
+    content: `${fmtCtx(ctx)}\n\n---\n\n${text}`,
+  });
+  return out;
+}
+
+// Mock reply: deterministic templates that quote real numbers. Used as a
+// fallback when Claude is unavailable.
+function mockReply(text, ctx) {
   const t = (text || '').toLowerCase();
   const fmt$ = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
 

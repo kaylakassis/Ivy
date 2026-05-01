@@ -56,6 +56,17 @@ export default async function handler(req, res) {
         session = ins.rows[0];
       }
 
+      // Fetch prior turns BEFORE inserting the new user message so the
+      // history we pass to Claude doesn't include the message we're about
+      // to respond to (we pass it as `text` separately).
+      const priorMsgs = await sql`
+        SELECT role, text FROM ivy_messages
+        WHERE session_id = ${session.id}
+        ORDER BY created_at ASC
+        LIMIT 40
+      `;
+      const history = priorMsgs.rows.map((r) => ({ role: r.role, text: r.text }));
+
       const userMsg = await sql`
         INSERT INTO ivy_messages (session_id, role, text)
         VALUES (${session.id}, 'me', ${text})
@@ -63,7 +74,7 @@ export default async function handler(req, res) {
       `;
 
       const ctx = await workspaceContext(workspaceId);
-      const replyText = generateReply(text, ctx);
+      const replyText = await generateReply(text, ctx, history);
 
       const ivyMsg = await sql`
         INSERT INTO ivy_messages (session_id, role, text)
