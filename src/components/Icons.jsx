@@ -54,6 +54,7 @@ export const Icons = {
   Drag:     (p) => <Icon {...p}><circle cx="9" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="6" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="12" r="1.2" fill="currentColor" stroke="none"/><circle cx="9" cy="18" r="1.2" fill="currentColor" stroke="none"/><circle cx="15" cy="18" r="1.2" fill="currentColor" stroke="none"/></Icon>,
   Eye:      (p) => <Icon {...p}><path d="M2.5 12s3.5-7 9.5-7 9.5 7 9.5 7-3.5 7-9.5 7-9.5-7-9.5-7z"/><circle cx="12" cy="12" r="3"/></Icon>,
   EyeOff:   (p) => <Icon {...p}><path d="M3 3l18 18"/><path d="M10.6 10.6a3 3 0 004.2 4.2"/><path d="M9.5 5.4A10 10 0 0112 5c6 0 9.5 7 9.5 7a18 18 0 01-3.5 4.4"/><path d="M6.6 6.6A18 18 0 002.5 12s3.5 7 9.5 7a10 10 0 005-1.3"/></Icon>,
+  Menu:     (p) => <Icon {...p}><path d="M4 7h16M4 12h16M4 17h16"/></Icon>,
   Logo: ({ size = 28, color = 'currentColor' }) => (
     <svg width={size} height={size} viewBox="0 0 40 40" fill="none">
       <path d="M20 4 C12 4, 7 10, 7 18 C7 28, 20 36, 20 36 C20 36, 33 28, 33 18 C33 10, 28 4, 20 4 Z"

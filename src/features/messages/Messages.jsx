@@ -6,16 +6,19 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { useThreads, useThread } from './state.js';
 import { fmtTime, fmtTimestampHeader, computeTimestampPoints } from './utils.js';
 import NewThreadModal from './NewThreadModal.jsx';
+import { useViewport } from '../../lib/viewport.js';
 
 export default function Messages() {
   const { threads, loading, error, startThread, updateThread, setMode } = useThreads();
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
+  const { isMobile } = useViewport();
 
-  // Auto-select the first thread when threads land.
+  // On desktop/tablet auto-select the first thread; on mobile show the list
+  // first and let the user tap into a conversation.
   useEffect(() => {
-    if (!selectedId && threads.length > 0) setSelectedId(threads[0].id);
-  }, [threads, selectedId]);
+    if (!isMobile && !selectedId && threads.length > 0) setSelectedId(threads[0].id);
+  }, [threads, selectedId, isMobile]);
 
   const existingClientIds = useMemo(
     () => new Set(threads.map((t) => t.clientId)),
@@ -41,15 +44,21 @@ export default function Messages() {
     );
   }
 
+  // On mobile we show ONE pane at a time — list when nothing's selected,
+  // conversation otherwise (with a back button rendered in ConversationPane).
+  const showList = !isMobile || !selectedId;
+  const showConversation = !isMobile || !!selectedId;
+
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '320px 1fr',
+      display: 'grid',
+      gridTemplateColumns: isMobile ? '1fr' : '320px 1fr',
       flex: 1, minHeight: 0,
       borderTop: '1px solid var(--border)',
     }}>
       {/* Thread list */}
-      <div style={{
-        borderRight: '1px solid var(--border)',
+      {showList && <div style={{
+        borderRight: isMobile ? 'none' : '1px solid var(--border)',
         display: 'flex', flexDirection: 'column',
         background: 'var(--surface)', minHeight: 0,
       }}>
@@ -76,14 +85,17 @@ export default function Messages() {
             );
           })}
         </div>
-      </div>
+      </div>}
 
       {/* Conversation */}
-      <ConversationPane
-        threadId={selectedId}
-        onMarkRead={(id) => updateThread(id, { unreadBiz: 0 })}
-        onSetMode={setMode}
-      />
+      {showConversation && (
+        <ConversationPane
+          threadId={selectedId}
+          onMarkRead={(id) => updateThread(id, { unreadBiz: 0 })}
+          onSetMode={setMode}
+          onBack={isMobile ? () => setSelectedId(null) : null}
+        />
+      )}
 
       {newOpen && (
         <NewThreadModal
@@ -147,7 +159,7 @@ function ThreadRow({ thread, active, onClick }) {
   );
 }
 
-function ConversationPane({ threadId, onMarkRead, onSetMode }) {
+function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
   const { thread, messages, loading, error, send } = useThread(threadId);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
@@ -204,6 +216,15 @@ function ConversationPane({ threadId, onMarkRead, onSetMode }) {
     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
       {/* Header */}
       <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 12 }}>
+        {onBack && (
+          <button onClick={onBack} aria-label="Back to conversations"
+            style={{
+              padding: 6, borderRadius: 8, color: 'var(--muted)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+            <Icons.Arrow size={18} sw={2} style={{ transform: 'rotate(180deg)' }}/>
+          </button>
+        )}
         <div style={{
           width: 36, height: 36, borderRadius: 12, flexShrink: 0,
           background: 'var(--accent-soft)', color: 'var(--accent)',

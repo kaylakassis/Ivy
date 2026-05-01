@@ -54,11 +54,11 @@ export default function Dashboard() {
   return (
     <div>
       <HeroBand />
-      <div style={{ padding: 32, display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 16 }}>
+      <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div className="grid-auto">
           {METRICS.map(m => <MetricCard key={m.k} label={m.label} />)}
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 16 }}>
+        <div className="split-2">
           <div className="card" style={{ padding: 24 }}>
             <div className="metric-label" style={{ marginBottom: 14 }}>Revenue vs expenses</div>
             <EmptyNote icon="Trending" title="No revenue recorded yet"
@@ -69,7 +69,7 @@ export default function Dashboard() {
             <EmptyNote icon="Calendar" title="No appointments" hint="Share a booking link or add one manually." />
           </div>
         </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="split-2">
           <div className="card" style={{ padding: 20 }}>
             <div className="metric-label" style={{ marginBottom: 10 }}>Activity</div>
             <EmptyNote icon="Clock" title="Nothing yet"

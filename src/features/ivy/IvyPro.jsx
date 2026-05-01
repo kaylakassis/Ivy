@@ -5,11 +5,13 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
+import { useViewport } from '../../lib/viewport.js';
 import { useIvy } from './state.js';
 
 export default function IvyPro() {
   const [tweaks] = useTweaks();
   const direction = tweaks.direction;
+  const { isMobile, isTablet } = useViewport();
   const {
     sessions, activeId, messages, context,
     loading, thinking, error, mode, modeError, usage,
@@ -17,6 +19,8 @@ export default function IvyPro() {
   } = useIvy();
 
   const [draft, setDraft] = useState('');
+  // Mobile: 'chat' | 'history' | 'data' tab. Default to chat.
+  const [mobileTab, setMobileTab] = useState('chat');
   const scrollRef = useRef(null);
 
   useEffect(() => {
@@ -34,15 +38,26 @@ export default function IvyPro() {
     return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading Ivy…</div>;
   }
 
+  // On mobile we stack as tabs; on tablet drop the right rail (data context)
+  // since the chat itself is the primary surface and the right rail can be
+  // recovered via tweaking "What Ivy sees" inline below the chat. On desktop:
+  // the original 3-column layout.
+  const cols = isMobile ? '1fr' : isTablet ? '240px 1fr' : '260px 1fr 320px';
+  const showHistory = !isMobile || mobileTab === 'history';
+  const showChat    = !isMobile || mobileTab === 'chat';
+  const showData    = (!isMobile && !isTablet) || (isMobile && mobileTab === 'data');
+
   return (
     <div style={{
-      height: 'calc(100vh - 60px)', display: 'grid',
-      gridTemplateColumns: '260px 1fr 320px',
+      height: isMobile ? 'calc(100vh - 56px - 64px)' : 'calc(100vh - 60px)',
+      display: 'grid',
+      gridTemplateColumns: cols,
       overflow: 'hidden',
     }}>
       {/* LEFT: history */}
-      <div style={{
-        borderRight: '1px solid var(--border)', background: 'var(--surface)',
+      {showHistory && <div style={{
+        borderRight: isMobile ? 'none' : '1px solid var(--border)',
+        background: 'var(--surface)',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ padding: '20px 18px 14px' }}>
@@ -74,16 +89,17 @@ export default function IvyPro() {
           ) : sessions.map((s) => (
             <SessionRow key={s.id} session={s}
               active={activeId === s.id}
-              onOpen={() => openSession(s.id)}
+              onOpen={() => { openSession(s.id); if (isMobile) setMobileTab('chat'); }}
               onRemove={() => removeSession(s.id)}/>
           ))}
         </div>
-      </div>
+      </div>}
 
       {/* CENTER */}
-      <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--surface-2)' }}>
-        <div style={{ padding: 24, paddingBottom: 0 }}>
-          <InsightBanner context={context} direction={direction} onAct={submit}/>
+      {showChat && <div style={{ display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--surface-2)' }}>
+        {isMobile && <MobileTabBar value={mobileTab} onChange={setMobileTab}/>}
+        <div style={{ padding: isMobile ? '12px 12px 0' : '24px 24px 0' }}>
+          <InsightBanner context={context} direction={direction} onAct={(t) => { submit(t); if (isMobile) setMobileTab('chat'); }}/>
         </div>
 
         <div ref={scrollRef} className="scroll" style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
@@ -137,16 +153,17 @@ export default function IvyPro() {
             </div>
           </div>
         </div>
-      </div>
+      </div>}
 
       {/* RIGHT: context panel */}
-      <div style={{
-        borderLeft: '1px solid var(--border)', background: 'var(--surface)',
+      {showData && <div style={{
+        borderLeft: isMobile ? 'none' : '1px solid var(--border)',
+        background: 'var(--surface)',
         padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 18,
       }}>
         <UploadPlaceholder/>
         <DataContext context={context}/>
-      </div>
+      </div>}
     </div>
   );
 }
@@ -172,6 +189,38 @@ function ModeChip({ mode, modeError }) {
       <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.8 }}>
         {live ? 'opus 4.7' : 'no API key'}
       </span>
+    </div>
+  );
+}
+
+function MobileTabBar({ value, onChange }) {
+  const tabs = [
+    { id: 'chat',    label: 'Chat',    icon: 'Spark' },
+    { id: 'history', label: 'History', icon: 'Chat' },
+    { id: 'data',    label: 'Data',    icon: 'Trending' },
+  ];
+  return (
+    <div style={{
+      display: 'flex', gap: 4, padding: 6, margin: '10px 12px 0',
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      borderRadius: 10,
+    }}>
+      {tabs.map((t) => {
+        const Icon = Icons[t.icon];
+        const on = value === t.id;
+        return (
+          <button key={t.id} onClick={() => onChange(t.id)} style={{
+            flex: 1, padding: '7px 10px', borderRadius: 8,
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            background: on ? 'var(--surface-2)' : 'transparent',
+            color: on ? 'var(--fg)' : 'var(--muted)',
+            fontSize: 12.5, fontWeight: 550,
+          }}>
+            <Icon size={14} sw={on ? 1.9 : 1.6}/>
+            {t.label}
+          </button>
+        );
+      })}
     </div>
   );
 }

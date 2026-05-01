@@ -93,7 +93,7 @@ export default function Clients() {
       </div>
 
       {/* Analytics */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="grid-auto">
         <AnalyticCard label="Total clients" value={active.length + paused.length}
           sub={`${active.length} active · ${paused.length} paused`} icon={<Icons.Users size={16} sw={1.8}/>}/>
         <AnalyticCard

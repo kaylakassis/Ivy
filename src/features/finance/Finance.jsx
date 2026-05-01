@@ -80,7 +80,7 @@ export default function Finance() {
       </div>
 
       {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="grid-auto">
         <SummaryCard label="Outstanding" value={fmtMoney(summary?.totalOutstanding)}
           sub={`${counts.sent + counts.overdue} unpaid`}
           icon={<Icons.Clock size={16} sw={1.8}/>}
@@ -127,29 +127,31 @@ export default function Finance() {
       </div>
 
       {/* Table */}
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
-          padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
-          fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
-          background: 'var(--surface-2)',
-        }}>
-          <div>Number</div><div>Client</div><div>Status</div><div>Issued</div><div>Due</div>
-          <div style={{ textAlign: 'right' }}>Total</div><div/>
-        </div>
-        {rows.length === 0 ? (
-          <div style={{ padding: 48 }}>
-            <EmptyNote
-              icon="Dollar"
-              title={tab === 'all' ? 'No invoices yet' : `No ${tab}`}
-              hint={tab === 'all'
-                ? 'Click "New invoice" to send your first.'
-                : 'Try a different tab.'}
-            />
+      <div className="card table-scroll" style={{ overflow: 'auto' }}>
+        <div>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
+            padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
+            fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-2)',
+          }}>
+            <div>Number</div><div>Client</div><div>Status</div><div>Issued</div><div>Due</div>
+            <div style={{ textAlign: 'right' }}>Total</div><div/>
           </div>
-        ) : rows.map((i, idx) => (
-          <InvoiceRow key={i.id} invoice={i} first={idx === 0} onOpen={() => setOpenId(i.id)}/>
-        ))}
+          {rows.length === 0 ? (
+            <div style={{ padding: 48 }}>
+              <EmptyNote
+                icon="Dollar"
+                title={tab === 'all' ? 'No invoices yet' : `No ${tab}`}
+                hint={tab === 'all'
+                  ? 'Click "New invoice" to send your first.'
+                  : 'Try a different tab.'}
+              />
+            </div>
+          ) : rows.map((i, idx) => (
+            <InvoiceRow key={i.id} invoice={i} first={idx === 0} onOpen={() => setOpenId(i.id)}/>
+          ))}
+        </div>
       </div>
 
       {openInv && (

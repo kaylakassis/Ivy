@@ -11,16 +11,69 @@ function initialsOf(user) {
   return (parts[0]?.[0] || '?').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
 }
 
-export default function Sidebar({ direction }) {
+export default function Sidebar({ direction, variant = 'full' }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const compact = variant === 'compact';
 
   const doSignOut = async () => {
     await signOut();
     nav('/signin', { replace: true });
   };
 
+  // Compact sidebar (tablet): icons only, ~64px wide.
+  if (compact) {
+    return (
+      <aside style={{
+        width: 64, minWidth: 64,
+        background: 'var(--sidebar-bg)',
+        borderRight: '1px solid var(--border)',
+        padding: '14px 8px',
+        display: 'flex', flexDirection: 'column', gap: 14,
+        height: '100vh', position: 'sticky', top: 0,
+      }}>
+        <div style={{
+          width: 36, height: 36, margin: '0 auto', borderRadius: 8,
+          background: 'var(--accent)', color: 'var(--accent-ink)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icons.Logo size={22} color="currentColor"/>
+        </div>
+
+        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {NAV.map((item) => {
+            const Icon = Icons[item.icon] || Icons.Home;
+            return (
+              <NavLink key={item.id} to={item.to} end={item.to === '/'} title={item.label}
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                style={{ justifyContent: 'center', padding: 10 }}
+              >
+                {({ isActive }) => (
+                  <Icon size={19} sw={isActive ? 1.9 : 1.6}
+                    stroke={item.accent && !isActive ? 'var(--accent)' : 'currentColor'}/>
+                )}
+              </NavLink>
+            );
+          })}
+        </nav>
+
+        <div style={{ flex: 1 }}/>
+
+        <button onClick={doSignOut} title="Sign out"
+          style={{
+            width: 36, height: 36, margin: '0 auto', borderRadius: 99,
+            background: 'var(--accent)', color: 'var(--accent-ink)',
+            fontSize: 12, fontWeight: 600,
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          {initialsOf(user)}
+        </button>
+      </aside>
+    );
+  }
+
+  // Full sidebar (desktop): unchanged.
   return (
     <aside style={{
       width: 248, minWidth: 248,

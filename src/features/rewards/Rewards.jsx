@@ -63,14 +63,14 @@ function RewardsLanding({ onLaunch }) {
         <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           Loyalty isn't about giveaways — it's about making your best clients feel seen. The data agrees:
         </p>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+        <div className="grid-auto-sm">
           {stats.map((s, i) => <StatTile key={i} {...s}/>)}
         </div>
       </div>
 
       <div className="card" style={{ padding: 24, marginBottom: 24 }}>
         <h3 style={{ margin: '0 0 16px', fontSize: 17, fontWeight: 600 }}>What you can do</h3>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+        <div className="split-2">
           {offerings.map((o, i) => (
             <div key={i} style={{ display: 'flex', gap: 10, alignItems: 'flex-start' }}>
               <div style={{
@@ -142,7 +142,7 @@ function RewardsManager({ r }) {
       </div>
 
       {/* KPIs */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
+      <div className="grid-auto">
         <Kpi label="Active members"      value={r.kpis.activeMembers} sub="Clients with at least one redemption"/>
         <Kpi label="Rewards redeemed"    value={r.kpis.rewardsRedeemed} sub="All time"/>
         <Kpi label="Repeat revenue"      value={fmtMoney(r.kpis.repeatRevenue)} sub="From clients with 2+ paid invoices" tone="accent"/>

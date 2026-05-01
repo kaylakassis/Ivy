@@ -94,28 +94,30 @@ export default function Documents() {
       </div>
 
       {/* Table */}
-      <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: '2fr 110px 140px 160px 140px',
-          padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
-          fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
-          background: 'var(--surface-2)',
-        }}>
-          <div>Document</div><div>Status</div><div>Recipient</div><div>Updated</div><div/>
-        </div>
-        {rows.length === 0 ? (
-          <div style={{ padding: 48 }}>
-            <EmptyNote
-              icon="Doc"
-              title={tab === 'all' ? 'No documents yet' : `No ${tab}`}
-              hint={tab === 'all'
-                ? 'Click "New document" to create your first waiver, agreement, or intake form.'
-                : 'Try a different tab.'}
-            />
+      <div className="card table-scroll" style={{ overflow: 'auto' }}>
+        <div>
+          <div style={{
+            display: 'grid', gridTemplateColumns: '2fr 110px 140px 160px 140px',
+            padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
+            fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-2)',
+          }}>
+            <div>Document</div><div>Status</div><div>Recipient</div><div>Updated</div><div/>
           </div>
-        ) : rows.map((d, i) => (
-          <DocRow key={d.id} doc={d} first={i === 0} onOpen={() => setOpenId(d.id)}/>
-        ))}
+          {rows.length === 0 ? (
+            <div style={{ padding: 48 }}>
+              <EmptyNote
+                icon="Doc"
+                title={tab === 'all' ? 'No documents yet' : `No ${tab}`}
+                hint={tab === 'all'
+                  ? 'Click "New document" to create your first waiver, agreement, or intake form.'
+                  : 'Try a different tab.'}
+              />
+            </div>
+          ) : rows.map((d, i) => (
+            <DocRow key={d.id} doc={d} first={i === 0} onOpen={() => setOpenId(d.id)}/>
+          ))}
+        </div>
       </div>
 
       {creatingOpen && (

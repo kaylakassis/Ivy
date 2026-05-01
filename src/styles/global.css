@@ -131,3 +131,187 @@ input, textarea { font: inherit; color: inherit; }
   letter-spacing: 0.08em;
   color: var(--muted);
 }
+
+/* ============================================================
+   RESPONSIVE FOUNDATION
+   ============================================================
+   Goal: most pages "just work" on mobile / tablet without per-component
+   changes. Page-level shells branch on useViewport() for the rest. */
+
+/* Sane defaults across all viewports */
+* { -webkit-tap-highlight-color: transparent; }
+html { -webkit-text-size-adjust: 100%; }
+body { overflow-x: hidden; }
+img, svg, video { max-width: 100%; height: auto; }
+
+/* Horizontal scroll-snap helper for tab pickers / chip rows on mobile.
+   Add `className="scroll-x"` to any horizontal flex row that overflows. */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.scroll-x::-webkit-scrollbar { display: none; }
+
+/* Reserve space for the mobile bottom nav. Pages opt in by adding the
+   `has-mobile-nav` class to their root container, OR the body class is
+   set automatically by AppShell when it renders the bottom nav. */
+@media (max-width: 720px) {
+  body.has-mobile-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
+  body.has-mobile-nav .app-root > div { padding-bottom: 64px; }
+}
+
+/* MOBILE: < 720px ------------------------------------------- */
+@media (max-width: 720px) {
+  /* iOS auto-zooms when the focused input is < 16px. Force 16px while
+     keeping the visual size via transform. Simpler: just set 16px. */
+  input, textarea, select {
+    font-size: 16px;
+  }
+
+  /* Larger touch targets on buttons */
+  .btn { padding: 10px 14px; min-height: 40px; }
+  .btn-ghost { min-height: 36px; }
+
+  /* Slightly tighter card radius / padding on small screens */
+  .card { border-radius: 12px; }
+
+  /* Page titles need to shrink so they don't wrap awkwardly. The inline
+     `style={{ fontSize: 32 }}` on individual pages will override this if
+     set, so this is only the floor. */
+  .page-title { letter-spacing: -0.025em; }
+
+  /* metric-label is 12px on desktop; 11px on mobile reads as denser */
+  .metric-label { font-size: 11px; letter-spacing: 0.06em; }
+
+  /* The 280px-min search box in the topbar collapses to an icon button
+     via JS; this CSS hides any leftover kbd hints. */
+  kbd { display: none; }
+
+  /* Modal containers should fill the viewport on phones so users aren't
+     fighting tiny dialogs with full keyboards. Pages that show modals
+     via `position: fixed; inset: 0` already fill the screen — this just
+     tightens default modal padding. */
+  [role="dialog"] {
+    padding: 12px !important;
+  }
+
+  /* Auth-card padding on mobile — desktop uses 32, mobile would waste
+     half the screen. */
+  .app-root form.card {
+    padding: 22px !important;
+  }
+}
+
+/* TABLET: 721-1024px ---------------------------------------- */
+@media (min-width: 721px) and (max-width: 1024px) {
+  .btn { padding: 9px 13px; }
+}
+
+/* Mobile bottom nav (rendered by AppShell when isMobile) */
+.mobile-nav {
+  position: fixed;
+  left: 0; right: 0; bottom: 0;
+  z-index: 60;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 6px 4px calc(6px + env(safe-area-inset-bottom, 0));
+  box-shadow: 0 -2px 12px rgba(0,0,0,0.05);
+}
+.dir-bold .mobile-nav { box-shadow: 0 -2px 12px rgba(0,0,0,0.4); }
+.mobile-nav-item {
+  flex: 1;
+  display: flex; flex-direction: column; align-items: center; gap: 2px;
+  padding: 8px 4px;
+  border-radius: 10px;
+  font-size: 10.5px; font-weight: 550;
+  color: var(--muted);
+  text-decoration: none;
+  text-align: center;
+}
+.mobile-nav-item.active {
+  color: var(--fg);
+  background: var(--surface-2);
+}
+.mobile-nav-item:active { transform: scale(0.96); }
+
+/* Utility: KPI grid that auto-fits + collapses to fewer columns when narrow.
+   Use in place of `gridTemplateColumns: 'repeat(N, 1fr)'`. */
+.grid-auto {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 14px;
+}
+.grid-auto-sm {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 12px;
+}
+
+/* Two-column splits that stack on mobile */
+.split-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 900px) {
+  .split-2 { grid-template-columns: 1fr; }
+}
+
+/* Three-column splits that stack on mobile */
+.split-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+}
+@media (max-width: 900px) {
+  .split-3 { grid-template-columns: 1fr; }
+}
+
+/* Wrap a wide table-style grid in `.table-scroll` to let the content scroll
+   horizontally on narrow viewports while staying tidy on desktop. The first
+   child is the inner content that should keep its full width. */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+@media (max-width: 720px) {
+  .table-scroll > * {
+    min-width: 760px;
+  }
+}
+
+/* Page padding override for mobile so the 24-32px desktop padding doesn't
+   eat half the screen. Page roots can opt-in by adding `.page-pad`. */
+.page-pad {
+  padding: 24px 32px 96px;
+}
+@media (max-width: 720px) {
+  .page-pad { padding: 16px 14px 96px; }
+}
+
+/* Mobile drawer (full nav) */
+.mobile-drawer-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.5);
+  z-index: 70;
+  animation: drawer-fade .15s ease-out;
+}
+.mobile-drawer {
+  position: fixed; top: 0; bottom: 0; left: 0;
+  width: 84vw; max-width: 320px;
+  background: var(--sidebar-bg);
+  border-right: 1px solid var(--border);
+  z-index: 71;
+  display: flex; flex-direction: column;
+  animation: drawer-slide .2s ease-out;
+  overflow-y: auto;
+}
+@keyframes drawer-fade {
+  from { opacity: 0; } to { opacity: 1; }
+}
+@keyframes drawer-slide {
+  from { transform: translateX(-100%); }
+  to   { transform: translateX(0); }
+}

@@ -48,14 +48,14 @@ export default function Goals() {
       </div>
 
       {/* Tiny stats row */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
+      <div className="grid-auto-sm">
         <Stat label="Open tasks"            value={openTasks.length}     sub={`${tasks.length - openTasks.length} done`}/>
         <Stat label="Overdue"               value={overdueCount}         sub="Tasks past due"
           tone={overdueCount > 0 ? 'bad' : 'ok'}/>
         <Stat label="Completed this week"   value={completedThisWeek}    sub="Last 7 days"/>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+      <div className="split-2">
         <TasksPane tasks={tasks}
           onCreate={createTask} onToggle={toggleTask}
           onUpdate={updateTask} onRemove={removeTask}/>

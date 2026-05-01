@@ -1,58 +1,126 @@
-import React from 'react';
+// Topbar — viewport-aware.
+//   Mobile: hamburger button + page title + search icon button (popover) + bell.
+//   Tablet/Desktop: title block + 280px search input + bell.
+import React, { useState } from 'react';
 import { Icons } from '../Icons.jsx';
 
-export default function Topbar({ title, subtitle, children }) {
+export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, children }) {
+  const [searchOpen, setSearchOpen] = useState(false);
+  const compact = isMobile || isTablet;
+
   return (
     <header style={{
-      display: 'flex', alignItems: 'center', gap: 16,
-      padding: '22px 32px 18px',
+      display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 16,
+      padding: isMobile ? '12px 14px' : '22px 32px 18px',
       borderBottom: '1px solid var(--border)',
       background: 'var(--page)',
       position: 'sticky', top: 0, zIndex: 40,
     }}>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>
-          <span>Workspace</span>
-          <span>·</span>
-          <span style={{ color: 'var(--fg-2)' }}>{title}</span>
-        </div>
-        <h1 className="page-title" style={{ margin: 0, fontSize: 28 }}>{subtitle || title}</h1>
-      </div>
-
-      <div style={{
-        display: 'flex', alignItems: 'center', gap: 8,
-        padding: '7px 11px', borderRadius: 10,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        minWidth: 280,
-      }}>
-        <Icons.Search size={15} stroke="var(--muted)" sw={1.6} />
-        <input
-          type="text" placeholder="Search clients, invoices, notes…"
+      {isMobile && (
+        <button onClick={onMenuClick}
+          aria-label="Open menu"
           style={{
-            background: 'none', border: 0, outline: 'none',
-            fontSize: 13, color: 'var(--fg)',
-            flex: 1,
-          }}
-        />
-        <kbd style={{
-          fontSize: 10, fontFamily: 'var(--font-sans)', fontWeight: 500,
-          padding: '2px 5px', borderRadius: 4,
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
-          color: 'var(--muted)',
-        }}>⌘K</kbd>
+            padding: 8, borderRadius: 8, color: 'var(--fg-2)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          <Icons.Menu size={20} sw={1.8}/>
+        </button>
+      )}
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        {!isMobile && (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--muted)', fontSize: 12, marginBottom: 4 }}>
+            <span>Workspace</span>
+            <span>·</span>
+            <span style={{ color: 'var(--fg-2)' }}>{title}</span>
+          </div>
+        )}
+        <h1 className="page-title" style={{
+          margin: 0,
+          fontSize: isMobile ? 20 : 28,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          {isMobile ? title : (subtitle || title)}
+        </h1>
       </div>
 
-      <button className="btn btn-outline" style={{ position: 'relative' }}>
-        <Icons.Bell size={15} />
+      {!compact && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '7px 11px', borderRadius: 10,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          minWidth: 280,
+        }}>
+          <Icons.Search size={15} stroke="var(--muted)" sw={1.6}/>
+          <input
+            type="text" placeholder="Search clients, invoices, notes…"
+            style={{
+              background: 'none', border: 0, outline: 'none',
+              fontSize: 13, color: 'var(--fg)', flex: 1,
+            }}
+          />
+          <kbd style={{
+            fontSize: 10, fontFamily: 'var(--font-sans)', fontWeight: 500,
+            padding: '2px 5px', borderRadius: 4,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            color: 'var(--muted)',
+          }}>⌘K</kbd>
+        </div>
+      )}
+
+      {compact && (
+        <button
+          aria-label="Search"
+          onClick={() => setSearchOpen((s) => !s)}
+          style={{
+            padding: 8, borderRadius: 8, color: 'var(--fg-2)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+          <Icons.Search size={18} sw={1.7}/>
+        </button>
+      )}
+
+      <button className="btn btn-outline" style={{
+        position: 'relative',
+        padding: isMobile ? 8 : undefined,
+      }}>
+        <Icons.Bell size={isMobile ? 16 : 15}/>
         <span style={{
           position: 'absolute', top: 5, right: 5,
           width: 7, height: 7, borderRadius: 99,
           background: 'var(--accent)',
           border: '2px solid var(--surface)',
-        }} />
+        }}/>
       </button>
 
       {children}
+
+      {compact && searchOpen && (
+        <div onClick={() => setSearchOpen(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 65,
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            position: 'fixed', top: isMobile ? 10 : 80, left: 14, right: 14,
+            maxWidth: 600, margin: '0 auto',
+            padding: 12, borderRadius: 12,
+            background: 'var(--surface)', border: '1px solid var(--border-strong)',
+            boxShadow: 'var(--shadow)',
+            display: 'flex', alignItems: 'center', gap: 10,
+          }}>
+            <Icons.Search size={16} stroke="var(--muted)" sw={1.6}/>
+            <input autoFocus type="text" placeholder="Search clients, invoices, notes…"
+              style={{
+                background: 'none', border: 0, outline: 'none',
+                fontSize: 16, color: 'var(--fg)', flex: 1,
+              }}
+            />
+            <button onClick={() => setSearchOpen(false)} className="btn btn-ghost"
+              style={{ padding: '4px 8px', fontSize: 12 }}>
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
     </header>
   );
 }
