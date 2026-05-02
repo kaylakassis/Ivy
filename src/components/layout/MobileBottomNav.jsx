@@ -5,11 +5,11 @@ import { NavLink } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 
 const PRIMARY = [
-  { to: '/',         icon: 'Home',     label: 'Home' },
-  { to: '/clients',  icon: 'Users',    label: 'Clients' },
-  { to: '/calendar', icon: 'Calendar', label: 'Calendar' },
-  { to: '/messages', icon: 'Chat',     label: 'Messages' },
-  { to: '/ivy',      icon: 'Spark',    label: 'Ivy' },
+  { to: '/dashboard', icon: 'Home',     label: 'Home' },
+  { to: '/clients',   icon: 'Users',    label: 'Clients' },
+  { to: '/calendar',  icon: 'Calendar', label: 'Calendar' },
+  { to: '/messages',  icon: 'Chat',     label: 'Messages' },
+  { to: '/ivy',       icon: 'Spark',    label: 'Ivy' },
 ];
 
 export default function MobileBottomNav() {

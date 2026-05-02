@@ -1,6 +1,6 @@
 // Shared navigation config for Sidebar + breadcrumbs.
 export const NAV = [
-  { id: 'dashboard', to: '/',           label: 'Dashboard',      icon: 'Home' },
+  { id: 'dashboard', to: '/dashboard',  label: 'Dashboard',      icon: 'Home' },
   { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users' },
   { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar' },
   { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar' },

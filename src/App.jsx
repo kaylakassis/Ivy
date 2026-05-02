@@ -30,10 +30,15 @@ import PublicBooking from './features/calendar/PublicBooking.jsx';
 import PublicSite from './features/website/PublicSite.jsx';
 import PrivacyPage from './features/legal/PrivacyPage.jsx';
 import TermsPage from './features/legal/TermsPage.jsx';
+import RootRouter from './features/marketing/RootRouter.jsx';
 
 export default function App() {
   return (
     <Routes>
+      {/* Public marketing landing — also handles "I'm logged in, where to?"
+          redirect for authenticated users. */}
+      <Route path="/" element={<RootRouter />} />
+
       {/* Auth */}
       <Route path="/signin"          element={<AuthPage mode="signin" />} />
       <Route path="/signup"          element={<AuthPage mode="signup" />} />
@@ -52,9 +57,10 @@ export default function App() {
       <Route path="/terms"   element={<TermsPage />} />
 
       {/* Business app shell (auth-gated). RoleRouter sends client-only
-          users to /me before the shell renders. */}
+          users to /me before the shell renders. Dashboard lives at
+          /dashboard so the marketing page can own /. */}
       <Route element={<RequireAuth><RoleRouter><AppShell /></RoleRouter></RequireAuth>}>
-        <Route index              element={<Dashboard />} />
+        <Route path="/dashboard"  element={<Dashboard />} />
         <Route path="/clients"    element={<Clients />} />
         <Route path="/calendar"   element={<Calendar />} />
         <Route path="/finance"    element={<Finance />} />
