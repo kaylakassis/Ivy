@@ -1,8 +1,19 @@
 // Resend wrapper. Sends transactional email (verification, password reset).
-// Env: RESEND_API_KEY (required), EMAIL_FROM (optional, defaults to onboarding@resend.dev).
+// Env:
+//   RESEND_API_KEY (required)
+//   EMAIL_FROM     (defaults to onboarding@resend.dev — replace once you've
+//                   verified your own domain in Resend)
+//   EMAIL_REPLY_TO (optional — where replies should route; defaults to
+//                   stripping the From-name so user replies hit it)
 //
-// To send from your own domain instead of resend.dev, verify a domain in Resend
-// and set EMAIL_FROM to e.g. "THRYVE <noreply@your-domain.com>".
+// To send from your own domain instead of resend.dev:
+//   1. Add your domain in https://resend.com/domains and complete the DNS
+//      records they list (SPF, DKIM, DMARC). Status must read "Verified".
+//   2. Set EMAIL_FROM='THRYVE <noreply@your-domain.com>' in Vercel envs.
+//   3. Set EMAIL_REPLY_TO='support@your-domain.com' so user replies have
+//      somewhere to land.
+//   4. Hit GET /api/admin/email-status with your ADMIN_SECRET to confirm
+//      Resend reports the domain as verified.
 
 const RESEND_URL = 'https://api.resend.com/emails';
 
@@ -10,9 +21,29 @@ function fromAddress() {
   return process.env.EMAIL_FROM || 'THRYVE <onboarding@resend.dev>';
 }
 
-export async function sendEmail({ to, subject, html, text }) {
+function replyToAddress() {
+  return process.env.EMAIL_REPLY_TO || null;
+}
+
+export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
+
+  const body = {
+    from: fromAddress(),
+    to: Array.isArray(to) ? to : [to],
+    subject,
+    html,
+    text: text || stripHtml(html),
+  };
+
+  // Reply-To: explicit override > env default > skip.
+  const reply = replyTo || replyToAddress();
+  if (reply) body.reply_to = reply;
+
+  // Allow callers to pass extra headers (e.g. List-Unsubscribe for nicer
+  // inbox treatment). Keys are passed through as-is.
+  if (headers && typeof headers === 'object') body.headers = headers;
 
   const res = await fetch(RESEND_URL, {
     method: 'POST',
@@ -20,13 +51,7 @@ export async function sendEmail({ to, subject, html, text }) {
       Authorization: `Bearer ${key}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      from: fromAddress(),
-      to: Array.isArray(to) ? to : [to],
-      subject,
-      html,
-      text: text || stripHtml(html),
-    }),
+    body: JSON.stringify(body),
   });
 
   if (!res.ok) {
