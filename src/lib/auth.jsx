@@ -23,10 +23,12 @@ export function AuthProvider({ children }) {
     return r.user;
   }, []);
 
-  const signUp = useCallback(async (email, password, name) => {
-    const r = await api.post('/auth/signup', { email, password, name });
+  // mode: 'owner' (default — creates a workspace) or 'client' (no workspace,
+  // claims existing client records by email match).
+  const signUp = useCallback(async (email, password, name, mode = 'owner') => {
+    const r = await api.post('/auth/signup', { email, password, name, mode });
     setUser(r.user);
-    return r.user;
+    return r;
   }, []);
 
   const signOut = useCallback(async () => {

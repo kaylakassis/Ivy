@@ -78,6 +78,13 @@ CREATE INDEX IF NOT EXISTS idx_clients_workspace_stage ON clients(workspace_id, 
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
 
+-- Client portal: when an end-customer signs up to THRYVE, we link their user
+-- account to every existing `clients` row that matches their email so they
+-- can see their data across multiple businesses they book with. user_id
+-- nullable because most rows are created by owners before the client signs up.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_clients_user ON clients(user_id);
+
 CREATE TABLE IF NOT EXISTS calendar_settings (
   workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
   biz_name TEXT NOT NULL DEFAULT 'My business',

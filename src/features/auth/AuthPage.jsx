@@ -12,6 +12,7 @@ export default function AuthPage({ mode = 'signin' }) {
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
   const [name,     setName]     = useState('');
+  const [role,     setRole]     = useState('owner'); // 'owner' | 'client'
   const [busy, setBusy]   = useState(false);
   const [err,  setErr]    = useState(null);
 
@@ -28,9 +29,15 @@ export default function AuthPage({ mode = 'signin' }) {
     }
     setBusy(true);
     try {
-      if (isSignUp) await signUp(email, password, name || null);
-      else          await signIn(email, password);
-      nav('/', { replace: true });
+      if (isSignUp) {
+        await signUp(email, password, name || null, role);
+        nav(role === 'client' ? '/me' : '/', { replace: true });
+      } else {
+        await signIn(email, password);
+        // For sign-in we let RoleRouter (in AppShell entry) figure out where
+        // to land — pushing to '/' triggers it.
+        nav('/', { replace: true });
+      }
     } catch (ex) {
       setErr(ex.message || 'Something went wrong');
     } finally {
@@ -70,9 +77,14 @@ export default function AuthPage({ mode = 'signin' }) {
         </div>
 
         {isSignUp && (
-          <Field label="Your name (optional)">
-            <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" style={inputS} />
-          </Field>
+          <>
+            <Field label="I'm signing up as a…">
+              <RoleToggle value={role} onChange={setRole}/>
+            </Field>
+            <Field label="Your name (optional)">
+              <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" style={inputS} />
+            </Field>
+          </>
         )}
         <Field label="Email">
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" style={inputS} />
@@ -159,6 +171,35 @@ function Field({ label, children }) {
       <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--fg-2)' }}>{label}</span>
       {children}
     </label>
+  );
+}
+
+function RoleToggle({ value, onChange }) {
+  const options = [
+    { id: 'owner',  label: 'Business owner',  hint: 'I run a business and want to manage it.' },
+    { id: 'client', label: 'Client / customer', hint: 'I book with a business that uses THRYVE.' },
+  ];
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      {options.map((o) => {
+        const on = value === o.id;
+        return (
+          <button key={o.id} type="button" onClick={() => onChange(o.id)} style={{
+            padding: '12px 12px', borderRadius: 10, textAlign: 'left',
+            background: on ? 'var(--accent-soft)' : 'var(--surface)',
+            border: '1.5px solid ' + (on ? 'var(--accent)' : 'var(--border)'),
+            cursor: 'pointer',
+          }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: on ? 'var(--accent)' : 'var(--fg)' }}>
+              {o.label}
+            </div>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, lineHeight: 1.4 }}>
+              {o.hint}
+            </div>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 

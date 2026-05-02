@@ -14,11 +14,15 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   try {
-    const { email, password, name } = await readBody(req);
+    const { email, password, name, mode } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || password.length < 8) {
       return badRequest(res, 'Password must be at least 8 characters');
     }
+    // 'owner' (default) creates a workspace; 'client' does not — they're
+    // signing up to view their bookings/invoices/messages from businesses
+    // that already added them to a workspace as a client record.
+    const role = mode === 'client' ? 'client' : 'owner';
 
     const ip = getClientIp(req);
     const blocked = await enforce(req, res, [
@@ -37,10 +41,19 @@ export default async function handler(req, res) {
       RETURNING id, email, name, created_at, email_verified_at
     `;
     const user = insertUser.rows[0];
-    await sql`INSERT INTO workspaces (owner_id) VALUES (${user.id})`;
 
-    // Sign them in immediately — frictionless onboarding. Verification banner
-    // in the app prompts them to confirm later.
+    if (role === 'owner') {
+      await sql`INSERT INTO workspaces (owner_id) VALUES (${user.id})`;
+    } else {
+      // Client signup: claim every existing `clients` row that already
+      // matches this email so they immediately see their data when they
+      // hit /me. Idempotent.
+      await sql`
+        UPDATE clients SET user_id = ${user.id}
+        WHERE email = ${emailKey} AND user_id IS NULL
+      `;
+    }
+
     setSessionCookie(res, signSession(user.id));
 
     // Fire-and-(mostly)-forget the verification email — don't fail signup
@@ -67,7 +80,7 @@ export default async function handler(req, res) {
       console.error('[signup] verification email failed:', mailErr.message);
     }
 
-    return created(res, { user });
+    return created(res, { user, role });
   } catch (err) {
     return serverError(res, err);
   }
