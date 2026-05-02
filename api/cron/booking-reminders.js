@@ -1,0 +1,171 @@
+// /api/cron/booking-reminders — hourly job. For every upcoming non-cancelled
+// booking, walks the service's reminder_minutes[] (default {10080, 2880,
+// 1440, 120} = 1 week, 2 days, 1 day, 2 hours). If now() is within a
+// (target - 70min, target + 5min] window for a beat that hasn't been sent
+// yet, fires the reminder email and stamps reminders_sent[<minutes>].
+//
+// Auth: same as welcome-emails — Authorization: Bearer $CRON_SECRET from
+// Vercel cron, OR x-admin-secret for manual testing.
+//
+// TZ caveat: bookings.date + start_min are treated as UTC for the math.
+// For v1 this is good enough — reminders fire within the right hour even
+// if the workspace's local timezone differs. We can layer
+// calendar_settings.timezone on top later.
+import { sql } from '../_lib/db.js';
+import { sendEmail, emailShell } from '../_lib/email.js';
+import { appUrl } from '../_lib/tokens.js';
+import { reportError } from '../_lib/monitoring.js';
+import { ok, serverError, unauthorized } from '../_lib/json.js';
+
+// Per-run cap so a backlog (cron paused for a day, etc.) doesn't blow
+// past Resend's rate limit on resume. The next hour catches the rest.
+const MAX_PER_RUN = 200;
+
+// Window constants (minutes). The lookback covers one full skipped run,
+// so an outage of up to 70 minutes self-heals. The lookahead absorbs cron
+// timing slop (Vercel doesn't fire exactly on the hour).
+const LOOKBACK_MIN  = 70;
+const LOOKAHEAD_MIN = 5;
+
+export default async function handler(req, res) {
+  const cronAuth = req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+  const adminAuth = process.env.ADMIN_SECRET
+    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
+  if (!cronAuth && !adminAuth) return unauthorized(res);
+
+  try {
+    const now = Date.now();
+
+    // Pull every active booking up to 8 days out + its service's reminder
+    // schedule + the business name. 8 days covers the longest default
+    // reminder beat (1 week) plus a buffer.
+    const { rows } = await sql`
+      SELECT
+        b.id, b.client_email, b.client_name,
+        b.date, b.start_min, b.end_min, b.notes,
+        b.reminders_sent,
+        s.name AS service_name,
+        COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
+        cs.biz_name
+      FROM bookings b
+      LEFT JOIN services s ON s.id = b.service_id
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+      WHERE b.cancelled_at IS NULL
+        AND b.client_email IS NOT NULL AND b.client_email <> ''
+        AND b.date BETWEEN CURRENT_DATE - INTERVAL '1 day'
+                       AND CURRENT_DATE + INTERVAL '8 days'
+      ORDER BY b.date, b.start_min
+      LIMIT 5000
+    `;
+
+    let sent = 0;
+    let scanned = 0;
+    let failed = 0;
+    for (const r of rows) {
+      if (sent >= MAX_PER_RUN) break;
+      scanned++;
+      const dateISO = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date;
+      const startMs = Date.parse(`${dateISO}T00:00:00Z`) + r.start_min * 60 * 1000;
+      if (Number.isNaN(startMs)) continue;
+      // Don't send reminders for bookings that have already started.
+      if (startMs <= now) continue;
+
+      const already = r.reminders_sent || {};
+      const reminderMinutes = Array.isArray(r.reminder_minutes) ? r.reminder_minutes : [];
+      for (const mins of reminderMinutes) {
+        if (sent >= MAX_PER_RUN) break;
+        const minsNum = Number(mins);
+        if (!Number.isFinite(minsNum) || minsNum <= 0) continue;
+        const key = String(minsNum);
+        if (already[key]) continue;
+
+        // Target = booking_start - reminder_minutes. Fire if NOW() is in
+        // [target - lookahead, target + lookback]. Lookahead is small so
+        // we don't send before the window; lookback covers gaps.
+        const targetMs = startMs - minsNum * 60 * 1000;
+        const diffMin = (now - targetMs) / 60000;
+        if (diffMin < -LOOKAHEAD_MIN) continue; // too early
+        if (diffMin >  LOOKBACK_MIN)  continue; // too late, skip silently
+
+        try {
+          await sendReminder({
+            to: r.client_email,
+            clientName: r.client_name,
+            serviceName: r.service_name || 'Session',
+            businessName: r.biz_name || 'Your business',
+            dateISO,
+            startMin: r.start_min,
+            endMin: r.end_min,
+            reminderMinutes: minsNum,
+            notes: r.notes,
+          });
+          await sql`
+            UPDATE bookings
+            SET reminders_sent = reminders_sent || jsonb_build_object(${key}, NOW()::text)
+            WHERE id = ${r.id}
+          `;
+          sent++;
+        } catch (err) {
+          // eslint-disable-next-line no-console
+          console.error(`[booking-reminder ${r.id}/${key}] failed:`, err.message);
+          reportError(err, { extra: { bookingId: r.id, beat: key } });
+          failed++;
+        }
+      }
+    }
+
+    return ok(res, { ok: true, scanned, sent, failed });
+  } catch (err) {
+    reportError(err, { req });
+    return serverError(res, err);
+  }
+}
+
+function fmtDay(iso) {
+  const d = new Date(iso + 'T00:00:00Z');
+  return d.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
+}
+function fmtTime(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  const ampm = h >= 12 ? 'pm' : 'am';
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+function describeWindow(mins) {
+  if (mins >= 60 * 24 * 7) return `in ${Math.round(mins / (60 * 24 * 7))} week${mins >= 60 * 24 * 14 ? 's' : ''}`;
+  if (mins >= 60 * 24)     return `in ${Math.round(mins / (60 * 24))} day${mins >= 60 * 48 ? 's' : ''}`;
+  if (mins >= 60)          return `in ${Math.round(mins / 60)} hour${mins >= 120 ? 's' : ''}`;
+  return `in ${mins} minute${mins === 1 ? '' : 's'}`;
+}
+
+async function sendReminder({ to, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes }) {
+  const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
+  const when = describeWindow(reminderMinutes);
+  const html = emailShell({
+    heading: `Reminder: your appointment is ${when}`,
+    body: `<p>${greeting}</p>
+      <p>Just a heads up — you have an appointment with
+        <strong>${escapeHtml(businessName)}</strong> ${when}.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0"
+        style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(fmtDay(dateISO))}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(fmtTime(startMin))} – ${escapeHtml(fmtTime(endMin))}</td></tr>
+        ${notes ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;vertical-align:top;">Note</td><td style="padding:6px 0;">${escapeHtml(notes)}</td></tr>` : ''}
+      </table>
+      <p>Need to reschedule or message ${escapeHtml(businessName)}? Open your portal —
+      you can chat with them directly.</p>`,
+    ctaText: 'Open my portal',
+    ctaUrl: `${appUrl()}/me`,
+    footer: `Reminder sent automatically. If you weren't expecting this email, please reach out to ${escapeHtml(businessName)}.`,
+  });
+  await sendEmail({
+    to,
+    subject: `Reminder: ${serviceName} ${when} — ${fmtDay(dateISO)}`,
+    html,
+  });
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
