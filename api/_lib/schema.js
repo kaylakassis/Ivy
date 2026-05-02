@@ -69,6 +69,22 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+-- Welcome-email sequence tracker. Keys are 'day1' | 'day3' | 'day7' | 'day14',
+-- values are ISO timestamps. Stored as JSONB so we can add new beats later
+-- without another migration.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Backfill: any user already past the whole 14-day window when this column
+-- lands gets marked as fully sent so the cron doesn't retroactively spam
+-- pre-existing accounts. Self-correcting via the empty-jsonb check.
+UPDATE users
+SET welcome_sent = jsonb_build_object(
+  'day1',  created_at::text,
+  'day3',  created_at::text,
+  'day7',  created_at::text,
+  'day14', created_at::text
+)
+WHERE welcome_sent = '{}'::jsonb
+  AND created_at < NOW() - INTERVAL '14 days';
 
 CREATE TABLE IF NOT EXISTS clients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
