@@ -22,7 +22,9 @@ import AccountPage from './features/account/AccountPage.jsx';
 import ClientShell from './features/client/ClientShell.jsx';
 import ClientHome from './features/client/ClientHome.jsx';
 import ClientMessages from './features/client/ClientMessages.jsx';
-import ClientStub from './features/client/ClientStub.jsx';
+import ClientBookings from './features/client/ClientBookings.jsx';
+import ClientInvoices from './features/client/ClientInvoices.jsx';
+import ClientDocuments from './features/client/ClientDocuments.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
 import PublicBooking from './features/calendar/PublicBooking.jsx';
 import PublicSite from './features/website/PublicSite.jsx';
@@ -70,12 +72,9 @@ export default function App() {
       <Route element={<RequireAuth><ClientShell /></RequireAuth>}>
         <Route path="/me"           element={<ClientHome />} />
         <Route path="/me/messages"  element={<ClientMessages />} />
-        <Route path="/me/bookings"  element={<ClientStub icon="Calendar" title="Bookings — coming soon"
-          hint="Your appointments across all THRYVE businesses will land here."/>} />
-        <Route path="/me/invoices"  element={<ClientStub icon="Dollar" title="Payments — coming soon"
-          hint="Pending and paid invoices from every business you book with."/>} />
-        <Route path="/me/documents" element={<ClientStub icon="Doc" title="Documents — coming soon"
-          hint="Waivers, agreements, and intake forms awaiting your signature."/>} />
+        <Route path="/me/bookings"  element={<ClientBookings />} />
+        <Route path="/me/invoices"  element={<ClientInvoices />} />
+        <Route path="/me/documents" element={<ClientDocuments />} />
       </Route>
     </Routes>
   );
