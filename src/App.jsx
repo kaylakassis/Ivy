@@ -31,6 +31,7 @@ import PublicSite from './features/website/PublicSite.jsx';
 import PrivacyPage from './features/legal/PrivacyPage.jsx';
 import TermsPage from './features/legal/TermsPage.jsx';
 import RootRouter from './features/marketing/RootRouter.jsx';
+import OnboardingPage from './features/onboarding/OnboardingPage.jsx';
 
 export default function App() {
   return (
@@ -55,6 +56,12 @@ export default function App() {
       {/* Legal (public, no auth) */}
       <Route path="/privacy" element={<PrivacyPage />} />
       <Route path="/terms"   element={<TermsPage />} />
+
+      {/* First-run wizard for new owners. Auth-gated but no AppShell so it
+          can't get caught in RoleRouter's "redirect un-onboarded users to
+          /onboarding" loop. */}
+      <Route path="/onboarding"
+        element={<RequireAuth><OnboardingPage /></RequireAuth>} />
 
       {/* Business app shell (auth-gated). RoleRouter sends client-only
           users to /me before the shell renders. Dashboard lives at

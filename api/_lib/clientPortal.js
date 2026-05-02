@@ -52,19 +52,22 @@ export function ids(memberships) {
   return memberships.map((m) => m.clientId);
 }
 
-// Does this user own a workspace? (Used to decide which app to show
-// after sign-in: business view, client view, or a switcher.)
+// Does this user own a workspace? Returns { id, onboardedAt } or null.
+// (Used to decide which app to show after sign-in: business, client, or
+// a switcher — and whether to route a fresh owner through /onboarding.)
 export async function ownsWorkspace(userId) {
   const { rows } = await sql`
-    SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1
+    SELECT id, onboarded_at FROM workspaces WHERE owner_id = ${userId} LIMIT 1
   `;
-  return rows.length > 0 ? rows[0].id : null;
+  return rows.length > 0
+    ? { id: rows[0].id, onboardedAt: rows[0].onboarded_at }
+    : null;
 }
 
 // Build a context object the frontend uses to choose the default app +
 // render the view-switcher only when the user is genuinely both.
 export async function userContext(user) {
-  const [workspaceId, memberships] = await Promise.all([
+  const [workspace, memberships] = await Promise.all([
     ownsWorkspace(user.id),
     myClientIds(user),
   ]);
@@ -75,9 +78,10 @@ export async function userContext(user) {
       name: user.name,
       emailVerifiedAt: user.email_verified_at,
     },
-    isOwner:  !!workspaceId,
+    isOwner:  !!workspace,
     isClient: memberships.length > 0,
-    workspaceId,
+    workspaceId: workspace?.id || null,
+    onboardedAt: workspace?.onboardedAt || null,
     memberships,
   };
 }

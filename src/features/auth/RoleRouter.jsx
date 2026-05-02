@@ -20,6 +20,8 @@ export default function RoleRouter({ children }) {
     api.get('/me')
       .then((r) => {
         if (!live) return;
+        // Fresh owner who hasn't completed onboarding → wizard.
+        if (r.isOwner && !r.onboardedAt) { setDecision('onboarding'); return; }
         if (r.isOwner) setDecision('business');
         else if (r.isClient) setDecision('client');
         else setDecision('business'); // fall back; the empty business shell is harmless
@@ -36,6 +38,7 @@ export default function RoleRouter({ children }) {
   if (!decision) {
     return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
   }
-  if (decision === 'client') return <Navigate to="/me" replace/>;
+  if (decision === 'onboarding') return <Navigate to="/onboarding" replace/>;
+  if (decision === 'client')     return <Navigate to="/me" replace/>;
   return children;
 }

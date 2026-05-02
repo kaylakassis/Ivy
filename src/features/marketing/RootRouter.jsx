@@ -22,6 +22,8 @@ export default function RootRouter() {
     api.get('/me')
       .then((r) => {
         if (!live) return;
+        // Owner who hasn't finished onboarding → wizard.
+        if (r.isOwner && !r.onboardedAt) { setDecision('onboarding'); return; }
         if (r.isOwner) setDecision('business');
         else if (r.isClient) setDecision('client');
         else setDecision('business'); // workspace got auto-created on signup
@@ -47,5 +49,7 @@ export default function RootRouter() {
   }
 
   // Logged-in: bounce to the right surface.
-  return <Navigate to={decision === 'client' ? '/me' : '/dashboard'} replace/>;
+  if (decision === 'onboarding') return <Navigate to="/onboarding" replace/>;
+  if (decision === 'client')     return <Navigate to="/me" replace/>;
+  return <Navigate to="/dashboard" replace/>;
 }

@@ -24,6 +24,17 @@ CREATE TABLE IF NOT EXISTS workspaces (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_id);
+-- Tracks first-run onboarding completion so we know whether to route the
+-- owner to /onboarding or straight to /dashboard. Self-correcting backfill:
+-- any pre-existing workspace that already has clients or services is marked
+-- onboarded so existing users don't get bumped through the wizard.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+UPDATE workspaces w SET onboarded_at = created_at
+WHERE onboarded_at IS NULL
+  AND (
+    EXISTS (SELECT 1 FROM clients  WHERE workspace_id = w.id)
+    OR EXISTS (SELECT 1 FROM services WHERE workspace_id = w.id)
+  );
 
 CREATE TABLE IF NOT EXISTS websites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
