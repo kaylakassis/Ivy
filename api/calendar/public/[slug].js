@@ -13,6 +13,7 @@ import {
   hasConflict, withinAvailability,
 } from '../../_lib/calendar.js';
 import { validEmail } from '../../_lib/auth.js';
+import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -148,6 +149,9 @@ async function createBooking(req, res) {
       RETURNING *
     `;
     const b = insert.rows[0];
+    // Side effects (thread + emails). Don't await — the public booker
+    // should see "confirmed!" without waiting on Resend round-trips.
+    notifyNewBooking({ workspaceId, bookingId: b.id, source: 'public' });
     return created(res, {
       booking: {
         id: b.id,

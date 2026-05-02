@@ -10,6 +10,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import {
   hasConflict, withinAvailability, serializeBooking, VALID_RECURRENCE,
 } from '../_lib/calendar.js';
+import { notifyNewBooking } from '../_lib/bookingNotify.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -92,6 +93,9 @@ export default async function handler(req, res) {
       )
       RETURNING *
     `;
+    // Auto-create the client-side chat thread + send the client a confirmation.
+    // Don't notify the owner here (they're the one who just created it).
+    notifyNewBooking({ workspaceId, bookingId: insert.rows[0].id, source: 'owner' });
     return created(res, { booking: serializeBooking(insert.rows[0]) });
   } catch (err) {
     return serverError(res, err);
