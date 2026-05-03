@@ -6,6 +6,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { useClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
+import ImportClientsModal from './ImportClientsModal.jsx';
 
 const DAY = 86400e3;
 
@@ -20,12 +21,13 @@ function timeAgo(iso) {
 }
 
 export default function Clients() {
-  const { clients, loading, create, update, remove } = useClients();
+  const { clients, loading, create, update, remove, refresh } = useClients();
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
   const [leadWindow, setLeadWindow] = useState(30);
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
 
   const { active, leads, paused, analytics } = useMemo(() => {
     const now = Date.now();
@@ -89,9 +91,14 @@ export default function Clients() {
             Your book of business — actives, leads, and the ones on pause.
           </div>
         </div>
-        <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
-          <Icons.Plus size={13} sw={2}/> Add client
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
+            <Icons.Doc size={13}/> Import CSV
+          </button>
+          <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
+            <Icons.Plus size={13} sw={2}/> Add client
+          </button>
+        </div>
       </div>
 
       {/* Analytics */}
@@ -186,6 +193,12 @@ export default function Clients() {
         />
       )}
       {addOpen && <AddClientModal onClose={() => setAddOpen(false)} onAdd={onAdd}/>}
+      {importOpen && (
+        <ImportClientsModal
+          onClose={() => setImportOpen(false)}
+          onComplete={() => refresh?.()}
+        />
+      )}
     </div>
   );
 }

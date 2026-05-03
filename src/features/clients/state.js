@@ -44,5 +44,11 @@ export function useClients() {
     setClients((cs) => cs.filter((c) => c.id !== id));
   }, []);
 
-  return { clients, loading, error, create, update, remove };
+  const refresh = useCallback(async () => {
+    const r = await api.get('/clients');
+    setClients(r.clients || []);
+    return r.clients;
+  }, []);
+
+  return { clients, loading, error, create, update, remove, refresh };
 }
