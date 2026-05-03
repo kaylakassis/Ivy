@@ -16,6 +16,7 @@ import { sql } from '../_lib/db.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
+import { isSuperAdminBySession } from '../_lib/admin.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 
 const SEQUENCES = [
@@ -31,11 +32,13 @@ const SEQUENCES = [
 const MAX_PER_BEAT = 200;
 
 export default async function handler(req, res) {
-  // Allow Vercel cron OR the operator's admin secret. Reject everything else.
+  // Allow Vercel cron, the operator's admin secret, OR an in-app trigger
+  // from a signed-in super-admin clicking the button in /account → Admin.
   const cronAuth = req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
     && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  if (!cronAuth && !adminAuth) return unauthorized(res);
+  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
+  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
     const summary = {};

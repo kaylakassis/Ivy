@@ -15,6 +15,7 @@ import { sql } from '../_lib/db.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
+import { isSuperAdminBySession } from '../_lib/admin.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 
 // Per-run cap so a backlog (cron paused for a day, etc.) doesn't blow
@@ -31,7 +32,9 @@ export default async function handler(req, res) {
   const cronAuth = req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
     && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  if (!cronAuth && !adminAuth) return unauthorized(res);
+  // Third path: signed-in super-admin clicking the in-app trigger button.
+  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
+  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
     const now = Date.now();

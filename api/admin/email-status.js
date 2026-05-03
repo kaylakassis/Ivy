@@ -32,14 +32,13 @@
 //   • failed   — record missing or wrong; copy the value from Resend
 //                dashboard and re-add it at your DNS provider
 import { requireSameOrigin } from '../_lib/security.js';
-import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { requireSuperAdmin } from '../_lib/admin.js';
+import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   if (!requireSameOrigin(req, res)) return;
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret) return res.status(500).json({ error: 'ADMIN_SECRET not set' });
-  if (req.headers['x-admin-secret'] !== secret) return unauthorized(res);
+  if (!(await requireSuperAdmin(req, res))) return;
 
   const key = process.env.RESEND_API_KEY;
   if (!key) return res.status(500).json({ error: 'RESEND_API_KEY not set' });

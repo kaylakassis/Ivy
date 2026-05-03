@@ -1,21 +1,23 @@
 // POST /api/admin/migrate — applies the schema embedded in api/_lib/schema.js.
-// Protected by a shared secret; run once after first deploy (and after each
-// schema change that adds new statements; CREATE TABLE IF NOT EXISTS makes
-// re-runs safe).
+// Protected: requires either x-admin-secret header OR an authenticated
+// super-admin session (SUPER_ADMIN_EMAIL match). Re-runs are safe — every
+// statement uses IF NOT EXISTS or idempotent UPDATE/INSERT patterns.
 //
+// Curl:
 //   curl -X POST -H "x-admin-secret: $ADMIN_SECRET" https://your-app.vercel.app/api/admin/migrate
+//
+// In-app: a button in /account → Admin runs this with the user's session.
 
 import { sql } from '../_lib/db.js';
 import { SCHEMA_SQL } from '../_lib/schema.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { ok, methodNotAllowed, serverError, unauthorized } from '../_lib/json.js';
+import { requireSuperAdmin } from '../_lib/admin.js';
+import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret) return res.status(500).json({ error: 'ADMIN_SECRET not set' });
-  if (req.headers['x-admin-secret'] !== secret) return unauthorized(res);
+  if (!(await requireSuperAdmin(req, res))) return;
 
   try {
     const statements = SCHEMA_SQL

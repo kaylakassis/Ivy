@@ -12,14 +12,13 @@
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { requireSuperAdmin } from '../_lib/admin.js';
+import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
-  const secret = process.env.ADMIN_SECRET;
-  if (!secret) return res.status(500).json({ error: 'ADMIN_SECRET not set' });
-  if (req.headers['x-admin-secret'] !== secret) return unauthorized(res);
+  if (!(await requireSuperAdmin(req, res))) return;
 
   try {
     const body = await readBody(req);

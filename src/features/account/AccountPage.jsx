@@ -2,12 +2,14 @@
 //   • Profile (read-only summary of the authenticated user)
 //   • Export your data — downloads a JSON dump of every workspace row
 //   • Delete account — irreversible; requires re-typing the email
+//   • (Super-admin only) Admin panel: run migrations, test email, etc.
 //
 // Future tabs (billing, team, notifications) will mount alongside.
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
+import { api } from '../../lib/api.js';
 
 export default function AccountPage() {
   const { user, refresh } = useAuth();
@@ -95,6 +97,8 @@ export default function AccountPage() {
           <Icons.Trash size={14}/> Delete my account
         </button>
       </div>
+
+      {user?.isSuperAdmin && <AdminPanel/>}
 
       {deleteOpen && (
         <DeleteAccountModal
@@ -213,6 +217,167 @@ function DeleteAccountModal({ email, onCancel, onConfirmed }) {
           </button>
         </div>
       </form>
+    </div>
+  );
+}
+
+// ---- Admin panel (visible only to SUPER_ADMIN_EMAIL) ----
+// Replaces the curl playbook for the most common admin operations.
+// Each button is a one-shot fetch with a tiny status indicator below it.
+function AdminPanel() {
+  return (
+    <div className="card" style={{
+      padding: 22, borderColor: 'var(--accent)',
+      borderWidth: 1, borderStyle: 'solid',
+      background: 'color-mix(in srgb, var(--accent-soft) 60%, var(--surface))',
+    }}>
+      <div className="metric-label" style={{ marginBottom: 8, color: 'var(--accent)' }}>
+        Admin
+      </div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Operator console</h3>
+      <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        One-click versions of the curl commands. Visible to you because your
+        email matches <code>SUPER_ADMIN_EMAIL</code>; hidden from everyone else.
+      </p>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <ActionRow
+          label="Run database migrations"
+          desc="Applies any new schema changes from the latest deploy. Safe to re-run."
+          fetcher={() => api.post('/admin/migrate')}
+          actionLabel="Run migrate"
+          successText={(r) => `Applied ${r.applied} statements.`}
+        />
+        <ActionRow
+          label="Check email-domain status"
+          desc="Pulls Resend's verification state for your sending domains."
+          fetcher={() => api.get('/admin/email-status')}
+          actionLabel="Check status"
+          successText={(r) => {
+            if (!r.domains?.length) return `No domains in Resend yet. From: ${r.from}`;
+            return r.domains.map((d) => `${d.name}: ${d.status}`).join(' · ');
+          }}
+        />
+        <SendTestEmailRow/>
+        <ActionRow
+          label="Trigger welcome-email cron now"
+          desc="Sends any due welcome-sequence beats to eligible users immediately."
+          fetcher={() => api.post('/cron/welcome-emails')}
+          actionLabel="Run now"
+          successText={(r) => {
+            const total = Object.values(r.summary || {}).reduce((s, v) => s + (v?.sent || 0), 0);
+            return `Sent ${total} email${total === 1 ? '' : 's'} across all beats.`;
+          }}
+        />
+        <ActionRow
+          label="Trigger booking-reminder cron now"
+          desc="Forces an immediate scan of upcoming bookings for due reminders."
+          fetcher={() => api.post('/cron/booking-reminders')}
+          actionLabel="Run now"
+          successText={(r) => `Scanned ${r.scanned}, sent ${r.sent}, failed ${r.failed}.`}
+        />
+      </div>
+    </div>
+  );
+}
+
+function ActionRow({ label, desc, fetcher, actionLabel, successText }) {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const run = async () => {
+    setBusy(true); setErr(null); setResult(null);
+    try {
+      const r = await fetcher();
+      setResult(successText ? successText(r) : 'OK');
+    } catch (e) {
+      setErr(e.message || 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{
+      padding: '12px 14px', borderRadius: 10,
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+    }}>
+      <div style={{ flex: 1, minWidth: 240 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{desc}</div>
+        {result && (
+          <div style={{ fontSize: 11.5, color: 'var(--ok)', marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+            <Icons.Check size={11} sw={2.4}/> {result}
+          </div>
+        )}
+        {err && (
+          <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 6 }}>
+            {err}
+          </div>
+        )}
+      </div>
+      <button onClick={run} disabled={busy}
+        className="btn btn-outline" style={{ padding: '6px 12px', fontSize: 12 }}>
+        {busy ? 'Running…' : actionLabel}
+      </button>
+    </div>
+  );
+}
+
+function SendTestEmailRow() {
+  const [to, setTo] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const run = async () => {
+    if (!to.trim()) { setErr('Enter an email'); return; }
+    setBusy(true); setErr(null); setResult(null);
+    try {
+      const r = await api.post('/admin/email-test', { to: to.trim() });
+      setResult(`Sent. Check ${to} in a minute (incl. spam folder).`);
+    } catch (e) {
+      setErr(e.message || 'Failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{
+      padding: '12px 14px', borderRadius: 10,
+      background: 'var(--surface)', border: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      <div>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>Send test email</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+          Sends a deliverability-check email through the same path the rest of the app uses.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input type="email" value={to} onChange={(e) => setTo(e.target.value)}
+          placeholder="you@example.com"
+          style={{
+            flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8,
+            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+            color: 'var(--fg)', fontSize: 13, outline: 'none',
+          }}/>
+        <button onClick={run} disabled={busy || !to.trim()}
+          className="btn btn-outline" style={{ padding: '6px 12px', fontSize: 12 }}>
+          {busy ? 'Sending…' : 'Send test'}
+        </button>
+      </div>
+      {result && (
+        <div style={{ fontSize: 11.5, color: 'var(--ok)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+          <Icons.Check size={11} sw={2.4}/> {result}
+        </div>
+      )}
+      {err && (
+        <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>
+      )}
     </div>
   );
 }
