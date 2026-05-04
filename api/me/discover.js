@@ -22,6 +22,7 @@ export default async function handler(req, res) {
         cs.biz_name,
         cs.slug,
         cs.tagline,
+        cs.category,
         (SELECT COUNT(*)::int FROM services s WHERE s.workspace_id = cs.workspace_id) AS service_count,
         (SELECT MIN(price)::numeric FROM services s WHERE s.workspace_id = cs.workspace_id) AS min_price
       FROM calendar_settings cs
@@ -34,6 +35,7 @@ export default async function handler(req, res) {
       slug:         r.slug,
       bizName:      r.biz_name,
       tagline:      r.tagline || '',
+      category:     r.category || null,
       serviceCount: r.service_count || 0,
       minPrice:     r.min_price != null ? Number(r.min_price) : null,
     }));

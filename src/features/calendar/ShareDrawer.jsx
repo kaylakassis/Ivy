@@ -6,11 +6,14 @@ import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
 import { slugify } from './utils.js';
 
+const CATEGORIES = ['Wellness', 'Beauty', 'Fitness', 'Health', 'Professional'];
+
 export default function ShareDrawer({ settings, onSave, onClose }) {
   const [bizName, setBizName] = useState(settings.bizName || '');
   const [slug, setSlug]       = useState(settings.slug || '');
   const [tagline, setTagline] = useState(settings.tagline || '');
   const [discoverable, setDiscoverable] = useState(!!settings.discoverable);
+  const [category, setCategory] = useState(settings.category || '');
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState(null);
   const [copied, setCopied]   = useState(false);
@@ -20,11 +23,13 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   useEffect(() => { setSlug(settings.slug || ''); },       [settings.slug]);
   useEffect(() => { setTagline(settings.tagline || ''); }, [settings.tagline]);
   useEffect(() => { setDiscoverable(!!settings.discoverable); }, [settings.discoverable]);
+  useEffect(() => { setCategory(settings.category || ''); }, [settings.category]);
 
   const dirty = bizName !== (settings.bizName || '')
     || slug !== (settings.slug || '')
     || tagline !== (settings.tagline || '')
-    || discoverable !== !!settings.discoverable;
+    || discoverable !== !!settings.discoverable
+    || category !== (settings.category || '');
   const savedSlug = settings.slug || null;
   const isPublished = !!savedSlug;
   const shareUrl = savedSlug ? `${window.location.origin}/book/${savedSlug}` : '';
@@ -39,6 +44,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
         slug: slug ? slug.toLowerCase().trim() : null,
         tagline: tagline.trim() || null,
         discoverable,
+        category: category || null,
       });
     } catch (e) {
       setErr(e.message || 'Could not save');
@@ -130,6 +136,29 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
                 ? "Show your business in the THRYVE directory. Any signed-in user can find you and book through your public link."
                 : "Save a handle above first — Discover entries link to your public booking page."}
             </div>
+            {discoverable && isPublished && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
+                  Category <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span>
+                </div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                  {CATEGORIES.map((c) => {
+                    const on = category === c;
+                    return (
+                      <button type="button" key={c}
+                        onClick={() => setCategory(on ? '' : c)}
+                        style={{
+                          padding: '4px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 600,
+                          background: on ? 'var(--fg)' : 'var(--surface)',
+                          color: on ? 'var(--page)' : 'var(--fg-2)',
+                          border: `1px solid ${on ? 'var(--fg)' : 'var(--border)'}`,
+                          cursor: 'pointer',
+                        }}>{c}</button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
           </div>
         </label>
       </div>

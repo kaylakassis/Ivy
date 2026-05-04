@@ -127,6 +127,10 @@ CREATE INDEX IF NOT EXISTS idx_calendar_settings_slug ON calendar_settings(slug)
 -- is the one-line pitch shown under the business name on the listing.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS discoverable BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
+-- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
+-- Health / Professional). Optional — null means "uncategorized" and the biz
+-- only matches the All chip.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS category TEXT;
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_discoverable ON calendar_settings(discoverable) WHERE discoverable = TRUE;
 
 CREATE TABLE IF NOT EXISTS services (

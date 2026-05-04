@@ -67,7 +67,18 @@ export default function ClientDocuments() {
   const finished = docs.filter((d) => d.status !== 'sent');
 
   return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div>
+        <h2 style={{
+          fontFamily: 'var(--font-display)', fontWeight: 500,
+          fontSize: 'clamp(26px, 4vw, 32px)',
+          letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05,
+        }}>Documents</h2>
+        <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>
+          Forms and agreements from every business you work with — sign once, kept forever.
+        </p>
+      </div>
+
       {docs.length === 0 ? (
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Doc" title="No documents yet"
@@ -76,10 +87,10 @@ export default function ClientDocuments() {
       ) : (
         <>
           {pending.length > 0 && (
-            <Section title="Awaiting your signature" docs={pending} onOpen={open} opening={opening} accent/>
+            <Section title="Action needed" docs={pending} onOpen={open} opening={opening} accent/>
           )}
           {finished.length > 0 && (
-            <Section title={pending.length > 0 ? 'Other documents' : 'Documents'} docs={finished} onOpen={open} opening={opening}/>
+            <Section title="Signed & filed" docs={finished} onOpen={open} opening={opening}/>
           )}
         </>
       )}
@@ -111,6 +122,9 @@ function Section({ title, docs, onOpen, opening, accent }) {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
                   From {d.businessName}
+                  {d.status === 'sent' && d.fieldCount > 0 && (
+                    <> · {d.fieldCount} field{d.fieldCount === 1 ? '' : 's'} to fill</>
+                  )}
                   {d.sentAt && <> · Sent {fmtDate(d.sentAt)}</>}
                   {d.completedAt && <> · Signed {fmtDate(d.completedAt)}</>}
                 </div>

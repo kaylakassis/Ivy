@@ -11,6 +11,7 @@ export const EMPTY_CAL = {
     bufferMinutes: 0,
     discoverable: false,
     tagline: '',
+    category: null,
     availability: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
   },
   services: [],

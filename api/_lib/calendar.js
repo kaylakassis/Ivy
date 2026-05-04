@@ -24,9 +24,15 @@ export function serializeSettings(row) {
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',
+    category:       row.category || null,
     updatedAt:      row.updated_at,
   };
 }
+
+// Categories for Discover. Owners pick one (or none). Kept short so the chip
+// row doesn't overflow on small screens — add carefully.
+export const DISCOVER_CATEGORIES = ['Wellness', 'Beauty', 'Fitness', 'Health', 'Professional'];
+export const DISCOVER_CATEGORY_SET = new Set(DISCOVER_CATEGORIES);
 
 export function serializeService(row) {
   if (!row) return null;

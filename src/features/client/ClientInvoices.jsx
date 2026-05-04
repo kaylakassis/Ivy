@@ -67,25 +67,59 @@ export default function ClientInvoices() {
     </div>
   );
 
+  // Sum into the three summary buckets the page header shows. Use paid_at
+  // when available (real settlement date) and fall back to issue_date for
+  // legacy rows. Anything paid after the first of the current month counts
+  // as "this month".
+  const now = new Date();
+  const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+  const monthLabel = now.toLocaleDateString([], { month: 'long' });
+
   const totalOwed = invoices
     .filter((i) => i.status === 'sent' || i.status === 'overdue')
     .reduce((s, i) => s + (i.total || 0), 0);
+  const monthPaid = invoices
+    .filter((i) => i.status === 'paid' && new Date(i.paidAt || i.issueDate) >= monthStart)
+    .reduce((s, i) => s + (i.total || 0), 0);
+  const lifetimePaid = invoices
+    .filter((i) => i.status === 'paid')
+    .reduce((s, i) => s + (i.total || 0), 0);
 
   return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      {totalOwed > 0 && (
-        <div className="card" style={{ padding: 18, display: 'flex', alignItems: 'center', gap: 14 }}>
-          <div style={{
-            width: 44, height: 44, borderRadius: 12, flexShrink: 0,
-            background: 'var(--warn)', color: '#fff',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><Icons.Dollar size={20}/></div>
-          <div style={{ flex: 1 }}>
-            <div className="metric-label">Outstanding</div>
-            <div className="metric-value" style={{ fontSize: 22, color: 'var(--warn)' }}>{fmtMoney(totalOwed)}</div>
-          </div>
-        </div>
-      )}
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
+      <div>
+        <h2 style={{
+          fontFamily: 'var(--font-display)', fontWeight: 500,
+          fontSize: 'clamp(26px, 4vw, 32px)',
+          letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05,
+        }}>Payments</h2>
+        <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>
+          Every invoice across every business that's billed you on THRYVE.
+        </p>
+      </div>
+
+      {/* Summary tiles */}
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12,
+      }}>
+        <SummaryTile
+          label={`Spent in ${monthLabel}`}
+          value={fmtMoney(monthPaid)}
+          tone="muted"
+          hint={`${invoices.filter((i) => i.status === 'paid' && new Date(i.paidAt || i.issueDate) >= monthStart).length} paid this month`}/>
+        <SummaryTile
+          label="Lifetime spend"
+          value={fmtMoney(lifetimePaid)}
+          tone="muted"
+          hint={`${invoices.filter((i) => i.status === 'paid').length} paid invoice${invoices.filter((i) => i.status === 'paid').length === 1 ? '' : 's'}`}/>
+        <SummaryTile
+          label="Outstanding"
+          value={fmtMoney(totalOwed)}
+          tone={totalOwed > 0 ? 'warn' : 'ok'}
+          hint={totalOwed > 0
+            ? `${invoices.filter((i) => i.status === 'sent' || i.status === 'overdue').length} unpaid`
+            : "You're all caught up"}/>
+      </div>
 
       {invoices.length === 0 ? (
         <div className="card" style={{ padding: 40 }}>
@@ -132,6 +166,23 @@ export default function ClientInvoices() {
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+function SummaryTile({ label, value, tone, hint }) {
+  const accent = tone === 'warn' ? 'var(--warn)'
+    : tone === 'ok' ? 'var(--ok)'
+    : 'var(--fg)';
+  return (
+    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div className="metric-label">{label}</div>
+      <div className="mono-num" style={{
+        fontSize: 26, fontWeight: 600, color: accent, letterSpacing: '-0.01em',
+      }}>{value}</div>
+      {hint && (
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>{hint}</div>
       )}
     </div>
   );

@@ -21,7 +21,9 @@ export default async function handler(req, res) {
 
     const { rows } = await sql.query(
       `SELECT id, recipient_client_id, name, kind, status,
-              sent_at, completed_at, updated_at
+              sent_at, completed_at, updated_at,
+              jsonb_array_length(fields) AS field_count,
+              page_count
        FROM documents
        WHERE recipient_client_id = ANY($1)
          AND status <> 'draft'
@@ -40,6 +42,8 @@ export default async function handler(req, res) {
         sentAt: r.sent_at,
         completedAt: r.completed_at,
         updatedAt: r.updated_at,
+        fieldCount: r.field_count || 0,
+        pageCount: r.page_count || 1,
         businessName: m?.businessName || 'Business',
       };
     });

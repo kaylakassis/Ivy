@@ -7,7 +7,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import {
   ensureCalendarSettings, serializeSettings, serializeService, serializeBlock,
-  serializeBooking, VALID_HANDLE,
+  serializeBooking, VALID_HANDLE, DISCOVER_CATEGORY_SET,
 } from '../_lib/calendar.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
@@ -86,6 +86,13 @@ export default async function handler(req, res) {
       if ('tagline' in body) {
         const t = body.tagline == null ? null : String(body.tagline).trim().slice(0, 140);
         push('tagline', t || null);
+      }
+      if ('category' in body) {
+        const c = body.category == null ? null : String(body.category).trim();
+        if (c && !DISCOVER_CATEGORY_SET.has(c)) {
+          return badRequest(res, 'Invalid category');
+        }
+        push('category', c || null);
       }
       if ('availability' in body) {
         const a = body.availability;
