@@ -64,6 +64,10 @@ export function readSession(req) {
 
 // Returns the current user row, or sends 401 and returns null.
 export async function requireUser(req, res) {
+  // Lazy import to avoid a circular dep — auth.js is imported very early.
+  const { ensureSchemaApplied } = await import('./ensureSchema.js');
+  await ensureSchemaApplied();
+
   const session = readSession(req);
   if (!session?.sub) {
     res.status(401).json({ error: 'Unauthorized' });
