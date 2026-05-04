@@ -22,6 +22,8 @@ export function serializeSettings(row) {
     slotMinutes:    row.slot_minutes,
     bufferMinutes:  row.buffer_minutes,
     availability:   row.availability || {},
+    discoverable:   !!row.discoverable,
+    tagline:        row.tagline || '',
     updatedAt:      row.updated_at,
   };
 }

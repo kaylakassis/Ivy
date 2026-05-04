@@ -16,10 +16,15 @@ import { sql } from './db.js';
 // Returns the IDs of every `clients` row this user owns, across workspaces.
 // Matches by user_id first, then auto-claims any rows with the same email
 // (so links pre-dating signup get attached to the user).
+//
+// SECURITY: the email auto-claim only runs once the user's email is verified.
+// Without this guard, anyone could sign up with a known target's email
+// address and immediately scoop up every workspace's clients-row that
+// happens to use that email — a cross-tenant data exfiltration path. The
+// verification step proves the user actually controls the inbox before we
+// link any pre-existing records to their account.
 export async function myClientIds(user) {
-  // First, opportunistically claim rows by email match. Idempotent — only
-  // updates rows that aren't already linked.
-  if (user.email) {
+  if (user.email && user.email_verified_at) {
     await sql`
       UPDATE clients
       SET user_id = ${user.id}

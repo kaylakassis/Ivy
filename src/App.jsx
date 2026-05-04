@@ -25,6 +25,7 @@ import ClientMessages from './features/client/ClientMessages.jsx';
 import ClientBookings from './features/client/ClientBookings.jsx';
 import ClientInvoices from './features/client/ClientInvoices.jsx';
 import ClientDocuments from './features/client/ClientDocuments.jsx';
+import ClientDiscover from './features/client/ClientDiscover.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
 import PublicBooking from './features/calendar/PublicBooking.jsx';
 import PublicSite from './features/website/PublicSite.jsx';
@@ -88,6 +89,7 @@ export default function App() {
         <Route path="/me/bookings"  element={<ClientBookings />} />
         <Route path="/me/invoices"  element={<ClientInvoices />} />
         <Route path="/me/documents" element={<ClientDocuments />} />
+        <Route path="/me/discover"  element={<ClientDiscover />} />
       </Route>
     </Routes>
   );

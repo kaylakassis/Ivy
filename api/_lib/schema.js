@@ -122,6 +122,12 @@ CREATE TABLE IF NOT EXISTS calendar_settings (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_slug ON calendar_settings(slug);
+-- Discover: opt-in directory listing on /me/discover. A business with
+-- discoverable=true and a slug is shown to all signed-in clients. Tagline
+-- is the one-line pitch shown under the business name on the listing.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS discoverable BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
+CREATE INDEX IF NOT EXISTS idx_calendar_settings_discoverable ON calendar_settings(discoverable) WHERE discoverable = TRUE;
 
 CREATE TABLE IF NOT EXISTS services (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -30,9 +30,13 @@ export default function ClientHome() {
       </div>
 
       {!isClient && (
-        <div className="card" style={{ padding: 28 }}>
+        <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <EmptyNote icon="Users" title="No businesses yet"
             hint={`Once a business owner adds you as a client (or you book through their THRYVE link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`}/>
+          <Link to="/me/discover" className="btn btn-primary"
+            style={{ alignSelf: 'flex-start' }}>
+            <Icons.Globe size={13} sw={1.7}/> Browse businesses on THRYVE
+          </Link>
         </div>
       )}
 

@@ -25,7 +25,7 @@ export default async function handler(req, res) {
               s.name AS service_name,
               s.duration_minutes, s.price
        FROM bookings b
-       LEFT JOIN services s ON s.id = b.service_id
+       LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        WHERE b.client_id = ANY($1)
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 500`,

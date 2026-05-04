@@ -27,6 +27,9 @@ export default function ClientBookings() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [tab, setTab]         = useState('upcoming');
+  const [confirming, setConfirming] = useState(null); // booking object pending cancel
+  const [cancelBusy, setCancelBusy] = useState(false);
+  const [cancelErr, setCancelErr]   = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -36,6 +39,23 @@ export default function ClientBookings() {
       .finally(() => live && setLoading(false));
     return () => { live = false; };
   }, []);
+
+  async function doCancel() {
+    if (!confirming) return;
+    setCancelBusy(true);
+    setCancelErr(null);
+    try {
+      await api.del('/me/bookings/' + confirming.id);
+      // Refetch so upcoming/past/cancelled buckets are correct.
+      const fresh = await api.get('/me/bookings');
+      setData(fresh);
+      setConfirming(null);
+    } catch (e) {
+      setCancelErr(e.message || 'Could not cancel');
+    } finally {
+      setCancelBusy(false);
+    }
+  }
 
   if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading bookings…</div>;
   if (error) return (
@@ -81,14 +101,27 @@ export default function ClientBookings() {
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>
-          {rows.map((b, i) => <BookingRow key={b.id} booking={b} first={i === 0}/>)}
+          {rows.map((b, i) => (
+            <BookingRow key={b.id} booking={b} first={i === 0}
+              cancellable={tab === 'upcoming' && !b.cancelledAt}
+              onCancel={() => { setCancelErr(null); setConfirming(b); }}/>
+          ))}
         </div>
+      )}
+
+      {confirming && (
+        <CancelConfirmDialog
+          booking={confirming}
+          busy={cancelBusy}
+          error={cancelErr}
+          onClose={() => !cancelBusy && setConfirming(null)}
+          onConfirm={doCancel}/>
       )}
     </div>
   );
 }
 
-function BookingRow({ booking, first }) {
+function BookingRow({ booking, first, cancellable, onCancel }) {
   const d = new Date(booking.date + 'T00:00:00');
   return (
     <div style={{
@@ -128,6 +161,72 @@ function BookingRow({ booking, first }) {
           Cancelled
         </div>
       )}
+      {cancellable && (
+        <button onClick={onCancel} className="btn btn-ghost"
+          style={{ fontSize: 12, padding: '6px 10px', color: 'var(--muted)' }}
+          title="Cancel this booking">
+          Cancel
+        </button>
+      )}
+    </div>
+  );
+}
+
+function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
+  return (
+    <div onClick={onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, padding: 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--surface)', border: '1px solid var(--border-strong)',
+          borderRadius: 14, boxShadow: 'var(--shadow-lg, var(--shadow))',
+          width: '100%', maxWidth: 420, padding: 22,
+          display: 'flex', flexDirection: 'column', gap: 14,
+        }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'rgba(155,44,44,0.12)', color: 'var(--danger)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <Icons.X size={18} sw={2}/>
+          </div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Cancel this booking?</div>
+        </div>
+        <div style={{
+          padding: 12, borderRadius: 10, background: 'var(--surface-2)',
+          border: '1px solid var(--border)', fontSize: 13, lineHeight: 1.6,
+        }}>
+          <div style={{ fontWeight: 600 }}>{booking.serviceName || 'Session'}</div>
+          <div style={{ color: 'var(--muted)', marginTop: 2 }}>{booking.businessName}</div>
+          <div style={{ color: 'var(--muted)', marginTop: 4 }}>
+            {fmtDay(booking.date)} · {fmtTime(booking.startMin)} – {fmtTime(booking.endMin)}
+          </div>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+          The business will be notified through your message thread. This can't be undone — you'd need
+          to book again from scratch.
+        </div>
+        {error && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)', fontSize: 12.5,
+          }}>{error}</div>
+        )}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onClose} disabled={busy}>
+            Keep booking
+          </button>
+          <button className="btn btn-primary" onClick={onConfirm} disabled={busy}
+            style={{ background: 'var(--danger)', borderColor: 'var(--danger)' }}>
+            {busy ? 'Cancelling…' : 'Cancel booking'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

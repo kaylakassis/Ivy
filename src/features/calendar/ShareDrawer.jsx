@@ -9,6 +9,8 @@ import { slugify } from './utils.js';
 export default function ShareDrawer({ settings, onSave, onClose }) {
   const [bizName, setBizName] = useState(settings.bizName || '');
   const [slug, setSlug]       = useState(settings.slug || '');
+  const [tagline, setTagline] = useState(settings.tagline || '');
+  const [discoverable, setDiscoverable] = useState(!!settings.discoverable);
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState(null);
   const [copied, setCopied]   = useState(false);
@@ -16,8 +18,13 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   // If the parent settings change (e.g. another save lands), pull them in.
   useEffect(() => { setBizName(settings.bizName || ''); }, [settings.bizName]);
   useEffect(() => { setSlug(settings.slug || ''); },       [settings.slug]);
+  useEffect(() => { setTagline(settings.tagline || ''); }, [settings.tagline]);
+  useEffect(() => { setDiscoverable(!!settings.discoverable); }, [settings.discoverable]);
 
-  const dirty = bizName !== (settings.bizName || '') || slug !== (settings.slug || '');
+  const dirty = bizName !== (settings.bizName || '')
+    || slug !== (settings.slug || '')
+    || tagline !== (settings.tagline || '')
+    || discoverable !== !!settings.discoverable;
   const savedSlug = settings.slug || null;
   const isPublished = !!savedSlug;
   const shareUrl = savedSlug ? `${window.location.origin}/book/${savedSlug}` : '';
@@ -30,6 +37,8 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
       await onSave({
         bizName: bizName.trim() || 'My business',
         slug: slug ? slug.toLowerCase().trim() : null,
+        tagline: tagline.trim() || null,
+        discoverable,
       });
     } catch (e) {
       setErr(e.message || 'Could not save');
@@ -86,6 +95,44 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
             style={{ flex: 1, padding: '10px 12px', background: 'transparent', border: 0, outline: 'none', color: 'var(--fg)', fontSize: 14 }}/>
         </div>
       </Field>
+
+      <Field label="Tagline" hint="Optional one-liner shown on your booking page and in Discover.">
+        <input value={tagline}
+          onChange={(e) => setTagline(e.target.value.slice(0, 140))}
+          onKeyDown={(e) => { if (e.key === 'Enter') save(); }}
+          placeholder="Massage therapy in downtown Austin"
+          maxLength={140}
+          style={inputSty}/>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, textAlign: 'right' }}>
+          {tagline.length}/140
+        </div>
+      </Field>
+
+      {/* Discover opt-in. Only meaningful once a handle is saved — Discover
+          listings link to /book/<slug>, so a business with no slug has nothing
+          to point at. */}
+      <div style={{
+        padding: '12px 14px', borderRadius: 10, marginBottom: 16,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        opacity: isPublished ? 1 : 0.55,
+      }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: isPublished ? 'pointer' : 'not-allowed' }}>
+          <input type="checkbox" checked={discoverable}
+            disabled={!isPublished}
+            onChange={(e) => setDiscoverable(e.target.checked)}
+            style={{ marginTop: 3 }}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icons.Globe size={13} sw={1.7}/> List me in Discover
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+              {isPublished
+                ? "Show your business in the THRYVE directory. Any signed-in user can find you and book through your public link."
+                : "Save a handle above first — Discover entries link to your public booking page."}
+            </div>
+          </div>
+        </label>
+      </div>
 
       {err && (
         <div style={{

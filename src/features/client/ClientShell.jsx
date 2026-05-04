@@ -18,6 +18,7 @@ const NAV = [
   { to: '/me/bookings',  label: 'Bookings',  icon: 'Calendar' },
   { to: '/me/invoices',  label: 'Payments',  icon: 'Dollar' },
   { to: '/me/documents', label: 'Documents', icon: 'Doc' },
+  { to: '/me/discover',  label: 'Discover',  icon: 'Globe' },
 ];
 
 export default function ClientShell() {

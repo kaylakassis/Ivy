@@ -51,7 +51,7 @@ export default async function handler(req, res) {
         COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
         cs.biz_name
       FROM bookings b
-      LEFT JOIN services s ON s.id = b.service_id
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
       WHERE b.cancelled_at IS NULL
         AND b.client_email IS NOT NULL AND b.client_email <> ''

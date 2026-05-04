@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     const { rows } = await sql.query(
       `SELECT t.*, c.name AS client_name, c.email AS client_email
        FROM message_threads t
-       JOIN clients c ON c.id = t.client_id
+       JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
        WHERE t.id = $1 AND t.client_id = ANY($2)`,
       [id, myIds],
     );
@@ -40,8 +40,15 @@ export default async function handler(req, res) {
         SELECT * FROM messages WHERE thread_id = ${id} ORDER BY created_at
       `;
       // Clear the client's unread badge once they've opened the thread.
+      // Defense-in-depth: re-scope to client_id = ANY(myIds) so a future
+      // regression in the SELECT above can't be coerced into clearing
+      // somebody else's unread counter.
       if (thread.unread_client > 0) {
-        await sql`UPDATE message_threads SET unread_client = 0 WHERE id = ${id}`;
+        await sql.query(
+          `UPDATE message_threads SET unread_client = 0
+           WHERE id = $1 AND client_id = ANY($2)`,
+          [id, myIds],
+        );
         thread.unread_client = 0;
       }
       return ok(res, {
@@ -66,13 +73,17 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       const preview = text.slice(0, 200);
-      await sql`
-        UPDATE message_threads SET
-          last_message_at = NOW(),
-          last_message_preview = ${preview},
-          unread_biz = unread_biz + 1
-        WHERE id = ${id}
-      `;
+      // Defense-in-depth: thread ownership is verified by the SELECT above,
+      // but re-scope the UPDATE to client_id = ANY(myIds) so a future
+      // regression can't bump the unread counter on someone else's thread.
+      await sql.query(
+        `UPDATE message_threads SET
+           last_message_at = NOW(),
+           last_message_preview = $1,
+           unread_biz = unread_biz + 1
+         WHERE id = $2 AND client_id = ANY($3)`,
+        [preview, id, myIds],
+      );
       return created(res, { message: serializeMessage(inserted.rows[0]) });
     }
 

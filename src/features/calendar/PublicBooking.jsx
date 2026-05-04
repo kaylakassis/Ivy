@@ -104,7 +104,7 @@ export default function PublicBooking() {
 
   return (
     <PageWrap tweaks={tweaks}>
-      <Header bizName={cal.settings.bizName}/>
+      <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
 
       {step === 'confirmed' ? (
         <div className="card" style={{ padding: 36 }}>
@@ -277,7 +277,7 @@ function PageWrap({ tweaks, children }) {
   );
 }
 
-function Header({ bizName }) {
+function Header({ bizName, tagline }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
       <div style={{
@@ -285,9 +285,14 @@ function Header({ bizName }) {
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22,
       }}>{(bizName || 'T')[0].toUpperCase()}</div>
-      <div>
+      <div style={{ minWidth: 0 }}>
         <div className="metric-label">Book an appointment</div>
         <h1 className="page-title" style={{ margin: '4px 0 0', fontSize: 28 }}>{bizName || 'Your business'}</h1>
+        {tagline && (
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+            {tagline}
+          </div>
+        )}
       </div>
     </div>
   );

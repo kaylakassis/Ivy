@@ -20,7 +20,7 @@ export default async function handler(req, res) {
       const { rows } = await sql`
         SELECT t.*, c.name AS client_name, c.email AS client_email
         FROM message_threads t
-        JOIN clients c ON c.id = t.client_id
+        JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
         WHERE t.workspace_id = ${workspaceId}
         ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
       `;

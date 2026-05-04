@@ -27,9 +27,10 @@ export default async function handler(req, res) {
       const msgs = await sql`
         SELECT * FROM messages WHERE thread_id = ${id} ORDER BY created_at
       `;
-      // Mark thread read for the owner side.
+      // Mark thread read for the owner side. Re-scope to workspace_id for
+      // defense-in-depth (matches the POST/PATCH paths below).
       if (thread.unread_biz > 0) {
-        await sql`UPDATE message_threads SET unread_biz = 0 WHERE id = ${id}`;
+        await sql`UPDATE message_threads SET unread_biz = 0 WHERE id = ${id} AND workspace_id = ${workspaceId}`;
         thread.unread_biz = 0;
       }
       return ok(res, {
@@ -50,12 +51,15 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       const preview = text.slice(0, 200);
+      // Defense-in-depth: thread ownership is already verified by
+      // fetchOwnedThread above, but include workspace_id on the UPDATE so
+      // a future regression in the ownership check can't open a leak.
       await sql`
         UPDATE message_threads SET
           last_message_at = NOW(),
           last_message_preview = ${preview},
           unread_client = unread_client + 1
-        WHERE id = ${id}
+        WHERE id = ${id} AND workspace_id = ${workspaceId}
       `;
       return created(res, { message: serializeMessage(inserted.rows[0]) });
     }

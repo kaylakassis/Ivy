@@ -9,6 +9,8 @@ export const EMPTY_CAL = {
     slug: '',
     slotMinutes: 30,
     bufferMinutes: 0,
+    discoverable: false,
+    tagline: '',
     availability: { 0: [], 1: [], 2: [], 3: [], 4: [], 5: [], 6: [] },
   },
   services: [],

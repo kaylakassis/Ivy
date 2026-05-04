@@ -80,6 +80,13 @@ export default async function handler(req, res) {
         if (!Number.isInteger(n) || n < 0 || n > 240) return badRequest(res, 'bufferMinutes must be 0–240');
         push('buffer_minutes', n);
       }
+      if ('discoverable' in body) {
+        push('discoverable', !!body.discoverable);
+      }
+      if ('tagline' in body) {
+        const t = body.tagline == null ? null : String(body.tagline).trim().slice(0, 140);
+        push('tagline', t || null);
+      }
       if ('availability' in body) {
         const a = body.availability;
         if (!a || typeof a !== 'object') return badRequest(res, 'availability must be an object');

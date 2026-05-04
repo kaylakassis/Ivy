@@ -249,7 +249,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
             return (
               <button key={m.id} onClick={() => onSetMode(thread.id, m.id)}
                 style={{
-                  padding: '4px 10px', borderRadius: 6, border: 0,
+                  padding: '4px 10px', borderRadius: 6,
                   fontSize: 11.5, fontWeight: 550, cursor: 'pointer',
                   background: on ? 'var(--surface)' : 'transparent',
                   color: on ? 'var(--fg)' : 'var(--muted)',

@@ -35,7 +35,6 @@ export const Icons = {
   Clock:    (p) => <Icon {...p}><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></Icon>,
   Trending: (p) => <Icon {...p}><path d="M3.5 17L10 10.5l3.5 3.5L20.5 7"/><path d="M15 7h5.5v5.5"/></Icon>,
   Mail:     (p) => <Icon {...p}><rect x="3.5" y="5" width="17" height="14" rx="2"/><path d="M4 7l8 6 8-6"/></Icon>,
-  Menu:     (p) => <Icon {...p}><path d="M4 7h16M4 12h16M4 17h10"/></Icon>,
   Filter:   (p) => <Icon {...p}><path d="M4 5h16l-6 8v5l-4 2v-7L4 5z"/></Icon>,
   Gift:     (p) => <Icon {...p}><rect x="3.5" y="8" width="17" height="4" rx="1"/><path d="M5 12v8.5h14V12"/><path d="M12 8v12.5"/><path d="M12 8c-2-3.5-6-3-6-1 0 1.5 2 1 6 1zM12 8c2-3.5 6-3 6-1 0 1.5-2 1-6 1z"/></Icon>,
   Edit:     (p) => <Icon {...p}><path d="M4 20l4-1 10-10-3-3L5 16l-1 4z"/><path d="M13.5 6.5l3 3"/></Icon>,

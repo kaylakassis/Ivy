@@ -118,7 +118,7 @@ export default function Calendar() {
         return (
           <button key={v.id} onClick={() => switchView(v.id)}
             style={{
-              padding: isMobile ? '6px 14px' : '5px 12px', borderRadius: 6, border: 0,
+              padding: isMobile ? '6px 14px' : '5px 12px', borderRadius: 6,
               fontSize: 12, fontWeight: 550, cursor: 'pointer',
               background: on ? 'var(--surface)' : 'transparent',
               color: on ? 'var(--fg)' : 'var(--muted)',

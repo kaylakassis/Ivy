@@ -38,7 +38,13 @@ export default async function handler(req, res) {
 
     const raw = generateRawToken(32);
     const hash = crypto.createHash('sha256').update(raw).digest('hex');
-    await sql`UPDATE documents SET sign_token_hash = ${hash} WHERE id = ${id}`;
+    // Defense-in-depth: re-scope the UPDATE to recipient_client_id = ANY(myIds)
+    // so a future regression in the SELECT above can't be coerced into minting
+    // a sign token for somebody else's document.
+    await sql.query(
+      `UPDATE documents SET sign_token_hash = $1 WHERE id = $2 AND recipient_client_id = ANY($3)`,
+      [hash, id, myIds],
+    );
 
     return ok(res, {
       url: `${appUrl()}/sign/${encodeURIComponent(raw)}`,

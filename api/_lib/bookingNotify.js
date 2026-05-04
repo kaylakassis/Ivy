@@ -43,7 +43,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         u.email AS owner_email,
         u.name AS owner_name
       FROM bookings b
-      LEFT JOIN services s ON s.id = b.service_id
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
       LEFT JOIN workspaces w ON w.id = b.workspace_id
       LEFT JOIN users u ON u.id = w.owner_id

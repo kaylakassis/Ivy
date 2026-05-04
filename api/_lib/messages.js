@@ -37,7 +37,7 @@ export async function fetchOwnedThread({ id, workspaceId }) {
   const { rows } = await sql`
     SELECT t.*, c.name AS client_name, c.email AS client_email
     FROM message_threads t
-    JOIN clients c ON c.id = t.client_id
+    JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
     WHERE t.id = ${id} AND t.workspace_id = ${workspaceId}
   `;
   return rows[0] || null;

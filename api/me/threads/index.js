@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       const { rows } = await sql.query(
         `SELECT t.*, c.name AS client_name, c.email AS client_email
          FROM message_threads t
-         JOIN clients c ON c.id = t.client_id
+         JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
          WHERE t.client_id = ANY($1)
          ORDER BY t.last_message_at DESC NULLS LAST, t.created_at DESC`,
         [myIds],
