@@ -14,6 +14,10 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   const [tagline, setTagline] = useState(settings.tagline || '');
   const [discoverable, setDiscoverable] = useState(!!settings.discoverable);
   const [category, setCategory] = useState(settings.category || '');
+  const [addressLabel, setAddressLabel] = useState(settings.addressLabel || '');
+  const [lat, setLat]         = useState(settings.lat ?? '');
+  const [lng, setLng]         = useState(settings.lng ?? '');
+  const [locating, setLocating] = useState(false);
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState(null);
   const [copied, setCopied]   = useState(false);
@@ -24,12 +28,35 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   useEffect(() => { setTagline(settings.tagline || ''); }, [settings.tagline]);
   useEffect(() => { setDiscoverable(!!settings.discoverable); }, [settings.discoverable]);
   useEffect(() => { setCategory(settings.category || ''); }, [settings.category]);
+  useEffect(() => { setAddressLabel(settings.addressLabel || ''); }, [settings.addressLabel]);
+  useEffect(() => { setLat(settings.lat ?? ''); }, [settings.lat]);
+  useEffect(() => { setLng(settings.lng ?? ''); }, [settings.lng]);
 
   const dirty = bizName !== (settings.bizName || '')
     || slug !== (settings.slug || '')
     || tagline !== (settings.tagline || '')
     || discoverable !== !!settings.discoverable
-    || category !== (settings.category || '');
+    || category !== (settings.category || '')
+    || addressLabel !== (settings.addressLabel || '')
+    || String(lat ?? '') !== String(settings.lat ?? '')
+    || String(lng ?? '') !== String(settings.lng ?? '');
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) {
+      setErr('Geolocation is not supported in this browser.');
+      return;
+    }
+    setLocating(true); setErr(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setLat(pos.coords.latitude.toFixed(5));
+        setLng(pos.coords.longitude.toFixed(5));
+        setLocating(false);
+      },
+      (e) => { setLocating(false); setErr(e.message || 'Could not read your location.'); },
+      { maximumAge: 5 * 60 * 1000, timeout: 10000 },
+    );
+  };
   const savedSlug = settings.slug || null;
   const isPublished = !!savedSlug;
   const shareUrl = savedSlug ? `${window.location.origin}/book/${savedSlug}` : '';
@@ -39,12 +66,17 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
     setBusy(true);
     setErr(null);
     try {
+      const latNum = lat === '' ? null : Number(lat);
+      const lngNum = lng === '' ? null : Number(lng);
       await onSave({
         bizName: bizName.trim() || 'My business',
         slug: slug ? slug.toLowerCase().trim() : null,
         tagline: tagline.trim() || null,
         discoverable,
         category: category || null,
+        addressLabel: addressLabel.trim() || null,
+        lat: Number.isFinite(latNum) ? latNum : null,
+        lng: Number.isFinite(lngNum) ? lngNum : null,
       });
     } catch (e) {
       setErr(e.message || 'Could not save');
@@ -137,25 +169,67 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
                 : "Save a handle above first — Discover entries link to your public booking page."}
             </div>
             {discoverable && isPublished && (
-              <div style={{ marginTop: 12 }}>
-                <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
-                  Category <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional)</span>
+              <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <div>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
+                    Category <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(helps clients find you)</span>
+                  </div>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                    {CATEGORIES.map((c) => {
+                      const on = category === c;
+                      return (
+                        <button type="button" key={c}
+                          onClick={() => setCategory(on ? '' : c)}
+                          style={{
+                            padding: '4px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 600,
+                            background: on ? 'var(--fg)' : 'var(--surface)',
+                            color: on ? 'var(--page)' : 'var(--fg-2)',
+                            border: `1px solid ${on ? 'var(--fg)' : 'var(--border)'}`,
+                            cursor: 'pointer',
+                          }}>{c}</button>
+                      );
+                    })}
+                  </div>
                 </div>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-                  {CATEGORIES.map((c) => {
-                    const on = category === c;
-                    return (
-                      <button type="button" key={c}
-                        onClick={() => setCategory(on ? '' : c)}
-                        style={{
-                          padding: '4px 10px', borderRadius: 99, fontSize: 11.5, fontWeight: 600,
-                          background: on ? 'var(--fg)' : 'var(--surface)',
-                          color: on ? 'var(--page)' : 'var(--fg-2)',
-                          border: `1px solid ${on ? 'var(--fg)' : 'var(--border)'}`,
-                          cursor: 'pointer',
-                        }}>{c}</button>
-                    );
-                  })}
+
+                <div>
+                  <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
+                    Location <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(powers distance search)</span>
+                  </div>
+                  <input value={addressLabel}
+                    onChange={(e) => setAddressLabel(e.target.value.slice(0, 140))}
+                    placeholder="e.g. Austin, TX or 123 Main St, Austin"
+                    maxLength={140}
+                    style={{
+                      width: '100%', padding: '8px 10px', borderRadius: 8,
+                      border: '1px solid var(--border-strong)', background: 'var(--surface)',
+                      color: 'var(--fg)', fontSize: 13,
+                    }}/>
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
+                    <input value={lat} placeholder="lat"
+                      type="number" inputMode="decimal" step="0.00001"
+                      onChange={(e) => setLat(e.target.value)}
+                      style={{
+                        width: 100, padding: '6px 8px', borderRadius: 6,
+                        border: '1px solid var(--border-strong)', background: 'var(--surface)',
+                        color: 'var(--fg)', fontSize: 12.5, fontFamily: 'ui-monospace, monospace',
+                      }}/>
+                    <input value={lng} placeholder="lng"
+                      type="number" inputMode="decimal" step="0.00001"
+                      onChange={(e) => setLng(e.target.value)}
+                      style={{
+                        width: 110, padding: '6px 8px', borderRadius: 6,
+                        border: '1px solid var(--border-strong)', background: 'var(--surface)',
+                        color: 'var(--fg)', fontSize: 12.5, fontFamily: 'ui-monospace, monospace',
+                      }}/>
+                    <button type="button" onClick={useMyLocation} disabled={locating}
+                      className="btn btn-outline" style={{ fontSize: 11.5, padding: '5px 10px' }}>
+                      {locating ? 'Locating…' : 'Use my current location'}
+                    </button>
+                  </div>
+                  <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.45 }}>
+                    Without coordinates, your business won't show up when clients search by distance — but you'll still match category, price, and service searches.
+                  </div>
                 </div>
               </div>
             )}

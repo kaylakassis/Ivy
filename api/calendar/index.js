@@ -94,6 +94,28 @@ export default async function handler(req, res) {
         }
         push('category', c || null);
       }
+      if ('addressLabel' in body) {
+        const a = body.addressLabel == null ? null : String(body.addressLabel).trim().slice(0, 140);
+        push('address_label', a || null);
+      }
+      if ('lat' in body) {
+        const v = body.lat;
+        if (v == null || v === '') push('lat', null);
+        else {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n < -90 || n > 90) return badRequest(res, 'lat must be between -90 and 90');
+          push('lat', n);
+        }
+      }
+      if ('lng' in body) {
+        const v = body.lng;
+        if (v == null || v === '') push('lng', null);
+        else {
+          const n = Number(v);
+          if (!Number.isFinite(n) || n < -180 || n > 180) return badRequest(res, 'lng must be between -180 and 180');
+          push('lng', n);
+        }
+      }
       if ('availability' in body) {
         const a = body.availability;
         if (!a || typeof a !== 'object') return badRequest(res, 'availability must be an object');

@@ -157,6 +157,24 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_refresh_token_encr
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_calendar_id TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_email TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_connected_at TIMESTAMPTZ;
+-- Discover filters. Owners set these in the website builder so client
+-- searches on the /me/discover tab can compose them with service queries.
+-- address_label is the human-readable line shown on the card; lat/lng
+-- power radius search via haversine. Optional — businesses without
+-- coordinates are excluded from distance-bounded queries but still match
+-- non-distance filters.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS address_label TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+CREATE INDEX IF NOT EXISTS idx_calendar_settings_latlng
+  ON calendar_settings(lat, lng) WHERE lat IS NOT NULL AND lng IS NOT NULL;
+-- Service-name search: pg_trgm makes ILIKE '%foo%' index-backed at scale.
+-- Falls back gracefully (sequential scan) on Postgres builds without it.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX IF NOT EXISTS idx_services_name_trgm
+  ON services USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_services_workspace_price
+  ON services(workspace_id, price);
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.

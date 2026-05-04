@@ -1,7 +1,14 @@
 // /me/discover — directory of THRYVE businesses that have opted in to be
-// listed publicly. Click through opens /book/<slug> in a new tab so the
-// existing public-booking flow handles the actual booking.
-import React, { useEffect, useMemo, useState } from 'react';
+// listed publicly. Filters compose server-side: category + price range +
+// service-name search + distance from the client's location are all
+// real DB queries (see /api/me/discover) so a search like "botox $10–50"
+// only returns businesses whose botox is in that range, sorted by distance
+// when the user shares their location.
+//
+// State lives in URL search params so links are shareable / bookmarkable
+// and the back button rewinds the filter, not the route.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelRowList } from '../../components/Skeleton.jsx';
@@ -9,51 +16,64 @@ import { api } from '../../lib/api.js';
 
 const CATEGORIES = ['All', 'Wellness', 'Beauty', 'Fitness', 'Health', 'Professional'];
 
-// Cycle through accent palette for card banners — stable per slug so a given
-// business always renders the same colour without us storing one.
 const BANNER_PALETTE = ['#C8D8FF', '#FFD1DC', '#D0E8D0', '#FFE3B0', '#E0D4F7', '#CDEBF0'];
 function bannerFor(slug) {
   let h = 0;
-  for (let i = 0; i < slug.length; i++) h = (h * 31 + slug.charCodeAt(i)) | 0;
+  for (let i = 0; i < (slug || '').length; i++) h = (h * 31 + slug.charCodeAt(i)) | 0;
   return BANNER_PALETTE[Math.abs(h) % BANNER_PALETTE.length];
 }
 
 export default function ClientDiscover() {
+  const [params, setParams] = useSearchParams();
+
+  // Read filter state from URL params on every render so external links
+  // / back-button drive the same filters.
+  const q         = params.get('q') || '';
+  const cat       = params.get('category') || 'All';
+  const priceMin  = params.get('priceMin') ? Number(params.get('priceMin')) : null;
+  const priceMax  = params.get('priceMax') ? Number(params.get('priceMax')) : null;
+  const radiusKm  = params.get('radiusKm') ? Number(params.get('radiusKm')) : null;
+  const lat       = params.get('lat') ? Number(params.get('lat')) : null;
+  const lng       = params.get('lng') ? Number(params.get('lng')) : null;
+
+  const setFilter = (patch) => {
+    const next = new URLSearchParams(params);
+    for (const [k, v] of Object.entries(patch)) {
+      if (v == null || v === '' || v === 'All') next.delete(k);
+      else next.set(k, String(v));
+    }
+    setParams(next, { replace: true });
+  };
+
   const [businesses, setBusinesses] = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [error, setError]           = useState(null);
-  const [q, setQ]                   = useState('');
-  const [cat, setCat]               = useState('All');
-  const [reloadKey, setReloadKey]   = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError]     = useState(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  // Debounce text input so each keystroke doesn't fire a request.
+  const debouncedQ = useDebounced(q, 220);
 
   useEffect(() => {
     let live = true;
     setLoading(true); setError(null);
-    api.get('/me/discover')
+    const qs = new URLSearchParams();
+    if (debouncedQ)         qs.set('q', debouncedQ);
+    if (cat && cat !== 'All') qs.set('category', cat);
+    if (priceMin != null)   qs.set('priceMin', priceMin);
+    if (priceMax != null)   qs.set('priceMax', priceMax);
+    if (radiusKm != null && lat != null && lng != null) {
+      qs.set('radiusKm', radiusKm);
+      qs.set('lat', lat);
+      qs.set('lng', lng);
+    }
+    api.get('/me/discover' + (qs.toString() ? '?' + qs.toString() : ''))
       .then((r) => live && setBusinesses(r.businesses || []))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, [reloadKey]);
+  }, [debouncedQ, cat, priceMin, priceMax, radiusKm, lat, lng, reloadKey]);
 
-  const filtered = useMemo(() => {
-    const needle = q.trim().toLowerCase();
-    return businesses.filter((b) => {
-      if (cat !== 'All' && b.category !== cat) return false;
-      if (!needle) return true;
-      return (b.bizName || '').toLowerCase().includes(needle)
-        || (b.tagline || '').toLowerCase().includes(needle);
-    });
-  }, [businesses, q, cat]);
-
-  const categoryCounts = useMemo(() => {
-    const c = { All: businesses.length };
-    for (const cat of CATEGORIES) if (cat !== 'All') c[cat] = 0;
-    for (const b of businesses) if (b.category && b.category in c) c[b.category]++;
-    return c;
-  }, [businesses]);
-
-  if (loading) return (
+  if (loading && businesses.length === 0) return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <SkelPageHeader/>
       <SkelRowList rows={5} withAvatar/>
@@ -69,9 +89,10 @@ export default function ClientDiscover() {
     </div>
   );
 
+  const anyFiltersActive = !!(q || (cat && cat !== 'All') || priceMin != null || priceMax != null || radiusKm != null);
+
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
-      {/* Hero */}
       <div>
         <h2 style={{
           fontFamily: 'var(--font-display)', fontWeight: 500,
@@ -82,85 +103,290 @@ export default function ClientDiscover() {
           <span style={{ color: 'var(--muted)' }}>Book in two taps.</span>
         </h2>
         <p style={{ color: 'var(--fg-2)', fontSize: 15, maxWidth: 560, margin: 0, lineHeight: 1.5 }}>
-          Every business here runs on THRYVE, so your appointments, payments, and paperwork live in one place.
+          Every business here runs on THRYVE — appointments, payments, and
+          paperwork live in one place.
         </p>
       </div>
 
-      {businesses.length > 0 && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {/* Category chips */}
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-            {CATEGORIES.map((c) => {
-              const on = cat === c;
-              const count = categoryCounts[c] ?? 0;
-              const dim = c !== 'All' && count === 0;
-              return (
-                <button key={c} type="button" onClick={() => !dim && setCat(c)}
-                  disabled={dim}
-                  style={{
-                    padding: '6px 14px', borderRadius: 99, fontSize: 13, fontWeight: 600,
-                    background: on ? 'var(--fg)' : 'var(--surface)',
-                    color: on ? 'var(--page)' : (dim ? 'var(--muted)' : 'var(--fg-2)'),
-                    border: `1px solid ${on ? 'var(--fg)' : 'var(--border)'}`,
-                    cursor: dim ? 'not-allowed' : 'pointer',
-                    opacity: dim ? 0.5 : 1,
-                  }}>
-                  {c}{c !== 'All' && count > 0 && (
-                    <span style={{ marginLeft: 6, opacity: 0.7, fontWeight: 500 }}>{count}</span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
+      {/* Filter bar */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
           {/* Search */}
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
-            padding: '10px 12px', borderRadius: 10,
+            padding: '10px 12px', borderRadius: 10, flex: 1, minWidth: 240,
             background: 'var(--surface)', border: '1px solid var(--border)',
-            maxWidth: 420,
           }}>
             <Icons.Search size={14} stroke="var(--muted)" sw={1.7}/>
-            <input value={q} onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name or what they do"
+            <input value={q} onChange={(e) => setFilter({ q: e.target.value })}
+              placeholder="Search by service or business — e.g. botox"
               style={{ flex: 1, border: 0, background: 'transparent', outline: 'none',
                 color: 'var(--fg)', fontSize: 13.5 }}/>
             {q && (
-              <button onClick={() => setQ('')} aria-label="Clear search"
+              <button onClick={() => setFilter({ q: '' })} aria-label="Clear search"
                 style={{ padding: 2, color: 'var(--muted)' }}>
                 <Icons.X size={12}/>
               </button>
             )}
           </div>
-        </div>
-      )}
 
-      {businesses.length === 0 ? (
-        <div className="card" style={{ padding: 40 }}>
-          <EmptyNote icon="Globe" title="No public businesses yet"
-            hint="When THRYVE businesses opt in to the public directory, they'll show up here."/>
+          <PriceFilter priceMin={priceMin} priceMax={priceMax}
+            onChange={(v) => setFilter(v)}/>
+
+          <DistanceFilter radiusKm={radiusKm} lat={lat} lng={lng}
+            onChange={(v) => setFilter(v)}/>
+
+          {anyFiltersActive && (
+            <button onClick={() => setFilter({
+              q: '', category: '', priceMin: '', priceMax: '', radiusKm: '', lat: '', lng: '',
+            })}
+              className="btn btn-ghost"
+              style={{ color: 'var(--muted)', fontSize: 12.5 }}>
+              Clear all
+            </button>
+          )}
         </div>
-      ) : filtered.length === 0 ? (
+
+        {/* Category chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {CATEGORIES.map((c) => {
+            const on = cat === c;
+            return (
+              <button key={c} type="button"
+                onClick={() => setFilter({ category: c === 'All' ? '' : c })}
+                style={{
+                  padding: '5px 12px', borderRadius: 99, fontSize: 12.5, fontWeight: 600,
+                  background: on ? 'var(--fg)' : 'var(--surface)',
+                  color: on ? 'var(--page)' : 'var(--fg-2)',
+                  border: `1px solid ${on ? 'var(--fg)' : 'var(--border)'}`,
+                  cursor: 'pointer',
+                }}>{c}</button>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Results */}
+      {loading ? (
+        <SkelRowList rows={3} withAvatar/>
+      ) : businesses.length === 0 ? (
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Search" title="No matches"
-            hint={q
-              ? `Nothing in ${cat === 'All' ? 'the directory' : cat} matches “${q}”.`
-              : `No ${cat} businesses listed yet.`}/>
+            hint={anyFiltersActive
+              ? 'Loosen a filter — or clear them all to see everything.'
+              : 'No public businesses listed yet.'}
+            action={anyFiltersActive
+              ? <button className="btn btn-outline" onClick={() => setFilter({
+                  q: '', category: '', priceMin: '', priceMax: '', radiusKm: '', lat: '', lng: '',
+                })}>Clear filters</button>
+              : null}/>
         </div>
       ) : (
-        <div style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-          gap: 16,
-        }}>
-          {filtered.map((b) => <BusinessCard key={b.slug} biz={b}/>)}
-        </div>
+        <>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            {businesses.length} match{businesses.length === 1 ? '' : 'es'}
+            {radiusKm != null && lat != null && <> · within {radiusKm} km of you</>}
+          </div>
+          <div style={{
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+            gap: 16,
+          }}>
+            {businesses.map((b) => <BusinessCard key={b.slug} biz={b} q={q}/>)}
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-function BusinessCard({ biz }) {
+// ─── Filter controls ────────────────────────────────────────────────
+
+function PriceFilter({ priceMin, priceMax, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useOutsideClick(ref, () => setOpen(false));
+  const label = priceMin != null && priceMax != null ? `$${priceMin}–${priceMax}`
+    : priceMin != null ? `≥ $${priceMin}`
+    : priceMax != null ? `≤ $${priceMax}`
+    : 'Price';
+  const active = priceMin != null || priceMax != null;
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen((o) => !o)} className="btn btn-outline"
+        style={{
+          fontSize: 12.5,
+          background: active ? 'var(--accent-soft)' : 'transparent',
+          borderColor: active ? 'var(--accent)' : 'var(--border-strong)',
+          color: active ? 'var(--accent)' : 'var(--fg-2)',
+          fontWeight: active ? 600 : 500,
+        }}>
+        <Icons.Dollar size={12} sw={1.7}/> {label}
+        <Icons.ArrowDown size={11} sw={2}/>
+      </button>
+      {open && (
+        <Popover>
+          <PopoverTitle>Price range</PopoverTitle>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 10 }}>
+            <NumberField placeholder="Min" value={priceMin} onChange={(v) => onChange({ priceMin: v })}/>
+            <span style={{ color: 'var(--muted)' }}>–</span>
+            <NumberField placeholder="Max" value={priceMax} onChange={(v) => onChange({ priceMax: v })}/>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 6 }}>
+            {[[0, 25, '<$25'], [25, 75, '$25–75'], [75, 200, '$75–200'], [200, null, '$200+']].map(([lo, hi, lab]) => (
+              <button key={lab} onClick={() => onChange({ priceMin: lo, priceMax: hi })}
+                className="btn btn-ghost"
+                style={{
+                  fontSize: 11.5, padding: '4px 10px', borderRadius: 99,
+                  background: priceMin === lo && priceMax === hi ? 'var(--accent-soft)' : 'var(--surface-2)',
+                  color: priceMin === lo && priceMax === hi ? 'var(--accent)' : 'var(--fg-2)',
+                }}>{lab}</button>
+            ))}
+          </div>
+          {(priceMin != null || priceMax != null) && (
+            <button onClick={() => onChange({ priceMin: '', priceMax: '' })}
+              style={{
+                background: 'transparent', border: 0, padding: 0, marginTop: 6,
+                color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline',
+              }}>Reset</button>
+          )}
+        </Popover>
+      )}
+    </div>
+  );
+}
+
+function DistanceFilter({ radiusKm, lat, lng, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const ref = useRef(null);
+  useOutsideClick(ref, () => setOpen(false));
+  const haveLoc = lat != null && lng != null;
+  const label = haveLoc && radiusKm != null ? `Within ${radiusKm} km`
+    : 'Distance';
+  const active = haveLoc && radiusKm != null;
+
+  const useMyLocation = () => {
+    if (!navigator.geolocation) {
+      setErr('Geolocation is not supported in this browser.');
+      return;
+    }
+    setBusy(true); setErr(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setBusy(false);
+        onChange({
+          lat: pos.coords.latitude.toFixed(5),
+          lng: pos.coords.longitude.toFixed(5),
+          radiusKm: radiusKm ?? 25,
+        });
+      },
+      (e) => { setBusy(false); setErr(e.message || 'Could not read your location.'); },
+      { maximumAge: 5 * 60 * 1000, timeout: 10000 },
+    );
+  };
+
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen((o) => !o)} className="btn btn-outline"
+        style={{
+          fontSize: 12.5,
+          background: active ? 'var(--accent-soft)' : 'transparent',
+          borderColor: active ? 'var(--accent)' : 'var(--border-strong)',
+          color: active ? 'var(--accent)' : 'var(--fg-2)',
+          fontWeight: active ? 600 : 500,
+        }}>
+        <Icons.Globe size={12} sw={1.7}/> {label}
+        <Icons.ArrowDown size={11} sw={2}/>
+      </button>
+      {open && (
+        <Popover>
+          <PopoverTitle>Distance from you</PopoverTitle>
+          {!haveLoc ? (
+            <>
+              <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 10, lineHeight: 1.5 }}>
+                Share your location once to see nearby businesses sorted by distance.
+              </div>
+              <button onClick={useMyLocation} disabled={busy} className="btn btn-primary"
+                style={{ width: '100%', justifyContent: 'center' }}>
+                {busy ? 'Locating…' : 'Use my location'}
+              </button>
+              {err && <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 6 }}>{err}</div>}
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+                {[5, 10, 25, 50, 100].map((km) => (
+                  <button key={km} onClick={() => onChange({ radiusKm: km })}
+                    className="btn btn-ghost"
+                    style={{
+                      fontSize: 11.5, padding: '4px 10px', borderRadius: 99,
+                      background: radiusKm === km ? 'var(--accent-soft)' : 'var(--surface-2)',
+                      color: radiusKm === km ? 'var(--accent)' : 'var(--fg-2)',
+                    }}>{km} km</button>
+                ))}
+              </div>
+              <button onClick={() => onChange({ lat: '', lng: '', radiusKm: '' })}
+                style={{
+                  background: 'transparent', border: 0, padding: 0, marginTop: 10,
+                  color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline',
+                }}>Forget my location</button>
+            </>
+          )}
+        </Popover>
+      )}
+    </div>
+  );
+}
+
+function NumberField({ placeholder, value, onChange }) {
+  return (
+    <input type="number" inputMode="numeric" min="0"
+      value={value ?? ''}
+      placeholder={placeholder}
+      onChange={(e) => onChange(e.target.value === '' ? '' : Number(e.target.value))}
+      style={{
+        width: 80, padding: '6px 8px', borderRadius: 6,
+        border: '1px solid var(--border-strong)', background: 'var(--surface)',
+        color: 'var(--fg)', fontSize: 13,
+      }}/>
+  );
+}
+
+function Popover({ children }) {
+  return (
+    <div className="card" style={{
+      position: 'absolute', top: 'calc(100% + 6px)', left: 0,
+      minWidth: 220, padding: 12, zIndex: 30,
+      boxShadow: 'var(--shadow)',
+    }}>{children}</div>
+  );
+}
+function PopoverTitle({ children }) {
+  return <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600, marginBottom: 8 }}>{children}</div>;
+}
+
+function useOutsideClick(ref, fn) {
+  useEffect(() => {
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) fn(); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [ref, fn]);
+}
+
+function useDebounced(value, ms) {
+  const [v, setV] = useState(value);
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(t);
+  }, [value, ms]);
+  return v;
+}
+
+// ─── Card ───────────────────────────────────────────────────────────
+
+function BusinessCard({ biz, q }) {
   const initial = (biz.bizName || '?').trim()[0]?.toUpperCase() || '?';
   const banner  = bannerFor(biz.slug || biz.bizName || '?');
   const href    = `/book/${biz.slug}`;
@@ -172,7 +398,6 @@ function BusinessCard({ biz }) {
         textDecoration: 'none', color: 'inherit', cursor: 'pointer',
         padding: 0,
       }}>
-      {/* Coloured banner with the initial chip */}
       <div style={{
         height: 96, background: banner, position: 'relative',
         display: 'flex', alignItems: 'flex-end', padding: 14,
@@ -196,13 +421,44 @@ function BusinessCard({ biz }) {
       </div>
 
       <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
-        <div style={{ fontSize: 15, fontWeight: 600 }}>{biz.bizName}</div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <div style={{ fontSize: 15, fontWeight: 600, flex: 1 }}>{biz.bizName}</div>
+          {biz.distanceKm != null && (
+            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+              {fmtDistance(biz.distanceKm)}
+            </div>
+          )}
+        </div>
         {biz.tagline && (
           <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.45,
             display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
             {biz.tagline}
           </div>
         )}
+        {biz.addressLabel && (
+          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{biz.addressLabel}</div>
+        )}
+
+        {/* Show matched services when there's a query */}
+        {q && biz.matchingServices && biz.matchingServices.length > 0 && (
+          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {biz.matchingServices.map((s) => (
+              <div key={s.id} style={{
+                display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
+                fontSize: 12, color: 'var(--fg-2)',
+                background: 'var(--surface-2)', padding: '4px 8px', borderRadius: 6,
+              }}>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {s.name}
+                </span>
+                <span className="mono-num" style={{ fontWeight: 600, marginLeft: 6 }}>
+                  ${Number(s.price).toFixed(0)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
           fontSize: 12, color: 'var(--muted)', marginTop: 'auto', paddingTop: 8,
@@ -221,4 +477,10 @@ function BusinessCard({ biz }) {
       </div>
     </a>
   );
+}
+
+function fmtDistance(km) {
+  if (km < 1) return `${Math.round(km * 1000)} m`;
+  if (km < 10) return `${km.toFixed(1)} km`;
+  return `${Math.round(km)} km`;
 }

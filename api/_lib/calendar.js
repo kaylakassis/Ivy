@@ -25,6 +25,9 @@ export function serializeSettings(row) {
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',
     category:       row.category || null,
+    addressLabel:   row.address_label || '',
+    lat:            row.lat == null ? null : Number(row.lat),
+    lng:            row.lng == null ? null : Number(row.lng),
     updatedAt:      row.updated_at,
   };
 }
