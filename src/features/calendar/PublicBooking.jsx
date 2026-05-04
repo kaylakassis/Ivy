@@ -42,6 +42,88 @@ export default function PublicBooking() {
     return () => { live = false; };
   }, [slug]);
 
+  // SEO: structured data + Open Graph / Twitter card meta. Injected
+  // dynamically because we're a SPA — Vite ships a single index.html.
+  // Crawlers that execute JS (Google, Bing, Twitterbot, Slackbot,
+  // Facebook's link previewer) all see these tags and use the
+  // aggregateRating + reviews block to render rich snippets in the SERP.
+  useEffect(() => {
+    if (!cal) return;
+    const cleanups = [];
+
+    const upsertMeta = (attr, key, value) => {
+      let el = document.querySelector(`meta[${attr}="${key}"]`);
+      const created = !el;
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, key);
+        document.head.appendChild(el);
+      }
+      const prev = el.getAttribute('content');
+      el.setAttribute('content', value);
+      cleanups.push(() => {
+        if (created) el.remove();
+        else if (prev != null) el.setAttribute('content', prev);
+      });
+    };
+
+    const biz = cal.settings.bizName || slug;
+    const tagline = cal.settings.tagline || `Book a session with ${biz} on THRYVE.`;
+    const url = window.location.href;
+    upsertMeta('name', 'description', tagline);
+    upsertMeta('property', 'og:title', biz);
+    upsertMeta('property', 'og:description', tagline);
+    upsertMeta('property', 'og:type', 'website');
+    upsertMeta('property', 'og:url', url);
+    upsertMeta('name', 'twitter:card', 'summary');
+    upsertMeta('name', 'twitter:title', biz);
+    upsertMeta('name', 'twitter:description', tagline);
+
+    // JSON-LD: LocalBusiness + aggregateRating + recent Review nodes.
+    // Schema.org-compliant; Google uses this to render stars + count
+    // beside the SERP listing once the domain has search history.
+    const jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'LocalBusiness',
+      name: biz,
+      url,
+      description: tagline,
+    };
+    if (cal.reviews?.count > 0 && cal.reviews?.avg) {
+      jsonLd.aggregateRating = {
+        '@type': 'AggregateRating',
+        ratingValue: cal.reviews.avg,
+        reviewCount: cal.reviews.count,
+        bestRating: 5,
+        worstRating: 1,
+      };
+    }
+    if (cal.reviews?.recent?.length) {
+      jsonLd.review = cal.reviews.recent.slice(0, 5).map((r) => ({
+        '@type': 'Review',
+        reviewRating: { '@type': 'Rating', ratingValue: r.rating, bestRating: 5 },
+        author: { '@type': 'Person', name: r.reviewerName },
+        datePublished: r.createdAt,
+        ...(r.text ? { reviewBody: r.text } : {}),
+      }));
+    }
+    if (cal.services?.length) {
+      jsonLd.makesOffer = cal.services.slice(0, 20).map((s) => ({
+        '@type': 'Offer',
+        name: s.name,
+        ...(typeof s.price === 'number' && s.price > 0
+          ? { price: s.price, priceCurrency: 'USD' } : {}),
+      }));
+    }
+    const script = document.createElement('script');
+    script.type = 'application/ld+json';
+    script.textContent = JSON.stringify(jsonLd);
+    document.head.appendChild(script);
+    cleanups.push(() => script.remove());
+
+    return () => { cleanups.forEach((fn) => fn()); };
+  }, [cal, slug]);
+
   if (loading) {
     return (
       <PageWrap tweaks={tweaks}>
@@ -342,7 +424,86 @@ export default function PublicBooking() {
           </div>
         </>
       )}
+
+      {/* Reviews block. Hidden on the confirmed/waitlisted screens so
+          the focus stays on the success state, but visible during the
+          pick + details steps for social proof while the visitor is
+          still deciding. */}
+      {step !== 'confirmed' && step !== 'waitlisted' && cal.reviews?.count > 0 && (
+        <ReviewsBlock summary={cal.reviews}/>
+      )}
     </PageWrap>
+  );
+}
+
+function ReviewsBlock({ summary }) {
+  const avg = summary.avg ? Number(summary.avg).toFixed(1) : null;
+  return (
+    <div className="card" style={{ padding: 22, marginTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 12, marginBottom: 14, flexWrap: 'wrap' }}>
+        <div className="metric-label">Reviews</div>
+        {avg && (
+          <>
+            <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 22, letterSpacing: '-0.01em' }}>
+              {avg}
+            </span>
+            <Stars rating={Number(avg)} size={14}/>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+              {summary.count} review{summary.count === 1 ? '' : 's'}
+            </span>
+          </>
+        )}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+        {summary.recent.slice(0, 6).map((r) => (
+          <div key={r.id} style={{
+            padding: 14, borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            display: 'flex', flexDirection: 'column', gap: 6,
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Stars rating={r.rating} size={11}/>
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+                {new Date(r.createdAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+              </span>
+            </div>
+            {r.text && (
+              <div style={{ fontSize: 13.5, color: 'var(--fg)', lineHeight: 1.5 }}>
+                "{r.text}"
+              </div>
+            )}
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+              — {r.reviewerName}
+            </div>
+            {r.ownerResponse && (
+              <div style={{
+                marginTop: 6, paddingTop: 8, borderTop: '1px dashed var(--border)',
+                fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5,
+              }}>
+                <span style={{ fontSize: 10.5, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Owner replied
+                </span>
+                <div style={{ marginTop: 3 }}>{r.ownerResponse}</div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function Stars({ rating, size = 12 }) {
+  const full = Math.round(rating);
+  return (
+    <span aria-label={`${rating} out of 5`} style={{ display: 'inline-flex', gap: 1.5, color: 'var(--accent)' }}>
+      {[1,2,3,4,5].map((i) => (
+        <span key={i} style={{
+          fontSize: size, lineHeight: 1,
+          color: i <= full ? 'var(--accent)' : 'var(--border-strong)',
+        }}>★</span>
+      ))}
+    </span>
   );
 }
 

@@ -1,11 +1,22 @@
 // Topbar — viewport-aware.
-//   Mobile: hamburger button + page title + search icon button (popover) + bell.
+//   Mobile: hamburger button + page title + search icon button + bell.
 //   Tablet/Desktop: title block + 280px search input + bell.
-import React, { useState } from 'react';
+//
+// Search input is a button that opens the global CommandPalette via a
+// synthetic Cmd+K keydown — keeps this component dumb.
+import React from 'react';
 import { Icons } from '../Icons.jsx';
 
+// Synthesize the same Cmd+K event the CommandPalette listens for. This
+// keeps the topbar dumb (no prop drilling) and the palette as the single
+// owner of search-open state.
+function openPalette() {
+  window.dispatchEvent(new KeyboardEvent('keydown', {
+    key: 'k', metaKey: true, ctrlKey: true, bubbles: true,
+  }));
+}
+
 export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, children }) {
-  const [searchOpen, setSearchOpen] = useState(false);
   const compact = isMobile || isTablet;
 
   return (
@@ -44,34 +55,34 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
         </h1>
       </div>
 
+      {/* Both forms route to the same global CommandPalette via a synthetic
+          keyboard event so we don't have to thread an opener prop through
+          the layout tree. The palette listens for Cmd+K / Ctrl+K. */}
       {!compact && (
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          padding: '7px 11px', borderRadius: 10,
-          background: 'var(--surface)', border: '1px solid var(--border)',
-          minWidth: 280,
-        }}>
+        <button onClick={openPalette} type="button"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 8,
+            padding: '7px 11px', borderRadius: 10,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            minWidth: 280, cursor: 'pointer', textAlign: 'left',
+          }}>
           <Icons.Search size={15} stroke="var(--muted)" sw={1.6}/>
-          <input
-            type="text" placeholder="Search clients, invoices, notes…"
-            style={{
-              background: 'none', border: 0, outline: 'none',
-              fontSize: 13, color: 'var(--fg)', flex: 1,
-            }}
-          />
+          <span style={{ flex: 1, color: 'var(--muted)', fontSize: 13 }}>
+            Search clients, invoices, notes…
+          </span>
           <kbd style={{
             fontSize: 10, fontFamily: 'var(--font-sans)', fontWeight: 500,
             padding: '2px 5px', borderRadius: 4,
             background: 'var(--surface-2)', border: '1px solid var(--border)',
             color: 'var(--muted)',
           }}>⌘K</kbd>
-        </div>
+        </button>
       )}
 
       {compact && (
         <button
           aria-label="Search"
-          onClick={() => setSearchOpen((s) => !s)}
+          onClick={openPalette}
           style={{
             padding: 8, borderRadius: 8, color: 'var(--fg-2)',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
@@ -94,33 +105,6 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
       </button>
 
       {children}
-
-      {compact && searchOpen && (
-        <div onClick={() => setSearchOpen(false)} style={{
-          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 65,
-        }}>
-          <div onClick={(e) => e.stopPropagation()} style={{
-            position: 'fixed', top: isMobile ? 10 : 80, left: 14, right: 14,
-            maxWidth: 600, margin: '0 auto',
-            padding: 12, borderRadius: 12,
-            background: 'var(--surface)', border: '1px solid var(--border-strong)',
-            boxShadow: 'var(--shadow)',
-            display: 'flex', alignItems: 'center', gap: 10,
-          }}>
-            <Icons.Search size={16} stroke="var(--muted)" sw={1.6}/>
-            <input autoFocus type="text" placeholder="Search clients, invoices, notes…"
-              style={{
-                background: 'none', border: 0, outline: 'none',
-                fontSize: 16, color: 'var(--fg)', flex: 1,
-              }}
-            />
-            <button onClick={() => setSearchOpen(false)} className="btn btn-ghost"
-              style={{ padding: '4px 8px', fontSize: 12 }}>
-              Cancel
-            </button>
-          </div>
-        </div>
-      )}
     </header>
   );
 }

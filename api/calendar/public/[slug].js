@@ -76,12 +76,40 @@ async function getCalendar(req, res) {
       });
     }
 
+    // Reviews block — drives the on-page social proof + the JSON-LD
+    // structured data we inject for SEO. Aggregate is computed across
+    // every visible review; "recent" caps at 12 so the payload stays
+    // small and the page renders quickly.
+    const [agg, recent] = await Promise.all([
+      sql`SELECT COUNT(*)::int AS n,
+                 ROUND(AVG(rating)::numeric, 2)::float AS avg
+            FROM reviews
+            WHERE workspace_id = ${s.workspace_id} AND status = 'visible'`,
+      sql`SELECT id, reviewer_name, rating, text, owner_response, created_at
+            FROM reviews
+            WHERE workspace_id = ${s.workspace_id} AND status = 'visible'
+            ORDER BY created_at DESC LIMIT 12`,
+    ]);
+    const reviewSummary = {
+      count: agg.rows[0]?.n || 0,
+      avg:   agg.rows[0]?.avg || null,
+      recent: recent.rows.map((r) => ({
+        id: r.id,
+        reviewerName: r.reviewer_name,
+        rating: r.rating,
+        text: r.text || '',
+        ownerResponse: r.owner_response || null,
+        createdAt: r.created_at,
+      })),
+    };
+
     return ok(res, {
       calendar: {
         settings: serializeSettings(s),
         services: services.rows.map(serializeService),
         blocks:   blocksOut,
         bookings: bookings.rows.map((r) => serializeBooking(r, { redactClient: true })),
+        reviews:  reviewSummary,
       },
     });
   } catch (err) {
