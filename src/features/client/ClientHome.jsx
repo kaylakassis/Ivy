@@ -73,6 +73,10 @@ export default function ClientHome() {
               icon="Dollar" tone={summary.openInvoices > 0 ? 'warn' : 'muted'} to="/me/invoices"/>
             <Stat label="Pending documents" value={summary.pendingDocs}
               icon="Doc" tone={summary.pendingDocs > 0 ? 'warn' : 'muted'} to="/me/documents"/>
+            {summary.pendingReviews > 0 && (
+              <Stat label="Reviews to leave" value={summary.pendingReviews}
+                icon="Check" tone="accent" to="/me/bookings?tab=past"/>
+            )}
           </div>
 
           <div className="card" style={{ padding: 18 }}>

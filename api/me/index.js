@@ -31,13 +31,13 @@ export default async function handler(req, res) {
 }
 
 function emptySummary() {
-  return { unreadMessages: 0, upcomingBookings: 0, openInvoices: 0, pendingDocs: 0 };
+  return { unreadMessages: 0, upcomingBookings: 0, openInvoices: 0, pendingDocs: 0, pendingReviews: 0 };
 }
 
 async function loadSummary(clientIds) {
   if (!clientIds.length) return emptySummary();
   // Single round-trip with parallel sub-queries keeps page loads snappy.
-  const [unread, upcoming, openInv, pending] = await Promise.all([
+  const [unread, upcoming, openInv, pending, pendingReviews] = await Promise.all([
     sql.query(
       `SELECT COALESCE(SUM(unread_client), 0)::int AS n
          FROM message_threads WHERE client_id = ANY($1)`,
@@ -59,11 +59,21 @@ async function loadSummary(clientIds) {
          WHERE recipient_client_id = ANY($1) AND status = 'sent'`,
       [clientIds],
     ),
+    sql.query(
+      `SELECT COUNT(*)::int AS n FROM bookings b
+         WHERE b.client_id = ANY($1)
+           AND b.cancelled_at IS NULL
+           AND b.date >= CURRENT_DATE - INTERVAL '60 days'
+           AND b.date <= CURRENT_DATE
+           AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = b.id)`,
+      [clientIds],
+    ),
   ]);
   return {
     unreadMessages:   unread.rows[0]?.n   || 0,
     upcomingBookings: upcoming.rows[0]?.n || 0,
     openInvoices:     openInv.rows[0]?.n  || 0,
     pendingDocs:      pending.rows[0]?.n  || 0,
+    pendingReviews:   pendingReviews.rows[0]?.n || 0,
   };
 }

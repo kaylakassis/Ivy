@@ -175,6 +175,29 @@ CREATE INDEX IF NOT EXISTS idx_services_name_trgm
   ON services USING gin (name gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_services_workspace_price
   ON services(workspace_id, price);
+
+-- Reviews. Tied to a specific booking so we can prove the reviewer was
+-- actually a client + a UNIQUE (booking_id) prevents review spam. Hidden
+-- reviews don't count in the average; owners can reply with one
+-- owner_response per review.
+CREATE TABLE IF NOT EXISTS reviews (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  reviewer_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  reviewer_name TEXT NOT NULL,
+  rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
+  text TEXT,
+  status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'hidden')),
+  owner_response TEXT,
+  owner_responded_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_reviews_workspace_recent
+  ON reviews(workspace_id, status, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_booking
+  ON reviews(booking_id) WHERE booking_id IS NOT NULL;
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.

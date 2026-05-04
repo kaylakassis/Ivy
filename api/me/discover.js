@@ -43,9 +43,10 @@ export default async function handler(req, res) {
     const category = (req.query.category || '').toString().trim();
     const priceMin = num(req.query.priceMin, { min: 0, max: 1e7 });
     const priceMax = num(req.query.priceMax, { min: 0, max: 1e7 });
-    const lat      = num(req.query.lat, { min: -90, max: 90 });
-    const lng      = num(req.query.lng, { min: -180, max: 180 });
-    const radiusKm = num(req.query.radiusKm, { min: 0.1, max: 20000 });
+    const lat       = num(req.query.lat, { min: -90, max: 90 });
+    const lng       = num(req.query.lng, { min: -180, max: 180 });
+    const radiusKm  = num(req.query.radiusKm, { min: 0.1, max: 20000 });
+    const minRating = num(req.query.minRating, { min: 1, max: 5 });
 
     // ILIKE wildcard. Empty q ⇒ match anything (we drop the predicate).
     const qPattern = q ? `%${q.replace(/[%_]/g, (c) => '\\' + c)}%` : null;
@@ -126,6 +127,22 @@ export default async function handler(req, res) {
       whereParts.push(`(${distSelect}) <= ${push(radiusKm)}`);
     }
 
+    if (minRating != null) {
+      // Rating average computed via subquery; min rating gates a business
+      // out only if its visible-review average is BELOW the threshold.
+      // Businesses with no reviews yet are excluded from a min-rating
+      // search (no signal to show), but appear when the filter's off.
+      whereParts.push(`(
+        SELECT COALESCE(AVG(rating), 0)
+        FROM reviews r
+        WHERE r.workspace_id = cs.workspace_id AND r.status = 'visible'
+      ) >= ${push(minRating)}`);
+      whereParts.push(`EXISTS (
+        SELECT 1 FROM reviews r2
+        WHERE r2.workspace_id = cs.workspace_id AND r2.status = 'visible'
+      )`);
+    }
+
     const queryText = `
       SELECT
         cs.workspace_id,
@@ -149,7 +166,9 @@ export default async function handler(req, res) {
             ${qPattern ? `AND s2.name ILIKE ${push(qPattern)}` : ''}
             ${priceMin != null ? `AND s2.price >= ${push(priceMin)}` : ''}
             ${priceMax != null ? `AND s2.price <= ${push(priceMax)}` : ''}
-        ) AS matching_services
+        ) AS matching_services,
+        (SELECT COUNT(*)::int FROM reviews r WHERE r.workspace_id = cs.workspace_id AND r.status = 'visible') AS review_count,
+        (SELECT AVG(rating)::numeric FROM reviews r WHERE r.workspace_id = cs.workspace_id AND r.status = 'visible') AS rating_avg
       FROM calendar_settings cs
       WHERE ${whereParts.join(' AND ')}
       ORDER BY ${dist1 !== 'NULL' ? 'distance_km ASC NULLS LAST,' : ''} cs.biz_name ASC
@@ -174,6 +193,8 @@ export default async function handler(req, res) {
       matchingServices: (r.matching_services || []).slice(0, 3).map((s) => ({
         id: s.id, name: s.name, price: Number(s.price || 0), durationMinutes: s.durationMinutes,
       })),
+      ratingAvg:    r.rating_avg != null ? Number(r.rating_avg) : null,
+      reviewCount:  r.review_count || 0,
     }));
     return ok(res, { businesses });
   } catch (err) {

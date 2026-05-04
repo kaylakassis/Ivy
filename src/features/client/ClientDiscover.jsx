@@ -35,6 +35,7 @@ export default function ClientDiscover() {
   const radiusKm  = params.get('radiusKm') ? Number(params.get('radiusKm')) : null;
   const lat       = params.get('lat') ? Number(params.get('lat')) : null;
   const lng       = params.get('lng') ? Number(params.get('lng')) : null;
+  const minRating = params.get('minRating') ? Number(params.get('minRating')) : null;
 
   const setFilter = (patch) => {
     const next = new URLSearchParams(params);
@@ -66,12 +67,13 @@ export default function ClientDiscover() {
       qs.set('lat', lat);
       qs.set('lng', lng);
     }
+    if (minRating != null) qs.set('minRating', minRating);
     api.get('/me/discover' + (qs.toString() ? '?' + qs.toString() : ''))
       .then((r) => live && setBusinesses(r.businesses || []))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, [debouncedQ, cat, priceMin, priceMax, radiusKm, lat, lng, reloadKey]);
+  }, [debouncedQ, cat, priceMin, priceMax, radiusKm, lat, lng, minRating, reloadKey]);
 
   if (loading && businesses.length === 0) return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -89,7 +91,7 @@ export default function ClientDiscover() {
     </div>
   );
 
-  const anyFiltersActive = !!(q || (cat && cat !== 'All') || priceMin != null || priceMax != null || radiusKm != null);
+  const anyFiltersActive = !!(q || (cat && cat !== 'All') || priceMin != null || priceMax != null || radiusKm != null || minRating != null);
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 22 }}>
@@ -136,9 +138,12 @@ export default function ClientDiscover() {
           <DistanceFilter radiusKm={radiusKm} lat={lat} lng={lng}
             onChange={(v) => setFilter(v)}/>
 
+          <RatingFilter minRating={minRating} onChange={(v) => setFilter(v)}/>
+
           {anyFiltersActive && (
             <button onClick={() => setFilter({
-              q: '', category: '', priceMin: '', priceMax: '', radiusKm: '', lat: '', lng: '',
+              q: '', category: '', priceMin: '', priceMax: '',
+              radiusKm: '', lat: '', lng: '', minRating: '',
             })}
               className="btn btn-ghost"
               style={{ color: 'var(--muted)', fontSize: 12.5 }}>
@@ -177,7 +182,8 @@ export default function ClientDiscover() {
               : 'No public businesses listed yet.'}
             action={anyFiltersActive
               ? <button className="btn btn-outline" onClick={() => setFilter({
-                  q: '', category: '', priceMin: '', priceMax: '', radiusKm: '', lat: '', lng: '',
+                  q: '', category: '', priceMin: '', priceMax: '',
+                  radiusKm: '', lat: '', lng: '', minRating: '',
                 })}>Clear filters</button>
               : null}/>
         </div>
@@ -340,6 +346,61 @@ function DistanceFilter({ radiusKm, lat, lng, onChange }) {
   );
 }
 
+function RatingFilter({ minRating, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+  useOutsideClick(ref, () => setOpen(false));
+  const label = minRating != null ? `${minRating}★+` : 'Rating';
+  const active = minRating != null;
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button onClick={() => setOpen((o) => !o)} className="btn btn-outline"
+        style={{
+          fontSize: 12.5,
+          background: active ? 'var(--accent-soft)' : 'transparent',
+          borderColor: active ? 'var(--accent)' : 'var(--border-strong)',
+          color: active ? 'var(--accent)' : 'var(--fg-2)',
+          fontWeight: active ? 600 : 500,
+        }}>
+        ★ {label}
+        <Icons.ArrowDown size={11} sw={2}/>
+      </button>
+      {open && (
+        <Popover>
+          <PopoverTitle>Minimum rating</PopoverTitle>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+            {[5, 4, 3, 2].map((n) => {
+              const on = minRating === n;
+              return (
+                <button key={n} onClick={() => onChange({ minRating: n })}
+                  className="btn btn-ghost"
+                  style={{
+                    justifyContent: 'flex-start',
+                    fontSize: 12.5, padding: '6px 10px', borderRadius: 8,
+                    background: on ? 'var(--accent-soft)' : 'transparent',
+                    color: on ? 'var(--accent)' : 'var(--fg-2)',
+                  }}>
+                  {'★'.repeat(n)}{'☆'.repeat(5 - n)} <span style={{ marginLeft: 8, opacity: 0.7 }}>{n}+</span>
+                </button>
+              );
+            })}
+          </div>
+          {minRating != null && (
+            <button onClick={() => onChange({ minRating: '' })}
+              style={{
+                background: 'transparent', border: 0, padding: 0, marginTop: 8,
+                color: 'var(--muted)', fontSize: 11.5, cursor: 'pointer', textDecoration: 'underline',
+              }}>Reset</button>
+          )}
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>
+            Businesses without reviews yet are hidden when this filter is on.
+          </div>
+        </Popover>
+      )}
+    </div>
+  );
+}
+
 function NumberField({ placeholder, value, onChange }) {
   return (
     <input type="number" inputMode="numeric" min="0"
@@ -402,15 +463,29 @@ function BusinessCard({ biz, q }) {
         height: 96, background: banner, position: 'relative',
         display: 'flex', alignItems: 'flex-end', padding: 14,
       }}>
-        {biz.category && (
-          <div style={{
-            position: 'absolute', top: 12, right: 12,
-            padding: '3px 8px', borderRadius: 99,
-            background: 'rgba(255,255,255,0.85)',
-            fontSize: 10.5, fontWeight: 600,
-            color: '#333', letterSpacing: '0.04em', textTransform: 'uppercase',
-          }}>{biz.category}</div>
-        )}
+        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 6 }}>
+          {biz.ratingAvg != null && biz.reviewCount > 0 && (
+            <div style={{
+              padding: '3px 8px', borderRadius: 99,
+              background: 'rgba(255,255,255,0.92)',
+              fontSize: 10.5, fontWeight: 700,
+              color: '#333',
+              display: 'inline-flex', alignItems: 'center', gap: 4,
+            }} title={`${biz.reviewCount} review${biz.reviewCount === 1 ? '' : 's'}`}>
+              <span style={{ color: '#E0A82E' }}>★</span>
+              {biz.ratingAvg.toFixed(1)}
+              <span style={{ opacity: 0.5, fontWeight: 500 }}>({biz.reviewCount})</span>
+            </div>
+          )}
+          {biz.category && (
+            <div style={{
+              padding: '3px 8px', borderRadius: 99,
+              background: 'rgba(255,255,255,0.85)',
+              fontSize: 10.5, fontWeight: 600,
+              color: '#333', letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}>{biz.category}</div>
+          )}
+        </div>
         <div style={{
           width: 44, height: 44, borderRadius: 12,
           background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
