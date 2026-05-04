@@ -16,6 +16,8 @@ function initialsOf(user) {
 export default function MobileDrawer({ direction, onClose }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
+  // Match Sidebar's filter — non-super-admins don't see the Admin link.
+  const visibleNav = NAV.filter((n) => !n.superAdminOnly || user?.isSuperAdmin);
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -64,7 +66,7 @@ export default function MobileDrawer({ direction, onClose }) {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '8px 12px' }}>
-          {NAV.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = Icons[item.icon] || Icons.Home;
             return (
               <NavLink key={item.id}
