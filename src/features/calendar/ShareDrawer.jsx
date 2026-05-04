@@ -5,6 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
 import { slugify } from './utils.js';
+import { api } from '../../lib/api.js';
 
 const CATEGORIES = ['Wellness', 'Beauty', 'Fitness', 'Health', 'Professional'];
 
@@ -56,6 +57,30 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
       (e) => { setLocating(false); setErr(e.message || 'Could not read your location.'); },
       { maximumAge: 5 * 60 * 1000, timeout: 10000 },
     );
+  };
+
+  // Resolve the typed address to coordinates via /api/geocode (Nominatim).
+  // Owner reviews + accepts before save, so an imperfect match is fine.
+  const lookupAddress = async () => {
+    const a = addressLabel.trim();
+    if (!a) { setErr('Type an address first'); return; }
+    setLocating(true); setErr(null);
+    try {
+      const r = await api.post('/geocode', { address: a });
+      if (!r.match) {
+        setErr("Couldn't find that address. Try adding the city, or paste coordinates manually.");
+        return;
+      }
+      setLat(r.match.lat.toFixed(5));
+      setLng(r.match.lng.toFixed(5));
+      // If the geocoder gave a more canonical label (e.g. "123 Main St,
+      // Austin, TX 78701, USA"), suggest it but don't overwrite — owner
+      // chose what to show on their card.
+    } catch (e) {
+      setErr(e.message || 'Could not look up that address.');
+    } finally {
+      setLocating(false);
+    }
   };
   const savedSlug = settings.slug || null;
   const isPublished = !!savedSlug;
@@ -196,15 +221,21 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
                   <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
                     Location <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(powers distance search)</span>
                   </div>
-                  <input value={addressLabel}
-                    onChange={(e) => setAddressLabel(e.target.value.slice(0, 140))}
-                    placeholder="e.g. Austin, TX or 123 Main St, Austin"
-                    maxLength={140}
-                    style={{
-                      width: '100%', padding: '8px 10px', borderRadius: 8,
-                      border: '1px solid var(--border-strong)', background: 'var(--surface)',
-                      color: 'var(--fg)', fontSize: 13,
-                    }}/>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <input value={addressLabel}
+                      onChange={(e) => setAddressLabel(e.target.value.slice(0, 140))}
+                      placeholder="e.g. 123 Main St, Austin, TX"
+                      maxLength={140}
+                      style={{
+                        flex: 1, padding: '8px 10px', borderRadius: 8,
+                        border: '1px solid var(--border-strong)', background: 'var(--surface)',
+                        color: 'var(--fg)', fontSize: 13,
+                      }}/>
+                    <button type="button" onClick={lookupAddress} disabled={locating || !addressLabel.trim()}
+                      className="btn btn-outline" style={{ fontSize: 11.5, padding: '5px 10px', whiteSpace: 'nowrap' }}>
+                      {locating ? 'Looking up…' : 'Find coordinates'}
+                    </button>
+                  </div>
                   <div style={{ display: 'flex', gap: 6, marginTop: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <input value={lat} placeholder="lat"
                       type="number" inputMode="decimal" step="0.00001"
@@ -223,8 +254,8 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
                         color: 'var(--fg)', fontSize: 12.5, fontFamily: 'ui-monospace, monospace',
                       }}/>
                     <button type="button" onClick={useMyLocation} disabled={locating}
-                      className="btn btn-outline" style={{ fontSize: 11.5, padding: '5px 10px' }}>
-                      {locating ? 'Locating…' : 'Use my current location'}
+                      className="btn btn-ghost" style={{ fontSize: 11.5, padding: '5px 10px', color: 'var(--muted)' }}>
+                      {locating ? '…' : 'or use my current location'}
                     </button>
                   </div>
                   <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.45 }}>
