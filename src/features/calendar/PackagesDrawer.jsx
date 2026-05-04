@@ -13,6 +13,7 @@ import { api } from '../../lib/api.js';
 export default function PackagesDrawer({ services, onClose }) {
   const [packages, setPackages] = useState(null);
   const [editing, setEditing]   = useState(null); // null = list view, {} = new, row = edit
+  const [confirmDelete, setConfirmDelete] = useState(null); // { pkg, outstanding }
   const [err, setErr]           = useState(null);
 
   const load = async () => {
@@ -23,17 +24,52 @@ export default function PackagesDrawer({ services, onClose }) {
   };
   useEffect(() => { load(); }, []);
 
-  const remove = async (id) => {
+  const hide = async (id) => {
     setErr(null);
     try { await api.del('/packages/' + id); await load(); }
     catch (e) { setErr(e.message); }
+  };
+
+  // Two-phase delete: first attempt hard-delete; if outstanding credits
+  // exist the API returns 409 with { outstanding } so we can surface the
+  // warning. Confirming re-runs with confirm=1.
+  const startDelete = async (pkg) => {
+    setErr(null);
+    try {
+      await api.del('/packages/' + pkg.id + '?hard=1');
+      await load();
+    } catch (e) {
+      // 409 from the API → re-show as a confirmation dialog. api.js
+      // attaches the parsed body on `e.details`. Fall back to row-level
+      // stats if the server didn't surface them (older deployments).
+      const outstanding = e?.details?.outstanding
+        || { clients: pkg.outstandingClients || 0, credits: pkg.outstandingCredits || 0 };
+      if (e?.status === 409 || (outstanding.clients || 0) > 0) {
+        setConfirmDelete({ pkg, outstanding });
+      } else {
+        setErr(e.message || 'Could not delete package');
+      }
+    }
+  };
+  const confirmHardDelete = async () => {
+    if (!confirmDelete?.pkg) return;
+    setErr(null);
+    try {
+      await api.del('/packages/' + confirmDelete.pkg.id + '?hard=1&confirm=1');
+      setConfirmDelete(null);
+      await load();
+    } catch (e) {
+      setErr(e.message || 'Could not delete package');
+      setConfirmDelete(null);
+    }
   };
 
   const sub = editing
     ? <PackageEditor pkg={editing} services={services} onCancel={() => setEditing(null)}
         onSaved={async () => { await load(); setEditing(null); }}/>
     : <PackageList packages={packages} services={services}
-        onNew={() => setEditing({})} onEdit={(p) => setEditing(p)} onRemove={remove}/>;
+        onNew={() => setEditing({})} onEdit={(p) => setEditing(p)}
+        onHide={hide} onDelete={startDelete}/>;
 
   return (
     <Drawer title="Packages"
@@ -47,11 +83,70 @@ export default function PackagesDrawer({ services, onClose }) {
         }}>{err}</div>
       )}
       {sub}
+      {confirmDelete && (
+        <DeleteWarning pkg={confirmDelete.pkg} outstanding={confirmDelete.outstanding}
+          onCancel={() => setConfirmDelete(null)} onConfirm={confirmHardDelete}/>
+      )}
     </Drawer>
   );
 }
 
-function PackageList({ packages, services, onNew, onEdit, onRemove }) {
+// Warns the owner before hard-deleting a package template that still
+// has active client_packages tied to it. Existing buyers keep their
+// credits (FK is ON DELETE SET NULL) — the consequence is purely that
+// the template disappears from the templates list and can no longer be
+// resold under that name.
+function DeleteWarning({ pkg, outstanding, onCancel, onConfirm }) {
+  const [busy, setBusy] = useState(false);
+  const submit = async () => { setBusy(true); await onConfirm(); };
+  const { clients, credits } = outstanding || {};
+  return (
+    <div role="dialog" onClick={onCancel} style={{
+      position: 'fixed', inset: 0, zIndex: 240,
+      background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} className="card"
+        style={{ width: '100%', maxWidth: 420, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 10,
+            background: 'rgba(155,44,44,0.12)', color: 'var(--danger)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Trash size={16}/></div>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>
+            Delete this package template?
+          </h3>
+        </div>
+        <p style={{ margin: '4px 0 10px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          <strong>{clients}</strong> client{clients === 1 ? '' : 's'} still
+          {' '}{clients === 1 ? 'has' : 'have'} an active <em>{pkg.name}</em> with
+          {' '}<strong>{credits}</strong> credit{credits === 1 ? '' : 's'} remaining.
+        </p>
+        <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          They'll keep being able to redeem those sessions — their package
+          stays linked to their account. You just won't be able to sell
+          this template again. (If you'd rather keep it around but hide
+          it from the sale picker, use <strong>Hide</strong> instead.)
+        </p>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={onCancel} className="btn btn-outline"
+            style={{ flex: 1, justifyContent: 'center' }}>Cancel</button>
+          <button onClick={submit} disabled={busy} className="btn btn-primary"
+            style={{
+              flex: 1, justifyContent: 'center',
+              background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff',
+              opacity: busy ? 0.6 : 1,
+            }}>
+            {busy ? 'Deleting…' : 'Delete forever'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function PackageList({ packages, services, onNew, onEdit, onHide, onDelete }) {
   const serviceById = new Map((services || []).map((s) => [s.id, s]));
 
   if (packages === null) {
@@ -106,11 +201,19 @@ function PackageList({ packages, services, onNew, onEdit, onRemove }) {
                 Edit
               </button>
               {p.active && (
-                <button onClick={() => onRemove(p.id)} className="btn btn-ghost"
-                  style={{ padding: '4px 10px', fontSize: 12, color: 'var(--muted)' }}>
+                <button onClick={() => onHide(p.id)} className="btn btn-ghost"
+                  style={{ padding: '4px 10px', fontSize: 12, color: 'var(--muted)' }}
+                  title="Stop selling this package without affecting existing buyers">
                   Hide
                 </button>
               )}
+              <button onClick={() => onDelete(p)} className="btn btn-ghost"
+                style={{ padding: '4px 8px', fontSize: 12, color: 'var(--danger)' }}
+                title={p.outstandingClients > 0
+                  ? `${p.outstandingClients} client${p.outstandingClients === 1 ? '' : 's'} still using this — you'll get a confirmation`
+                  : 'Delete this template'}>
+                <Icons.Trash size={12}/>
+              </button>
             </div>
           ))}
         </div>

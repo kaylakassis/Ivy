@@ -351,3 +351,18 @@ img, svg, video { max-width: 100%; height: auto; }
 @media (prefers-reduced-motion: reduce) {
   .skel { animation: none; background: var(--surface-2); }
 }
+
+/* Walkthrough spotlight ring — pulses outward to draw attention without
+   trapping clicks (the ring itself has pointer-events: none). */
+@keyframes thryve-tour-pulse {
+  0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent),
+                     0 12px 40px rgba(0,0,0,0.25); }
+  70%  { box-shadow: 0 0 0 14px color-mix(in srgb, var(--accent) 0%, transparent),
+                     0 12px 40px rgba(0,0,0,0.25); }
+  100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 0%, transparent),
+                     0 12px 40px rgba(0,0,0,0.25); }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Keep the ring visible but stop the pulse for users who asked for it. */
+  [style*="thryve-tour-pulse"] { animation: none !important; }
+}

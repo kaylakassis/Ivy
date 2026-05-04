@@ -46,6 +46,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
             const Icon = Icons[item.icon] || Icons.Home;
             return (
               <NavLink key={item.id} to={item.to} end={item.to === '/'} title={item.label}
+                data-tour={`nav-${item.id}`}
                 className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
                 style={{ justifyContent: 'center', padding: 10 }}
               >
@@ -130,6 +131,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
               key={item.id}
               to={item.to}
               end={item.to === '/'}
+              data-tour={`nav-${item.id}`}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
             >
               {({ isActive }) => (

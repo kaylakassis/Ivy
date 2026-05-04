@@ -200,13 +200,15 @@ export default function Calendar() {
           <button className="btn btn-outline" onClick={() => setDrawer('services')}>
             <Icons.Dollar size={14}/> {!isTablet && 'Services'}
           </button>
-          <button className="btn btn-outline" onClick={() => setDrawer('packages')}>
+          <button className="btn btn-outline" onClick={() => setDrawer('packages')}
+            data-tour="calendar-packages">
             <Icons.Doc size={14}/> {!isTablet && 'Packages'}
           </button>
           <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
             <Icons.Clock size={14}/> {!isTablet && 'Availability'}
           </button>
-          <button className="btn btn-outline" onClick={() => setDrawer('share')}>
+          <button className="btn btn-outline" onClick={() => setDrawer('share')}
+            data-tour="calendar-share">
             <Icons.Globe size={14}/> {!isTablet && 'Share'}
           </button>
           <button className="btn btn-outline" onClick={() => setDrawer('sync')}>
@@ -218,7 +220,8 @@ export default function Calendar() {
           }}>
             <Icons.Clock size={14}/> {!isTablet && 'Block time'}
           </button>
-          <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}>
+          <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}
+            data-tour="calendar-new-booking">
             <Icons.Plus size={14}/> New booking
           </button>
         </div>

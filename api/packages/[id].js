@@ -91,12 +91,50 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      // Soft-delete: outstanding client_packages keep working; new sales
-      // are blocked because the template is hidden from the list UI.
-      await sql`
-        UPDATE packages SET active = FALSE, updated_at = NOW()
-        WHERE id = ${id} AND workspace_id = ${workspaceId}
+      // Two modes:
+      //   default → soft-delete (active = FALSE). Hides from sale UIs but
+      //             leaves the template row so existing client_packages
+      //             still join nicely.
+      //   ?hard=1 → hard delete. Outstanding client_packages keep working
+      //             because client_packages.package_id is ON DELETE SET
+      //             NULL — they retain credits, name, and service ids
+      //             from when the package was sold. Caller is expected
+      //             to confirm with the owner first when there are
+      //             still-active client packages.
+      const hard = req.query.hard === '1' || req.query.hard === 'true';
+
+      if (!hard) {
+        await sql`
+          UPDATE packages SET active = FALSE, updated_at = NOW()
+          WHERE id = ${id} AND workspace_id = ${workspaceId}
+        `;
+        return noContent(res);
+      }
+
+      const { rows: stats } = await sql`
+        SELECT
+          COUNT(*) FILTER (WHERE status = 'active' AND credits_remaining > 0) AS outstanding_clients,
+          COALESCE(SUM(credits_remaining) FILTER (WHERE status = 'active' AND credits_remaining > 0), 0) AS outstanding_credits
+        FROM client_packages
+        WHERE workspace_id = ${workspaceId} AND package_id = ${id}
       `;
+      const outstanding = {
+        clients: Number(stats[0]?.outstanding_clients) || 0,
+        credits: Number(stats[0]?.outstanding_credits) || 0,
+      };
+
+      // Without confirm=1 + outstanding > 0, surface the warning so the
+      // UI can show a confirmation dialog. Defends against a misclick on
+      // the trash button when the template is still in use.
+      const confirmed = req.query.confirm === '1' || req.query.confirm === 'true';
+      if (outstanding.clients > 0 && !confirmed) {
+        return res.status(409).json({
+          error: 'Outstanding client packages exist',
+          outstanding,
+        });
+      }
+
+      await sql`DELETE FROM packages WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       return noContent(res);
     }
 

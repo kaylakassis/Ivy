@@ -5,11 +5,11 @@ import { NavLink } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 
 const PRIMARY = [
-  { to: '/dashboard', icon: 'Home',     label: 'Home' },
-  { to: '/clients',   icon: 'Users',    label: 'Clients' },
-  { to: '/calendar',  icon: 'Calendar', label: 'Calendar' },
-  { to: '/messages',  icon: 'Chat',     label: 'Messages' },
-  { to: '/ivy',       icon: 'Spark',    label: 'Ivy' },
+  { id: 'dashboard', to: '/dashboard', icon: 'Home',     label: 'Home' },
+  { id: 'clients',   to: '/clients',   icon: 'Users',    label: 'Clients' },
+  { id: 'calendar',  to: '/calendar',  icon: 'Calendar', label: 'Calendar' },
+  { id: 'comms',     to: '/messages',  icon: 'Chat',     label: 'Messages' },
+  { id: 'ivy',       to: '/ivy',       icon: 'Spark',    label: 'Ivy' },
 ];
 
 export default function MobileBottomNav() {
@@ -20,6 +20,7 @@ export default function MobileBottomNav() {
         return (
           <NavLink key={item.to}
             to={item.to} end={item.to === '/'}
+            data-tour={`nav-${item.id}`}
             className={({ isActive }) => `mobile-nav-item ${isActive ? 'active' : ''}`}
           >
             {({ isActive }) => (

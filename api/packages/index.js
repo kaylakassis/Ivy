@@ -27,11 +27,31 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
+      // Pull outstanding-credit summaries in the same query so the UI
+      // can surface "this template is still in use" warnings without
+      // a per-row round trip.
       const { rows } = await sql`
-        SELECT * FROM packages WHERE workspace_id = ${workspaceId}
-        ORDER BY active DESC, name ASC
+        SELECT p.*,
+          COALESCE(stats.outstanding_clients, 0) AS outstanding_clients,
+          COALESCE(stats.outstanding_credits, 0) AS outstanding_credits
+        FROM packages p
+        LEFT JOIN (
+          SELECT package_id,
+            COUNT(*) FILTER (WHERE status = 'active' AND credits_remaining > 0) AS outstanding_clients,
+            SUM(credits_remaining) FILTER (WHERE status = 'active' AND credits_remaining > 0) AS outstanding_credits
+          FROM client_packages
+          WHERE workspace_id = ${workspaceId}
+          GROUP BY package_id
+        ) stats ON stats.package_id = p.id
+        WHERE p.workspace_id = ${workspaceId}
+        ORDER BY p.active DESC, p.name ASC
       `;
-      return ok(res, { packages: rows.map(serializePackage) });
+      const packages = rows.map((r) => ({
+        ...serializePackage(r),
+        outstandingClients: Number(r.outstanding_clients) || 0,
+        outstandingCredits: Number(r.outstanding_credits) || 0,
+      }));
+      return ok(res, { packages });
     }
 
     if (req.method === 'POST') {
