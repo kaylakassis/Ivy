@@ -41,6 +41,7 @@ export default function ClientHome() {
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <FirstVisitWelcome/>
       <div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>
           {greet}{user?.name ? `, ${user.name.split(' ')[0]}` : ''}.
@@ -112,6 +113,64 @@ export default function ClientHome() {
           <PackagesCard/>
         </>
       )}
+    </div>
+  );
+}
+
+// One-time welcome banner. Shows on first visit to /me, dismisses on
+// click, and never reappears (flag in localStorage). Mirrors the friendly
+// tone of the owner walkthrough's Ivy step but stays compact — clients
+// don't need a multi-step tour.
+const WELCOME_KEY = 'thryve.client.welcomed.v1';
+function FirstVisitWelcome() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    try {
+      if (!localStorage.getItem(WELCOME_KEY)) setVisible(true);
+    } catch { /* localStorage blocked — just don't show it */ }
+  }, []);
+
+  if (!visible) return null;
+
+  const dismiss = () => {
+    try { localStorage.setItem(WELCOME_KEY, String(Date.now())); }
+    catch { /* ignore */ }
+    setVisible(false);
+  };
+
+  return (
+    <div className="card" style={{
+      padding: 18, display: 'flex', alignItems: 'flex-start', gap: 14,
+      borderColor: 'var(--accent)',
+      background: 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface))',
+    }}>
+      <div style={{
+        width: 38, height: 38, borderRadius: 10, flexShrink: 0,
+        background: 'var(--accent)', color: 'var(--accent-ink)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icons.Spark size={18}/>
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
+          Welcome to your THRYVE portal
+        </div>
+        <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          This is your one place for everything across the businesses you
+          work with: bookings, invoices, documents to sign, and direct
+          messages. We'll surface what needs your attention up top — quick
+          glance, you're set.
+        </p>
+        <button onClick={dismiss} className="btn btn-primary"
+          style={{ padding: '6px 14px', fontSize: 12.5 }}>
+          Got it <Icons.Check size={11} sw={2.4}/>
+        </button>
+      </div>
+      <button onClick={dismiss} aria-label="Dismiss welcome"
+        className="btn btn-ghost" style={{ padding: 6, marginTop: -2 }}>
+        <Icons.X size={14}/>
+      </button>
     </div>
   );
 }

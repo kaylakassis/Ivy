@@ -25,9 +25,42 @@ function replyToAddress() {
   return process.env.EMAIL_REPLY_TO || null;
 }
 
+function isProd() {
+  return process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
+}
+
+function fromDomain() {
+  // Pull "user@domain.tld" out of either bare or "Name <addr>" form.
+  const raw = fromAddress();
+  const m = raw.match(/<([^>]+)>/) || [null, raw];
+  return (m[1] || '').split('@').pop()?.toLowerCase().trim();
+}
+
+// Hard guard against the easiest deliverability footgun: deploying to
+// production with `onboarding@resend.dev` as the sender. Gmail filters
+// it aggressively into spam, so password-reset / verification emails
+// never reach the user. Refusing to send up-front is much louder than
+// "delivered to spam, no idea why".
+function assertSafeProdFrom() {
+  if (!isProd()) return;
+  const dom = fromDomain();
+  if (!process.env.EMAIL_FROM) {
+    throw new Error(
+      'EMAIL_FROM is not set. Add a verified Resend domain in production env (e.g. \'THRYVE <noreply@thryve.app>\').',
+    );
+  }
+  if (dom === 'resend.dev' || dom === 'example.com' || !dom) {
+    throw new Error(
+      `EMAIL_FROM domain "${dom}" is not deliverable in production. Verify your own domain in Resend (Domains → Add) and set EMAIL_FROM to use it.`,
+    );
+  }
+}
+
 export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
+
+  assertSafeProdFrom();
 
   const body = {
     from: fromAddress(),
