@@ -56,6 +56,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       durationMinutes: 60, price: 0,
       description: '', photoUrl: '', prepInstructions: '',
       reminderMinutes: [...DEFAULT_REMINDERS],
+      capacity: 1,
     };
     setItems((xs) => [...xs, draft]);
     setEditId(id);
@@ -81,6 +82,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
         photoUrl: (s.photoUrl || '').trim(),
         prepInstructions: (s.prepInstructions || '').trim(),
         reminderMinutes: (s.reminderMinutes || []).slice(),
+        capacity: Number(s.capacity) || 1,
       })));
       onClose();
     } catch (e) {
@@ -251,7 +253,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           <input value={service.name} onChange={(e) => onChange({ name: e.target.value })} style={inputSty} autoFocus/>
         </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
           <Field label="Duration (min)">
             <input type="number" min={5} max={1440} step={5} value={service.durationMinutes}
               onChange={(e) => onChange({ durationMinutes: Math.max(5, Math.min(1440, Number(e.target.value) || 0)) })}
@@ -260,6 +262,12 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           <Field label="Price ($)">
             <input type="number" min={0} step={1} value={service.price}
               onChange={(e) => onChange({ price: Math.max(0, Number(e.target.value) || 0) })}
+              style={inputSty}/>
+          </Field>
+          <Field label="Capacity"
+            hint={service.capacity > 1 ? 'Group / class' : '1-on-1'}>
+            <input type="number" min={1} max={1000} step={1} value={service.capacity || 1}
+              onChange={(e) => onChange({ capacity: Math.max(1, Math.min(1000, Number(e.target.value) || 1)) })}
               style={inputSty}/>
           </Field>
         </div>

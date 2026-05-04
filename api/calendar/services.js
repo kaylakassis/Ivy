@@ -61,6 +61,12 @@ export default async function handler(req, res) {
         reminderMinutes = DEFAULT_REMINDERS.slice();
       }
 
+      const capRaw = s?.capacity ?? 1;
+      const capacity = Number.isInteger(capRaw) ? capRaw : Number(capRaw);
+      if (!Number.isInteger(capacity) || capacity < 1 || capacity > 1000) {
+        return badRequest(res, `services[${idx}].capacity must be 1–1000`);
+      }
+
       cleaned.push({
         id: s?.id || null,
         name,
@@ -71,6 +77,7 @@ export default async function handler(req, res) {
         photoUrl,
         prepInstructions,
         reminderMinutes,
+        capacity,
       });
     }
 
@@ -101,7 +108,8 @@ export default async function handler(req, res) {
             description = ${s.description},
             photo_url = ${s.photoUrl},
             prep_instructions = ${s.prepInstructions},
-            reminder_minutes = ${s.reminderMinutes}
+            reminder_minutes = ${s.reminderMinutes},
+            capacity = ${s.capacity}
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -111,11 +119,11 @@ export default async function handler(req, res) {
         const i = await sql`
           INSERT INTO services (
             workspace_id, name, duration_minutes, price, display_order,
-            description, photo_url, prep_instructions, reminder_minutes
+            description, photo_url, prep_instructions, reminder_minutes, capacity
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
-            ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}
+            ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity}
           )
           RETURNING *
         `;

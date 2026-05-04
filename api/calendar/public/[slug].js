@@ -131,13 +131,14 @@ async function createBooking(req, res) {
 
     // Verify service belongs to this workspace and duration matches.
     const svcRows = await sql`
-      SELECT id, duration_minutes FROM services
+      SELECT id, duration_minutes, capacity FROM services
       WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
     if (svcRows.rows.length === 0) return badRequest(res, 'Unknown service');
     if ((end - start) !== svcRows.rows[0].duration_minutes) {
       return badRequest(res, 'Slot duration does not match service');
     }
+    const serviceCapacity = Math.max(1, Number(svcRows.rows[0].capacity) || 1);
 
     // Don't allow booking in the past.
     const now = new Date();
@@ -152,8 +153,10 @@ async function createBooking(req, res) {
     if (!withinAvailability(availability, weekday, start, end)) {
       return badRequest(res, 'That slot is outside booking hours');
     }
-    if (await hasConflict({ workspaceId, dateISO: date, start, end })) {
-      return badRequest(res, 'That slot was just taken — please pick another time');
+    if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity })) {
+      return badRequest(res, serviceCapacity > 1
+        ? 'That class just filled up — please pick another time'
+        : 'That slot was just taken — please pick another time');
     }
 
     // Attach to an existing client by email; create a lead if missing.

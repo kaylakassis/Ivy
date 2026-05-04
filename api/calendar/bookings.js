@@ -44,10 +44,13 @@ export default async function handler(req, res) {
     if (!VALID_RECURRENCE.has(recurrenceRule)) return badRequest(res, 'Invalid recurrence rule');
     if (recurrenceUntil && !/^\d{4}-\d{2}-\d{2}$/.test(recurrenceUntil)) return badRequest(res, 'recurrenceUntil must be YYYY-MM-DD');
 
-    // Validate service if provided.
+    // Validate service if provided + capture capacity for the slot
+    // conflict check (group services let multiple bookings share a slot).
+    let serviceCapacity = 1;
     if (serviceId) {
-      const r = await sql`SELECT id FROM services WHERE id = ${serviceId} AND workspace_id = ${workspaceId}`;
+      const r = await sql`SELECT id, capacity FROM services WHERE id = ${serviceId} AND workspace_id = ${workspaceId}`;
       if (r.rows.length === 0) return badRequest(res, 'Unknown service');
+      serviceCapacity = Math.max(1, Number(r.rows[0].capacity) || 1);
     }
     // Validate client if provided.
     let resolvedClientId = clientId;
@@ -79,8 +82,10 @@ export default async function handler(req, res) {
       if (settings.rows.length > 0 && !withinAvailability(settings.rows[0].availability, weekday, start, end)) {
         return badRequest(res, 'That slot is outside your availability — toggle Override to book anyway');
       }
-      if (await hasConflict({ workspaceId, dateISO: date, start, end })) {
-        return badRequest(res, 'That slot conflicts with an existing booking or block');
+      if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity })) {
+        return badRequest(res, serviceCapacity > 1
+          ? 'That class is full or the slot conflicts with another booking'
+          : 'That slot conflicts with an existing booking or block');
       }
     }
 

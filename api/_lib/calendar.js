@@ -49,6 +49,7 @@ export function serializeService(row) {
     photoUrl:          row.photo_url || '',
     prepInstructions:  row.prep_instructions || '',
     reminderMinutes:   row.reminder_minutes || DEFAULT_REMINDERS.slice(),
+    capacity:          row.capacity || 1,
   };
 }
 
@@ -103,7 +104,12 @@ export function withinAvailability(availability, weekday, start, end) {
 }
 
 // Returns true if the slot collides with any block or active booking on the given date.
-export async function hasConflict({ workspaceId, dateISO, start, end }) {
+// Slot conflict check. Permits group bookings — if serviceId + capacity
+// are passed and capacity > 1, multiple bookings of the SAME service in
+// the EXACT same start/end window can co-exist up to `capacity`. Any
+// other overlap (different service, different exact slot, blocks,
+// external busy) still conflicts.
+export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1 }) {
   const blocks = await sql`
     SELECT 1 FROM calendar_blocks
     WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
@@ -111,24 +117,36 @@ export async function hasConflict({ workspaceId, dateISO, start, end }) {
     LIMIT 1
   `;
   if (blocks.rows.length > 0) return true;
-  const bookings = await sql`
-    SELECT 1 FROM bookings
-    WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
-      AND cancelled_at IS NULL
-      AND start_min < ${end} AND end_min > ${start}
-    LIMIT 1
-  `;
-  if (bookings.rows.length > 0) return true;
-  // Inbound external busy times (e.g. Google Cal personal events when
-  // the owner has google_block_inbound on). Treated identically to
-  // calendar_blocks for slot availability.
+
+  // Inbound external busy times — same hard-block treatment as
+  // calendar_blocks.
   const external = await sql`
     SELECT 1 FROM external_busy_blocks
     WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
       AND start_min < ${end} AND end_min > ${start}
     LIMIT 1
   `;
-  return external.rows.length > 0;
+  if (external.rows.length > 0) return true;
+
+  // Bookings overlap rules:
+  //   1. Any overlap from a DIFFERENT service → conflict
+  //   2. Same-service overlap with DIFFERENT start/end (not exact slot)
+  //      → conflict (one therapist, can't run two groups stacked)
+  //   3. Same-service, EXACT same slot → allowed up to capacity
+  const overlapping = await sql`
+    SELECT service_id, start_min, end_min FROM bookings
+    WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
+      AND cancelled_at IS NULL
+      AND start_min < ${end} AND end_min > ${start}
+  `;
+  let sameSlotSameService = 0;
+  for (const r of overlapping.rows) {
+    const isExactSlot = r.start_min === start && r.end_min === end;
+    const isSameService = serviceId && r.service_id === serviceId;
+    if (!isSameService || !isExactSlot) return true;
+    sameSlotSameService++;
+  }
+  return sameSlotSameService >= Math.max(1, Number(capacity) || 1);
 }
 
 export function isPositiveInt(x, max = 24 * 60) {

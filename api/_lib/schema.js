@@ -315,6 +315,12 @@ CREATE TABLE IF NOT EXISTS services (
 ALTER TABLE services ADD COLUMN IF NOT EXISTS description TEXT;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS prep_instructions TEXT;
+-- Group bookings: capacity > 1 means N clients can share the same slot
+-- (yoga class, group therapy, fitness session). hasConflict permits
+-- same-service+same-slot bookings up to this number; different-service
+-- overlaps still conflict.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS capacity INT NOT NULL DEFAULT 1
+  CHECK (capacity >= 1 AND capacity <= 1000);
 ALTER TABLE services ADD COLUMN IF NOT EXISTS reminder_minutes INT[] NOT NULL DEFAULT ARRAY[10080, 2880, 1440, 120]::int[];
 CREATE INDEX IF NOT EXISTS idx_services_workspace ON services(workspace_id, display_order);
 

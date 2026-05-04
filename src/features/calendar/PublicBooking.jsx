@@ -215,7 +215,16 @@ export default function PublicBooking() {
                         }}/>
                       ) : null}
                       <div style={{ padding: 12 }}>
-                        <div style={{ fontWeight: 600, fontSize: 13, color: selected ? 'var(--accent)' : 'var(--fg)' }}>{s.name}</div>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <span style={{ fontWeight: 600, fontSize: 13, color: selected ? 'var(--accent)' : 'var(--fg)', flex: 1 }}>{s.name}</span>
+                          {s.capacity > 1 && (
+                            <span style={{
+                              padding: '1px 7px', borderRadius: 99,
+                              fontSize: 9.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+                              background: 'var(--accent-soft)', color: 'var(--accent)',
+                            }}>Group · {s.capacity}</span>
+                          )}
+                        </div>
                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                           {s.durationMinutes} min · ${Number(s.price).toLocaleString()}
                         </div>
@@ -249,7 +258,7 @@ export default function PublicBooking() {
           {/* Day cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
             {weekDays.map((d, i) => {
-              const slots = svc ? slotsForDate(cal, d, svc.durationMinutes).filter((s) => s.available) : [];
+              const slots = svc ? slotsForDate(cal, d, svc).filter((s) => s.available) : [];
               const today = new Date(); today.setHours(0, 0, 0, 0);
               const isPast = d < today;
               return (
@@ -271,8 +280,17 @@ export default function PublicBooking() {
                       padding: '6px 4px', borderRadius: 6, fontSize: 11, fontWeight: 550,
                       background: 'var(--surface-2)', border: '1px solid var(--border)',
                       color: 'var(--fg)', cursor: 'pointer',
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
                     }}>
-                      {minToHM(s.start)}
+                      <span>{minToHM(s.start)}</span>
+                      {s.seatsLeft != null && (
+                        <span style={{
+                          fontSize: 9, fontWeight: 600,
+                          color: s.seatsLeft <= 2 ? 'var(--warn)' : 'var(--accent)',
+                        }}>
+                          {s.seatsLeft} left
+                        </span>
+                      )}
                     </button>
                   ))}
                   {slots.length > 8 && (

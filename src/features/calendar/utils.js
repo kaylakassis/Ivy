@@ -46,11 +46,19 @@ export const WEEKDAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 // Compute slot grid for a date given calendar state and a service duration.
 // Returns [{ start, end, available, reason }]
-export function slotsForDate(cal, date, serviceDur) {
+// Compute available booking slots for a date + service. Service-aware so
+// group classes (capacity > 1) keep returning available slots until they
+// hit capacity. Caller passes the full service object so we can read its
+// id + capacity; for backwards compat we accept just a number too.
+export function slotsForDate(cal, date, serviceOrDur) {
+  const service = typeof serviceOrDur === 'number'
+    ? { durationMinutes: serviceOrDur, id: null, capacity: 1 }
+    : (serviceOrDur || {});
+  const dur = service.durationMinutes || 60;
+  const capacity = Math.max(1, Number(service.capacity) || 1);
   const dayIdx = date.getDay();
   const dateISO = fmtDateISO(date);
   const windows = (cal.settings?.availability && cal.settings.availability[String(dayIdx)]) || [];
-  const dur = serviceDur || 60;
   const step = cal.settings?.slotMinutes || 30;
   const slots = [];
 
@@ -59,6 +67,7 @@ export function slotsForDate(cal, date, serviceDur) {
       const start = t;
       const end = t + dur;
       let reason = null;
+      let seatsTaken = 0;
 
       for (const b of (cal.blocks || [])) {
         if (b.date === dateISO && !(end <= b.startMin || start >= b.endMin)) {
@@ -68,13 +77,23 @@ export function slotsForDate(cal, date, serviceDur) {
       }
       if (!reason) {
         for (const bk of (cal.bookings || [])) {
-          if (bk.date === dateISO && !(end <= bk.startMin || start >= bk.endMin)) {
+          if (bk.date !== dateISO) continue;
+          if (end <= bk.startMin || start >= bk.endMin) continue;
+          // Same-service + EXACT-slot bookings count toward capacity.
+          // Anything else (different service or different time even
+          // same service) is a hard conflict.
+          const sameSlot = bk.startMin === start && bk.endMin === end;
+          const sameService = service.id && bk.serviceId === service.id;
+          if (!sameSlot || !sameService) {
             reason = 'Booked';
             break;
           }
+          seatsTaken++;
         }
       }
-      slots.push({ start, end, available: !reason, reason });
+      const available = !reason && seatsTaken < capacity;
+      const seatsLeft = capacity > 1 ? Math.max(0, capacity - seatsTaken) : null;
+      slots.push({ start, end, available, reason, seatsLeft, capacity });
     }
   }
   return slots;
