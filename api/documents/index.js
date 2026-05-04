@@ -18,18 +18,30 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       const status = req.query.status;
+      // ?templates=1 returns only is_template=TRUE rows; ?templates=0
+      // (or absent) returns instances. ServicesDrawer's intake picker
+      // calls with templates=1.
+      const templatesOnly = req.query.templates === '1';
       let rows;
-      if (status && VALID_STATUS.has(status)) {
+      if (templatesOnly) {
+        const r = await sql`
+          SELECT * FROM documents
+          WHERE workspace_id = ${workspaceId} AND is_template = TRUE
+          ORDER BY name ASC
+        `;
+        rows = r.rows;
+      } else if (status && VALID_STATUS.has(status)) {
         const r = await sql`
           SELECT * FROM documents
           WHERE workspace_id = ${workspaceId} AND status = ${status}
+            AND is_template = FALSE
           ORDER BY updated_at DESC
         `;
         rows = r.rows;
       } else {
         const r = await sql`
           SELECT * FROM documents
-          WHERE workspace_id = ${workspaceId}
+          WHERE workspace_id = ${workspaceId} AND is_template = FALSE
           ORDER BY updated_at DESC
         `;
         rows = r.rows;
@@ -50,9 +62,10 @@ export default async function handler(req, res) {
       if (kind === 'written' && !contentHtml) return badRequest(res, 'Written documents need contentHtml');
       if (fields === null) return badRequest(res, 'Invalid fields');
 
+      const isTemplate = !!body.isTemplate;
       const insert = await sql`
-        INSERT INTO documents (workspace_id, name, kind, content_html, fields)
-        VALUES (${workspaceId}, ${name}, ${kind}, ${contentHtml}, ${JSON.stringify(fields)}::jsonb)
+        INSERT INTO documents (workspace_id, name, kind, content_html, fields, is_template)
+        VALUES (${workspaceId}, ${name}, ${kind}, ${contentHtml}, ${JSON.stringify(fields)}::jsonb, ${isTemplate})
         RETURNING *
       `;
       return created(res, { document: serializeDoc(insert.rows[0]) });

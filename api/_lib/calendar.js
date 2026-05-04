@@ -50,6 +50,7 @@ export function serializeService(row) {
     prepInstructions:  row.prep_instructions || '',
     reminderMinutes:   row.reminder_minutes || DEFAULT_REMINDERS.slice(),
     capacity:          row.capacity || 1,
+    intakeFormTemplateIds: row.intake_form_template_ids || [],
   };
 }
 

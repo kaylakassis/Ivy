@@ -49,6 +49,9 @@ export default async function handler(req, res) {
         if (fields === null) return badRequest(res, 'Invalid fields');
         push('fields', JSON.stringify(fields));
       }
+      if ('isTemplate' in body) {
+        push('is_template', !!body.isTemplate);
+      }
 
       if (sets.length === 0) return ok(res, { document: serializeDoc(doc) });
 

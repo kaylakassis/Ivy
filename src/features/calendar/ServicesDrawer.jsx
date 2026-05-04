@@ -9,10 +9,11 @@
 //   reminder_minutes (array of "minutes before appointment" — defaults to
 //     7d/2d/1d/2h, fully customizable)
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { api } from '../../lib/api.js';
 
 const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
 
@@ -57,6 +58,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       description: '', photoUrl: '', prepInstructions: '',
       reminderMinutes: [...DEFAULT_REMINDERS],
       capacity: 1,
+      intakeFormTemplateIds: [],
     };
     setItems((xs) => [...xs, draft]);
     setEditId(id);
@@ -83,6 +85,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
         prepInstructions: (s.prepInstructions || '').trim(),
         reminderMinutes: (s.reminderMinutes || []).slice(),
         capacity: Number(s.capacity) || 1,
+        intakeFormTemplateIds: (s.intakeFormTemplateIds || []).slice(),
       })));
       onClose();
     } catch (e) {
@@ -300,6 +303,14 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           />
         </Field>
 
+        <Field label="Intake forms"
+          hint="Sent to the client automatically when this service is booked.">
+          <IntakeFormPicker
+            selected={service.intakeFormTemplateIds || []}
+            onChange={(intakeFormTemplateIds) => onChange({ intakeFormTemplateIds })}
+          />
+        </Field>
+
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={onRemove}>
             <Icons.Trash size={13}/> Remove
@@ -430,6 +441,59 @@ function Field({ label, hint, children }) {
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
+    </div>
+  );
+}
+
+// Multi-select picker for document templates that should be sent to
+// clients when this service is booked. Loads workspace templates from
+// /api/documents?templates=1 once on mount.
+function IntakeFormPicker({ selected, onChange }) {
+  const [templates, setTemplates] = useState(null);
+
+  useEffect(() => {
+    api.get('/documents?templates=1')
+      .then((r) => setTemplates(r.documents || []))
+      .catch(() => setTemplates([]));
+  }, []);
+
+  if (templates === null) {
+    return <div style={{ fontSize: 12, color: 'var(--muted)' }}>Loading templates…</div>;
+  }
+  if (templates.length === 0) {
+    return (
+      <div style={{
+        padding: '10px 12px', borderRadius: 8,
+        background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
+        fontSize: 12, color: 'var(--muted)', lineHeight: 1.5,
+      }}>
+        No form templates yet. In the Documents page, create a document and
+        toggle <em>Save as template</em> — then come back here to attach it.
+      </div>
+    );
+  }
+  const toggle = (id) => {
+    if (selected.includes(id)) onChange(selected.filter((x) => x !== id));
+    else onChange([...selected, id]);
+  };
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {templates.map((t) => {
+        const on = selected.includes(t.id);
+        return (
+          <label key={t.id} style={{
+            display: 'flex', alignItems: 'center', gap: 8, padding: '6px 10px',
+            borderRadius: 8, background: on ? 'var(--surface-2)' : 'transparent',
+            cursor: 'pointer', fontSize: 12.5,
+          }}>
+            <input type="checkbox" checked={on} onChange={() => toggle(t.id)}/>
+            <span style={{ flex: 1 }}>{t.name}</span>
+            <span style={{ color: 'var(--muted)', fontSize: 11 }}>
+              {t.fields?.length || 0} field{t.fields?.length === 1 ? '' : 's'}
+            </span>
+          </label>
+        );
+      })}
     </div>
   );
 }

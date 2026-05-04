@@ -18,6 +18,7 @@ import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
+import { attachIntakeForms } from '../../_lib/intake.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -69,6 +70,7 @@ export default async function handler(req, res) {
         if (promoted) {
           notifyNewBooking({ workspaceId: booking.workspace_id, bookingId: promoted.id, source: 'waitlist' });
           syncOnBookingCreated({ workspaceId: booking.workspace_id, bookingId: promoted.id });
+          attachIntakeForms({ workspaceId: booking.workspace_id, bookingId: promoted.id });
         }
       } catch (err) {
         // eslint-disable-next-line no-console

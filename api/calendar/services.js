@@ -67,6 +67,13 @@ export default async function handler(req, res) {
         return badRequest(res, `services[${idx}].capacity must be 1–1000`);
       }
 
+      const intakeFormTemplateIds = Array.isArray(s?.intakeFormTemplateIds)
+        ? s.intakeFormTemplateIds.map((x) => String(x)).filter(Boolean).slice(0, 20)
+        : [];
+      if (intakeFormTemplateIds.some((id) => !/^[0-9a-fA-F-]{36}$/.test(id))) {
+        return badRequest(res, `services[${idx}].intakeFormTemplateIds must be UUIDs`);
+      }
+
       cleaned.push({
         id: s?.id || null,
         name,
@@ -78,7 +85,25 @@ export default async function handler(req, res) {
         prepInstructions,
         reminderMinutes,
         capacity,
+        intakeFormTemplateIds,
       });
+    }
+
+    // Validate every referenced template id belongs to this workspace
+    // and is actually marked as a template. Single round-trip.
+    const allTemplateRefs = Array.from(new Set(cleaned.flatMap((s) => s.intakeFormTemplateIds)));
+    if (allTemplateRefs.length > 0) {
+      const { rows: tplRows } = await sql.query(
+        `SELECT id FROM documents
+         WHERE workspace_id = $1 AND id = ANY($2) AND is_template = TRUE`,
+        [workspaceId, allTemplateRefs],
+      );
+      const known = new Set(tplRows.map((r) => r.id));
+      for (const s of cleaned) {
+        for (const t of s.intakeFormTemplateIds) {
+          if (!known.has(t)) return badRequest(res, `Unknown intake form template ${t}`);
+        }
+      }
     }
 
     // Read current services so we know which existing ids to keep.
@@ -109,7 +134,8 @@ export default async function handler(req, res) {
             photo_url = ${s.photoUrl},
             prep_instructions = ${s.prepInstructions},
             reminder_minutes = ${s.reminderMinutes},
-            capacity = ${s.capacity}
+            capacity = ${s.capacity},
+            intake_form_template_ids = ${s.intakeFormTemplateIds}
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -119,11 +145,13 @@ export default async function handler(req, res) {
         const i = await sql`
           INSERT INTO services (
             workspace_id, name, duration_minutes, price, display_order,
-            description, photo_url, prep_instructions, reminder_minutes, capacity
+            description, photo_url, prep_instructions, reminder_minutes, capacity,
+            intake_form_template_ids
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
-            ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity}
+            ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity},
+            ${s.intakeFormTemplateIds}
           )
           RETURNING *
         `;

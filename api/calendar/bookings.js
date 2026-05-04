@@ -13,6 +13,7 @@ import {
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
 import { syncOnBookingCreated } from '../_lib/googleSync.js';
 import { consumeCredit } from '../_lib/packages.js';
+import { attachIntakeForms } from '../_lib/intake.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -126,6 +127,8 @@ export default async function handler(req, res) {
     notifyNewBooking({ workspaceId, bookingId: insert.rows[0].id, source: 'owner' });
     // Best-effort Google Calendar push. Failures log + skip; never block.
     syncOnBookingCreated({ workspaceId, bookingId: insert.rows[0].id });
+    // Auto-send any intake forms the service has attached.
+    attachIntakeForms({ workspaceId, bookingId: insert.rows[0].id });
     return created(res, { booking: serializeBooking(insert.rows[0]) });
   } catch (err) {
     return serverError(res, err);

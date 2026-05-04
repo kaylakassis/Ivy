@@ -10,6 +10,7 @@ import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
+import { attachIntakeForms } from '../../_lib/intake.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
 
@@ -99,6 +100,7 @@ export default async function handler(req, res) {
         if (promoted) {
           notifyNewBooking({ workspaceId, bookingId: promoted.id, source: 'waitlist' });
           syncOnBookingCreated({ workspaceId, bookingId: promoted.id });
+          attachIntakeForms({ workspaceId, bookingId: promoted.id });
         }
       } catch (err) {
         // eslint-disable-next-line no-console

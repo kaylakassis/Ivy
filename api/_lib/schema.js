@@ -448,6 +448,18 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id, status);
+-- Documents double as templates: when is_template=TRUE the row is a
+-- reusable form template (no recipient, status='draft'). Booking the
+-- right service auto-clones it into a new instance addressed to the
+-- client. instance.template_id points back to the template so we can
+-- show "5 sent in last 30d" stats per template.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS is_template BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES documents(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_templates
+  ON documents(workspace_id) WHERE is_template = TRUE;
+-- Per-service intake-form attachment. UUID[] of document template ids
+-- to clone + send when a booking against this service is created.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS intake_form_template_ids UUID[] NOT NULL DEFAULT '{}'::uuid[];
 
 -- Per-workspace finance settings (next invoice number, default tax, currency).
 CREATE TABLE IF NOT EXISTS finance_settings (

@@ -22,6 +22,8 @@ export function serializeDoc(row) {
     sentAt:              row.sent_at,
     completedAt:         row.completed_at,
     activity:            row.activity || [],
+    isTemplate:          !!row.is_template,
+    templateId:          row.template_id || null,
     createdAt:           row.created_at,
     updatedAt:           row.updated_at,
   };
