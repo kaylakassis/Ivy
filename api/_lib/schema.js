@@ -121,7 +121,7 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENC
 CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
 
 -- Client portal: when an end-customer signs up to THRYVE, we link their user
--- account to every existing `clients` row that matches their email so they
+-- account to every existing 'clients' row that matches their email so they
 -- can see their data across multiple businesses they book with. user_id
 -- nullable because most rows are created by owners before the client signs up.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
@@ -200,7 +200,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS recurrence_until DATE;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_occurrences DATE[] NOT NULL DEFAULT '{}'::date[];
 -- Per-booking reminder-fire tracker. Keys are the reminder_minutes value as
 -- a string (e.g. '120' for the 2-hour reminder); values are ISO timestamps.
--- The cron checks `reminders_sent ? key` so each beat fires exactly once.
+-- The cron checks reminders_sent ? key so each beat fires exactly once.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
 
