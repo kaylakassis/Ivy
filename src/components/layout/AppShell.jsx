@@ -15,6 +15,7 @@ import MobileBottomNav from './MobileBottomNav.jsx';
 import MobileDrawer from './MobileDrawer.jsx';
 import ViewToggle from '../ViewToggle.jsx';
 import Paywall from '../../features/billing/Paywall.jsx';
+import SubscriptionBanner from '../../features/billing/SubscriptionBanner.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -71,6 +72,7 @@ function AppShellInner() {
           display: 'flex', flexDirection: 'column',
           minHeight: '100vh',
         }}>
+          <SubscriptionBanner />
           <VerifyEmailBanner />
           <Topbar
             title={t.title}
