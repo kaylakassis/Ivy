@@ -1,12 +1,9 @@
 // Floating Business ↔ Client view switcher. Bottom-center on every page in
-// both shells. Shows only when the user has actual access to the other side
-// (an owner can see Client even if they're not a client of any business —
-// the empty Discover is harmless — but a client-only user without a
-// workspace shouldn't see Business at all).
+// both shells, available to anyone signed in.
 //
-// Pure navigation: clicking "Business" while unsubscribed will land on
-// AppShell, which then renders the Paywall modal. That keeps gating logic
-// in one place instead of duplicated here.
+// Pure navigation. Going to Business as an unsubscribed user lands them in
+// AppShell, which then renders the Paywall — gating lives in one place.
+// Going to Client always works (the portal is universal and free).
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
@@ -15,17 +12,10 @@ export default function ViewToggle({ ctx }) {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // We only need the user to be signed in (ctx loaded). Older revisions
+  // hid the pill from client-only users — but that's exactly the user who
+  // most benefits from a discoverable way back to /me, so we always show.
   if (!ctx) return null;
-  const { isOwner, isClient } = ctx;
-
-  // No toggle needed for users with only one side. Owner-without-client is
-  // still allowed to peek at /me — the directory is universal — so we show
-  // the toggle whenever the user owns a workspace, regardless of isClient.
-  if (!isOwner && !isClient) return null;
-  if (!isOwner && isClient) {
-    // Client-only — they can't reach Business, hide the toggle entirely.
-    return null;
-  }
 
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
   const view = onClient ? 'client' : 'business';
@@ -40,7 +30,9 @@ export default function ViewToggle({ ctx }) {
       position: 'fixed',
       bottom: 'calc(env(safe-area-inset-bottom, 0px) + 18px)',
       left: '50%', transform: 'translateX(-50%)',
-      zIndex: 90,
+      // Sits above the Paywall (z-index 200) so a paywalled owner can
+      // always escape back to the free client portal.
+      zIndex: 250,
       display: 'flex', gap: 4, padding: 4,
       background: 'var(--surface)', border: '1px solid var(--border-strong)',
       borderRadius: 999, boxShadow: 'var(--shadow)',
