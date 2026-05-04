@@ -35,6 +35,21 @@ async function loadBusinessMeta(workspaceId) {
   return rows[0] ? { name: rows[0].biz_name, slug: rows[0].slug } : null;
 }
 
+// Returns true when this workspace has Stripe wired up enough to accept a
+// card payment from a public invoice viewer (secret + webhook secret both
+// stored). Without webhook signing, paid invoices wouldn't auto-mark, so
+// we hide the Pay button.
+async function isStripeReady(workspaceId) {
+  const { rows } = await sql`
+    SELECT 1 FROM finance_settings
+    WHERE workspace_id = ${workspaceId}
+      AND stripe_secret_encrypted IS NOT NULL
+      AND stripe_webhook_secret_encrypted IS NOT NULL
+    LIMIT 1
+  `;
+  return rows.length > 0;
+}
+
 export default async function handler(req, res) {
   if (req.method === 'GET')  return getInvoice(req, res);
   if (req.method === 'POST') return submitMarkPaid(req, res);
@@ -67,8 +82,11 @@ async function getInvoice(req, res) {
       await sql`UPDATE invoices SET activity = ${JSON.stringify(next)}::jsonb WHERE id = ${inv.id}`;
     }
 
-    const business = await loadBusinessMeta(inv.workspace_id);
-    return ok(res, { invoice: serializeInvoicePublic(inv, { business }) });
+    const [business, paymentEnabled] = await Promise.all([
+      loadBusinessMeta(inv.workspace_id),
+      isStripeReady(inv.workspace_id),
+    ]);
+    return ok(res, { invoice: serializeInvoicePublic(inv, { business, paymentEnabled }) });
   } catch (err) {
     return serverError(res, err);
   }

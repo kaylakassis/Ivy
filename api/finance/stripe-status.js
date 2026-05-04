@@ -6,6 +6,7 @@
 // Never returns the encrypted secrets — only metadata.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -26,8 +27,9 @@ export default async function handler(req, res) {
       WHERE workspace_id = ${workspaceId}
     `;
     const r = rows[0];
+    const webhookUrl = `${appUrl()}/api/webhooks/stripe/${workspaceId}`;
     if (!r || !r.connected) {
-      return ok(res, { connected: false });
+      return ok(res, { connected: false, webhookUrl });
     }
     return ok(res, {
       connected: true,
@@ -35,6 +37,7 @@ export default async function handler(req, res) {
       publishable: r.stripe_publishable_key || null,
       webhookConfigured: !!r.webhook_configured,
       connectedAt: r.stripe_connected_at,
+      webhookUrl,
     });
   } catch (err) {
     return serverError(res, err);

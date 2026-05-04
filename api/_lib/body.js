@@ -15,3 +15,20 @@ export async function readBody(req) {
     req.on('error', reject);
   });
 }
+
+// Reads the request body as a raw string, no JSON parsing. Required for
+// signature verification (e.g. Stripe webhooks) where a single byte of
+// re-formatting would invalidate the HMAC.
+//
+// The handler that uses this must opt out of Vercel body parsing:
+//   export const config = { api: { bodyParser: false } };
+export async function readRawBody(req) {
+  if (typeof req.body === 'string') return req.body;
+  if (Buffer.isBuffer(req.body)) return req.body.toString('utf8');
+  return await new Promise((resolve, reject) => {
+    let data = '';
+    req.on('data', (c) => { data += c; });
+    req.on('end', () => resolve(data));
+    req.on('error', reject);
+  });
+}

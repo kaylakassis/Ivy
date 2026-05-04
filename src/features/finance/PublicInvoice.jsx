@@ -1,20 +1,27 @@
 // /invoice/:token — public invoice view (no login required).
-// Shows the invoice with line items + total. "I've paid" button records an
-// activity entry on the owner's side so they know to reconcile.
+// Shows the invoice with line items + total. When the issuing workspace has
+// Stripe wired up (paymentEnabled flag from the API), shows a "Pay with card"
+// button that creates a Checkout Session and redirects. Otherwise falls back
+// to the soft "I've paid" confirmation flow.
 import React, { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 
 export default function PublicInvoice() {
   const { token } = useParams();
+  const [params]  = useSearchParams();
   const [tweaks]  = useTweaks();
+  const paidFlag      = params.get('paid') === '1';
+  const cancelledFlag = params.get('cancelled') === '1';
   const [inv, setInv]         = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [paying, setPaying]       = useState(false);
+  const [payErr, setPayErr]       = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -44,6 +51,24 @@ export default function PublicInvoice() {
       setSubmitted(true);
     } catch { /* noop */ }
     finally { setSubmitting(false); }
+  };
+
+  const payWithCard = async () => {
+    setPaying(true); setPayErr(null);
+    try {
+      const r = await fetch('/api/invoice-pay/' + encodeURIComponent(token), {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({}),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.url) throw new Error(j.error || `HTTP ${r.status}`);
+      window.location.href = j.url;
+    } catch (e) {
+      setPayErr(e.message || 'Could not start payment.');
+      setPaying(false);
+    }
   };
 
   if (loading) {
@@ -159,7 +184,18 @@ export default function PublicInvoice() {
 
       {/* Pay action */}
       <div className="card" style={{ padding: 24, marginTop: 16, textAlign: 'center' }}>
-        {submitted ? (
+        {paidFlag ? (
+          <div>
+            <div style={{
+              width: 44, height: 44, borderRadius: 99, background: 'var(--ok)', color: '#fff',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+            }}><Icons.Check size={22} sw={2.4}/></div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Payment received — thanks!</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              {inv.business?.name || 'The sender'} will get a confirmation as soon as Stripe confirms the charge.
+            </div>
+          </div>
+        ) : submitted ? (
           <div>
             <div style={{
               width: 44, height: 44, borderRadius: 99, background: 'var(--ok)', color: '#fff',
@@ -170,6 +206,42 @@ export default function PublicInvoice() {
               They'll reconcile and mark this invoice paid on their side.
             </div>
           </div>
+        ) : inv.paymentEnabled ? (
+          <>
+            <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginBottom: 12, lineHeight: 1.55 }}>
+              Pay <strong>{fmtMoney(inv.total)}</strong> by card. You'll be taken to a secure
+              Stripe checkout — your card details never touch our servers.
+            </div>
+            {cancelledFlag && (
+              <div style={{
+                marginBottom: 12, padding: '6px 10px', borderRadius: 6,
+                background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 12,
+              }}>
+                Payment was cancelled — try again whenever you're ready.
+              </div>
+            )}
+            {payErr && (
+              <div style={{
+                marginBottom: 12, padding: '6px 10px', borderRadius: 6,
+                background: 'rgba(155,44,44,0.08)', color: 'var(--danger)', fontSize: 12,
+              }}>{payErr}</div>
+            )}
+            <button className="btn btn-primary" onClick={payWithCard} disabled={paying}
+              style={{ padding: '12px 22px', minWidth: 220, justifyContent: 'center' }}>
+              {paying ? 'Redirecting…' : `Pay ${fmtMoney(inv.total)} with card`}
+              {!paying && <Icons.Arrow size={14} sw={2.2}/>}
+            </button>
+            <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>
+              Already paid by another method?{' '}
+              <button onClick={markPaid} disabled={submitting}
+                style={{
+                  background: 'transparent', border: 0, padding: 0,
+                  color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11,
+                }}>
+                {submitting ? 'Sending…' : 'Let them know'}
+              </button>
+            </div>
+          </>
         ) : (
           <>
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginBottom: 12, lineHeight: 1.55 }}>

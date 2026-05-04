@@ -57,6 +57,7 @@ export function serializeInvoicePublic(row, workspaceMeta = {}) {
   return {
     ...inv,
     business: workspaceMeta.business || null,
+    paymentEnabled: !!workspaceMeta.paymentEnabled,
   };
 }
 

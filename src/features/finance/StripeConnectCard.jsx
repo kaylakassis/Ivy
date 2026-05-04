@@ -68,6 +68,8 @@ export default function StripeConnectCard() {
 function ConnectedView({ status, onDisconnected }) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
+  const [showWebhook, setShowWebhook] = useState(!status.webhookConfigured);
+  const [copied, setCopied] = useState(false);
 
   const disconnect = async () => {
     setBusy(true);
@@ -80,45 +82,84 @@ function ConnectedView({ status, onDisconnected }) {
     }
   };
 
+  const copyUrl = async () => {
+    if (!status.webhookUrl) return;
+    try {
+      await navigator.clipboard.writeText(status.webhookUrl);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch { /* noop */ }
+  };
+
   const date = status.connectedAt
     ? new Date(status.connectedAt).toLocaleDateString([], { dateStyle: 'medium' })
     : null;
 
   return (
-    <div className="card" style={{ padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
-      <div style={{
-        width: 30, height: 30, borderRadius: 8,
-        background: 'var(--ok)', color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-      }}><Icons.Check size={16} sw={2.4}/></div>
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-          Stripe connected — {status.accountLabel || 'your account'}
+    <div className="card" style={{ padding: 14 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{
+          width: 30, height: 30, borderRadius: 8,
+          background: 'var(--ok)', color: '#fff',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}><Icons.Check size={16} sw={2.4}/></div>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            Stripe connected — {status.accountLabel || 'your account'}
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+            {date && <>Connected {date} · </>}
+            {status.webhookConfigured ? 'Webhook signing configured' : (
+              <span style={{ color: 'var(--warn)' }}>
+                Webhook signing not set — paid invoices won't auto-mark
+              </span>
+            )}
+          </div>
         </div>
-        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
-          {date && <>Connected {date} · </>}
-          {status.webhookConfigured ? 'Webhook signing configured' : (
-            <span style={{ color: 'var(--warn)' }}>
-              Webhook signing not set — paid invoices won't auto-mark
-            </span>
-          )}
-        </div>
-      </div>
-      {confirming ? (
-        <>
-          <button className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>
-            Cancel
-          </button>
-          <button className="btn btn-outline" onClick={disconnect} disabled={busy}
-            style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
-            {busy ? 'Disconnecting…' : 'Confirm disconnect'}
-          </button>
-        </>
-      ) : (
-        <button className="btn btn-ghost" onClick={() => setConfirming(true)}
+        <button className="btn btn-ghost" onClick={() => setShowWebhook((v) => !v)}
           style={{ color: 'var(--muted)' }}>
-          Disconnect
+          {showWebhook ? 'Hide setup' : 'Webhook URL'}
         </button>
+        {confirming ? (
+          <>
+            <button className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>
+              Cancel
+            </button>
+            <button className="btn btn-outline" onClick={disconnect} disabled={busy}
+              style={{ color: 'var(--danger)', borderColor: 'var(--danger)' }}>
+              {busy ? 'Disconnecting…' : 'Confirm disconnect'}
+            </button>
+          </>
+        ) : (
+          <button className="btn btn-ghost" onClick={() => setConfirming(true)}
+            style={{ color: 'var(--muted)' }}>
+            Disconnect
+          </button>
+        )}
+      </div>
+      {showWebhook && status.webhookUrl && (
+        <div style={{
+          marginTop: 12, padding: 10, borderRadius: 8,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          fontSize: 11.5, color: 'var(--fg-2)', lineHeight: 1.5,
+        }}>
+          In Stripe → Developers → Webhooks → <em>Add endpoint</em>, paste this URL
+          and listen for <code>checkout.session.completed</code>:
+          <div style={{ display: 'flex', gap: 8, marginTop: 6, alignItems: 'center' }}>
+            <code style={{
+              flex: 1, padding: '6px 8px', borderRadius: 6,
+              background: 'var(--surface)', border: '1px solid var(--border)',
+              fontSize: 11.5, overflow: 'auto', whiteSpace: 'nowrap',
+            }}>{status.webhookUrl}</code>
+            <button onClick={copyUrl} className="btn btn-outline" style={{ padding: '4px 10px', fontSize: 11.5 }}>
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+          <div style={{ marginTop: 6 }}>
+            Then paste the signing secret (<code>whsec_…</code>) in your Connect Stripe form to enable
+            auto-mark on paid invoices.
+          </div>
+        </div>
       )}
     </div>
   );
