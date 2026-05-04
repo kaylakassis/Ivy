@@ -26,11 +26,48 @@ const PROBE_QUERY = 'SELECT 1 FROM audit_events LIMIT 1';
 let applied = false;
 let inFlight = null;
 
+// Splits a multi-statement SQL string on `;` boundaries. Strips line
+// comments (--) BEFORE splitting so a `;` inside a comment can't shred
+// a fragment off (and so the same `;` inside a comment can't make us
+// ship a quote-orphaned chunk to the database). String-literal-aware:
+// `;` inside a single-quoted string is preserved.
 function splitStatements(sqlText) {
-  return sqlText
-    .split(/;\s*\n/)
-    .map((s) => s.replace(/^\s*--.*$/gm, '').trim())
-    .filter((s) => s.length > 0);
+  // Step 1: strip line comments. We can do this naively at the line
+  // level because schema.js doesn't use `--` inside literals.
+  const noComments = sqlText
+    .split('\n')
+    .map((line) => line.replace(/--.*$/, ''))
+    .join('\n');
+
+  // Step 2: walk the text, tracking single-quoted strings so a `;`
+  // inside a quoted string doesn't cut off the statement (e.g. a
+  // CHECK constraint's allowed values).
+  const stmts = [];
+  let buf = '';
+  let inString = false;
+  for (let i = 0; i < noComments.length; i++) {
+    const ch = noComments[i];
+    if (ch === "'") {
+      // Postgres '' is an escaped single quote inside a string.
+      if (inString && noComments[i + 1] === "'") {
+        buf += ch + noComments[++i];
+        continue;
+      }
+      inString = !inString;
+      buf += ch;
+      continue;
+    }
+    if (ch === ';' && !inString) {
+      const trimmed = buf.trim();
+      if (trimmed) stmts.push(trimmed);
+      buf = '';
+      continue;
+    }
+    buf += ch;
+  }
+  const tail = buf.trim();
+  if (tail) stmts.push(tail);
+  return stmts;
 }
 
 async function runProbe() {

@@ -105,11 +105,8 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS walkthrough_completed_at TIMESTAMPTZ;
 --                also be 'regular' + sponsored if needed; user_type just
 --                records the primary classification for admin filtering.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT 'regular';
--- Idempotent constraint via DROP IF EXISTS + ADD. The naive DO $$ ...
--- END $$; alternative looks tidier but our migration runner splits on
--- ';\n' and shreds dollar-quoted blocks; that broke the affiliates
--- migration cold. Two plain statements stay readable AND survive the
--- splitter.
+-- Idempotent constraint via DROP IF EXISTS + ADD. Two plain statements
+-- play nicer with our naive migration runner than a DO block would.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_type_check;
 ALTER TABLE users ADD CONSTRAINT users_user_type_check
   CHECK (user_type IN ('regular', 'sponsored', 'affiliate'));
