@@ -207,3 +207,50 @@ export async function deleteEvent({ accessToken, calendarId, eventId }) {
     method: 'DELETE', accessToken,
   });
 }
+
+// FreeBusy query — fast endpoint that returns just `{ start, end }` busy
+// windows without per-event detail. Used by the inbound sync to mirror
+// the owner's personal calendar as opaque busy blocks, no titles or
+// attendees fetched.
+//
+// timeMin / timeMax are RFC 3339 strings.
+export async function fetchFreeBusy({ accessToken, calendarIds = ['primary'], timeMin, timeMax }) {
+  const r = await calApi('/freeBusy', {
+    method: 'POST', accessToken,
+    body: {
+      timeMin,
+      timeMax,
+      items: calendarIds.map((id) => ({ id })),
+    },
+  });
+  // Flatten across all requested calendars; downstream collapses overlaps.
+  const busy = [];
+  for (const id of calendarIds) {
+    const cal = r?.calendars?.[id];
+    if (!cal) continue;
+    for (const b of (cal.busy || [])) {
+      if (b.start && b.end) busy.push({ start: b.start, end: b.end });
+    }
+  }
+  return busy;
+}
+
+// Lists future events from a calendar so we can pull a stable per-event
+// id (FreeBusy doesn't return ids — we'd lose track of which busy block
+// to update vs delete on the next sync). Pulls only the fields needed:
+// id, start, end, summary. Calendar API's /events endpoint with
+// timeMin / singleEvents / maxResults.
+export async function listEvents({ accessToken, calendarId = 'primary', timeMin, timeMax, maxResults = 250 }) {
+  const params = new URLSearchParams({
+    timeMin,
+    timeMax,
+    singleEvents: 'true',          // expand recurring instances
+    orderBy: 'startTime',
+    maxResults: String(maxResults),
+    fields: 'items(id,summary,start,end,status,transparency)',
+  });
+  const r = await calApi(`/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
+    method: 'GET', accessToken,
+  });
+  return r?.items || [];
+}

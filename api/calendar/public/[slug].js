@@ -49,12 +49,32 @@ async function getCalendar(req, res) {
       SELECT * FROM bookings WHERE workspace_id = ${s.workspace_id} AND cancelled_at IS NULL
       ORDER BY date, start_min
     `;
+    // External busy times (e.g. Google Cal personal events) are merged
+    // into the blocks list with a label of "Busy" so the slot picker
+    // greys them out without leaking the real event title. Server-side
+    // hasConflict() already checks external_busy_blocks, so the UI
+    // rendering is just for honesty in the slot grid.
+    const external = await sql`
+      SELECT id, date, start_min, end_min FROM external_busy_blocks
+      WHERE workspace_id = ${s.workspace_id} AND date >= CURRENT_DATE
+      ORDER BY date, start_min
+    `;
+    const blocksOut = blocks.rows.map(serializeBlock);
+    for (const b of external.rows) {
+      blocksOut.push({
+        id: 'ext_' + b.id,
+        date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : b.date,
+        startMin: b.start_min,
+        endMin: b.end_min,
+        label: 'Busy',
+      });
+    }
 
     return ok(res, {
       calendar: {
         settings: serializeSettings(s),
         services: services.rows.map(serializeService),
-        blocks:   blocks.rows.map(serializeBlock),
+        blocks:   blocksOut,
         bookings: bookings.rows.map((r) => serializeBooking(r, { redactClient: true })),
       },
     });

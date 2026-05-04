@@ -157,6 +157,14 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_refresh_token_encr
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_calendar_id TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_email TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_connected_at TIMESTAMPTZ;
+-- Inbound busy-block sync: when enabled, the cron pulls busy times from
+-- the owner's connected Google calendar and stores them as opaque
+-- external_busy_blocks. The slot-conflict check on the public booking
+-- page consults those blocks so a personal event blocks the THRYVE slot
+-- automatically.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_block_inbound BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_inbound_last_sync_at TIMESTAMPTZ;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_inbound_last_error TEXT;
 -- Discover filters. Owners set these in the website builder so client
 -- searches on the /me/discover tab can compose them with service queries.
 -- address_label is the human-readable line shown on the card; lat/lng
@@ -198,6 +206,29 @@ CREATE INDEX IF NOT EXISTS idx_reviews_workspace_recent
   ON reviews(workspace_id, status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_booking
   ON reviews(booking_id) WHERE booking_id IS NOT NULL;
+
+-- Mirror of busy times from the owner's connected external calendar
+-- (Google for now). Treated as opaque blockers in slot availability
+-- — never editable from THRYVE. Refreshed by api/cron/google-busy-sync;
+-- rows the most-recent sync didn't include are deleted, so cancellations
+-- in the upstream calendar free the slot back up automatically.
+CREATE TABLE IF NOT EXISTS external_busy_blocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  source TEXT NOT NULL DEFAULT 'google',
+  source_event_id TEXT,
+  date DATE NOT NULL,
+  start_min INT NOT NULL,
+  end_min INT NOT NULL,
+  summary TEXT,
+  last_synced_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_external_busy_workspace_date
+  ON external_busy_blocks(workspace_id, date);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_external_busy_workspace_event
+  ON external_busy_blocks(workspace_id, source, source_event_id)
+  WHERE source_event_id IS NOT NULL;
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.

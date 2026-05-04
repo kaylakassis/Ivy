@@ -117,7 +117,17 @@ export async function hasConflict({ workspaceId, dateISO, start, end }) {
       AND start_min < ${end} AND end_min > ${start}
     LIMIT 1
   `;
-  return bookings.rows.length > 0;
+  if (bookings.rows.length > 0) return true;
+  // Inbound external busy times (e.g. Google Cal personal events when
+  // the owner has google_block_inbound on). Treated identically to
+  // calendar_blocks for slot availability.
+  const external = await sql`
+    SELECT 1 FROM external_busy_blocks
+    WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
+      AND start_min < ${end} AND end_min > ${start}
+    LIMIT 1
+  `;
+  return external.rows.length > 0;
 }
 
 export function isPositiveInt(x, max = 24 * 60) {

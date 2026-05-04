@@ -225,28 +225,31 @@ function GoogleSection() {
       )}
 
       {status.connected ? (
-        <div style={{
-          marginTop: 10, padding: '10px 12px', borderRadius: 10,
-          background: 'color-mix(in srgb, var(--ok) 12%, transparent)',
-          border: '1px solid color-mix(in srgb, var(--ok) 35%, transparent)',
-          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
-        }}>
-          <Icons.Check size={14} sw={2.2} stroke="var(--ok)"/>
-          <div style={{ flex: 1, minWidth: 160 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ok)' }}>Connected</div>
-            <div style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 2 }}>
-              {status.email || 'Google account'}
-              {status.connectedAt && (
-                <> · since {new Date(status.connectedAt).toLocaleDateString([], { dateStyle: 'medium' })}</>
-              )}
+        <>
+          <div style={{
+            marginTop: 10, padding: '10px 12px', borderRadius: 10,
+            background: 'color-mix(in srgb, var(--ok) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--ok) 35%, transparent)',
+            display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+          }}>
+            <Icons.Check size={14} sw={2.2} stroke="var(--ok)"/>
+            <div style={{ flex: 1, minWidth: 160 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ok)' }}>Connected</div>
+              <div style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 2 }}>
+                {status.email || 'Google account'}
+                {status.connectedAt && (
+                  <> · since {new Date(status.connectedAt).toLocaleDateString([], { dateStyle: 'medium' })}</>
+                )}
+              </div>
             </div>
+            <button onClick={disconnect} disabled={busy != null}
+              className="btn btn-ghost"
+              style={{ color: 'var(--danger)', fontSize: 12.5 }}>
+              {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+            </button>
           </div>
-          <button onClick={disconnect} disabled={busy != null}
-            className="btn btn-ghost"
-            style={{ color: 'var(--danger)', fontSize: 12.5 }}>
-            {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
-          </button>
-        </div>
+          <InboundToggle/>
+        </>
       ) : (
         <button onClick={connect} disabled={busy != null}
           className="btn btn-primary"
@@ -256,6 +259,96 @@ function GoogleSection() {
         </button>
       )}
     </>
+  );
+}
+
+// Inbound busy-block sync toggle. Lives under the "Connected" card in
+// the Google section. When enabled, the cron pulls busy windows from
+// the owner's primary Google calendar every hour; the slot-conflict
+// check on the public booking page consults them so personal events
+// auto-block client booking attempts.
+function InboundToggle() {
+  const [state, setState] = useState(null); // { connected, enabled, lastSyncAt, lastError }
+  const [busy, setBusy]   = useState(null); // 'toggle' | 'sync'
+  const [err, setErr]     = useState(null);
+
+  const load = async () => {
+    try { setState(await api.get('/calendar/google/inbound')); }
+    catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const toggle = async () => {
+    if (!state) return;
+    setBusy('toggle'); setErr(null);
+    try {
+      const r = await api.post('/calendar/google/inbound', { enabled: !state.enabled });
+      setState((s) => ({ ...s, enabled: r.enabled }));
+      // Wait a beat then refetch so lastSyncAt updates after the
+      // server's fire-and-forget pull.
+      setTimeout(load, 1500);
+    } catch (e) { setErr(e.message || 'Could not toggle'); }
+    finally { setBusy(null); }
+  };
+
+  const syncNow = async () => {
+    setBusy('sync'); setErr(null);
+    try {
+      await api.patch('/calendar/google/inbound', {});
+      await load();
+    } catch (e) { setErr(e.message || 'Sync failed'); }
+    finally { setBusy(null); }
+  };
+
+  if (!state) return null;
+  const lastSync = state.lastSyncAt ? new Date(state.lastSyncAt) : null;
+
+  return (
+    <div style={{
+      marginTop: 10, padding: '12px 14px', borderRadius: 10,
+      background: 'var(--surface-2)', border: '1px solid var(--border)',
+    }}>
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+        <input type="checkbox" checked={!!state.enabled}
+          onChange={toggle} disabled={busy != null}
+          style={{ marginTop: 3 }}/>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>
+            Block THRYVE slots from external events
+          </div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+            We'll pull busy windows from your primary Google calendar every
+            hour and block matching slots on your public booking page —
+            so a dentist appointment on your personal calendar auto-blocks
+            client bookings. Event titles never leave your account.
+          </div>
+        </div>
+      </label>
+
+      {state.enabled && (
+        <div style={{
+          marginTop: 10, paddingTop: 10, borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+          fontSize: 11.5, color: 'var(--muted)',
+        }}>
+          {lastSync ? (
+            <span>Last synced {lastSync.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
+          ) : <span>Not synced yet — running on the next hourly cron tick.</span>}
+          <button onClick={syncNow} disabled={busy != null}
+            className="btn btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--accent)' }}>
+            {busy === 'sync' ? 'Syncing…' : 'Sync now'}
+          </button>
+        </div>
+      )}
+
+      {(err || state.lastError) && (
+        <div style={{
+          marginTop: 8, padding: '6px 10px', borderRadius: 8,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 11.5,
+        }}>{err || `Last sync: ${state.lastError}`}</div>
+      )}
+    </div>
   );
 }
 
