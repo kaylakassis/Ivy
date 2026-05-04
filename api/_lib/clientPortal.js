@@ -57,16 +57,53 @@ export function ids(memberships) {
   return memberships.map((m) => m.clientId);
 }
 
-// Does this user own a workspace? Returns { id, onboardedAt } or null.
-// (Used to decide which app to show after sign-in: business, client, or
-// a switcher — and whether to route a fresh owner through /onboarding.)
+// Does this user own a workspace? Returns { id, onboardedAt, subscription }
+// or null. (Used to decide which app to show after sign-in: business, client,
+// or a switcher — and whether to route a fresh owner through /onboarding.)
 export async function ownsWorkspace(userId) {
   const { rows } = await sql`
-    SELECT id, onboarded_at FROM workspaces WHERE owner_id = ${userId} LIMIT 1
+    SELECT id, onboarded_at,
+           subscription_status, trial_ends_at, subscription_period_end
+    FROM workspaces WHERE owner_id = ${userId} LIMIT 1
   `;
-  return rows.length > 0
-    ? { id: rows[0].id, onboardedAt: rows[0].onboarded_at }
-    : null;
+  if (!rows.length) return null;
+  const r = rows[0];
+  return {
+    id: r.id,
+    onboardedAt: r.onboarded_at,
+    subscription: deriveSubscription(r),
+  };
+}
+
+// Turn the raw workspace row into the shape the frontend wants. `isActive`
+// is the single source of truth for whether the business app is unlocked
+// — derived from status + the trial / period end timestamps so the UI
+// doesn't have to redo the comparison.
+function deriveSubscription(row) {
+  const status = row.subscription_status || 'inactive';
+  const now = Date.now();
+  const trialEndsAt    = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : null;
+  const periodEndsAt   = row.subscription_period_end ? new Date(row.subscription_period_end).getTime() : null;
+  const trialActive    = status === 'trialing' && trialEndsAt && trialEndsAt > now;
+  const paidActive     = (status === 'active' || status === 'past_due')
+                          && periodEndsAt && periodEndsAt > now;
+  // 'past_due' still counts as active for grace — Stripe will retry; we
+  // surface the warning in the UI but don't lock the app immediately.
+  const isActive = trialActive || paidActive || status === 'active';
+
+  let daysRemaining = null;
+  const endRef = trialActive ? trialEndsAt : (paidActive ? periodEndsAt : null);
+  if (endRef) {
+    daysRemaining = Math.max(0, Math.ceil((endRef - now) / (24 * 60 * 60 * 1000)));
+  }
+  return {
+    status,
+    isActive,
+    inTrial: trialActive,
+    trialEndsAt: row.trial_ends_at,
+    periodEndsAt: row.subscription_period_end,
+    daysRemaining,
+  };
 }
 
 // Build a context object the frontend uses to choose the default app +
@@ -87,6 +124,7 @@ export async function userContext(user) {
     isClient: memberships.length > 0,
     workspaceId: workspace?.id || null,
     onboardedAt: workspace?.onboardedAt || null,
+    subscription: workspace?.subscription || null,
     memberships,
   };
 }

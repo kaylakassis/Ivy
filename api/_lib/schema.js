@@ -36,6 +36,21 @@ WHERE onboarded_at IS NULL
     OR EXISTS (SELECT 1 FROM services WHERE workspace_id = w.id)
   );
 
+-- Subscription state. Owners need an active sub (or live trial) to use the
+-- business app — the client portal is always free. Status mirrors Stripe's:
+--   trialing | active | past_due | cancelled | inactive
+-- New workspaces start trialing for 14 days. Existing workspaces get the
+-- same grace window so the rollout doesn't paywall anyone overnight.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_status    TEXT NOT NULL DEFAULT 'trialing';
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at          TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '14 days');
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_period_end TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+-- One-time backfill for any workspace that existed before this column was
+-- added (the DEFAULT only applies to inserts).
+UPDATE workspaces SET trial_ends_at = NOW() + INTERVAL '14 days'
+WHERE trial_ends_at IS NULL AND subscription_status = 'trialing';
+
 CREATE TABLE IF NOT EXISTS websites (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL UNIQUE REFERENCES workspaces(id) ON DELETE CASCADE,

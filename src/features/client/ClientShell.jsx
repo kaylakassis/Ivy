@@ -8,6 +8,7 @@ import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import VerifyEmailBanner from '../../components/VerifyEmailBanner.jsx';
 import { SkelLine, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
+import ViewToggle from '../../components/ViewToggle.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { useAuth } from '../../lib/auth.jsx';
@@ -81,6 +82,8 @@ function ClientShellInner() {
         <ClientMobileDrawer direction={tweaks.direction} data={data}
           onClose={() => setDrawerOpen(false)}/>
       )}
+
+      <ViewToggle ctx={data}/>
     </div>
   );
 }

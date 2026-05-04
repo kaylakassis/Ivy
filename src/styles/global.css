@@ -159,6 +159,9 @@ img, svg, video { max-width: 100%; height: auto; }
 @media (max-width: 720px) {
   body.has-mobile-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
   body.has-mobile-nav .app-root > div { padding-bottom: 64px; }
+  /* Bottom-nav owns the bottom 64px on mobile — bump the floating
+     view-toggle pill above it so they don't collide. */
+  body.has-mobile-nav .view-toggle { bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); }
 }
 
 /* MOBILE: < 720px ------------------------------------------- */
