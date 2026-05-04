@@ -13,7 +13,10 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchCheckoutSession, fetchSubscription } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
+import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+
+const PAYING_STATUSES = new Set(['active', 'past_due']);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -72,6 +75,12 @@ export default async function handler(req, res) {
         subscription_period_end = ${periodEnd}
       WHERE id = ${workspaceId}
     `;
+    if (PAYING_STATUSES.has(mapped)) {
+      await attributePayment({
+        workspaceId,
+        valueCents: monthlyValueCents(subscription),
+      }).catch((e) => console.warn('[billing/sync] attribute failed:', e.message));
+    }
     return ok(res, {
       synced: true,
       status: mapped,

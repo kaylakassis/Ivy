@@ -16,6 +16,7 @@ import MobileDrawer from './MobileDrawer.jsx';
 import Paywall from '../../features/billing/Paywall.jsx';
 import SubscriptionBanner from '../../features/billing/SubscriptionBanner.jsx';
 import Walkthrough from '../../features/onboarding/Walkthrough.jsx';
+import ImpersonationBanner from '../ImpersonationBanner.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -75,6 +76,7 @@ function AppShellInner() {
 
   return (
     <div className={`app-root dir-${tweaks.direction}`}>
+      <ImpersonationBanner/>
       <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
         {viewport.isDesktop && <Sidebar direction={tweaks.direction} variant="full" />}
         {viewport.isTablet  && <Sidebar direction={tweaks.direction} variant="compact" />}

@@ -27,7 +27,14 @@ export function getClientIp(req) {
 }
 
 // Convenience: enforce one or more limits in sequence; sends 429 + returns true if blocked.
+//
+// Super-admins skip the limiter entirely so manual testing / repeated
+// password-reset triggers don't lock them out of their own product.
+// Admin auth is detected via x-admin-secret header OR a session belonging
+// to an allowlisted email — same paths as requireSuperAdmin.
 export async function enforce(req, res, limits) {
+  if (await isAdminBypass(req)) return false;
+
   for (const limit of limits) {
     const r = await rateLimit(limit);
     if (!r.allowed) {
@@ -40,4 +47,17 @@ export async function enforce(req, res, limits) {
     }
   }
   return false;
+}
+
+// Lazy import to avoid the rate limiter pulling in admin.js (which
+// imports auth.js → rate-limit.js circular).
+async function isAdminBypass(req) {
+  try {
+    const secret = process.env.ADMIN_SECRET;
+    if (secret && req?.headers?.['x-admin-secret'] === secret) return true;
+    const { isSuperAdminBySession } = await import('./admin.js');
+    return await isSuperAdminBySession(req);
+  } catch {
+    return false;
+  }
 }

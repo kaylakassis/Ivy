@@ -172,6 +172,29 @@ CREATE TABLE IF NOT EXISTS support_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_support_messages_thread
   ON support_messages(thread_id, created_at);
+
+-- Admin audit trail. Every super-admin-initiated mutation appends a row.
+-- `actor_user_id` is the admin who took the action; `target_user_id` is
+-- whoever was affected (nullable for tenant-wide ops). `meta` stores
+-- whatever extra context the call site provides (old/new values, IP, etc.)
+-- so we don't have to add columns every time we want to log a new field.
+CREATE TABLE IF NOT EXISTS audit_events (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  actor_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  actor_email TEXT,
+  target_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  action TEXT NOT NULL,
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+  ip TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_audit_events_created
+  ON audit_events(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_events_target
+  ON audit_events(target_user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_audit_events_actor
+  ON audit_events(actor_user_id, created_at DESC);
 -- Backfill: any user already past the whole 14-day window when this column
 -- lands gets marked as fully sent so the cron doesn't retroactively spam
 -- pre-existing accounts. Self-correcting via the empty-jsonb check.

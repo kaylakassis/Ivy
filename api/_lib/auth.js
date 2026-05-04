@@ -7,6 +7,10 @@ import cookie from 'cookie';
 import { sql } from './db.js';
 
 const COOKIE = 'thryve_session';
+// Stashed admin session while impersonating. Restored by the
+// /api/admin/impersonate/stop endpoint. HttpOnly so the impersonated UI
+// can't read it.
+const IMPERSONATION_BACKUP = 'thryve_admin_session';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 function secret() {
@@ -23,8 +27,8 @@ export async function verifyPassword(pw, hash) {
   return bcrypt.compare(pw, hash);
 }
 
-export function signSession(userId) {
-  return jwt.sign({ sub: userId }, secret(), { expiresIn: `${MAX_AGE}s` });
+export function signSession(userId, extraClaims = {}) {
+  return jwt.sign({ sub: userId, ...extraClaims }, secret(), { expiresIn: `${MAX_AGE}s` });
 }
 
 // Vercel runs all deployments over HTTPS, so secure: always-on. NODE_ENV check
@@ -35,6 +39,12 @@ const COOKIE_BASE = {
   sameSite: 'lax',   // Blocks cross-site POST/PATCH/DELETE under default rules.
   path: '/',
 };
+
+// Helper that lets us set multiple cookies in one response. Vercel's
+// res.setHeader('Set-Cookie', ...) overwrites — pass an array for stacking.
+function setCookies(res, ...cookies) {
+  res.setHeader('Set-Cookie', cookies);
+}
 
 export function setSessionCookie(res, token) {
   res.setHeader('Set-Cookie', cookie.serialize(COOKIE, token, {
@@ -48,6 +58,35 @@ export function clearSessionCookie(res) {
     ...COOKIE_BASE,
     maxAge: 0,
   }));
+}
+
+// Stash the current session under a backup cookie + set a new one for
+// the impersonated user. Both written in a single Set-Cookie array.
+export function setImpersonationCookies(res, { backupToken, targetToken }) {
+  setCookies(res,
+    cookie.serialize(IMPERSONATION_BACKUP, backupToken, {
+      ...COOKIE_BASE, maxAge: MAX_AGE,
+    }),
+    cookie.serialize(COOKIE, targetToken, {
+      ...COOKIE_BASE, maxAge: MAX_AGE,
+    }),
+  );
+}
+
+// Restore from backup. Returns the backup token (so the caller can
+// verify it before believing it). If no backup exists, returns null
+// and the caller should treat the request as a no-op.
+export function readImpersonationBackup(req) {
+  const header = req.headers.cookie || '';
+  const parsed = cookie.parse(header);
+  return parsed[IMPERSONATION_BACKUP] || null;
+}
+
+export function restoreFromImpersonation(res, originalToken) {
+  setCookies(res,
+    cookie.serialize(IMPERSONATION_BACKUP, '', { ...COOKIE_BASE, maxAge: 0 }),
+    cookie.serialize(COOKIE, originalToken, { ...COOKIE_BASE, maxAge: MAX_AGE }),
+  );
 }
 
 export function readSession(req) {

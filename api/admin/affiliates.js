@@ -17,7 +17,8 @@
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireSuperAdmin } from '../_lib/admin.js';
+import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
+import { recordAudit } from '../_lib/audit.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const CODE_RE = /^[A-Z0-9_-]{3,40}$/;
@@ -117,6 +118,11 @@ async function createAffiliate(req, res) {
     VALUES (${userId}, ${code}, ${displayName || u.rows[0].name || null})
     RETURNING id, code, display_name, active, created_at
   `;
+  const actor = await getAdminActor(req);
+  await recordAudit(req, {
+    actor, targetUserId: userId, action: 'affiliate.create',
+    meta: { code, affiliateId: ins.rows[0].id },
+  });
   return created(res, { affiliate: ins.rows[0] });
 }
 

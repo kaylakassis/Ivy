@@ -5,13 +5,14 @@ import { api } from './api.js';
 const Ctx = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [user, setUser]       = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [user, setUser]                 = useState(null);
+  const [impersonating, setImpersonating] = useState(null);
+  const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
     let live = true;
     api.get('/auth/me')
-      .then((r) => live && setUser(r.user))
+      .then((r) => { if (live) { setUser(r.user); setImpersonating(r.impersonating || null); } })
       .catch(() => live && setUser(null))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
@@ -42,15 +43,17 @@ export function AuthProvider({ children }) {
     try {
       const r = await api.get('/auth/me');
       setUser(r.user);
+      setImpersonating(r.impersonating || null);
       return r.user;
     } catch {
       setUser(null);
+      setImpersonating(null);
       return null;
     }
   }, []);
 
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut, refresh }}>
+    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut, refresh, impersonating }}>
       {children}
     </Ctx.Provider>
   );

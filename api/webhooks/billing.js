@@ -13,7 +13,12 @@ import { sql } from '../_lib/db.js';
 import { readRawBody } from '../_lib/body.js';
 import { verifyWebhookSignature, fetchSubscription } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
+import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+
+// Stripe statuses that count as "this user is paying us". Trialing is
+// excluded — affiliates only earn attribution on real revenue.
+const PAYING_STATUSES = new Set(['active', 'past_due']);
 
 export const config = { api: { bodyParser: false } };
 
@@ -91,6 +96,13 @@ async function onCheckoutCompleted(session, secretKey) {
       subscription_period_end = ${periodEnd}
     WHERE id = ${workspaceId}
   `;
+
+  if (PAYING_STATUSES.has(status)) {
+    await attributePayment({
+      workspaceId,
+      valueCents: monthlyValueCents(sub),
+    }).catch((e) => console.warn('[billing] attribute on checkout failed:', e.message));
+  }
 }
 
 // Mid-life updates: renewals, plan changes, cancellations. Match by
@@ -111,6 +123,7 @@ async function onSubscriptionChanged(sub) {
     WHERE stripe_subscription_id = ${sub.id}
     RETURNING id
   `;
+  let resolvedWorkspaceId = updated.rows[0]?.id || null;
   if (updated.rows.length === 0 && workspaceId) {
     await sql`
       UPDATE workspaces SET
@@ -120,6 +133,14 @@ async function onSubscriptionChanged(sub) {
         subscription_period_end = ${periodEnd}
       WHERE id = ${workspaceId}
     `;
+    resolvedWorkspaceId = workspaceId;
+  }
+
+  if (resolvedWorkspaceId && PAYING_STATUSES.has(status)) {
+    await attributePayment({
+      workspaceId: resolvedWorkspaceId,
+      valueCents: monthlyValueCents(sub),
+    }).catch((e) => console.warn('[billing] attribute on sub change failed:', e.message));
   }
 }
 
@@ -135,10 +156,17 @@ async function onInvoiceEvent(invoice, type, secretKey) {
   const periodEnd = sub.current_period_end
     ? new Date(sub.current_period_end * 1000)
     : null;
-  await sql`
+  const r = await sql`
     UPDATE workspaces SET
       subscription_status     = ${status},
       subscription_period_end = ${periodEnd}
     WHERE stripe_subscription_id = ${sub.id}
+    RETURNING id
   `;
+  if (type === 'invoice.payment_succeeded' && r.rows[0]?.id) {
+    await attributePayment({
+      workspaceId: r.rows[0].id,
+      valueCents: monthlyValueCents(sub),
+    }).catch((e) => console.warn('[billing] attribute on invoice success failed:', e.message));
+  }
 }

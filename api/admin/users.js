@@ -17,9 +17,10 @@ import { sql } from '../_lib/db.js';
 import { hashPassword, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireSuperAdmin } from '../_lib/admin.js';
+import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { createToken, KIND_RESET, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
+import { recordAudit } from '../_lib/audit.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const PAGE_SIZE = 50;
@@ -229,6 +230,14 @@ async function createUser(req, res) {
       console.warn('[admin/users] invite email failed:', err.message);
     }
   }
+
+  const actor = await getAdminActor(req);
+  await recordAudit(req, {
+    actor,
+    targetUserId: user.id,
+    action: 'user.create',
+    meta: { userType, sendInvite, email },
+  });
 
   return created(res, {
     user: {

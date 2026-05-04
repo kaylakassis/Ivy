@@ -21,6 +21,9 @@ const TABS = [
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'support',    label: 'Support',    icon: 'Chat' },
+  { id: 'blast',      label: 'Email blast', icon: 'Spark' },
+  { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
+  { id: 'export',     label: 'Export',     icon: 'Doc' },
 ];
 
 export default function AdminPage() {
@@ -63,6 +66,9 @@ export default function AdminPage() {
       {tab === 'users'      && <UsersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'support'    && <SupportTab/>}
+      {tab === 'blast'      && <BlastTab/>}
+      {tab === 'audit'      && <AuditTab/>}
+      {tab === 'export'     && <ExportTab/>}
     </div>
   );
 }
@@ -432,6 +438,17 @@ function UserDetailModal({ user, onClose, onChanged }) {
             }}>
             Set password manually
           </button>
+          <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
+            onClick={async () => {
+              if (!confirm(`Sign in as ${user.email}? You'll see the app exactly as they do, with a banner up top to stop.`)) return;
+              setBusy('Impersonating'); setErr(null);
+              try {
+                await api.post('/admin/impersonate', { userId: user.id });
+                window.location.href = '/dashboard';
+              } catch (e) { setErr(e.message); setBusy(null); }
+            }}>
+            View as user →
+          </button>
         </div>
 
         {info && <div style={{ fontSize: 12, color: 'var(--ok)' }}>{info}</div>}
@@ -698,6 +715,189 @@ function SupportConversation({ thread, onChanged }) {
             color: 'var(--fg)', fontSize: 13.5, outline: 'none' }}/>
         <button onClick={send} disabled={busy || !text.trim()} className="btn btn-primary"
           style={{ padding: '8px 14px' }}>Send</button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Email blast tab ----------
+
+const BLAST_SEGMENTS = [
+  { id: 'business-active', label: 'Business — Active' },
+  { id: 'business-trial',  label: 'Business — Trial' },
+  { id: 'sponsored',       label: 'Sponsored' },
+  { id: 'affiliate',       label: 'Affiliates' },
+  { id: 'client-only',     label: 'Client-only' },
+  { id: 'all',             label: 'Everyone' },
+];
+
+function BlastTab() {
+  const [segment, setSegment] = useState('business-active');
+  const [subject, setSubject] = useState('');
+  const [heading, setHeading] = useState('');
+  const [html, setHtml] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const dryRun = async () => {
+    setBusy(true); setErr(null); setResult(null);
+    try {
+      const r = await api.post('/admin/email-blast', { segment, subject, html, heading, dryRun: true });
+      setResult(`Dry run: would send to ${r.recipients} recipient${r.recipients === 1 ? '' : 's'}.`);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+  const send = async () => {
+    if (!confirm(`Send to every "${BLAST_SEGMENTS.find((s) => s.id === segment)?.label}" recipient?`)) return;
+    setBusy(true); setErr(null); setResult(null);
+    try {
+      const r = await api.post('/admin/email-blast', { segment, subject, html, heading });
+      setResult(`Sent ${r.sent} of ${r.recipients} (${r.failed} failed).`);
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Sends a one-off email to a filtered segment of your users. Only
+        verified addresses receive it (unverified ones bounce and hurt
+        deliverability). The body supports HTML — keep it simple, the
+        branded shell wraps it for you.
+      </div>
+
+      <Field label="Segment">
+        <select value={segment} onChange={(e) => setSegment(e.target.value)} style={fieldSty}>
+          {BLAST_SEGMENTS.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}
+        </select>
+      </Field>
+      <Field label="Subject" hint="What lands in their inbox preview.">
+        <input value={subject} onChange={(e) => setSubject(e.target.value)} style={fieldSty}/>
+      </Field>
+      <Field label="Heading (shown big at the top of the email)">
+        <input value={heading} onChange={(e) => setHeading(e.target.value)} style={fieldSty}
+          placeholder="Defaults to the subject if left blank."/>
+      </Field>
+      <Field label="Body (HTML)" hint="Use <p>, <ul>, <strong>. The shell adds branding + footer.">
+        <textarea value={html} onChange={(e) => setHtml(e.target.value)} rows={10}
+          style={{ ...fieldSty, fontFamily: 'monospace', fontSize: 12.5 }}/>
+      </Field>
+
+      {result && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>{result}</div>}
+      {err && <ErrCard msg={err}/>}
+
+      <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+        <button disabled={busy || !segment} onClick={dryRun} className="btn btn-outline">
+          {busy ? 'Counting…' : 'Dry run · count recipients'}
+        </button>
+        <button disabled={busy || !subject || !html} onClick={send} className="btn btn-primary">
+          {busy ? 'Sending…' : 'Send blast'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ---------- Audit log tab ----------
+
+function AuditTab() {
+  const [data, setData]   = useState(null);
+  const [page, setPage]   = useState(1);
+  const [actor, setActor] = useState('');
+  const [target, setTarget] = useState('');
+  const [action, setAction] = useState('');
+  const [err, setErr]     = useState(null);
+
+  const reload = () => {
+    setData(null); setErr(null);
+    const qs = new URLSearchParams();
+    if (actor)  qs.set('actor', actor);
+    if (target) qs.set('target', target);
+    if (action) qs.set('action', action);
+    if (page > 1) qs.set('page', String(page));
+    api.get(`/admin/audit?${qs.toString()}`)
+      .then(setData).catch((e) => setErr(e.message));
+  };
+  useEffect(reload, [page]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <input value={actor} onChange={(e) => setActor(e.target.value)} placeholder="Actor email…"
+          style={{ ...fieldSty, flex: '1 1 200px' }}/>
+        <input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="Target email…"
+          style={{ ...fieldSty, flex: '1 1 200px' }}/>
+        <input value={action} onChange={(e) => setAction(e.target.value)} placeholder="Action (e.g. user.set_type)"
+          style={{ ...fieldSty, flex: '1 1 200px' }}/>
+        <button onClick={() => { setPage(1); reload(); }} className="btn btn-outline">Search</button>
+      </div>
+
+      {err && <ErrCard msg={err}/>}
+      {!data && !err && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
+      {data && (
+        <>
+          <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+            {data.total.toLocaleString()} total events · page {data.page}
+          </div>
+          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
+              <thead style={{ background: 'var(--surface-2)' }}>
+                <tr style={{ textAlign: 'left' }}>
+                  <Th>When</Th><Th>Actor</Th><Th>Action</Th><Th>Target</Th><Th>Detail</Th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.events.map((e) => (
+                  <tr key={e.id} style={{ borderTop: '1px solid var(--border)' }}>
+                    <Td>{new Date(e.createdAt).toLocaleString()}</Td>
+                    <Td>{e.actorEmail || <span style={{ color: 'var(--muted)' }}>system</span>}</Td>
+                    <Td><code>{e.action}</code></Td>
+                    <Td>{e.targetEmail || <span style={{ color: 'var(--muted)' }}>—</span>}</Td>
+                    <Td><code style={{ fontSize: 11 }}>{JSON.stringify(e.meta)}</code></Td>
+                  </tr>
+                ))}
+                {data.events.length === 0 && (
+                  <tr><td colSpan={5} style={{ padding: 28 }}>
+                    <EmptyNote icon="Clock" title="No matching events" hint="Try clearing filters."/>
+                  </td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}
+              className="btn btn-outline">Prev</button>
+            <button onClick={() => setPage((p) => p + 1)}
+              disabled={(data.events.length || 0) < data.pageSize}
+              className="btn btn-outline">Next</button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ---------- Export tab ----------
+
+function ExportTab() {
+  const get = (kind) => {
+    // Direct download — let the browser handle the CSV save dialog.
+    window.location.href = `/api/admin/export?kind=${encodeURIComponent(kind)}`;
+  };
+  return (
+    <div className="card" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        One-click CSV exports for offline analysis or sending to your accountant.
+        Includes everything you'd see in the Users / Affiliates tabs.
+      </div>
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        <button className="btn btn-outline" onClick={() => get('users')}>
+          <Icons.Users size={13}/> Download users CSV
+        </button>
+        <button className="btn btn-outline" onClick={() => get('affiliates')}>
+          <Icons.Gift size={13}/> Download affiliates CSV
+        </button>
       </div>
     </div>
   );

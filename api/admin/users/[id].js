@@ -19,9 +19,10 @@ import { sql } from '../../_lib/db.js';
 import { hashPassword } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
-import { requireSuperAdmin, emailIsSuperAdmin } from '../../_lib/admin.js';
+import { requireSuperAdmin, emailIsSuperAdmin, getAdminActor } from '../../_lib/admin.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { createToken, KIND_RESET, appUrl } from '../../_lib/tokens.js';
+import { recordAudit } from '../../_lib/audit.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
 const VALID_TYPES = new Set(['regular', 'sponsored', 'affiliate']);
@@ -46,12 +47,17 @@ export default async function handler(req, res) {
 
 async function patchUser(u, req, res) {
   const body = await readBody(req);
+  const actor = await getAdminActor(req);
 
   if ('userType' in body) {
     const t = String(body.userType);
     if (!VALID_TYPES.has(t)) return badRequest(res, 'Invalid userType');
 
     await sql`UPDATE users SET user_type = ${t} WHERE id = ${u.id}`;
+    await recordAudit(req, {
+      actor, targetUserId: u.id, action: 'user.set_type',
+      meta: { from: u.user_type, to: t },
+    });
 
     // Side effects on the user's workspace (if any) so the paywall stays
     // consistent with the type.
@@ -95,6 +101,10 @@ async function patchUser(u, req, res) {
     if (pw.length < 8) return badRequest(res, 'Password too short');
     const hash = await hashPassword(pw);
     await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${u.id}`;
+    await recordAudit(req, {
+      actor, targetUserId: u.id, action: 'user.set_password',
+      meta: { method: 'manual' },
+    });
   }
 
   if (body.sendResetLink === true) {
@@ -115,6 +125,10 @@ async function patchUser(u, req, res) {
           footer: 'If this looks unexpected, reply to this email and we\'ll sort it out.',
         }),
       });
+      await recordAudit(req, {
+        actor, targetUserId: u.id, action: 'user.send_reset_link',
+        meta: {},
+      });
     } catch (err) {
       // eslint-disable-next-line no-console
       console.warn('[admin/users/:id] reset-link email failed:', err.message);
@@ -129,7 +143,12 @@ async function deleteUser(u, req, res) {
   if (emailIsSuperAdmin(u.email)) {
     return badRequest(res, "Refusing to delete a super-admin account through this endpoint.");
   }
+  const actor = await getAdminActor(req);
   await sql`DELETE FROM users WHERE id = ${u.id}`;
+  await recordAudit(req, {
+    actor, targetUserId: u.id, action: 'user.delete',
+    meta: { email: u.email },
+  });
   return noContent(res);
 }
 

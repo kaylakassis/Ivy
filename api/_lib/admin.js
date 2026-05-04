@@ -57,3 +57,13 @@ export async function isSuperAdminBySession(req) {
   const { rows } = await sql`SELECT email FROM users WHERE id = ${session.sub}`;
   return emailIsSuperAdmin(rows[0]?.email);
 }
+
+// Returns the calling user (for audit logging) when the request carries
+// a real session. Header-secret callers have no user — returns null and
+// the audit row records a system-level action.
+export async function getAdminActor(req) {
+  const session = readSession(req);
+  if (!session?.sub) return null;
+  const { rows } = await sql`SELECT id, email, name FROM users WHERE id = ${session.sub}`;
+  return rows[0] || null;
+}
