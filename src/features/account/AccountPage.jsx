@@ -64,6 +64,8 @@ export default function AccountPage() {
 
       <SubscriptionCard/>
 
+      <WalkthroughCard/>
+
       {/* Export */}
       <div className="card" style={{ padding: 22 }}>
         <div className="metric-label" style={{ marginBottom: 8 }}>Your data</div>
@@ -501,6 +503,49 @@ function SubscriptionCard() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// Replay walkthrough card. Resets walkthrough_completed_at server-side,
+// then redirects to /dashboard?walkthrough=1 so AppShell auto-launches
+// the tour from the override URL flag (no second refetch needed).
+function WalkthroughCard() {
+  const { ctx, refresh } = useUserContext();
+  const nav = useNavigate();
+  const [busy, setBusy] = useState(false);
+
+  if (!ctx?.isOwner) return null;
+  const seen = !!ctx.walkthroughCompletedAt;
+
+  const replay = async () => {
+    setBusy(true);
+    try {
+      await api.post('/me/walkthrough', { reset: true });
+      await refresh();
+      nav('/dashboard?walkthrough=1');
+    } catch {
+      // Best-effort — fall back to URL flag even if the reset POST hiccups.
+      nav('/dashboard?walkthrough=1');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>App tour</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>
+        {seen ? 'Replay the walkthrough' : 'Take the walkthrough'}
+      </h3>
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        A 1-minute tour through every section of THRYVE. Doesn't touch any of
+        your data — start it any time you'd like a refresher.
+      </p>
+      <button onClick={replay} disabled={busy}
+        className="btn btn-outline">
+        <Icons.Trending size={13} sw={1.7}/> {busy ? 'Loading…' : (seen ? 'Replay walkthrough' : 'Start walkthrough')}
+      </button>
     </div>
   );
 }

@@ -125,6 +125,7 @@ export async function userContext(user) {
     workspaceId: workspace?.id || null,
     onboardedAt: workspace?.onboardedAt || null,
     subscription: workspace?.subscription || null,
+    walkthroughCompletedAt: user.walkthrough_completed_at || null,
     memberships,
   };
 }

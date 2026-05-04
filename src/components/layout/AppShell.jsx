@@ -15,6 +15,7 @@ import MobileBottomNav from './MobileBottomNav.jsx';
 import MobileDrawer from './MobileDrawer.jsx';
 import Paywall from '../../features/billing/Paywall.jsx';
 import SubscriptionBanner from '../../features/billing/SubscriptionBanner.jsx';
+import Walkthrough from '../../features/onboarding/Walkthrough.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -33,6 +34,7 @@ function AppShellInner() {
   const location = useLocation();
   const viewport = useViewport();
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [walkthroughOverride, setWalkthroughOverride] = useState(null);
   const { ctx, refresh } = useUserContext();
   const current = NAV.find(n => n.to === location.pathname) || NAV[0];
   const t = TITLES[current.id] || TITLES.dashboard;
@@ -40,6 +42,17 @@ function AppShellInner() {
   // Paywall only applies to owners. Client-only users land here briefly
   // when the role router is still resolving — never gate them.
   const needsPaywall = ctx?.isOwner && !ctx?.subscription?.isActive;
+
+  // Auto-launch the in-app walkthrough on first render after signup +
+  // onboarding complete. AccountPage's "Replay" button writes
+  // ?walkthrough=1 into the URL to override the dismissed state without
+  // a full DB refetch round-trip.
+  const walkthroughRequested = location.search.includes('walkthrough=1');
+  const showWalkthrough = !needsPaywall
+    && walkthroughOverride !== false
+    && (walkthroughOverride === true
+        || walkthroughRequested
+        || (ctx?.isOwner && ctx?.onboardedAt && !ctx?.walkthroughCompletedAt));
 
   // Mirror the direction class onto <body> so React portals (dropdowns, modals)
   // rendered into document.body inherit the same CSS variables we use everywhere.
@@ -92,6 +105,20 @@ function AppShellInner() {
       )}
 
       {needsPaywall && <Paywall ctx={ctx} onRefresh={refresh}/>}
+
+      {showWalkthrough && (
+        <Walkthrough onClose={() => {
+          setWalkthroughOverride(false);
+          // Strip ?walkthrough=1 from the URL so a refresh doesn't
+          // re-open the tour after the user dismissed it.
+          if (walkthroughRequested) {
+            const u = new URL(window.location.href);
+            u.searchParams.delete('walkthrough');
+            window.history.replaceState({}, '', u.pathname + (u.search ? u.search : ''));
+          }
+          refresh();
+        }}/>
+      )}
     </div>
   );
 }

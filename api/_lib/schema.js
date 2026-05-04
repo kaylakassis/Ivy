@@ -88,6 +88,11 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
 -- values are ISO timestamps. Stored as JSONB so we can add new beats later
 -- without another migration.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- One-time UI walkthrough flag. NULL = the user hasn't seen / dismissed
+-- the in-app tour yet, so AppShell auto-launches it. Re-launchable from
+-- the Account page via a Replay button that POSTs { reset: true } and
+-- nulls this back out.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS walkthrough_completed_at TIMESTAMPTZ;
 -- Backfill: any user already past the whole 14-day window when this column
 -- lands gets marked as fully sent so the cron doesn't retroactively spam
 -- pre-existing accounts. Self-correcting via the empty-jsonb check.
