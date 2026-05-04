@@ -8,6 +8,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedClient, serializeClient, VALID_STAGES } from '../_lib/clients.js';
+import { normalizePhone } from '../_lib/sms.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -38,6 +39,27 @@ export default async function handler(req, res) {
         push('name', v);
       }
       if ('email' in body) push('email', body.email ? body.email.toString().trim().toLowerCase() : null);
+      if ('phone' in body) {
+        const raw = body.phone ? String(body.phone).trim() : null;
+        if (raw === null || raw === '') push('phone', null);
+        else {
+          const norm = normalizePhone(raw);
+          if (!norm) return badRequest(res, 'Phone number is not a valid format');
+          push('phone', norm);
+        }
+      }
+      if ('smsConsent' in body) {
+        // Owners can record consent on behalf of the client (e.g. paper
+        // intake form). Setting to false also nulls the consent
+        // timestamp; setting to true stamps NOW() if not already set.
+        if (body.smsConsent) {
+          // Use IS NULL guard via separate path — do it inline:
+          const cur = existing.sms_consent_at;
+          if (!cur) push('sms_consent_at', new Date().toISOString());
+        } else {
+          push('sms_consent_at', null);
+        }
+      }
       if ('stage' in body) {
         if (!VALID_STAGES.has(body.stage)) return badRequest(res, 'Invalid stage');
         push('stage', body.stage);

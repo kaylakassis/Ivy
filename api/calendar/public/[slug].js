@@ -13,6 +13,7 @@ import {
   hasConflict, withinAvailability,
 } from '../../_lib/calendar.js';
 import { validEmail } from '../../_lib/auth.js';
+import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import {
@@ -111,6 +112,14 @@ async function createBooking(req, res) {
     const clientName = (body.clientName || '').toString().trim().slice(0, 120);
     const clientEmail = (body.clientEmail || '').toString().trim().toLowerCase();
     const notes = body.notes ? String(body.notes).slice(0, 1000) : null;
+    // Phone is optional — only normalized if the field was non-empty so
+    // bookings without phones still succeed.
+    let clientPhone = null;
+    if (body.clientPhone) {
+      clientPhone = normalizePhone(body.clientPhone);
+      if (!clientPhone) return badRequest(res, 'Phone number is not a valid format');
+    }
+    const smsConsent = !!body.smsConsent && !!clientPhone;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return badRequest(res, 'date must be YYYY-MM-DD');
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
@@ -148,25 +157,41 @@ async function createBooking(req, res) {
     }
 
     // Attach to an existing client by email; create a lead if missing.
+    // When the form provided a phone, store / refresh it on the client
+    // row so future bookings + reminders pick it up by default. Same
+    // for SMS consent — never silently flip to TRUE; only stamp the
+    // timestamp if the form explicitly opted in.
     let clientId = null;
     const existing = await sql`
-      SELECT id FROM clients WHERE workspace_id = ${workspaceId} AND email = ${clientEmail} LIMIT 1
+      SELECT id, phone, sms_consent_at FROM clients
+      WHERE workspace_id = ${workspaceId} AND email = ${clientEmail} LIMIT 1
     `;
     if (existing.rows.length > 0) {
-      clientId = existing.rows[0].id;
-      await sql`UPDATE clients SET last_seen_at = NOW() WHERE id = ${clientId}`;
+      const ec = existing.rows[0];
+      clientId = ec.id;
+      const newPhone   = clientPhone || ec.phone;
+      const newConsent = smsConsent ? (ec.sms_consent_at || new Date().toISOString()) : ec.sms_consent_at;
+      await sql`
+        UPDATE clients SET
+          last_seen_at   = NOW(),
+          phone          = ${newPhone},
+          sms_consent_at = ${newConsent}
+        WHERE id = ${clientId}
+      `;
     } else {
       const newClient = await sql`
-        INSERT INTO clients (workspace_id, name, email, stage, source, last_seen_at)
-        VALUES (${workspaceId}, ${clientName}, ${clientEmail}, 'lead', 'Booking', NOW())
+        INSERT INTO clients (workspace_id, name, email, phone, sms_consent_at, stage, source, last_seen_at)
+        VALUES (${workspaceId}, ${clientName}, ${clientEmail},
+                ${clientPhone}, ${smsConsent ? new Date().toISOString() : null},
+                'lead', 'Booking', NOW())
         RETURNING id
       `;
       clientId = newClient.rows[0].id;
     }
 
     const insert = await sql`
-      INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, date, start_min, end_min, notes)
-      VALUES (${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${date}, ${start}, ${end}, ${notes})
+      INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, client_phone, date, start_min, end_min, notes)
+      VALUES (${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone}, ${date}, ${start}, ${end}, ${notes})
       RETURNING *
     `;
     const b = insert.rows[0];

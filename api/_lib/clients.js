@@ -7,6 +7,8 @@ export function serializeClient(row) {
     id:            row.id,
     name:          row.name,
     email:         row.email,
+    phone:         row.phone || null,
+    smsConsentAt:  row.sms_consent_at || null,
     stage:         row.stage,
     tags:          row.tags || [],
     notes:         row.notes,

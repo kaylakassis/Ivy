@@ -7,6 +7,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeClient, VALID_STAGES } from '../_lib/clients.js';
+import { normalizePhone } from '../_lib/sms.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -47,10 +48,19 @@ export default async function handler(req, res) {
       if (!name) return badRequest(res, 'Name is required');
       if (name.length > 120) return badRequest(res, 'Name too long');
 
+      // Optional phone — normalized to E.164 or rejected outright if
+      // malformed so we never store junk that breaks Twilio later.
+      let phone = null;
+      if (body.phone) {
+        phone = normalizePhone(body.phone);
+        if (!phone) return badRequest(res, 'Phone number is not a valid format');
+      }
+      const smsConsentAt = body.smsConsent ? new Date().toISOString() : null;
+
       const tags = source ? [source] : [];
       const { rows } = await sql`
-        INSERT INTO clients (workspace_id, name, email, stage, tags, source)
-        VALUES (${workspaceId}, ${name}, ${email}, ${stage}, ${tags}, ${source})
+        INSERT INTO clients (workspace_id, name, email, phone, sms_consent_at, stage, tags, source)
+        VALUES (${workspaceId}, ${name}, ${email}, ${phone}, ${smsConsentAt}, ${stage}, ${tags}, ${source})
         RETURNING *
       `;
       return created(res, { client: serializeClient(rows[0]) });

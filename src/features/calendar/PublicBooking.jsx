@@ -23,6 +23,8 @@ export default function PublicBooking() {
   const [step, setStep] = useState('pick');     // 'pick' | 'details' | 'confirmed'
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [smsOptIn, setSmsOptIn] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [bookErr, setBookErr] = useState(null);
 
@@ -93,6 +95,11 @@ export default function PublicBooking() {
         endMin: slot.end,
         clientName: name,
         clientEmail: email,
+        clientPhone: phone.trim() || null,
+        // Consent is gated server-side on phone presence anyway, but
+        // mirror the gate here so the form doesn't transmit a true with
+        // no phone — clearer audit trail.
+        smsConsent: !!(smsOptIn && phone.trim()),
       });
       setStep('confirmed');
     } catch (e) {
@@ -145,6 +152,24 @@ export default function PublicBooking() {
           <Field label="Email">
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputSty} placeholder="you@email.com"/>
           </Field>
+          <Field label="Mobile" hint="Optional — needed if you'd like text reminders.">
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+              style={inputSty} placeholder="(555) 123-4567" autoComplete="tel"/>
+          </Field>
+          {phone.trim() && (
+            <label style={{
+              display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14,
+              fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5, cursor: 'pointer',
+            }}>
+              <input type="checkbox" checked={smsOptIn}
+                onChange={(e) => setSmsOptIn(e.target.checked)}
+                style={{ marginTop: 3 }}/>
+              <span>
+                Text me reminders about this booking. Standard messaging rates may apply;
+                reply STOP at any time to opt out.
+              </span>
+            </label>
+          )}
           {bookErr && (
             <div style={{
               padding: '8px 12px', borderRadius: 8,
@@ -298,11 +323,12 @@ function Header({ bizName, tagline }) {
   );
 }
 
-function Field({ label, children }) {
+function Field({ label, hint, children }) {
   return (
     <div style={{ marginBottom: 14 }}>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>{label}</div>
       {children}
+      {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}
     </div>
   );
 }

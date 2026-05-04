@@ -13,6 +13,7 @@
 // calendar_settings.timezone on top later.
 import { sql } from '../_lib/db.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendClientSms } from '../_lib/sms.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
@@ -45,16 +46,22 @@ export default async function handler(req, res) {
     const { rows } = await sql`
       SELECT
         b.id, b.client_email, b.client_name,
+        COALESCE(b.client_phone, c.phone) AS client_phone,
+        c.sms_consent_at,
         b.date, b.start_min, b.end_min, b.notes,
-        b.reminders_sent,
+        b.reminders_sent, b.sms_sent,
         s.name AS service_name,
         COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
         cs.biz_name
       FROM bookings b
       LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+      LEFT JOIN clients c ON c.id = b.client_id
       WHERE b.cancelled_at IS NULL
-        AND b.client_email IS NOT NULL AND b.client_email <> ''
+        AND (
+          (b.client_email IS NOT NULL AND b.client_email <> '')
+          OR (COALESCE(b.client_phone, c.phone) IS NOT NULL AND c.sms_consent_at IS NOT NULL)
+        )
         AND b.date BETWEEN CURRENT_DATE - INTERVAL '1 day'
                        AND CURRENT_DATE + INTERVAL '8 days'
       ORDER BY b.date, b.start_min
@@ -73,46 +80,83 @@ export default async function handler(req, res) {
       // Don't send reminders for bookings that have already started.
       if (startMs <= now) continue;
 
-      const already = r.reminders_sent || {};
+      const alreadyEmail = r.reminders_sent || {};
+      const alreadySms   = r.sms_sent || {};
       const reminderMinutes = Array.isArray(r.reminder_minutes) ? r.reminder_minutes : [];
+      const smsEligible = !!(r.client_phone && r.sms_consent_at);
+      const emailEligible = !!(r.client_email);
+
       for (const mins of reminderMinutes) {
         if (sent >= MAX_PER_RUN) break;
         const minsNum = Number(mins);
         if (!Number.isFinite(minsNum) || minsNum <= 0) continue;
         const key = String(minsNum);
-        if (already[key]) continue;
 
-        // Target = booking_start - reminder_minutes. Fire if NOW() is in
-        // [target - lookahead, target + lookback]. Lookahead is small so
-        // we don't send before the window; lookback covers gaps.
         const targetMs = startMs - minsNum * 60 * 1000;
         const diffMin = (now - targetMs) / 60000;
         if (diffMin < -LOOKAHEAD_MIN) continue; // too early
         if (diffMin >  LOOKBACK_MIN)  continue; // too late, skip silently
 
-        try {
-          await sendReminder({
-            to: r.client_email,
+        // Email path. Decoupled from SMS so a Twilio failure doesn't
+        // re-fire the email on the next cron tick (and vice versa).
+        if (emailEligible && !alreadyEmail[key]) {
+          try {
+            await sendReminder({
+              to: r.client_email,
+              clientName: r.client_name,
+              serviceName: r.service_name || 'Session',
+              businessName: r.biz_name || 'Your business',
+              dateISO,
+              startMin: r.start_min,
+              endMin: r.end_min,
+              reminderMinutes: minsNum,
+              notes: r.notes,
+            });
+            await sql`
+              UPDATE bookings
+              SET reminders_sent = reminders_sent || jsonb_build_object(${key}, NOW()::text)
+              WHERE id = ${r.id}
+            `;
+            sent++;
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error(`[booking-reminder ${r.id}/${key}] email failed:`, err.message);
+            reportError(err, { extra: { bookingId: r.id, beat: key, channel: 'email' } });
+            failed++;
+          }
+        }
+
+        // SMS path. Re-checks consent + phone (sendClientSms enforces).
+        if (smsEligible && !alreadySms[key]) {
+          const body = composeReminderSms({
             clientName: r.client_name,
             serviceName: r.service_name || 'Session',
             businessName: r.biz_name || 'Your business',
             dateISO,
             startMin: r.start_min,
-            endMin: r.end_min,
             reminderMinutes: minsNum,
-            notes: r.notes,
           });
-          await sql`
-            UPDATE bookings
-            SET reminders_sent = reminders_sent || jsonb_build_object(${key}, NOW()::text)
-            WHERE id = ${r.id}
-          `;
-          sent++;
-        } catch (err) {
-          // eslint-disable-next-line no-console
-          console.error(`[booking-reminder ${r.id}/${key}] failed:`, err.message);
-          reportError(err, { extra: { bookingId: r.id, beat: key } });
-          failed++;
+          const out = await sendClientSms({
+            phone:     r.client_phone,
+            consentAt: r.sms_consent_at,
+            body,
+          });
+          if (out.ok) {
+            await sql`
+              UPDATE bookings
+              SET sms_sent = sms_sent || jsonb_build_object(${key}, NOW()::text)
+              WHERE id = ${r.id}
+            `;
+            sent++;
+          } else {
+            // eslint-disable-next-line no-console
+            console.warn(`[booking-reminder ${r.id}/${key}] sms skipped: ${out.reason}`);
+            // Don't bump `failed` for benign skip reasons; only if Twilio
+            // returned an actual error from a configured account.
+            if (!/no consent|no phone|invalid phone|twilio not configured/i.test(out.reason)) {
+              failed++;
+            }
+          }
         }
       }
     }
@@ -171,4 +215,17 @@ async function sendReminder({ to, clientName, serviceName, businessName, dateISO
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// SMS bodies need to fit in a couple of segments — keep punchy. The
+// "Reply STOP to opt out" suffix is appended by withOptOutSuffix in
+// _lib/sms.js; don't add it here.
+function composeReminderSms({ clientName, serviceName, businessName, dateISO, startMin, reminderMinutes }) {
+  const first = clientName ? clientName.split(/\s+/)[0] : 'there';
+  const when  = describeWindow(reminderMinutes);
+  const day   = new Date(dateISO + 'T00:00:00Z').toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+  });
+  const time  = fmtTime(startMin);
+  return `${businessName}: hi ${first}, your ${serviceName} is ${when} (${day} at ${time}). See you then!`;
 }

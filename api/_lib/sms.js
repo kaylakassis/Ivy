@@ -1,0 +1,63 @@
+// SMS helper layer on top of _lib/twilio. Owns:
+//   • Phone normalization to E.164 (+CCXXXXXXXXXX)
+//   • Compliance suffix on every outbound ("Reply STOP to opt out") so
+//     we don't drift out of TCPA / 10DLC requirements
+//   • Consent gating — clients with sms_consent_at NULL never receive
+//     a non-essential message, full stop. Booking-confirmation /
+//     reminder paths must check consent before calling sendBookingSms.
+//
+// THRYVE pays for SMS as part of subscription so owners don't have to
+// wire up Twilio themselves. Switching to per-workspace BYO Twilio is
+// a future option — keep the API of this module shaped so callers
+// only pass workspaceId + recipient details, no token plumbing.
+import { sendSms, isTwilioConfigured } from './twilio.js';
+
+// Normalize whatever the user typed to E.164. Strip non-digits, then:
+//   • starts with '+' → assume already E.164, keep digits + plus
+//   • 10 digits → assume +1 (US/Canada default) — works for the bulk
+//                   of our market, can be made smarter per-workspace later
+//   • 11 digits starting with 1 → +1XXXXXXXXXX
+//   • otherwise return null (caller treats as invalid)
+export function normalizePhone(raw, defaultCountry = '+1') {
+  if (!raw) return null;
+  const s = String(raw).trim();
+  if (!s) return null;
+  const hadPlus = s.startsWith('+');
+  const digits = s.replace(/\D/g, '');
+  if (!digits) return null;
+  if (hadPlus) {
+    if (digits.length < 8 || digits.length > 15) return null;
+    return '+' + digits;
+  }
+  if (digits.length === 10) return defaultCountry + digits;
+  if (digits.length === 11 && digits.startsWith('1')) return '+' + digits;
+  if (digits.length >= 11 && digits.length <= 15) return '+' + digits;
+  return null;
+}
+
+// Append the standard opt-out suffix exactly once. Idempotent —
+// callers can naïvely add it without worrying about double-tagging.
+export function withOptOutSuffix(body) {
+  if (!body) return body;
+  if (/reply\s+stop/i.test(body)) return body;
+  return body.trim() + '\n\nReply STOP to opt out.';
+}
+
+// Send a message to a client, gated on (1) Twilio configured, (2) phone
+// non-empty + normalized, (3) consent timestamp present. Returns
+// { ok, reason?, sid? }.
+export async function sendClientSms({ phone, consentAt, body }) {
+  if (!isTwilioConfigured()) return { ok: false, reason: 'twilio not configured' };
+  if (!phone) return { ok: false, reason: 'no phone' };
+  if (!consentAt) return { ok: false, reason: 'no consent' };
+
+  const to = normalizePhone(phone);
+  if (!to) return { ok: false, reason: 'invalid phone' };
+
+  try {
+    const r = await sendSms({ to, body: withOptOutSuffix(body) });
+    return { ok: true, sid: r.sid, status: r.status };
+  } catch (err) {
+    return { ok: false, reason: err.message || 'send failed' };
+  }
+}

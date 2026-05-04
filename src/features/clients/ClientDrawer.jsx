@@ -85,6 +85,22 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
               editStyle={{ fontSize: 13 }}
               type="email"
             />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 4 }}>
+              <InlineText
+                value={client.phone || ''}
+                onSave={(v) => safeUpdate({ phone: v.trim() || null })}
+                placeholder="Add phone"
+                style={{ fontSize: 12.5, color: 'var(--muted)' }}
+                editStyle={{ fontSize: 13 }}
+                type="tel"
+              />
+              {client.phone && (
+                <SmsConsentToggle
+                  consentAt={client.smsConsentAt}
+                  onToggle={(next) => safeUpdate({ smsConsent: next })}
+                />
+              )}
+            </div>
           </div>
           <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}>
             <Icons.X size={15}/>
@@ -347,5 +363,34 @@ function Notes({ client, onSave }) {
           color: 'var(--fg)', minHeight: 80, resize: 'vertical', outline: 0,
         }}/>
     </div>
+  );
+}
+
+// Tiny chip + toggle: shows "SMS on/off" next to the phone number.
+// Clicking flips smsConsent on the parent. Owners use this to record
+// consent collected on paper / verbally; the public booking form sets
+// it at booking time too.
+function SmsConsentToggle({ consentAt, onToggle }) {
+  const on = !!consentAt;
+  return (
+    <button type="button" onClick={() => onToggle(!on)}
+      title={on
+        ? `SMS consent recorded ${new Date(consentAt).toLocaleDateString([], { dateStyle: 'medium' })}. Click to revoke.`
+        : 'No SMS consent on file. Click to record consent.'}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5,
+        padding: '2px 8px', borderRadius: 99,
+        background: on ? 'color-mix(in srgb, var(--ok) 14%, transparent)' : 'var(--surface-2)',
+        border: `1px solid ${on ? 'color-mix(in srgb, var(--ok) 35%, transparent)' : 'var(--border)'}`,
+        color: on ? 'var(--ok)' : 'var(--muted)',
+        fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em',
+        textTransform: 'uppercase', cursor: 'pointer',
+      }}>
+      <span style={{
+        width: 6, height: 6, borderRadius: 99,
+        background: on ? 'var(--ok)' : 'var(--muted)',
+      }}/>
+      SMS {on ? 'on' : 'off'}
+    </button>
   );
 }

@@ -119,6 +119,13 @@ CREATE TABLE IF NOT EXISTS clients (
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_stage ON clients(workspace_id, stage);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
+-- Phone + per-client SMS consent. sms_consent_at NULL means "not opted in"
+-- — the reminders cron and any future broadcast paths will skip them.
+-- Phone stored normalized to E.164 (+15551234567); pre-normalize before
+-- write (see _lib/sms.js).
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS sms_consent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_clients_phone ON clients(phone) WHERE phone IS NOT NULL;
 
 -- Client portal: when an end-customer signs up to THRYVE, we link their user
 -- account to every existing 'clients' row that matches their email so they
@@ -292,6 +299,13 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminders_sent JSONB NOT NULL DEFA
 -- Google Calendar event id, set when we successfully push a booking into
 -- the workspace's connected Google Cal. Lets us PUT/DELETE later.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_event_id TEXT;
+-- SMS reminder tracking — parallel to reminders_sent (which is email).
+-- Same key shape: { '120': '<iso>', '1440': '<iso>', ... }. Decoupled
+-- so a Twilio failure doesn't re-fire the email on the next cron tick.
+-- client_phone snapshots clients.phone at booking time, so reminders
+-- still go out even if the client later updates / deletes the row.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_phone TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
 
 -- Messaging: one thread per (workspace, client). Mode controls whether the
