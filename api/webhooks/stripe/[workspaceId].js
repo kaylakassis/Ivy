@@ -105,14 +105,21 @@ export default async function handler(req, res) {
       },
     ];
 
+    // Capture payment_intent so the refund endpoint can target it
+    // without re-fetching the session every time.
+    const paymentIntent = typeof session.payment_intent === 'string'
+      ? session.payment_intent
+      : session.payment_intent?.id || null;
+
     await sql`
       UPDATE invoices SET
-        status          = 'paid',
-        paid_at         = NOW(),
-        paid_method     = 'card',
-        view_token_hash = NULL,
-        activity        = ${JSON.stringify(newActivity)}::jsonb,
-        updated_at      = NOW()
+        status                 = 'paid',
+        paid_at                = NOW(),
+        paid_method            = 'card',
+        view_token_hash        = NULL,
+        stripe_payment_intent  = ${paymentIntent},
+        activity               = ${JSON.stringify(newActivity)}::jsonb,
+        updated_at             = NOW()
       WHERE id = ${inv.id} AND workspace_id = ${workspaceId} AND status <> 'paid'
     `;
 

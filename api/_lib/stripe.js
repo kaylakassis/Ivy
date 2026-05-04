@@ -184,3 +184,20 @@ export async function fetchSubscription({ secretKey, subscriptionId }) {
   if (!subscriptionId) throw new Error('subscriptionId is required');
   return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, { secretKey });
 }
+
+// Issue a refund against a payment_intent. amountCents omitted = full
+// refund of remaining balance. reason maps to Stripe's enum:
+// 'duplicate' | 'fraudulent' | 'requested_by_customer'.
+export async function createRefund({ secretKey, paymentIntent, amountCents, reason }) {
+  if (!paymentIntent) throw new Error('paymentIntent is required');
+  const body = { payment_intent: paymentIntent };
+  if (amountCents != null) body.amount = amountCents;
+  if (reason) body.reason = reason;
+  const refund = await stripeFetch('/refunds', { method: 'POST', secretKey, body });
+  return {
+    id:     refund.id,
+    amount: refund.amount,
+    status: refund.status,
+    reason: refund.reason,
+  };
+}

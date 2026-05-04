@@ -8,10 +8,11 @@ import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
 
 const STATUS_META = {
-  sent:    { label: 'Awaiting payment', color: 'var(--warn)' },
-  overdue: { label: 'Overdue',          color: 'var(--danger)' },
-  paid:    { label: 'Paid',             color: 'var(--ok)' },
-  voided:  { label: 'Voided',           color: 'var(--muted)' },
+  sent:     { label: 'Awaiting payment', color: 'var(--warn)' },
+  overdue:  { label: 'Overdue',          color: 'var(--danger)' },
+  paid:     { label: 'Paid',             color: 'var(--ok)' },
+  voided:   { label: 'Voided',           color: 'var(--muted)' },
+  refunded: { label: 'Refunded',         color: 'var(--muted)' },
 };
 
 function fmtDate(iso) {

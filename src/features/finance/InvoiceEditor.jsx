@@ -3,8 +3,11 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 
-export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMarkPaid, onVoid, onDelete }) {
-  const isLocked = invoice.status === 'paid' || invoice.status === 'voided';
+export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMarkPaid, onVoid, onDelete, onRefund }) {
+  const isLocked = invoice.status === 'paid' || invoice.status === 'voided' || invoice.status === 'refunded';
+  const refundedAmount = Number(invoice.refundedAmount || 0);
+  const remaining = Math.max(0, Number(invoice.total || 0) - refundedAmount);
+  const refundable = (invoice.status === 'paid' || invoice.status === 'refunded') && remaining > 0;
   const [items, setItems]         = useState(invoice.items || []);
   const [taxRate, setTaxRate]     = useState(invoice.taxRate ?? 0);
   const [discount, setDiscount]   = useState(invoice.discount ?? 0);
@@ -13,8 +16,10 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
   const [notes, setNotes]         = useState(invoice.notes || '');
   const [busy, setBusy]           = useState(false);
   const [err, setErr]             = useState(null);
-  const [confirm, setConfirm]     = useState(null);  // 'delete' | 'void' | 'paid' | null
+  const [confirm, setConfirm]     = useState(null);  // 'delete' | 'void' | 'paid' | 'refund' | null
   const [paidMethod, setPaidMethod] = useState('card');
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
 
   useEffect(() => {
     setItems(invoice.items || []);
@@ -256,6 +261,37 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
                 Confirm payment
               </button>
             </>
+          ) : confirm === 'refund' ? (
+            <>
+              <input type="number" min="0.01" step="0.01" max={remaining}
+                value={refundAmount}
+                onChange={(e) => setRefundAmount(e.target.value)}
+                placeholder={remaining.toFixed(2)}
+                style={{ ...inputS, width: 110 }}/>
+              <select value={refundReason} onChange={(e) => setRefundReason(e.target.value)}
+                style={inputS}>
+                <option value="">Reason (optional)</option>
+                <option value="requested_by_customer">Customer requested</option>
+                <option value="duplicate">Duplicate</option>
+                <option value="fraudulent">Fraudulent</option>
+              </select>
+              <button className="btn btn-ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</button>
+              <button className="btn btn-primary" disabled={busy} style={{ background: 'var(--danger)' }}
+                onClick={async () => {
+                  setBusy(true); setErr(null);
+                  try {
+                    const amount = refundAmount === '' ? null : Number(refundAmount);
+                    await onRefund({ amount, reason: refundReason || null });
+                    setConfirm(null);
+                    setRefundAmount('');
+                    setRefundReason('');
+                  } catch (e) {
+                    setErr(e.message || 'Refund failed');
+                  } finally { setBusy(false); }
+                }}>
+                {refundAmount && Number(refundAmount) < remaining ? 'Refund partial' : 'Refund full amount'}
+              </button>
+            </>
           ) : (
             <>
               {invoice.status === 'draft' && (
@@ -268,6 +304,13 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
                 <button className="btn btn-ghost" onClick={() => setConfirm('void')}
                   style={{ color: 'var(--danger)' }}>
                   Void
+                </button>
+              )}
+              {refundable && (
+                <button className="btn btn-ghost" onClick={() => setConfirm('refund')}
+                  style={{ color: 'var(--danger)' }}>
+                  <Icons.Arrow size={12} sw={2} style={{ transform: 'rotate(180deg)' }}/>
+                  Refund {refundedAmount > 0 ? `(${remaining.toFixed(2)} left)` : ''}
                 </button>
               )}
               <div style={{ flex: 1 }}/>

@@ -67,8 +67,15 @@ export function useInvoices() {
     return r.invoice;
   }, [refreshSummary]);
 
+  const refund = useCallback(async (id, { amount, reason } = {}) => {
+    const r = await api.post('/invoices/refund', { id, amount, reason });
+    setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
+    await refreshSummary();
+    return r;
+  }, [refreshSummary]);
+
   return {
     invoices, summary, loading, error,
-    create, update, remove, send, markPaid, void: voidInvoice,
+    create, update, remove, send, markPaid, void: voidInvoice, refund,
   };
 }

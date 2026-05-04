@@ -1,7 +1,7 @@
 // Shared serializers + helpers for invoices.
 import { sql } from './db.js';
 
-export const VALID_STATUS = new Set(['draft', 'sent', 'paid', 'overdue', 'voided']);
+export const VALID_STATUS = new Set(['draft', 'sent', 'paid', 'overdue', 'voided', 'refunded']);
 export const VALID_PAID_METHOD = new Set(['card', 'ach', 'cash', 'check', 'transfer', 'other']);
 
 // Round to 2dp (avoid float-drift on totals).
@@ -40,6 +40,9 @@ export function serializeInvoice(row) {
     sentAt:       row.sent_at,
     paidAt:       row.paid_at,
     paidMethod:   row.paid_method,
+    refundedAmount: Number(row.refunded_amount || 0),
+    refundedAt:   row.refunded_at,
+    stripePaymentIntent: row.stripe_payment_intent || null,
     activity:     row.activity || [],
     subtotal:     totals.subtotal,
     tax:          totals.tax,

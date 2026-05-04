@@ -14,12 +14,13 @@ const STATUS_META = {
   paid:     { label: 'Paid',     color: 'var(--ok)' },
   overdue:  { label: 'Overdue',  color: 'var(--danger)' },
   voided:   { label: 'Voided',   color: 'var(--muted-2)' },
+  refunded: { label: 'Refunded', color: 'var(--muted-2)' },
 };
 
 export default function Finance() {
   const {
     invoices, summary, loading, error,
-    create, update, remove, send, markPaid, void: voidInvoice,
+    create, update, remove, send, markPaid, void: voidInvoice, refund,
   } = useInvoices();
 
   const [tab, setTab]               = useState('all');
@@ -169,6 +170,7 @@ export default function Finance() {
           onSend={() => setSending(openInv.id)}
           onMarkPaid={(method) => markPaid(openInv.id, method)}
           onVoid={() => voidInvoice(openInv.id)}
+          onRefund={(args) => refund(openInv.id, args)}
         />
       )}
       {sendingInv && (

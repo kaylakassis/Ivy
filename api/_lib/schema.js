@@ -507,6 +507,15 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_issued ON invoices(workspace_i
 -- uses this to find the invoice when checkout.session.completed fires.
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_invoices_stripe_session ON invoices(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
+-- Refunds. payment_intent gets captured on checkout.session.completed
+-- so the refund endpoint can target it. refunded_amount tracks partial
+-- refunds — when it equals the total, status flips to 'refunded'.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refunded_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
+ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_status_check;
+ALTER TABLE invoices ADD CONSTRAINT invoices_status_check
+  CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'voided', 'refunded'));
 
 -- Goals + Tasks. Goals track progress against a target (revenue / clients /
 -- sessions / custom). Tasks are simple to-dos; "smart" tasks of certain types
