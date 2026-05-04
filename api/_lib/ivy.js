@@ -107,12 +107,14 @@ export async function workspaceContext(workspaceId) {
 // Tries Claude first, falls back to the deterministic mock on any error,
 // missing API key, or exceeded daily cap. `history` is the prior conversation
 // as [{role, text}] in chronological order; the latest user turn is `text`.
+// `attachment` (optional) is { filename, mediaType, base64 } — added to the
+// final user turn as an image / document / text block per the media type.
 // Returns `{ text, mode, error?, usage? }` so callers / the UI can surface
 // whether the reply came from real Claude or the local mock.
-export async function generateReply(text, ctx, history = [], workspaceId = null) {
+export async function generateReply(text, ctx, history = [], workspaceId = null, attachment = null) {
   const client = anthropic();
   if (!client) {
-    return { text: mockReply(text, ctx), mode: 'mock', error: 'no-api-key' };
+    return { text: mockReply(text, ctx, attachment), mode: 'mock', error: 'no-api-key' };
   }
 
   // Enforce daily cap. If exceeded we explicitly tell the user (rather than
@@ -138,14 +140,14 @@ export async function generateReply(text, ctx, history = [], workspaceId = null)
   }
 
   try {
-    const { reply, response } = await claudeReply(client, text, ctx, history);
+    const { reply, response } = await claudeReply(client, text, ctx, history, attachment);
     if (workspaceId) await recordUsage(workspaceId, response).catch(() => {});
     return { text: reply, mode: 'live' };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[ivy] Anthropic call failed, falling back to mock:', err?.message || err);
     return {
-      text: mockReply(text, ctx),
+      text: mockReply(text, ctx, attachment),
       mode: 'mock',
       error: (err && err.message) ? err.message.slice(0, 200) : 'unknown-error',
     };
@@ -220,8 +222,8 @@ You can reference: revenue this month, open invoice count, active client count, 
 
 If they ask something outside your scope (legal, medical, tax filings, personal therapy), point that out briefly and redirect to what you can help with.`;
 
-async function claudeReply(client, text, ctx, history) {
-  const messages = buildMessages(text, ctx, history);
+async function claudeReply(client, text, ctx, history, attachment) {
+  const messages = buildMessages(text, ctx, history, attachment);
   const response = await client.messages.create({
     model: IVY_MODEL,
     max_tokens: IVY_MAX_TOKENS,
@@ -243,6 +245,45 @@ async function claudeReply(client, text, ctx, history) {
   return { reply, response };
 }
 
+// Map a wide range of MIME types into the small set Anthropic accepts.
+// Returns either a content block ready to drop into the user turn, or
+// null if the file type isn't supported (caller falls back to a text
+// description).
+function attachmentToBlock(att) {
+  if (!att || !att.base64 || !att.mediaType) return null;
+  const mt = att.mediaType.toLowerCase();
+  // PDFs become 'document' blocks (Claude reads them natively).
+  if (mt === 'application/pdf') {
+    return {
+      type: 'document',
+      source: { type: 'base64', media_type: 'application/pdf', data: att.base64 },
+      ...(att.filename ? { title: String(att.filename).slice(0, 200) } : {}),
+    };
+  }
+  // Images become vision blocks.
+  if (mt === 'image/png' || mt === 'image/jpeg' || mt === 'image/gif' || mt === 'image/webp') {
+    return {
+      type: 'image',
+      source: { type: 'base64', media_type: mt, data: att.base64 },
+    };
+  }
+  // CSV / plain text / TSV / markdown — decode base64 and pass as text.
+  // Capped server-side so an enormous CSV doesn't blow up the prompt.
+  if (mt.startsWith('text/') || mt === 'application/csv' || mt === 'application/json') {
+    try {
+      const decoded = Buffer.from(att.base64, 'base64').toString('utf8');
+      const trimmed = decoded.length > 80_000
+        ? decoded.slice(0, 80_000) + '\n\n[truncated — first 80k characters shown]'
+        : decoded;
+      const label = att.filename ? `Attached file: ${att.filename}` : 'Attached file';
+      return { type: 'text', text: `${label}\n\n\`\`\`\n${trimmed}\n\`\`\`` };
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
 function fmtCtx(ctx) {
   const c = ctx || {};
   const fmt$ = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
@@ -256,7 +297,7 @@ function fmtCtx(ctx) {
   ].join('\n');
 }
 
-function buildMessages(text, ctx, history) {
+function buildMessages(text, ctx, history, attachment) {
   // Take the last N turns (one turn ≈ 2 messages: me + ivy). Never start with
   // an assistant message — drop a leading 'ivy' if it slipped through.
   const trimmed = (history || []).slice(-IVY_HISTORY_TURNS * 2);
@@ -268,19 +309,33 @@ function buildMessages(text, ctx, history) {
   }));
 
   // The latest user turn carries the live snapshot so Ivy reasons over current
-  // numbers rather than whatever was in context when the chat started.
-  out.push({
-    role: 'user',
-    content: `${fmtCtx(ctx)}\n\n---\n\n${text}`,
-  });
+  // numbers rather than whatever was in context when the chat started. When
+  // an attachment is attached, build a content-block array; otherwise keep
+  // it as a string so the API request stays minimal.
+  const userText = `${fmtCtx(ctx)}\n\n---\n\n${text || 'Analyze this file and pull out the takeaways relevant to my business.'}`;
+  const block = attachment ? attachmentToBlock(attachment) : null;
+  if (block) {
+    out.push({
+      role: 'user',
+      content: [block, { type: 'text', text: userText }],
+    });
+  } else {
+    out.push({ role: 'user', content: userText });
+  }
   return out;
 }
 
 // Mock reply: deterministic templates that quote real numbers. Used as a
-// fallback when Claude is unavailable.
-function mockReply(text, ctx) {
+// fallback when Claude is unavailable. When an attachment is present we
+// can't actually parse it — say so honestly so the user knows real
+// analysis requires the API key to be set.
+function mockReply(text, ctx, attachment) {
   const t = (text || '').toLowerCase();
   const fmt$ = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
+
+  if (attachment) {
+    return `I can see you attached ${attachment.filename || 'a file'}. Real analysis runs through Claude — that needs the ANTHROPIC_API_KEY env var set on the deployment. Once it's wired, drop the file again and I'll pull out the takeaways: top revenue drivers, anything dropping > 15%, costs growing faster than revenue, and the next move that follows from the data.`;
+  }
 
   if (t.includes('revenue') || t.includes('money') || t.includes('income')) {
     return `You're at ${fmt$(ctx.revenueThisMonth)} in paid revenue this month. ${
@@ -310,7 +365,7 @@ function mockReply(text, ctx) {
     return `Three things this week:\n\n${moves.slice(0, 3).map((m, i) => `${i + 1}. ${m}`).join('\n')}\n\nWant me to break any of these down?`;
   }
   if (t.includes('analyze') && (t.includes('report') || t.includes('upload'))) {
-    return `Uploads are coming soon — once they're live I'll parse CSVs and PDFs and pull out (1) top 3 revenue sources, (2) any segment with > 15% drop, (3) any cost line growing faster than revenue. For now, paste the numbers in chat and I'll dig in.`;
+    return `Drop a CSV, PDF, or image into the upload box on the right and I'll pull out (1) top 3 revenue sources, (2) any segment with > 15% drop, and (3) any cost line growing faster than revenue. Or paste the numbers here in chat.`;
   }
   if (t.length < 30) {
     return `Happy to dig in. A little more context would help — what outcome are you after?`;

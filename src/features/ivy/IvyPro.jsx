@@ -161,7 +161,9 @@ export default function IvyPro() {
         background: 'var(--surface)',
         padding: 20, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 18,
       }}>
-        <UploadPlaceholder/>
+        <UploadAnalyzer
+          busy={thinking}
+          onAnalyze={(file) => send('', file)}/>
         <DataContext context={context}/>
       </div>}
     </div>
@@ -454,32 +456,123 @@ function ThinkingBubble() {
   );
 }
 
-function UploadPlaceholder() {
+// Drop a CSV, PDF, or image and Ivy posts a 1-line user turn with the
+// attachment + asks Claude to extract takeaways. The actual analysis
+// happens server-side; the file bytes never get persisted to the DB.
+function UploadAnalyzer({ onAnalyze, busy }) {
+  const inputRef = React.useRef(null);
+  const [dragOver, setDragOver] = useState(false);
+  const [err, setErr]   = useState(null);
+  const [pickedName, setPickedName] = useState(null);
+
+  const ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.csv,.tsv,.txt,.md,.json,application/pdf,image/png,image/jpeg,image/gif,image/webp,text/csv,text/plain,text/tab-separated-values,text/markdown,application/json';
+  const MAX_BYTES = 3.5 * 1024 * 1024;
+
+  const handle = async (file) => {
+    if (!file) return;
+    setErr(null);
+    if (file.size > MAX_BYTES) {
+      setErr(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB — cap is 3.5 MB.`);
+      return;
+    }
+    try {
+      const base64 = await fileToBase64(file);
+      setPickedName(file.name);
+      await onAnalyze({
+        filename: file.name,
+        mediaType: normalizeMime(file),
+        base64,
+      });
+      setPickedName(null);
+    } catch (e) {
+      setErr(e?.message || 'Could not read that file.');
+      setPickedName(null);
+    }
+  };
+
+  const onDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const f = e.dataTransfer?.files?.[0];
+    if (f) handle(f);
+  };
+
   return (
     <div>
       <div style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 10 }}>
         Upload report for analysis
       </div>
-      <div style={{
-        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
-        padding: 20, borderRadius: 12,
-        border: '1.5px dashed var(--border-strong)', background: 'var(--surface-2)',
-        textAlign: 'center', opacity: 0.7,
-      }}>
+      <button type="button"
+        onClick={() => inputRef.current?.click()}
+        onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={onDrop}
+        disabled={busy}
+        style={{
+          width: '100%', cursor: busy ? 'wait' : 'pointer',
+          display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+          padding: 20, borderRadius: 12,
+          border: '1.5px dashed ' + (dragOver ? 'var(--accent)' : 'var(--border-strong)'),
+          background: dragOver ? 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface-2))' : 'var(--surface-2)',
+          textAlign: 'center', color: 'var(--fg)',
+          transition: 'background 0.15s, border-color 0.15s',
+        }}>
         <div style={{
           width: 36, height: 36, borderRadius: 10, background: 'var(--surface)',
           border: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          color: 'var(--muted)',
+          color: busy ? 'var(--accent)' : 'var(--muted)',
         }}>
-          <Icons.Plus size={16} sw={2}/>
+          {busy ? <span style={{ animation: 'ivyPulse 1.2s ease-in-out infinite', fontSize: 18 }}>•</span>
+                : <Icons.Plus size={16} sw={2}/>}
         </div>
-        <div style={{ fontSize: 12.5, fontWeight: 600 }}>Coming soon</div>
-        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>
-          Drop CSVs, PDFs, or images and Ivy will pull out the takeaways.
+        <div style={{ fontSize: 12.5, fontWeight: 600 }}>
+          {busy ? `Analyzing ${pickedName || 'file'}…` : 'Click or drop a file'}
         </div>
-      </div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.45 }}>
+          CSV, PDF, image, JSON, or plain text. Up to 3.5 MB. Ivy will read it and post the takeaways into your chat.
+        </div>
+      </button>
+      <input ref={inputRef} type="file" hidden accept={ACCEPT}
+        onChange={(e) => { const f = e.target.files?.[0]; e.target.value = ''; if (f) handle(f); }}/>
+      {err && (
+        <div style={{
+          marginTop: 8, padding: '6px 10px', borderRadius: 8, fontSize: 11.5,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)',
+        }}>{err}</div>
+      )}
     </div>
   );
+}
+
+// File extension → MIME fallback. Browsers sometimes give a blank
+// `type` for CSVs uploaded from Excel; sniff the suffix instead.
+function normalizeMime(file) {
+  const t = (file.type || '').toLowerCase();
+  if (t) return t;
+  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  return {
+    csv: 'text/csv', tsv: 'text/tab-separated-values',
+    txt: 'text/plain', md: 'text/markdown',
+    json: 'application/json',
+    pdf: 'application/pdf',
+    png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
+    gif: 'image/gif', webp: 'image/webp',
+  }[ext] || 'application/octet-stream';
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => {
+      const result = String(r.result || '');
+      // FileReader.readAsDataURL → "data:<mime>;base64,<data>". Strip header.
+      const i = result.indexOf(',');
+      resolve(i >= 0 ? result.slice(i + 1) : result);
+    };
+    r.onerror = () => reject(new Error('Could not read file'));
+    r.readAsDataURL(file);
+  });
 }
 
 function DataContext({ context }) {

@@ -58,18 +58,28 @@ export function useIvy() {
     setMessages([]);
   }, []);
 
-  const send = useCallback(async (text) => {
+  // `text` may be empty when an attachment is supplied — the server treats
+  // that as an implicit "analyze this file" prompt.
+  const send = useCallback(async (text, attachment = null) => {
     const t = (text || '').trim();
-    if (!t || thinking) return;
+    if ((!t && !attachment) || thinking) return;
     setError(null);
 
-    // Optimistic append of the user's own bubble
-    const optimistic = { id: 'tmp-' + Date.now(), role: 'me', text: t, createdAt: new Date().toISOString() };
+    // Optimistic append of the user's own bubble. Show a paperclip line
+    // when an attachment is included so the chat doesn't look empty.
+    const optimisticText = attachment
+      ? (t ? `${t}\n\n📎 ${attachment.filename || 'file'}` : `📎 ${attachment.filename || 'file'}`)
+      : t;
+    const optimistic = { id: 'tmp-' + Date.now(), role: 'me', text: optimisticText, createdAt: new Date().toISOString() };
     setMessages((xs) => [...xs, optimistic]);
     setThinking(true);
 
     try {
-      const r = await api.post('/ivy', { text: t, sessionId: activeId || undefined });
+      const r = await api.post('/ivy', {
+        text: t,
+        sessionId: activeId || undefined,
+        attachment: attachment || undefined,
+      });
       const realMessages = r.messages || [];
       setMessages((xs) => {
         // Replace optimistic with real pair

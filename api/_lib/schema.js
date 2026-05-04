@@ -101,20 +101,22 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS walkthrough_completed_at TIMESTAMPTZ;
 --   'regular'    default. Honors normal billing rules.
 --   'sponsored'  comp account: full app access without a subscription.
 --                Bypasses Paywall via the userContext virtual sub flag.
---   'affiliate'  the human owns an affiliate code in `affiliates`. Can
---                also be `regular` + sponsored if needed; user_type just
+--   'affiliate'  the human owns an affiliate code in 'affiliates'. Can
+--                also be 'regular' + sponsored if needed; user_type just
 --                records the primary classification for admin filtering.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT 'regular';
-DO $$ BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_user_type_check') THEN
-    ALTER TABLE users ADD CONSTRAINT users_user_type_check
-      CHECK (user_type IN ('regular', 'sponsored', 'affiliate'));
-  END IF;
-END $$;
+-- Idempotent constraint via DROP IF EXISTS + ADD. The naive DO $$ ...
+-- END $$; alternative looks tidier but our migration runner splits on
+-- ';\n' and shreds dollar-quoted blocks; that broke the affiliates
+-- migration cold. Two plain statements stay readable AND survive the
+-- splitter.
+ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_type_check;
+ALTER TABLE users ADD CONSTRAINT users_user_type_check
+  CHECK (user_type IN ('regular', 'sponsored', 'affiliate'));
 CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)
   WHERE user_type <> 'regular';
 
--- Affiliate program. One row per affiliate user; `code` is what they
+-- Affiliate program. One row per affiliate user; 'code' is what they
 -- share, ?ref=CODE on /signup attributes the conversion. Owner-side the
 -- admin can rotate the code without breaking past attributions because
 -- they're stored on affiliate_uses by id, not code.
@@ -131,8 +133,8 @@ CREATE TABLE IF NOT EXISTS affiliates (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliates_user ON affiliates(user_id);
 
 -- Each click-through-and-signup. We stamp the affiliate at signup time
--- (?ref=CODE) so attribution survives later code rotation. `became_paid_at`
--- + `monthly_value_cents` populate when the referred user starts paying so
+-- (?ref=CODE) so attribution survives later code rotation. 'became_paid_at'
+-- + 'monthly_value_cents' populate when the referred user starts paying so
 -- the admin can compute revenue-per-affiliate.
 CREATE TABLE IF NOT EXISTS affiliate_uses (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -174,8 +176,8 @@ CREATE INDEX IF NOT EXISTS idx_support_messages_thread
   ON support_messages(thread_id, created_at);
 
 -- Admin audit trail. Every super-admin-initiated mutation appends a row.
--- `actor_user_id` is the admin who took the action; `target_user_id` is
--- whoever was affected (nullable for tenant-wide ops). `meta` stores
+-- 'actor_user_id' is the admin who took the action; 'target_user_id' is
+-- whoever was affected (nullable for tenant-wide ops). 'meta' stores
 -- whatever extra context the call site provides (old/new values, IP, etc.)
 -- so we don't have to add columns every time we want to log a new field.
 CREATE TABLE IF NOT EXISTS audit_events (

@@ -15,6 +15,17 @@ import {
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const MAX_MESSAGE_CHARS = 4000;
+// Vercel serverless caps the request body around 4.5 MB. We allow up to
+// ~3.5 MB of raw file bytes (≈4.7 MB of base64) and add a server-side
+// belt-and-braces check so a malformed client can't OOM us.
+const MAX_ATTACHMENT_BYTES = 3.5 * 1024 * 1024;
+const ALLOWED_MIME = new Set([
+  'application/pdf',
+  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
+  'text/csv', 'text/plain', 'text/tab-separated-values',
+  'text/markdown',
+  'application/csv', 'application/json',
+]);
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -47,7 +58,11 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = await readBody(req);
       const text = (body.text || '').toString().trim();
-      if (!text) return badRequest(res, 'Message is required');
+      // Validate + normalize attachment if present. Allow an empty text
+      // when an attachment is attached — "analyze this" is implicit.
+      const attachment = parseAttachment(body.attachment);
+      if (attachment instanceof Error) return badRequest(res, attachment.message);
+      if (!text && !attachment) return badRequest(res, 'Message is required');
       if (text.length > MAX_MESSAGE_CHARS) return badRequest(res, 'Message too long');
 
       let session;
@@ -75,14 +90,20 @@ export default async function handler(req, res) {
       `;
       const history = priorMsgs.rows.map((r) => ({ role: r.role, text: r.text }));
 
+      // The persisted user message includes a one-line note about the
+      // attachment so it shows up in chat history. The actual file
+      // bytes are NOT stored — they only live in the API call.
+      const persistedText = attachment
+        ? (text ? `${text}\n\n📎 ${attachment.filename || 'file'}` : `📎 ${attachment.filename || 'file'}`)
+        : text;
       const userMsg = await sql`
         INSERT INTO ivy_messages (session_id, role, text)
-        VALUES (${session.id}, 'me', ${text})
+        VALUES (${session.id}, 'me', ${persistedText})
         RETURNING *
       `;
 
       const ctx = await workspaceContext(workspaceId);
-      const reply = await generateReply(text, ctx, history, workspaceId);
+      const reply = await generateReply(text, ctx, history, workspaceId, attachment);
       const replyText = reply.text;
 
       const ivyMsg = await sql`
@@ -114,4 +135,27 @@ export default async function handler(req, res) {
   } catch (err) {
     return serverError(res, err);
   }
+}
+
+// Returns a normalized { filename, mediaType, base64 } on success, null
+// when no attachment is present, or an Error with a user-readable
+// message when the payload is invalid.
+function parseAttachment(raw) {
+  if (raw == null || raw === '') return null;
+  if (typeof raw !== 'object') return new Error('Attachment must be an object');
+  const filename = (raw.filename || raw.name || '').toString().slice(0, 200) || null;
+  const mediaType = (raw.mediaType || raw.type || '').toString().toLowerCase();
+  const base64 = (raw.base64 || raw.data || '').toString();
+  if (!mediaType) return new Error('Attachment missing mediaType');
+  if (!ALLOWED_MIME.has(mediaType)) {
+    return new Error(`Unsupported file type: ${mediaType}. Allowed: PDF, PNG/JPEG/GIF/WEBP image, CSV, JSON, plain text.`);
+  }
+  if (!base64) return new Error('Attachment missing data');
+  // base64-decoded byte length ≈ ceil(len * 3 / 4) − padding, close enough.
+  const approxBytes = Math.floor(base64.length * 0.75);
+  if (approxBytes > MAX_ATTACHMENT_BYTES) {
+    const mb = (MAX_ATTACHMENT_BYTES / 1024 / 1024).toFixed(1);
+    return new Error(`File is too large. Cap is ${mb} MB.`);
+  }
+  return { filename, mediaType, base64 };
 }
