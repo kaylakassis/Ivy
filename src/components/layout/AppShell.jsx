@@ -13,7 +13,6 @@ import Topbar from './Topbar.jsx';
 import VerifyEmailBanner from '../VerifyEmailBanner.jsx';
 import MobileBottomNav from './MobileBottomNav.jsx';
 import MobileDrawer from './MobileDrawer.jsx';
-import ViewToggle from '../ViewToggle.jsx';
 import Paywall from '../../features/billing/Paywall.jsx';
 import SubscriptionBanner from '../../features/billing/SubscriptionBanner.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
@@ -91,8 +90,6 @@ function AppShellInner() {
       {viewport.isMobile && drawerOpen && (
         <MobileDrawer direction={tweaks.direction} onClose={() => setDrawerOpen(false)} />
       )}
-
-      <ViewToggle/>
 
       {needsPaywall && <Paywall ctx={ctx} onRefresh={refresh}/>}
     </div>

@@ -1,19 +1,38 @@
-// Floating Business ↔ Client view switcher. Bottom-center on every page in
-// both shells. Always rendered — RequireAuth already guarantees a signed-in
-// user before either shell mounts, so we don't need to second-guess it
-// here. Earlier revisions gated on a /api/me round-trip; if that request
-// was slow or errored, the pill silently disappeared. Pure URL-based now.
+// Floating Business ↔ Client view switcher. Mounted at the App root so it
+// renders on every route, regardless of which shell is active. Pure URL-based
+// — no /api/me dependency that can hide it on slow/failed fetches.
+//
+// Hidden on routes where view-switching makes no sense:
+//   • Marketing landing, sign-in/up, password flows, email verification
+//   • Public-link pages (book, sign, invoice, public site)
+//   • Onboarding wizard
+//   • Legal pages
 //
 // Going to Business as an unsubscribed user lands them in AppShell, which
 // then renders the Paywall — gating lives in one place.
-// Going to Client always works (the portal is universal and free).
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
 
+// Anything that's not a logged-in shell route. Conservative allowlist would
+// flicker the pill on auth state changes; explicit denylist keeps the pill
+// stable as we add new shell routes.
+const HIDE_PREFIXES = [
+  '/signin', '/signup', '/forgot-password', '/reset-password', '/verify-email',
+  '/onboarding',
+  '/book/', '/sign/', '/invoice/', '/site/',
+  '/privacy', '/terms',
+];
+
 export default function ViewToggle() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Hide on routes that have no concept of "Business vs Client view".
+  if (location.pathname === '/') return null;
+  if (HIDE_PREFIXES.some((p) => location.pathname === p || location.pathname.startsWith(p))) {
+    return null;
+  }
 
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
   const view = onClient ? 'client' : 'business';

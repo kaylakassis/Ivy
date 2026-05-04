@@ -1,6 +1,7 @@
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
+import ViewToggle from './components/ViewToggle.jsx';
 import RequireAuth from './features/auth/RequireAuth.jsx';
 import AuthPage from './features/auth/AuthPage.jsx';
 import ForgotPasswordPage from './features/auth/ForgotPasswordPage.jsx';
@@ -36,6 +37,7 @@ import OnboardingPage from './features/onboarding/OnboardingPage.jsx';
 
 export default function App() {
   return (
+    <>
     <Routes>
       {/* Public marketing landing — also handles "I'm logged in, where to?"
           redirect for authenticated users. */}
@@ -92,5 +94,7 @@ export default function App() {
         <Route path="/me/discover"  element={<ClientDiscover />} />
       </Route>
     </Routes>
+    <ViewToggle/>
+    </>
   );
 }
