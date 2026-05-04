@@ -120,6 +120,9 @@ async function createBooking(req, res) {
       if (!clientPhone) return badRequest(res, 'Phone number is not a valid format');
     }
     const smsConsent = !!body.smsConsent && !!clientPhone;
+    // Waitlist branch: client wants to queue for this slot instead of
+    // (or after) failing a booking attempt against a full slot.
+    const joinWaitlist = !!body.joinWaitlist;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return badRequest(res, 'date must be YYYY-MM-DD');
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
@@ -153,6 +156,39 @@ async function createBooking(req, res) {
     if (!withinAvailability(availability, weekday, start, end)) {
       return badRequest(res, 'That slot is outside booking hours');
     }
+
+    if (joinWaitlist) {
+      // Insert a waitlist entry instead of a booking. Allowed even when
+      // the slot is currently free — the client may want to be notified
+      // if the time changes; just no-op if there's already an entry
+      // from this email for the exact slot.
+      const existing = await sql`
+        SELECT id FROM waitlist_entries
+        WHERE workspace_id = ${workspaceId}
+          AND service_id = ${serviceId}
+          AND date = ${date} AND start_min = ${start} AND end_min = ${end}
+          AND client_email = ${clientEmail}
+          AND status = 'waiting'
+        LIMIT 1
+      `;
+      if (existing.rows.length > 0) {
+        return created(res, { waitlist: { id: existing.rows[0].id, alreadyJoined: true } });
+      }
+      const w = await sql`
+        INSERT INTO waitlist_entries (
+          workspace_id, service_id, client_id,
+          client_name, client_email, client_phone,
+          date, start_min, end_min, notes
+        ) VALUES (
+          ${workspaceId}, ${serviceId}, NULL,
+          ${clientName}, ${clientEmail}, ${clientPhone},
+          ${date}, ${start}, ${end}, ${notes}
+        )
+        RETURNING id
+      `;
+      return created(res, { waitlist: { id: w.rows[0].id, alreadyJoined: false } });
+    }
+
     if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity })) {
       return badRequest(res, serviceCapacity > 1
         ? 'That class just filled up — please pick another time'

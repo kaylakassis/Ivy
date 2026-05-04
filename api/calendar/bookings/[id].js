@@ -6,8 +6,10 @@ import { sql } from '../../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
 import { serializeBooking, VALID_RECURRENCE } from '../../_lib/calendar.js';
-import { syncOnBookingUpdated, syncOnBookingDeleted } from '../../_lib/googleSync.js';
+import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
+import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
+import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
 
@@ -80,9 +82,28 @@ export default async function handler(req, res) {
         WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL
       `;
       if (r.rowCount === 0) return notFound(res, 'Booking not found or already cancelled');
-      syncOnBookingDeleted({ workspaceId, googleEventId: found.rows[0].google_event_id });
+      const cancelled = found.rows[0];
+      syncOnBookingDeleted({ workspaceId, googleEventId: cancelled.google_event_id });
       // Refund the package credit if this booking consumed one.
-      await restoreCredit({ workspaceId, clientPackageId: found.rows[0].client_package_id });
+      await restoreCredit({ workspaceId, clientPackageId: cancelled.client_package_id });
+      // Promote next waitlist entry into a real booking. Best-effort —
+      // any failure logs but doesn't fail the cancel.
+      try {
+        const promoted = await promoteWaitlistOnCancel({
+          workspaceId,
+          serviceId: cancelled.service_id,
+          dateISO:   cancelled.date,
+          startMin:  cancelled.start_min,
+          endMin:    cancelled.end_min,
+        });
+        if (promoted) {
+          notifyNewBooking({ workspaceId, bookingId: promoted.id, source: 'waitlist' });
+          syncOnBookingCreated({ workspaceId, bookingId: promoted.id });
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[waitlist] promote failed on cancel:', err.message);
+      }
       return noContent(res);
     }
 

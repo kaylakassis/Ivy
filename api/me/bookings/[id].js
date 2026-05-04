@@ -14,8 +14,10 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { serializeBooking } from '../../_lib/calendar.js';
-import { syncOnBookingDeleted, syncOnBookingUpdated } from '../../_lib/googleSync.js';
+import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
+import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
+import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -55,6 +57,23 @@ export default async function handler(req, res) {
       syncOnBookingDeleted({ workspaceId: booking.workspace_id, googleEventId: booking.google_event_id });
       // Refund any consumed package credit.
       await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
+      // Promote next waitlist entry. Best-effort.
+      try {
+        const promoted = await promoteWaitlistOnCancel({
+          workspaceId: booking.workspace_id,
+          serviceId: booking.service_id,
+          dateISO:   booking.date,
+          startMin:  booking.start_min,
+          endMin:    booking.end_min,
+        });
+        if (promoted) {
+          notifyNewBooking({ workspaceId: booking.workspace_id, bookingId: promoted.id, source: 'waitlist' });
+          syncOnBookingCreated({ workspaceId: booking.workspace_id, bookingId: promoted.id });
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[waitlist] promote failed on cancel:', err.message);
+      }
       return noContent(res);
     }
 

@@ -81,7 +81,7 @@ export default function PublicBooking() {
   const svc = cal.services.find((s) => s.id === serviceId);
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekAnchor, i));
 
-  const book = async () => {
+  const book = async (joinWaitlist = false) => {
     if (!slot || !svc) return;
     setBusy(true);
     setBookErr(null);
@@ -96,12 +96,10 @@ export default function PublicBooking() {
         clientName: name,
         clientEmail: email,
         clientPhone: phone.trim() || null,
-        // Consent is gated server-side on phone presence anyway, but
-        // mirror the gate here so the form doesn't transmit a true with
-        // no phone — clearer audit trail.
         smsConsent: !!(smsOptIn && phone.trim()),
+        joinWaitlist,
       });
-      setStep('confirmed');
+      setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
     } catch (e) {
       setBookErr(e.message || 'Could not confirm — try another slot.');
     } finally {
@@ -113,7 +111,26 @@ export default function PublicBooking() {
     <PageWrap tweaks={tweaks}>
       <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
 
-      {step === 'confirmed' ? (
+      {step === 'waitlisted' ? (
+        <div className="card" style={{ padding: 36 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 99, background: 'var(--accent)', color: 'var(--accent-ink)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+            }}><Icons.Clock size={26} sw={2.4}/></div>
+            <h2 className="page-title" style={{ fontSize: 24, margin: '0 0 8px' }}>You're on the list.</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+              We'll email <b style={{ color: 'var(--fg-2)' }}>{email}</b>
+              {smsOptIn && phone.trim() ? <> and text <b style={{ color: 'var(--fg-2)' }}>{phone}</b></> : null}
+              {' '}the moment a spot opens up for{' '}
+              <b style={{ color: 'var(--fg-2)' }}>
+                {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+              </b>{' '}at <b style={{ color: 'var(--fg-2)' }}>{minToHM(slot.start)}</b>.
+              You'll be auto-booked — no action needed on your end.
+            </p>
+          </div>
+        </div>
+      ) : step === 'confirmed' ? (
         <div className="card" style={{ padding: 36 }}>
           <div style={{ textAlign: 'center' }}>
             <div style={{
@@ -175,14 +192,25 @@ export default function PublicBooking() {
               padding: '8px 12px', borderRadius: 8,
               background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
               color: 'var(--danger)', fontSize: 12.5, marginBottom: 14,
-            }}>{bookErr}</div>
+              display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+            }}>
+              <span style={{ flex: 1 }}>{bookErr}</span>
+              {/* If the failure was a full / taken slot, offer to queue
+                  instead of forcing the client to pick another time. */}
+              {/full|taken|just/i.test(bookErr) && (
+                <button onClick={() => book(true)} disabled={busy}
+                  className="btn btn-outline" style={{ fontSize: 12 }}>
+                  {busy ? '…' : 'Join the waitlist'}
+                </button>
+              )}
+            </div>
           )}
           <div style={{ display: 'flex', gap: 10 }}>
             <button className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep('pick')}>
               ← Back
             </button>
             <button className="btn btn-primary" style={{ flex: 2, justifyContent: 'center', opacity: busy ? 0.6 : 1 }}
-              disabled={!name.trim() || !email.trim() || busy} onClick={book}>
+              disabled={!name.trim() || !email.trim() || busy} onClick={() => book(false)}>
               {busy ? 'Confirming…' : 'Confirm booking'}
             </button>
           </div>

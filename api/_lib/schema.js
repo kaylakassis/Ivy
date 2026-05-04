@@ -293,6 +293,32 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_package_id UUID
   REFERENCES client_packages(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_bookings_client_package
   ON bookings(client_package_id) WHERE client_package_id IS NOT NULL;
+
+-- Waitlist. When a slot is full (solo slot already booked, or group
+-- class at capacity), clients can join a per-(service, date, start_min,
+-- end_min) queue. On cancellation, the booking-cancel paths promote
+-- the oldest waiting entry into a real booking + notify the client.
+CREATE TABLE IF NOT EXISTS waitlist_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  service_id UUID NOT NULL REFERENCES services(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  client_name TEXT NOT NULL,
+  client_email TEXT NOT NULL,
+  client_phone TEXT,
+  date DATE NOT NULL,
+  start_min INT NOT NULL,
+  end_min INT NOT NULL,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'waiting' CHECK (status IN ('waiting','promoted','cancelled')),
+  promoted_booking_id UUID REFERENCES bookings(id) ON DELETE SET NULL,
+  promoted_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_waitlist_slot
+  ON waitlist_entries(workspace_id, service_id, date, start_min, end_min, status);
+CREATE INDEX IF NOT EXISTS idx_waitlist_workspace_status
+  ON waitlist_entries(workspace_id, status, created_at);
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.
