@@ -10,6 +10,7 @@ import {
 } from './utils.js';
 import AvailabilityDrawer from './AvailabilityDrawer.jsx';
 import ShareDrawer from './ShareDrawer.jsx';
+import SyncDrawer from './SyncDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
 import ServicesDrawer from './ServicesDrawer.jsx';
 import AddBookingModal from './AddBookingModal.jsx';
@@ -204,6 +205,9 @@ export default function Calendar() {
           <button className="btn btn-outline" onClick={() => setDrawer('share')}>
             <Icons.Globe size={14}/> {!isTablet && 'Share'}
           </button>
+          <button className="btn btn-outline" onClick={() => setDrawer('sync')}>
+            <Icons.Arrow size={14}/> {!isTablet && 'Sync'}
+          </button>
           <button className="btn btn-outline" onClick={() => {
             setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '' });
             setDrawer('event');
@@ -320,6 +324,9 @@ export default function Calendar() {
           onSave={patchSettings}
           onClose={() => setDrawer(null)}
         />
+      )}
+      {drawer === 'sync' && (
+        <SyncDrawer onClose={() => setDrawer(null)}/>
       )}
       {drawer === 'event' && selectedEvent && (
         <EventDrawer
@@ -472,6 +479,7 @@ function ActionSheet({ onClose, onPick }) {
     { id: 'services',     label: 'Services',     icon: 'Dollar' },
     { id: 'availability', label: 'Availability', icon: 'Clock' },
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
+    { id: 'sync',         label: 'Calendar sync', icon: 'Arrow' },
     { id: 'block',        label: 'Block time',   icon: 'Clock' },
   ];
   return (

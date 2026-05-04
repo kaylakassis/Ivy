@@ -142,6 +142,13 @@ CREATE INDEX IF NOT EXISTS idx_calendar_settings_slug ON calendar_settings(slug)
 -- is the one-line pitch shown under the business name on the listing.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS discoverable BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
+-- iCal subscription feed. Owner generates a token and pastes the resulting
+-- URL into Google Cal / Apple Cal / Outlook to mirror their THRYVE bookings
+-- into their personal calendar. We store the sha256 of the token so leaked
+-- DB rows can't be replayed; the raw token only lives in the URL the owner
+-- shares with their own calendar app.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS ical_feed_token_hash TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS ical_feed_token_created_at TIMESTAMPTZ;
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.
