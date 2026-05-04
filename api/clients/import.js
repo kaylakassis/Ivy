@@ -13,6 +13,7 @@ import { requireUser, ensureWorkspace, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { VALID_STAGES, serializeClient } from '../_lib/clients.js';
+import { sendClientInvite } from '../_lib/clientNotify.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const MAX_ROWS = 2000;
@@ -86,6 +87,10 @@ export default async function handler(req, res) {
         if (email) existingEmails.add(email); // prevent duplicate within same batch
         created++;
         if (inserted.length < 50) inserted.push(serializeClient(ins.rows[0]));
+        // Fire invite email — best-effort, idempotent via invite_sent_at.
+        if (email) {
+          sendClientInvite({ workspaceId, clientId: ins.rows[0].id });
+        }
       } catch (err) {
         invalid++;
         errors.push({ row: i + 1, error: err.message?.slice(0, 200) || 'Insert failed' });

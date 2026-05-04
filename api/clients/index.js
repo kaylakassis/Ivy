@@ -8,6 +8,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeClient, VALID_STAGES } from '../_lib/clients.js';
 import { normalizePhone } from '../_lib/sms.js';
+import { sendClientInvite } from '../_lib/clientNotify.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -76,6 +77,10 @@ export default async function handler(req, res) {
         VALUES (${workspaceId}, ${name}, ${email}, ${phone}, ${smsConsentAt}, ${stage}, ${tags}, ${source})
         RETURNING *
       `;
+      // Best-effort invite. Skip when no email or already invited.
+      if (rows[0]?.email) {
+        sendClientInvite({ workspaceId, clientId: rows[0].id });
+      }
       return created(res, { client: serializeClient(rows[0]) });
     }
 

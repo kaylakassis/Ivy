@@ -56,13 +56,20 @@ async function processBeat({ key, hours, render }) {
   // Find users who:
   //   - signed up at least `hours` ago
   //   - don't already have welcome_sent.<key> set
-  // Cap to MAX_PER_BEAT rows per run.
+  //   - have a verified email (no point emailing addresses they can't
+  //     prove they own; reduces bounce rates too)
+  // Also pull workspace ownership + client membership so we can branch
+  // the body content per role: owners get the business-app sequence,
+  // client-only users get the portal sequence.
   const { rows } = await sql.query(
-    `SELECT id, email, name, created_at
-       FROM users
-       WHERE created_at <= NOW() - ($1 || ' hours')::interval
-         AND NOT (welcome_sent ? $2)
-       ORDER BY created_at ASC
+    `SELECT u.id, u.email, u.name, u.created_at,
+            EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id) AS is_owner,
+            EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)    AS is_client
+       FROM users u
+       WHERE u.created_at <= NOW() - ($1 || ' hours')::interval
+         AND NOT (u.welcome_sent ? $2)
+         AND u.email_verified_at IS NOT NULL
+       ORDER BY u.created_at ASC
        LIMIT ${MAX_PER_BEAT}`,
     [String(hours), key],
   );
@@ -71,18 +78,22 @@ async function processBeat({ key, hours, render }) {
   let failed = 0;
   for (const user of rows) {
     try {
-      const { subject, html } = render({
-        name: firstName(user),
-        appUrl: appUrl(),
-      });
-      await sendEmail({ to: user.email, subject, html });
-      // Merge { [key]: now } into welcome_sent — JSONB || preserves other keys.
+      // Owners see the owner sequence (run-your-business). Client-only
+      // users see the portal sequence (manage your appointments). When
+      // the renderer doesn't have a client variant for this beat
+      // (e.g. day14 is owner-only), client-only users skip silently —
+      // we still mark welcome_sent so we don't re-evaluate them.
+      const variant = user.is_owner ? 'owner' : 'client';
+      const out = render({ name: firstName(user), appUrl: appUrl(), variant });
+      if (out) {
+        await sendEmail({ to: user.email, subject: out.subject, html: out.html });
+        sent++;
+      }
       await sql`
         UPDATE users
         SET welcome_sent = welcome_sent || jsonb_build_object(${key}, NOW()::text)
         WHERE id = ${user.id}
       `;
-      sent++;
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(`[welcome ${key}] send failed for ${user.email}:`, err.message);
@@ -104,8 +115,27 @@ const SEQUENCE_FOOTER = `<p style="margin:0;font-size:11px;color:#85827B;line-he
   Reply to this email if you'd rather not get them.
 </p>`;
 
-// ---- Day 1 — "Get your first booking on the books" ----
-function renderDay1({ name, appUrl }) {
+// ---- Day 1 ----
+function renderDay1({ name, appUrl, variant }) {
+  if (variant === 'client') {
+    return {
+      subject: 'Welcome to THRYVE — your client portal',
+      html: emailShell({
+        heading: `Welcome${name ? `, ${name}` : ''} 👋`,
+        body: `<p>You've got a free THRYVE account, and that's a good thing —
+          it means every business you book with on THRYVE shows up in one
+          place: appointments, invoices, forms to sign, direct messages.</p>
+          <p><strong>One tap and you're in.</strong> Your portal lives at
+          <code style="font-family:inherit;background:#F1EEE6;padding:2px 6px;border-radius:6px;">/me</code>.</p>
+          <p>If you're new to THRYVE, browse the Discover tab to find
+          businesses near you — filter by category, price, distance, or
+          rating — and book in two taps.</p>`,
+        ctaText: 'Open my portal',
+        ctaUrl: `${appUrl}/me`,
+        footer: SEQUENCE_FOOTER,
+      }),
+    };
+  }
   return {
     subject: 'Share your booking link → first appointment',
     html: emailShell({
@@ -125,8 +155,13 @@ function renderDay1({ name, appUrl }) {
   };
 }
 
-// ---- Day 3 — "Bring your clients in" ----
-function renderDay3({ name, appUrl }) {
+// ---- Day 3 ----
+function renderDay3({ name, appUrl, variant }) {
+  if (variant === 'client') {
+    // Client doesn't need a "bring your clients in" email. Skip the
+    // beat (the cron still marks welcome_sent so we don't re-evaluate).
+    return null;
+  }
   return {
     subject: 'Adding your existing clients (without the spreadsheet pain)',
     html: emailShell({
@@ -134,13 +169,15 @@ function renderDay3({ name, appUrl }) {
       body: `<p>If you've already taken your first THRYVE booking — congrats. If
         not, here's the next move: <strong>get your existing clients in</strong>.</p>
         <p>Open the Clients tab and add the 5–10 people you work with most.
-        Just name + email. Once they're in, you can:</p>
+        Name + email is enough — they'll get a "claim your account" invite
+        automatically. Once they're in, you can:</p>
         <ul>
           <li>Send invoices with one click — they pay through a secure link.</li>
           <li>Send waivers, intake forms, or agreements they can sign in 30 seconds.</li>
           <li>Message them directly through the app. No SMS plan, no app to download.</li>
+          <li>Sell session packages upfront with deposits collected via Stripe.</li>
         </ul>
-        <p>The CSV importer is coming soon — for now, manual is the move.</p>`,
+        <p>Got a list elsewhere? Use the CSV import — it dedupes by email.</p>`,
       ctaText: 'Add my clients',
       ctaUrl: `${appUrl}/clients`,
       footer: SEQUENCE_FOOTER,
@@ -148,8 +185,31 @@ function renderDay3({ name, appUrl }) {
   };
 }
 
-// ---- Day 7 — "Meet Ivy, your AI coach" ----
-function renderDay7({ name, appUrl }) {
+// ---- Day 7 ----
+function renderDay7({ name, appUrl, variant }) {
+  if (variant === 'client') {
+    return {
+      subject: 'A week in — making the most of your portal',
+      html: emailShell({
+        heading: `One week in${name ? `, ${name}` : ''}.`,
+        body: `<p>Quick reminder of what your THRYVE portal does for you:</p>
+          <ul>
+            <li><strong>Bookings</strong> — every appointment across every
+              business you work with, in one list.</li>
+            <li><strong>Payments</strong> — invoices, paid receipts, monthly
+              spend, and any deposits owed.</li>
+            <li><strong>Documents</strong> — forms to sign before sessions
+              and signed copies you can re-download.</li>
+            <li><strong>Messages</strong> — direct chat with each business.</li>
+          </ul>
+          <p>If a business you work with isn't on THRYVE yet, you can send
+          them a short note pointing them at the app — they'll thank you.</p>`,
+        ctaText: 'Open my portal',
+        ctaUrl: `${appUrl}/me`,
+        footer: SEQUENCE_FOOTER,
+      }),
+    };
+  }
   return {
     subject: 'Meet Ivy — your AI business coach',
     html: emailShell({
@@ -173,8 +233,9 @@ function renderDay7({ name, appUrl }) {
   };
 }
 
-// ---- Day 14 — "How's it going?" ----
-function renderDay14({ name, appUrl }) {
+// ---- Day 14 ----
+function renderDay14({ name, appUrl, variant }) {
+  if (variant === 'client') return null;  // owners only
   return {
     subject: `Two weeks with THRYVE — how's it feeling?`,
     html: emailShell({

@@ -20,6 +20,7 @@ import { attachIntakeForms } from '../../_lib/intake.js';
 import { decrypt } from '../../_lib/secrets.js';
 import { createCheckoutSession } from '../../_lib/stripe.js';
 import { appUrl } from '../../_lib/tokens.js';
+import { sendClientInvite } from '../../_lib/clientNotify.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -231,6 +232,9 @@ async function createBooking(req, res) {
         RETURNING id
       `;
       clientId = newClient.rows[0].id;
+      // First-time booker — email a "claim your account" invite alongside
+      // the booking confirmation that notifyNewBooking sends.
+      sendClientInvite({ workspaceId, clientId });
     }
 
     const insert = await sql`

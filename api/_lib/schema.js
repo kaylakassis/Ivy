@@ -131,6 +131,10 @@ CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS sms_consent_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_clients_phone ON clients(phone) WHERE phone IS NOT NULL;
+-- Client-add invite. When an owner adds a client with an email (or
+-- imports them), we email a "claim your account" link once. Stamp
+-- prevents resending on rapid edits / re-imports.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS invite_sent_at TIMESTAMPTZ;
 
 -- Client portal: when an end-customer signs up to THRYVE, we link their user
 -- account to every existing 'clients' row that matches their email so they
