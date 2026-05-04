@@ -1,7 +1,7 @@
 import React from 'react';
 import { Icons } from './Icons.jsx';
 
-export default function EmptyNote({ icon = 'Check', title, hint }) {
+export default function EmptyNote({ icon = 'Check', title, hint, action }) {
   const I = Icons[icon] || Icons.Check;
   return (
     <div style={{
@@ -15,7 +15,10 @@ export default function EmptyNote({ icon = 'Check', title, hint }) {
         color: 'var(--muted)', marginBottom: 4,
       }}><I size={18} /></div>
       <div style={{ fontSize: 13, fontWeight: 500, color: 'var(--fg)' }}>{title}</div>
-      <div style={{ fontSize: 12, color: 'var(--muted)', maxWidth: 260, lineHeight: 1.45 }}>{hint}</div>
+      {hint && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', maxWidth: 260, lineHeight: 1.45 }}>{hint}</div>
+      )}
+      {action && <div style={{ marginTop: 6 }}>{action}</div>}
     </div>
   );
 }

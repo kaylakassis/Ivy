@@ -5,13 +5,35 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelPageHeader, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
 import { useClientPortal } from './clientContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 
 export default function ClientHome() {
-  const { data, loading } = useClientPortal();
+  const { data, loading, error, refresh } = useClientPortal();
   const { user } = useAuth();
-  if (loading || !data) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
+  if (loading || (!data && !error)) {
+    return (
+      <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <SkelPageHeader/>
+        <SkelStatGrid count={4}/>
+        <SkelRowList rows={3} withAvatar/>
+      </div>
+    );
+  }
+  if (error || !data) {
+    return (
+      <div className="page-pad">
+        <div className="card" style={{ padding: 28 }}>
+          <EmptyNote icon="Users" title="Couldn't load your portal"
+            hint={error?.message || 'Try refreshing.'}
+            action={refresh && (
+              <button className="btn btn-outline" onClick={refresh}>Retry</button>
+            )}/>
+        </div>
+      </div>
+    );
+  }
 
   const { memberships, summary, isClient } = data;
   const greet = greeting();

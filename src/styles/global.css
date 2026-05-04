@@ -326,3 +326,25 @@ img, svg, video { max-width: 100%; height: auto; }
   from { transform: translateX(-100%); }
   to   { transform: translateX(0); }
 }
+
+/* Skeleton placeholder — used while data is loading. The shimmer is paused
+   when the user prefers reduced motion. */
+.skel {
+  display: block;
+  border-radius: 6px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-2) 0%,
+    var(--surface) 50%,
+    var(--surface-2) 100%
+  );
+  background-size: 200% 100%;
+  animation: skel-shimmer 1.4s linear infinite;
+}
+@keyframes skel-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel { animation: none; background: var(--surface-2); }
+}

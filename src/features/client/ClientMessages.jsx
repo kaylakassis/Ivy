@@ -7,6 +7,7 @@
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelRowList } from '../../components/Skeleton.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
 import { useClientPortal } from './clientContext.jsx';
@@ -36,8 +37,11 @@ export default function ClientMessages() {
     return r.threads;
   }, []);
 
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     let live = true;
+    setLoading(true); setError(null);
     api.get('/me/threads')
       .then((r) => {
         if (!live) return;
@@ -47,7 +51,7 @@ export default function ClientMessages() {
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, [isMobile]);
+  }, [isMobile, reloadKey]);
 
   // Auto-create a thread for any business membership that doesn't have one
   // yet, so the client can send the first message.
@@ -60,11 +64,17 @@ export default function ClientMessages() {
     setSelectedId(r.thread.id);
   }, []);
 
-  if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading messages…</div>;
+  if (loading) return (
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <SkelRowList rows={5} withAvatar/>
+    </div>
+  );
   if (error) return (
     <div style={{ padding: 48 }}>
       <div className="card" style={{ padding: 40 }}>
-        <EmptyNote icon="Chat" title="Couldn't load messages" hint={error.message || 'Try refreshing.'}/>
+        <EmptyNote icon="Chat" title="Couldn't load messages"
+          hint={error.message || 'Try refreshing.'}
+          action={<button className="btn btn-outline" onClick={() => setReloadKey((n) => n + 1)}>Retry</button>}/>
       </div>
     </div>
   );
@@ -230,7 +240,11 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
     );
   }
   if (loading) {
-    return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading conversation…</div>;
+    return (
+      <div style={{ padding: 24, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <SkelRowList rows={6} withAvatar height={48}/>
+      </div>
+    );
   }
   if (error || !thread) {
     return (

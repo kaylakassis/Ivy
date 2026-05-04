@@ -3,6 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
 
 function fmtDay(iso) {
@@ -31,14 +32,17 @@ export default function ClientBookings() {
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelErr, setCancelErr]   = useState(null);
 
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     let live = true;
+    setLoading(true); setError(null);
     api.get('/me/bookings')
       .then((r) => live && setData(r))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, []);
+  }, [reloadKey]);
 
   async function doCancel() {
     if (!confirming) return;
@@ -57,11 +61,17 @@ export default function ClientBookings() {
     }
   }
 
-  if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading bookings…</div>;
+  if (loading) return (
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <SkelRowList rows={5}/>
+    </div>
+  );
   if (error) return (
     <div style={{ padding: 48 }}>
       <div className="card" style={{ padding: 40 }}>
-        <EmptyNote icon="Calendar" title="Couldn't load bookings" hint={error.message || 'Try refreshing.'}/>
+        <EmptyNote icon="Calendar" title="Couldn't load bookings"
+          hint={error.message || 'Try refreshing.'}
+          action={<button className="btn btn-outline" onClick={() => setReloadKey((n) => n + 1)}>Retry</button>}/>
       </div>
     </div>
   );

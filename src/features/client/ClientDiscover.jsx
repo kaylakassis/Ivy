@@ -4,6 +4,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelPageHeader, SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
 
 export default function ClientDiscover() {
@@ -11,15 +12,17 @@ export default function ClientDiscover() {
   const [loading, setLoading]       = useState(true);
   const [error, setError]           = useState(null);
   const [q, setQ]                   = useState('');
+  const [reloadKey, setReloadKey]   = useState(0);
 
   useEffect(() => {
     let live = true;
+    setLoading(true); setError(null);
     api.get('/me/discover')
       .then((r) => live && setBusinesses(r.businesses || []))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, []);
+  }, [reloadKey]);
 
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -30,11 +33,18 @@ export default function ClientDiscover() {
     );
   }, [businesses, q]);
 
-  if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading directory…</div>;
+  if (loading) return (
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <SkelPageHeader/>
+      <SkelRowList rows={5} withAvatar/>
+    </div>
+  );
   if (error) return (
     <div style={{ padding: 48 }}>
       <div className="card" style={{ padding: 40 }}>
-        <EmptyNote icon="Globe" title="Couldn't load Discover" hint={error.message || 'Try refreshing.'}/>
+        <EmptyNote icon="Globe" title="Couldn't load Discover"
+          hint={error.message || 'Try refreshing.'}
+          action={<button className="btn btn-outline" onClick={() => setReloadKey((n) => n + 1)}>Retry</button>}/>
       </div>
     </div>
   );

@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
 
 const STATUS_META = {
@@ -27,14 +28,17 @@ export default function ClientInvoices() {
   const [error, setError]       = useState(null);
   const [opening, setOpening]   = useState(null); // invoice id currently being opened
 
+  const [reloadKey, setReloadKey] = useState(0);
+
   useEffect(() => {
     let live = true;
+    setLoading(true); setError(null);
     api.get('/me/invoices')
       .then((r) => live && setInvoices(r.invoices || []))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, []);
+  }, [reloadKey]);
 
   const open = async (id) => {
     setOpening(id);
@@ -48,11 +52,17 @@ export default function ClientInvoices() {
     }
   };
 
-  if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading invoices…</div>;
+  if (loading) return (
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <SkelRowList rows={4}/>
+    </div>
+  );
   if (error) return (
     <div style={{ padding: 48 }}>
       <div className="card" style={{ padding: 40 }}>
-        <EmptyNote icon="Dollar" title="Couldn't load invoices" hint={error.message || 'Try refreshing.'}/>
+        <EmptyNote icon="Dollar" title="Couldn't load invoices"
+          hint={error.message || 'Try refreshing.'}
+          action={<button className="btn btn-outline" onClick={() => setReloadKey((n) => n + 1)}>Retry</button>}/>
       </div>
     </div>
   );

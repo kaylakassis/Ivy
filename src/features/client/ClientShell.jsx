@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import VerifyEmailBanner from '../../components/VerifyEmailBanner.jsx';
+import { SkelLine, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { useAuth } from '../../lib/auth.jsx';
@@ -51,7 +52,7 @@ function ClientShellInner() {
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
   if (loading) {
-    return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading your portal…</div>;
+    return <ClientShellSkeleton tweaks={tweaks} viewport={viewport}/>;
   }
 
   return (
@@ -369,5 +370,44 @@ function ClientMobileDrawer({ direction, data, onClose }) {
         </div>
       </aside>
     </>
+  );
+}
+
+// Renders the shell chrome (sidebar + topbar shape) with skeleton placeholders
+// for the page body. Avoids the dead "Loading…" flash on first paint.
+function ClientShellSkeleton({ tweaks, viewport }) {
+  return (
+    <div className={`app-root dir-${tweaks.direction}`}>
+      <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
+        {!viewport.isMobile && (
+          <aside style={{
+            width: viewport.isTablet ? 64 : 248, minWidth: viewport.isTablet ? 64 : 248,
+            background: 'var(--sidebar-bg)', borderRight: '1px solid var(--border)',
+            padding: viewport.isTablet ? '14px 8px' : '18px 14px',
+            display: 'flex', flexDirection: 'column', gap: 14,
+            height: '100vh', position: 'sticky', top: 0,
+          }}>
+            <SkelLine width="80%" height={28} style={{ borderRadius: 8 }}/>
+            {Array.from({ length: 6 }, (_, i) => (
+              <SkelLine key={i} width="100%" height={32} style={{ borderRadius: 8 }}/>
+            ))}
+          </aside>
+        )}
+        <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+          <div style={{
+            height: 56, padding: '0 20px',
+            display: 'flex', alignItems: 'center', gap: 12,
+            borderBottom: '1px solid var(--border)',
+          }}>
+            <SkelLine width={140} height={16} style={{ borderRadius: 6 }}/>
+          </div>
+          <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+            <SkelLine width={220} height={26} style={{ borderRadius: 8 }}/>
+            <SkelStatGrid count={4}/>
+            <SkelRowList rows={3} withAvatar/>
+          </div>
+        </main>
+      </div>
+    </div>
   );
 }
