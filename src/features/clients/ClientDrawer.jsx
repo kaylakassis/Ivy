@@ -2,6 +2,7 @@
 // Inline-editable: name, email, lifetime value. Stage, tags, notes also editable.
 // Shows a "Saved" / error banner after each save so failures aren't silent.
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
@@ -10,7 +11,31 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
   const [confirmDel, setConfirmDel] = useState(false);
   const [busyDel, setBusyDel] = useState(false);
   const [saveStatus, setSaveStatus] = useState(null); // { kind: 'ok' | 'error', text }
+  const [actBusy, setActBusy] = useState(null); // 'message' | 'invoice' | 'book' | null
   const statusTimer = useRef(null);
+  const navigate = useNavigate();
+
+  // Quick actions from the drawer footer. Each routes to the right page
+  // with a deep-link param so the destination can prefill / open
+  // straight to the right modal.
+  const startMessage = async () => {
+    setActBusy('message');
+    try {
+      // POST /api/messages upserts a thread for this client and returns
+      // it. /messages?threadId=X already opens that thread automatically.
+      const r = await api.post('/messages', { clientId: client.id });
+      const tid = r.thread?.id;
+      navigate(tid ? `/messages?threadId=${tid}` : '/messages');
+    } catch {
+      navigate('/messages');
+    } finally { setActBusy(null); }
+  };
+  const startInvoice = () => {
+    navigate(`/finance?newInvoice=${client.id}`);
+  };
+  const startBooking = () => {
+    navigate(`/calendar?newBooking=${client.id}`);
+  };
 
   // Wrap onUpdate so we always show a status indicator for saves.
   const safeUpdate = async (patch) => {
@@ -181,13 +206,13 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
                 <Icons.Trash size={13}/>Delete
               </button>
               <div style={{ flex: 1 }}/>
-              <button className="btn btn-outline" disabled style={{ opacity: 0.5 }}>
-                <Icons.Chat size={13}/>Message
+              <button className="btn btn-outline" onClick={startMessage} disabled={!!actBusy}>
+                <Icons.Chat size={13}/>{actBusy === 'message' ? '…' : 'Message'}
               </button>
-              <button className="btn btn-outline" disabled style={{ opacity: 0.5 }}>
+              <button className="btn btn-outline" onClick={startInvoice} disabled={!!actBusy}>
                 <Icons.Dollar size={13}/>Invoice
               </button>
-              <button className="btn btn-primary" disabled style={{ opacity: 0.5 }}>
+              <button className="btn btn-primary" onClick={startBooking} disabled={!!actBusy}>
                 <Icons.Calendar size={13}/>Book
               </button>
             </>

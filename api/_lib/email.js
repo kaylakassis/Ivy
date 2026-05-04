@@ -1,18 +1,18 @@
 // Resend wrapper. Sends transactional email (verification, password reset).
 // Env:
 //   RESEND_API_KEY (required)
-//   EMAIL_FROM     (defaults to onboarding@resend.dev — replace once you've
-//                   verified your own domain in Resend)
-//   EMAIL_REPLY_TO (optional — where replies should route; defaults to
-//                   stripping the From-name so user replies hit it)
+//   EMAIL_FROM     (defaults to onboarding@resend.dev — Resend's sandbox.
+//                   Works for sending to your own verified-on-Resend email
+//                   only. Replace once you've verified your own domain in
+//                   Resend dashboard.)
+//   EMAIL_REPLY_TO (optional — where replies should route)
 //
-// To send from your own domain instead of resend.dev:
-//   1. Add your domain in https://resend.com/domains and complete the DNS
+// Production setup once you have a domain:
+//   1. Add your domain in https://resend.com/domains and finish the DNS
 //      records they list (SPF, DKIM, DMARC). Status must read "Verified".
 //   2. Set EMAIL_FROM='THRYVE <noreply@your-domain.com>' in Vercel envs.
-//   3. Set EMAIL_REPLY_TO='support@your-domain.com' so user replies have
-//      somewhere to land.
-//   4. Hit GET /api/admin/email-status with your ADMIN_SECRET to confirm
+//   3. Set EMAIL_REPLY_TO='support@your-domain.com'.
+//   4. Hit /account → Admin → "Check email-domain status" to confirm
 //      Resend reports the domain as verified.
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -25,10 +25,6 @@ function replyToAddress() {
   return process.env.EMAIL_REPLY_TO || null;
 }
 
-function isProd() {
-  return process.env.VERCEL_ENV === 'production' || process.env.NODE_ENV === 'production';
-}
-
 function fromDomain() {
   // Pull "user@domain.tld" out of either bare or "Name <addr>" form.
   const raw = fromAddress();
@@ -36,31 +32,25 @@ function fromDomain() {
   return (m[1] || '').split('@').pop()?.toLowerCase().trim();
 }
 
-// Hard guard against the easiest deliverability footgun: deploying to
-// production with `onboarding@resend.dev` as the sender. Gmail filters
-// it aggressively into spam, so password-reset / verification emails
-// never reach the user. Refusing to send up-front is much louder than
-// "delivered to spam, no idea why".
-function assertSafeProdFrom() {
-  if (!isProd()) return;
-  const dom = fromDomain();
-  if (!process.env.EMAIL_FROM) {
-    throw new Error(
-      'EMAIL_FROM is not set. Add a verified Resend domain in production env (e.g. \'THRYVE <noreply@thryve.app>\').',
-    );
-  }
-  if (dom === 'resend.dev' || dom === 'example.com' || !dom) {
-    throw new Error(
-      `EMAIL_FROM domain "${dom}" is not deliverable in production. Verify your own domain in Resend (Domains → Add) and set EMAIL_FROM to use it.`,
-    );
+let _warnedSandbox = false;
+function warnIfSandbox() {
+  // Light warning so the operator notices in function logs that they're
+  // on the resend.dev sandbox, but DON'T block the send — Resend's
+  // sandbox does deliver to verified Resend-account addresses, which
+  // is enough to test signup-verification flows in production before a
+  // custom domain is ready.
+  if (_warnedSandbox) return;
+  if (!process.env.EMAIL_FROM || fromDomain() === 'resend.dev') {
+    // eslint-disable-next-line no-console
+    console.warn('[email] EMAIL_FROM not set (or resend.dev). Resend will only deliver to your own verified Resend-account address. Set EMAIL_FROM to a verified custom-domain sender for full delivery.');
+    _warnedSandbox = true;
   }
 }
 
 export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
-
-  assertSafeProdFrom();
+  warnIfSandbox();
 
   const body = {
     from: fromAddress(),
@@ -89,7 +79,17 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');
-    throw new Error(`Resend ${res.status}: ${detail.slice(0, 200)}`);
+    // Re-shape the most common Resend errors into something an operator
+    // can act on directly. Surfaces in /admin → Send test email.
+    if (res.status === 403 && /domain.*not.*verified|verify.*domain/i.test(detail)) {
+      throw new Error(
+        `Resend rejected: domain not verified. Add ${fromDomain()} at https://resend.com/domains and finish the DNS records. Until then, EMAIL_FROM='THRYVE <onboarding@resend.dev>' will only deliver to your own verified Resend-account address.`,
+      );
+    }
+    if (res.status === 422) {
+      throw new Error(`Resend 422 (validation): ${detail.slice(0, 240)}`);
+    }
+    throw new Error(`Resend ${res.status}: ${detail.slice(0, 240)}`);
   }
   return res.json();
 }

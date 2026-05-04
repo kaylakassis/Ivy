@@ -5,6 +5,7 @@
 // Search input is a button that opens the global CommandPalette via a
 // synthetic Cmd+K keydown — keeps this component dumb.
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 
 // Synthesize the same Cmd+K event the CommandPalette listens for. This
@@ -18,6 +19,7 @@ function openPalette() {
 
 export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, children }) {
   const compact = isMobile || isTablet;
+  const navigate = useNavigate();
 
   return (
     <header style={{
@@ -91,17 +93,13 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
         </button>
       )}
 
-      <button className="btn btn-outline" style={{
-        position: 'relative',
-        padding: isMobile ? 8 : undefined,
-      }}>
+      <button className="btn btn-outline" aria-label="Messages"
+        onClick={() => navigate('/messages')}
+        style={{
+          position: 'relative',
+          padding: isMobile ? 8 : undefined,
+        }}>
         <Icons.Bell size={isMobile ? 16 : 15}/>
-        <span style={{
-          position: 'absolute', top: 5, right: 5,
-          width: 7, height: 7, borderRadius: 99,
-          background: 'var(--accent)',
-          border: '2px solid var(--surface)',
-        }}/>
       </button>
 
       {children}

@@ -1,6 +1,7 @@
 // Finance dashboard + invoices list. Online card collection via Stripe lives
 // in the StripeConnectCard near the top of the page.
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useInvoices } from './state.js';
@@ -60,17 +61,35 @@ export default function Finance() {
   const openInv = invoices.find((i) => i.id === openId) || null;
   const sendingInv = invoices.find((i) => i.id === sendingId) || null;
 
-  const startNew = async () => {
+  const startNew = async (clientId = null) => {
     if (creatingBusy) return;
     setCreating(true);
     try {
       const inv = await create({
         items: [{ id: 'li1', description: '', quantity: 1, rate: 0 }],
         taxRate: 0, discount: 0,
+        ...(clientId ? { clientId } : {}),
       });
       setOpenId(inv.id);
     } finally { setCreating(false); }
   };
+
+  // Deep link from ClientDrawer's Invoice button: ?newInvoice=<clientId>
+  // → create a fresh draft for that client and open the editor. Strip
+  // the param so a refresh doesn't re-create.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const consumedRef = useRef(false);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cid = params.get('newInvoice');
+    if (!cid || consumedRef.current) return;
+    consumedRef.current = true;
+    params.delete('newInvoice');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    startNew(cid);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading finance…</div>;
   if (error) {

@@ -1,6 +1,7 @@
 // Owner-side Messages: thread list (left) + conversation (right).
 // Text-only for now. Attachments + doc-cards land in later phases.
 import React, { useState, useRef, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useThreads, useThread } from './state.js';
@@ -13,6 +14,22 @@ export default function Messages() {
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
   const { isMobile } = useViewport();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // ?threadId=X selects a specific conversation (deep-link from
+  // ClientDrawer's Message quick-action, push notifications, etc.)
+  // Strips the param after consuming so a refresh doesn't fight the
+  // user picking a different thread.
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tid = params.get('threadId');
+    if (!tid) return;
+    setSelectedId(tid);
+    params.delete('threadId');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // On desktop/tablet auto-select the first thread; on mobile show the list
   // first and let the user tap into a conversation.

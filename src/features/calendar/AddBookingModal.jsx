@@ -7,10 +7,26 @@ import { TimeInput, inputSty } from './Drawer.jsx';
 import { RECURRENCE_OPTIONS, fmtDateISO } from './utils.js';
 import { api } from '../../lib/api.js';
 
-export default function AddBookingModal({ services, onSubmit, onClose, defaultDate, defaultStart }) {
+export default function AddBookingModal({ services, onSubmit, onClose, defaultDate, defaultStart, defaultClientId }) {
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
   const [clientName, setClientName]   = useState('');
   const [clientEmail, setClientEmail] = useState('');
+
+  // Optional preset from "Book" quick-action in ClientDrawer. Looks up
+  // the client by id and prefills name/email so the owner only needs
+  // to pick service + time.
+  useEffect(() => {
+    if (!defaultClientId) return;
+    let cancelled = false;
+    api.get(`/clients/${defaultClientId}`)
+      .then((r) => {
+        if (cancelled || !r.client) return;
+        setClientName(r.client.name || '');
+        setClientEmail(r.client.email || '');
+      })
+      .catch(() => { /* falls back to manual entry */ });
+    return () => { cancelled = true; };
+  }, [defaultClientId]);
   const [date, setDate]   = useState(defaultDate || fmtDateISO(new Date()));
   const [start, setStart] = useState(defaultStart ?? 9 * 60);
   const [notes, setNotes] = useState('');

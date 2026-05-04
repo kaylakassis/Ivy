@@ -57,20 +57,26 @@ export function ids(memberships) {
   return memberships.map((m) => m.clientId);
 }
 
-// Does this user own a workspace? Returns { id, onboardedAt, subscription }
-// or null. (Used to decide which app to show after sign-in: business, client,
-// or a switcher — and whether to route a fresh owner through /onboarding.)
+// Does this user own a workspace? Returns { id, onboardedAt, subscription,
+// bizName, slug } or null. The biz_name + slug come from calendar_settings
+// so the sidebar workspace badge can show "Maple Massage" instead of
+// "Untitled" once the owner finishes onboarding.
 export async function ownsWorkspace(userId) {
   const { rows } = await sql`
-    SELECT id, onboarded_at,
-           subscription_status, trial_ends_at, subscription_period_end
-    FROM workspaces WHERE owner_id = ${userId} LIMIT 1
+    SELECT w.id, w.onboarded_at,
+           w.subscription_status, w.trial_ends_at, w.subscription_period_end,
+           cs.biz_name, cs.slug
+    FROM workspaces w
+    LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
+    WHERE w.owner_id = ${userId} LIMIT 1
   `;
   if (!rows.length) return null;
   const r = rows[0];
   return {
     id: r.id,
     onboardedAt: r.onboarded_at,
+    bizName: r.biz_name || null,
+    slug:    r.slug || null,
     subscription: deriveSubscription(r),
   };
 }
@@ -143,6 +149,8 @@ export async function userContext(user) {
     isClient: memberships.length > 0,
     workspaceId: workspace?.id || null,
     onboardedAt: workspace?.onboardedAt || null,
+    bizName: workspace?.bizName || null,
+    bookingSlug: workspace?.slug || null,
     subscription,
     walkthroughCompletedAt: user.walkthrough_completed_at || null,
     memberships,

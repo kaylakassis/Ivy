@@ -1,6 +1,7 @@
 // Full Clients view: header + analytics + tabs + search + table + detail drawer + add modal.
 import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useClients } from './state.js';
@@ -28,6 +29,25 @@ export default function Clients() {
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+
+  // Deep-link support so other pages can route here with a modal opened.
+  // Used by Dashboard hero "Add client" and per-client quick actions.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (params.get('add') === '1') {
+      setAddOpen(true);
+      params.delete('add');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+    if (params.get('id')) {
+      setOpenId(params.get('id'));
+      params.delete('id');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const { active, leads, paused, analytics } = useMemo(() => {
     const now = Date.now();

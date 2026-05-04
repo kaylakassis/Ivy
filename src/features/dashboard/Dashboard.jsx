@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
@@ -160,6 +160,7 @@ function ChecklistRow({ item }) {
 
 function HeroBand() {
   const hour = new Date().getHours();
+  const nav = useNavigate();
   const greet = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const dateStr = new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase();
   return (
@@ -177,8 +178,12 @@ function HeroBand() {
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-        <button className="btn btn-outline"><Icons.Calendar size={14}/>Open calendar</button>
-        <button className="btn btn-primary"><Icons.Plus size={14}/>Add client</button>
+        <button className="btn btn-outline" onClick={() => nav('/calendar')}>
+          <Icons.Calendar size={14}/>Open calendar
+        </button>
+        <button className="btn btn-primary" onClick={() => nav('/clients?add=1')}>
+          <Icons.Plus size={14}/>Add client
+        </button>
       </div>
     </div>
   );

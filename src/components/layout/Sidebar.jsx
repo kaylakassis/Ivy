@@ -3,6 +3,7 @@ import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 import { NAV } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
+import { useUserContext } from '../../lib/userContext.jsx';
 
 function initialsOf(user) {
   if (!user) return '?';
@@ -13,12 +14,18 @@ function initialsOf(user) {
 
 export default function Sidebar({ direction, variant = 'full' }) {
   const { user, signOut } = useAuth();
+  const { ctx } = useUserContext();
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const compact = variant === 'compact';
   // Filter out super-admin-only items unless the user qualifies. The
   // /admin route still exists in App.jsx — this is purely cosmetic.
   const visibleNav = NAV.filter((n) => !n.superAdminOnly || user?.isSuperAdmin);
+  // Workspace badge values. Real biz_name when the owner finished
+  // onboarding, otherwise a CTA. Either way clicking takes them to
+  // /calendar where the name + slug live.
+  const bizName = ctx?.bizName?.trim() || null;
+  const bookingSlug = ctx?.bookingSlug || null;
 
   const doSignOut = async () => {
     await signOut();
@@ -107,21 +114,34 @@ export default function Sidebar({ direction, variant = 'full' }) {
         </div>
       </div>
 
-      <button style={{
+      <button onClick={() => nav('/calendar')} style={{
         display: 'flex', alignItems: 'center', gap: 10,
         padding: '8px 10px', borderRadius: 10,
-        background: 'var(--surface)', border: '1px dashed var(--border-strong)',
-        textAlign: 'left', fontSize: 13, color: 'var(--fg-2)',
+        background: 'var(--surface)',
+        border: '1px ' + (bizName ? 'solid' : 'dashed') + ' var(--border-strong)',
+        textAlign: 'left', fontSize: 13, color: 'var(--fg-2)', cursor: 'pointer',
       }}>
         <div style={{
           width: 22, height: 22, borderRadius: 6,
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
-          color: 'var(--muted)', fontSize: 11, fontWeight: 600,
+          background: bizName ? 'var(--accent)' : 'var(--surface-2)',
+          color: bizName ? 'var(--accent-ink)' : 'var(--muted)',
+          border: bizName ? 'none' : '1px solid var(--border)',
+          fontSize: 11, fontWeight: 600,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}>+</div>
+        }}>{bizName ? bizName[0].toUpperCase() : '+'}</div>
         <div style={{ flex: 1, overflow: 'hidden' }}>
-          <div style={{ fontWeight: 550, color: 'var(--fg)', fontSize: 13, lineHeight: 1.1 }}>Name your workspace</div>
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>Untitled</div>
+          <div style={{
+            fontWeight: 550, color: 'var(--fg)', fontSize: 13, lineHeight: 1.1,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {bizName || 'Name your workspace'}
+          </div>
+          <div style={{
+            fontSize: 11, color: 'var(--muted)', marginTop: 2,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>
+            {bookingSlug ? `/book/${bookingSlug}` : 'Untitled'}
+          </div>
         </div>
         <Icons.ArrowDown size={14} stroke="var(--muted)" sw={1.8} />
       </button>

@@ -1,5 +1,6 @@
 // Owner-side Calendar: Day / Week / Month views with shared toolbar.
 import React, { useState, useEffect, useMemo } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useCalendar } from './state.js';
@@ -34,7 +35,23 @@ export default function Calendar() {
   const [drawer, setDrawer] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [addBookingOpen, setAddBookingOpen] = useState(false);
+  const [bookingDefaultClientId, setBookingDefaultClientId] = useState(null);
   const [actionsOpen, setActionsOpen] = useState(false);
+
+  // Deep link from ClientDrawer's "Book" button: ?newBooking=<clientId>
+  // → open AddBookingModal with that client's name + email pre-filled.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const cid = params.get('newBooking');
+    if (!cid) return;
+    setBookingDefaultClientId(cid);
+    setAddBookingOpen(true);
+    params.delete('newBooking');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   // Force day view on phones — the 7-column week grid is illegible on narrow
   // screens. Users can still pick week/month from the toggle if they want.
@@ -359,8 +376,9 @@ export default function Calendar() {
         <AddBookingModal
           services={cal.services}
           defaultDate={fmtDateISO(anchor)}
+          defaultClientId={bookingDefaultClientId}
           onSubmit={createBooking}
-          onClose={() => setAddBookingOpen(false)}
+          onClose={() => { setAddBookingOpen(false); setBookingDefaultClientId(null); }}
         />
       )}
     </div>
