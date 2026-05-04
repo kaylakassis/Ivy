@@ -522,6 +522,26 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_workspace_status ON invoices(workspace_id, status);
 CREATE INDEX IF NOT EXISTS idx_invoices_workspace_issued ON invoices(workspace_id, issue_date DESC);
+
+-- Expenses. Owners log deductible business spend with category +
+-- optional vendor + notes + receipt URL. Categories map to IRS
+-- Schedule C lines so the annual tax export aggregates correctly.
+CREATE TABLE IF NOT EXISTS expenses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  amount NUMERIC(12,2) NOT NULL,
+  date DATE NOT NULL,
+  category TEXT NOT NULL,
+  vendor TEXT,
+  notes TEXT,
+  receipt_url TEXT,
+  payment_method TEXT,
+  is_deductible BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_expenses_workspace_date ON expenses(workspace_id, date DESC);
+CREATE INDEX IF NOT EXISTS idx_expenses_workspace_category ON expenses(workspace_id, category, date DESC);
 -- Tracks the most recent Stripe checkout session per invoice. Webhook lookup
 -- uses this to find the invoice when checkout.session.completed fires.
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;

@@ -7,6 +7,7 @@ import { useInvoices } from './state.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import StripeConnectCard from './StripeConnectCard.jsx';
+import Expenses from './Expenses.jsx';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -24,9 +25,23 @@ export default function Finance() {
   } = useInvoices();
 
   const [tab, setTab]               = useState('all');
+  const [section, setSection]       = useState('invoices'); // 'invoices' | 'expenses'
   const [openId, setOpenId]         = useState(null);
   const [creatingBusy, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
+
+  const downloadTaxExport = () => {
+    const year = new Date().getFullYear();
+    const input = window.prompt(`Tax-year export — which year?`, year);
+    if (!input) return;
+    const y = parseInt(input, 10);
+    if (!Number.isInteger(y) || y < 2000 || y > 2100) {
+      window.alert('Year must be a 4-digit number.');
+      return;
+    }
+    // Open the CSV download in a new tab so the cookie auth carries.
+    window.location.href = `/api/finance/tax-export?year=${y}`;
+  };
 
   const counts = useMemo(() => ({
     all:     invoices.length,
@@ -79,11 +94,54 @@ export default function Finance() {
             Send invoices, track payments, watch revenue grow.
           </div>
         </div>
-        <button className="btn btn-primary" onClick={startNew} disabled={creatingBusy}>
-          <Icons.Plus size={13} sw={2}/> {creatingBusy ? 'Creating…' : 'New invoice'}
+        <button className="btn btn-outline" onClick={downloadTaxExport}
+          title="Download Schedule C-style tax summary CSV">
+          <Icons.Doc size={13}/> Tax export
         </button>
+        {section === 'invoices' && (
+          <button className="btn btn-primary" onClick={startNew} disabled={creatingBusy}>
+            <Icons.Plus size={13} sw={2}/> {creatingBusy ? 'Creating…' : 'New invoice'}
+          </button>
+        )}
       </div>
 
+      {/* Section selector: Invoices vs Expenses. */}
+      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start' }}>
+        {[
+          { id: 'invoices', label: 'Invoices' },
+          { id: 'expenses', label: 'Expenses' },
+        ].map(({ id, label }) => (
+          <button key={id} onClick={() => setSection(id)} style={{
+            padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+            background: section === id ? 'var(--surface)' : 'transparent',
+            color: section === id ? 'var(--fg)' : 'var(--muted)',
+            boxShadow: section === id ? 'var(--shadow-sm)' : 'none',
+          }}>{label}</button>
+        ))}
+      </div>
+
+      {section === 'expenses' ? (
+        <Expenses/>
+      ) : (
+        <InvoicesSection
+          invoices={invoices} summary={summary} counts={counts} rows={rows}
+          tab={tab} setTab={setTab}
+          openInv={openInv} sendingInv={sendingInv}
+          setOpenId={setOpenId} setSending={setSending}
+          update={update} remove={remove} send={send}
+          markPaid={markPaid} voidInvoice={voidInvoice} refund={refund}
+        />
+      )}
+    </div>
+  );
+}
+
+function InvoicesSection({
+  invoices, summary, counts, rows, tab, setTab, openInv, sendingInv,
+  setOpenId, setSending, update, remove, send, markPaid, voidInvoice, refund,
+}) {
+  return (
+    <>
       <StripeConnectCard/>
 
       {/* Summary cards */}
@@ -180,7 +238,7 @@ export default function Finance() {
           onClose={() => setSending(null)}
         />
       )}
-    </div>
+    </>
   );
 }
 
