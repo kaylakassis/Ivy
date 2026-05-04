@@ -135,3 +135,52 @@ export function verifyWebhookSignature({ payload, header, secret, tolerance = 30
     throw new Error('Webhook payload is not valid JSON');
   }
 }
+
+// ─── Subscription billing (THRYVE itself charging workspace owners) ──
+// These talk to *our* Stripe account, not the per-workspace one. Pass the
+// platform secret (process.env.THRYVE_STRIPE_SECRET).
+
+export async function createSubscriptionCheckoutSession({
+  secretKey, priceId, customerId, customerEmail,
+  workspaceId, successUrl, cancelUrl,
+}) {
+  const body = {
+    mode: 'subscription',
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    'line_items[0][price]': priceId,
+    'line_items[0][quantity]': 1,
+    'metadata[workspace_id]': workspaceId,
+    'subscription_data[metadata][workspace_id]': workspaceId,
+    allow_promotion_codes: true,
+  };
+  if (customerId) body.customer = customerId;
+  else if (customerEmail) body.customer_email = customerEmail;
+  const session = await stripeFetch('/checkout/sessions', {
+    method: 'POST', secretKey, body,
+  });
+  return { id: session.id, url: session.url, customer: session.customer };
+}
+
+// Stripe Customer Portal — self-serve cancel / update card / view invoices.
+// Owner clicks "Manage subscription" on the Account page.
+export async function createBillingPortalSession({
+  secretKey, customerId, returnUrl,
+}) {
+  if (!customerId) throw new Error('customerId is required');
+  const session = await stripeFetch('/billing_portal/sessions', {
+    method: 'POST', secretKey,
+    body: { customer: customerId, return_url: returnUrl },
+  });
+  return { id: session.id, url: session.url };
+}
+
+export async function fetchCheckoutSession({ secretKey, sessionId }) {
+  if (!sessionId) throw new Error('sessionId is required');
+  return stripeFetch(`/checkout/sessions/${encodeURIComponent(sessionId)}?expand[0]=subscription`, { secretKey });
+}
+
+export async function fetchSubscription({ secretKey, subscriptionId }) {
+  if (!subscriptionId) throw new Error('subscriptionId is required');
+  return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, { secretKey });
+}

@@ -9,6 +9,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
+import { useUserContext } from '../../lib/userContext.jsx';
 import { api } from '../../lib/api.js';
 
 export default function AccountPage() {
@@ -60,6 +61,8 @@ export default function AccountPage() {
         <Row label="Email verified" value={user?.email_verified_at ? 'Yes' : 'No'}/>
         <Row label="Member since" value={user?.created_at ? new Date(user.created_at).toLocaleDateString([], { dateStyle: 'long' }) : '—'}/>
       </div>
+
+      <SubscriptionCard/>
 
       {/* Export */}
       <div className="card" style={{ padding: 22 }}>
@@ -378,6 +381,126 @@ function SendTestEmailRow() {
       {err && (
         <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>
       )}
+    </div>
+  );
+}
+
+// Subscription panel — shows current state for owners and links to the
+// Stripe billing portal when there's a customer record. For client-only
+// users it renders nothing (no business workspace to subscribe).
+function SubscriptionCard() {
+  const { ctx, refresh } = useUserContext();
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+
+  if (!ctx?.isOwner) return null;
+  const sub = ctx.subscription || { status: 'inactive', isActive: false };
+
+  const openPortal = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post('/billing/portal', {});
+      if (!r.url) throw new Error('No portal URL returned');
+      window.location.href = r.url;
+    } catch (e) {
+      setErr(e.message || 'Could not open billing portal');
+      setBusy(false);
+    }
+  };
+
+  const subscribeNow = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.post('/billing/checkout', {});
+      if (!r.url) throw new Error('No checkout URL returned');
+      window.location.href = r.url;
+    } catch (e) {
+      setErr(e.message || 'Could not open checkout');
+      setBusy(false);
+    }
+  };
+
+  const startTrial = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/billing/start-trial', {});
+      await refresh();
+    } catch (e) {
+      setErr(e.message || 'Could not start trial');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const statusLabel = {
+    active:   'Active',
+    trialing: 'Free trial',
+    past_due: 'Past due',
+    cancelled:'Cancelled',
+    inactive: 'Inactive',
+  }[sub.status] || sub.status;
+  const tone =
+    sub.status === 'active'    ? 'var(--ok)'
+  : sub.status === 'trialing'  ? 'var(--accent)'
+  : sub.status === 'past_due'  ? 'var(--warn)'
+  : 'var(--muted)';
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Subscription</div>
+
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+        <span style={{
+          padding: '3px 10px', borderRadius: 99,
+          background: 'color-mix(in srgb, ' + tone + ' 14%, transparent)',
+          color: tone, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+        }}>{statusLabel}</span>
+        {sub.daysRemaining != null && (sub.status === 'trialing' || sub.status === 'active') && (
+          <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
+            {sub.daysRemaining === 0
+              ? 'Renews today'
+              : `${sub.status === 'trialing' ? 'Trial ends' : 'Renews'} in ${sub.daysRemaining} day${sub.daysRemaining === 1 ? '' : 's'}`}
+          </span>
+        )}
+      </div>
+
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        {sub.status === 'active'
+          ? 'Open the Stripe billing portal to update your card, view past invoices, or cancel.'
+        : sub.status === 'past_due'
+          ? "Stripe couldn't charge your card. Open the billing portal to update it — your access will resume automatically once the next attempt succeeds."
+        : sub.status === 'trialing'
+          ? `You're on the free trial. Subscribe any time to keep access after it ends.`
+          : 'Subscribe to keep using the business app. The client portal stays free either way.'}
+      </p>
+
+      {err && (
+        <div style={{
+          padding: '8px 12px', borderRadius: 8, marginBottom: 12,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12.5,
+        }}>{err}</div>
+      )}
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+        {sub.stripeCustomerId || sub.status === 'active' || sub.status === 'past_due' || sub.status === 'cancelled' ? (
+          <button className="btn btn-outline" onClick={openPortal} disabled={busy}>
+            {busy ? 'Opening…' : 'Manage subscription'} <Icons.Arrow size={12} sw={2}/>
+          </button>
+        ) : null}
+        {!sub.isActive && (
+          <button className="btn btn-primary" onClick={subscribeNow} disabled={busy}>
+            {busy ? 'Redirecting…' : (sub.status === 'cancelled' ? 'Resubscribe' : 'Subscribe')} <Icons.Arrow size={12} sw={2}/>
+          </button>
+        )}
+        {!sub.isActive && !sub.trialEndsAt && (
+          <button className="btn btn-ghost" onClick={startTrial} disabled={busy}
+            style={{ color: 'var(--muted)' }}>
+            Start 14-day free trial
+          </button>
+        )}
+      </div>
     </div>
   );
 }
