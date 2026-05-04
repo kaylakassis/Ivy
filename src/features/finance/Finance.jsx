@@ -1,10 +1,12 @@
-// Finance dashboard + invoices list. Phase A: manual mark-paid; Stripe later.
+// Finance dashboard + invoices list. Online card collection via Stripe lives
+// in the StripeConnectCard near the top of the page.
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useInvoices } from './state.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
+import StripeConnectCard from './StripeConnectCard.jsx';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -73,13 +75,15 @@ export default function Finance() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Finance</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Send invoices, track payments, watch revenue grow. Card collection through Stripe is next.
+            Send invoices, track payments, watch revenue grow.
           </div>
         </div>
         <button className="btn btn-primary" onClick={startNew} disabled={creatingBusy}>
           <Icons.Plus size={13} sw={2}/> {creatingBusy ? 'Creating…' : 'New invoice'}
         </button>
       </div>
+
+      <StripeConnectCard/>
 
       {/* Summary cards */}
       <div className="grid-auto">

@@ -244,6 +244,13 @@ CREATE TABLE IF NOT EXISTS finance_settings (
   default_tax_rate NUMERIC(6,3) NOT NULL DEFAULT 0,
   currency TEXT NOT NULL DEFAULT 'USD'
 );
+-- Stripe credentials, encrypted at rest. Owners paste their own restricted
+-- API key + webhook signing secret; we never see the plaintext after write.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_publishable_key TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_secret_encrypted TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret_encrypted TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_account_label TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connected_at TIMESTAMPTZ;
 
 -- Invoices. Line items live in JSONB to keep editing transactional and simple
 -- (each item: { id, description, quantity, rate }).
@@ -272,6 +279,10 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_workspace_status ON invoices(workspace_id, status);
 CREATE INDEX IF NOT EXISTS idx_invoices_workspace_issued ON invoices(workspace_id, issue_date DESC);
+-- Tracks the most recent Stripe checkout session per invoice. Webhook lookup
+-- uses this to find the invoice when checkout.session.completed fires.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_invoices_stripe_session ON invoices(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
 
 -- Goals + Tasks. Goals track progress against a target (revenue / clients /
 -- sessions / custom). Tasks are simple to-dos; "smart" tasks of certain types
