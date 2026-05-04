@@ -14,6 +14,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { serializeBooking } from '../../_lib/calendar.js';
+import { syncOnBookingDeleted, syncOnBookingUpdated } from '../../_lib/googleSync.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -50,6 +51,7 @@ export default async function handler(req, res) {
         clientId: booking.client_id,
         booking,
       });
+      syncOnBookingDeleted({ workspaceId: booking.workspace_id, googleEventId: booking.google_event_id });
       return noContent(res);
     }
 
@@ -78,6 +80,9 @@ export default async function handler(req, res) {
         booking,
         occurrenceDate: body.cancelOccurrence,
       });
+      // Updated EXDATE list → push to Google so the cancelled occurrence
+      // also drops out of the user's connected calendar.
+      syncOnBookingUpdated({ workspaceId: booking.workspace_id, bookingId: id });
       return ok(res, { booking: serializeBooking(updated.rows[0]) });
     }
 

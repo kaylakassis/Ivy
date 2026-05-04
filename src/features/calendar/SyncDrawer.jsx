@@ -1,15 +1,13 @@
-// Calendar Sync drawer — outbound iCal feed setup.
+// Calendar Sync drawer — outbound iCal feed setup + Google Calendar
+// OAuth connect (richer two-way push integration).
 //
-// Owners enable a per-workspace token and paste the resulting URL into
-// Google Cal / Apple Cal / Outlook. Their THRYVE bookings then appear in
-// their personal calendar app, read-only. Every edit / cancel still
-// happens in THRYVE — that's the point.
-//
-// We never echo a previously-issued URL back to the UI. The token's
-// hashed at write time and the raw value only exists in memory long
-// enough to return it on the regenerate response. Lost the URL?
-// Regenerate (which also revokes the old one).
+// Both options keep THRYVE as the source of truth: edits / cancels /
+// reschedules happen in the THRYVE app, then propagate out. The Google
+// option additionally creates a dedicated "THRYVE Bookings" calendar
+// in the owner's Google account so events live in their own colour-
+// coded layer rather than mixing with personal events.
 import React, { useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer from './Drawer.jsx';
 import { api } from '../../lib/api.js';
@@ -74,18 +72,21 @@ export default function SyncDrawer({ onClose }) {
 
   return (
     <Drawer title="Calendar sync"
-      subtitle="Mirror your THRYVE bookings into Google Cal, Apple Cal, or Outlook."
+      subtitle="Mirror your THRYVE bookings into your personal calendar."
       onClose={onClose}>
+
+      <GoogleSection/>
+
+      <Divider label="or use a public iCal URL"/>
 
       <div style={{
         padding: '10px 12px', borderRadius: 10, marginBottom: 14,
         background: 'var(--surface-2)', border: '1px solid var(--border)',
         fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.55,
       }}>
-        Bookings flow <strong>out</strong> of THRYVE into your personal
-        calendar — reads only. Edits, reschedules, and cancellations all
-        happen here in THRYVE, then sync to your calendar app within a few
-        minutes (Google Cal can take up to 24h on its end).
+        Works with any calendar app that supports subscriptions. One-way
+        only — edits, reschedules, and cancellations all happen here in
+        THRYVE, then sync out within a few minutes.
       </div>
 
       {status === null ? (
@@ -108,6 +109,182 @@ export default function SyncDrawer({ onClose }) {
         />
       )}
     </Drawer>
+  );
+}
+
+function Divider({ label }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, margin: '20px 0 14px' }}>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
+      <span style={{ fontSize: 11, color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600 }}>
+        {label}
+      </span>
+      <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
+    </div>
+  );
+}
+
+// Google Calendar OAuth panel. Reads /api/calendar/google/status, kicks
+// off OAuth via /connect (we redirect on the client), reflects connection
+// state, supports disconnect. Surfaces ?google=... query params left by
+// the callback flow so the user sees a clear success / error banner.
+function GoogleSection() {
+  const [params, setParams] = useSearchParams();
+  const [status, setStatus] = useState(null);
+  const [busy, setBusy]     = useState(null);
+  const [err, setErr]       = useState(null);
+
+  const load = async () => {
+    try {
+      const r = await api.get('/calendar/google/status');
+      setStatus(r);
+    } catch (e) {
+      setStatus({ configured: false, connected: false });
+      setErr(e.message || null);
+    }
+  };
+  useEffect(() => { load(); }, []);
+
+  // After the OAuth round-trip, the callback bounces us back here with
+  // ?google=... — surface it as a banner, then strip from the URL.
+  const callbackFlag = params.get('google');
+  useEffect(() => {
+    if (!callbackFlag) return;
+    if (callbackFlag === 'connected') load();
+    const t = setTimeout(() => {
+      const next = new URLSearchParams(params);
+      next.delete('google');
+      setParams(next, { replace: true });
+    }, 6000);
+    return () => clearTimeout(t);
+  }, [callbackFlag]);
+
+  const connect = async () => {
+    setBusy('connect'); setErr(null);
+    try {
+      const r = await api.get('/calendar/google/connect');
+      if (!r.url) throw new Error('Could not start Google connect');
+      window.location.href = r.url;
+    } catch (e) {
+      setErr(e.message || 'Could not start Google connect');
+      setBusy(null);
+    }
+  };
+
+  const disconnect = async () => {
+    setBusy('disconnect'); setErr(null);
+    try {
+      await api.post('/calendar/google/disconnect', {});
+      await load();
+    } catch (e) {
+      setErr(e.message || 'Could not disconnect');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  if (!status) {
+    return <div style={{ fontSize: 12, color: 'var(--muted)' }}>Loading Google…</div>;
+  }
+
+  if (!status.configured) {
+    return (
+      <div style={{
+        padding: '10px 12px', borderRadius: 10, marginBottom: 14,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        fontSize: 12, color: 'var(--muted)', lineHeight: 1.5,
+      }}>
+        Google Calendar sync isn't configured on this deployment. Ask an
+        admin to set <code>GOOGLE_OAUTH_CLIENT_ID</code> and{' '}
+        <code>GOOGLE_OAUTH_CLIENT_SECRET</code> in Vercel env.
+      </div>
+    );
+  }
+
+  return (
+    <>
+      <div style={{ marginBottom: 8 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>
+          <Icons.Globe size={13} sw={1.7}/> Google Calendar
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+          Two-way push: bookings appear in a dedicated "THRYVE Bookings"
+          calendar in your Google account, updated within seconds when
+          you edit them in THRYVE.
+        </div>
+      </div>
+
+      {callbackFlag && <CallbackBanner flag={callbackFlag}/>}
+
+      {err && (
+        <div style={{
+          padding: '8px 12px', borderRadius: 8, margin: '10px 0',
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12.5,
+        }}>{err}</div>
+      )}
+
+      {status.connected ? (
+        <div style={{
+          marginTop: 10, padding: '10px 12px', borderRadius: 10,
+          background: 'color-mix(in srgb, var(--ok) 12%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--ok) 35%, transparent)',
+          display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+        }}>
+          <Icons.Check size={14} sw={2.2} stroke="var(--ok)"/>
+          <div style={{ flex: 1, minWidth: 160 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--ok)' }}>Connected</div>
+            <div style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 2 }}>
+              {status.email || 'Google account'}
+              {status.connectedAt && (
+                <> · since {new Date(status.connectedAt).toLocaleDateString([], { dateStyle: 'medium' })}</>
+              )}
+            </div>
+          </div>
+          <button onClick={disconnect} disabled={busy != null}
+            className="btn btn-ghost"
+            style={{ color: 'var(--danger)', fontSize: 12.5 }}>
+            {busy === 'disconnect' ? 'Disconnecting…' : 'Disconnect'}
+          </button>
+        </div>
+      ) : (
+        <button onClick={connect} disabled={busy != null}
+          className="btn btn-primary"
+          style={{ width: '100%', justifyContent: 'center', padding: '10px 14px', marginTop: 10 }}>
+          {busy === 'connect' ? 'Redirecting…' : 'Connect Google Calendar'}
+          {busy !== 'connect' && <Icons.Arrow size={13} sw={2.2}/>}
+        </button>
+      )}
+    </>
+  );
+}
+
+function CallbackBanner({ flag }) {
+  const map = {
+    connected:        { tone: 'ok',    text: "You're connected. Bookings will start syncing now." },
+    denied:           { tone: 'muted', text: 'Connection cancelled — you can reconnect any time.' },
+    'state-mismatch': { tone: 'warn',  text: 'Authorization mismatch (try again from this tab).' },
+    'no-refresh':     { tone: 'warn',  text: 'Google did not return a refresh token. Reconnect from your Google account settings to retry.' },
+    invalid:          { tone: 'warn',  text: 'Invalid OAuth response.' },
+    unconfigured:     { tone: 'warn',  text: 'Google integration not configured on this deployment.' },
+    error:            { tone: 'warn',  text: 'Something went wrong. Try again.' },
+  };
+  const m = map[flag] || { tone: 'muted', text: flag };
+  const bg     = m.tone === 'ok' ? 'color-mix(in srgb, var(--ok) 10%, transparent)'
+              : m.tone === 'warn' ? 'rgba(155,44,44,0.08)'
+              : 'var(--surface-2)';
+  const border = m.tone === 'ok' ? 'color-mix(in srgb, var(--ok) 35%, transparent)'
+              : m.tone === 'warn' ? 'rgba(155,44,44,0.25)'
+              : 'var(--border)';
+  const fg     = m.tone === 'ok' ? 'var(--ok)'
+              : m.tone === 'warn' ? 'var(--danger)'
+              : 'var(--fg-2)';
+  return (
+    <div style={{
+      marginTop: 10, padding: '8px 12px', borderRadius: 8,
+      background: bg, border: `1px solid ${border}`,
+      color: fg, fontSize: 12.5,
+    }}>{m.text}</div>
   );
 }
 

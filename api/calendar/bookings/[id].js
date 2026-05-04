@@ -6,6 +6,7 @@ import { sql } from '../../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
 import { serializeBooking, VALID_RECURRENCE } from '../../_lib/calendar.js';
+import { syncOnBookingUpdated, syncOnBookingDeleted } from '../../_lib/googleSync.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
 
@@ -39,6 +40,7 @@ export default async function handler(req, res) {
           WHERE id = ${id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
+        syncOnBookingUpdated({ workspaceId, bookingId: id });
         return ok(res, { booking: serializeBooking(updated.rows[0]) });
       }
 
@@ -67,6 +69,7 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       const { rows } = await sql.query(queryText, values);
+      syncOnBookingUpdated({ workspaceId, bookingId: id });
       return ok(res, { booking: serializeBooking(rows[0]) });
     }
 
@@ -76,6 +79,7 @@ export default async function handler(req, res) {
         WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL
       `;
       if (r.rowCount === 0) return notFound(res, 'Booking not found or already cancelled');
+      syncOnBookingDeleted({ workspaceId, googleEventId: found.rows[0].google_event_id });
       return noContent(res);
     }
 

@@ -11,6 +11,7 @@ import {
   hasConflict, withinAvailability, serializeBooking, VALID_RECURRENCE,
 } from '../_lib/calendar.js';
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
+import { syncOnBookingCreated } from '../_lib/googleSync.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -96,6 +97,8 @@ export default async function handler(req, res) {
     // Auto-create the client-side chat thread + send the client a confirmation.
     // Don't notify the owner here (they're the one who just created it).
     notifyNewBooking({ workspaceId, bookingId: insert.rows[0].id, source: 'owner' });
+    // Best-effort Google Calendar push. Failures log + skip; never block.
+    syncOnBookingCreated({ workspaceId, bookingId: insert.rows[0].id });
     return created(res, { booking: serializeBooking(insert.rows[0]) });
   } catch (err) {
     return serverError(res, err);

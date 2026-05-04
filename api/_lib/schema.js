@@ -149,6 +149,14 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
 -- shares with their own calendar app.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS ical_feed_token_hash TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS ical_feed_token_created_at TIMESTAMPTZ;
+-- Google Calendar OAuth: refresh_token encrypted at rest (uses _lib/secrets).
+-- google_calendar_id is the dedicated "THRYVE Bookings" calendar we create
+-- on connect; google_email is for display on the Sync drawer ("connected
+-- as kayla@gmail.com"). Disconnecting clears all four.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_refresh_token_encrypted TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_calendar_id TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_email TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_connected_at TIMESTAMPTZ;
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.
@@ -209,6 +217,9 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS cancelled_occurrences DATE[] NOT N
 -- a string (e.g. '120' for the 2-hour reminder); values are ISO timestamps.
 -- The cron checks reminders_sent ? key so each beat fires exactly once.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminders_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Google Calendar event id, set when we successfully push a booking into
+-- the workspace's connected Google Cal. Lets us PUT/DELETE later.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_event_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
 
 -- Messaging: one thread per (workspace, client). Mode controls whether the
