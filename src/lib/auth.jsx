@@ -25,8 +25,9 @@ export function AuthProvider({ children }) {
 
   // mode: 'owner' (default — creates a workspace) or 'client' (no workspace,
   // claims existing client records by email match).
-  const signUp = useCallback(async (email, password, name, mode = 'owner') => {
-    const r = await api.post('/auth/signup', { email, password, name, mode });
+  // ref: optional affiliate code preserved from ?ref=CODE on the signup URL.
+  const signUp = useCallback(async (email, password, name, mode = 'owner', ref = null) => {
+    const r = await api.post('/auth/signup', { email, password, name, mode, ref });
     setUser(r.user);
     return r;
   }, []);

@@ -39,16 +39,19 @@ WHERE onboarded_at IS NULL
 -- Subscription state. Owners need an active sub (or live trial) to use the
 -- business app — the client portal is always free. Status mirrors Stripe's:
 --   trialing | active | past_due | cancelled | inactive
--- New workspaces start trialing for 14 days. Existing workspaces get the
--- same grace window so the rollout doesn't paywall anyone overnight.
+-- New workspaces start trialing for 28 days. Existing workspaces get a
+-- grace window so the rollout doesn't paywall anyone overnight.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_status    TEXT NOT NULL DEFAULT 'trialing';
-ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at          TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '14 days');
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at          TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '28 days');
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_period_end TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+-- Update the column default for any future workspace inserts that bypass
+-- the explicit value (e.g. raw SQL admin tooling).
+ALTER TABLE workspaces ALTER COLUMN trial_ends_at SET DEFAULT (NOW() + INTERVAL '28 days');
 -- One-time backfill for any workspace that existed before this column was
 -- added (the DEFAULT only applies to inserts).
-UPDATE workspaces SET trial_ends_at = NOW() + INTERVAL '14 days'
+UPDATE workspaces SET trial_ends_at = NOW() + INTERVAL '28 days'
 WHERE trial_ends_at IS NULL AND subscription_status = 'trialing';
 
 CREATE TABLE IF NOT EXISTS websites (
@@ -93,6 +96,82 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_sent JSONB NOT NULL DEFAULT '
 -- the Account page via a Replay button that POSTs { reset: true } and
 -- nulls this back out.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS walkthrough_completed_at TIMESTAMPTZ;
+
+-- User classification — independent of subscription state.
+--   'regular'    default. Honors normal billing rules.
+--   'sponsored'  comp account: full app access without a subscription.
+--                Bypasses Paywall via the userContext virtual sub flag.
+--   'affiliate'  the human owns an affiliate code in `affiliates`. Can
+--                also be `regular` + sponsored if needed; user_type just
+--                records the primary classification for admin filtering.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT 'regular';
+DO $$ BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'users_user_type_check') THEN
+    ALTER TABLE users ADD CONSTRAINT users_user_type_check
+      CHECK (user_type IN ('regular', 'sponsored', 'affiliate'));
+  END IF;
+END $$;
+CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)
+  WHERE user_type <> 'regular';
+
+-- Affiliate program. One row per affiliate user; `code` is what they
+-- share, ?ref=CODE on /signup attributes the conversion. Owner-side the
+-- admin can rotate the code without breaking past attributions because
+-- they're stored on affiliate_uses by id, not code.
+CREATE TABLE IF NOT EXISTS affiliates (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  code TEXT NOT NULL UNIQUE,
+  display_name TEXT,
+  notes TEXT,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_affiliates_user ON affiliates(user_id);
+
+-- Each click-through-and-signup. We stamp the affiliate at signup time
+-- (?ref=CODE) so attribution survives later code rotation. `became_paid_at`
+-- + `monthly_value_cents` populate when the referred user starts paying so
+-- the admin can compute revenue-per-affiliate.
+CREATE TABLE IF NOT EXISTS affiliate_uses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  affiliate_id UUID NOT NULL REFERENCES affiliates(id) ON DELETE CASCADE,
+  referred_user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  signed_up_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  became_paid_at TIMESTAMPTZ,
+  monthly_value_cents INT
+);
+CREATE INDEX IF NOT EXISTS idx_affiliate_uses_affiliate
+  ON affiliate_uses(affiliate_id, signed_up_at DESC);
+CREATE INDEX IF NOT EXISTS idx_affiliate_uses_paid
+  ON affiliate_uses(affiliate_id, became_paid_at)
+  WHERE became_paid_at IS NOT NULL;
+
+-- Lightweight support inbox. Each user has at most one open thread; the
+-- admin replies inline. Polling-based — realtime can come later. Mirrors
+-- the message_threads / messages pattern but a separate table so support
+-- traffic doesn't pollute the per-business chat table.
+CREATE TABLE IF NOT EXISTS support_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'closed')),
+  unread_admin INT NOT NULL DEFAULT 0,
+  unread_user  INT NOT NULL DEFAULT 0,
+  last_message_at TIMESTAMPTZ,
+  last_message_preview TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE TABLE IF NOT EXISTS support_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES support_threads(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('user', 'admin')),
+  text TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_support_messages_thread
+  ON support_messages(thread_id, created_at);
 -- Backfill: any user already past the whole 14-day window when this column
 -- lands gets marked as fully sent so the cron doesn't retroactively spam
 -- pre-existing accounts. Self-correcting via the empty-jsonb check.

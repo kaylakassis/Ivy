@@ -1,6 +1,6 @@
 // Shared Sign In / Sign Up screen. `mode` prop toggles between them.
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import AuthShell from './AuthShell.jsx';
@@ -8,6 +8,11 @@ import AuthShell from './AuthShell.jsx';
 export default function AuthPage({ mode = 'signin' }) {
   const { signIn, signUp } = useAuth();
   const nav       = useNavigate();
+  const location  = useLocation();
+  // ?ref=CODE survives all the way to the signup POST so affiliate
+  // attribution lands. Lowercased keys handled server-side; only
+  // honored on the signup path.
+  const refCode   = new URLSearchParams(location.search).get('ref');
   const [email,    setEmail]    = useState('');
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
@@ -30,7 +35,7 @@ export default function AuthPage({ mode = 'signin' }) {
     setBusy(true);
     try {
       if (isSignUp) {
-        await signUp(email, password, name || null, role);
+        await signUp(email, password, name || null, role, refCode);
         nav(role === 'client' ? '/me' : '/', { replace: true });
       } else {
         await signIn(email, password);

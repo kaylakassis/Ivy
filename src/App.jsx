@@ -20,6 +20,7 @@ import PublicInvoice from './features/finance/PublicInvoice.jsx';
 import Website from './features/website/Website.jsx';
 import IvyPro from './features/ivy/IvyPro.jsx';
 import AccountPage from './features/account/AccountPage.jsx';
+import AdminPage from './features/admin/AdminPage.jsx';
 import ClientShell from './features/client/ClientShell.jsx';
 import ClientHome from './features/client/ClientHome.jsx';
 import ClientMessages from './features/client/ClientMessages.jsx';
@@ -81,6 +82,7 @@ export default function App() {
         <Route path="/website"    element={<Website />} />
         <Route path="/ivy"        element={<IvyPro />} />
         <Route path="/account"    element={<AccountPage />} />
+        <Route path="/admin"      element={<AdminPage />} />
       </Route>
 
       {/* Client portal shell (auth-gated). Anyone can navigate here directly;

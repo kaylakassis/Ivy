@@ -16,6 +16,9 @@ export default function Sidebar({ direction, variant = 'full' }) {
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
   const compact = variant === 'compact';
+  // Filter out super-admin-only items unless the user qualifies. The
+  // /admin route still exists in App.jsx — this is purely cosmetic.
+  const visibleNav = NAV.filter((n) => !n.superAdminOnly || user?.isSuperAdmin);
 
   const doSignOut = async () => {
     await signOut();
@@ -42,7 +45,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
         </div>
 
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {NAV.map((item) => {
+          {visibleNav.map((item) => {
             const Icon = Icons[item.icon] || Icons.Home;
             return (
               <NavLink key={item.id} to={item.to} end={item.to === '/'} title={item.label}
@@ -124,7 +127,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
       </button>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {NAV.map(item => {
+        {visibleNav.map(item => {
           const IconComp = Icons[item.icon] || Icons.Home;
           return (
             <NavLink

@@ -1,5 +1,5 @@
 // POST /api/billing/start-trial
-// Starts (or re-starts) a 14-day trial for the owner's workspace, but only
+// Starts (or re-starts) a 28-day trial for the owner's workspace, but only
 // if they're not already in an active state. Idempotent — calling while
 // already trialing/active is a no-op.
 //
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     const { rows } = await sql`
       UPDATE workspaces SET
         subscription_status = 'trialing',
-        trial_ends_at       = NOW() + INTERVAL '14 days'
+        trial_ends_at       = NOW() + INTERVAL '28 days'
       WHERE id = ${workspaceId}
       RETURNING subscription_status, trial_ends_at, subscription_period_end
     `;

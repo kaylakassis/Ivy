@@ -2,17 +2,30 @@
 //
 // An endpoint is reachable by a super-admin if EITHER:
 //   • The request carries `x-admin-secret: $ADMIN_SECRET` (curl / scripts), OR
-//   • There's an authenticated session whose user.email matches
-//     $SUPER_ADMIN_EMAIL (in-app admin panel buttons).
+//   • There's an authenticated session whose user.email matches one of the
+//     allowlisted super-admin emails (in-app admin panel buttons).
+//
+// The allowlist is the union of:
+//   • DEFAULT_SUPER_ADMINS below (the operator's hardcoded address — keeps
+//     the admin panel reachable even before any env vars are set in a
+//     fresh deploy)
+//   • SUPER_ADMIN_EMAIL env var (comma-separated list, lowercased)
 //
 // Both auth paths are kept so existing curl playbooks still work.
 import { requireUser, readSession } from './auth.js';
 import { sql } from './db.js';
 
+const DEFAULT_SUPER_ADMINS = ['kayla@market-theory.com'];
+
+export function superAdminEmails() {
+  const fromEnv = (process.env.SUPER_ADMIN_EMAIL || '')
+    .split(/[,;\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean);
+  return new Set([...DEFAULT_SUPER_ADMINS, ...fromEnv]);
+}
+
 export function emailIsSuperAdmin(email) {
-  const expected = (process.env.SUPER_ADMIN_EMAIL || '').toLowerCase().trim();
-  if (!expected) return false;
-  return (email || '').toLowerCase() === expected;
+  if (!email) return false;
+  return superAdminEmails().has(String(email).toLowerCase().trim());
 }
 
 // Returns true if the caller should be allowed. Sends 401 + returns false

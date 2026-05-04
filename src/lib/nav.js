@@ -1,4 +1,10 @@
 // Shared navigation config for Sidebar + breadcrumbs.
+//
+// Items with `superAdminOnly: true` are filtered out of the rendered
+// sidebar for everyone except super-admins (Sidebar.jsx checks
+// useAuth().user.isSuperAdmin and skips them otherwise). The route still
+// exists in App.jsx — visibility is purely cosmetic; the API endpoints
+// behind /admin already enforce super-admin auth.
 export const NAV = [
   { id: 'dashboard', to: '/dashboard',  label: 'Dashboard',      icon: 'Home' },
   { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users' },
@@ -10,6 +16,7 @@ export const NAV = [
   { id: 'docs',      to: '/documents',  label: 'Documents',      icon: 'Doc' },
   { id: 'website',   to: '/website',    label: 'Website',        icon: 'Globe' },
   { id: 'ivy',       to: '/ivy',        label: 'Ivy Pro',        icon: 'Spark', accent: true },
+  { id: 'admin',     to: '/admin',      label: 'Admin',          icon: 'Settings', superAdminOnly: true },
 ];
 
 export const TITLES = {
@@ -23,4 +30,5 @@ export const TITLES = {
   docs:      { title: 'Documents',     subtitle: 'Notes & files' },
   website:   { title: 'Website',       subtitle: 'Public presence' },
   ivy:       { title: 'Ivy Pro',       subtitle: 'Your AI coach' },
+  admin:     { title: 'Admin',         subtitle: 'Operator console' },
 };

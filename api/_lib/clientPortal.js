@@ -113,18 +113,37 @@ export async function userContext(user) {
     ownsWorkspace(user.id),
     myClientIds(user),
   ]);
+
+  // Sponsored accounts are comp'd by the platform — we synthesize an
+  // always-active subscription so the Paywall renders nothing for them
+  // even if their workspace row's columns drift from the admin endpoint.
+  const isSponsored = user.user_type === 'sponsored';
+  let subscription = workspace?.subscription || null;
+  if (isSponsored && workspace) {
+    subscription = {
+      status: 'active',
+      isActive: true,
+      inTrial: false,
+      trialEndsAt: null,
+      periodEndsAt: null,
+      daysRemaining: null,
+      sponsored: true,
+    };
+  }
+
   return {
     user: {
       id: user.id,
       email: user.email,
       name: user.name,
       emailVerifiedAt: user.email_verified_at,
+      userType: user.user_type || 'regular',
     },
     isOwner:  !!workspace,
     isClient: memberships.length > 0,
     workspaceId: workspace?.id || null,
     onboardedAt: workspace?.onboardedAt || null,
-    subscription: workspace?.subscription || null,
+    subscription,
     walkthroughCompletedAt: user.walkthrough_completed_at || null,
     memberships,
   };

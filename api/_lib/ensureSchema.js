@@ -21,7 +21,7 @@ import { SCHEMA_SQL } from './schema.js';
 // One cheap SELECT to detect whether the latest schema is applied. Update
 // this when a new schema delta ships so the next cold start triggers the
 // full migration once.
-const PROBE_QUERY = 'SELECT last_overdue_reminder_at FROM documents LIMIT 1';
+const PROBE_QUERY = 'SELECT 1 FROM affiliates LIMIT 1';
 
 let applied = false;
 let inFlight = null;

@@ -70,6 +70,8 @@ export default function AccountPage() {
 
       <NotificationsCard/>
 
+      <SupportCard/>
+
       <WalkthroughCard/>
 
       {/* Export */}
@@ -512,7 +514,7 @@ function SubscriptionCard() {
         {!sub.isActive && !sub.trialEndsAt && (
           <button className="btn btn-ghost" onClick={startTrial} disabled={busy}
             style={{ color: 'var(--muted)' }}>
-            Start 14-day free trial
+            Start 28-day free trial
           </button>
         )}
       </div>
@@ -625,6 +627,107 @@ function NotificationsCard() {
             </button>
           )}
         </>
+      )}
+    </div>
+  );
+}
+
+// Lightweight support inbox. Users post a question, the super-admin sees
+// it in /admin → Support and replies. Polls every 15s when the panel is
+// open so a reply lands without a manual refresh.
+function SupportCard() {
+  const [data, setData] = useState(null);
+  const [text, setText] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+  const [open, setOpen] = useState(false);
+
+  const load = async () => {
+    try {
+      const r = await api.get('/support');
+      setData(r);
+    } catch (e) { setErr(e.message); }
+  };
+
+  useEffect(() => {
+    if (!open) return;
+    load();
+    const id = setInterval(load, 15000);
+    return () => clearInterval(id);
+  }, [open]);
+
+  const send = async () => {
+    const t = text.trim();
+    if (!t) return;
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/support', { text: t });
+      setText('');
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Help</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Contact support</h3>
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Stuck on something or have feedback? Send us a message — we'll
+        reply right here. You'll get a push notification when we do
+        (if you've enabled them).
+      </p>
+      {!open ? (
+        <button onClick={() => setOpen(true)} className="btn btn-outline">
+          <Icons.Chat size={13} sw={1.7}/> Open support chat
+        </button>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{
+            background: 'var(--surface-2)', borderRadius: 10, padding: 10,
+            maxHeight: 320, overflow: 'auto',
+            display: 'flex', flexDirection: 'column', gap: 8,
+            border: '1px solid var(--border)',
+          }}>
+            {data?.messages?.length ? data.messages.map((m) => (
+              <div key={m.id} style={{
+                alignSelf: m.sender === 'user' ? 'flex-end' : 'flex-start',
+                maxWidth: '82%',
+                padding: '8px 12px', borderRadius: 12,
+                fontSize: 13.5, lineHeight: 1.5,
+                background: m.sender === 'user' ? 'var(--accent)' : 'var(--surface)',
+                color: m.sender === 'user' ? 'var(--accent-ink)' : 'var(--fg)',
+                border: m.sender === 'user' ? 'none' : '1px solid var(--border)',
+                whiteSpace: 'pre-wrap',
+              }}>{m.text}</div>
+            )) : (
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', textAlign: 'center', padding: 16 }}>
+                No messages yet. Send one below to start the conversation.
+              </div>
+            )}
+          </div>
+          {err && (
+            <div style={{
+              padding: '6px 10px', borderRadius: 8, fontSize: 12,
+              background: 'rgba(155,44,44,0.08)', color: 'var(--danger)',
+              border: '1px solid rgba(155,44,44,0.25)',
+            }}>{err}</div>
+          )}
+          <div style={{ display: 'flex', gap: 8 }}>
+            <input value={text} onChange={(e) => setText(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); send(); } }}
+              placeholder="What's on your mind?" disabled={busy}
+              style={{
+                flex: 1, padding: '10px 12px', borderRadius: 10,
+                background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+                color: 'var(--fg)', fontSize: 13.5, outline: 'none',
+              }}/>
+            <button onClick={send} disabled={busy || !text.trim()}
+              className="btn btn-primary" style={{ padding: '8px 14px' }}>
+              <Icons.Arrow size={13} sw={2}/>
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

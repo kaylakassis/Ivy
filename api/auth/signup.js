@@ -14,7 +14,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   try {
-    const { email, password, name, mode } = await readBody(req);
+    const { email, password, name, mode, ref } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || password.length < 8) {
       return badRequest(res, 'Password must be at least 8 characters');
@@ -23,6 +23,12 @@ export default async function handler(req, res) {
     // signing up to view their bookings/invoices/messages from businesses
     // that already added them to a workspace as a client record.
     const role = mode === 'client' ? 'client' : 'owner';
+    // Affiliate code: only honored if it matches an active affiliates row.
+    // Stored on affiliate_uses by id so a later code rotation doesn't
+    // detach attribution.
+    const refCode = typeof ref === 'string' && ref.trim()
+      ? ref.trim().toUpperCase().slice(0, 40)
+      : null;
 
     const ip = getClientIp(req);
     const blocked = await enforce(req, res, [
@@ -52,6 +58,23 @@ export default async function handler(req, res) {
         UPDATE clients SET user_id = ${user.id}
         WHERE email = ${emailKey} AND user_id IS NULL
       `;
+    }
+
+    // Affiliate attribution. Best-effort — never fail signup over this.
+    if (refCode) {
+      try {
+        const aff = await sql`SELECT id FROM affiliates WHERE code = ${refCode} AND active = TRUE`;
+        if (aff.rows.length > 0) {
+          await sql`
+            INSERT INTO affiliate_uses (affiliate_id, referred_user_id)
+            VALUES (${aff.rows[0].id}, ${user.id})
+            ON CONFLICT (referred_user_id) DO NOTHING
+          `;
+        }
+      } catch (refErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[signup] affiliate attribution failed:', refErr.message);
+      }
     }
 
     setSessionCookie(res, signSession(user.id));

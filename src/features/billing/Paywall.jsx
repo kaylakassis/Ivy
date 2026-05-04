@@ -110,7 +110,7 @@ export default function Paywall({ ctx, onRefresh }) {
             : wasPaid       ? 'Your subscription has ended'
             : trialExpired  ? 'Your free trial has ended'
             : everTrialed   ? 'Subscribe to continue'
-            :                 'Start your 14-day free trial'}
+            :                 'Start your 28-day free trial'}
           </h2>
           <p style={{ margin: '8px 0 0', color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55 }}>
             {busy === 'syncing'
@@ -161,7 +161,7 @@ export default function Paywall({ ctx, onRefresh }) {
               <button onClick={startTrial} disabled={busy != null}
                 className="btn btn-outline"
                 style={{ flex: 1, justifyContent: 'center', padding: '12px 14px' }}>
-                {busy === 'trial' ? 'Starting…' : 'Start 14-day free trial'}
+                {busy === 'trial' ? 'Starting…' : 'Start 28-day free trial'}
               </button>
             )}
             <button onClick={subscribe} disabled={busy != null}
