@@ -23,6 +23,17 @@ function fmtTime(iso) {
   return d.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
+// Hash-stable accent palette so each business gets the same coloured avatar
+// chip every time, matching how Discover renders its banners. Keeps the
+// portal feeling like one design language across pages.
+const AVATAR_PALETTE = ['#C8D8FF', '#FFD1DC', '#D0E8D0', '#FFE3B0', '#E0D4F7', '#CDEBF0'];
+function avatarBg(seed) {
+  const s = String(seed || '');
+  let h = 0;
+  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
+}
+
 export default function ClientMessages() {
   const { isMobile } = useViewport();
   const { data: ctx } = useClientPortal();
@@ -157,22 +168,21 @@ export default function ClientMessages() {
 }
 
 function ThreadRow({ thread, active, onClick }) {
-  const initials = (thread.businessName || '?')
-    .split(/\s+/).filter(Boolean).slice(0, 2)
-    .map((p) => p[0].toUpperCase()).join('');
+  const initial = (thread.businessName || '?').trim()[0]?.toUpperCase() || '?';
   return (
     <button onClick={onClick} style={{
-      display: 'flex', width: '100%', alignItems: 'center', gap: 10,
-      padding: '12px 16px', textAlign: 'left',
+      display: 'flex', width: '100%', alignItems: 'center', gap: 12,
+      padding: '14px 16px', textAlign: 'left',
       background: active ? 'var(--surface-2)' : 'transparent',
       borderBottom: '1px solid var(--border)', cursor: 'pointer',
     }}>
       <div style={{
-        width: 38, height: 38, borderRadius: 12, flexShrink: 0,
-        background: 'var(--accent-soft)', color: 'var(--accent)',
+        width: 40, height: 40, borderRadius: 12, flexShrink: 0,
+        background: avatarBg(thread.clientId || thread.businessName),
+        color: '#333',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontSize: 13, fontWeight: 600,
-      }}>{initials}</div>
+        fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17,
+      }}>{initial}</div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
           <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1, minWidth: 0,
@@ -279,11 +289,12 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
           </button>
         )}
         <div style={{
-          width: 36, height: 36, borderRadius: 12, flexShrink: 0,
-          background: 'var(--accent-soft)', color: 'var(--accent)',
+          width: 38, height: 38, borderRadius: 12, flexShrink: 0,
+          background: avatarBg(thread.clientId || thread.businessName),
+          color: '#333',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
-          fontSize: 13, fontWeight: 600,
-        }}>{(thread.businessName || '?').split(/\s+/).filter(Boolean).slice(0, 2).map((p) => p[0].toUpperCase()).join('')}</div>
+          fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17,
+        }}>{(thread.businessName || '?').trim()[0]?.toUpperCase() || '?'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{thread.businessName}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
