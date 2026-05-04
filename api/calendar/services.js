@@ -74,6 +74,18 @@ export default async function handler(req, res) {
         return badRequest(res, `services[${idx}].intakeFormTemplateIds must be UUIDs`);
       }
 
+      const depositType = s?.depositType || 'none';
+      if (!['none', 'percent', 'fixed'].includes(depositType)) {
+        return badRequest(res, `services[${idx}].depositType must be none / percent / fixed`);
+      }
+      const depositAmount = Number(s?.depositAmount ?? 0);
+      if (!Number.isFinite(depositAmount) || depositAmount < 0) {
+        return badRequest(res, `services[${idx}].depositAmount must be non-negative`);
+      }
+      if (depositType === 'percent' && depositAmount > 100) {
+        return badRequest(res, `services[${idx}].depositAmount must be 0–100 when type is percent`);
+      }
+
       cleaned.push({
         id: s?.id || null,
         name,
@@ -86,6 +98,8 @@ export default async function handler(req, res) {
         reminderMinutes,
         capacity,
         intakeFormTemplateIds,
+        depositType,
+        depositAmount,
       });
     }
 
@@ -135,7 +149,9 @@ export default async function handler(req, res) {
             prep_instructions = ${s.prepInstructions},
             reminder_minutes = ${s.reminderMinutes},
             capacity = ${s.capacity},
-            intake_form_template_ids = ${s.intakeFormTemplateIds}
+            intake_form_template_ids = ${s.intakeFormTemplateIds},
+            deposit_type = ${s.depositType},
+            deposit_amount = ${s.depositAmount}
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -146,12 +162,12 @@ export default async function handler(req, res) {
           INSERT INTO services (
             workspace_id, name, duration_minutes, price, display_order,
             description, photo_url, prep_instructions, reminder_minutes, capacity,
-            intake_form_template_ids
+            intake_form_template_ids, deposit_type, deposit_amount
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
             ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity},
-            ${s.intakeFormTemplateIds}
+            ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount}
           )
           RETURNING *
         `;

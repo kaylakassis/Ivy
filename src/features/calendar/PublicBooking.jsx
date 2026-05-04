@@ -88,7 +88,7 @@ export default function PublicBooking() {
     try {
       // Same URL as the GET; method is POST. Avoids a sibling [slug]/ dir
       // that would conflict with [slug].js in Vercel's function bundling.
-      await api.post('/calendar/public/' + encodeURIComponent(slug), {
+      const r = await api.post('/calendar/public/' + encodeURIComponent(slug), {
         serviceId: svc.id,
         date: slot.dateISO,
         startMin: slot.start,
@@ -99,6 +99,14 @@ export default function PublicBooking() {
         smsConsent: !!(smsOptIn && phone.trim()),
         joinWaitlist,
       });
+      // If the service requires a deposit AND the workspace has Stripe
+      // connected, the server returned a Checkout URL — redirect there.
+      // The slot is already held by the booking, so a cancelled deposit
+      // payment doesn't release it (owner can still chase the deposit).
+      if (r.depositCheckoutUrl) {
+        window.location.href = r.depositCheckoutUrl;
+        return;
+      }
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
     } catch (e) {
       setBookErr(e.message || 'Could not confirm — try another slot.');

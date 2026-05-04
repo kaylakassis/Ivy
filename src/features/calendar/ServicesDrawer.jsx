@@ -59,6 +59,8 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       reminderMinutes: [...DEFAULT_REMINDERS],
       capacity: 1,
       intakeFormTemplateIds: [],
+      depositType: 'none',
+      depositAmount: 0,
     };
     setItems((xs) => [...xs, draft]);
     setEditId(id);
@@ -86,6 +88,8 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
         reminderMinutes: (s.reminderMinutes || []).slice(),
         capacity: Number(s.capacity) || 1,
         intakeFormTemplateIds: (s.intakeFormTemplateIds || []).slice(),
+        depositType: s.depositType || 'none',
+        depositAmount: Number(s.depositAmount) || 0,
       })));
       onClose();
     } catch (e) {
@@ -309,6 +313,33 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             selected={service.intakeFormTemplateIds || []}
             onChange={(intakeFormTemplateIds) => onChange({ intakeFormTemplateIds })}
           />
+        </Field>
+
+        <Field label="Deposit"
+          hint={service.depositType === 'percent'
+            ? `Charged at booking. ${Math.round((Number(service.price || 0) * Number(service.depositAmount || 0)) / 100 * 100) / 100} of $${Number(service.price || 0).toFixed(0)}.`
+            : service.depositType === 'fixed'
+            ? `Flat amount charged at booking. Balance owed at session.`
+            : 'Pay the full price after the session (default).'}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <select value={service.depositType || 'none'}
+              onChange={(e) => onChange({ depositType: e.target.value })}
+              style={inputSty}>
+              <option value="none">No deposit</option>
+              <option value="percent">% of price</option>
+              <option value="fixed">Fixed $ amount</option>
+            </select>
+            <input type="number" min={0} step={service.depositType === 'percent' ? 1 : 0.01}
+              max={service.depositType === 'percent' ? 100 : 1e7}
+              value={service.depositAmount || 0}
+              onChange={(e) => onChange({ depositAmount: Math.max(0, Number(e.target.value) || 0) })}
+              disabled={(service.depositType || 'none') === 'none'}
+              placeholder={service.depositType === 'percent' ? '50' : '25.00'}
+              style={{
+                ...inputSty,
+                opacity: (service.depositType || 'none') === 'none' ? 0.5 : 1,
+              }}/>
+          </div>
         </Field>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>

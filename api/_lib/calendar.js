@@ -51,7 +51,28 @@ export function serializeService(row) {
     reminderMinutes:   row.reminder_minutes || DEFAULT_REMINDERS.slice(),
     capacity:          row.capacity || 1,
     intakeFormTemplateIds: row.intake_form_template_ids || [],
+    depositType:       row.deposit_type || 'none',
+    depositAmount:     Number(row.deposit_amount || 0),
   };
+}
+
+// Compute the deposit owed for a booking against this service. Accepts
+// either a serialized service (camelCase) or a raw row (snake_case).
+// Always returns a non-negative 2dp number.
+export function depositFor(service, totalPrice) {
+  if (!service) return 0;
+  const type = service.deposit_type || service.depositType || 'none';
+  const amt  = Number(service.deposit_amount ?? service.depositAmount ?? 0);
+  const price = Number(totalPrice ?? service.price ?? 0);
+  if (!price || type === 'none') return 0;
+  if (type === 'percent') {
+    const pct = Math.min(100, Math.max(0, amt));
+    return Math.round(price * pct) / 100;
+  }
+  if (type === 'fixed') {
+    return Math.min(price, Math.max(0, Math.round(amt * 100) / 100));
+  }
+  return 0;
 }
 
 // Default reminder schedule in minutes-before-appointment.
@@ -93,6 +114,9 @@ export function serializeBooking(row, opts = {}) {
       : (row.recurrence_until || null),
     cancelledOccurrences,
     clientPackageId:     row.client_package_id || null,
+    depositRequired:     Number(row.deposit_required || 0),
+    depositPaid:         Number(row.deposit_paid || 0),
+    depositPaidAt:       row.deposit_paid_at || null,
   };
 }
 

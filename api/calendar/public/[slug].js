@@ -10,13 +10,16 @@ import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
-  hasConflict, withinAvailability,
+  hasConflict, withinAvailability, depositFor,
 } from '../../_lib/calendar.js';
 import { validEmail } from '../../_lib/auth.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
+import { decrypt } from '../../_lib/secrets.js';
+import { createCheckoutSession } from '../../_lib/stripe.js';
+import { appUrl } from '../../_lib/tokens.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -135,7 +138,7 @@ async function createBooking(req, res) {
 
     // Verify service belongs to this workspace and duration matches.
     const svcRows = await sql`
-      SELECT id, duration_minutes, capacity FROM services
+      SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount FROM services
       WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
     if (svcRows.rows.length === 0) return badRequest(res, 'Unknown service');
@@ -143,6 +146,7 @@ async function createBooking(req, res) {
       return badRequest(res, 'Slot duration does not match service');
     }
     const serviceCapacity = Math.max(1, Number(svcRows.rows[0].capacity) || 1);
+    const depositRequired = depositFor(svcRows.rows[0]);
 
     // Don't allow booking in the past.
     const now = new Date();
@@ -230,11 +234,62 @@ async function createBooking(req, res) {
     }
 
     const insert = await sql`
-      INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, client_phone, date, start_min, end_min, notes)
-      VALUES (${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone}, ${date}, ${start}, ${end}, ${notes})
+      INSERT INTO bookings (
+        workspace_id, service_id, client_id, client_name, client_email, client_phone,
+        date, start_min, end_min, notes, deposit_required
+      )
+      VALUES (
+        ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
+        ${date}, ${start}, ${end}, ${notes}, ${depositRequired}
+      )
       RETURNING *
     `;
     const b = insert.rows[0];
+
+    // If a deposit is required AND the workspace has Stripe connected,
+    // mint a Checkout session for the deposit and return its URL so
+    // the public booker can redirect the client to pay. Failures here
+    // don't block the booking — the slot is held; owner can collect
+    // the deposit manually later.
+    let depositCheckoutUrl = null;
+    if (depositRequired > 0) {
+      try {
+        const fs = await sql`
+          SELECT stripe_secret_encrypted, currency
+          FROM finance_settings WHERE workspace_id = ${workspaceId}
+        `;
+        const enc = fs.rows[0]?.stripe_secret_encrypted;
+        if (enc) {
+          const secretKey = decrypt(enc);
+          const base = appUrl();
+          const session = await createCheckoutSession({
+            secretKey,
+            invoice: {
+              id: `bookdep_${b.id}`,
+              number: `Deposit · ${b.id.slice(0, 8)}`,
+              workspace_id: workspaceId,
+            },
+            currency: (fs.rows[0]?.currency || 'USD').toUpperCase(),
+            totalCents: Math.round(depositRequired * 100),
+            successUrl: `${base}/book/${encodeURIComponent(slug)}?deposit=paid`,
+            cancelUrl:  `${base}/book/${encodeURIComponent(slug)}?deposit=cancelled`,
+            customerEmail: clientEmail,
+          });
+          depositCheckoutUrl = session.url;
+          // Persist the session_id so the webhook can match it back to
+          // the booking. Reuse the bookings.deposit_payment_intent slot
+          // post-payment; for now stash the session id there as the
+          // forward pointer (webhook overwrites with the PI).
+          await sql`
+            UPDATE bookings SET deposit_payment_intent = ${session.id}
+            WHERE id = ${b.id}
+          `;
+        }
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[deposit] checkout session failed:', err.message);
+      }
+    }
     // Side effects (thread + emails). Don't await — the public booker
     // should see "confirmed!" without waiting on Resend round-trips.
     notifyNewBooking({ workspaceId, bookingId: b.id, source: 'public' });
@@ -246,7 +301,9 @@ async function createBooking(req, res) {
         date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : b.date,
         startMin: b.start_min,
         endMin: b.end_min,
+        depositRequired,
       },
+      depositCheckoutUrl,
     });
   } catch (err) {
     return serverError(res, err);

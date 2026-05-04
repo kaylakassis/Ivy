@@ -71,10 +71,37 @@ export default async function handler(req, res) {
     if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
       return res.status(400).json({ error: 'workspace mismatch' });
     }
-    if (!invoiceId) return ok(res, { received: true, ignored: 'no metadata' });
     if (session.payment_status !== 'paid') {
       return ok(res, { received: true, ignored: `payment_status=${session.payment_status}` });
     }
+
+    // Deposit checkout flow: the public booking endpoint stashes the
+    // session_id on bookings.deposit_payment_intent as a forward
+    // pointer. Recognize that pattern by metadata.invoice_id starting
+    // with 'bookdep_' OR by looking up a booking with the session id.
+    if ((invoiceId && String(invoiceId).startsWith('bookdep_')) || !invoiceId) {
+      const { rows: bRows } = await sql`
+        SELECT id, deposit_required, deposit_paid, activity FROM bookings
+        WHERE workspace_id = ${workspaceId} AND deposit_payment_intent = ${sessionId}
+        LIMIT 1
+      `;
+      if (bRows.length > 0) {
+        const booking = bRows[0];
+        const paymentIntent = typeof session.payment_intent === 'string'
+          ? session.payment_intent
+          : session.payment_intent?.id || null;
+        await sql`
+          UPDATE bookings SET
+            deposit_paid           = ${booking.deposit_required},
+            deposit_paid_at        = NOW(),
+            deposit_payment_intent = ${paymentIntent}
+          WHERE id = ${booking.id} AND workspace_id = ${workspaceId}
+        `;
+        return ok(res, { received: true, marked: 'deposit-paid', bookingId: booking.id });
+      }
+      // Fall through if no matching booking — invoice case below.
+    }
+    if (!invoiceId) return ok(res, { received: true, ignored: 'no metadata' });
 
     // Look up + verify the invoice belongs to this workspace before mutating.
     const { rows: invRows } = await sql`

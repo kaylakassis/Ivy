@@ -354,6 +354,20 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS capacity INT NOT NULL DEFAULT 1
   CHECK (capacity >= 1 AND capacity <= 1000);
 ALTER TABLE services ADD COLUMN IF NOT EXISTS reminder_minutes INT[] NOT NULL DEFAULT ARRAY[10080, 2880, 1440, 120]::int[];
 CREATE INDEX IF NOT EXISTS idx_services_workspace ON services(workspace_id, display_order);
+-- Deposit policy. type='percent' → amount is 0–100 % of price.
+-- type='fixed' → amount is USD. type='none' → pay-on-completion (default).
+ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_type TEXT NOT NULL DEFAULT 'none'
+  CHECK (deposit_type IN ('none', 'percent', 'fixed'));
+ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+-- Per-booking deposit tracking. deposit_required is the snapshot of
+-- what's owed at booking time (price * percent or fixed); deposit_paid
+-- is what's actually been collected. payment_intent enables Stripe
+-- refunds when a booking is cancelled.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_required NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_paid NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_paid_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS deposit_payment_intent TEXT;
 
 CREATE TABLE IF NOT EXISTS calendar_blocks (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
