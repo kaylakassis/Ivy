@@ -11,6 +11,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { serializeThread, serializeMessage } from '../../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
+import { notifyOwnerSafe } from '../../_lib/push.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -84,6 +85,16 @@ export default async function handler(req, res) {
          WHERE id = $2 AND client_id = ANY($3)`,
         [preview, id, myIds],
       );
+      // Notify the workspace owner (best-effort).
+      notifyOwnerSafe({
+        workspaceId: thread.workspace_id,
+        payload: {
+          title: `Message from ${thread.client_name || 'a client'}`,
+          body: preview,
+          url: `/messages/${id}`,
+          tag: `thread-${id}`,
+        },
+      });
       return created(res, { message: serializeMessage(inserted.rows[0]) });
     }
 

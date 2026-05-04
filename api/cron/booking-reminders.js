@@ -17,6 +17,7 @@ import { sendClientSms } from '../_lib/sms.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
+import { notifyClientSafe } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 
 // Per-run cap so a backlog (cron paused for a day, etc.) doesn't blow
@@ -45,7 +46,7 @@ export default async function handler(req, res) {
     // reminder beat (1 week) plus a buffer.
     const { rows } = await sql`
       SELECT
-        b.id, b.client_email, b.client_name,
+        b.id, b.client_id, b.client_email, b.client_name,
         COALESCE(b.client_phone, c.phone) AS client_phone,
         c.sms_consent_at,
         b.date, b.start_min, b.end_min, b.notes,
@@ -117,6 +118,20 @@ export default async function handler(req, res) {
               SET reminders_sent = reminders_sent || jsonb_build_object(${key}, NOW()::text)
               WHERE id = ${r.id}
             `;
+            // Push reminder to the client too (no-op if they haven't
+            // claimed the portal or enabled push). Idempotency rides on
+            // the reminders_sent stamp above — we only get here once.
+            if (r.client_id) {
+              notifyClientSafe({
+                clientId: r.client_id,
+                payload: {
+                  title: `Reminder: ${r.service_name || 'Session'} ${describeWindow(minsNum)}`,
+                  body: `${r.biz_name || 'Your business'} · ${fmtDay(dateISO)} at ${fmtTime(r.start_min)}`,
+                  url: `/me`,
+                  tag: `reminder-${r.id}-${key}`,
+                },
+              });
+            }
             sent++;
           } catch (err) {
             // eslint-disable-next-line no-console

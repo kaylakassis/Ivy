@@ -9,6 +9,7 @@ import { readBody } from '../_lib/body.js';
 import { fetchOwnedThread, serializeThread, serializeMessage } from '../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
+import { notifyClientSafe } from '../_lib/push.js';
 
 const VALID_MODES = new Set(['two-way', 'one-way']);
 
@@ -61,6 +62,17 @@ export default async function handler(req, res) {
           unread_client = unread_client + 1
         WHERE id = ${id} AND workspace_id = ${workspaceId}
       `;
+      // Notify the client (no-op if they haven't claimed their portal
+      // account or haven't enabled push).
+      notifyClientSafe({
+        clientId: thread.client_id,
+        payload: {
+          title: 'New message',
+          body: preview,
+          url: `/me/messages/${id}`,
+          tag: `thread-${id}`,
+        },
+      });
       return created(res, { message: serializeMessage(inserted.rows[0]) });
     }
 

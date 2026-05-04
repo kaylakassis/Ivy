@@ -136,6 +136,25 @@ CREATE INDEX IF NOT EXISTS idx_clients_phone ON clients(phone) WHERE phone IS NO
 -- prevents resending on rapid edits / re-imports.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS invite_sent_at TIMESTAMPTZ;
 
+-- Web Push subscriptions. One row per (user, browser/device). Each
+-- subscription is an endpoint URL + the public ECDH + auth keys the
+-- browser issued. We strip rows on 404/410 from the push provider so
+-- stale subscriptions clear themselves.
+CREATE TABLE IF NOT EXISTS push_subscriptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  endpoint TEXT NOT NULL,
+  p256dh_key TEXT NOT NULL,
+  auth_key TEXT NOT NULL,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_user_endpoint
+  ON push_subscriptions(user_id, endpoint);
+CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
+  ON push_subscriptions(user_id);
+
 -- Client portal: when an end-customer signs up to THRYVE, we link their user
 -- account to every existing 'clients' row that matches their email so they
 -- can see their data across multiple businesses they book with. user_id
@@ -480,6 +499,9 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS is_template BOOLEAN NOT NULL DEFA
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES documents(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_documents_templates
   ON documents(workspace_id) WHERE is_template = TRUE;
+-- Stamps the last time the doc-reminders cron pinged the owner about this
+-- still-unsigned document. Used to throttle the nag — once a week max.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS last_overdue_reminder_at TIMESTAMPTZ;
 -- Per-service intake-form attachment. UUID[] of document template ids
 -- to clone + send when a booking against this service is created.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS intake_form_template_ids UUID[] NOT NULL DEFAULT '{}'::uuid[];

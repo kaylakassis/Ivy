@@ -5,12 +5,16 @@
 //   • (Super-admin only) Admin panel: run migrations, test email, etc.
 //
 // Future tabs (billing, team, notifications) will mount alongside.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { api } from '../../lib/api.js';
+import {
+  pushSupported, permissionState, getSubscription,
+  subscribePush, unsubscribePush,
+} from '../../lib/push.js';
 
 export default function AccountPage() {
   const { user, refresh } = useAuth();
@@ -63,6 +67,8 @@ export default function AccountPage() {
       </div>
 
       <SubscriptionCard/>
+
+      <NotificationsCard/>
 
       <WalkthroughCard/>
 
@@ -280,6 +286,13 @@ function AdminPanel() {
           fetcher={() => api.post('/cron/booking-reminders')}
           actionLabel="Run now"
           successText={(r) => `Scanned ${r.scanned}, sent ${r.sent}, failed ${r.failed}.`}
+        />
+        <ActionRow
+          label="Trigger document-reminder cron now"
+          desc="Pings owners (and clients) about documents still unsigned 3+ days after sending."
+          fetcher={() => api.post('/cron/doc-reminders')}
+          actionLabel="Run now"
+          successText={(r) => `Scanned ${r.scanned}, pinged ${r.pinged}.`}
         />
       </div>
     </div>
@@ -503,6 +516,116 @@ function SubscriptionCard() {
           </button>
         )}
       </div>
+    </div>
+  );
+}
+
+// Push-notifications opt-in. Real `Notification.requestPermission()` only
+// works inside a user gesture, so the toggle has to be a plain button —
+// no auto-prompt on mount. Once granted, the browser remembers; we just
+// reflect the current state on every render.
+function NotificationsCard() {
+  const [supported, setSupported] = useState(true);
+  const [perm, setPerm]   = useState('default');
+  const [active, setActive] = useState(false);
+  const [busy, setBusy]   = useState(false);
+  const [err, setErr]     = useState(null);
+
+  const refresh = async () => {
+    if (!pushSupported()) { setSupported(false); return; }
+    setPerm(permissionState());
+    try {
+      const sub = await getSubscription();
+      setActive(!!sub);
+    } catch {
+      setActive(false);
+    }
+  };
+
+  useEffect(() => { refresh(); }, []);
+
+  const enable = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await subscribePush();
+      await refresh();
+    } catch (e) {
+      setErr(e.message || 'Could not enable notifications');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const disable = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await unsubscribePush();
+      await refresh();
+    } catch (e) {
+      setErr(e.message || 'Could not disable notifications');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Notifications</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Push notifications</h3>
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Get notified the moment something needs you — new messages, signed
+        documents, paid invoices, booking confirmations, and reminders for
+        clients who haven't completed their forms yet. We never use these for
+        marketing.
+      </p>
+
+      {!supported && (
+        <div style={{
+          padding: '8px 12px', borderRadius: 8, fontSize: 12.5,
+          background: 'var(--surface-2)', color: 'var(--fg-2)',
+        }}>
+          This browser doesn't support push notifications. Try Chrome, Edge,
+          Firefox, or install THRYVE to your home screen on iOS.
+        </div>
+      )}
+
+      {supported && perm === 'denied' && (
+        <div style={{
+          padding: '10px 12px', borderRadius: 8, fontSize: 12.5,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)',
+        }}>
+          Notifications are blocked for this site. Open your browser's site
+          settings, allow notifications for THRYVE, and reload this page.
+        </div>
+      )}
+
+      {supported && perm !== 'denied' && (
+        <>
+          {err && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 8, marginBottom: 12,
+              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+              color: 'var(--danger)', fontSize: 12.5,
+            }}>{err}</div>
+          )}
+          {active ? (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+              <span style={{ fontSize: 12, color: 'var(--ok)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                <Icons.Check size={12} sw={2.4}/> Notifications are on for this device.
+              </span>
+              <button className="btn btn-outline" onClick={disable} disabled={busy}
+                style={{ padding: '6px 12px', fontSize: 12 }}>
+                {busy ? 'Turning off…' : 'Turn off on this device'}
+              </button>
+            </div>
+          ) : (
+            <button className="btn btn-primary" onClick={enable} disabled={busy}>
+              {busy ? 'Enabling…' : 'Enable notifications'}
+            </button>
+          )}
+        </>
+      )}
     </div>
   );
 }

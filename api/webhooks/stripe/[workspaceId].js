@@ -12,6 +12,7 @@ import { readRawBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature } from '../../_lib/stripe.js';
 import { computeTotals } from '../../_lib/finance.js';
+import { notifyOwnerSafe } from '../../_lib/push.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
@@ -149,6 +150,16 @@ export default async function handler(req, res) {
         updated_at             = NOW()
       WHERE id = ${inv.id} AND workspace_id = ${workspaceId} AND status <> 'paid'
     `;
+
+    notifyOwnerSafe({
+      workspaceId,
+      payload: {
+        title: 'Invoice paid',
+        body: `${inv.number} · ${fmtMoney(totals.total)}`,
+        url: `/finance/invoices`,
+        tag: `invoice-paid-${inv.id}`,
+      },
+    });
 
     return ok(res, { received: true, marked: 'paid' });
   } catch (err) {

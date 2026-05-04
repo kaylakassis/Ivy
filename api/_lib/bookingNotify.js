@@ -13,6 +13,7 @@ import { sql } from './db.js';
 import { sendEmail, emailShell } from './email.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
+import { notifyOwnerSafe } from './push.js';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -97,6 +98,21 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         dateLabel,
         timeLabel,
         notes: ctx.notes,
+      }));
+    }
+
+    // 4. Push notification to owner — same gating as the email (public
+    //    bookings only). Useful when the owner has the app open in
+    //    another tab or installed as a PWA.
+    if (source === 'public') {
+      tasks.push(notifyOwnerSafe({
+        workspaceId,
+        payload: {
+          title: 'New booking',
+          body: `${ctx.client_name || 'A client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,
+          url: `/calendar`,
+          tag: `booking-${ctx.id}`,
+        },
       }));
     }
 

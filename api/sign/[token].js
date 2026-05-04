@@ -13,6 +13,7 @@ import {
   serializeDocPublic, cleanFields, VALID_FIELD_TYPES,
 } from '../_lib/documents.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { notifyOwnerSafe } from '../_lib/push.js';
 import crypto from 'node:crypto';
 
 function hashToken(raw) {
@@ -155,6 +156,16 @@ async function signDoc(req, res) {
       // eslint-disable-next-line no-console
       console.error('[sign] thread message failed:', msgErr.message);
     }
+
+    notifyOwnerSafe({
+      workspaceId: doc.workspace_id,
+      payload: {
+        title: 'Document signed',
+        body: `${doc.recipient_name || 'A client'} completed "${doc.name}"`,
+        url: `/documents`,
+        tag: `doc-signed-${doc.id}`,
+      },
+    });
 
     return ok(res, { document: serializeDocPublic(updated.rows[0]) });
   } catch (err) {

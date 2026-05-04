@@ -16,6 +16,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedDoc, serializeDoc } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
@@ -119,6 +120,17 @@ export default async function handler(req, res) {
       // eslint-disable-next-line no-console
       console.error('[documents/send] thread message failed:', msgErr.message);
     }
+
+    notifyClientSafe({
+      clientId,
+      payload: {
+        title: 'Document needs your signature',
+        body: doc.name,
+        url: `/me/documents`,
+        tag: `doc-${doc.id}`,
+        requireInteraction: true,
+      },
+    });
 
     return ok(res, { document: serializeDoc(updated.rows[0]) });
   } catch (err) {
