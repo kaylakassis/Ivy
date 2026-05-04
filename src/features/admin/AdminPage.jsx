@@ -381,19 +381,62 @@ function CreateUserModal({ onClose, onCreated }) {
   );
 }
 
+// Roles surfaced in the modal — five buttons that fully reconcile
+// users.user_type AND workspace subscription state on the server side.
+// Order goes from "no perks" → "all perks" so the row reads left-to-right.
+const ROLES = [
+  { id: 'regular',         label: 'Regular',          desc: 'Default. Honors normal billing.' },
+  { id: 'business-trial',  label: 'Business · Trial', desc: '28-day full-access trial.' },
+  { id: 'business-active', label: 'Business · Active', desc: 'Manually flag as paying.' },
+  { id: 'sponsored',       label: 'Sponsored',        desc: 'Comp full access, no sub.' },
+  { id: 'affiliate',       label: 'Affiliate',        desc: 'Auto-creates a referral code.' },
+];
+
+// Map a user's current state onto a single ROLES.id so the active button
+// gets the primary highlight. Subscription state takes precedence over
+// user_type when classifying — a sponsored user shows "Sponsored" even
+// if their workspace also happens to be 'active'.
+function currentRole(user) {
+  if (user.userType === 'sponsored') return 'sponsored';
+  if (user.userType === 'affiliate') return 'affiliate';
+  const ws = user.workspace;
+  if (ws?.status === 'active')   return 'business-active';
+  if (ws?.status === 'trialing'
+    && ws.trialEndsAt && new Date(ws.trialEndsAt) > new Date()) return 'business-trial';
+  return 'regular';
+}
+
 function UserDetailModal({ user, onClose, onChanged }) {
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   const action = async (label, fn) => {
     setBusy(label); setErr(null); setInfo(null);
-    try { await fn(); setInfo(`${label} ✓`); }
+    try {
+      await fn();
+      setInfo(`${label} ✓`);
+      onChanged?.();
+    }
     catch (e) { setErr(e.message); }
     finally { setBusy(null); }
   };
 
-  const setType = (t) => action(`Set type → ${t}`, () => api.patch(`/admin/users/${user.id}`, { userType: t }));
+  const setRole = (r) => action(
+    `Set role → ${r}`,
+    () => api.patch(`/admin/users/${user.id}`, { role: r }),
+  );
+
+  const doDelete = async () => {
+    setBusy('Deleting'); setErr(null); setInfo(null);
+    try {
+      await api.del(`/admin/users/${user.id}`);
+      onChanged?.();   // closes modal + refreshes list
+    } catch (e) { setErr(e.message); setBusy(null); setConfirmDelete(false); }
+  };
+
+  const active = currentRole(user);
 
   return (
     <Modal title={user.email} onClose={onClose}>
@@ -414,15 +457,19 @@ function UserDetailModal({ user, onClose, onChanged }) {
 
         <hr style={{ border: 0, borderTop: '1px solid var(--border)', margin: '6px 0' }}/>
 
-        <div className="metric-label" style={{ marginBottom: 4 }}>Change type</div>
+        <div className="metric-label" style={{ marginBottom: 4 }}>Role</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-          {['regular', 'sponsored', 'affiliate'].map((t) => (
-            <button key={t} disabled={!!busy} onClick={() => setType(t)}
-              className={`btn ${user.userType === t ? 'btn-primary' : 'btn-outline'}`}
+          {ROLES.map((r) => (
+            <button key={r.id} disabled={!!busy} onClick={() => setRole(r.id)}
+              title={r.desc}
+              className={`btn ${active === r.id ? 'btn-primary' : 'btn-outline'}`}
               style={{ padding: '5px 12px', fontSize: 12 }}>
-              {busy === `Set type → ${t}` ? '…' : t}
+              {busy === `Set role → ${r.id}` ? '…' : r.label}
             </button>
           ))}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: -4 }}>
+          {ROLES.find((r) => r.id === active)?.desc}
         </div>
 
         <div className="metric-label" style={{ marginTop: 8 }}>Actions</div>
@@ -431,7 +478,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
             onClick={() => action('Reset link sent', () => api.patch(`/admin/users/${user.id}`, { sendResetLink: true }))}>
             Send password-reset link
           </button>
-          <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12, color: 'var(--danger)', borderColor: 'var(--danger)' }}
+          <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
             onClick={async () => {
               const pw = prompt('New password (min 8 chars):'); if (!pw) return;
               await action('Password set', () => api.patch(`/admin/users/${user.id}`, { password: pw }));
@@ -451,15 +498,89 @@ function UserDetailModal({ user, onClose, onChanged }) {
           </button>
         </div>
 
+        <div className="metric-label" style={{ marginTop: 8, color: 'var(--danger)' }}>Danger zone</div>
+        <button disabled={!!busy} className="btn btn-outline"
+          onClick={() => setConfirmDelete(true)}
+          style={{
+            padding: '7px 12px', fontSize: 12,
+            color: 'var(--danger)', borderColor: 'var(--danger)',
+            alignSelf: 'flex-start',
+          }}>
+          <Icons.Trash size={12}/> Delete this user permanently
+        </button>
+
         {info && <div style={{ fontSize: 12, color: 'var(--ok)' }}>{info}</div>}
         {err && <ErrCard msg={err}/>}
 
         <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 6 }}>
           <button onClick={onClose} className="btn btn-outline">Close</button>
-          <button onClick={onChanged} className="btn btn-primary">Refresh list</button>
         </div>
       </div>
+
+      {confirmDelete && (
+        <ConfirmDeleteUser email={user.email}
+          busy={busy === 'Deleting'}
+          onCancel={() => setConfirmDelete(false)}
+          onConfirm={doDelete}/>
+      )}
     </Modal>
+  );
+}
+
+// Email-typing confirm prevents the "I clicked it by accident" mistake.
+// Cascades through the FK chain server-side, so this really wipes the
+// account and everything tied to it.
+function ConfirmDeleteUser({ email, busy, onCancel, onConfirm }) {
+  const [typed, setTyped] = useState('');
+  const matches = typed.trim().toLowerCase() === email.toLowerCase();
+  return (
+    <div role="dialog" onMouseDown={(e) => { if (e.target === e.currentTarget) onCancel(); }}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 220,
+        background: 'rgba(0,0,0,0.6)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+      }}>
+      <div className="card" onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 460, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+          <div style={{
+            width: 34, height: 34, borderRadius: 10,
+            background: 'rgba(155,44,44,0.12)', color: 'var(--danger)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Trash size={16}/></div>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>Delete this user?</h3>
+        </div>
+        <p style={{ margin: '4px 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          Permanently removes <strong>{email}</strong> and everything tied to
+          their account — workspace, clients, invoices, documents, messages,
+          Ivy chats, support thread, push subscriptions. There is no undo.
+        </p>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, fontSize: 12 }}>
+          <span style={{ color: 'var(--fg-2)', fontWeight: 550 }}>
+            Type <code>{email}</code> to confirm:
+          </span>
+          <input value={typed} onChange={(e) => setTyped(e.target.value)}
+            autoFocus autoComplete="off" placeholder={email}
+            style={{
+              width: '100%', padding: '10px 12px', borderRadius: 10,
+              border: '1px solid ' + (typed && !matches ? 'var(--danger)' : 'var(--border-strong)'),
+              background: 'var(--surface)', outline: 'none',
+              fontSize: 14, color: 'var(--fg)',
+            }}/>
+        </label>
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+          <button onClick={onCancel} className="btn btn-outline">Cancel</button>
+          <button onClick={onConfirm} disabled={!matches || busy}
+            className="btn btn-primary"
+            style={{
+              background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff',
+              opacity: (!matches || busy) ? 0.6 : 1,
+            }}>
+            {busy ? 'Deleting…' : 'Delete forever'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

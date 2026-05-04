@@ -1,20 +1,30 @@
 // PATCH  /api/admin/users/:id
-//   Body: { userType?, password?, name?, sendResetLink? }
-//   • userType in 'regular'|'sponsored'|'affiliate' — flips the column.
-//     Switching to/from sponsored also adjusts the workspace's
-//     subscription state so the paywall behaves correctly:
-//       → sponsored: workspace status flips to 'active' with a far-future
-//         period_end so the Paywall sees them as paid.
-//       → leaving sponsored back to regular: status reverts to 'trialing'
-//         with a fresh 28-day window if they don't already have an
-//         active Stripe sub.
-//   • password: setting a new one without going through email — useful
-//     when an owner can't receive email and asks for a manual reset.
-//   • sendResetLink: true → emails them a reset link.
+//   Body fields are independent — pass any subset:
+//     role           'regular'|'sponsored'|'affiliate'|'business-trial'|'business-active'
+//                    Single high-level dispatch that knows the side effects:
+//                      regular         → user_type='regular', revert sponsored
+//                                        comp if leaving 'sponsored'
+//                      sponsored       → user_type='sponsored', flip workspace
+//                                        to active w/ 100-year period_end
+//                                        (paywall stays out of the way)
+//                      affiliate       → user_type='affiliate', auto-create
+//                                        an affiliates row with a generated
+//                                        code if one doesn't exist yet
+//                      business-trial  → workspace.subscription_status =
+//                                        'trialing' with a fresh 28-day window
+//                      business-active → workspace.subscription_status =
+//                                        'active' with period_end = NOW() + 1mo
+//                                        (manual flag — Stripe webhook still
+//                                         updates real period_end on payment)
+//     userType       legacy alias for role; only accepts the first three
+//                    values. Kept for back-compat with older admin clients.
+//     password       setting a new one without going through email
+//     name           rename
+//     sendResetLink: true → emails them a reset link
 //
 // DELETE /api/admin/users/:id
 //   Hard-delete the user. Cascades through the FK chain (workspaces,
-//   clients, etc. — see schema). Use with care; there's no undo.
+//   clients, etc.) — see schema. Refuses to delete super-admins.
 import { sql } from '../../_lib/db.js';
 import { hashPassword } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
@@ -25,7 +35,16 @@ import { createToken, KIND_RESET, appUrl } from '../../_lib/tokens.js';
 import { recordAudit } from '../../_lib/audit.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
-const VALID_TYPES = new Set(['regular', 'sponsored', 'affiliate']);
+const VALID_ROLES = new Set([
+  'regular', 'sponsored', 'affiliate',
+  'business-trial', 'business-active',
+]);
+
+// Roles that map directly onto users.user_type. The remaining two
+// ('business-trial', 'business-active') only flip workspace state;
+// user_type stays whatever it was (or reverts to 'regular' if the
+// caller is leaving 'sponsored').
+const TYPE_ROLES = new Set(['regular', 'sponsored', 'affiliate']);
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -49,46 +68,21 @@ async function patchUser(u, req, res) {
   const body = await readBody(req);
   const actor = await getAdminActor(req);
 
-  if ('userType' in body) {
+  // Resolve the requested role. `role` is the new high-level field; `userType`
+  // is kept for back-compat and is only allowed to carry user_type values.
+  let role = null;
+  if ('role' in body) {
+    const r = String(body.role);
+    if (!VALID_ROLES.has(r)) return badRequest(res, 'Invalid role');
+    role = r;
+  } else if ('userType' in body) {
     const t = String(body.userType);
-    if (!VALID_TYPES.has(t)) return badRequest(res, 'Invalid userType');
+    if (!TYPE_ROLES.has(t)) return badRequest(res, 'Invalid userType');
+    role = t;
+  }
 
-    await sql`UPDATE users SET user_type = ${t} WHERE id = ${u.id}`;
-    await recordAudit(req, {
-      actor, targetUserId: u.id, action: 'user.set_type',
-      meta: { from: u.user_type, to: t },
-    });
-
-    // Side effects on the user's workspace (if any) so the paywall stays
-    // consistent with the type.
-    if (t === 'sponsored') {
-      await sql`
-        UPDATE workspaces SET
-          subscription_status     = 'active',
-          subscription_period_end = NOW() + INTERVAL '100 years',
-          trial_ends_at           = NULL
-        WHERE owner_id = ${u.id}
-      `;
-    } else if (u.user_type === 'sponsored' && t !== 'sponsored') {
-      // Coming back from sponsored — give them a fresh 28-day trial unless
-      // they already have a real Stripe subscription.
-      await sql`
-        UPDATE workspaces SET
-          subscription_status     = CASE
-            WHEN stripe_subscription_id IS NOT NULL THEN subscription_status
-            ELSE 'trialing'
-          END,
-          subscription_period_end = CASE
-            WHEN stripe_subscription_id IS NOT NULL THEN subscription_period_end
-            ELSE NULL
-          END,
-          trial_ends_at           = CASE
-            WHEN stripe_subscription_id IS NOT NULL THEN trial_ends_at
-            ELSE NOW() + INTERVAL '28 days'
-          END
-        WHERE owner_id = ${u.id}
-      `;
-    }
+  if (role) {
+    await applyRole(u, role, req, actor);
   }
 
   if ('name' in body) {
@@ -144,12 +138,118 @@ async function deleteUser(u, req, res) {
     return badRequest(res, "Refusing to delete a super-admin account through this endpoint.");
   }
   const actor = await getAdminActor(req);
+  if (actor?.id === u.id) {
+    return badRequest(res, "You can't delete the account you're signed in as.");
+  }
   await sql`DELETE FROM users WHERE id = ${u.id}`;
   await recordAudit(req, {
     actor, targetUserId: u.id, action: 'user.delete',
     meta: { email: u.email },
   });
   return noContent(res);
+}
+
+// Single dispatch for every role assignment. Side effects vary by role:
+//   regular         → user_type = 'regular'; if leaving sponsored, revert
+//                     workspace subscription.
+//   sponsored       → user_type = 'sponsored'; force workspace to 'active'
+//                     with a 100-year period_end so the Paywall hides.
+//   affiliate       → user_type = 'affiliate'; auto-create an affiliates
+//                     row with a generated code if one doesn't exist.
+//   business-trial  → workspace.subscription_status = 'trialing' with a
+//                     fresh 28-day trial; user_type back to 'regular' if
+//                     they were sponsored.
+//   business-active → workspace.subscription_status = 'active' with a
+//                     1-month period_end (the Stripe webhook will refresh
+//                     the period_end on real renewals); user_type back to
+//                     'regular' if they were sponsored.
+async function applyRole(u, role, req, actor) {
+  // Whether this role corresponds to a value of users.user_type or only
+  // affects the workspace's subscription state.
+  const newUserType = TYPE_ROLES.has(role) ? role : 'regular';
+  if (newUserType !== u.user_type) {
+    await sql`UPDATE users SET user_type = ${newUserType} WHERE id = ${u.id}`;
+  }
+
+  // Subscription-state side effects keyed off the requested role.
+  if (role === 'sponsored') {
+    await sql`
+      UPDATE workspaces SET
+        subscription_status     = 'active',
+        subscription_period_end = NOW() + INTERVAL '100 years',
+        trial_ends_at           = NULL
+      WHERE owner_id = ${u.id}
+    `;
+  } else if (role === 'business-trial') {
+    await sql`
+      UPDATE workspaces SET
+        subscription_status     = 'trialing',
+        trial_ends_at           = NOW() + INTERVAL '28 days',
+        subscription_period_end = NULL
+      WHERE owner_id = ${u.id}
+    `;
+  } else if (role === 'business-active') {
+    await sql`
+      UPDATE workspaces SET
+        subscription_status     = 'active',
+        subscription_period_end = NOW() + INTERVAL '1 month',
+        trial_ends_at           = NULL
+      WHERE owner_id = ${u.id}
+    `;
+  } else if (u.user_type === 'sponsored' && role !== 'sponsored') {
+    // Leaving sponsored back to regular/affiliate without an explicit
+    // billing role — give them a fresh 28-day trial unless they already
+    // have a Stripe sub doing the real billing.
+    await sql`
+      UPDATE workspaces SET
+        subscription_status     = CASE
+          WHEN stripe_subscription_id IS NOT NULL THEN subscription_status
+          ELSE 'trialing'
+        END,
+        subscription_period_end = CASE
+          WHEN stripe_subscription_id IS NOT NULL THEN subscription_period_end
+          ELSE NULL
+        END,
+        trial_ends_at           = CASE
+          WHEN stripe_subscription_id IS NOT NULL THEN trial_ends_at
+          ELSE NOW() + INTERVAL '28 days'
+        END
+      WHERE owner_id = ${u.id}
+    `;
+  }
+
+  // Affiliate row provisioning. A user flipped to 'affiliate' should have
+  // a code ready when they log in. Idempotent — re-running is a no-op.
+  if (role === 'affiliate') {
+    const dup = await sql`SELECT id, code FROM affiliates WHERE user_id = ${u.id}`;
+    if (dup.rows.length === 0) {
+      const code = await uniqueAffiliateCode();
+      await sql`
+        INSERT INTO affiliates (user_id, code, display_name)
+        VALUES (${u.id}, ${code}, ${u.name || null})
+      `;
+      await recordAudit(req, {
+        actor, targetUserId: u.id, action: 'affiliate.create',
+        meta: { code, source: 'role-assign' },
+      });
+    }
+  }
+
+  await recordAudit(req, {
+    actor, targetUserId: u.id, action: 'user.set_role',
+    meta: { from: u.user_type, to: role },
+  });
+}
+
+async function uniqueAffiliateCode() {
+  const ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  for (let i = 0; i < 8; i++) {
+    let s = '';
+    for (let j = 0; j < 8; j++) s += ALPHABET[Math.floor(Math.random() * ALPHABET.length)];
+    const r = await sql`SELECT 1 FROM affiliates WHERE code = ${s}`;
+    if (r.rows.length === 0) return s;
+  }
+  return `THRYVE-${Date.now().toString(36).toUpperCase()}`;
 }
 
 function escapeHtml(s) {
