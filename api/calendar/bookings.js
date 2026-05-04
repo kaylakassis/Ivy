@@ -12,6 +12,7 @@ import {
 } from '../_lib/calendar.js';
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
 import { syncOnBookingCreated } from '../_lib/googleSync.js';
+import { consumeCredit } from '../_lib/packages.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -83,14 +84,35 @@ export default async function handler(req, res) {
       }
     }
 
+    // Optional package credit consumption. The atomic decrement in
+    // consumeCredit prevents two concurrent bookings from spending the
+    // same last credit. We refuse the booking outright if the consume
+    // fails — easier UX than silently falling back to "pay normally"
+    // when the owner explicitly chose a package.
+    const clientPackageId = body.clientPackageId ? String(body.clientPackageId) : null;
+    if (clientPackageId) {
+      if (!resolvedClientId) {
+        return badRequest(res, 'Package bookings require a client');
+      }
+      const ok = await consumeCredit({
+        workspaceId,
+        clientPackageId,
+        clientId: resolvedClientId,
+        serviceId,
+      });
+      if (!ok) return badRequest(res, 'Package has no credits left, is expired, or doesn\'t cover this service');
+    }
+
     const insert = await sql`
       INSERT INTO bookings (
         workspace_id, service_id, client_id, client_name, client_email,
-        date, start_min, end_min, notes, recurrence_rule, recurrence_until
+        date, start_min, end_min, notes, recurrence_rule, recurrence_until,
+        client_package_id
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${resolvedClientId}, ${clientName}, ${clientEmail},
-        ${date}, ${start}, ${end}, ${notes}, ${recurrenceRule}, ${recurrenceUntil}
+        ${date}, ${start}, ${end}, ${notes}, ${recurrenceRule}, ${recurrenceUntil},
+        ${clientPackageId}
       )
       RETURNING *
     `;

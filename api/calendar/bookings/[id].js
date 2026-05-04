@@ -7,6 +7,7 @@ import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
 import { serializeBooking, VALID_RECURRENCE } from '../../_lib/calendar.js';
 import { syncOnBookingUpdated, syncOnBookingDeleted } from '../../_lib/googleSync.js';
+import { restoreCredit } from '../../_lib/packages.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
 
@@ -80,6 +81,8 @@ export default async function handler(req, res) {
       `;
       if (r.rowCount === 0) return notFound(res, 'Booking not found or already cancelled');
       syncOnBookingDeleted({ workspaceId, googleEventId: found.rows[0].google_event_id });
+      // Refund the package credit if this booking consumed one.
+      await restoreCredit({ workspaceId, clientPackageId: found.rows[0].client_package_id });
       return noContent(res);
     }
 

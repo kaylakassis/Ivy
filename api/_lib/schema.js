@@ -236,6 +236,63 @@ CREATE INDEX IF NOT EXISTS idx_external_busy_workspace_date
 CREATE UNIQUE INDEX IF NOT EXISTS idx_external_busy_workspace_event
   ON external_busy_blocks(workspace_id, source, source_event_id)
   WHERE source_event_id IS NOT NULL;
+
+-- Packages: owner-defined session bundles (e.g. "10 Cuts for $750"). Two
+-- tables — packages is the template, client_packages is the per-client
+-- purchase / assignment with a remaining-credits counter that decrements
+-- when bookings consume a credit.
+--
+-- service_ids[] makes packages multi-service (e.g. "10 of any haircut"
+-- across two services). Empty array means "valid for any service in
+-- the workspace".
+CREATE TABLE IF NOT EXISTS packages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  service_ids UUID[] NOT NULL DEFAULT '{}'::uuid[],
+  session_count INT NOT NULL CHECK (session_count > 0),
+  price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  expiry_days INT,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_packages_workspace_active
+  ON packages(workspace_id, active);
+
+-- Snapshot pattern: name / service_ids / credits_total / price are
+-- copied at sale time so owners can edit / delete the template later
+-- without breaking outstanding bundles.
+CREATE TABLE IF NOT EXISTS client_packages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  package_id UUID REFERENCES packages(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  service_ids UUID[] NOT NULL DEFAULT '{}'::uuid[],
+  credits_total INT NOT NULL,
+  credits_remaining INT NOT NULL,
+  price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  invoice_id UUID REFERENCES invoices(id) ON DELETE SET NULL,
+  expires_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','exhausted','expired','cancelled')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (credits_remaining >= 0 AND credits_remaining <= credits_total)
+);
+CREATE INDEX IF NOT EXISTS idx_client_packages_client
+  ON client_packages(client_id, status);
+CREATE INDEX IF NOT EXISTS idx_client_packages_workspace
+  ON client_packages(workspace_id, status);
+
+-- Bookings link to the client_package they consume (if any) so cancels
+-- can refund the credit and the owner / client can see "credit used"
+-- on each session.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_package_id UUID
+  REFERENCES client_packages(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_client_package
+  ON bookings(client_package_id) WHERE client_package_id IS NOT NULL;
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.

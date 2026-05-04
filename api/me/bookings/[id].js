@@ -15,6 +15,7 @@ import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { serializeBooking } from '../../_lib/calendar.js';
 import { syncOnBookingDeleted, syncOnBookingUpdated } from '../../_lib/googleSync.js';
+import { restoreCredit } from '../../_lib/packages.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -52,6 +53,8 @@ export default async function handler(req, res) {
         booking,
       });
       syncOnBookingDeleted({ workspaceId: booking.workspace_id, googleEventId: booking.google_event_id });
+      // Refund any consumed package credit.
+      await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
       return noContent(res);
     }
 

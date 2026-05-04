@@ -11,6 +11,7 @@ import {
 import AvailabilityDrawer from './AvailabilityDrawer.jsx';
 import ShareDrawer from './ShareDrawer.jsx';
 import SyncDrawer from './SyncDrawer.jsx';
+import PackagesDrawer from './PackagesDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
 import ServicesDrawer from './ServicesDrawer.jsx';
 import AddBookingModal from './AddBookingModal.jsx';
@@ -199,6 +200,9 @@ export default function Calendar() {
           <button className="btn btn-outline" onClick={() => setDrawer('services')}>
             <Icons.Dollar size={14}/> {!isTablet && 'Services'}
           </button>
+          <button className="btn btn-outline" onClick={() => setDrawer('packages')}>
+            <Icons.Doc size={14}/> {!isTablet && 'Packages'}
+          </button>
           <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
             <Icons.Clock size={14}/> {!isTablet && 'Availability'}
           </button>
@@ -327,6 +331,9 @@ export default function Calendar() {
       )}
       {drawer === 'sync' && (
         <SyncDrawer onClose={() => setDrawer(null)}/>
+      )}
+      {drawer === 'packages' && (
+        <PackagesDrawer services={cal.services} onClose={() => setDrawer(null)}/>
       )}
       {drawer === 'event' && selectedEvent && (
         <EventDrawer
@@ -477,6 +484,7 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
 function ActionSheet({ onClose, onPick }) {
   const items = [
     { id: 'services',     label: 'Services',     icon: 'Dollar' },
+    { id: 'packages',     label: 'Packages',     icon: 'Doc' },
     { id: 'availability', label: 'Availability', icon: 'Clock' },
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
     { id: 'sync',         label: 'Calendar sync', icon: 'Arrow' },

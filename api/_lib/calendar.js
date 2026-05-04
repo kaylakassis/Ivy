@@ -90,6 +90,7 @@ export function serializeBooking(row, opts = {}) {
       ? row.recurrence_until.toISOString().slice(0, 10)
       : (row.recurrence_until || null),
     cancelledOccurrences,
+    clientPackageId:     row.client_package_id || null,
   };
 }
 

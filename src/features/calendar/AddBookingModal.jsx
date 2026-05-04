@@ -1,8 +1,11 @@
-// Owner-side "Add booking" modal — service, client, date/time, optional recurrence.
-import React, { useState } from 'react';
+// Owner-side "Add booking" modal — service, client, date/time, optional
+// recurrence, optional package-credit consumption when the matching
+// client has an active bundle covering the chosen service.
+import React, { useState, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { TimeInput, inputSty } from './Drawer.jsx';
 import { RECURRENCE_OPTIONS, fmtDateISO } from './utils.js';
+import { api } from '../../lib/api.js';
 
 export default function AddBookingModal({ services, onSubmit, onClose, defaultDate, defaultStart }) {
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
@@ -16,6 +19,46 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   const [override, setOverride] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  // Package credit candidates for the client matching the typed email.
+  // Empty array = lookup completed and there are no eligible packages;
+  // null = haven't looked up yet.
+  const [eligiblePackages, setEligiblePackages] = useState(null);
+  const [clientPackageId, setClientPackageId]   = useState(null);
+
+  // Look up the client by email after the owner has typed something
+  // plausible, then load their active packages covering the selected
+  // service. Debounced so each keystroke isn't a request.
+  useEffect(() => {
+    const email = clientEmail.trim().toLowerCase();
+    if (!email || !email.includes('@') || !serviceId) {
+      setEligiblePackages(null);
+      setClientPackageId(null);
+      return;
+    }
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      try {
+        const r = await api.get('/clients?email=' + encodeURIComponent(email));
+        const c = r.clients?.[0];
+        if (!c) { if (!cancelled) setEligiblePackages([]); return; }
+        const cp = await api.get(`/clients/${c.id}/packages`);
+        if (cancelled) return;
+        const eligible = (cp.packages || []).filter((p) =>
+          p.status === 'active'
+          && p.creditsRemaining > 0
+          && (!p.expiresAt || new Date(p.expiresAt).getTime() > Date.now())
+          && (p.serviceIds.length === 0 || p.serviceIds.includes(serviceId))
+        );
+        setEligiblePackages(eligible);
+        if (clientPackageId && !eligible.some((p) => p.id === clientPackageId)) {
+          setClientPackageId(null);
+        }
+      } catch {
+        if (!cancelled) setEligiblePackages([]);
+      }
+    }, 350);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [clientEmail, serviceId]);
 
   const svc = services.find((s) => s.id === serviceId);
   const end = svc ? start + svc.durationMinutes : start + 60;
@@ -38,6 +81,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
         recurrenceRule,
         recurrenceUntil: recurrenceUntil || null,
         skipConflictCheck: override,
+        clientPackageId: clientPackageId || null,
       });
       onClose();
     } catch (ex) {
@@ -119,6 +163,23 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
               <Field label="Repeat until (optional)" hint="Leave blank for indefinite. Series stops on this date inclusive.">
                 <input type="date" value={recurrenceUntil} onChange={(e) => setRecurrenceUntil(e.target.value)}
                   min={date} style={inputSty}/>
+              </Field>
+            )}
+
+            {eligiblePackages && eligiblePackages.length > 0 && (
+              <Field label="Apply package credit"
+                hint="Decrements one credit from the chosen bundle. Skip to charge normally.">
+                <select value={clientPackageId || ''}
+                  onChange={(e) => setClientPackageId(e.target.value || null)}
+                  style={inputSty}>
+                  <option value="">No — bill normally</option>
+                  {eligiblePackages.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} — {p.creditsRemaining} of {p.creditsTotal} left
+                      {p.expiresAt ? ` · expires ${new Date(p.expiresAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}
+                    </option>
+                  ))}
+                </select>
               </Field>
             )}
 
