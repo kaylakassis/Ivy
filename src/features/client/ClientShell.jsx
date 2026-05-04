@@ -83,7 +83,7 @@ function ClientShellInner() {
           onClose={() => setDrawerOpen(false)}/>
       )}
 
-      <ViewToggle ctx={data}/>
+      <ViewToggle/>
     </div>
   );
 }

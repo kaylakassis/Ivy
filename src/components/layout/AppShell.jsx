@@ -92,7 +92,7 @@ function AppShellInner() {
         <MobileDrawer direction={tweaks.direction} onClose={() => setDrawerOpen(false)} />
       )}
 
-      <ViewToggle ctx={ctx}/>
+      <ViewToggle/>
 
       {needsPaywall && <Paywall ctx={ctx} onRefresh={refresh}/>}
     </div>

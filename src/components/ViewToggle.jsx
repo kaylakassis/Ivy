@@ -1,21 +1,19 @@
 // Floating Business ↔ Client view switcher. Bottom-center on every page in
-// both shells, available to anyone signed in.
+// both shells. Always rendered — RequireAuth already guarantees a signed-in
+// user before either shell mounts, so we don't need to second-guess it
+// here. Earlier revisions gated on a /api/me round-trip; if that request
+// was slow or errored, the pill silently disappeared. Pure URL-based now.
 //
-// Pure navigation. Going to Business as an unsubscribed user lands them in
-// AppShell, which then renders the Paywall — gating lives in one place.
+// Going to Business as an unsubscribed user lands them in AppShell, which
+// then renders the Paywall — gating lives in one place.
 // Going to Client always works (the portal is universal and free).
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
 
-export default function ViewToggle({ ctx }) {
+export default function ViewToggle() {
   const navigate = useNavigate();
   const location = useLocation();
-
-  // We only need the user to be signed in (ctx loaded). Older revisions
-  // hid the pill from client-only users — but that's exactly the user who
-  // most benefits from a discoverable way back to /me, so we always show.
-  if (!ctx) return null;
 
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
   const view = onClient ? 'client' : 'business';
