@@ -288,7 +288,21 @@ function DistanceFilter({ radiusKm, lat, lng, onChange }) {
           radiusKm: radiusKm ?? 25,
         });
       },
-      (e) => { setBusy(false); setErr(e.message || 'Could not read your location.'); },
+      (e) => {
+        setBusy(false);
+        // Map the three GeolocationPositionError codes to copy a user
+        // can act on. Default to whatever the browser said for anything
+        // unexpected.
+        if (e.code === 1) {
+          setErr('Permission denied. Allow location for this site in your browser settings, then try again.');
+        } else if (e.code === 2) {
+          setErr("Couldn't read your position — try again, or check that location services are on.");
+        } else if (e.code === 3) {
+          setErr('Timed out. Try again with a clearer signal.');
+        } else {
+          setErr(e.message || 'Could not read your location.');
+        }
+      },
       { maximumAge: 5 * 60 * 1000, timeout: 10000 },
     );
   };

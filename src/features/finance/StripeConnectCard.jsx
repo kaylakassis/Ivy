@@ -1,18 +1,24 @@
 // Stripe connection panel on the Finance page.
 //   • Loads /api/finance/stripe-status on mount.
-//   • Disconnected: shows a "Connect Stripe" prompt that expands into a form
-//     for pasting secret + publishable keys + webhook signing secret.
+//   • Disconnected: primary CTA initiates Stripe Connect OAuth (one
+//     click → Stripe → back). Secondary "Advanced: paste keys manually"
+//     link expands the legacy form for users who'd rather use a
+//     restricted API key + manual webhook setup.
 //   • Connected: shows the linked account label and a Disconnect option.
 //
-// We never echo the secret key back from the server, so once entered and
-// validated it can only be replaced (overwriting), never read.
+// On return from OAuth, the callback redirects to /finance?stripe=… so
+// we surface a toast (connected | declined | error) inline.
 import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
 export default function StripeConnectCard() {
   const [status, setStatus] = useState(null); // null = loading
   const [opening, setOpening] = useState(false);
+  const [oauthBusy, setOauthBusy] = useState(false);
+  const [oauthErr, setOauthErr]   = useState(null);
+  const [toast, setToast] = useState(null); // 'connected' | 'declined' | 'error'
 
   const load = async () => {
     try {
@@ -23,6 +29,34 @@ export default function StripeConnectCard() {
     }
   };
   useEffect(() => { load(); }, []);
+
+  // OAuth callback drops the user back at /finance?stripe=… — surface
+  // a toast and strip the param so a refresh doesn't re-toast.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const flag = params.get('stripe');
+    if (!flag) return;
+    setToast(flag);
+    params.delete('stripe');
+    params.delete('detail');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const startOauth = async () => {
+    setOauthBusy(true); setOauthErr(null);
+    try {
+      const r = await api.post('/finance/stripe-oauth-init', {});
+      if (r.url) window.location.href = r.url;
+    } catch (e) {
+      // Most common reason: STRIPE_CONNECT_CLIENT_ID isn't set on the
+      // platform. Surface a tip pointing at the manual fallback.
+      setOauthErr(e.message || 'Could not start Stripe OAuth.');
+      setOauthBusy(false);
+    }
+  };
 
   if (status === null) {
     return (
@@ -39,25 +73,67 @@ export default function StripeConnectCard() {
   if (!opening) {
     return (
       <div className="card" style={{
-        padding: 18, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        padding: 18, display: 'flex', flexDirection: 'column', gap: 14,
         background: 'linear-gradient(135deg, var(--accent-soft), transparent)',
         border: '1px solid var(--accent)',
       }}>
-        <div style={{
-          width: 38, height: 38, borderRadius: 10,
-          background: 'var(--accent)', color: 'var(--accent-ink)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}><Icons.Dollar size={18}/></div>
-        <div style={{ flex: 1, minWidth: 220 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>Accept card payments</div>
-          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2 }}>
-            Connect your Stripe account so clients can pay invoices online.
-            Funds go directly to your Stripe — we never hold money.
+        {toast === 'declined' && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, fontSize: 12.5,
+            background: 'var(--surface-2)', color: 'var(--fg-2)',
+          }}>
+            Stripe sign-in cancelled. Try again whenever you're ready.
           </div>
+        )}
+        {toast === 'error' && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, fontSize: 12.5,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)',
+          }}>
+            Something went wrong connecting Stripe. Try the manual key flow if it keeps failing.
+          </div>
+        )}
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: 'var(--accent)', color: 'var(--accent-ink)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+          }}><Icons.Dollar size={18}/></div>
+          <div style={{ flex: 1, minWidth: 220 }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Accept card payments</div>
+            <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2 }}>
+              Sign into Stripe in one click — no API keys to copy. Funds go
+              straight to your Stripe; we never hold money.
+            </div>
+          </div>
+          <button onClick={startOauth} disabled={oauthBusy} className="btn btn-primary">
+            {oauthBusy ? 'Opening…' : 'Connect with Stripe'}
+            <Icons.Arrow size={12} sw={2}/>
+          </button>
         </div>
-        <button onClick={() => setOpening(true)} className="btn btn-primary">
-          Connect Stripe
-        </button>
+
+        {oauthErr && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, fontSize: 12,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)',
+          }}>
+            {oauthErr}
+          </div>
+        )}
+
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', textAlign: 'center' }}>
+          {' '}
+          <button type="button" onClick={() => setOpening(true)}
+            style={{
+              background: 'transparent', border: 0, padding: 0, cursor: 'pointer',
+              color: 'var(--muted)', textDecoration: 'underline', fontSize: 11.5,
+            }}>
+            Or paste API keys manually
+          </button>
+        </div>
       </div>
     );
   }

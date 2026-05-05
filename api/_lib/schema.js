@@ -627,6 +627,11 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_secret_encrypted TE
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret_encrypted TEXT;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_account_label TEXT;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connected_at TIMESTAMPTZ;
+-- Stripe Connect (OAuth) support. acct_xxx id from the connect/oauth/token
+-- exchange. When set, charges + customers are scoped to this connected
+-- account via Stripe-Account header — no need to store their secret key.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_user_id TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_livemode BOOLEAN;
 
 -- Invoices. Line items live in JSONB to keep editing transactional and simple
 -- (each item: { id, description, quantity, rate }).

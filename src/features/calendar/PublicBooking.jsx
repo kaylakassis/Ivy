@@ -20,7 +20,11 @@ export default function PublicBooking() {
   const [serviceId, setServiceId] = useState(null);
   const [weekAnchor, setWeekAnchor] = useState(() => startOfWeek(new Date()));
   const [slot, setSlot] = useState(null);
-  const [step, setStep] = useState('pick');     // 'pick' | 'details' | 'confirmed'
+  const [step, setStep] = useState('pick');     // 'pick' | 'details' | 'confirmed' | 'waitlisted'
+  // True when the user picked a fully-booked day card. Switches the
+  // details step's primary button from "Confirm booking" to "Join the
+  // waitlist" so we skip the failed-book → error → waitlist double tap.
+  const [waitlistMode, setWaitlistMode] = useState(false);
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -249,10 +253,20 @@ export default function PublicBooking() {
         </div>
       ) : step === 'details' ? (
         <div className="card" style={{ padding: 28 }}>
-          <div className="metric-label" style={{ marginBottom: 4 }}>Confirm</div>
-          <div style={{ fontSize: 17, fontWeight: 600, marginBottom: 18 }}>
-            {svc?.name} · {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })} · {minToHM(slot.start)}
+          <div className="metric-label" style={{ marginBottom: 4 }}>
+            {waitlistMode ? 'Join waitlist' : 'Confirm'}
           </div>
+          <div style={{ fontSize: 17, fontWeight: 600, marginBottom: waitlistMode ? 8 : 18 }}>
+            {svc?.name} · {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+            {!waitlistMode && <> · {minToHM(slot.start)}</>}
+          </div>
+          {waitlistMode && (
+            <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+              Every slot for this day is booked. Drop your details and we'll
+              auto-book you the moment a spot opens up — no action needed
+              on your end.
+            </p>
+          )}
           <Field label="Your name">
             <input value={name} onChange={(e) => setName(e.target.value)} style={inputSty} placeholder="Ana Beltrán"/>
           </Field>
@@ -296,12 +310,15 @@ export default function PublicBooking() {
             </div>
           )}
           <div style={{ display: 'flex', gap: 10 }}>
-            <button className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={() => setStep('pick')}>
+            <button className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => { setWaitlistMode(false); setStep('pick'); }}>
               ← Back
             </button>
             <button className="btn btn-primary" style={{ flex: 2, justifyContent: 'center', opacity: busy ? 0.6 : 1 }}
-              disabled={!name.trim() || !email.trim() || busy} onClick={() => book(false)}>
-              {busy ? 'Confirming…' : 'Confirm booking'}
+              disabled={!name.trim() || !email.trim() || busy} onClick={() => book(waitlistMode)}>
+              {busy
+                ? (waitlistMode ? 'Joining…' : 'Confirming…')
+                : (waitlistMode ? 'Join the waitlist' : 'Confirm booking')}
             </button>
           </div>
         </div>
@@ -376,9 +393,15 @@ export default function PublicBooking() {
           {/* Day cards */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
             {weekDays.map((d, i) => {
-              const slots = svc ? slotsForDate(cal, d, svc).filter((s) => s.available) : [];
+              const allSlots = svc ? slotsForDate(cal, d, svc) : [];
+              const slots = allSlots.filter((s) => s.available);
               const today = new Date(); today.setHours(0, 0, 0, 0);
               const isPast = d < today;
+              // Differentiate "closed that day" (no windows produced any
+              // slots) from "fully booked" (windows existed but every
+              // slot is taken). The latter gets a Join-waitlist CTA.
+              const isClosed     = !isPast && allSlots.length === 0;
+              const isFullyBooked = !isPast && allSlots.length > 0 && slots.length === 0;
               return (
                 <div key={i} className="card" style={{
                   padding: 10, display: 'flex', flexDirection: 'column', gap: 6,
@@ -388,8 +411,31 @@ export default function PublicBooking() {
                     <div className="metric-label" style={{ fontSize: 10 }}>{WEEKDAYS_SHORT[d.getDay()]}</div>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500 }}>{d.getDate()}</div>
                   </div>
-                  {isPast ? null : slots.length === 0 ? (
-                    <div style={{ fontSize: 10, color: 'var(--muted-2)', textAlign: 'center', padding: '8px 0' }}>No slots</div>
+                  {isPast ? null : isClosed ? (
+                    <div style={{ fontSize: 10, color: 'var(--muted-2)', textAlign: 'center', padding: '8px 0' }}>Closed</div>
+                  ) : isFullyBooked ? (
+                    /* Hot day — every slot taken. Surface waitlist as
+                       the obvious next step instead of letting the user
+                       wander away. */
+                    <button onClick={() => {
+                      // Drop into the details step in waitlist mode —
+                      // the primary button becomes "Join the waitlist"
+                      // and the submit goes straight to the queue.
+                      const first = allSlots[0];
+                      if (!first) return;
+                      setSlot({ dateISO: fmtDateISO(d), start: first.start, end: first.end });
+                      setWaitlistMode(true);
+                      setStep('details');
+                    }} style={{
+                      padding: '8px 4px', borderRadius: 6,
+                      fontSize: 10.5, fontWeight: 600, lineHeight: 1.35,
+                      background: 'color-mix(in srgb, var(--warn) 14%, transparent)',
+                      border: '1px solid var(--warn)',
+                      color: 'var(--warn)', cursor: 'pointer',
+                      textAlign: 'center',
+                    }}>
+                      Fully booked<br/><span style={{ fontWeight: 500 }}>Join waitlist →</span>
+                    </button>
                   ) : slots.slice(0, 8).map((s, si) => (
                     <button key={si} onClick={() => {
                       setSlot({ dateISO: fmtDateISO(d), start: s.start, end: s.end });

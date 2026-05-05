@@ -151,13 +151,19 @@ export default async function handler(req, res) {
       WHERE id = ${inv.id} AND workspace_id = ${workspaceId} AND status <> 'paid'
     `;
 
+    // Proactive Ivy hand-off: tap the push to land in Ivy with a
+    // ready-to-go thank-you prompt. The /ivy?prompt= deep link is
+    // consumed by IvyPro on mount — see the useEffect there.
+    const clientLabel = inv.client_name || 'A client';
+    const totalLabel  = fmtMoney(totals.total);
+    const ivyPrompt   = `Draft a short, warm thank-you message for ${clientLabel} who just paid invoice ${inv.number} (${totalLabel}). Then send it as a chat message to them.`;
     notifyOwnerSafe({
       workspaceId,
       type: 'payments',
       payload: {
-        title: 'Invoice paid',
-        body: `${inv.number} · ${fmtMoney(totals.total)}`,
-        url: `/finance/invoices`,
+        title: 'Invoice paid 💸',
+        body: `${clientLabel} · ${inv.number} · ${totalLabel}. Tap to draft a thank-you with Ivy.`,
+        url: `/ivy?prompt=${encodeURIComponent(ivyPrompt)}`,
         tag: `invoice-paid-${inv.id}`,
       },
     });

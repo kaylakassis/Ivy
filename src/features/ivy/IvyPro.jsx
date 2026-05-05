@@ -2,6 +2,7 @@
 // Three-column layout: left (history + new chat), center (chat / welcome),
 // right (workspace context + upload placeholder).
 import React, { useEffect, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
@@ -26,6 +27,31 @@ export default function IvyPro() {
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, thinking]);
+
+  // ?prompt=… deep-link consumed by push notifications and similar
+  // hand-offs. Drops the text into the composer (or auto-sends if also
+  // ?send=1) so the user can review before firing it off. Strips the
+  // params after consumption so a refresh doesn't re-prefill.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const consumedRef = useRef(false);
+  useEffect(() => {
+    if (loading || consumedRef.current) return;
+    const params = new URLSearchParams(location.search);
+    const prompt = params.get('prompt');
+    if (!prompt) return;
+    consumedRef.current = true;
+    const autoSend = params.get('send') === '1';
+    params.delete('prompt');
+    params.delete('send');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    if (autoSend) {
+      send(prompt);
+    } else {
+      setDraft(prompt);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, location.search]);
 
   const submit = (text) => {
     const t = (text ?? draft).trim();
