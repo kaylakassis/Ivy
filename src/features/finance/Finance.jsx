@@ -12,6 +12,8 @@ import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
 import Memberships from './Memberships.jsx';
+import Quotes from './Quotes.jsx';
+import GiftCards from './GiftCards.jsx';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -131,8 +133,10 @@ export default function Finance() {
       <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start', flexWrap: 'wrap' }}>
         {[
           { id: 'invoices',    label: 'Invoices' },
+          { id: 'quotes',      label: 'Estimates' },
           { id: 'recurring',   label: 'Recurring' },
           { id: 'memberships', label: 'Memberships' },
+          { id: 'giftcards',   label: 'Gift cards' },
           { id: 'time',        label: 'Time' },
           { id: 'expenses',    label: 'Expenses' },
         ].map(({ id, label }) => (
@@ -147,10 +151,14 @@ export default function Finance() {
 
       {section === 'expenses' ? (
         <Expenses/>
+      ) : section === 'quotes' ? (
+        <Quotes/>
       ) : section === 'recurring' ? (
         <Recurring/>
       ) : section === 'memberships' ? (
         <Memberships/>
+      ) : section === 'giftcards' ? (
+        <GiftCards/>
       ) : section === 'time' ? (
         <Time/>
       ) : (

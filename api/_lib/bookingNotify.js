@@ -39,7 +39,8 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
       SELECT
         b.id, b.client_id, b.client_name, b.client_email,
         b.date, b.start_min, b.end_min, b.notes,
-        s.name AS service_name,
+        b.video_room_url, b.location_address,
+        s.name AS service_name, s.location_type,
         cs.biz_name,
         cs.slug,
         u.email AS owner_email,
@@ -87,6 +88,8 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         dateLabel,
         timeLabel,
         notes: ctx.notes,
+        videoRoomUrl: ctx.video_room_url,
+        locationAddress: ctx.location_address,
         source,
         branding,
       }));
@@ -166,7 +169,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding }) {
+async function sendClientConfirm({ to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const opener = source === 'public'
     ? `Your booking with <strong>${escapeHtml(businessName)}</strong> is confirmed.`
@@ -180,8 +183,14 @@ async function sendClientConfirm({ to, clientName, businessName, serviceName, da
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(dateLabel)}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(timeLabel)}</td></tr>
+        ${locationAddress ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;vertical-align:top;">Where</td><td style="padding:6px 0;">${escapeHtml(locationAddress)}</td></tr>` : ''}
         ${notes ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;vertical-align:top;">Note</td><td style="padding:6px 0;">${escapeHtml(notes)}</td></tr>` : ''}
       </table>
+      ${videoRoomUrl ? `<p style="margin:18px 0;padding:12px 14px;background:#F6F5F1;border:1px solid #E8E4DC;border-radius:10px;">
+        <strong>Meeting link:</strong><br/>
+        <a href="${escapeHtml(videoRoomUrl)}" style="color:#2E3168;word-break:break-all;">${escapeHtml(videoRoomUrl)}</a>
+        <br/><span style="font-size:12px;color:#85827B;">Save this — open it at the start of your session.</span>
+      </p>` : ''}
       <p>Need to reschedule or message ${escapeHtml(businessName)}? You can view this booking
       and chat with them through your THRYVE portal.</p>`,
     ctaText: 'Open my portal',

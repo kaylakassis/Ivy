@@ -115,6 +115,61 @@ export default async function handler(req, res) {
         return badRequest(res, `services[${idx}].noShowFeeAmount must be non-negative`);
       }
 
+      // Per-service add-ons. Each: { id, name, price, durationMinutes }.
+      // We mint an id for new entries so the public booker can refer
+      // to them stably even if the owner reorders.
+      const rawAddOns = Array.isArray(s?.addOns) ? s.addOns : [];
+      if (rawAddOns.length > 30) return badRequest(res, `services[${idx}].addOns capped at 30`);
+      const addOns = [];
+      for (const a of rawAddOns) {
+        const aname = (a?.name || '').toString().trim();
+        if (!aname) continue;
+        if (aname.length > 200) return badRequest(res, `services[${idx}].addOns: name too long`);
+        const aPrice = Number(a?.price ?? 0);
+        if (!Number.isFinite(aPrice) || aPrice < 0) {
+          return badRequest(res, `services[${idx}].addOns: price must be non-negative`);
+        }
+        const aDur = Number.isInteger(a?.durationMinutes) ? a.durationMinutes : Number(a?.durationMinutes || 0);
+        if (!Number.isInteger(aDur) || aDur < 0 || aDur > 480) {
+          return badRequest(res, `services[${idx}].addOns: durationMinutes must be 0–480`);
+        }
+        addOns.push({
+          id: a?.id || `ao_${Math.random().toString(36).slice(2, 10)}`,
+          name: aname,
+          price: Math.round(aPrice * 100) / 100,
+          durationMinutes: aDur,
+        });
+      }
+
+      // Per-service custom intake fields. Each:
+      //   { id, label, type, required, options[] }
+      const rawFields = Array.isArray(s?.customFields) ? s.customFields : [];
+      if (rawFields.length > 20) return badRequest(res, `services[${idx}].customFields capped at 20`);
+      const customFields = [];
+      const VALID_FIELD_TYPE = new Set(['text', 'textarea', 'number', 'select', 'checkbox']);
+      for (const f of rawFields) {
+        const flabel = (f?.label || '').toString().trim();
+        if (!flabel) continue;
+        if (flabel.length > 200) return badRequest(res, `services[${idx}].customFields: label too long`);
+        const ftype = (f?.type || 'text').toString();
+        if (!VALID_FIELD_TYPE.has(ftype)) {
+          return badRequest(res, `services[${idx}].customFields: invalid type ${ftype}`);
+        }
+        const options = Array.isArray(f?.options)
+          ? f.options.map((o) => String(o).slice(0, 200)).filter(Boolean).slice(0, 30)
+          : [];
+        if (ftype === 'select' && options.length === 0) {
+          return badRequest(res, `services[${idx}].customFields: select fields need options`);
+        }
+        customFields.push({
+          id: f?.id || `cf_${Math.random().toString(36).slice(2, 10)}`,
+          label: flabel,
+          type: ftype,
+          required: !!f?.required,
+          options,
+        });
+      }
+
       cleaned.push({
         id: s?.id || null,
         name,
@@ -134,6 +189,8 @@ export default async function handler(req, res) {
         cancellationFeeAmount,
         cancellationWindowHours,
         noShowFeeAmount,
+        addOns,
+        customFields,
       });
     }
 
@@ -190,7 +247,9 @@ export default async function handler(req, res) {
             travel_buffer_minutes = ${s.travelBufferMinutes},
             cancellation_fee_amount = ${s.cancellationFeeAmount},
             cancellation_window_hours = ${s.cancellationWindowHours},
-            no_show_fee_amount = ${s.noShowFeeAmount}
+            no_show_fee_amount = ${s.noShowFeeAmount},
+            add_ons = ${JSON.stringify(s.addOns)}::jsonb,
+            custom_fields = ${JSON.stringify(s.customFields)}::jsonb
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -203,14 +262,16 @@ export default async function handler(req, res) {
             description, photo_url, prep_instructions, reminder_minutes, capacity,
             intake_form_template_ids, deposit_type, deposit_amount,
             location_type, travel_buffer_minutes,
-            cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount
+            cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount,
+            add_ons, custom_fields
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
             ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity},
             ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount},
             ${s.locationType}, ${s.travelBufferMinutes},
-            ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount}
+            ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount},
+            ${JSON.stringify(s.addOns)}::jsonb, ${JSON.stringify(s.customFields)}::jsonb
           )
           RETURNING *
         `;

@@ -670,6 +670,40 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS no_show_at TIMESTAMPTZ;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_charged_at TIMESTAMPTZ;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_payment_intent TEXT;
+
+-- Virtual / online services. Auto-generated meeting URL minted on
+-- insert when the underlying service.location_type = 'virtual'.
+-- One unique room per booking so links can't be reused after the
+-- session ends. Currently we mint a Jitsi Meet room
+-- (https://meet.jit.si/thryve-<token>) — zero-config, no API key
+-- needed, works in every modern browser. Owners can override per
+-- booking by setting their own URL (e.g. their Zoom personal room).
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS video_room_url TEXT;
+
+-- Service add-ons + per-service custom intake fields.
+--
+-- custom_fields shape: [{ id, label, type, required, options[] }]
+--   • text / textarea / number / select / checkbox
+--   • options[] only used when type='select'
+-- Surfaced at the booking-details step on the public page so we capture
+-- service-specific context up front (auto: vehicle make/model, pet
+-- breed/size, tutor: subject/grade, etc.) instead of stuffing
+-- everything into freeform notes.
+--
+-- add_ons shape: [{ id, name, price, durationMinutes }]
+-- Optional extras the client picks at booking ("hot stones +$20",
+-- "deep conditioning +$15"). Extends the slot duration by the sum
+-- of selected add-ons' durationMinutes — slot grid recomputes from
+-- (service.duration + selected add-ons).
+ALTER TABLE services ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS add_ons JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS custom_field_values JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS add_on_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Snapshot of total at booking time — service.price + sum(add-on prices)
+-- minus any gift-card credit applied. Lets reports + invoices reflect
+-- what was actually agreed without re-deriving from possibly-edited
+-- service prices later.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_total NUMERIC(12,2) NOT NULL DEFAULT 0;
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
 
 -- Messaging: one thread per (workspace, client). Mode controls whether the
@@ -902,6 +936,109 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_one_running
 -- Per-workspace default hourly rate. Stored on finance_settings so
 -- new entries can default to it without an extra round trip.
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS default_hourly_rate NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+-- Quotes / estimates. Mirrors invoices for the structural pieces
+-- (line items, tax, discount, notes, public view token) but lives
+-- in its own table because the LIFECYCLE is different: a quote is
+-- proposed, the client accepts or declines, and on accept it
+-- becomes an invoice. We never mutate a quote post-acceptance —
+-- the resulting invoice carries the snapshot.
+CREATE TABLE IF NOT EXISTS quotes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  number TEXT NOT NULL,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  client_name TEXT,
+  client_email TEXT,
+  issue_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  expiry_date DATE,
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  tax_rate NUMERIC(6,3) NOT NULL DEFAULT 0,
+  discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  status TEXT NOT NULL DEFAULT 'draft'
+    CHECK (status IN ('draft', 'sent', 'accepted', 'declined', 'expired', 'voided')),
+  view_token_hash TEXT UNIQUE,
+  sent_at TIMESTAMPTZ,
+  accepted_at TIMESTAMPTZ,
+  declined_at TIMESTAMPTZ,
+  decline_reason TEXT,
+  -- When accepted, we create an invoice and link it here so the
+  -- owner sees "this quote turned into INV-1042" in the activity log.
+  resulting_invoice_id UUID REFERENCES invoices(id) ON DELETE SET NULL,
+  activity JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (workspace_id, number)
+);
+CREATE INDEX IF NOT EXISTS idx_quotes_workspace_status
+  ON quotes(workspace_id, status);
+CREATE INDEX IF NOT EXISTS idx_quotes_workspace_issued
+  ON quotes(workspace_id, issue_date DESC);
+
+-- Auto-incrementing quote number (parallels finance_settings.next_invoice_number).
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS next_quote_number INT NOT NULL DEFAULT 1001;
+
+-- Gift cards. Each row is one issued card with a redeemable code.
+-- balance_cents drains as the card is applied to bookings/invoices;
+-- we never destructively edit history, so the audit trail comes
+-- from gift_card_redemptions.
+CREATE TABLE IF NOT EXISTS gift_cards (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  -- Public code shown to recipients. 12+ chars, ambiguity-free
+  -- (no 0/O/1/I), uppercase. Hashed for lookup so a leaked DB
+  -- doesn't immediately give attackers usable codes.
+  code_hash TEXT NOT NULL UNIQUE,
+  -- Last 4 chars of the raw code for the owner dashboard so they
+  -- can identify a row without seeing the full code (which we
+  -- can't decrypt). Recipients see the full code via email.
+  code_last4 TEXT NOT NULL,
+  original_amount_cents INT NOT NULL CHECK (original_amount_cents > 0),
+  balance_cents INT NOT NULL CHECK (balance_cents >= 0),
+  -- Stripe payment_intent for the purchase, so refunds are possible.
+  stripe_payment_intent TEXT,
+  sender_name TEXT,
+  sender_email TEXT,
+  recipient_name TEXT,
+  recipient_email TEXT,
+  message TEXT,
+  -- Optional expiry. Many states cap minimum expiry windows for
+  -- gift cards — owners set this per workspace policy. NULL = no
+  -- expiry (default).
+  expires_at TIMESTAMPTZ,
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'depleted', 'expired', 'voided')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gift_cards_workspace
+  ON gift_cards(workspace_id, status, created_at DESC);
+
+-- Append-only audit of every redemption (or partial spend) of a
+-- gift card. amount_cents is what came off this card in this
+-- transaction. applied_to_kind names the target object so reports
+-- can join back ('booking' | 'invoice'); applied_to_id is the
+-- target's UUID.
+CREATE TABLE IF NOT EXISTS gift_card_redemptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  gift_card_id UUID NOT NULL REFERENCES gift_cards(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  amount_cents INT NOT NULL CHECK (amount_cents > 0),
+  applied_to_kind TEXT NOT NULL CHECK (applied_to_kind IN ('booking', 'invoice')),
+  applied_to_id UUID,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_gc_redemptions_card
+  ON gift_card_redemptions(gift_card_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_gc_redemptions_workspace
+  ON gift_card_redemptions(workspace_id, created_at DESC);
+
+-- Bookings + invoices both surface their gift-card credit in their
+-- own row so reports + receipts include it without a join.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS gift_card_credit_cents INT NOT NULL DEFAULT 0;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gift_card_credit_cents INT NOT NULL DEFAULT 0;
 
 -- Memberships: self-serve recurring subscriptions. Owners define
 -- one or more "membership" tiers (name, price, perks). Each tier

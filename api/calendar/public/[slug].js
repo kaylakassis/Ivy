@@ -10,8 +10,9 @@ import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
-  hasConflict, withinAvailability, depositFor,
+  hasConflict, withinAvailability, depositFor, mintVideoRoomUrl,
 } from '../../_lib/calendar.js';
+import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail } from '../../_lib/auth.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
@@ -190,18 +191,95 @@ async function createBooking(req, res) {
     // Verify service belongs to this workspace and duration matches.
     const svcRows = await sql`
       SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount,
-             location_type, travel_buffer_minutes
+             location_type, travel_buffer_minutes,
+             custom_fields, add_ons
         FROM services
        WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
     if (svcRows.rows.length === 0) return badRequest(res, 'Unknown service');
-    if ((end - start) !== svcRows.rows[0].duration_minutes) {
-      return badRequest(res, 'Slot duration does not match service');
+    const svc = svcRows.rows[0];
+    const serviceCapacity = Math.max(1, Number(svc.capacity) || 1);
+    const locationType  = svc.location_type || 'in_person';
+    const travelBuffer  = Number(svc.travel_buffer_minutes || 0);
+
+    // Add-ons: validate every requested add-on belongs to this
+    // service and pull its price + duration delta. Selected add-ons
+    // extend the slot duration, so the requested (end - start) must
+    // equal service.duration + sum(add-on durations).
+    const requestedAddOnIds = Array.isArray(body.addOnIds) ? body.addOnIds.map(String) : [];
+    const availableAddOns = Array.isArray(svc.add_ons) ? svc.add_ons : [];
+    const selectedAddOns = [];
+    for (const id of requestedAddOnIds) {
+      const found = availableAddOns.find((a) => a.id === id);
+      if (!found) return badRequest(res, `Unknown add-on: ${id}`);
+      selectedAddOns.push(found);
     }
-    const serviceCapacity = Math.max(1, Number(svcRows.rows[0].capacity) || 1);
-    const depositRequired = depositFor(svcRows.rows[0]);
-    const locationType  = svcRows.rows[0].location_type || 'in_person';
-    const travelBuffer  = Number(svcRows.rows[0].travel_buffer_minutes || 0);
+    const addOnDuration = selectedAddOns.reduce((s, a) => s + Number(a.durationMinutes || 0), 0);
+    const expectedDuration = svc.duration_minutes + addOnDuration;
+    if ((end - start) !== expectedDuration) {
+      return badRequest(res, 'Slot duration does not match service + add-ons');
+    }
+    const addOnTotal = selectedAddOns.reduce((s, a) => s + Number(a.price || 0), 0);
+    const bookingTotal = Number(svc.price || 0) + addOnTotal;
+
+    // Custom intake fields: validate required fields present, types ok.
+    const customFields = Array.isArray(svc.custom_fields) ? svc.custom_fields : [];
+    const customValues = (body.customFieldValues && typeof body.customFieldValues === 'object')
+      ? body.customFieldValues : {};
+    const cleanedCustomValues = {};
+    for (const f of customFields) {
+      const raw = customValues[f.id];
+      const isEmpty = raw == null || raw === '' || (Array.isArray(raw) && raw.length === 0);
+      if (f.required && isEmpty) {
+        return badRequest(res, `"${f.label || f.id}" is required`);
+      }
+      if (isEmpty) continue;
+      let val = raw;
+      if (f.type === 'number') {
+        const n = Number(raw);
+        if (!Number.isFinite(n)) return badRequest(res, `"${f.label || f.id}" must be a number`);
+        val = n;
+      } else if (f.type === 'select') {
+        const opts = Array.isArray(f.options) ? f.options : [];
+        if (opts.length > 0 && !opts.includes(String(raw))) {
+          return badRequest(res, `"${f.label || f.id}" must be one of: ${opts.join(', ')}`);
+        }
+        val = String(raw);
+      } else if (f.type === 'checkbox') {
+        val = !!raw;
+      } else {
+        val = String(raw).slice(0, 4000);
+      }
+      cleanedCustomValues[f.id] = val;
+    }
+
+    // Recompute deposit using the booking total (service + add-ons),
+    // not just service.price — owners expect a 25% deposit on a $200
+    // service+add-on combo to be $50, not $50 of just the service.
+    let depositRequired = depositFor(svc, bookingTotal);
+
+    // Optional gift card application. Resolved up-front (before insert)
+    // so we know how much credit to apply + how much deposit remains
+    // after the credit. If the credit covers the whole deposit, we
+    // skip the Stripe Checkout entirely.
+    const giftCardCode = body.giftCardCode ? String(body.giftCardCode) : null;
+    let giftCardRow = null;
+    let giftCardCreditCents = 0;
+    if (giftCardCode) {
+      giftCardRow = await findActiveByCode(workspaceId, giftCardCode);
+      if (!giftCardRow) return badRequest(res, "That gift card code isn't valid (or has been used up).");
+      // Apply the lesser of (gift card balance, booking total) — owners
+      // collect the rest from the client either at the chair (no deposit
+      // required) or via a reduced deposit + balance-due-at-session.
+      const totalCents = Math.round(Number(bookingTotal) * 100);
+      giftCardCreditCents = Math.min(Number(giftCardRow.balance_cents), totalCents);
+    }
+    // Reduce the deposit by the gift card credit (never below zero).
+    if (giftCardCreditCents > 0) {
+      const depositCents = Math.round(Number(depositRequired) * 100);
+      const reducedCents = Math.max(0, depositCents - giftCardCreditCents);
+      depositRequired = reducedCents / 100;
+    }
 
     // Mobile-service address capture. Required at booking time so the
     // owner knows where to go. Saved on the client row so subsequent
@@ -309,18 +387,51 @@ async function createBooking(req, res) {
       sendClientInvite({ workspaceId, clientId });
     }
 
+    // Mint a video room when the service is virtual. Per-booking
+    // unique URL so a leaked link can't be reused for a future
+    // session with a different client.
+    const videoRoomUrl = locationType === 'virtual' ? mintVideoRoomUrl() : null;
+
     const insert = await sql`
       INSERT INTO bookings (
         workspace_id, service_id, client_id, client_name, client_email, client_phone,
-        date, start_min, end_min, notes, deposit_required, location_address
+        date, start_min, end_min, notes, deposit_required, location_address,
+        video_room_url, custom_field_values, add_on_ids, booking_total,
+        gift_card_credit_cents
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
-        ${date}, ${start}, ${end}, ${notes}, ${depositRequired}, ${locationAddress}
+        ${date}, ${start}, ${end}, ${notes}, ${depositRequired}, ${locationAddress},
+        ${videoRoomUrl},
+        ${JSON.stringify(cleanedCustomValues)}::jsonb,
+        ${JSON.stringify(requestedAddOnIds)}::jsonb,
+        ${bookingTotal},
+        ${giftCardCreditCents}
       )
       RETURNING *
     `;
-    const b = insert.rows[0];
+    const newBookingRow = insert.rows[0];
+
+    // Atomically debit the gift card after the booking row exists. If
+    // the redemption fails (race against another concurrent redemption),
+    // roll back the gift_card_credit_cents on the booking — the booking
+    // itself stays so the slot isn't lost.
+    if (giftCardRow && giftCardCreditCents > 0) {
+      try {
+        await redeemAtomic({
+          giftCardId: giftCardRow.id,
+          workspaceId,
+          amountCents: giftCardCreditCents,
+          appliedToKind: 'booking',
+          appliedToId: newBookingRow.id,
+          clientId,
+        });
+      } catch (err) {
+        await sql`UPDATE bookings SET gift_card_credit_cents = 0 WHERE id = ${newBookingRow.id}`;
+        return badRequest(res, 'Gift card was just used by another transaction — please try a different code.');
+      }
+    }
+    const b = newBookingRow;
 
     // If a deposit is required AND the workspace has Stripe connected,
     // mint a Checkout session for the deposit and return its URL so
@@ -377,6 +488,9 @@ async function createBooking(req, res) {
         date: b.date instanceof Date ? b.date.toISOString().slice(0, 10) : b.date,
         startMin: b.start_min,
         endMin: b.end_min,
+        videoRoomUrl: b.video_room_url || null,
+        bookingTotal: Number(b.booking_total || 0),
+        locationType,
         depositRequired,
       },
       depositCheckoutUrl,

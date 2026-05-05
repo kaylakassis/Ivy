@@ -30,14 +30,28 @@ export default function PublicBooking() {
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [smsOptIn, setSmsOptIn] = useState(false);
+  // Selected add-ons (set of add-on ids) and custom-field answers
+  // (id → value). Reset whenever the chosen service changes so a
+  // visitor doesn't carry stale picks across services.
+  const [selectedAddOns, setSelectedAddOns] = useState(new Set());
+  const [customAnswers, setCustomAnswers]   = useState({});
   const [busy, setBusy]   = useState(false);
   const [bookErr, setBookErr] = useState(null);
+  // Video room URL returned from the confirmed booking response. Shown
+  // on the success screen for virtual services.
+  const [confirmedVideoUrl, setConfirmedVideoUrl] = useState(null);
 
   // "Have a question?" prospect-message modal state. Lets a visitor
   // talk to the business before committing to a slot.
   const [contactOpen, setContactOpen] = useState(false);
   // Membership subscribe modal — separate from the booking flow.
   const [joiningMembership, setJoiningMembership] = useState(null);
+  // Gift card buy modal.
+  const [giftCardOpen, setGiftCardOpen] = useState(false);
+  // Gift card application at checkout.
+  const [giftCardCode, setGiftCardCode] = useState('');
+  const [giftCardChecked, setGiftCardChecked] = useState(null);
+  const [giftCardErr, setGiftCardErr] = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -181,17 +195,29 @@ export default function PublicBooking() {
     try {
       // Same URL as the GET; method is POST. Avoids a sibling [slug]/ dir
       // that would conflict with [slug].js in Vercel's function bundling.
+      // Compute the slot's effective end-time given selected add-ons
+      // (each adds its durationMinutes). Server re-checks; this is for
+      // the request payload + slot conflict math.
+      const addOnDurDelta = (svc?.addOns || [])
+        .filter((a) => selectedAddOns.has(a.id))
+        .reduce((s, a) => s + Number(a.durationMinutes || 0), 0);
+      const effectiveEnd = slot.start + (svc?.durationMinutes || 0) + addOnDurDelta;
+
       const r = await api.post('/calendar/public/' + encodeURIComponent(slug), {
         serviceId: svc.id,
         date: slot.dateISO,
         startMin: slot.start,
-        endMin: slot.end,
+        endMin: effectiveEnd,
         clientName: name,
         clientEmail: email,
         clientPhone: phone.trim() || null,
         // Mobile services need an address — only forwarded when the
         // service is mobile so the server can validate it's there.
         locationAddress: svc?.locationType === 'mobile' ? address.trim() : null,
+        addOnIds: Array.from(selectedAddOns),
+        customFieldValues: customAnswers,
+        // Optional gift card application at booking time.
+        giftCardCode: giftCardChecked ? giftCardCode : null,
         smsConsent: !!(smsOptIn && phone.trim()),
         joinWaitlist,
       });
@@ -203,6 +229,7 @@ export default function PublicBooking() {
         window.location.href = r.depositCheckoutUrl;
         return;
       }
+      if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
     } catch (e) {
       setBookErr(e.message || 'Could not confirm — try another slot.');
@@ -255,6 +282,34 @@ export default function PublicBooking() {
         />
       )}
 
+      {/* Gift card CTA — same step as the slot picker so it doesn't
+          get in the way of someone who's actively trying to book. */}
+      {step === 'pick' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          padding: '10px 14px', borderRadius: 10, marginTop: 14,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          fontSize: 13, color: 'var(--fg-2)',
+        }}>
+          <Icons.Gift size={14} stroke="var(--accent)"/>
+          <span style={{ flex: 1, minWidth: 200 }}>
+            Send a gift card to a friend — they'll get it in their inbox right away.
+          </span>
+          <button onClick={() => setGiftCardOpen(true)}
+            className="btn btn-outline" style={{ fontSize: 12.5, padding: '6px 12px' }}>
+            Buy a gift card
+          </button>
+        </div>
+      )}
+
+      {giftCardOpen && (
+        <BuyGiftCardModal
+          slug={slug}
+          bizName={cal.settings.bizName}
+          onClose={() => setGiftCardOpen(false)}
+        />
+      )}
+
       {joiningMembership && (
         <JoinMembershipModal
           slug={slug}
@@ -298,6 +353,29 @@ export default function PublicBooking() {
               </b>{' '}at <b style={{ color: 'var(--fg-2)' }}>{minToHM(slot.start)}</b>.
             </p>
           </div>
+          {confirmedVideoUrl && (
+            <div style={{
+              marginTop: 24, padding: 18,
+              background: 'color-mix(in srgb, var(--accent-soft) 60%, var(--surface))',
+              border: '1px solid var(--accent)', borderRadius: 12,
+            }}>
+              <div className="metric-label" style={{ marginBottom: 6, color: 'var(--accent)' }}>
+                Your meeting link
+              </div>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginBottom: 10, lineHeight: 1.5 }}>
+                Save this — it's also in the confirmation email. Open it at the start of your session.
+              </div>
+              <a href={confirmedVideoUrl} target="_blank" rel="noopener noreferrer"
+                className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                <Icons.Globe size={13}/> Join meeting
+              </a>
+              <div style={{
+                marginTop: 10, padding: '8px 10px', borderRadius: 8,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                fontSize: 11.5, color: 'var(--muted)', wordBreak: 'break-all',
+              }}>{confirmedVideoUrl}</div>
+            </div>
+          )}
           {svc?.prepInstructions && (
             <div style={{
               marginTop: 28, padding: 18,
@@ -346,6 +424,132 @@ export default function PublicBooking() {
                 style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.45 }}
                 autoComplete="street-address"/>
             </Field>
+          )}
+
+          {/* Add-ons. Listed as checkboxes; each shows price + any
+              extra duration so the visitor sees what they're agreeing
+              to. Total updates inline. */}
+          {svc?.addOns?.length > 0 && (
+            <Field label="Add anything?" hint="Optional extras, charged with the service.">
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {svc.addOns.map((a) => {
+                  const checked = selectedAddOns.has(a.id);
+                  return (
+                    <label key={a.id} style={{
+                      display: 'flex', alignItems: 'center', gap: 10, padding: '8px 12px',
+                      borderRadius: 10, cursor: 'pointer',
+                      background: checked ? 'var(--accent-soft)' : 'var(--surface-2)',
+                      border: `1px solid ${checked ? 'var(--accent)' : 'var(--border)'}`,
+                    }}>
+                      <input type="checkbox" checked={checked}
+                        onChange={(e) => {
+                          setSelectedAddOns((prev) => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(a.id); else next.delete(a.id);
+                            return next;
+                          });
+                        }}/>
+                      <span style={{ flex: 1, fontSize: 13.5, fontWeight: 600 }}>{a.name}</span>
+                      <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
+                        +${Number(a.price).toFixed(2)}
+                        {Number(a.durationMinutes) > 0 && ` · +${a.durationMinutes}min`}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+            </Field>
+          )}
+
+          {/* Gift card apply: visitors paste a code, we ping the
+              public check endpoint to confirm balance. The applied
+              card is forwarded with the booking POST and atomically
+              redeemed server-side so concurrent uses can't overspend. */}
+          <Field label="Gift card (optional)"
+            hint={giftCardChecked
+              ? `Balance available: $${(giftCardChecked.balanceCents / 100).toFixed(2)}. Applied to this booking.`
+              : 'Paste a gift card code to apply credit.'}>
+            <div style={{ display: 'flex', gap: 6 }}>
+              <input value={giftCardCode}
+                onChange={(e) => { setGiftCardCode(e.target.value); setGiftCardChecked(null); setGiftCardErr(null); }}
+                placeholder="ABCD-1234-EFGH"
+                disabled={!!giftCardChecked}
+                style={{
+                  ...inputSty,
+                  fontFamily: 'ui-monospace, monospace',
+                  textTransform: 'uppercase',
+                  opacity: giftCardChecked ? 0.6 : 1,
+                }}/>
+              {giftCardChecked ? (
+                <button type="button" className="btn btn-outline"
+                  onClick={() => { setGiftCardChecked(null); setGiftCardCode(''); }}
+                  style={{ fontSize: 12 }}>
+                  Remove
+                </button>
+              ) : (
+                <button type="button" className="btn btn-outline"
+                  disabled={!giftCardCode.trim()}
+                  style={{ fontSize: 12 }}
+                  onClick={async () => {
+                    setGiftCardErr(null);
+                    try {
+                      const res = await fetch('/api/gift-cards/check', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ slug, code: giftCardCode.trim() }),
+                      });
+                      const j = await res.json().catch(() => ({}));
+                      if (!res.ok) throw new Error(j.error || 'Invalid code');
+                      setGiftCardChecked(j.card);
+                    } catch (ex) {
+                      setGiftCardErr(ex.message || 'Could not check that code');
+                    }
+                  }}>
+                  Apply
+                </button>
+              )}
+            </div>
+            {giftCardErr && (
+              <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 6 }}>{giftCardErr}</div>
+            )}
+          </Field>
+
+          {/* Custom intake fields. Required ones block submit; types
+              determine the input shape. */}
+          {svc?.customFields?.length > 0 && (
+            <>
+              {svc.customFields.map((f) => (
+                <Field key={f.id} label={f.label + (f.required ? ' *' : '')}>
+                  {f.type === 'textarea' ? (
+                    <textarea value={customAnswers[f.id] || ''}
+                      onChange={(e) => setCustomAnswers((m) => ({ ...m, [f.id]: e.target.value }))}
+                      rows={3} required={f.required}
+                      style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.45 }}/>
+                  ) : f.type === 'number' ? (
+                    <input type="number" value={customAnswers[f.id] || ''}
+                      onChange={(e) => setCustomAnswers((m) => ({ ...m, [f.id]: e.target.value }))}
+                      required={f.required} style={inputSty}/>
+                  ) : f.type === 'select' ? (
+                    <select value={customAnswers[f.id] || ''}
+                      onChange={(e) => setCustomAnswers((m) => ({ ...m, [f.id]: e.target.value }))}
+                      required={f.required} style={inputSty}>
+                      <option value="">— Choose —</option>
+                      {(f.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
+                    </select>
+                  ) : f.type === 'checkbox' ? (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fg-2)' }}>
+                      <input type="checkbox" checked={!!customAnswers[f.id]}
+                        onChange={(e) => setCustomAnswers((m) => ({ ...m, [f.id]: e.target.checked }))}/>
+                      Yes
+                    </label>
+                  ) : (
+                    <input value={customAnswers[f.id] || ''}
+                      onChange={(e) => setCustomAnswers((m) => ({ ...m, [f.id]: e.target.value }))}
+                      required={f.required} style={inputSty}/>
+                  )}
+                </Field>
+              ))}
+            </>
           )}
           {phone.trim() && (
             <label style={{
@@ -406,7 +610,13 @@ export default function PublicBooking() {
                 {cal.services.map((s) => {
                   const selected = serviceId === s.id;
                   return (
-                    <button key={s.id} onClick={() => setServiceId(s.id)} style={{
+                    <button key={s.id} onClick={() => {
+                      setServiceId(s.id);
+                      // Reset per-service state — picks shouldn't carry
+                      // across services.
+                      setSelectedAddOns(new Set());
+                      setCustomAnswers({});
+                    }} style={{
                       padding: 0, borderRadius: 12, textAlign: 'left', cursor: 'pointer',
                       background: selected ? 'var(--accent-soft)' : 'var(--surface-2)',
                       border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
@@ -849,6 +1059,135 @@ function JoinMembershipModal({ slug, membership, bizName, onClose }) {
         </div>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, textAlign: 'center' }}>
           Card details are entered on Stripe's secure checkout — never on this page.
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// Buy-a-gift-card modal. Locked to a fixed amount ladder for safety;
+// builds a Stripe Checkout session via /api/gift-cards/checkout.
+function BuyGiftCardModal({ slug, bizName, onClose }) {
+  const [amount, setAmount] = useState(5000);
+  const [senderName, setSenderName] = useState('');
+  const [senderEmail, setSenderEmail] = useState('');
+  const [recipientName, setRecipientName] = useState('');
+  const [recipientEmail, setRecipientEmail] = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!senderName.trim() || !senderEmail.trim() || !recipientName.trim() || !recipientEmail.trim()) {
+      setErr('All fields except message are required');
+      return;
+    }
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/gift-cards/checkout', {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          amountCents: amount,
+          senderName: senderName.trim(),
+          senderEmail: senderEmail.trim(),
+          recipientName: recipientName.trim(),
+          recipientEmail: recipientEmail.trim(),
+          message: message.trim() || null,
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      window.location.href = j.url;
+    } catch (ex) {
+      setErr(ex.message || 'Could not start checkout');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={busy ? null : onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card scroll"
+        style={{ width: '100%', maxWidth: 480, padding: 24, maxHeight: 'calc(100vh - 40px)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Gift size={16} sw={1.8}/></div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Send a gift card</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+              {bizName ? `For use at ${bizName}.` : 'Redeemable on this booking page.'}
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+            <Icons.X size={15}/>
+          </button>
+        </div>
+
+        <Field label="Amount">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+            {[2500, 5000, 7500, 10000, 15000, 20000, 25000, 50000].map((cents) => (
+              <button key={cents} type="button" onClick={() => setAmount(cents)}
+                style={{
+                  padding: '8px 6px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+                  border: `1px solid ${amount === cents ? 'var(--accent)' : 'var(--border-strong)'}`,
+                  background: amount === cents ? 'var(--accent)' : 'var(--surface-2)',
+                  color: amount === cents ? 'var(--accent-ink)' : 'var(--fg-2)',
+                  cursor: 'pointer',
+                }}>${(cents / 100).toFixed(0)}</button>
+            ))}
+          </div>
+        </Field>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+          <Field label="From (your name)">
+            <input value={senderName} onChange={(e) => setSenderName(e.target.value)} required
+              style={inputSty}/>
+          </Field>
+          <Field label="Your email">
+            <input type="email" value={senderEmail} onChange={(e) => setSenderEmail(e.target.value)}
+              required style={inputSty} autoComplete="email"/>
+          </Field>
+          <Field label="Recipient name">
+            <input value={recipientName} onChange={(e) => setRecipientName(e.target.value)}
+              required style={inputSty}/>
+          </Field>
+          <Field label="Recipient email">
+            <input type="email" value={recipientEmail} onChange={(e) => setRecipientEmail(e.target.value)}
+              required style={inputSty}/>
+          </Field>
+        </div>
+
+        <Field label="Message (optional)">
+          <textarea value={message} onChange={(e) => setMessage(e.target.value.slice(0, 1000))}
+            rows={3}
+            placeholder={`Happy birthday! Treat yourself.`}
+            style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
+        </Field>
+
+        {err && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, marginBottom: 14,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)', fontSize: 12.5,
+          }}>{err}</div>
+        )}
+
+        <button type="submit" className="btn btn-primary"
+          disabled={busy}
+          style={{ width: '100%', justifyContent: 'center', padding: '12px' }}>
+          {busy ? 'Opening checkout…' : `Continue — $${(amount / 100).toFixed(2)}`}
+        </button>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, textAlign: 'center' }}>
+          Recipient gets the code by email immediately after payment.
         </div>
       </form>
     </div>

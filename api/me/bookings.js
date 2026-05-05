@@ -22,8 +22,10 @@ export default async function handler(req, res) {
     const { rows } = await sql.query(
       `SELECT b.id, b.workspace_id, b.client_id, b.service_id,
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
+              b.video_room_url, b.location_address, b.tip_amount,
               s.name AS service_name,
               s.duration_minutes, s.price, s.capacity AS service_capacity,
+              s.location_type AS service_location_type,
               cs.slug AS biz_slug
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
@@ -50,9 +52,13 @@ export default async function handler(req, res) {
         serviceId: r.service_id,
         serviceName: r.service_name,
         serviceCapacity: r.service_capacity || 1,
+        serviceLocationType: r.service_location_type || 'in_person',
         durationMinutes: r.duration_minutes,
         price: r.price != null ? Number(r.price) : null,
         cancelledAt: r.cancelled_at,
+        videoRoomUrl: r.video_room_url || null,
+        locationAddress: r.location_address || null,
+        tipAmount: Number(r.tip_amount || 0),
         businessName: m?.businessName || 'Business',
         // Slug + workspaceId let the client-side reschedule modal fetch
         // the public availability + slot grid without duplicating

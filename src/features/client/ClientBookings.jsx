@@ -214,6 +214,14 @@ function BookingRow({ booking, first, cancellable, reschedulable, reviewable, on
           Cancelled
         </div>
       )}
+      {booking.videoRoomUrl && !booking.cancelledAt && (
+        <a href={booking.videoRoomUrl} target="_blank" rel="noopener noreferrer"
+          className="btn btn-primary"
+          style={{ fontSize: 12, padding: '6px 12px' }}
+          title="Join your meeting">
+          <Icons.Globe size={12} sw={1.8}/> Join
+        </a>
+      )}
       {reviewable && (
         <button onClick={onReview} className="btn btn-outline"
           style={{ fontSize: 12, padding: '6px 12px' }}

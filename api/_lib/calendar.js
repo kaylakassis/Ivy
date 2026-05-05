@@ -59,6 +59,8 @@ export function serializeService(row) {
     cancellationWindowHours: Number.isInteger(row.cancellation_window_hours)
       ? row.cancellation_window_hours : 24,
     noShowFeeAmount:   Number(row.no_show_fee_amount || 0),
+    customFields:      row.custom_fields || [],
+    addOns:            row.add_ons || [],
   };
 }
 
@@ -124,6 +126,11 @@ export function serializeBooking(row, opts = {}) {
     depositPaid:         Number(row.deposit_paid || 0),
     depositPaidAt:       row.deposit_paid_at || null,
     locationAddress:     redactClient ? null : (row.location_address || null),
+    videoRoomUrl:        row.video_room_url || null,
+    customFieldValues:   redactClient ? null : (row.custom_field_values || {}),
+    addOnIds:            row.add_on_ids || [],
+    bookingTotal:        Number(row.booking_total || 0),
+    giftCardCreditCents: Number(row.gift_card_credit_cents || 0),
     noShowAt:            row.no_show_at || null,
     feeChargedAmount:    Number(row.fee_charged_amount || 0),
     feeChargedKind:      row.fee_charged_kind || null,
@@ -131,6 +138,20 @@ export function serializeBooking(row, opts = {}) {
     tipAmount:           Number(row.tip_amount || 0),
     tipChargedAt:        row.tip_charged_at || null,
   };
+}
+
+// Mint a unique meeting URL for a virtual booking. Jitsi Meet's
+// public instance accepts arbitrary room names — we prefix with
+// 'thryve-' so the room is namespaced to us, and append a 24-char
+// random suffix so the link is unguessable. No API key, no setup.
+//
+// Owners who want their own conferencing tool can paste a custom
+// URL on the booking row post-create; the public booking flow
+// always uses what's in the column, never re-mints.
+import crypto from 'node:crypto';
+export function mintVideoRoomUrl() {
+  const token = crypto.randomBytes(18).toString('base64url');
+  return `https://meet.jit.si/thryve-${token}`;
 }
 
 export const VALID_RECURRENCE = new Set([null, 'weekly', 'biweekly', 'monthly']);

@@ -65,6 +65,34 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
       <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '—'}/>
       {event.notes && <InfoRow label="Notes" value={event.notes}/>}
 
+      {/* Mobile address + video room URL surfaced for the owner so they
+          know where to go (or how to dial in). */}
+      {event.locationAddress && (
+        <InfoRow label="Address" value={event.locationAddress}/>
+      )}
+      {event.videoRoomUrl && (
+        <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10,
+          background: 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface-2))',
+          border: '1px solid var(--accent)' }}>
+          <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600,
+            letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 6 }}>
+            Meeting room
+          </div>
+          <a href={event.videoRoomUrl} target="_blank" rel="noopener noreferrer"
+            style={{ fontSize: 12.5, color: 'var(--fg)', wordBreak: 'break-all', textDecoration: 'underline' }}>
+            {event.videoRoomUrl}
+          </a>
+        </div>
+      )}
+      {event.customFieldValues && Object.keys(event.customFieldValues).length > 0 && (
+        <div style={{ marginTop: 12 }}>
+          <div className="metric-label" style={{ marginBottom: 6 }}>Intake</div>
+          {Object.entries(event.customFieldValues).map(([k, v]) => (
+            <InfoRow key={k} label={k} value={String(v)}/>
+          ))}
+        </div>
+      )}
+
       {/* Recurrence editor */}
       <div style={{ marginTop: 18 }}>
         <div className="metric-label" style={{ marginBottom: 8 }}>Recurrence</div>
@@ -110,12 +138,9 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
         )}
       </div>
 
-      {/* Booking-detail extras: location, no-show + tip + late-cancel
-          fee. Surfaced before the destructive cancel actions so they
-          aren't visually grouped with "Cancel booking." */}
-      {event.locationAddress && (
-        <InfoRow label="Address" value={event.locationAddress}/>
-      )}
+      {/* Booking status: no-show / fee / tip. Surfaced before the
+          destructive cancel actions so they aren't visually grouped
+          with "Cancel booking." */}
       {(event.noShowAt || Number(event.feeChargedAmount) > 0 || Number(event.tipAmount) > 0) && (
         <div style={{
           marginTop: 14, padding: '10px 12px', borderRadius: 10,

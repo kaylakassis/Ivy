@@ -66,6 +66,8 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       cancellationFeeAmount: 0,
       cancellationWindowHours: 24,
       noShowFeeAmount: 0,
+      addOns: [],
+      customFields: [],
     };
     setItems((xs) => [...xs, draft]);
     setEditId(id);
@@ -100,6 +102,19 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
         cancellationFeeAmount: Math.max(0, Number(s.cancellationFeeAmount) || 0),
         cancellationWindowHours: Math.max(0, Math.min(720, Number(s.cancellationWindowHours) || 24)),
         noShowFeeAmount: Math.max(0, Number(s.noShowFeeAmount) || 0),
+        addOns: (s.addOns || []).map((a) => ({
+          id: a.id || undefined,
+          name: (a.name || '').trim(),
+          price: Math.max(0, Number(a.price) || 0),
+          durationMinutes: Math.max(0, Math.min(480, Number(a.durationMinutes) || 0)),
+        })).filter((a) => a.name),
+        customFields: (s.customFields || []).map((f) => ({
+          id: f.id || undefined,
+          label: (f.label || '').trim(),
+          type: f.type || 'text',
+          required: !!f.required,
+          options: Array.isArray(f.options) ? f.options.map((o) => String(o).trim()).filter(Boolean) : [],
+        })).filter((f) => f.label),
       })));
       onClose();
     } catch (e) {
@@ -413,6 +428,26 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             style={inputSty}/>
         </Field>
 
+        {/* Add-ons: optional extras the client picks at booking. Each
+            extends the slot duration + total. Example: "Hot stones +$20",
+            "Deep tissue +$30 +15min". */}
+        <Field label="Add-ons (optional extras)"
+          hint="Clients pick these at booking. Each extends the slot duration + total.">
+          <AddOnEditor
+            value={service.addOns || []}
+            onChange={(addOns) => onChange({ addOns })}/>
+        </Field>
+
+        {/* Per-service intake fields. Best for service-specific context:
+            pet breed/size, vehicle make/model, tutoring subject/grade,
+            preferred pressure, allergies. */}
+        <Field label="Custom intake fields"
+          hint="Asked at booking. Shown back to you on the booking detail.">
+          <CustomFieldEditor
+            value={service.customFields || []}
+            onChange={(customFields) => onChange({ customFields })}/>
+        </Field>
+
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>
           <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} onClick={onRemove}>
             <Icons.Trash size={13}/> Remove
@@ -543,6 +578,125 @@ function Field({ label, hint, children }) {
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
+    </div>
+  );
+}
+
+// Inline editor for service add-ons. Each row: name + price + duration.
+// "Add" appends a row; clicking the X removes it. Empty rows are
+// dropped at submit time.
+function AddOnEditor({ value, onChange }) {
+  const items = Array.isArray(value) ? value : [];
+  const setItem = (i, patch) => onChange(items.map((x, j) => j === i ? { ...x, ...patch } : x));
+  const remove  = (i) => onChange(items.filter((_, j) => j !== i));
+  const add     = () => onChange([...items, { name: '', price: 0, durationMinutes: 0 }]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {items.length === 0 && (
+        <div style={{
+          padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)',
+          border: '1px dashed var(--border-strong)', fontSize: 12, color: 'var(--muted)',
+        }}>
+          No add-ons. Add one to let clients pick extras at checkout.
+        </div>
+      )}
+      {items.map((a, i) => (
+        <div key={a.id || i} style={{
+          display: 'grid', gridTemplateColumns: '2fr 80px 90px 30px', gap: 6,
+          alignItems: 'center',
+        }}>
+          <input value={a.name || ''}
+            onChange={(e) => setItem(i, { name: e.target.value })}
+            placeholder="Hot stones"
+            style={{ ...inputSty, padding: '7px 10px' }}/>
+          <input type="number" min={0} step={0.01}
+            value={a.price || 0}
+            onChange={(e) => setItem(i, { price: Number(e.target.value) || 0 })}
+            placeholder="$"
+            style={{ ...inputSty, padding: '7px 10px', textAlign: 'right' }}/>
+          <input type="number" min={0} max={480} step={5}
+            value={a.durationMinutes || 0}
+            onChange={(e) => setItem(i, { durationMinutes: Number(e.target.value) || 0 })}
+            placeholder="+min"
+            style={{ ...inputSty, padding: '7px 10px', textAlign: 'right' }}/>
+          <button type="button" onClick={() => remove(i)}
+            className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }}>
+            <Icons.X size={13}/>
+          </button>
+        </div>
+      ))}
+      <button type="button" onClick={add} className="btn btn-ghost"
+        style={{ alignSelf: 'flex-start', fontSize: 12, padding: '4px 8px' }}>
+        <Icons.Plus size={11}/> Add an extra
+      </button>
+    </div>
+  );
+}
+
+// Inline editor for custom intake fields. Each row: label + type
+// + required flag + options (only for select). Same UX pattern as
+// the add-on editor.
+function CustomFieldEditor({ value, onChange }) {
+  const items = Array.isArray(value) ? value : [];
+  const setItem = (i, patch) => onChange(items.map((x, j) => j === i ? { ...x, ...patch } : x));
+  const remove  = (i) => onChange(items.filter((_, j) => j !== i));
+  const add     = () => onChange([...items, { label: '', type: 'text', required: false, options: [] }]);
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      {items.length === 0 && (
+        <div style={{
+          padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)',
+          border: '1px dashed var(--border-strong)', fontSize: 12, color: 'var(--muted)',
+        }}>
+          No custom fields. Add one to ask service-specific questions at booking.
+        </div>
+      )}
+      {items.map((f, i) => (
+        <div key={f.id || i} style={{
+          padding: 10, borderRadius: 8, background: 'var(--surface-2)',
+          border: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column', gap: 6,
+        }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 90px 30px', gap: 6, alignItems: 'center' }}>
+            <input value={f.label || ''}
+              onChange={(e) => setItem(i, { label: e.target.value })}
+              placeholder="What's the make and model?"
+              style={{ ...inputSty, padding: '7px 10px' }}/>
+            <select value={f.type || 'text'}
+              onChange={(e) => setItem(i, { type: e.target.value })}
+              style={{ ...inputSty, padding: '7px 10px' }}>
+              <option value="text">Short text</option>
+              <option value="textarea">Long text</option>
+              <option value="number">Number</option>
+              <option value="select">Pick from list</option>
+              <option value="checkbox">Yes / no</option>
+            </select>
+            <label style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 4 }}>
+              <input type="checkbox" checked={!!f.required}
+                onChange={(e) => setItem(i, { required: e.target.checked })}/>
+              Required
+            </label>
+            <button type="button" onClick={() => remove(i)}
+              className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }}>
+              <Icons.X size={13}/>
+            </button>
+          </div>
+          {f.type === 'select' && (
+            <input value={(f.options || []).join(', ')}
+              onChange={(e) => setItem(i, {
+                options: e.target.value.split(',').map((o) => o.trim()).filter(Boolean),
+              })}
+              placeholder="Comma-separated options: small, medium, large"
+              style={{ ...inputSty, padding: '7px 10px', fontSize: 12.5 }}/>
+          )}
+        </div>
+      ))}
+      <button type="button" onClick={add} className="btn btn-ghost"
+        style={{ alignSelf: 'flex-start', fontSize: 12, padding: '4px 8px' }}>
+        <Icons.Plus size={11}/> Add a field
+      </button>
     </div>
   );
 }
