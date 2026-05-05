@@ -222,7 +222,7 @@ export default function OnboardingPage() {
             background: 'var(--accent)', transition: 'width .3s ease',
           }}/>
         </div>
-        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
+        <div className="onboard-step-labels" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
           {STEPS.map((s, i) => (
             <div key={s.id} style={{
               fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
@@ -306,7 +306,8 @@ function Welcome({ user, onNext }) {
       </div>
 
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginTop: 4,
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 10, marginTop: 4,
       }}>
         <Bullet icon="Calendar" label="Bookings" hint="Public link · auto-confirmations"/>
         <Bullet icon="Dollar"   label="Invoices" hint="Stripe checkout · refunds"/>

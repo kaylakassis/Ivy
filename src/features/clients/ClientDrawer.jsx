@@ -187,8 +187,8 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
         </div>
 
         <div style={{
-          padding: '14px 24px', borderTop: '1px solid var(--border)',
-          display: 'flex', gap: 8, alignItems: 'center',
+          padding: '14px 16px', borderTop: '1px solid var(--border)',
+          display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap',
         }}>
           {confirmDel ? (
             <>

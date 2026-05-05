@@ -256,7 +256,7 @@ function Gallery({ data }) {
             Add photos in the inspector to populate this gallery.
           </div>
         ) : (
-          <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ marginTop: 32, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12 }}>
             {photos.map((p, i) => (
               <div key={i} style={{
                 aspectRatio: '1/1',

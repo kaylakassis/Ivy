@@ -268,7 +268,7 @@ function UsersTab() {
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             {data.total.toLocaleString()} total · page {data.page} of {Math.max(1, Math.ceil(data.total / data.pageSize))}
           </div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="card" style={{ padding: 0, overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ background: 'var(--surface-2)' }}>
                 <tr style={{ textAlign: 'left' }}>
@@ -615,7 +615,7 @@ function AffiliatesTab() {
         </div>
       )}
       {data && data.affiliates.length > 0 && (
-        <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="card" style={{ padding: 0, overflow: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead style={{ background: 'var(--surface-2)' }}>
               <tr style={{ textAlign: 'left' }}>
@@ -721,7 +721,7 @@ function SupportTab() {
   useEffect(() => { reload(); }, []);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '320px 1fr', gap: 12, minHeight: 420 }}>
+    <div className="support-grid" style={{ minHeight: 420 }}>
       <div className="card" style={{ padding: 0, overflow: 'auto', maxHeight: 600 }}>
         {err && <div style={{ padding: 12 }}><ErrCard msg={err}/></div>}
         {!threads && !err && <div style={{ padding: 12, fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
@@ -961,7 +961,7 @@ function AuditTab() {
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             {data.total.toLocaleString()} total events · page {data.page}
           </div>
-          <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+          <div className="card" style={{ padding: 0, overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12.5 }}>
               <thead style={{ background: 'var(--surface-2)' }}>
                 <tr style={{ textAlign: 'left' }}>

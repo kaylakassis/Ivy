@@ -65,7 +65,7 @@ export default function Wizard({ onLaunch }) {
         </Field>
 
         <Field label="Template" hint="Pick a starting style — you can tweak colors and fonts later.">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12 }}>
             {TEMPLATE_LIST.map((t) => (
               <button
                 key={t.id}

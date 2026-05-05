@@ -373,3 +373,23 @@ img, svg, video { max-width: 100%; height: auto; }
 @keyframes thryve-spin {
   to { transform: rotate(360deg); }
 }
+
+/* Onboarding wizard — the per-step label row under the progress bar
+   (Welcome · Your business · Services · …). Hidden on phones where it
+   would compress to two-character truncations; the "Step X of Y"
+   counter in the top bar carries the same info more cleanly. */
+@media (max-width: 600px) {
+  .onboard-step-labels { display: none !important; }
+}
+
+/* Admin → Support tab: thread list (left) + conversation (right). 320px
+   sidebar on desktop, stacked on phones so the conversation can use full
+   width when reading. */
+.support-grid {
+  display: grid;
+  grid-template-columns: 320px 1fr;
+  gap: 12px;
+}
+@media (max-width: 900px) {
+  .support-grid { grid-template-columns: 1fr; }
+}
