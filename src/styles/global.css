@@ -323,6 +323,27 @@ img, svg, video { max-width: 100%; height: auto; }
   .tab-row > * { flex-shrink: 0; }
 }
 
+/* Public-booking week strip. Desktop renders 7 equal columns; mobile
+   converts to a horizontally-scrollable row of fixed-width day cards
+   so dates + slot times stay legible instead of being crushed to
+   ~28px wide. */
+@media (max-width: 720px) {
+  .public-booking-days {
+    grid-template-columns: none !important;
+    display: flex !important;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scroll-snap-type: x mandatory;
+    padding-bottom: 6px;
+  }
+  .public-booking-days::-webkit-scrollbar { display: none; }
+  .public-booking-days > * {
+    flex: 0 0 auto;
+    min-width: 130px;
+    scroll-snap-align: start;
+  }
+}
+
 /* Two-column form grid that collapses to a single column on mobile.
    Common pattern for "From / To" or "Sender / Recipient" pairs in
    modals. Replaces inline `gridTemplateColumns: '1fr 1fr'` style. */

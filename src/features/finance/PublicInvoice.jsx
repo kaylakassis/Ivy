@@ -129,7 +129,7 @@ export default function PublicInvoice() {
         </div>
 
         {/* Line items */}
-        <div style={{
+        <div className="table-scroll" style={{
           borderRadius: 12, overflow: 'hidden',
           border: '1px solid var(--border)',
         }}>
@@ -138,6 +138,7 @@ export default function PublicInvoice() {
             padding: '10px 16px', fontSize: 10.5, fontWeight: 600,
             background: 'var(--surface-2)', borderBottom: '1px solid var(--border)',
             color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
+            minWidth: 520,
           }}>
             <div>Description</div>
             <div style={{ textAlign: 'right' }}>Qty</div>
@@ -149,6 +150,7 @@ export default function PublicInvoice() {
               display: 'grid', gridTemplateColumns: '1fr 80px 110px 110px',
               padding: '12px 16px',
               borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+              minWidth: 520,
               alignItems: 'center', fontSize: 13,
             }}>
               <div>{it.description || '—'}</div>

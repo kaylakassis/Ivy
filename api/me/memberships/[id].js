@@ -47,10 +47,14 @@ export default async function handler(req, res) {
       // The customer.subscription.updated webhook will flip status to
       // cancelled when the period actually ends. Mark cancel_at_period_end
       // locally now so the UI can show "cancels on Mar 31" immediately.
-      await sql`
-        UPDATE client_memberships SET cancel_at_period_end = TRUE, updated_at = NOW()
-         WHERE id = ${id}
-      `;
+      // Defense-in-depth: re-scope by client_id = ANY($myIds) so a future
+      // regression in the SELECT above can't be coerced into cancelling
+      // someone else's subscription.
+      await sql.query(
+        `UPDATE client_memberships SET cancel_at_period_end = TRUE, updated_at = NOW()
+          WHERE id = $1 AND client_id = ANY($2)`,
+        [id, myIds],
+      );
       return ok(res, { cancelled: true, atPeriodEnd: true });
     } catch (err) {
       // eslint-disable-next-line no-console

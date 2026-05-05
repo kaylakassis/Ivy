@@ -79,7 +79,16 @@ export default async function handler(req, res) {
 
     // Wipe any prior signer rows for this doc (re-sending should reset
     // signer state cleanly). Then insert fresh rows in order.
-    await sql`DELETE FROM document_signers WHERE document_id = ${id}`;
+    // Defense-in-depth: scope by workspace via subquery so a future
+    // regression in the fetchOwnedDoc check above can't be coerced
+    // into wiping signers for someone else's document.
+    await sql`
+      DELETE FROM document_signers
+       WHERE document_id = ${id}
+         AND document_id IN (
+           SELECT id FROM documents WHERE id = ${id} AND workspace_id = ${workspaceId}
+         )
+    `;
 
     // Mint the first signer's token only. Sequential signing: each
     // signer's token is created as the previous one completes, so a

@@ -69,9 +69,14 @@ export default async function handler(req, res) {
     if (existing.rows.length > 0) {
       clientId = existing.rows[0].id;
       // Backfill the name if we had nothing on file (saves the owner
-      // a tap later).
+      // a tap later). Defense-in-depth: re-include workspace_id on
+      // the UPDATE so the public-contact flow can never write to a
+      // client row outside the workspace it's posting for.
       if (!existing.rows[0].name && name) {
-        await sql`UPDATE clients SET name = ${name}, updated_at = NOW() WHERE id = ${clientId}`;
+        await sql`
+          UPDATE clients SET name = ${name}, updated_at = NOW()
+           WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+        `;
       }
     } else {
       const ins = await sql`

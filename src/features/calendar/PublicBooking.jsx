@@ -672,9 +672,6 @@ export default function PublicBooking() {
                             </div>
                           )}
                         </div>
-                        {(false) && (
-                          <div/>
-                        )}
                         {s.description && (
                           <p style={{
                             margin: '8px 0 0', fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.45,
@@ -702,8 +699,13 @@ export default function PublicBooking() {
             </button>
           </div>
 
-          {/* Day cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10 }}>
+          {/* Day cards. On phones the 7-column grid collapses to a
+              horizontally-scrollable row of fixed-min-width cards so
+              each day stays readable instead of getting crushed to
+              ~28px-wide. Desktop keeps the equal-width grid. */}
+          <div className="public-booking-days" style={{
+            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10,
+          }}>
             {weekDays.map((d, i) => {
               const allSlots = svc ? slotsForDate(cal, d, svc) : [];
               const slots = allSlots.filter((s) => s.available);

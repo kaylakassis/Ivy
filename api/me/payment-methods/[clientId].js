@@ -42,6 +42,9 @@ export default async function handler(req, res) {
       // ignore — we still want to scrub locally below
     }
 
+    // Defense-in-depth: re-scope to id = ANY(myIds) so a future
+    // regression in the lookup above can't blank another tenant's
+    // saved card.
     await sql.query(
       `UPDATE clients SET
          payment_method_id = NULL,
@@ -50,8 +53,8 @@ export default async function handler(req, res) {
          payment_method_exp_month = NULL,
          payment_method_exp_year = NULL,
          updated_at = NOW()
-        WHERE id = $1`,
-      [clientId],
+        WHERE id = $1 AND id = ANY($2)`,
+      [clientId, myIds],
     );
     return noContent(res);
   } catch (err) {

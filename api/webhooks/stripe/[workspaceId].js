@@ -174,6 +174,12 @@ export default async function handler(req, res) {
     // creates the client_memberships row; the customer.subscription.*
     // events then keep status in sync over time.
     if (session.mode === 'subscription' && session.metadata?.purpose === 'membership') {
+      // Defense-in-depth: reject events with metadata.workspace_id !==
+      // URL workspaceId. Mirrors the same check used for invoice
+      // payments + gift cards above.
+      if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch (membership)' });
+      }
       const membershipId = session.metadata?.membership_id;
       const clientIdMeta = session.metadata?.client_id || null;
       const subscriptionId = typeof session.subscription === 'string'
@@ -226,13 +232,26 @@ export default async function handler(req, res) {
       }
 
       // Persist Stripe customer id on the client row for future tips
-      // / fees off the same card.
+      // / fees off the same card. Workspace-scoped UPDATE so a webhook
+      // event can't link a customer onto a client outside this tenant.
       if (customerId) {
-        await sql`UPDATE clients SET stripe_customer_id = ${customerId} WHERE id = ${clientId} AND stripe_customer_id IS NULL`;
+        await sql`
+          UPDATE clients SET stripe_customer_id = ${customerId}
+           WHERE id = ${clientId}
+             AND workspace_id = ${workspaceId}
+             AND stripe_customer_id IS NULL
+        `;
       }
 
-      // Idempotent: if we already saw this subscription, skip.
-      const exists = await sql`SELECT id FROM client_memberships WHERE stripe_subscription_id = ${subscriptionId}`;
+      // Idempotent: if we already saw this subscription, skip. Scoped
+      // to workspace so cross-tenant subscription IDs (theoretically
+      // impossible since Stripe accounts are per-workspace, but
+      // defense-in-depth) don't suppress a legitimate insert.
+      const exists = await sql`
+        SELECT id FROM client_memberships
+         WHERE stripe_subscription_id = ${subscriptionId}
+           AND workspace_id = ${workspaceId}
+      `;
       if (exists.rows.length === 0) {
         await sql`
           INSERT INTO client_memberships (
@@ -253,11 +272,21 @@ export default async function handler(req, res) {
     // Mint the code on payment-succeeded, store hashed code, email the
     // recipient with the raw code. Idempotent on the Stripe payment_intent.
     if (session.mode === 'payment' && session.metadata?.purpose === 'gift_card' && session.payment_status === 'paid') {
+      // Defense-in-depth: reject events whose metadata.workspace_id
+      // disagrees with the URL's workspaceId. Signature verification
+      // already pinned this event to one workspace's secret, so this
+      // is belt-and-braces against a misconfigured webhook URL.
+      if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch (gift card)' });
+      }
       const paymentIntentId = typeof session.payment_intent === 'string'
         ? session.payment_intent : session.payment_intent?.id || null;
       if (paymentIntentId) {
         const dup = await sql`
-          SELECT id FROM gift_cards WHERE stripe_payment_intent = ${paymentIntentId} LIMIT 1
+          SELECT id FROM gift_cards
+           WHERE stripe_payment_intent = ${paymentIntentId}
+             AND workspace_id = ${workspaceId}
+           LIMIT 1
         `;
         if (dup.rows.length > 0) {
           return ok(res, { received: true, ignored: 'gift card already issued for this PI' });

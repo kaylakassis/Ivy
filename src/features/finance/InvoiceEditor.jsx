@@ -125,11 +125,12 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
                 color: 'var(--muted)', fontSize: 12.5, textAlign: 'center',
               }}>No line items yet.</div>
             ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div className="table-scroll" style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 <div style={{
                   display: 'grid', gridTemplateColumns: '1fr 80px 100px 100px 30px',
                   gap: 8, padding: '6px 4px', fontSize: 10.5, fontWeight: 600,
                   color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
+                  minWidth: 480,
                 }}>
                   <div>Description</div>
                   <div style={{ textAlign: 'right' }}>Qty</div>
@@ -143,6 +144,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
                     gap: 8, alignItems: 'center',
                     padding: 8, borderRadius: 8, border: '1px solid var(--border)',
                     background: 'var(--surface-2)',
+                    minWidth: 480,
                   }}>
                     <input value={it.description}
                       onChange={(e) => updateItem(i, { description: e.target.value })}
@@ -160,7 +162,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
                       ${(Number(it.quantity || 0) * Number(it.rate || 0)).toFixed(2)}
                     </div>
                     {!isLocked ? (
-                      <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: 4, color: 'var(--danger)' }}>
+                      <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: '8px 10px', minHeight: 36, color: 'var(--danger)' }}>
                         <Icons.X size={13}/>
                       </button>
                     ) : <div/>}

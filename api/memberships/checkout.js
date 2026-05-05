@@ -90,7 +90,13 @@ export default async function handler(req, res) {
         workspaceId, clientId,
       });
       stripeCustomerId = cust.id;
-      await sql`UPDATE clients SET stripe_customer_id = ${stripeCustomerId} WHERE id = ${clientId}`;
+      // Defense-in-depth: scope the UPDATE to workspace_id so the
+      // public membership-checkout flow can never link a Stripe
+      // customer to a clients row outside its own workspace.
+      await sql`
+        UPDATE clients SET stripe_customer_id = ${stripeCustomerId}
+         WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+      `;
     }
 
     const base = appUrl();

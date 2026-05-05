@@ -86,9 +86,12 @@ export default async function handler(req, res) {
           workspaceId: c.workspace_id, clientId: c.id,
         });
         customerId = cust.id;
+        // Defense-in-depth: pin the workspace_id on the UPDATE so a
+        // future regression in the SELECT above can't link a Stripe
+        // customer to another tenant's client row.
         await sql`
           UPDATE clients SET stripe_customer_id = ${customerId}, updated_at = NOW()
-            WHERE id = ${c.id}
+            WHERE id = ${c.id} AND workspace_id = ${c.workspace_id}
         `;
       }
 
