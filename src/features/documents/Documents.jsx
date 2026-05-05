@@ -15,7 +15,7 @@ const STATUS_META = {
 };
 
 export default function Documents() {
-  const { documents, loading, error, create, update, remove, send } = useDocuments();
+  const { documents, loading, error, create, update, remove, send, uploadPdf } = useDocuments();
   const [tab, setTab]               = useState('all');
   const [openId, setOpenId]         = useState(null);
   const [creatingOpen, setCreating] = useState(false);
@@ -135,6 +135,7 @@ export default function Documents() {
           onSave={(patch) => update(openDoc.id, patch)}
           onDelete={async () => { await remove(openDoc.id); setOpenId(null); }}
           onSend={() => setSending(openDoc.id)}
+          onUploadPdf={(file) => uploadPdf(openDoc.id, file)}
         />
       )}
       {sendingDoc && (

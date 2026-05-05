@@ -113,6 +113,11 @@ export default async function handler(req, res) {
     // Update the document. We also keep the legacy recipient_* fields
     // in sync with the FIRST signer so older code paths still display
     // a reasonable "to whom" label.
+    // Wipe any stale field values from a prior signing round before
+    // sending again (re-send after void/decline). We keep field
+    // metadata — id/type/page/x/y/w/h/signerIndex/label/required —
+    // but blank `.value` so the new signers don't see prior inputs.
+    const cleanedFields = (doc.fields || []).map((f) => ({ ...f, value: '' }));
     const first = resolved[0];
     const updated = await sql`
       UPDATE documents SET
@@ -123,9 +128,12 @@ export default async function handler(req, res) {
         sign_token_hash     = ${firstHash},
         sent_at             = NOW(),
         activity            = ${JSON.stringify(newActivity)}::jsonb,
+        fields              = ${JSON.stringify(cleanedFields)}::jsonb,
         completion_hash     = NULL,
         decline_reason      = NULL,
         declined_at         = NULL,
+        final_pdf_url       = NULL,
+        final_pdf_blob_pathname = NULL,
         updated_at          = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *

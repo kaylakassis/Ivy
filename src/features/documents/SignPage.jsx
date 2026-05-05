@@ -1,11 +1,12 @@
 // /sign/:token  (public, no login required)
 // Renders the sent document, lets the recipient fill each field, and submits.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import SignaturePad from './SignaturePad.jsx';
+import PdfFieldSigner from './PdfFieldSigner.jsx';
 
 export default function SignPage() {
   const { token } = useParams();
@@ -19,6 +20,7 @@ export default function SignPage() {
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone]       = useState(false);
   const [nextSignerName, setNextSignerName] = useState(null);
+  const [finalPdfUrl, setFinalPdfUrl] = useState(null);
   const [submitErr, setSubmitErr] = useState(null);
   // Decline flow state.
   const [declineOpen, setDeclineOpen] = useState(false);
@@ -55,10 +57,23 @@ export default function SignPage() {
 
   const setVal = (id, v) => setValues((m) => ({ ...m, [id]: v }));
 
+  // For PDF documents only the current signer's fields are theirs to
+  // fill; for legacy/written documents, every field shown belongs to
+  // the active signer (single-signer flow uses signerIndex 0 and
+  // multi-signer flow lists fields uniformly).
+  const myFields = useMemo(() => {
+    if (!doc) return [];
+    if (doc.kind === 'pdf') {
+      const myIdx = signerInfo?.position ? (signerInfo.position - 1) : 0;
+      return (doc.fields || []).filter((f) => (f.signerIndex || 0) === myIdx);
+    }
+    return doc.fields || [];
+  }, [doc, signerInfo]);
+
   const submit = async () => {
     if (!doc) return;
-    // Validate required fields
-    for (const f of doc.fields || []) {
+    // Validate required fields owned by THIS signer.
+    for (const f of myFields) {
       const required = f.required !== false;
       if (required && !((values[f.id] ?? f.value ?? '').toString().trim())) {
         setSubmitErr(`Please fill in "${f.label || f.type}"`);
@@ -72,7 +87,10 @@ export default function SignPage() {
         credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fields: (doc.fields || []).map((f) => ({
+          // Submit only the signer's own fields. The server merges them
+          // onto the stored field set, so other signers' values stay
+          // untouched.
+          fields: myFields.map((f) => ({
             id: f.id, type: f.type,
             value: (values[f.id] ?? f.value ?? '').toString(),
           })),
@@ -83,10 +101,10 @@ export default function SignPage() {
         throw new Error(j.error || `HTTP ${res.status}`);
       }
       const j = await res.json().catch(() => ({}));
-      // Multi-signer: server tells us who's next so we can show the
-      // honest "you're done — passing it on to X" message instead of
-      // pretending the whole doc is finalized.
       if (j.nextSigner?.name) setNextSignerName(j.nextSigner.name);
+      // Server returns the updated document; if it's a finalized PDF
+      // we surface the download link on the success screen.
+      if (j.document?.finalPdfUrl) setFinalPdfUrl(j.document.finalPdfUrl);
       setDone(true);
     } catch (e) {
       setSubmitErr(e.message || 'Could not submit');
@@ -171,6 +189,13 @@ export default function SignPage() {
               <>Thanks — <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is complete and the sender has been notified.</>
             )}
           </p>
+          {finalPdfUrl && (
+            <a href={finalPdfUrl} target="_blank" rel="noopener noreferrer"
+              className="btn btn-outline"
+              style={{ marginTop: 22, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+              <Icons.Doc size={14}/> Download signed PDF
+            </a>
+          )}
         </div>
       </PageWrap>
     );
@@ -210,22 +235,44 @@ export default function SignPage() {
         </div>
       )}
 
-      <div className="card" style={{ padding: 32, marginBottom: 18 }}>
-        <div
-          style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg)', whiteSpace: 'pre-wrap' }}
-          dangerouslySetInnerHTML={{ __html: sanitize(doc.contentHtml || '') }}
-        />
-      </div>
+      {doc.kind === 'pdf' && doc.fileUrl ? (
+        <div className="card" style={{ padding: 16, marginBottom: 18 }}>
+          <div className="metric-label" style={{ marginBottom: 12 }}>
+            Click any highlighted box on the PDF to fill it in
+          </div>
+          <PdfFieldSigner
+            pdfUrl={doc.fileUrl}
+            fields={doc.fields || []}
+            values={values}
+            onChange={setValues}
+            currentSignerIndex={signerInfo?.position ? signerInfo.position - 1 : 0}
+          />
+        </div>
+      ) : (
+        <div className="card" style={{ padding: 32, marginBottom: 18 }}>
+          <div
+            style={{ fontSize: 14, lineHeight: 1.65, color: 'var(--fg)', whiteSpace: 'pre-wrap' }}
+            dangerouslySetInnerHTML={{ __html: sanitize(doc.contentHtml || '') }}
+          />
+        </div>
+      )}
 
       <div className="card" style={{ padding: 24 }}>
-        <div className="metric-label" style={{ marginBottom: 16 }}>Please complete the following</div>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {(doc.fields || []).map((f) => (
-            <FieldInput key={f.id} field={f}
-              value={values[f.id] ?? f.value ?? ''}
-              onChange={(v) => setVal(f.id, v)}/>
-          ))}
-        </div>
+        {doc.kind !== 'pdf' && (
+          <>
+            <div className="metric-label" style={{ marginBottom: 16 }}>Please complete the following</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+              {myFields.map((f) => (
+                <FieldInput key={f.id} field={f}
+                  value={values[f.id] ?? f.value ?? ''}
+                  onChange={(v) => setVal(f.id, v)}/>
+              ))}
+            </div>
+          </>
+        )}
+        {doc.kind === 'pdf' && (
+          <PdfFieldsSummary fields={myFields} values={values}/>
+        )}
 
         {submitErr && (
           <div style={{
@@ -297,6 +344,38 @@ export default function SignPage() {
         </div>
       )}
     </PageWrap>
+  );
+}
+
+// Lightweight progress summary under the PDF: shows what the signer
+// still needs to fill so they don't miss a box hidden on a later page.
+function PdfFieldsSummary({ fields, values }) {
+  if (!fields || fields.length === 0) {
+    return (
+      <div style={{
+        padding: '10px 14px', borderRadius: 10,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        fontSize: 12.5, color: 'var(--muted)',
+      }}>This document doesn't need any input from you. Just click "Sign and submit" to finalize.</div>
+    );
+  }
+  const filled = fields.filter((f) => (values[f.id] ?? f.value ?? '').toString().trim()).length;
+  const total = fields.length;
+  return (
+    <div style={{
+      padding: '10px 14px', borderRadius: 10,
+      background: filled === total
+        ? 'color-mix(in srgb, var(--ok) 8%, var(--surface-2))'
+        : 'var(--surface-2)',
+      border: `1px solid ${filled === total ? 'var(--ok)' : 'var(--border)'}`,
+      display: 'flex', alignItems: 'center', gap: 10, fontSize: 13,
+    }}>
+      <Icons.Check size={14} sw={2.4} stroke={filled === total ? 'var(--ok)' : 'var(--muted)'}/>
+      <span style={{ color: filled === total ? 'var(--ok)' : 'var(--fg-2)' }}>
+        <strong>{filled}</strong> of <strong>{total}</strong> fields completed
+        {filled < total && ' — click each highlighted box on the PDF above'}
+      </span>
+    </div>
   );
 }
 

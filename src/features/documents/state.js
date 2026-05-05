@@ -57,5 +57,49 @@ export function useDocuments() {
     return r.document;
   }, []);
 
-  return { documents, loading, error, refresh, create, update, remove, send, void: voidDoc };
+  // Streams a PDF directly to Vercel Blob using the upload-token
+  // endpoint, then PATCHes the document row with the new fileUrl,
+  // page count, and kind='pdf'. Returns the updated document. The
+  // browser also counts pages locally so we don't need an extra
+  // server round trip.
+  const uploadPdf = useCallback(async (id, file) => {
+    if (!file) throw new Error('No file');
+    if (file.type !== 'application/pdf') throw new Error('Please choose a PDF');
+    if (file.size > 25 * 1024 * 1024) throw new Error('PDF must be under 25 MB');
+
+    const { upload } = await import('@vercel/blob/client');
+    const result = await upload(file.name, file, {
+      access: 'public',
+      handleUploadUrl: '/api/documents/upload-token',
+      contentType: 'application/pdf',
+    });
+
+    const pageCount = await countPdfPages(file).catch(() => 1);
+
+    const patched = await api.patch('/documents/' + id, {
+      kind: 'pdf',
+      fileUrl: result.url,
+      pdfBlobPathname: result.pathname,
+      pageCount,
+      // Wipe any prior field placements when swapping the source PDF;
+      // page-relative coordinates would otherwise misalign.
+      fields: [],
+    });
+    setDocuments((ds) => ds.map((d) => d.id === id ? patched.document : d));
+    return patched.document;
+  }, []);
+
+  return { documents, loading, error, refresh, create, update, remove, send, void: voidDoc, uploadPdf };
+}
+
+// Local-only page counter so we can stamp page_count on the row at
+// upload time without a server round trip. Re-uses the pdfjs-dist
+// import the editor + viewer already load.
+async function countPdfPages(file) {
+  const lib = await import('pdfjs-dist/build/pdf.mjs');
+  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  lib.GlobalWorkerOptions.workerSrc = workerUrl;
+  const buf = await file.arrayBuffer();
+  const pdf = await lib.getDocument({ data: buf }).promise;
+  return pdf.numPages;
 }

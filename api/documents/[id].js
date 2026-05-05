@@ -53,6 +53,24 @@ export default async function handler(req, res) {
       if ('isTemplate' in body) {
         push('is_template', !!body.isTemplate);
       }
+      if ('kind' in body) {
+        const k = (body.kind || '').toString();
+        if (k !== 'pdf' && k !== 'written') return badRequest(res, 'Invalid kind');
+        push('kind', k);
+      }
+      if ('fileUrl' in body) {
+        const url = body.fileUrl ? String(body.fileUrl) : null;
+        if (url && !/^https?:\/\//.test(url)) return badRequest(res, 'Invalid fileUrl');
+        push('file_url', url);
+      }
+      if ('pageCount' in body) {
+        const n = Number(body.pageCount);
+        if (!Number.isInteger(n) || n < 1 || n > 200) return badRequest(res, 'pageCount out of range');
+        push('page_count', n);
+      }
+      if ('pdfBlobPathname' in body) {
+        push('pdf_blob_pathname', body.pdfBlobPathname ? String(body.pdfBlobPathname) : null);
+      }
 
       if (sets.length === 0) return ok(res, { document: serializeDoc(doc) });
 
@@ -64,7 +82,8 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       const { rows } = await sql.query(queryText, values);
-      return ok(res, { document: serializeDoc(rows[0]) });
+      const signers = await fetchSigners(id);
+      return ok(res, { document: serializeDoc(rows[0], signers) });
     }
 
     if (req.method === 'DELETE') {

@@ -29,6 +29,7 @@ import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { stampCompletedPdf, uploadStampedPdf } from '../_lib/pdfStamp.js';
 import crypto from 'node:crypto';
 
 function hashToken(raw) {
@@ -185,19 +186,28 @@ async function signDoc(req, res) {
     const submitted = cleanFields(body.fields ?? []);
     if (submitted === null) return badRequest(res, 'Invalid fields payload');
 
-    // Merge submitted values onto stored fields by id. Required-field check.
+    // Merge submitted values onto stored fields by id. Required-field
+    // check is scoped to fields owned by THIS signer (per signerIndex)
+    // — otherwise signer 1 would trip over required fields that signer
+    // 2 will only fill on their turn. For documents without
+    // per-signer assignment (legacy single-signer / written multi),
+    // all fields default to signerIndex 0 so the same signer fills
+    // everything and the check still works.
     const stored = doc.fields || [];
     const merged = stored.map((f) => {
       const sub = submitted.find((s) => s.id === f.id);
       const value = sub ? String(sub.value || '') : (f.value || '');
       return { ...f, value };
     });
+    const myIdx = isMulti ? signerIndex : 0;
     for (const f of merged) {
-      if (f.required !== false && !f.value) {
-        return badRequest(res, `Please fill in "${f.label || f.type}"`);
-      }
       if (!VALID_FIELD_TYPES.has(f.type)) {
         return badRequest(res, `Unknown field type: ${f.type}`);
+      }
+      const ownerIdx = Number.isInteger(f.signerIndex) ? f.signerIndex : 0;
+      if (ownerIdx !== myIdx) continue;
+      if (f.required !== false && !f.value) {
+        return badRequest(res, `Please fill in "${f.label || f.type}"`);
       }
     }
 
@@ -213,6 +223,16 @@ async function signDoc(req, res) {
           user_agent      = ${ua},
           updated_at      = NOW()
         WHERE id = ${signer.id}
+      `;
+      // Persist the running merged values onto documents.fields so the
+      // NEXT signer's resolveByToken sees prior signers' contributions
+      // (otherwise the merge would lose signer 1's value when signer 2
+      // submits, since stored would still show empties).
+      await sql`
+        UPDATE documents SET
+          fields = ${JSON.stringify(merged)}::jsonb,
+          updated_at = NOW()
+        WHERE id = ${doc.id}
       `;
       await appendActivity(doc.id, doc.activity, {
         kind: 'signer-completed',
@@ -283,8 +303,10 @@ async function signDoc(req, res) {
         return ok(res, { document: serializeDocPublic(doc), nextSigner: { name: n.name } });
       }
 
-      // Last signer completed → finalize document with tamper-evident hash.
+      // Last signer completed → finalize document with tamper-evident hash
+      // and (if it's a PDF) stamp the flattened final artifact.
       const finalDoc = await finalizeCompletedDoc(doc.id);
+      await maybeStampFinalPdf(finalDoc);
       await notifyOwnerOnCompletion(finalDoc);
       return ok(res, { document: serializeDocPublic(finalDoc), completed: true });
     }
@@ -314,8 +336,13 @@ async function signDoc(req, res) {
       WHERE id = ${doc.id}
       RETURNING *
     `;
+    await maybeStampFinalPdf(updated.rows[0]);
     await notifyOwnerOnCompletion(updated.rows[0]);
-    return ok(res, { document: serializeDocPublic(updated.rows[0]), completed: true });
+    // Re-read the doc after stamping so the response includes the
+    // final_pdf_url, otherwise the sign-page success state can't link
+    // the recipient back to a downloadable copy.
+    const fresh = await sql`SELECT * FROM documents WHERE id = ${doc.id}`;
+    return ok(res, { document: serializeDocPublic(fresh.rows[0] || updated.rows[0]), completed: true });
   } catch (err) {
     return serverError(res, err);
   }
@@ -501,6 +528,50 @@ function computeHash({ contentHtml, signers }) {
   return crypto.createHash('sha256')
     .update(JSON.stringify(canon))
     .digest('hex');
+}
+
+// If the doc is a PDF with placed fields, render the flattened final
+// PDF (signatures + text drawn into the document, plus an audit page)
+// and store its blob URL on documents.final_pdf_url. Best-effort: a
+// stamping failure is logged but doesn't roll back completion — the
+// canonical record is the document_signers rows + completion_hash.
+async function maybeStampFinalPdf(doc) {
+  if (!doc) return;
+  if (doc.kind !== 'pdf' || !doc.file_url) return;
+  try {
+    const signers = await sql`
+      SELECT id, order_index, name, email, signed_at, declined_at,
+             decline_reason, ip, user_agent, field_values
+        FROM document_signers
+       WHERE document_id = ${doc.id}
+       ORDER BY order_index ASC
+    `;
+    const bytes = await stampCompletedPdf({
+      pdfUrl: doc.file_url,
+      fields: doc.fields || [],
+      signers: signers.rows,
+      doc,
+      hash: doc.completion_hash,
+    });
+    if (!bytes) return;
+    const { url, pathname } = await uploadStampedPdf({
+      workspaceId: doc.workspace_id,
+      docId: doc.id,
+      bytes,
+    });
+    await sql`
+      UPDATE documents SET
+        final_pdf_url = ${url},
+        final_pdf_blob_pathname = ${pathname},
+        updated_at = NOW()
+      WHERE id = ${doc.id}
+    `;
+    doc.final_pdf_url = url;
+    doc.final_pdf_blob_pathname = pathname;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[sign] PDF stamping failed:', err.message);
+  }
 }
 
 async function notifyOwnerOnCompletion(doc) {

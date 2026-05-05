@@ -1,7 +1,10 @@
-// Edit a draft document: name, body (HTML/textarea), and the ordered list of
-// fields the recipient must complete (signature / date / text / initial).
-import React, { useState, useEffect } from 'react';
+// Edit a draft document: name, body (HTML/textarea or uploaded PDF), and
+// the ordered list of fields the recipient must complete (signature /
+// date / text / initial). PDF documents place fields visually on the
+// page; written documents list them as a flat array.
+import React, { useState, useEffect, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
+import PdfFieldEditor from './PdfFieldEditor.jsx';
 
 const FIELD_TYPES = [
   { id: 'signature', label: 'Signature' },
@@ -10,21 +13,38 @@ const FIELD_TYPES = [
   { id: 'text',      label: 'Text' },
 ];
 
-export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend }) {
+export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onUploadPdf }) {
   const [name, setName]     = useState(doc.name);
   const [body, setBody]     = useState(doc.contentHtml || '');
-  const [fields, setFields] = useState(() => doc.fields?.length ? doc.fields : defaultFields());
+  const [fields, setFields] = useState(() => doc.fields?.length ? doc.fields : defaultFields(doc.kind));
   const [busy, setBusy]     = useState(false);
   const [err, setErr]       = useState(null);
   const [confirmDel, setConfirmDel] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef(null);
 
   const isEditable = doc.status === 'draft' || doc.status === 'voided';
+  const isPdf = doc.kind === 'pdf' && !!doc.fileUrl;
 
   useEffect(() => {
     setName(doc.name);
     setBody(doc.contentHtml || '');
-    setFields(doc.fields?.length ? doc.fields : defaultFields());
-  }, [doc.id]);
+    setFields(doc.fields?.length ? doc.fields : defaultFields(doc.kind));
+  }, [doc.id, doc.kind, doc.fileUrl]);
+
+  const onPickPdf = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setUploading(true); setErr(null);
+    try {
+      await onUploadPdf(file);
+    } catch (ex) {
+      setErr(ex.message || 'Could not upload PDF');
+    } finally {
+      setUploading(false);
+    }
+  };
 
   const save = async () => {
     setBusy(true); setErr(null);
@@ -81,75 +101,144 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend 
             </div>
           )}
 
-          {/* Body */}
-          <div>
-            <div className="metric-label" style={{ marginBottom: 6 }}>Document text</div>
-            <textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={!isEditable}
-              rows={12}
-              placeholder="Plain text body. Use blank lines to separate paragraphs. HTML is allowed for headings + emphasis."
-              style={{
-                width: '100%', padding: '14px 16px',
-                border: '1px solid var(--border-strong)', borderRadius: 10,
-                background: 'var(--surface-2)', color: 'var(--fg)',
-                fontSize: 14, lineHeight: 1.55, fontFamily: 'inherit',
-                resize: 'vertical', outline: 'none', minHeight: 240,
-              }}/>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
-              The recipient sees this as the document body. Keep it focused — fields go below.
-            </div>
-          </div>
-
-          {/* Fields */}
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-              <div className="metric-label" style={{ flex: 1 }}>Fields the recipient fills in</div>
-              {isEditable && (
-                <button className="btn btn-ghost" onClick={addField} style={{ fontSize: 12, padding: '4px 8px' }}>
-                  <Icons.Plus size={12}/> Add field
-                </button>
-              )}
-            </div>
-
-            {fields.length === 0 ? (
-              <div style={{
-                padding: 16, borderRadius: 10, background: 'var(--surface-2)',
-                border: '1px dashed var(--border-strong)',
-                color: 'var(--muted)', fontSize: 12.5, textAlign: 'center',
-              }}>
-                No fields yet. Add at least one signature so the recipient has something to complete.
+          {/* Source: PDF upload OR written body */}
+          {isPdf ? (
+            <div>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <div className="metric-label" style={{ flex: 1 }}>
+                  PDF document
+                </div>
+                {isEditable && (
+                  <>
+                    <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()}
+                      disabled={uploading}
+                      style={{ fontSize: 12, padding: '4px 8px' }}>
+                      <Icons.Paperclip size={12}/> Replace PDF
+                    </button>
+                    <input ref={fileInputRef} type="file" accept="application/pdf"
+                      onChange={onPickPdf} style={{ display: 'none' }}/>
+                  </>
+                )}
               </div>
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {fields.map((f, i) => (
-                  <div key={f.id} style={{
-                    display: 'grid', gridTemplateColumns: '120px 1fr 90px 30px', gap: 8, alignItems: 'center',
-                    padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-2)',
-                  }}>
-                    <select value={f.type} onChange={(e) => updateField(i, { type: e.target.value })}
-                      disabled={!isEditable}
-                      style={selectS}>
-                      {FIELD_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
-                    </select>
-                    <input value={f.label || ''} onChange={(e) => updateField(i, { label: e.target.value })}
-                      disabled={!isEditable}
-                      placeholder="Label (e.g., Client signature)"
-                      style={inputS}/>
-                    <label style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
-                      <input type="checkbox" checked={f.required !== false}
-                        onChange={(e) => updateField(i, { required: e.target.checked })}
-                        disabled={!isEditable}/>
-                      Required
-                    </label>
-                    {isEditable ? (
-                      <button className="btn btn-ghost" onClick={() => removeField(i)} style={{ padding: 4, color: 'var(--danger)' }}>
-                        <Icons.X size={13}/>
+              <PdfFieldEditor
+                pdfUrl={doc.fileUrl}
+                fields={fields}
+                onChange={setFields}
+                signers={doc.signers || []}
+                disabled={!isEditable}
+              />
+            </div>
+          ) : (
+            <>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 6 }}>
+                  <div className="metric-label" style={{ flex: 1 }}>Document text</div>
+                  {isEditable && (
+                    <>
+                      <button className="btn btn-ghost" onClick={() => fileInputRef.current?.click()}
+                        disabled={uploading}
+                        style={{ fontSize: 12, padding: '4px 8px' }}>
+                        <Icons.Paperclip size={12}/> {uploading ? 'Uploading…' : 'Upload PDF instead'}
                       </button>
-                    ) : <div/>}
-                  </div>
-                ))}
+                      <input ref={fileInputRef} type="file" accept="application/pdf"
+                        onChange={onPickPdf} style={{ display: 'none' }}/>
+                    </>
+                  )}
+                </div>
+                <textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={!isEditable}
+                  rows={12}
+                  placeholder="Plain text body. Use blank lines to separate paragraphs. HTML is allowed for headings + emphasis."
+                  style={{
+                    width: '100%', padding: '14px 16px',
+                    border: '1px solid var(--border-strong)', borderRadius: 10,
+                    background: 'var(--surface-2)', color: 'var(--fg)',
+                    fontSize: 14, lineHeight: 1.55, fontFamily: 'inherit',
+                    resize: 'vertical', outline: 'none', minHeight: 240,
+                  }}/>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                  The recipient sees this as the document body. Or upload a PDF to drop fields onto.
+                </div>
               </div>
-            )}
-          </div>
+
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                  <div className="metric-label" style={{ flex: 1 }}>Fields the recipient fills in</div>
+                  {isEditable && (
+                    <button className="btn btn-ghost" onClick={addField} style={{ fontSize: 12, padding: '4px 8px' }}>
+                      <Icons.Plus size={12}/> Add field
+                    </button>
+                  )}
+                </div>
+
+                {fields.length === 0 ? (
+                  <div style={{
+                    padding: 16, borderRadius: 10, background: 'var(--surface-2)',
+                    border: '1px dashed var(--border-strong)',
+                    color: 'var(--muted)', fontSize: 12.5, textAlign: 'center',
+                  }}>
+                    No fields yet. Add at least one signature so the recipient has something to complete.
+                  </div>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {fields.map((f, i) => (
+                      <div key={f.id} style={{
+                        display: 'grid', gridTemplateColumns: '120px 1fr 90px 30px', gap: 8, alignItems: 'center',
+                        padding: 10, borderRadius: 10, border: '1px solid var(--border)', background: 'var(--surface-2)',
+                      }}>
+                        <select value={f.type} onChange={(e) => updateField(i, { type: e.target.value })}
+                          disabled={!isEditable}
+                          style={selectS}>
+                          {FIELD_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
+                        </select>
+                        <input value={f.label || ''} onChange={(e) => updateField(i, { label: e.target.value })}
+                          disabled={!isEditable}
+                          placeholder="Label (e.g., Client signature)"
+                          style={inputS}/>
+                        <label style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 6 }}>
+                          <input type="checkbox" checked={f.required !== false}
+                            onChange={(e) => updateField(i, { required: e.target.checked })}
+                            disabled={!isEditable}/>
+                          Required
+                        </label>
+                        {isEditable ? (
+                          <button className="btn btn-ghost" onClick={() => removeField(i)} style={{ padding: 4, color: 'var(--danger)' }}>
+                            <Icons.X size={13}/>
+                          </button>
+                        ) : <div/>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </>
+          )}
+
+          {/* Final stamped PDF, when available. Only set on PDFs after
+              every signer has completed and the server has flattened
+              their inputs into the source PDF. */}
+          {doc.finalPdfUrl && (
+            <a href={doc.finalPdfUrl} target="_blank" rel="noopener noreferrer"
+              className="card"
+              style={{
+                padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12,
+                textDecoration: 'none', color: 'inherit',
+                background: 'color-mix(in srgb, var(--ok) 6%, var(--surface))',
+                border: '1px solid var(--ok)',
+              }}>
+              <div style={{
+                width: 38, height: 38, borderRadius: 10,
+                background: 'var(--ok)', color: '#fff',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}><Icons.Doc size={16} sw={2}/></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontWeight: 600, fontSize: 13.5 }}>Signed PDF ready</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+                  Flattened with every signature, date, and the audit page. Click to download.
+                </div>
+              </div>
+              <Icons.Arrow size={14} stroke="var(--muted)"/>
+            </a>
+          )}
 
           {/* Signers — multi-signer audit panel. Always renders when there
               are signers attached, regardless of doc status; lets the owner
@@ -236,7 +325,11 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend 
   );
 }
 
-function defaultFields() {
+function defaultFields(kind) {
+  // PDF documents start with NO fields — the owner places them visually
+  // on the page. Written documents seed a signature + date so the form
+  // isn't empty.
+  if (kind === 'pdf') return [];
   return [
     { id: 'sig',  type: 'signature', label: 'Signature', required: true,  value: '' },
     { id: 'date', type: 'date',      label: 'Date',      required: true,  value: '' },

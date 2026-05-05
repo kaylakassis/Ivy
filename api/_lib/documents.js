@@ -13,6 +13,8 @@ export function serializeDoc(row, signers = []) {
     kind:                row.kind,
     contentHtml:         row.content_html,
     fileUrl:             row.file_url,
+    pdfBlobPathname:     row.pdf_blob_pathname || null,
+    finalPdfUrl:         row.final_pdf_url || null,
     pageCount:           row.page_count,
     fields:              row.fields || [],
     recipientClientId:   row.recipient_client_id,
@@ -94,12 +96,20 @@ export function serializeDocPublic(row) {
     kind:         row.kind,
     contentHtml:  row.content_html,
     fileUrl:      row.file_url,
+    finalPdfUrl:  row.final_pdf_url || null,
     pageCount:    row.page_count,
     fields:       row.fields || [],
     recipientName: row.recipient_name,
     status:       row.status,
     completedAt:  row.completed_at,
   };
+}
+
+function clamp01(n) {
+  if (!Number.isFinite(n)) return null;
+  if (n < 0) return 0;
+  if (n > 1) return 1;
+  return n;
 }
 
 export async function fetchOwnedDoc({ id, workspaceId }) {
@@ -120,18 +130,23 @@ export function cleanFields(input) {
     const f = input[i] || {};
     const type = (f.type || '').toString();
     if (!VALID_FIELD_TYPES.has(type)) return null;
+    // x/y/w/h are 0..1 fractions of the rendered page (top-left origin).
+    // signerIndex maps a field to a specific signer (0-based). Default
+    // 0 = first signer fills it, matching the legacy single-signer
+    // behavior. Out-of-range indexes get clamped on read.
+    const x = typeof f.x === 'number' ? clamp01(f.x) : null;
+    const y = typeof f.y === 'number' ? clamp01(f.y) : null;
+    const w = typeof f.w === 'number' ? clamp01(f.w) : null;
+    const h = typeof f.h === 'number' ? clamp01(f.h) : null;
     out.push({
       id:    f.id || `f${i}_${Math.random().toString(36).slice(2, 8)}`,
       type,
       label: (f.label || '').toString().slice(0, 120),
       required: f.required !== false,  // default to required
       value: typeof f.value === 'string' ? f.value : '',
-      // x/y/w/h reserved for the drag-drop phase; pass through if provided.
-      page:  Number.isInteger(f.page) ? f.page : 0,
-      x:     typeof f.x === 'number' ? f.x : null,
-      y:     typeof f.y === 'number' ? f.y : null,
-      w:     typeof f.w === 'number' ? f.w : null,
-      h:     typeof f.h === 'number' ? f.h : null,
+      page:  Number.isInteger(f.page) ? Math.max(0, f.page) : 0,
+      signerIndex: Number.isInteger(f.signerIndex) ? Math.max(0, f.signerIndex) : 0,
+      x, y, w, h,
     });
   }
   return out;

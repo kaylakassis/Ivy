@@ -671,6 +671,14 @@ CREATE INDEX IF NOT EXISTS idx_document_signers_client
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS completion_hash TEXT;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS declined_at TIMESTAMPTZ;
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS decline_reason TEXT;
+-- PDF support. file_url stores the Vercel Blob URL for the source PDF
+-- the owner uploaded; pdf_blob_pathname is the matching pathname so we
+-- can clean it up on delete. final_pdf_url is the flattened, stamped
+-- PDF generated when all signers complete (signature image + text +
+-- date drawn into each field's coordinates), uploaded to Blob too.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS pdf_blob_pathname TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS final_pdf_url TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS final_pdf_blob_pathname TEXT;
 -- Status enum needs 'declined' for the multi-signer-decline path.
 ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_status_check;
 ALTER TABLE documents ADD CONSTRAINT documents_status_check
