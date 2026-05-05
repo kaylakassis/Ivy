@@ -7,6 +7,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import VerifyEmailBanner from '../../components/VerifyEmailBanner.jsx';
+import TermsAcceptModal from '../../components/TermsAcceptModal.jsx';
 import { SkelLine, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -81,6 +82,7 @@ function ClientShellInner() {
         <ClientMobileDrawer direction={tweaks.direction} data={data}
           onClose={() => setDrawerOpen(false)}/>
       )}
+      <TermsAcceptModal/>
     </div>
   );
 }

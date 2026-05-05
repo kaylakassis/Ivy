@@ -216,6 +216,29 @@ CREATE TABLE IF NOT EXISTS newsletter_subscribers (
 );
 CREATE INDEX IF NOT EXISTS idx_newsletter_created
   ON newsletter_subscribers(created_at DESC);
+
+-- Legal acceptances. Append-only audit trail of every time a user
+-- accepted a versioned legal document (terms, privacy, AI disclaimer).
+-- IP + user_agent stored for legal evidentiary purposes; never deleted.
+-- Plus denormalized columns on users so we can answer "have they
+-- accepted the current terms" with one cheap column read instead of
+-- a join + sort.
+CREATE TABLE IF NOT EXISTS legal_acceptances (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  document TEXT NOT NULL,
+  version TEXT NOT NULL,
+  accepted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ip TEXT,
+  user_agent TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_legal_acceptances_user
+  ON legal_acceptances(user_id, accepted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_legal_acceptances_doc_version
+  ON legal_acceptances(document, version);
+
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_version TEXT;
 -- Backfill: any user already past the whole 14-day window when this column
 -- lands gets marked as fully sent so the cron doesn't retroactively spam
 -- pre-existing accounts. Self-correcting via the empty-jsonb check.

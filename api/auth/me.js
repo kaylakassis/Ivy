@@ -2,6 +2,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser, readSession } from '../_lib/auth.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
+import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '../_lib/legal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -22,9 +23,21 @@ export default async function handler(req, res) {
       };
     }
 
+    // Terms-staleness signal so the frontend can show a forced
+    // re-accept modal. needsTermsAcceptance covers two cases:
+    // (a) user predates the column entirely (terms_version is NULL),
+    // (b) we bumped the version and they haven't re-accepted yet.
+    const needsTermsAcceptance = !hasAcceptedCurrentTerms(user);
+
     return ok(res, {
       user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) },
       impersonating,
+      terms: {
+        currentVersion: CURRENT_TERMS_VERSION,
+        acceptedVersion: user.terms_version || null,
+        acceptedAt: user.terms_accepted_at || null,
+        needsAcceptance: needsTermsAcceptance,
+      },
     });
   } catch (err) {
     return serverError(res, err);

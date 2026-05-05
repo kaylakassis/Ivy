@@ -18,6 +18,7 @@ import SubscriptionBanner from '../../features/billing/SubscriptionBanner.jsx';
 import Walkthrough from '../../features/onboarding/Walkthrough.jsx';
 import ImpersonationBanner from '../ImpersonationBanner.jsx';
 import CommandPalette from '../CommandPalette.jsx';
+import TermsAcceptModal from '../TermsAcceptModal.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -124,6 +125,7 @@ function AppShellInner() {
       )}
 
       <CommandPalette/>
+      <TermsAcceptModal/>
     </div>
   );
 }

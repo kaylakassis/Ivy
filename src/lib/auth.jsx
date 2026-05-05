@@ -1,18 +1,25 @@
 // Auth context — holds the logged-in user and exposes sign-in / sign-up / sign-out.
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api } from './api.js';
+import { CURRENT_TERMS_VERSION } from './legal.js';
 
 const Ctx = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser]                 = useState(null);
   const [impersonating, setImpersonating] = useState(null);
+  const [terms, setTerms]               = useState(null);
   const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
     let live = true;
     api.get('/auth/me')
-      .then((r) => { if (live) { setUser(r.user); setImpersonating(r.impersonating || null); } })
+      .then((r) => {
+        if (!live) return;
+        setUser(r.user);
+        setImpersonating(r.impersonating || null);
+        setTerms(r.terms || null);
+      })
       .catch(() => live && setUser(null))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
@@ -27,8 +34,15 @@ export function AuthProvider({ children }) {
   // mode: 'owner' (default — creates a workspace) or 'client' (no workspace,
   // claims existing client records by email match).
   // ref: optional affiliate code preserved from ?ref=CODE on the signup URL.
+  // The Terms version is pinned at compile time on the client and
+  // re-validated server-side; passing it explicitly creates an audit
+  // trail tying the bytes the user actually saw to the row we
+  // record.
   const signUp = useCallback(async (email, password, name, mode = 'owner', ref = null) => {
-    const r = await api.post('/auth/signup', { email, password, name, mode, ref });
+    const r = await api.post('/auth/signup', {
+      email, password, name, mode, ref,
+      acceptedTermsVersion: CURRENT_TERMS_VERSION,
+    });
     setUser(r.user);
     return r;
   }, []);
@@ -44,16 +58,33 @@ export function AuthProvider({ children }) {
       const r = await api.get('/auth/me');
       setUser(r.user);
       setImpersonating(r.impersonating || null);
+      setTerms(r.terms || null);
       return r.user;
     } catch {
       setUser(null);
       setImpersonating(null);
+      setTerms(null);
       return null;
     }
   }, []);
 
+  // Records the user's acceptance of the current Terms version.
+  // Server gates by version, then writes both an immutable
+  // legal_acceptances row and the denormalized users.terms_version
+  // snapshot. After it returns, refresh /api/auth/me so the
+  // mustAcceptTerms flag flips off.
+  const acceptCurrentTerms = useCallback(async () => {
+    await api.post('/me/accept-terms', { version: CURRENT_TERMS_VERSION });
+    await refresh();
+  }, [refresh]);
+
   return (
-    <Ctx.Provider value={{ user, loading, signIn, signUp, signOut, refresh, impersonating }}>
+    <Ctx.Provider value={{
+      user, loading, signIn, signUp, signOut, refresh, impersonating,
+      terms,
+      mustAcceptTerms: !!(user && terms?.needsAcceptance),
+      acceptCurrentTerms,
+    }}>
       {children}
     </Ctx.Provider>
   );

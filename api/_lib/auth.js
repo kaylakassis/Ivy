@@ -114,7 +114,8 @@ export async function requireUser(req, res) {
   }
   const { rows } = await sql`
     SELECT id, email, name, created_at, email_verified_at,
-           walkthrough_completed_at, user_type
+           walkthrough_completed_at, user_type,
+           terms_accepted_at, terms_version
     FROM users WHERE id = ${session.sub}
   `;
   if (rows.length === 0) {

@@ -1,4 +1,10 @@
-// POST /api/auth/signup  { email, password, name? }
+// POST /api/auth/signup  { email, password, name?, acceptedTermsVersion }
+//
+// `acceptedTermsVersion` is required. It must equal the server's
+// CURRENT_TERMS_VERSION; we record an immutable acceptance row in
+// legal_acceptances at the same instant we create the user, so the
+// proof-of-acceptance is bound to the same transaction as the account
+// itself.
 import { sql } from '../_lib/db.js';
 import { hashPassword, signSession, setSessionCookie, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
@@ -6,6 +12,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
 const VERIFY_TTL_MIN = 60 * 24; // 24 hours
@@ -14,10 +21,16 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   try {
-    const { email, password, name, mode, ref } = await readBody(req);
+    const { email, password, name, mode, ref, acceptedTermsVersion } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || password.length < 8) {
       return badRequest(res, 'Password must be at least 8 characters');
+    }
+    // Hard requirement: signup cannot proceed without an explicit
+    // acceptance of the current Terms version. Refuse the request
+    // rather than silently default — we want the proof.
+    if (acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
+      return badRequest(res, `You must accept the current Terms (${CURRENT_TERMS_VERSION}) to create an account.`);
     }
     // 'owner' (default) creates a workspace; 'client' does not — they're
     // signing up to view their bookings/invoices/messages from businesses
@@ -42,11 +55,21 @@ export default async function handler(req, res) {
 
     const password_hash = await hashPassword(password);
     const insertUser = await sql`
-      INSERT INTO users (email, password_hash, name)
-      VALUES (${emailKey}, ${password_hash}, ${name || null})
+      INSERT INTO users (email, password_hash, name, terms_version, terms_accepted_at)
+      VALUES (${emailKey}, ${password_hash}, ${name || null}, ${CURRENT_TERMS_VERSION}, NOW())
       RETURNING id, email, name, created_at, email_verified_at
     `;
     const user = insertUser.rows[0];
+
+    // Append the immutable acceptance row in the same transaction as
+    // the user creation. legal_acceptances is append-only — we never
+    // delete; this row plus its IP + UA is the proof if it ever
+    // matters.
+    const ua = req.headers['user-agent']?.toString().slice(0, 500) || null;
+    await sql`
+      INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
+      VALUES (${user.id}, 'terms', ${CURRENT_TERMS_VERSION}, ${ip}, ${ua})
+    `;
 
     if (role === 'owner') {
       await sql`INSERT INTO workspaces (owner_id) VALUES (${user.id})`;

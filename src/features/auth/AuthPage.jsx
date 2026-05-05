@@ -18,12 +18,15 @@ export default function AuthPage({ mode = 'signin' }) {
   const [confirm,  setConfirm]  = useState('');
   const [name,     setName]     = useState('');
   const [role,     setRole]     = useState('owner'); // 'owner' | 'client'
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [err,  setErr]    = useState(null);
 
   const isSignUp = mode === 'signup';
   const mismatch = isSignUp && confirm.length > 0 && confirm !== password;
-  const canSubmit = !busy && (!isSignUp || (password.length >= 8 && confirm === password));
+  const canSubmit = !busy
+    && (!isSignUp
+      || (password.length >= 8 && confirm === password && acceptedTerms));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -31,6 +34,10 @@ export default function AuthPage({ mode = 'signin' }) {
     if (isSignUp) {
       if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
       if (password !== confirm) { setErr("Passwords don't match"); return; }
+      if (!acceptedTerms) {
+        setErr('You must accept the Terms and Privacy Policy to continue.');
+        return;
+      }
     }
     setBusy(true);
     try {
@@ -123,6 +130,36 @@ export default function AuthPage({ mode = 'signin' }) {
               Forgot your password?
             </Link>
           </div>
+        )}
+
+        {/* Required-acceptance checkbox on signup. Server enforces the
+            same requirement and refuses the POST without it; this is
+            the soft guard. Wording explicitly calls out AI / financial /
+            legal / business-outcome disclaimers so it can't be argued
+            the user "didn't see" them. */}
+        {isSignUp && (
+          <label style={{
+            display: 'flex', alignItems: 'flex-start', gap: 10,
+            padding: '12px 14px', borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+            fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55, cursor: 'pointer',
+          }}>
+            <input type="checkbox" checked={acceptedTerms}
+              onChange={(e) => setAcceptedTerms(e.target.checked)}
+              style={{ marginTop: 3, flexShrink: 0 }}/>
+            <span>
+              I have read and agree to the{' '}
+              <Link to="/terms"   target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Terms of Service</Link>{' '}and{' '}
+              <Link to="/privacy" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Privacy Policy</Link>,
+              and I understand that THRYVE — including the Ivy AI coach
+              and every integrated third-party service — provides
+              informational tools only, not financial, legal, tax, or
+              other professional advice. I am responsible for my own
+              business decisions and outcomes, and I will consult a
+              qualified financial advisor and/or attorney for guidance
+              on material decisions.
+            </span>
+          </label>
         )}
 
         {err && (
