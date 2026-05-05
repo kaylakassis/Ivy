@@ -26,14 +26,39 @@ function MetricCard({ label }) {
   );
 }
 
-// Owner setup checklist. Hides itself the moment every required step is
-// done so the dashboard isn't permanently noisy. Optional steps stay
-// visible while there are still incomplete required steps; once those
-// are all green, the entire card disappears (we don't nag about
-// optional things forever).
+// Owner setup checklist. Two phases:
+//   PHASE 1 (required incomplete): "Finish setting up" — accent banner with
+//   the next required action front and center. Recommended items also
+//   listed but visually de-emphasized.
+//   PHASE 2 (required complete, recommended outstanding): "Get fully ready
+//   for business" — softer banner. The required cluster is collapsed and
+//   shows a green check-mark. Recommended items are the focus.
+// Phase 3 (everything done) hides the card entirely.
+//
+// Dismissable via "Hide for now" — stamps localStorage with a 7-day TTL
+// so the card disappears for that period and the user isn't nagged on
+// every page load. Re-shows automatically once the TTL expires OR a new
+// item flips back to incomplete.
+const DISMISS_KEY = 'thryve.setupChecklist.hideUntil';
+const DISMISS_DAYS = 7;
+
+function isDismissed() {
+  try {
+    const v = localStorage.getItem(DISMISS_KEY);
+    if (!v) return false;
+    return Date.now() < Number(v);
+  } catch { return false; }
+}
+function dismissForAWeek() {
+  try {
+    localStorage.setItem(DISMISS_KEY, String(Date.now() + DISMISS_DAYS * 86400e3));
+  } catch { /* ignore */ }
+}
+
 function SetupChecklist() {
   const [data, setData] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
+  const [hidden, setHidden] = useState(() => isDismissed());
 
   useEffect(() => {
     let cancelled = false;
@@ -47,40 +72,71 @@ function SetupChecklist() {
     return () => { cancelled = true; };
   }, []);
 
-  if (!data || data.complete || !data.items || data.items.length === 0) return null;
+  if (!data || !data.items || data.items.length === 0) return null;
+  if (data.fullyComplete) return null;
+  if (hidden) return null;
 
   const required = data.items.filter((i) => i.required);
-  const optional = data.items.filter((i) => !i.required);
+  const recommended = data.items.filter((i) => !i.required);
   const doneRequired = required.filter((i) => i.done).length;
+  const doneRec = recommended.filter((i) => i.done).length;
   const totalRequired = required.length;
-  const pct = Math.round((doneRequired / Math.max(1, totalRequired)) * 100);
-  const nextItem = required.find((i) => !i.done);
+  const totalRec = recommended.length;
+
+  const phase = data.complete ? 'recommended' : 'required';
+  const nextItem = phase === 'required'
+    ? required.find((i) => !i.done)
+    : recommended.find((i) => !i.done);
+
+  const headline = phase === 'required'
+    ? 'Finish setting up your business'
+    : "You're ready to take bookings — keep going";
+  const sub = phase === 'required'
+    ? 'A few quick steps and your booking page is live.'
+    : 'Optional but worth it: card payments, a public website, your first client. Each one moves the needle.';
+
+  // Progress: counts both required + recommended once we hit phase 2.
+  const pctRequired = Math.round((doneRequired / Math.max(1, totalRequired)) * 100);
+  const pctRec = Math.round((doneRec / Math.max(1, totalRec)) * 100);
+  const pct = phase === 'required' ? pctRequired : pctRec;
+
+  const tone = phase === 'required' ? 'var(--accent)' : 'var(--ok)';
+
+  const dismiss = () => { dismissForAWeek(); setHidden(true); };
 
   return (
     <div className="card" style={{
       padding: 22,
-      borderColor: 'var(--accent)',
-      background: 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface))',
+      borderColor: tone,
+      background: phase === 'required'
+        ? 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface))'
+        : 'color-mix(in srgb, var(--ok) 6%, var(--surface))',
     }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14 }}>
         <div style={{
           width: 38, height: 38, borderRadius: 10, flexShrink: 0,
-          background: 'var(--accent)', color: 'var(--accent-ink)',
+          background: tone,
+          color: phase === 'required' ? 'var(--accent-ink)' : '#fff',
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
           <Icons.Check size={18} sw={2.4}/>
         </div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Finish setting up your business</h3>
+            <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>{headline}</h3>
             <span style={{
               fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase',
               padding: '2px 8px', borderRadius: 99,
-              background: 'var(--accent)', color: 'var(--accent-ink)',
-            }}>{doneRequired}/{totalRequired}</span>
+              background: tone,
+              color: phase === 'required' ? 'var(--accent-ink)' : '#fff',
+            }}>
+              {phase === 'required'
+                ? `${doneRequired}/${totalRequired}`
+                : `${doneRec}/${totalRec}`}
+            </span>
           </div>
           <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            A few quick steps and you're ready to take real bookings.
+            {sub}
             {nextItem && <> Up next — <strong>{nextItem.label.toLowerCase()}</strong>.</>}
           </p>
           {/* Progress bar */}
@@ -90,19 +146,38 @@ function SetupChecklist() {
           }}>
             <div style={{
               height: '100%', width: `${pct}%`,
-              background: 'var(--accent)', transition: 'width 0.25s ease',
+              background: tone, transition: 'width 0.25s ease',
             }}/>
           </div>
 
           {!collapsed && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-              {[...required, ...optional].map((item) => (
-                <ChecklistRow key={item.id} item={item}/>
-              ))}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {phase === 'required' && (
+                <ChecklistGroup
+                  label="Required"
+                  items={required}/>
+              )}
+              <ChecklistGroup
+                label="Recommended"
+                items={recommended}
+                done={doneRec}
+                total={totalRec}/>
+              {phase === 'recommended' && (
+                /* Show the required block in a tucked-away "you've completed
+                   these" footnote so they can revisit if needed. */
+                <details style={{ fontSize: 12, color: 'var(--muted)' }}>
+                  <summary style={{ cursor: 'pointer' }}>
+                    Required setup completed ({doneRequired}/{totalRequired})
+                  </summary>
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 6 }}>
+                    {required.map((item) => <ChecklistRow key={item.id} item={item}/>)}
+                  </div>
+                </details>
+              )}
             </div>
           )}
 
-          <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center' }}>
+          <div style={{ display: 'flex', gap: 10, marginTop: 12, alignItems: 'center', flexWrap: 'wrap' }}>
             {nextItem && (
               <Link to={nextItem.href} className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 12.5 }}>
                 {nextItem.label} <Icons.Arrow size={11} sw={2}/>
@@ -112,8 +187,28 @@ function SetupChecklist() {
               style={{ padding: '7px 12px', fontSize: 12.5, color: 'var(--muted)' }}>
               {collapsed ? 'Show all steps' : 'Hide details'}
             </button>
+            <div style={{ flex: 1 }}/>
+            <button onClick={dismiss} className="btn btn-ghost"
+              style={{ padding: '7px 12px', fontSize: 12.5, color: 'var(--muted)' }}
+              title="Hide for 7 days. We'll re-show if anything changes.">
+              Hide for now
+            </button>
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+
+function ChecklistGroup({ label, items }) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 10.5, fontWeight: 600, letterSpacing: '0.06em',
+        textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6,
+      }}>{label}</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.map((item) => <ChecklistRow key={item.id} item={item}/>)}
       </div>
     </div>
   );
