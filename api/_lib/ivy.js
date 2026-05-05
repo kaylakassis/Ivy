@@ -7,6 +7,7 @@
 // each workspace's conversation isolated.
 import Anthropic from '@anthropic-ai/sdk';
 import { sql } from './db.js';
+import { IVY_TOOLS, executeIvyTool } from './ivyTools.js';
 
 // Single shared client. Reads ANTHROPIC_API_KEY from env automatically.
 let _client = null;
@@ -20,12 +21,17 @@ function anthropic() {
 const IVY_MODEL = 'claude-opus-4-7';
 const IVY_MAX_TOKENS = 1024;
 const IVY_HISTORY_TURNS = 10;
+// Cap on tool-use loop iterations per user message. Real conversations
+// rarely need more than 3–4 tool calls; 8 is generous slack for "list
+// quiet clients → search clients → send a message to each" patterns.
+const TOOL_LOOP_CAP = 8;
 
 // Per-workspace daily caps. Hits whichever ceiling first → fall back to mock
 // with a "limit reached" message so a runaway loop or overly chatty workspace
-// can't drive real money out of our pocket. Tune up as plan tiers come online.
-const DAILY_REQUEST_CAP = 100;
-const DAILY_OUTPUT_TOKEN_CAP = 50_000;
+// can't drive real money out of our pocket. Tool loops can multiply API
+// calls per user message — bumped accordingly. Tune as plan tiers land.
+const DAILY_REQUEST_CAP = 200;
+const DAILY_OUTPUT_TOKEN_CAP = 100_000;
 
 export function serializeSession(row, lastPreview) {
   if (!row) return null;
@@ -140,8 +146,12 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   }
 
   try {
-    const { reply, response } = await claudeReply(client, text, ctx, history, attachment);
-    if (workspaceId) await recordUsage(workspaceId, response).catch(() => {});
+    const { reply, aggregateUsage } = await claudeReply(client, text, ctx, history, attachment, workspaceId);
+    // Record SUM of all turns toward the daily cap — tool loops can
+    // burn many turns per user message.
+    if (workspaceId && aggregateUsage) {
+      await recordUsage(workspaceId, { usage: aggregateUsage }).catch(() => {});
+    }
     return { text: reply, mode: 'live' };
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -220,29 +230,99 @@ When their question is broad, ask one focused follow-up before launching into ad
 
 You can reference: revenue this month, open invoice count, active client count, upcoming sessions in next 7 days, and clients who haven't been messaged in 3+ weeks ("quiet clients"). The current snapshot is included in the user's message. Use those numbers — don't make up data you don't have.
 
+You also have tools that operate on the workspace directly:
+- list_quiet_clients, list_overdue_invoices, list_upcoming_bookings — pull current data when you need detail beyond the snapshot.
+- search_clients — find a specific client by name/email substring.
+- send_message_to_client — drop a chat message in the client's THRYVE inbox.
+- mark_invoice_paid — flip an invoice to paid (cash/check/transfer/etc.).
+- send_invoice — email an existing invoice to its client.
+- add_client — create a new client/lead.
+
+Call tools when the user asks you to do something — don't just describe what they could do. If they ask "send a check-in to my quiet clients", look them up, draft personalized messages, then send. Confirm in plain English afterwards what you did. If a write operation looks ambiguous, ask one clarifying question before acting (e.g. "Should I send the same message to all 5, or different ones based on context?").
+
 If they ask something outside your scope (legal, medical, tax filings, personal therapy), point that out briefly and redirect to what you can help with.`;
 
-async function claudeReply(client, text, ctx, history, attachment) {
+// Tool-use loop. Sends messages → if Claude returns tool_use blocks,
+// executes them server-side and sends tool_result blocks back. Repeats
+// up to TOOL_LOOP_CAP iterations or until stop_reason is anything other
+// than 'tool_use'.
+//
+// Returns:
+//   { reply, response, usage }
+//
+// `response` is the FINAL Claude response (the one with the text reply);
+// `usage` is the SUM of input + output tokens across every turn so the
+// daily cap accounts for a multi-tool conversation correctly.
+async function claudeReply(client, text, ctx, history, attachment, workspaceId) {
   const messages = buildMessages(text, ctx, history, attachment);
-  const response = await client.messages.create({
-    model: IVY_MODEL,
-    max_tokens: IVY_MAX_TOKENS,
-    system: [
-      {
-        type: 'text',
-        text: IVY_SYSTEM,
-        cache_control: { type: 'ephemeral' },
-      },
-    ],
-    messages,
-  });
+
+  let response = null;
+  let totalIn = 0, totalOut = 0;
+  let totalCacheRead = 0, totalCacheCreate = 0;
+
+  for (let i = 0; i < TOOL_LOOP_CAP; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    response = await client.messages.create({
+      model: IVY_MODEL,
+      max_tokens: IVY_MAX_TOKENS,
+      system: [
+        {
+          type: 'text',
+          text: IVY_SYSTEM,
+          cache_control: { type: 'ephemeral' },
+        },
+      ],
+      tools: IVY_TOOLS,
+      messages,
+    });
+    const u = response.usage || {};
+    totalIn          += Number(u.input_tokens || 0);
+    totalOut         += Number(u.output_tokens || 0);
+    totalCacheRead   += Number(u.cache_read_input_tokens || 0);
+    totalCacheCreate += Number(u.cache_creation_input_tokens || 0);
+
+    // If Claude isn't asking for a tool, we're done — extract text.
+    if (response.stop_reason !== 'tool_use') break;
+
+    // Execute every tool_use block in this turn, then assemble the
+    // matching tool_result blocks for the next turn.
+    const toolUses = response.content.filter((b) => b.type === 'tool_use');
+    if (toolUses.length === 0) break; // defensive: shouldn't happen
+
+    // Append assistant turn (with tool_use) to messages so the next call
+    // can reference it.
+    messages.push({ role: 'assistant', content: response.content });
+
+    const toolResults = [];
+    for (const tu of toolUses) {
+      // eslint-disable-next-line no-await-in-loop
+      const result = await executeIvyTool(tu.name, tu.input || {}, { workspaceId });
+      toolResults.push({
+        type: 'tool_result',
+        tool_use_id: tu.id,
+        content: JSON.stringify(result).slice(0, 8000),
+        ...(result && result.error ? { is_error: true } : {}),
+      });
+    }
+    messages.push({ role: 'user', content: toolResults });
+  }
+
   const reply = response.content
     .filter((b) => b.type === 'text')
     .map((b) => b.text)
     .join('\n')
     .trim();
   if (!reply) throw new Error('Empty reply from Claude');
-  return { reply, response };
+  return {
+    reply,
+    response,
+    aggregateUsage: {
+      input_tokens: totalIn,
+      output_tokens: totalOut,
+      cache_read_input_tokens: totalCacheRead,
+      cache_creation_input_tokens: totalCacheCreate,
+    },
+  };
 }
 
 // Map a wide range of MIME types into the small set Anthropic accepts.
