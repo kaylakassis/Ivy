@@ -39,8 +39,14 @@ export function useDocuments() {
     setDocuments((ds) => ds.filter((d) => d.id !== id));
   }, []);
 
-  const send = useCallback(async (id, clientId) => {
-    const r = await api.post('/documents/send', { id, clientId });
+  // Accepts a single clientId (legacy) OR an array of recipients
+  // ([{ clientId, name?, email? }]) for multi-signer sends. The
+  // server endpoint normalizes both.
+  const send = useCallback(async (id, recipientsOrClientId) => {
+    const body = Array.isArray(recipientsOrClientId)
+      ? { id, recipients: recipientsOrClientId }
+      : { id, clientId: recipientsOrClientId };
+    const r = await api.post('/documents/send', body);
     setDocuments((ds) => ds.map((d) => d.id === id ? r.document : d));
     return r.document;
   }, []);

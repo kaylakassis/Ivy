@@ -1,4 +1,7 @@
-// Pick a client to send a document to.
+// Multi-recipient send modal. Pick one or more clients, optionally
+// reorder them, then send. Each gets a per-signer token (sequential
+// signing) — only the first one's email goes out immediately; the
+// next signer is auto-emailed when the previous completes.
 import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
@@ -7,6 +10,8 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery]     = useState('');
+  // Ordered array of selected clients. Order = signing order.
+  const [picked, setPicked]   = useState([]);
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState(null);
 
@@ -21,16 +26,33 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
 
   const candidates = useMemo(() => {
     const q = query.trim().toLowerCase();
+    const pickedIds = new Set(picked.map((p) => p.id));
     return clients
       .filter((c) => c.email)
+      .filter((c) => !pickedIds.has(c.id))
       .filter((c) => !q || c.name.toLowerCase().includes(q) || (c.email || '').toLowerCase().includes(q));
-  }, [clients, query]);
+  }, [clients, picked, query]);
 
-  const pick = async (clientId) => {
-    setBusy(true);
-    setErr(null);
-    try { await onSend(clientId); }
-    catch (e) { setErr(e.message || 'Could not send'); setBusy(false); }
+  const add = (c) => setPicked((p) => [...p, c]);
+  const remove = (id) => setPicked((p) => p.filter((x) => x.id !== id));
+  const moveUp = (i) => setPicked((p) => i === 0 ? p : [
+    ...p.slice(0, i - 1), p[i], p[i - 1], ...p.slice(i + 1),
+  ]);
+  const moveDown = (i) => setPicked((p) => i === p.length - 1 ? p : [
+    ...p.slice(0, i), p[i + 1], p[i], ...p.slice(i + 2),
+  ]);
+
+  const submit = async () => {
+    if (picked.length === 0) return;
+    setBusy(true); setErr(null);
+    try {
+      // Pass an ordered recipients array. The send endpoint accepts
+      // either this OR the legacy { clientId } shape.
+      await onSend(picked.map((c) => ({ clientId: c.id })));
+    } catch (e) {
+      setErr(e.message || 'Could not send');
+      setBusy(false);
+    }
   };
 
   return (
@@ -39,7 +61,7 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <div onClick={(e) => e.stopPropagation()} className="card scroll" style={{
-        padding: 0, width: '100%', maxWidth: 480, maxHeight: '76vh',
+        padding: 0, width: '100%', maxWidth: 540, maxHeight: '82vh',
         display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ padding: '18px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -50,6 +72,61 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
           <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={15}/></button>
         </div>
 
+        {/* Picked signers, in order */}
+        {picked.length > 0 && (
+          <div style={{
+            padding: '12px 16px',
+            borderBottom: '1px solid var(--border)',
+            background: 'color-mix(in srgb, var(--accent-soft) 30%, transparent)',
+          }}>
+            <div className="metric-label" style={{ marginBottom: 8 }}>
+              Signing order — {picked.length} signer{picked.length === 1 ? '' : 's'}
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {picked.map((c, i) => (
+                <div key={c.id} style={{
+                  display: 'flex', alignItems: 'center', gap: 10,
+                  padding: '8px 12px', borderRadius: 8,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                }}>
+                  <span style={{
+                    width: 22, height: 22, borderRadius: 99,
+                    background: 'var(--accent)', color: 'var(--accent-ink)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    fontSize: 11, fontWeight: 700, flexShrink: 0,
+                  }}>{i + 1}</span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {c.name}
+                    </div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                      {c.email}
+                    </div>
+                  </div>
+                  <button onClick={() => moveUp(i)} disabled={i === 0}
+                    className="btn btn-ghost" style={{ padding: 4, opacity: i === 0 ? 0.3 : 1 }}>
+                    <Icons.ArrowDown size={12} sw={2} style={{ transform: 'rotate(180deg)' }}/>
+                  </button>
+                  <button onClick={() => moveDown(i)} disabled={i === picked.length - 1}
+                    className="btn btn-ghost" style={{ padding: 4, opacity: i === picked.length - 1 ? 0.3 : 1 }}>
+                    <Icons.ArrowDown size={12} sw={2}/>
+                  </button>
+                  <button onClick={() => remove(c.id)} className="btn btn-ghost"
+                    style={{ padding: 4, color: 'var(--danger)' }}>
+                    <Icons.X size={12} sw={2}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+            {picked.length > 1 && (
+              <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, lineHeight: 1.45 }}>
+                Sequential signing: signer 1 gets the email immediately. Each next signer is auto-emailed when the previous one completes.
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Search + candidate list */}
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 8,
@@ -58,24 +135,24 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
           }}>
             <Icons.Search size={14} stroke="var(--muted)"/>
             <input value={query} onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search clients" autoFocus
+              placeholder="Search clients to add" autoFocus
               style={{ flex: 1, background: 'none', border: 0, outline: 'none', fontSize: 13, color: 'var(--fg)' }}/>
           </div>
         </div>
 
-        <div className="scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 200 }}>
+        <div className="scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 160 }}>
           {loading ? (
             <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>Loading…</div>
           ) : candidates.length === 0 ? (
             <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
               {clients.length === 0
                 ? 'Add clients first to send them documents.'
-                : 'Clients need an email to receive a signing link.'}
+                : picked.length > 0 ? 'No more matching clients.' : 'Clients need an email to receive a signing link.'}
             </div>
           ) : candidates.map((c) => {
             const initials = (c.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
             return (
-              <button key={c.id} disabled={busy} onClick={() => pick(c.id)} style={{
+              <button key={c.id} onClick={() => add(c)} style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 12,
                 padding: '10px 16px', border: 0, background: 'transparent',
                 borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left',
@@ -97,7 +174,7 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
                     {c.email}
                   </div>
                 </div>
-                <Icons.Arrow size={13} stroke="var(--muted)"/>
+                <Icons.Plus size={14} stroke="var(--accent)" sw={2}/>
               </button>
             );
           })}
@@ -109,6 +186,22 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
             {err}
           </div>
         )}
+
+        <div style={{
+          padding: '12px 16px', borderTop: '1px solid var(--border)',
+          display: 'flex', gap: 10, alignItems: 'center',
+        }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)' }}>
+            {picked.length} selected
+          </span>
+          <div style={{ flex: 1 }}/>
+          <button onClick={onClose} className="btn btn-outline" disabled={busy}>Cancel</button>
+          <button onClick={submit} disabled={busy || picked.length === 0}
+            className="btn btn-primary"
+            style={{ opacity: (busy || picked.length === 0) ? 0.6 : 1 }}>
+            {busy ? 'Sending…' : `Send to ${picked.length || '…'}`}
+          </button>
+        </div>
       </div>
     </div>
   );

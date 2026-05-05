@@ -6,7 +6,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeDoc, cleanFields, VALID_KINDS, VALID_STATUS } from '../_lib/documents.js';
+import { serializeDoc, cleanFields, fetchSignersBulk, VALID_KINDS, VALID_STATUS } from '../_lib/documents.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -46,7 +46,12 @@ export default async function handler(req, res) {
         `;
         rows = r.rows;
       }
-      return ok(res, { documents: rows.map(serializeDoc) });
+      // Bulk-fetch signers in one round trip so each row can show its
+      // multi-signer progress without N+1 queries.
+      const signersByDoc = await fetchSignersBulk(rows.map((r) => r.id));
+      return ok(res, {
+        documents: rows.map((r) => serializeDoc(r, signersByDoc.get(r.id) || [])),
+      });
     }
 
     if (req.method === 'POST') {

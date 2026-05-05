@@ -151,6 +151,14 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend 
             )}
           </div>
 
+          {/* Signers — multi-signer audit panel. Always renders when there
+              are signers attached, regardless of doc status; lets the owner
+              see exactly who signed when, from where, and the
+              tamper-evident hash once the doc is fully complete. */}
+          {(doc.signers || []).length > 0 && (
+            <SignersPanel doc={doc}/>
+          )}
+
           {/* Activity */}
           {(doc.activity || []).length > 0 && (
             <div>
@@ -233,6 +241,106 @@ function defaultFields() {
     { id: 'sig',  type: 'signature', label: 'Signature', required: true,  value: '' },
     { id: 'date', type: 'date',      label: 'Date',      required: true,  value: '' },
   ];
+}
+
+// Multi-signer status panel. Order, name, status pill, signed time,
+// IP. Surfaces the tamper-evident completion hash when the doc is
+// fully signed so the owner can copy it for legal storage.
+function SignersPanel({ doc }) {
+  const signers = doc.signers || [];
+  const completed = signers.every((s) => s.status === 'completed');
+  return (
+    <div>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Signers</div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {signers.map((s, i) => (
+          <div key={s.id || i} style={{
+            display: 'grid',
+            gridTemplateColumns: '24px minmax(0, 1.4fr) 90px minmax(0, 1fr)',
+            gap: 12, alignItems: 'center',
+            padding: '10px 12px', borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            fontSize: 12.5,
+          }}>
+            <span style={{
+              width: 22, height: 22, borderRadius: 99,
+              background: 'var(--surface)', color: 'var(--fg)',
+              border: '1px solid var(--border-strong)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 11, fontWeight: 700,
+            }}>{i + 1}</span>
+            <div style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {s.name}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {s.email}
+              </div>
+            </div>
+            <SignerStatusPill status={s.status}/>
+            <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'right' }}>
+              {s.signedAt && (
+                <div>Signed {new Date(s.signedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</div>
+              )}
+              {s.declinedAt && (
+                <div style={{ color: 'var(--danger)' }}>
+                  Declined {new Date(s.declinedAt).toLocaleString([], { month: 'short', day: 'numeric' })}
+                </div>
+              )}
+              {s.declineReason && (
+                <div style={{ fontStyle: 'italic', maxWidth: 200, marginLeft: 'auto' }}>
+                  "{s.declineReason}"
+                </div>
+              )}
+              {s.ip && <div>IP {s.ip}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {completed && doc.completionHash && (
+        <div style={{
+          marginTop: 10, padding: '10px 12px', borderRadius: 10,
+          background: 'color-mix(in srgb, var(--ok) 6%, var(--surface-2))',
+          border: '1px solid var(--ok)', fontSize: 11.5,
+        }}>
+          <div style={{ color: 'var(--ok)', fontWeight: 600, marginBottom: 4 }}>
+            Tamper-evident completion hash
+          </div>
+          <code style={{
+            display: 'block', wordBreak: 'break-all', fontSize: 11,
+            color: 'var(--fg-2)', fontFamily: 'ui-monospace, monospace',
+          }}>{doc.completionHash}</code>
+          <div style={{ marginTop: 6, color: 'var(--muted)', lineHeight: 1.5 }}>
+            SHA-256 over the document body and every signer's name, email,
+            field values, and timestamps. If anything changes after this
+            point, recomputing won't match — store this hash for any
+            future dispute.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SignerStatusPill({ status }) {
+  const META = {
+    pending:    { label: 'Pending',    fg: 'var(--muted)', bg: 'var(--surface)' },
+    awaiting:   { label: 'Awaiting',   fg: 'var(--warn)',  bg: 'color-mix(in srgb, var(--warn) 12%, transparent)' },
+    viewed:     { label: 'Viewed',     fg: 'var(--accent)', bg: 'var(--accent-soft)' },
+    completed:  { label: 'Signed',     fg: 'var(--ok)',    bg: 'color-mix(in srgb, var(--ok) 12%, transparent)' },
+    declined:   { label: 'Declined',   fg: 'var(--danger)', bg: 'rgba(155,44,44,0.1)' },
+  };
+  const m = META[status] || META.pending;
+  return (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5,
+      padding: '2px 8px', borderRadius: 99, justifySelf: 'flex-start',
+      fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
+      background: m.bg, color: m.fg,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: 99, background: m.fg }}/>{m.label}
+    </span>
+  );
 }
 
 const inputS = {

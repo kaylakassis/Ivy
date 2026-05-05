@@ -7,7 +7,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedDoc, serializeDoc, cleanFields } from '../_lib/documents.js';
+import { fetchOwnedDoc, serializeDoc, cleanFields, fetchSigners } from '../_lib/documents.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -22,7 +22,8 @@ export default async function handler(req, res) {
     if (!doc) return notFound(res, 'Document not found');
 
     if (req.method === 'GET') {
-      return ok(res, { document: serializeDoc(doc) });
+      const signers = await fetchSigners(id);
+      return ok(res, { document: serializeDoc(doc, signers) });
     }
 
     if (req.method === 'PATCH') {

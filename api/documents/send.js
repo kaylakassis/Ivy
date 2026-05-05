@@ -1,14 +1,18 @@
-// POST /api/documents/send  — body: { id, clientId }
+// POST /api/documents/send  body: { id, recipients }
+//   recipients: [{ clientId, name?, email? }, ...]   — multi-signer.
+//                For backward compat with single-signer callers, also
+//                accepts a single { clientId } shape.
 //
-// Generates a one-time signing token, emails the client a magic link, marks
-// the document 'sent', appends an activity entry, and posts a system message
-// into the chat thread between owner and client (creating the thread if
-// missing).
+// Builds a document_signers row per recipient (in order), mints a token
+// for the FIRST signer only (sequential signing), emails them, and
+// drops a system message in the chat thread for that first client.
+// When that signer completes, /api/sign/[token] mints + emails the
+// next signer's token, and so on. The final completion stamps the
+// document and computes the tamper-evident hash.
 //
-// File lives next to /api/documents/[id].js as a static sibling so Vercel's
-// router sends `/api/documents/send` to this file instead of the dynamic
-// [id] handler.
-
+// File lives next to /api/documents/[id].js as a static sibling so
+// Vercel's router sends `/api/documents/send` to this file instead of
+// the dynamic [id] handler.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
@@ -34,57 +38,115 @@ export default async function handler(req, res) {
 
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
-    const clientId = body.clientId ? String(body.clientId) : null;
     if (!id) return badRequest(res, 'id is required');
-    if (!clientId) return badRequest(res, 'clientId is required');
+
+    // Normalize input: accept either a `recipients` array OR a legacy
+    // single-clientId shape. Cap at 10 signers to keep the UI sane.
+    let recipients = [];
+    if (Array.isArray(body.recipients) && body.recipients.length > 0) {
+      recipients = body.recipients;
+    } else if (body.clientId) {
+      recipients = [{ clientId: body.clientId }];
+    } else {
+      return badRequest(res, 'recipients or clientId is required');
+    }
+    if (recipients.length > 10) return badRequest(res, 'Up to 10 signers per document');
 
     const doc = await fetchOwnedDoc({ id, workspaceId });
     if (!doc) return badRequest(res, 'Document not found');
     if (doc.status === 'completed') return badRequest(res, 'Already completed');
     if (doc.status === 'voided')    return badRequest(res, 'Document is voided — restore first');
+    if (doc.status === 'declined')  return badRequest(res, 'Document was declined — restore to draft first');
 
-    const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
-    if (cl.rows.length === 0) return badRequest(res, 'Unknown client');
-    const recipient = cl.rows[0];
-    if (!recipient.email) return badRequest(res, 'That client has no email on file');
+    // Resolve each recipient: must belong to this workspace, must have an
+    // email. Build the rows we'll insert.
+    const resolved = [];
+    for (const r of recipients) {
+      const cid = r.clientId ? String(r.clientId) : null;
+      if (!cid) return badRequest(res, 'Each recipient needs a clientId');
+      const cl = await sql`
+        SELECT id, name, email FROM clients
+        WHERE id = ${cid} AND workspace_id = ${workspaceId}
+      `;
+      if (cl.rows.length === 0) return badRequest(res, `Unknown client: ${cid}`);
+      const c = cl.rows[0];
+      const name = (r.name || c.name || '').toString().slice(0, 200);
+      const email = (r.email || c.email || '').toString().toLowerCase().trim();
+      if (!email) return badRequest(res, `Client ${name || cid} has no email`);
+      resolved.push({ clientId: cid, name, email });
+    }
 
-    // Generate a fresh signing token. Stored hashed; raw token only ever lives
-    // in the email link.
-    const rawToken = generateRawToken(32);
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+    // Wipe any prior signer rows for this doc (re-sending should reset
+    // signer state cleanly). Then insert fresh rows in order.
+    await sql`DELETE FROM document_signers WHERE document_id = ${id}`;
+
+    // Mint the first signer's token only. Sequential signing: each
+    // signer's token is created as the previous one completes, so a
+    // leaked email link never gives access out of order.
+    const firstRaw  = generateRawToken(32);
+    const firstHash = crypto.createHash('sha256').update(firstRaw).digest('hex');
+
+    for (let i = 0; i < resolved.length; i++) {
+      const r = resolved[i];
+      const isFirst = i === 0;
+      await sql`
+        INSERT INTO document_signers (
+          document_id, order_index, client_id, name, email,
+          sign_token_hash, status
+        ) VALUES (
+          ${id}, ${i}, ${r.clientId}, ${r.name}, ${r.email},
+          ${isFirst ? firstHash : null},
+          ${isFirst ? 'awaiting' : 'pending'}
+        )
+      `;
+    }
 
     const newActivity = [
       ...(doc.activity || []),
-      { ts: new Date().toISOString(), kind: 'sent', text: `Sent to ${recipient.name}` },
+      {
+        ts: new Date().toISOString(),
+        kind: 'sent',
+        text: `Sent to ${resolved.length} signer${resolved.length === 1 ? '' : 's'}: ${resolved.map((r) => r.name).join(', ')}`,
+      },
     ];
 
+    // Update the document. We also keep the legacy recipient_* fields
+    // in sync with the FIRST signer so older code paths still display
+    // a reasonable "to whom" label.
+    const first = resolved[0];
     const updated = await sql`
       UPDATE documents SET
-        recipient_client_id = ${clientId},
-        recipient_name = ${recipient.name},
-        recipient_email = ${recipient.email},
-        status = 'sent',
-        sign_token_hash = ${tokenHash},
-        sent_at = NOW(),
-        activity = ${JSON.stringify(newActivity)}::jsonb,
-        updated_at = NOW()
+        recipient_client_id = ${first.clientId},
+        recipient_name      = ${first.name},
+        recipient_email     = ${first.email},
+        status              = 'sent',
+        sign_token_hash     = ${firstHash},
+        sent_at             = NOW(),
+        activity            = ${JSON.stringify(newActivity)}::jsonb,
+        completion_hash     = NULL,
+        decline_reason      = NULL,
+        declined_at         = NULL,
+        updated_at          = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *
     `;
 
-    const link = `${appUrl()}/sign/${encodeURIComponent(rawToken)}`;
-
-    // Email + thread integration are best-effort: don't fail the API if either
-    // hiccups (the owner can re-send from the activity drawer).
+    // Email + thread message for the first signer only. Subsequent
+    // signers get their email when their turn comes up.
+    const link = `${appUrl()}/sign/${encodeURIComponent(firstRaw)}`;
+    const positionLine = resolved.length > 1
+      ? `<p style="font-size:13px;color:#85827B;">You're signer 1 of ${resolved.length}. The next signer will receive their link after you finish.</p>`
+      : '';
     try {
       await sendEmail({
-        to: recipient.email,
+        to: first.email,
         subject: `Action needed: sign "${doc.name}"`,
         html: emailShell({
           heading: 'A document needs your signature',
-          body: `<p>Hi ${escapeHtml(recipient.name)},</p>
+          body: `<p>Hi ${escapeHtml(first.name)},</p>
                  <p>You've been sent a document to review and sign: <b>${escapeHtml(doc.name)}</b>.</p>
-                 <p>Click the button to open and sign it.</p>`,
+                 <p>Click the button to open and sign it.</p>
+                 ${positionLine}`,
           ctaText: 'Open and sign',
           ctaUrl: link,
           footer: `If you weren't expecting this, you can safely ignore this email.`,
@@ -98,7 +160,7 @@ export default async function handler(req, res) {
     try {
       const threadRow = await sql`
         INSERT INTO message_threads (workspace_id, client_id)
-        VALUES (${workspaceId}, ${clientId})
+        VALUES (${workspaceId}, ${first.clientId})
         ON CONFLICT (workspace_id, client_id) DO UPDATE SET workspace_id = EXCLUDED.workspace_id
         RETURNING id
       `;
@@ -111,9 +173,9 @@ export default async function handler(req, res) {
       const preview = `Document sent: ${doc.name}`;
       await sql`
         UPDATE message_threads SET
-          last_message_at = NOW(),
+          last_message_at      = NOW(),
           last_message_preview = ${preview},
-          unread_client = unread_client + 1
+          unread_client        = unread_client + 1
         WHERE id = ${threadId}
       `;
     } catch (msgErr) {
@@ -122,7 +184,7 @@ export default async function handler(req, res) {
     }
 
     notifyClientSafe({
-      clientId,
+      clientId: first.clientId,
       type: 'documents',
       payload: {
         title: 'Document needs your signature',

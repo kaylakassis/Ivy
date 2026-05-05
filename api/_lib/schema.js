@@ -636,6 +636,45 @@ CREATE TABLE IF NOT EXISTS documents (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id, status);
+-- Multi-signer: one row per signer per document. The legacy single-signer
+-- shape on documents.recipient_* + sign_token_hash stays in place for
+-- backward compatibility — new sends populate document_signers and use
+-- per-signer tokens. Sequential ordering is encoded by order_index;
+-- only the next-in-line signer has a usable sign_token_hash at any time.
+CREATE TABLE IF NOT EXISTS document_signers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  document_id UUID NOT NULL REFERENCES documents(id) ON DELETE CASCADE,
+  order_index INT NOT NULL DEFAULT 0,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  email TEXT NOT NULL,
+  sign_token_hash TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'awaiting', 'viewed', 'completed', 'declined')),
+  field_values JSONB NOT NULL DEFAULT '[]'::jsonb,
+  signed_at TIMESTAMPTZ,
+  declined_at TIMESTAMPTZ,
+  decline_reason TEXT,
+  ip TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_document_signers_doc
+  ON document_signers(document_id, order_index);
+CREATE INDEX IF NOT EXISTS idx_document_signers_client
+  ON document_signers(client_id) WHERE client_id IS NOT NULL;
+
+-- Tamper-evidence: SHA-256 of (document body + ordered signer field
+-- values + signed_at timestamps) computed at completion time. Makes a
+-- subsequent edit to the document or its values detectable post-fact.
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS completion_hash TEXT;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS declined_at TIMESTAMPTZ;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS decline_reason TEXT;
+-- Status enum needs 'declined' for the multi-signer-decline path.
+ALTER TABLE documents DROP CONSTRAINT IF EXISTS documents_status_check;
+ALTER TABLE documents ADD CONSTRAINT documents_status_check
+  CHECK (status IN ('draft', 'sent', 'completed', 'voided', 'declined'));
 -- Documents double as templates: when is_template=TRUE the row is a
 -- reusable form template (no recipient, status='draft'). Booking the
 -- right service auto-clones it into a new instance addressed to the

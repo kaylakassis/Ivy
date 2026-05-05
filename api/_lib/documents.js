@@ -2,10 +2,10 @@
 import { sql } from './db.js';
 
 export const VALID_KINDS  = new Set(['written', 'pdf']);
-export const VALID_STATUS = new Set(['draft', 'sent', 'completed', 'voided']);
+export const VALID_STATUS = new Set(['draft', 'sent', 'completed', 'voided', 'declined']);
 export const VALID_FIELD_TYPES = new Set(['signature', 'date', 'text', 'initial']);
 
-export function serializeDoc(row) {
+export function serializeDoc(row, signers = []) {
   if (!row) return null;
   return {
     id:                  row.id,
@@ -21,12 +21,68 @@ export function serializeDoc(row) {
     status:              row.status,
     sentAt:              row.sent_at,
     completedAt:         row.completed_at,
+    declinedAt:          row.declined_at || null,
+    declineReason:       row.decline_reason || null,
+    completionHash:      row.completion_hash || null,
+    signers:             signers.map(serializeSigner),
     activity:            row.activity || [],
     isTemplate:          !!row.is_template,
     templateId:          row.template_id || null,
     createdAt:           row.created_at,
     updatedAt:           row.updated_at,
   };
+}
+
+export function serializeSigner(row) {
+  if (!row) return null;
+  return {
+    id:            row.id,
+    orderIndex:    row.order_index,
+    clientId:      row.client_id,
+    name:          row.name,
+    email:         row.email,
+    status:        row.status,
+    signedAt:      row.signed_at || null,
+    declinedAt:    row.declined_at || null,
+    declineReason: row.decline_reason || null,
+    ip:            row.ip || null,
+    userAgent:     row.user_agent || null,
+  };
+}
+
+// Pulls every signer for a document, ordered. Owner-side serializer
+// helper so listing pages can show "2 of 4 signed" without extra
+// round trips per row.
+export async function fetchSigners(documentId) {
+  if (!documentId) return [];
+  const { rows } = await sql`
+    SELECT id, order_index, client_id, name, email, status,
+           signed_at, declined_at, decline_reason, ip, user_agent
+      FROM document_signers
+     WHERE document_id = ${documentId}
+     ORDER BY order_index ASC
+  `;
+  return rows;
+}
+
+// Bulk fetch — given a list of doc ids, returns a Map<docId, signers[]>.
+// Used by the index list endpoint to avoid N+1 queries.
+export async function fetchSignersBulk(docIds) {
+  if (!Array.isArray(docIds) || docIds.length === 0) return new Map();
+  const { rows } = await sql.query(
+    `SELECT id, document_id, order_index, client_id, name, email, status,
+            signed_at, declined_at, decline_reason, ip, user_agent
+       FROM document_signers
+      WHERE document_id = ANY($1)
+      ORDER BY document_id, order_index ASC`,
+    [docIds],
+  );
+  const out = new Map();
+  for (const r of rows) {
+    if (!out.has(r.document_id)) out.set(r.document_id, []);
+    out.get(r.document_id).push(r);
+  }
+  return out;
 }
 
 // Public-facing serializer (no workspace ids, no sign token, no internal flags).

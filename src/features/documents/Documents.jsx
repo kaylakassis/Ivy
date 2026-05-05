@@ -11,6 +11,7 @@ const STATUS_META = {
   sent:      { label: 'Awaiting',  color: 'var(--warn)' },
   completed: { label: 'Completed', color: 'var(--ok)' },
   voided:    { label: 'Voided',    color: 'var(--danger)' },
+  declined:  { label: 'Declined',  color: 'var(--danger)' },
 };
 
 export default function Documents() {
@@ -26,6 +27,7 @@ export default function Documents() {
     sent:      documents.filter((d) => d.status === 'sent').length,
     completed: documents.filter((d) => d.status === 'completed').length,
     voided:    documents.filter((d) => d.status === 'voided').length,
+    declined:  documents.filter((d) => d.status === 'declined').length,
   }), [documents]);
 
   const rows = useMemo(() => {
@@ -76,6 +78,7 @@ export default function Documents() {
           { id: 'draft', label: 'Drafts' },
           { id: 'sent', label: 'Awaiting' },
           { id: 'completed', label: 'Completed' },
+          { id: 'declined', label: 'Declined' },
           { id: 'voided', label: 'Voided' },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => setTab(id)} style={{
@@ -104,7 +107,7 @@ export default function Documents() {
             fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
             background: 'var(--surface-2)',
           }}>
-            <div>Document</div><div>Status</div><div>Recipient</div><div>Updated</div><div/>
+            <div>Document</div><div>Status</div><div>Signers</div><div>Updated</div><div/>
           </div>
           {rows.length === 0 ? (
             <div style={{ padding: 48 }}>
@@ -181,14 +184,54 @@ function DocRow({ doc, first, onOpen }) {
       }}>
         <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
       </span>
-      <div style={{ fontSize: 12.5, color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {doc.recipientName || <span style={{ color: 'var(--muted-2)' }}>—</span>}
-      </div>
+      <SignerCell doc={doc}/>
       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
         {new Date(doc.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
       </div>
       <div style={{ textAlign: 'right' }}>
         <Icons.Arrow size={13} stroke="var(--muted)"/>
+      </div>
+    </div>
+  );
+}
+
+// Compact "X of Y signed" cell with avatar dots per signer (green =
+// signed, yellow = awaiting, red = declined). Fallback to legacy
+// recipientName when the doc has no signer rows yet (e.g., predates
+// multi-signer or single-signer flow).
+function SignerCell({ doc }) {
+  const signers = doc.signers || [];
+  if (signers.length === 0) {
+    return (
+      <div style={{ fontSize: 12.5, color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+        {doc.recipientName || <span style={{ color: 'var(--muted-2)' }}>—</span>}
+      </div>
+    );
+  }
+  const signed = signers.filter((s) => s.status === 'completed').length;
+  const declined = signers.filter((s) => s.status === 'declined').length;
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+      <div style={{ display: 'flex', gap: 2 }}>
+        {signers.map((s, i) => (
+          <span key={s.id || i} title={`${s.name} — ${s.status}`}
+            style={{
+              width: 9, height: 9, borderRadius: 99,
+              background:
+                s.status === 'completed' ? 'var(--ok)'
+              : s.status === 'declined'  ? 'var(--danger)'
+              : s.status === 'awaiting' || s.status === 'viewed' ? 'var(--warn)'
+              : 'var(--border-strong)',
+            }}/>
+        ))}
+      </div>
+      <div style={{
+        fontSize: 12, color: 'var(--fg-2)',
+        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+      }}>
+        {declined > 0
+          ? <span style={{ color: 'var(--danger)' }}>Declined</span>
+          : `${signed} of ${signers.length} signed`}
       </div>
     </div>
   );

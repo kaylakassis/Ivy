@@ -15,9 +15,16 @@ export default function SignPage() {
   const [error, setError]     = useState(null);
 
   const [values, setValues]   = useState({}); // fieldId → string
+  const [signerInfo, setSignerInfo] = useState(null); // { position, total, name, email }
   const [submitting, setSubmitting] = useState(false);
   const [done, setDone]       = useState(false);
+  const [nextSignerName, setNextSignerName] = useState(null);
   const [submitErr, setSubmitErr] = useState(null);
+  // Decline flow state.
+  const [declineOpen, setDeclineOpen] = useState(false);
+  const [declineReason, setDeclineReason] = useState('');
+  const [declining, setDeclining] = useState(false);
+  const [declined, setDeclined]   = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -32,6 +39,7 @@ export default function SignPage() {
       .then((r) => {
         if (!live) return;
         setDoc(r.document);
+        if (r.signer) setSignerInfo(r.signer);
         // Pre-fill date fields with today.
         const todayISO = new Date().toISOString().slice(0, 10);
         const initial = {};
@@ -74,11 +82,37 @@ export default function SignPage() {
         const j = await res.json().catch(() => ({}));
         throw new Error(j.error || `HTTP ${res.status}`);
       }
+      const j = await res.json().catch(() => ({}));
+      // Multi-signer: server tells us who's next so we can show the
+      // honest "you're done — passing it on to X" message instead of
+      // pretending the whole doc is finalized.
+      if (j.nextSigner?.name) setNextSignerName(j.nextSigner.name);
       setDone(true);
     } catch (e) {
       setSubmitErr(e.message || 'Could not submit');
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const decline = async () => {
+    setDeclining(true); setSubmitErr(null);
+    try {
+      const res = await fetch('/api/sign/' + encodeURIComponent(token), {
+        method: 'DELETE',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: declineReason.trim() || null }),
+      });
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      setDeclined(true);
+    } catch (e) {
+      setSubmitErr(e.message || 'Could not record decline');
+    } finally {
+      setDeclining(false);
     }
   };
 
@@ -98,7 +132,29 @@ export default function SignPage() {
     );
   }
 
+  if (declined) {
+    return (
+      <PageWrap tweaks={tweaks}>
+        <div className="card" style={{ padding: 40, textAlign: 'center' }}>
+          <div style={{
+            width: 56, height: 56, borderRadius: 99,
+            background: 'var(--surface-2)', color: 'var(--fg-2)',
+            border: '1px solid var(--border-strong)',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+          }}><Icons.X size={26} sw={2}/></div>
+          <h1 className="page-title" style={{ margin: 0, fontSize: 26 }}>Recorded.</h1>
+          <p style={{ color: 'var(--muted)', marginTop: 10, fontSize: 14, lineHeight: 1.55, maxWidth: 460, marginInline: 'auto' }}>
+            We've let the sender know that you declined to sign{' '}
+            <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b>. They'll
+            follow up if they want to revise and re-send.
+          </p>
+        </div>
+      </PageWrap>
+    );
+  }
+
   if (done) {
+    const handedOff = !!nextSignerName;
     return (
       <PageWrap tweaks={tweaks}>
         <div className="card" style={{ padding: 40, textAlign: 'center' }}>
@@ -107,8 +163,13 @@ export default function SignPage() {
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
           }}><Icons.Check size={28} sw={2.4}/></div>
           <h1 className="page-title" style={{ margin: 0, fontSize: 28 }}>You're signed.</h1>
-          <p style={{ color: 'var(--muted)', marginTop: 10, fontSize: 14, lineHeight: 1.5, maxWidth: 460, marginInline: 'auto' }}>
-            Thanks — <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is complete and the sender has been notified.
+          <p style={{ color: 'var(--muted)', marginTop: 10, fontSize: 14, lineHeight: 1.55, maxWidth: 460, marginInline: 'auto' }}>
+            {handedOff ? (
+              <>Thanks — your part of <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is in.
+              We've passed it to <b style={{ color: 'var(--fg-2)' }}>{nextSignerName}</b> to sign next.</>
+            ) : (
+              <>Thanks — <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is complete and the sender has been notified.</>
+            )}
           </p>
         </div>
       </PageWrap>
@@ -127,6 +188,27 @@ export default function SignPage() {
           <h1 className="page-title" style={{ margin: 0, fontSize: 22 }}>{doc.name}</h1>
         </div>
       </div>
+
+      {/* Multi-signer position banner — only shows when we have signer
+          context, which only happens for documents sent through the
+          new multi-signer flow. */}
+      {signerInfo && signerInfo.total > 1 && (
+        <div style={{
+          padding: '10px 14px', borderRadius: 10, marginBottom: 18,
+          background: 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface))',
+          border: '1px solid var(--accent)',
+          display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5,
+        }}>
+          <Icons.Users size={14} sw={1.7} stroke="var(--accent)"/>
+          <span style={{ color: 'var(--fg-2)' }}>
+            You're signer <strong style={{ color: 'var(--fg)' }}>{signerInfo.position}</strong>{' '}
+            of <strong style={{ color: 'var(--fg)' }}>{signerInfo.total}</strong>.
+            {signerInfo.position < signerInfo.total
+              ? ' The next signer will get their link after you finish.'
+              : " You're the last signer — the document finalizes when you submit."}
+          </span>
+        </div>
+      )}
 
       <div className="card" style={{ padding: 32, marginBottom: 18 }}>
         <div
@@ -153,14 +235,67 @@ export default function SignPage() {
           }}>{submitErr}</div>
         )}
 
-        <div style={{ marginTop: 24, display: 'flex', justifyContent: 'flex-end' }}>
-          <button className="btn btn-primary" onClick={submit} disabled={submitting}
+        <div style={{
+          marginTop: 24, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+        }}>
+          <button onClick={() => setDeclineOpen(true)} disabled={submitting || declining}
+            className="btn btn-ghost"
+            style={{ color: 'var(--danger)', padding: '10px 14px' }}>
+            <Icons.X size={13} sw={2}/> Decline to sign
+          </button>
+          <div style={{ flex: 1 }}/>
+          <button className="btn btn-primary" onClick={submit} disabled={submitting || declining}
             style={{ padding: '12px 22px', opacity: submitting ? 0.6 : 1 }}>
             {submitting ? 'Submitting…' : 'Sign and submit'}
             {!submitting && <Icons.Check size={14} sw={2.4}/>}
           </button>
         </div>
       </div>
+
+      {declineOpen && (
+        <div role="dialog" onClick={() => !declining && setDeclineOpen(false)} style={{
+          position: 'fixed', inset: 0, zIndex: 200,
+          background: 'rgba(0,0,0,0.55)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div onClick={(e) => e.stopPropagation()} className="card"
+            style={{ width: '100%', maxWidth: 460, padding: 24 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 10,
+                background: 'rgba(155,44,44,0.12)', color: 'var(--danger)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}><Icons.X size={16}/></div>
+              <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>Decline to sign?</h3>
+            </div>
+            <p style={{ margin: '4px 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+              The sender will be notified that you declined. You can include
+              a brief reason — it'll go in the audit log so they understand
+              why.
+            </p>
+            <textarea value={declineReason} onChange={(e) => setDeclineReason(e.target.value)}
+              rows={3} maxLength={500}
+              placeholder="Optional reason (e.g., need to revise term 4)"
+              style={{
+                width: '100%', padding: '10px 12px', borderRadius: 10,
+                background: 'var(--surface)', border: '1px solid var(--border-strong)',
+                color: 'var(--fg)', fontSize: 13.5, outline: 'none',
+                fontFamily: 'inherit', resize: 'vertical', marginBottom: 14,
+              }}/>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
+              <button onClick={() => setDeclineOpen(false)} className="btn btn-outline"
+                disabled={declining}>Keep signing</button>
+              <button onClick={decline} disabled={declining} className="btn btn-primary"
+                style={{
+                  background: 'var(--danger)', borderColor: 'var(--danger)', color: '#fff',
+                  opacity: declining ? 0.6 : 1,
+                }}>
+                {declining ? 'Recording…' : 'Decline'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </PageWrap>
   );
 }
