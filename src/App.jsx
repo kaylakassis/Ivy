@@ -1,101 +1,138 @@
-import React from 'react';
+// Top-level route table. Most route components are lazy-loaded so a
+// fresh visit to /signin doesn't pull the entire business app + admin
+// console into the initial bundle. Eager:
+//   AuthPage, AppShell, ClientShell, RootRouter, RequireAuth, RoleRouter
+//   — first-paint critical or used by every authenticated request.
+// Everything else loads on demand inside <Suspense>; the fallback is a
+// minimal centered spinner so navigation never feels stuck.
+import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
 import ViewToggle from './components/ViewToggle.jsx';
 import RequireAuth from './features/auth/RequireAuth.jsx';
 import AuthPage from './features/auth/AuthPage.jsx';
-import ForgotPasswordPage from './features/auth/ForgotPasswordPage.jsx';
-import ResetPasswordPage from './features/auth/ResetPasswordPage.jsx';
-import VerifyEmailPage from './features/auth/VerifyEmailPage.jsx';
-import Dashboard from './features/dashboard/Dashboard.jsx';
-import Clients from './features/clients/Clients.jsx';
-import Calendar from './features/calendar/Calendar.jsx';
-import Finance from './features/finance/Finance.jsx';
-import Goals from './features/goals/Goals.jsx';
-import Rewards from './features/rewards/Rewards.jsx';
-import Messages from './features/messages/Messages.jsx';
-import Documents from './features/documents/Documents.jsx';
-import SignPage from './features/documents/SignPage.jsx';
-import PublicInvoice from './features/finance/PublicInvoice.jsx';
-import Website from './features/website/Website.jsx';
-import IvyPro from './features/ivy/IvyPro.jsx';
-import AccountPage from './features/account/AccountPage.jsx';
-import AdminPage from './features/admin/AdminPage.jsx';
-import ClientShell from './features/client/ClientShell.jsx';
-import ClientHome from './features/client/ClientHome.jsx';
-import ClientMessages from './features/client/ClientMessages.jsx';
-import ClientBookings from './features/client/ClientBookings.jsx';
-import ClientInvoices from './features/client/ClientInvoices.jsx';
-import ClientDocuments from './features/client/ClientDocuments.jsx';
-import ClientDiscover from './features/client/ClientDiscover.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
-import PublicBooking from './features/calendar/PublicBooking.jsx';
-import PublicSite from './features/website/PublicSite.jsx';
-import PrivacyPage from './features/legal/PrivacyPage.jsx';
-import TermsPage from './features/legal/TermsPage.jsx';
 import RootRouter from './features/marketing/RootRouter.jsx';
-import OnboardingPage from './features/onboarding/OnboardingPage.jsx';
+import ClientShell from './features/client/ClientShell.jsx';
+
+// ── Lazy: business app pages ──
+const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
+const Clients     = lazy(() => import('./features/clients/Clients.jsx'));
+const Calendar    = lazy(() => import('./features/calendar/Calendar.jsx'));
+const Finance     = lazy(() => import('./features/finance/Finance.jsx'));
+const Goals       = lazy(() => import('./features/goals/Goals.jsx'));
+const Rewards     = lazy(() => import('./features/rewards/Rewards.jsx'));
+const Messages    = lazy(() => import('./features/messages/Messages.jsx'));
+const Documents   = lazy(() => import('./features/documents/Documents.jsx'));
+const Website     = lazy(() => import('./features/website/Website.jsx'));
+const IvyPro      = lazy(() => import('./features/ivy/IvyPro.jsx'));
+const AccountPage = lazy(() => import('./features/account/AccountPage.jsx'));
+const AdminPage   = lazy(() => import('./features/admin/AdminPage.jsx'));
+
+// ── Lazy: client portal ──
+const ClientHome      = lazy(() => import('./features/client/ClientHome.jsx'));
+const ClientMessages  = lazy(() => import('./features/client/ClientMessages.jsx'));
+const ClientBookings  = lazy(() => import('./features/client/ClientBookings.jsx'));
+const ClientInvoices  = lazy(() => import('./features/client/ClientInvoices.jsx'));
+const ClientDocuments = lazy(() => import('./features/client/ClientDocuments.jsx'));
+const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
+
+// ── Lazy: secondary auth flows + onboarding ──
+const ForgotPasswordPage = lazy(() => import('./features/auth/ForgotPasswordPage.jsx'));
+const ResetPasswordPage  = lazy(() => import('./features/auth/ResetPasswordPage.jsx'));
+const VerifyEmailPage    = lazy(() => import('./features/auth/VerifyEmailPage.jsx'));
+const OnboardingPage     = lazy(() => import('./features/onboarding/OnboardingPage.jsx'));
+
+// ── Lazy: public surfaces (often a fresh visit's first hit) ──
+const PublicBooking = lazy(() => import('./features/calendar/PublicBooking.jsx'));
+const PublicSite    = lazy(() => import('./features/website/PublicSite.jsx'));
+const SignPage      = lazy(() => import('./features/documents/SignPage.jsx'));
+const PublicInvoice = lazy(() => import('./features/finance/PublicInvoice.jsx'));
+const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
+const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
+
+// Centered, low-key spinner. Avoids blank-flash but doesn't fight the
+// destination page's own loader for visual real estate. Lives inside
+// the route so it only renders during chunk fetches.
+function RouteFallback() {
+  return (
+    <div style={{
+      minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      color: 'var(--muted)', fontSize: 13,
+    }}>
+      <div style={{
+        width: 12, height: 12, borderRadius: 99,
+        border: '2px solid var(--border)',
+        borderTopColor: 'var(--accent)',
+        animation: 'thryve-spin 0.7s linear infinite',
+      }}/>
+    </div>
+  );
+}
 
 export default function App() {
   return (
     <>
-    <Routes>
-      {/* Public marketing landing — also handles "I'm logged in, where to?"
-          redirect for authenticated users. */}
-      <Route path="/" element={<RootRouter />} />
+    <Suspense fallback={<RouteFallback/>}>
+      <Routes>
+        {/* Public marketing landing — also handles "I'm logged in, where to?"
+            redirect for authenticated users. */}
+        <Route path="/" element={<RootRouter />} />
 
-      {/* Auth */}
-      <Route path="/signin"          element={<AuthPage mode="signin" />} />
-      <Route path="/signup"          element={<AuthPage mode="signup" />} />
-      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
-      <Route path="/reset-password"  element={<ResetPasswordPage />} />
-      <Route path="/verify-email"    element={<VerifyEmailPage />} />
+        {/* Auth — primary entry pages are eager (first paint); the
+            secondary flows (forgot/reset/verify) load lazily. */}
+        <Route path="/signin"          element={<AuthPage mode="signin" />} />
+        <Route path="/signup"          element={<AuthPage mode="signup" />} />
+        <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+        <Route path="/reset-password"  element={<ResetPasswordPage />} />
+        <Route path="/verify-email"    element={<VerifyEmailPage />} />
 
-      {/* Public */}
-      <Route path="/book/:slug"   element={<PublicBooking />} />
-      <Route path="/site/:handle" element={<PublicSite />} />
-      <Route path="/sign/:token"     element={<SignPage />} />
-      <Route path="/invoice/:token"  element={<PublicInvoice />} />
+        {/* Public */}
+        <Route path="/book/:slug"      element={<PublicBooking />} />
+        <Route path="/site/:handle"    element={<PublicSite />} />
+        <Route path="/sign/:token"     element={<SignPage />} />
+        <Route path="/invoice/:token"  element={<PublicInvoice />} />
 
-      {/* Legal (public, no auth) */}
-      <Route path="/privacy" element={<PrivacyPage />} />
-      <Route path="/terms"   element={<TermsPage />} />
+        {/* Legal (public, no auth) */}
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms"   element={<TermsPage />} />
 
-      {/* First-run wizard for new owners. Auth-gated but no AppShell so it
-          can't get caught in RoleRouter's "redirect un-onboarded users to
-          /onboarding" loop. */}
-      <Route path="/onboarding"
-        element={<RequireAuth><OnboardingPage /></RequireAuth>} />
+        {/* First-run wizard for new owners. Auth-gated but no AppShell so it
+            can't get caught in RoleRouter's "redirect un-onboarded users to
+            /onboarding" loop. */}
+        <Route path="/onboarding"
+          element={<RequireAuth><OnboardingPage /></RequireAuth>} />
 
-      {/* Business app shell (auth-gated). RoleRouter sends client-only
-          users to /me before the shell renders. Dashboard lives at
-          /dashboard so the marketing page can own /. */}
-      <Route element={<RequireAuth><RoleRouter><AppShell /></RoleRouter></RequireAuth>}>
-        <Route path="/dashboard"  element={<Dashboard />} />
-        <Route path="/clients"    element={<Clients />} />
-        <Route path="/calendar"   element={<Calendar />} />
-        <Route path="/finance"    element={<Finance />} />
-        <Route path="/goals"      element={<Goals />} />
-        <Route path="/rewards"    element={<Rewards />} />
-        <Route path="/messages"   element={<Messages />} />
-        <Route path="/documents"  element={<Documents />} />
-        <Route path="/website"    element={<Website />} />
-        <Route path="/ivy"        element={<IvyPro />} />
-        <Route path="/account"    element={<AccountPage />} />
-        <Route path="/admin"      element={<AdminPage />} />
-      </Route>
+        {/* Business app shell (auth-gated). RoleRouter sends client-only
+            users to /me before the shell renders. Dashboard lives at
+            /dashboard so the marketing page can own /. */}
+        <Route element={<RequireAuth><RoleRouter><AppShell /></RoleRouter></RequireAuth>}>
+          <Route path="/dashboard"  element={<Dashboard />} />
+          <Route path="/clients"    element={<Clients />} />
+          <Route path="/calendar"   element={<Calendar />} />
+          <Route path="/finance"    element={<Finance />} />
+          <Route path="/goals"      element={<Goals />} />
+          <Route path="/rewards"    element={<Rewards />} />
+          <Route path="/messages"   element={<Messages />} />
+          <Route path="/documents"  element={<Documents />} />
+          <Route path="/website"    element={<Website />} />
+          <Route path="/ivy"        element={<IvyPro />} />
+          <Route path="/account"    element={<AccountPage />} />
+          <Route path="/admin"      element={<AdminPage />} />
+        </Route>
 
-      {/* Client portal shell (auth-gated). Anyone can navigate here directly;
-          the data they see is filtered by their email / user_id. */}
-      <Route element={<RequireAuth><ClientShell /></RequireAuth>}>
-        <Route path="/me"           element={<ClientHome />} />
-        <Route path="/me/messages"  element={<ClientMessages />} />
-        <Route path="/me/bookings"  element={<ClientBookings />} />
-        <Route path="/me/invoices"  element={<ClientInvoices />} />
-        <Route path="/me/documents" element={<ClientDocuments />} />
-        <Route path="/me/discover"  element={<ClientDiscover />} />
-      </Route>
-    </Routes>
+        {/* Client portal shell (auth-gated). Anyone can navigate here directly;
+            the data they see is filtered by their email / user_id. */}
+        <Route element={<RequireAuth><ClientShell /></RequireAuth>}>
+          <Route path="/me"           element={<ClientHome />} />
+          <Route path="/me/messages"  element={<ClientMessages />} />
+          <Route path="/me/bookings"  element={<ClientBookings />} />
+          <Route path="/me/invoices"  element={<ClientInvoices />} />
+          <Route path="/me/documents" element={<ClientDocuments />} />
+          <Route path="/me/discover"  element={<ClientDiscover />} />
+        </Route>
+      </Routes>
+    </Suspense>
     <ViewToggle/>
     </>
   );

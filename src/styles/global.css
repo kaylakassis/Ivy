@@ -366,3 +366,10 @@ img, svg, video { max-width: 100%; height: auto; }
   /* Keep the ring visible but stop the pulse for users who asked for it. */
   [style*="thryve-tour-pulse"] { animation: none !important; }
 }
+
+/* Route-fallback spinner. Used by the lazy-route Suspense fallback in
+   App.jsx — small, low-contrast, doesn't fight the destination page's
+   own loader for visual real estate. */
+@keyframes thryve-spin {
+  to { transform: rotate(360deg); }
+}
