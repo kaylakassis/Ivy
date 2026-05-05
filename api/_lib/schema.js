@@ -493,6 +493,17 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_slot
   ON waitlist_entries(workspace_id, service_id, date, start_min, end_min, status);
 CREATE INDEX IF NOT EXISTS idx_waitlist_workspace_status
   ON waitlist_entries(workspace_id, status, created_at);
+-- Email branding. Owners can upload a logo, pick an accent color
+-- for buttons, and set a multi-line signature/footer that goes at
+-- the bottom of every client-facing email (invoices, documents,
+-- booking reminders, etc.). All optional — fall back to "thryve"
+-- defaults when unset so existing workspaces don't change behavior
+-- until the owner customizes.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_url TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_blob_pathname TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_accent_color TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_email_signature TEXT;
+
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional — null means "uncategorized" and the biz
 -- only matches the All chip.

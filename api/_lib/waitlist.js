@@ -4,6 +4,7 @@
 //     booking + notify the client they're in
 import { sql } from './db.js';
 import { sendEmail, emailShell } from './email.js';
+import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { appUrl } from './tokens.js';
 
@@ -127,6 +128,7 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
   const timeLabel = fmtTime(entry.start_min);
 
   if (entry.client_email) {
+    const branding = await fetchBranding(workspaceId);
     const html = emailShell({
       heading: 'Good news — a spot just opened up!',
       body: `<p>Hi ${escapeHtml(firstName(entry.client_name))},</p>
@@ -136,11 +138,13 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
         <p>If this no longer works, you can cancel from your portal.</p>`,
       ctaText: 'See in my portal',
       ctaUrl: `${appUrl()}/me/bookings`,
+      branding,
     });
     await sendEmail({
       to: entry.client_email,
       subject: `You're in — ${serviceName} on ${dateLabel}`,
       html,
+      replyTo: branding.replyTo,
     });
   }
 

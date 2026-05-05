@@ -99,10 +99,20 @@ function stripHtml(s = '') {
 }
 
 // Branded-but-minimal email shell. Looks decent, won't break in any client.
-export function emailShell({ heading, body, ctaText, ctaUrl, footer }) {
+//
+// Optional `branding` ({ businessName, logoUrl, accentColor, emailSignature })
+// applies the workspace owner's chosen presentation. When absent or
+// partially set, the shell falls back to THRYVE defaults — same look
+// the app shipped with before per-workspace branding existed.
+export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding }) {
+  const accent = sanitizeColor(branding?.accentColor) || '#2E3168';
+  const businessName = (branding?.businessName || '').trim();
+  const logoUrl = sanitizeUrl(branding?.logoUrl);
+  const sig = (branding?.emailSignature || '').trim();
+
   const cta = ctaText && ctaUrl
     ? `<p style="margin:32px 0;text-align:center;">
-         <a href="${ctaUrl}" style="display:inline-block;padding:13px 24px;background:#2E3168;color:#FFFFFF;
+         <a href="${ctaUrl}" style="display:inline-block;padding:13px 24px;background:${accent};color:#FFFFFF;
             text-decoration:none;border-radius:10px;font-weight:550;font-size:14px;">
            ${ctaText}
          </a>
@@ -112,25 +122,61 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer }) {
        </p>`
     : '';
 
+  // Header: owner's logo if uploaded, else owner's business name in
+  // serif type, else "thryve" wordmark.
+  const headerInner = logoUrl
+    ? `<img src="${logoUrl}" alt="${escapeAttr(businessName || 'Logo')}"
+         style="max-height:42px;max-width:200px;width:auto;height:auto;display:block;"/>`
+    : (businessName
+       ? `<div style="font-family:'Fraunces',Georgia,serif;font-size:22px;letter-spacing:-0.02em;font-weight:500;color:#141414;">${escapeText(businessName)}</div>`
+       : `<div style="font-family:'Fraunces',Georgia,serif;font-size:22px;letter-spacing:-0.02em;font-weight:500;">thryve</div>`);
+
+  // Owner-supplied signature renders below the body, above the
+  // optional caller-supplied footer. Both go through escape: the
+  // signature is treated as plain text with line breaks preserved.
+  const sigBlock = sig
+    ? `<div style="font-size:13px;color:#3F3D38;line-height:1.6;margin:24px 0 0;white-space:pre-wrap;">${escapeText(sig)}</div>`
+    : '';
+
+  // Bottom-of-page byline. When branded, credit the business but
+  // keep a small "Sent via THRYVE" mark for accountability.
+  const sentByline = businessName
+    ? `Sent by ${escapeText(businessName)} via THRYVE`
+    : 'Sent by THRYVE Business OS';
+
   return `<!doctype html>
 <html><body style="margin:0;padding:24px;background:#F6F5F1;font-family:-apple-system,system-ui,'Inter',sans-serif;color:#141414;">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
     <tr><td align="center">
       <table role="presentation" width="520" cellpadding="0" cellspacing="0"
              style="background:#FFFFFF;border:1px solid #E8E4DC;border-radius:14px;overflow:hidden;">
-        <tr><td style="padding:32px 32px 8px;">
-          <div style="font-family:'Fraunces',Georgia,serif;font-size:22px;letter-spacing:-0.02em;font-weight:500;">thryve</div>
-        </td></tr>
+        <tr><td style="padding:32px 32px 8px;">${headerInner}</td></tr>
         <tr><td style="padding:8px 32px 32px;">
           <h1 style="margin:0 0 16px;font-family:'Fraunces',Georgia,serif;font-size:24px;letter-spacing:-0.025em;font-weight:500;line-height:1.2;">${heading}</h1>
           <div style="font-size:15px;line-height:1.6;color:#3F3D38;">${body}</div>
           ${cta}
+          ${sigBlock}
           ${footer ? `<hr style="border:0;border-top:1px solid #E8E4DC;margin:32px 0 16px;"/>
                      <div style="font-size:12px;color:#85827B;line-height:1.55;">${footer}</div>` : ''}
         </td></tr>
       </table>
-      <div style="font-size:11px;color:#A9A59B;margin-top:14px;">Sent by THRYVE Business OS</div>
+      <div style="font-size:11px;color:#A9A59B;margin-top:14px;">${sentByline}</div>
     </td></tr>
   </table>
 </body></html>`;
 }
+
+function sanitizeColor(c) {
+  if (!c || typeof c !== 'string') return null;
+  const v = c.trim();
+  return /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3})?$/.test(v) ? v : null;
+}
+function sanitizeUrl(u) {
+  if (!u || typeof u !== 'string') return null;
+  const v = u.trim();
+  return /^https:\/\//.test(v) ? v : null;
+}
+function escapeText(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function escapeAttr(s) { return escapeText(s); }

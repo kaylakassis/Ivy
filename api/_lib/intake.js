@@ -9,6 +9,7 @@
 import crypto from 'node:crypto';
 import { sql } from './db.js';
 import { sendEmail, emailShell } from './email.js';
+import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 
 function generateRawToken(bytes = 32) {
@@ -97,9 +98,11 @@ async function cloneAndSend({
   `;
 
   const link = `${appUrl()}/sign/${encodeURIComponent(rawToken)}`;
+  const branding = await fetchBranding(workspaceId);
   await sendEmail({
     to: recipientEmail,
     subject: `Before your appointment — please complete "${template.name}"`,
+    replyTo: branding.replyTo,
     html: emailShell({
       heading: 'Quick form to complete before your appointment',
       body: `<p>Hi ${escapeHtml(recipientName)},</p>
@@ -109,6 +112,7 @@ async function cloneAndSend({
         <p>The link below is private to you — please complete it before your session.</p>`,
       ctaText: 'Open and sign',
       ctaUrl: link,
+      branding,
     }),
   }).catch(() => { /* best-effort */ });
 

@@ -11,6 +11,7 @@
 // reported to Sentry but don't surface to the caller.
 import { sql } from './db.js';
 import { sendEmail, emailShell } from './email.js';
+import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
 import { notifyOwnerSafe } from './push.js';
@@ -59,6 +60,10 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     const dateLabel    = fmtDate(dateISO);
     const timeLabel    = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
 
+    // Branding wraps both client + owner emails. Cheap fetch — single
+    // SELECT — done once and shared across all recipients.
+    const branding = await fetchBranding(workspaceId);
+
     const tasks = [];
 
     // 1. Thread + system message — only if the booking is tied to a client
@@ -83,6 +88,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         timeLabel,
         notes: ctx.notes,
         source,
+        branding,
       }));
     }
 
@@ -98,6 +104,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         dateLabel,
         timeLabel,
         notes: ctx.notes,
+        branding,
       }));
     }
 
@@ -159,13 +166,13 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source }) {
+async function sendClientConfirm({ to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const opener = source === 'public'
     ? `Your booking with <strong>${escapeHtml(businessName)}</strong> is confirmed.`
     : `<strong>${escapeHtml(businessName)}</strong> just booked you in.`;
   const html = emailShell({
-    heading: 'Booking confirmed ✓',
+    heading: 'Booking confirmed',
     body: `<p>${greeting}</p>
       <p>${opener}</p>
       <table role="presentation" cellpadding="0" cellspacing="0"
@@ -180,14 +187,16 @@ async function sendClientConfirm({ to, clientName, businessName, serviceName, da
     ctaText: 'Open my portal',
     ctaUrl: `${appUrl()}/me`,
     footer: `If you didn't make this booking, please reach out to ${escapeHtml(businessName)} directly.`,
+    branding,
   });
-  await sendEmail({ to, subject: `Booking confirmed — ${dateLabel}`, html });
+  await sendEmail({ to, subject: `Booking confirmed — ${dateLabel}`, html, replyTo: branding?.replyTo });
 }
 
-async function sendOwnerNotify({ to, ownerName, clientName, clientEmail, serviceName, dateLabel, timeLabel, notes }) {
+async function sendOwnerNotify({ to, ownerName, clientName, clientEmail, serviceName, dateLabel, timeLabel, notes, branding }) {
   const greeting = ownerName ? `Hi ${escapeHtml(ownerName.split(/\s+/)[0])},` : 'Hi,';
   const html = emailShell({
-    heading: '📅 New booking',
+    heading: 'New booking',
+    branding,
     body: `<p>${greeting}</p>
       <p><strong>${escapeHtml(clientName || 'A client')}</strong> just booked through your THRYVE link.</p>
       <table role="presentation" cellpadding="0" cellspacing="0"

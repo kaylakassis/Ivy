@@ -19,6 +19,7 @@ import { materializeOne } from '../_lib/recurring.js';
 import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
@@ -108,10 +109,12 @@ async function autoSendInvoice({ schedule, invoice }) {
     WHERE id = ${invoice.id}
   `;
   const link = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
-  const business = (await sql`SELECT biz_name FROM calendar_settings WHERE workspace_id = ${invoice.workspace_id}`).rows[0]?.biz_name;
+  const branding = await fetchBranding(invoice.workspace_id);
+  const business = branding.businessName;
   await sendEmail({
     to: invoice.client_email,
     subject: `Invoice ${invoice.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
+    replyTo: branding.replyTo,
     html: emailShell({
       heading: `Invoice ${invoice.number}`,
       body: `<p>Hi ${escapeHtml(invoice.client_name)},</p>
@@ -120,6 +123,7 @@ async function autoSendInvoice({ schedule, invoice }) {
       ctaText: 'View invoice',
       ctaUrl: link,
       footer: `Reply to this email if anything looks off.`,
+      branding,
     }),
   });
   // Best-effort thread message.

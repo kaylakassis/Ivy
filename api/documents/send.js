@@ -20,6 +20,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedDoc, serializeDoc } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
 import { notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
@@ -145,10 +146,12 @@ export default async function handler(req, res) {
     const positionLine = resolved.length > 1
       ? `<p style="font-size:13px;color:#85827B;">You're signer 1 of ${resolved.length}. The next signer will receive their link after you finish.</p>`
       : '';
+    const branding = await fetchBranding(workspaceId);
     try {
       await sendEmail({
         to: first.email,
         subject: `Action needed: sign "${doc.name}"`,
+        replyTo: branding.replyTo,
         html: emailShell({
           heading: 'A document needs your signature',
           body: `<p>Hi ${escapeHtml(first.name)},</p>
@@ -158,6 +161,7 @@ export default async function handler(req, res) {
           ctaText: 'Open and sign',
           ctaUrl: link,
           footer: `If you weren't expecting this, you can safely ignore this email.`,
+          branding,
         }),
       });
     } catch (mailErr) {

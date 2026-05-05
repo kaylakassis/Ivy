@@ -13,6 +13,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
@@ -76,13 +77,15 @@ export default async function handler(req, res) {
     `;
 
     const link = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
-    const business = (await sql`SELECT biz_name FROM calendar_settings WHERE workspace_id = ${workspaceId}`).rows[0]?.biz_name;
+    const branding = await fetchBranding(workspaceId);
+    const business = branding.businessName;
 
     // Email — best-effort; don't fail the call.
     try {
       await sendEmail({
         to: recipientEmail,
         subject: `Invoice ${inv.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
+        replyTo: branding.replyTo,
         html: emailShell({
           heading: `Invoice ${inv.number}`,
           body: `<p>Hi ${escapeHtml(recipientName)},</p>
@@ -92,6 +95,7 @@ export default async function handler(req, res) {
           ctaText: 'View invoice',
           ctaUrl: link,
           footer: `Reply to this email if anything looks off.`,
+          branding,
         }),
       });
     } catch (mailErr) {

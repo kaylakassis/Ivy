@@ -27,6 +27,7 @@ import {
 } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { stampCompletedPdf, uploadStampedPdf } from '../_lib/pdfStamp.js';
@@ -271,9 +272,11 @@ async function signDoc(req, res) {
           WHERE id = ${doc.id}
         `;
         try {
+          const branding = await fetchBranding(doc.workspace_id);
           await sendEmail({
             to: n.email,
             subject: `Action needed: sign "${doc.name}"`,
+            replyTo: branding.replyTo,
             html: emailShell({
               heading: 'A document needs your signature',
               body: `<p>Hi ${escapeHtml(n.name)},</p>
@@ -281,6 +284,7 @@ async function signDoc(req, res) {
               ctaText: 'Open and sign',
               ctaUrl: `${appUrl()}/sign/${encodeURIComponent(nextRaw)}`,
               footer: `If you weren't expecting this, you can safely ignore this email.`,
+              branding,
             }),
           });
         } catch (mailErr) {
@@ -424,8 +428,7 @@ async function declineDoc(req, res) {
       },
     });
     try {
-      // Owner email so they have it in writing too.
-      const cs = await sql`SELECT biz_name FROM calendar_settings WHERE workspace_id = ${doc.workspace_id}`;
+      const branding = await fetchBranding(doc.workspace_id);
       const owner = await sql`SELECT u.email FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE w.id = ${doc.workspace_id}`;
       const ownerEmail = owner.rows[0]?.email;
       if (ownerEmail) {
@@ -440,6 +443,7 @@ async function declineDoc(req, res) {
             ctaText: 'View document',
             ctaUrl: `${appUrl()}/documents`,
             footer: 'You can adapt the document and re-send, or follow up directly with the signer.',
+            branding,
           }),
         });
       }

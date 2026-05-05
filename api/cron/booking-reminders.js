@@ -13,6 +13,7 @@
 // calendar_settings.timezone on top later.
 import { sql } from '../_lib/db.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
 import { sendClientSms } from '../_lib/sms.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
@@ -46,7 +47,7 @@ export default async function handler(req, res) {
     // reminder beat (1 week) plus a buffer.
     const { rows } = await sql`
       SELECT
-        b.id, b.client_id, b.client_email, b.client_name,
+        b.id, b.workspace_id, b.client_id, b.client_email, b.client_name,
         COALESCE(b.client_phone, c.phone) AS client_phone,
         c.sms_consent_at,
         b.date, b.start_min, b.end_min, b.notes,
@@ -102,6 +103,7 @@ export default async function handler(req, res) {
         // re-fire the email on the next cron tick (and vice versa).
         if (emailEligible && !alreadyEmail[key]) {
           try {
+            const branding = await fetchBranding(r.workspace_id);
             await sendReminder({
               to: r.client_email,
               clientName: r.client_name,
@@ -112,6 +114,7 @@ export default async function handler(req, res) {
               endMin: r.end_min,
               reminderMinutes: minsNum,
               notes: r.notes,
+              branding,
             });
             await sql`
               UPDATE bookings
@@ -201,7 +204,7 @@ function describeWindow(mins) {
   return `in ${mins} minute${mins === 1 ? '' : 's'}`;
 }
 
-async function sendReminder({ to, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes }) {
+async function sendReminder({ to, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes, branding }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const when = describeWindow(reminderMinutes);
   const html = emailShell({
@@ -221,11 +224,13 @@ async function sendReminder({ to, clientName, serviceName, businessName, dateISO
     ctaText: 'Open my portal',
     ctaUrl: `${appUrl()}/me`,
     footer: `Reminder sent automatically. If you weren't expecting this email, please reach out to ${escapeHtml(businessName)}.`,
+    branding,
   });
   await sendEmail({
     to,
     subject: `Reminder: ${serviceName} ${when} — ${fmtDay(dateISO)}`,
     html,
+    replyTo: branding?.replyTo,
   });
 }
 

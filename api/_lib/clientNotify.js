@@ -5,6 +5,7 @@
 // don't spam.
 import { sql } from './db.js';
 import { sendEmail, emailShell } from './email.js';
+import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 
 function escapeHtml(s) {
@@ -37,12 +38,15 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     const signupHref  = `${base}/signup?email=${encodeURIComponent(c.email)}`;
     const bizName     = c.biz_name || 'Your business';
     const bookingHref = c.slug ? `${base}/book/${encodeURIComponent(c.slug)}` : null;
+    const branding = await fetchBranding(workspaceId);
 
     await sendEmail({
       to: c.email,
       subject: `${bizName} added you on THRYVE`,
+      replyTo: branding.replyTo,
       html: emailShell({
         heading: `${bizName} added you on THRYVE`,
+        branding,
         body: `<p>Hi${firstName(c.name) ? ` ${escapeHtml(firstName(c.name))}` : ''},</p>
           <p><strong>${escapeHtml(bizName)}</strong> added you to their THRYVE
           account, which means you'll get bookings, invoices, and

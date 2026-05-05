@@ -66,6 +66,8 @@ export default function AccountPage() {
         <Row label="Member since" value={user?.created_at ? new Date(user.created_at).toLocaleDateString([], { dateStyle: 'long' }) : '—'}/>
       </div>
 
+      <BrandingCard/>
+
       <SubscriptionCard/>
 
       <NotificationsCard/>
@@ -895,3 +897,194 @@ function WalkthroughCard() {
     </div>
   );
 }
+
+// Branding: logo + accent color + email signature + business name.
+// Drives every client-facing email (invoices, documents, booking
+// reminders, etc.) so the recipient sees the OWNER'S brand instead of
+// THRYVE's defaults. Saves field-by-field — no big "Save" button.
+function BrandingCard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState(null);
+  const [savingField, setSavingField] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  // Local edit buffers so we can save on blur instead of every keystroke.
+  const [name, setName] = useState('');
+  const [accent, setAccent] = useState('#2E3168');
+  const [signature, setSignature] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    api.get('/account/branding')
+      .then((r) => {
+        if (!live) return;
+        setData(r.branding);
+        setName(r.branding.businessName || '');
+        setAccent(r.branding.accentColor || '#2E3168');
+        setSignature(r.branding.emailSignature || '');
+      })
+      .catch((e) => live && setErr(e))
+      .finally(() => live && setLoading(false));
+    return () => { live = false; };
+  }, []);
+
+  const save = async (patch, key) => {
+    setSavingField(key); setErr(null);
+    try {
+      const r = await api.patch('/account/branding', patch);
+      setData(r.branding);
+    } catch (e) { setErr(e); }
+    finally { setSavingField(null); }
+  };
+
+  const onPickLogo = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) { setErr(new Error('Logo must be under 2 MB')); return; }
+    setUploading(true); setErr(null);
+    try {
+      const { upload } = await import('@vercel/blob/client');
+      const result = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/account/branding-logo-token',
+        contentType: file.type,
+      });
+      await save({ logoUrl: result.url, logoPathname: result.pathname }, 'logo');
+    } catch (ex) { setErr(ex); }
+    finally { setUploading(false); }
+  };
+  const removeLogo = () => save({ logoUrl: null, logoPathname: null }, 'logo');
+
+  if (loading) {
+    return (
+      <div className="card" style={{ padding: 22 }}>
+        <div className="metric-label" style={{ marginBottom: 8 }}>Email branding</div>
+        <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Email branding</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Make every email feel like yours</h3>
+      <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Your logo and brand color appear on every invoice, document, and
+        booking email your clients receive. Replies route to your inbox.
+      </p>
+
+      {/* Logo */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 18 }}>
+        <div style={{
+          width: 88, height: 88, borderRadius: 12,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          overflow: 'hidden', flexShrink: 0,
+        }}>
+          {data?.logoUrl
+            ? <img src={data.logoUrl} alt="" style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}/>
+            : <Icons.Image size={28} stroke="var(--muted)"/>}
+        </div>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 4 }}>Logo</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>
+            PNG, JPG, WebP, or SVG. Up to 2 MB. Renders at 42px tall in emails.
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <label className="btn btn-outline" style={{ cursor: 'pointer', fontSize: 12 }}>
+              <Icons.Paperclip size={12}/> {uploading ? 'Uploading…' : (data?.logoUrl ? 'Replace' : 'Upload')}
+              <input type="file" accept="image/*" onChange={onPickLogo}
+                disabled={uploading} style={{ display: 'none' }}/>
+            </label>
+            {data?.logoUrl && (
+              <button className="btn btn-ghost" onClick={removeLogo}
+                disabled={savingField === 'logo'}
+                style={{ color: 'var(--danger)', fontSize: 12 }}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Business name */}
+      <div style={{ marginBottom: 18 }}>
+        <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500, display: 'block' }}>
+          Business name
+        </label>
+        <input value={name} onChange={(e) => setName(e.target.value)}
+          onBlur={() => name !== (data?.businessName || '') && save({ businessName: name }, 'name')}
+          placeholder="e.g., Calm Hands Wellness"
+          style={fieldStyle}/>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+          Shown in email subjects ("Invoice INV-1001 from Calm Hands Wellness") and the email header.
+        </div>
+      </div>
+
+      {/* Accent color */}
+      <div style={{ marginBottom: 18 }}>
+        <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500, display: 'block' }}>
+          Brand accent color
+        </label>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <input type="color" value={accent}
+            onChange={(e) => setAccent(e.target.value)}
+            onBlur={() => accent !== (data?.accentColor || '#2E3168') && save({ accentColor: accent }, 'accent')}
+            style={{
+              width: 48, height: 40, borderRadius: 10,
+              border: '1px solid var(--border-strong)',
+              background: 'var(--surface)', cursor: 'pointer', padding: 4,
+            }}/>
+          <input value={accent}
+            onChange={(e) => setAccent(e.target.value)}
+            onBlur={() => accent !== (data?.accentColor || '#2E3168') && save({ accentColor: accent }, 'accent')}
+            placeholder="#2E3168"
+            style={{ ...fieldStyle, width: 140, fontFamily: 'ui-monospace, monospace' }}/>
+          <button type="button"
+            onClick={() => { setAccent('#2E3168'); save({ accentColor: null }, 'accent'); }}
+            className="btn btn-ghost" style={{ fontSize: 12 }}>Reset</button>
+          <div style={{ flex: 1 }}/>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+            padding: '8px 16px', borderRadius: 10,
+            background: accent, color: '#fff', fontSize: 12, fontWeight: 600,
+          }}>Sample CTA</span>
+        </div>
+      </div>
+
+      {/* Signature */}
+      <div style={{ marginBottom: 8 }}>
+        <label style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500, display: 'block' }}>
+          Email signature (optional)
+        </label>
+        <textarea value={signature} onChange={(e) => setSignature(e.target.value)}
+          onBlur={() => signature !== (data?.emailSignature || '') && save({ emailSignature: signature }, 'sig')}
+          rows={4} maxLength={2000}
+          placeholder={`— Kayla\nFounder, Calm Hands Wellness\n(415) 555-0123`}
+          style={{ ...fieldStyle, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+          Appended to every client-facing email under your message body. Plain text — line breaks are preserved.
+        </div>
+      </div>
+
+      {savingField && (
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Saving…</div>
+      )}
+      {err && (
+        <div style={{
+          marginTop: 10, padding: '8px 12px', borderRadius: 8,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12.5,
+        }}>{err.message || 'Save failed'}</div>
+      )}
+    </div>
+  );
+}
+
+const fieldStyle = {
+  width: '100%', padding: '10px 12px', borderRadius: 10,
+  background: 'var(--surface)', border: '1px solid var(--border-strong)',
+  color: 'var(--fg)', fontSize: 14, outline: 'none',
+};
