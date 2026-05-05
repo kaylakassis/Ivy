@@ -19,6 +19,8 @@ import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
+import { loadStripeCreds } from '../../_lib/stripeCreds.js';
+import { chargeOffSession } from '../../_lib/stripe.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -41,14 +43,48 @@ export default async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       if (booking.cancelled_at) return badRequest(res, 'Booking already cancelled');
+
+      // Late-cancel auto-charge. If the booking starts within the
+      // service's cancellation_window_hours AND a fee is configured AND
+      // there's a saved card on file, charge the fee off-session. The
+      // cancel itself goes through whether the charge succeeds or not
+      // (so a declined card doesn't trap the client in a session they
+      // can't make).
+      let lateCancelCharged = null;
+      let lateCancelChargeError = null;
+      try {
+        const policy = await maybeChargeLateCancel({
+          booking, myIds,
+        });
+        lateCancelCharged = policy.charged;
+        lateCancelChargeError = policy.error;
+      } catch {
+        // Logged inside helper. Don't block the cancel.
+      }
+
       // Soft-cancel. Defense-in-depth: include client_id IN (...) on the
       // UPDATE so a future regression in the ownership check above can't
-      // cancel another tenant's booking.
-      await sql.query(
-        `UPDATE bookings SET cancelled_at = NOW()
-         WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL`,
-        [id, myIds],
-      );
+      // cancel another tenant's booking. When a late-cancel fee was
+      // charged, persist the charge fields in the same UPDATE so we
+      // don't have a window where the booking is cancelled-but-no-fee.
+      if (lateCancelCharged) {
+        await sql.query(
+          `UPDATE bookings SET
+             cancelled_at       = NOW(),
+             fee_charged_amount = $3,
+             fee_charged_at     = NOW(),
+             fee_charged_kind   = 'late_cancel',
+             fee_payment_intent = $4
+           WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL`,
+          [id, myIds, lateCancelCharged.amount, lateCancelCharged.paymentIntent],
+        );
+      } else {
+        await sql.query(
+          `UPDATE bookings SET cancelled_at = NOW()
+           WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL`,
+          [id, myIds],
+        );
+      }
       // Drop a system note in the thread so the business sees the cancellation.
       await postCancellationNote({
         workspaceId: booking.workspace_id,
@@ -76,7 +112,14 @@ export default async function handler(req, res) {
         // eslint-disable-next-line no-console
         console.error('[waitlist] promote failed on cancel:', err.message);
       }
-      return noContent(res);
+      // Return JSON instead of 204 so the UI can surface "fee charged"
+      // / "fee couldn't be charged" inline. Falls back to ok({}) when
+      // no fee was applied so older clients keep working.
+      return ok(res, {
+        cancelled: true,
+        feeCharged: lateCancelCharged ? lateCancelCharged.amount : 0,
+        feeChargeError: lateCancelChargeError,
+      });
     }
 
     if (req.method === 'PATCH') {
@@ -193,6 +236,61 @@ export default async function handler(req, res) {
     return methodNotAllowed(res, ['DELETE', 'PATCH']);
   } catch (err) {
     return serverError(res, err);
+  }
+}
+
+// If the booking is being cancelled inside the service's
+// cancellation_window_hours AND the service has a non-zero fee AND
+// the client has a card on file, charge the fee off-session. Returns
+// { charged, error } where charged is { amount, paymentIntent } on
+// success or null when nothing was charged. Never throws — the cancel
+// must always go through.
+async function maybeChargeLateCancel({ booking, myIds }) {
+  try {
+    if (!booking.client_id) return { charged: null, error: null };
+    const r = await sql.query(
+      `SELECT s.cancellation_fee_amount, s.cancellation_window_hours, s.name AS service_name,
+              c.stripe_customer_id, c.payment_method_id
+         FROM clients c
+         LEFT JOIN services s ON s.id = $2 AND s.workspace_id = c.workspace_id
+        WHERE c.id = $1 AND c.id = ANY($3)
+        LIMIT 1`,
+      [booking.client_id, booking.service_id, myIds],
+    );
+    const row = r.rows[0];
+    if (!row) return { charged: null, error: null };
+    const feeAmount = Number(row.cancellation_fee_amount || 0);
+    const windowHours = Number(row.cancellation_window_hours || 0);
+    if (feeAmount <= 0 || windowHours <= 0) return { charged: null, error: null };
+    if (!row.stripe_customer_id || !row.payment_method_id) return { charged: null, error: null };
+
+    // "Inside the window" = booking starts before NOW + windowHours.
+    const dateISO = booking.date instanceof Date
+      ? booking.date.toISOString().slice(0, 10)
+      : booking.date;
+    const startMs = Date.parse(`${dateISO}T00:00:00Z`) + booking.start_min * 60 * 1000;
+    const cutoffMs = Date.now() + windowHours * 60 * 60 * 1000;
+    if (startMs >= cutoffMs) return { charged: null, error: null }; // outside window — free cancel
+
+    const creds = await loadStripeCreds(booking.workspace_id);
+    const pi = await chargeOffSession({
+      secretKey: creds.secretKey,
+      customerId: row.stripe_customer_id,
+      paymentMethodId: row.payment_method_id,
+      amountCents: Math.round(feeAmount * 100),
+      currency: creds.currency,
+      description: `Late-cancel fee — ${row.service_name || 'session'}`,
+      metadata: { booking_id: booking.id, workspace_id: booking.workspace_id, kind: 'late_cancel' },
+      statementDescriptor: 'LATE CANCEL FEE',
+    });
+    return {
+      charged: { amount: feeAmount, paymentIntent: pi.id },
+      error: null,
+    };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[late-cancel charge] failed:', err.message);
+    return { charged: null, error: err.message || 'charge failed' };
   }
 }
 

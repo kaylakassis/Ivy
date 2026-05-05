@@ -11,7 +11,7 @@ export const VERTICALS = {
     angle: 'massage therapists',
     homeLine: 'Intake forms auto-send before sessions. Reminders cut no-shows.',
     headline: 'Bookings, intake forms, and reminders in one place.',
-    sub: "Stop juggling MassageBook, Acuity, and a separate intake-form tool. One workspace for booking, intake, payments, and the client portal.",
+    sub: "One workspace for booking, intake forms, payments, and the client portal — instead of stitching together three or four separate tools.",
     bullets: [
       { title: 'Auto-send intake forms', body: 'Attach a SOAP-note intake form to each service. THRYVE sends it the moment a client books — no more "did you fill out the form?" texts.' },
       { title: 'No-show reduction', body: 'Email + SMS reminders ship 24h and 2h before the session. Clients can confirm or reschedule from the link without calling.' },
@@ -25,7 +25,7 @@ export const VERTICALS = {
     angle: 'hair stylists & barbers',
     homeLine: 'Deposits on booking, packages for repeat clients, rebooking nudges.',
     headline: 'Booking, deposits, packages, and rebooking — all native.',
-    sub: "Booksy and Square take a cut. THRYVE doesn't. One subscription replaces all three of: booking, payment processing, and the client CRM.",
+    sub: "We don't take a cut of your sales — Stripe's standard processing fee is the only fee, and it goes straight to your account. One subscription covers booking, payments, and the client CRM.",
     bullets: [
       { title: 'Deposits on every booking', body: "Set a deposit per service. Stripe collects on confirm; the rest at the chair." },
       { title: 'Service packages', body: '5-pack of cut-and-color, 10-pack of trims. Sell the bundle; THRYVE consumes a credit per booking automatically.' },
@@ -38,7 +38,7 @@ export const VERTICALS = {
     icon: 'Trending',
     angle: 'personal trainers & fitness coaches',
     homeLine: 'Group classes with capacity, recurring sessions, payment-on-booking.',
-    headline: 'Group classes, recurring sessions, and packages — without TrainerRoad-grade overhead.',
+    headline: 'Group classes, recurring sessions, and packages — without enterprise-grade overhead.',
     sub: 'Schedule 1-on-1s and group classes. Sell session packs. Collect on booking. Let your AI coach (Ivy) help you spot at-risk clients before they ghost.',
     bullets: [
       { title: 'Group classes with capacity', body: 'Set a service to "capacity 12". Clients book individual seats; the slot fills up like a real class roster.' },
@@ -53,7 +53,7 @@ export const VERTICALS = {
     angle: 'coaches & consultants',
     homeLine: 'Discovery calls, retainers, signed agreements — same thread.',
     headline: 'Discovery calls, retainers, signed agreements — same thread.',
-    sub: "You don't need Calendly + Honeybook + DocuSign. Drop your booking link, attach the agreement to the engagement service, get e-signed automatically.",
+    sub: "One link replaces a stack of separate scheduling, contracting, and e-signing tools. Drop your booking link, attach the agreement to the engagement service, get e-signed automatically.",
     bullets: [
       { title: 'E-signing built in', body: 'Build your own agreement template once. Attach it to your "Strategy engagement" service. THRYVE sends it the moment they book and tracks signatures.' },
       { title: 'Retainer invoices', body: "Recurring monthly invoices via Stripe. Auto-payment if their card's on file; reminders if not." },

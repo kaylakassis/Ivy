@@ -61,6 +61,11 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       intakeFormTemplateIds: [],
       depositType: 'none',
       depositAmount: 0,
+      locationType: 'in_person',
+      travelBufferMinutes: 0,
+      cancellationFeeAmount: 0,
+      cancellationWindowHours: 24,
+      noShowFeeAmount: 0,
     };
     setItems((xs) => [...xs, draft]);
     setEditId(id);
@@ -90,6 +95,11 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
         intakeFormTemplateIds: (s.intakeFormTemplateIds || []).slice(),
         depositType: s.depositType || 'none',
         depositAmount: Number(s.depositAmount) || 0,
+        locationType: s.locationType || 'in_person',
+        travelBufferMinutes: Math.max(0, Math.min(240, Number(s.travelBufferMinutes) || 0)),
+        cancellationFeeAmount: Math.max(0, Number(s.cancellationFeeAmount) || 0),
+        cancellationWindowHours: Math.max(0, Math.min(720, Number(s.cancellationWindowHours) || 24)),
+        noShowFeeAmount: Math.max(0, Number(s.noShowFeeAmount) || 0),
       })));
       onClose();
     } catch (e) {
@@ -340,6 +350,67 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
                 opacity: (service.depositType || 'none') === 'none' ? 0.5 : 1,
               }}/>
           </div>
+        </Field>
+
+        {/* Where does this service happen? */}
+        <Field label="Where does it happen?"
+          hint={service.locationType === 'mobile'
+            ? 'You travel to the client. They enter their address at booking.'
+            : service.locationType === 'virtual'
+            ? 'Online — clients join over video.'
+            : 'At your location. Default for most service businesses.'}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <select value={service.locationType || 'in_person'}
+              onChange={(e) => onChange({ locationType: e.target.value })}
+              style={inputSty}>
+              <option value="in_person">At your place</option>
+              <option value="mobile">You travel to client</option>
+              <option value="virtual">Online / video</option>
+            </select>
+            <input type="number" min={0} max={240} step={5}
+              value={service.travelBufferMinutes || 0}
+              onChange={(e) => onChange({ travelBufferMinutes: Math.max(0, Math.min(240, Number(e.target.value) || 0)) })}
+              disabled={(service.locationType || 'in_person') !== 'mobile'}
+              placeholder="Travel buffer (min)"
+              style={{
+                ...inputSty,
+                opacity: (service.locationType || 'in_person') !== 'mobile' ? 0.5 : 1,
+              }}/>
+          </div>
+          {service.locationType === 'mobile' && Number(service.travelBufferMinutes) > 0 && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+              {service.travelBufferMinutes} minutes blocked off before + after each booking so you can drive between locations.
+            </div>
+          )}
+        </Field>
+
+        {/* Cancellation + no-show policy. Both fees auto-charge against
+            the client's saved card if one's on file; otherwise the owner
+            sees the late-cancel/no-show in the booking and can chase it
+            manually. */}
+        <Field label="Cancellation policy"
+          hint={`Cancellations within ${service.cancellationWindowHours ?? 24}h ${Number(service.cancellationFeeAmount) > 0 ? `auto-charge $${Number(service.cancellationFeeAmount).toFixed(2)} to the saved card on file` : 'are flagged as late but no fee charges'}.`}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <input type="number" min={0} step={1} max={720}
+              value={service.cancellationWindowHours ?? 24}
+              onChange={(e) => onChange({ cancellationWindowHours: Math.max(0, Math.min(720, Number(e.target.value) || 0)) })}
+              placeholder="Window (hours)"
+              style={inputSty}/>
+            <input type="number" min={0} step={0.01}
+              value={service.cancellationFeeAmount || 0}
+              onChange={(e) => onChange({ cancellationFeeAmount: Math.max(0, Number(e.target.value) || 0) })}
+              placeholder="Late-cancel fee ($)"
+              style={inputSty}/>
+          </div>
+        </Field>
+
+        <Field label="No-show fee ($)"
+          hint="Charged automatically when you mark a booking as a no-show, if the client has a card on file.">
+          <input type="number" min={0} step={0.01}
+            value={service.noShowFeeAmount || 0}
+            onChange={(e) => onChange({ noShowFeeAmount: Math.max(0, Number(e.target.value) || 0) })}
+            placeholder="0.00"
+            style={inputSty}/>
         </Field>
 
         <div style={{ display: 'flex', gap: 10, marginTop: 20 }}>

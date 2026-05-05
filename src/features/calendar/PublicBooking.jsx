@@ -28,6 +28,7 @@ export default function PublicBooking() {
   const [name, setName]   = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [address, setAddress] = useState('');
   const [smsOptIn, setSmsOptIn] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [bookErr, setBookErr] = useState(null);
@@ -35,6 +36,8 @@ export default function PublicBooking() {
   // "Have a question?" prospect-message modal state. Lets a visitor
   // talk to the business before committing to a slot.
   const [contactOpen, setContactOpen] = useState(false);
+  // Membership subscribe modal — separate from the booking flow.
+  const [joiningMembership, setJoiningMembership] = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -186,6 +189,9 @@ export default function PublicBooking() {
         clientName: name,
         clientEmail: email,
         clientPhone: phone.trim() || null,
+        // Mobile services need an address — only forwarded when the
+        // service is mobile so the server can validate it's there.
+        locationAddress: svc?.locationType === 'mobile' ? address.trim() : null,
         smsConsent: !!(smsOptIn && phone.trim()),
         joinWaitlist,
       });
@@ -235,6 +241,26 @@ export default function PublicBooking() {
           slug={slug}
           bizName={cal.settings.bizName}
           onClose={() => setContactOpen(false)}
+        />
+      )}
+
+      {/* Memberships card — only when the business has at least one
+          active tier with a Stripe price. Visitors click a tier to
+          open the join modal. */}
+      {step === 'pick' && cal.memberships?.length > 0 && (
+        <MembershipsBlock
+          memberships={cal.memberships}
+          bizName={cal.settings.bizName}
+          onJoin={(m) => setJoiningMembership(m)}
+        />
+      )}
+
+      {joiningMembership && (
+        <JoinMembershipModal
+          slug={slug}
+          membership={joiningMembership}
+          bizName={cal.settings.bizName}
+          onClose={() => setJoiningMembership(null)}
         />
       )}
 
@@ -310,6 +336,17 @@ export default function PublicBooking() {
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
               style={inputSty} placeholder="(555) 123-4567" autoComplete="tel"/>
           </Field>
+          {/* Mobile-service address. Only required when the chosen
+              service is delivered at the client's location. */}
+          {svc?.locationType === 'mobile' && (
+            <Field label="Where should we come?" hint="Street address, city, ZIP. Apartment / suite + parking notes if relevant.">
+              <textarea value={address} onChange={(e) => setAddress(e.target.value)}
+                rows={2}
+                placeholder="123 Main St, Apt 4B, Brooklyn NY 11201"
+                style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.45 }}
+                autoComplete="street-address"/>
+            </Field>
+          )}
           {phone.trim() && (
             <label style={{
               display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14,
@@ -396,19 +433,37 @@ export default function PublicBooking() {
                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                           {s.durationMinutes} min · ${Number(s.price).toLocaleString()}
                         </div>
-                        {s.depositType && s.depositType !== 'none' && Number(s.depositAmount) > 0 && (
-                          <div style={{
-                            display: 'inline-flex', alignItems: 'center', gap: 4,
-                            marginTop: 6, padding: '2px 7px', borderRadius: 99,
-                            fontSize: 10, fontWeight: 600,
-                            background: selected ? 'var(--surface)' : 'var(--surface)',
-                            color: 'var(--fg-2)', border: '1px solid var(--border-strong)',
-                          }}>
-                            <Icons.Lock size={9} sw={1.8}/>
-                            Deposit: {s.depositType === 'percent'
-                              ? `${Number(s.depositAmount)}%`
-                              : `$${Number(s.depositAmount).toFixed(2)}`}
-                          </div>
+                        {/* Location-type chip: tells visitors up-front whether
+                            this service comes to them, happens at the owner's
+                            place, or runs over video. */}
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }}>
+                          {s.locationType && s.locationType !== 'in_person' && (
+                            <div style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '2px 7px', borderRadius: 99,
+                              fontSize: 10, fontWeight: 600,
+                              background: 'var(--accent-soft)', color: 'var(--accent)',
+                            }}>
+                              {s.locationType === 'mobile' ? 'Comes to you' : 'Online'}
+                            </div>
+                          )}
+                          {s.depositType && s.depositType !== 'none' && Number(s.depositAmount) > 0 && (
+                            <div style={{
+                              display: 'inline-flex', alignItems: 'center', gap: 4,
+                              padding: '2px 7px', borderRadius: 99,
+                              fontSize: 10, fontWeight: 600,
+                              background: 'var(--surface)',
+                              color: 'var(--fg-2)', border: '1px solid var(--border-strong)',
+                            }}>
+                              <Icons.Lock size={9} sw={1.8}/>
+                              Deposit: {s.depositType === 'percent'
+                                ? `${Number(s.depositAmount)}%`
+                                : `$${Number(s.depositAmount).toFixed(2)}`}
+                            </div>
+                          )}
+                        </div>
+                        {(false) && (
+                          <div/>
                         )}
                         {s.description && (
                           <p style={{
@@ -646,6 +701,159 @@ const inputSty = {
   background: 'var(--surface)', border: '1px solid var(--border-strong)',
   color: 'var(--fg)', fontSize: 14, outline: 'none',
 };
+
+// Memberships block — listed as cards below the slot picker. Each
+// card opens the join modal; the modal POSTs to /api/memberships/checkout
+// and redirects to Stripe Checkout.
+function MembershipsBlock({ memberships, bizName, onJoin }) {
+  return (
+    <div className="card" style={{ padding: 18, marginTop: 18 }}>
+      <div className="metric-label" style={{ marginBottom: 10 }}>
+        Memberships {bizName ? `at ${bizName}` : ''}
+      </div>
+      <div style={{
+        display: 'grid', gap: 10,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+      }}>
+        {memberships.map((m) => (
+          <button key={m.id} type="button" onClick={() => onJoin(m)}
+            style={{
+              padding: 16, borderRadius: 12, textAlign: 'left', cursor: 'pointer',
+              background: 'var(--surface-2)',
+              border: '1px solid var(--border)',
+              display: 'flex', flexDirection: 'column', gap: 6,
+              transition: 'border-color .1s, background .1s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent)';
+              e.currentTarget.style.background = 'var(--accent-soft)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border)';
+              e.currentTarget.style.background = 'var(--surface-2)';
+            }}>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>{m.name}</div>
+            <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'var(--font-display)' }}>
+              ${(Number(m.priceCents) / 100).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+              <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500, fontFamily: 'inherit', marginLeft: 4 }}>
+                / {m.interval === 'quarter' ? '3 mo' : m.interval}
+              </span>
+            </div>
+            {m.description && (
+              <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                {m.description}
+              </div>
+            )}
+            {Array.isArray(m.perks) && m.perks.length > 0 && (
+              <ul style={{ margin: '4px 0 0', padding: '0 0 0 14px', fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                {m.perks.slice(0, 6).map((p, i) => <li key={i}>{p}</li>)}
+              </ul>
+            )}
+            <div style={{
+              marginTop: 8, padding: '6px 12px', borderRadius: 8,
+              background: 'var(--accent)', color: 'var(--accent-ink)',
+              fontSize: 12, fontWeight: 600, textAlign: 'center',
+            }}>Join — secure checkout</div>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function JoinMembershipModal({ slug, membership, bizName, onClose }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim()) {
+      setErr('Both fields are required'); return;
+    }
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/memberships/checkout', {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          membershipId: membership.id,
+          name: name.trim(),
+          email: email.trim(),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      window.location.href = j.url;
+    } catch (ex) {
+      setErr(ex.message || 'Could not start checkout');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={busy ? null : onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card"
+        style={{ width: '100%', maxWidth: 460, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Heart size={16} sw={1.8}/></div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Join {membership.name}</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+              ${(Number(membership.priceCents) / 100).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} / {membership.interval === 'quarter' ? '3 mo' : membership.interval}
+              {bizName ? ` · ${bizName}` : ''}
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+            <Icons.X size={15}/>
+          </button>
+        </div>
+
+        <Field label="Your name">
+          <input value={name} onChange={(e) => setName(e.target.value)}
+            required autoFocus style={inputSty}/>
+        </Field>
+        <Field label="Email" hint="Renewal receipts go here.">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+            required style={inputSty} autoComplete="email"/>
+        </Field>
+
+        {err && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, marginBottom: 14,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)', fontSize: 12.5,
+          }}>{err}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button type="button" className="btn btn-outline"
+            onClick={onClose} disabled={busy}
+            style={{ flex: 1, justifyContent: 'center' }}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy}
+            style={{ flex: 2, justifyContent: 'center' }}>
+            {busy ? 'Opening checkout…' : 'Continue to checkout'}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, textAlign: 'center' }}>
+          Card details are entered on Stripe's secure checkout — never on this page.
+        </div>
+      </form>
+    </div>
+  );
+}
 
 // Pre-booking message modal. Hits the public contact endpoint, which
 // auto-creates a "lead" client + thread on the owner's side. The

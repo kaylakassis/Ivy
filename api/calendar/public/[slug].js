@@ -103,6 +103,27 @@ async function getCalendar(req, res) {
       })),
     };
 
+    // Active membership tiers, surfaced on the public booking page so
+    // visitors can join. Only active rows with a Stripe price (i.e.
+    // genuinely buyable) — stripe_price_id null tiers are still in
+    // the owner's draft state and shouldn't be shown to the public.
+    const mships = await sql`
+      SELECT id, name, description, price_cents, interval, perks, display_order
+        FROM memberships
+       WHERE workspace_id = ${s.workspace_id}
+         AND active = TRUE
+         AND stripe_price_id IS NOT NULL
+       ORDER BY display_order ASC, created_at ASC
+    `;
+    const membershipsOut = mships.rows.map((r) => ({
+      id:          r.id,
+      name:        r.name,
+      description: r.description || '',
+      priceCents:  Number(r.price_cents || 0),
+      interval:    r.interval,
+      perks:       r.perks || [],
+    }));
+
     return ok(res, {
       calendar: {
         settings: serializeSettings(s),
@@ -110,6 +131,7 @@ async function getCalendar(req, res) {
         blocks:   blocksOut,
         bookings: bookings.rows.map((r) => serializeBooking(r, { redactClient: true })),
         reviews:  reviewSummary,
+        memberships: membershipsOut,
       },
     });
   } catch (err) {
@@ -167,8 +189,10 @@ async function createBooking(req, res) {
 
     // Verify service belongs to this workspace and duration matches.
     const svcRows = await sql`
-      SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount FROM services
-      WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
+      SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount,
+             location_type, travel_buffer_minutes
+        FROM services
+       WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
     if (svcRows.rows.length === 0) return badRequest(res, 'Unknown service');
     if ((end - start) !== svcRows.rows[0].duration_minutes) {
@@ -176,6 +200,17 @@ async function createBooking(req, res) {
     }
     const serviceCapacity = Math.max(1, Number(svcRows.rows[0].capacity) || 1);
     const depositRequired = depositFor(svcRows.rows[0]);
+    const locationType  = svcRows.rows[0].location_type || 'in_person';
+    const travelBuffer  = Number(svcRows.rows[0].travel_buffer_minutes || 0);
+
+    // Mobile-service address capture. Required at booking time so the
+    // owner knows where to go. Saved on the client row so subsequent
+    // bookings pre-fill it.
+    let locationAddress = null;
+    if (locationType === 'mobile') {
+      locationAddress = (body.locationAddress || '').toString().trim().slice(0, 500);
+      if (!locationAddress) return badRequest(res, "Please share where we should come for this service.");
+    }
 
     // Don't allow booking in the past.
     const now = new Date();
@@ -223,7 +258,10 @@ async function createBooking(req, res) {
       return created(res, { waitlist: { id: w.rows[0].id, alreadyJoined: false } });
     }
 
-    if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity })) {
+    if (await hasConflict({
+      workspaceId, dateISO: date, start, end, serviceId,
+      capacity: serviceCapacity, travelBufferMin: travelBuffer,
+    })) {
       return badRequest(res, serviceCapacity > 1
         ? 'That class just filled up — please pick another time'
         : 'That slot was just taken — please pick another time');
@@ -244,18 +282,24 @@ async function createBooking(req, res) {
       clientId = ec.id;
       const newPhone   = clientPhone || ec.phone;
       const newConsent = smsConsent ? (ec.sms_consent_at || new Date().toISOString()) : ec.sms_consent_at;
+      // Persist the address from a mobile booking onto the client row so
+      // the next time they book, the field pre-fills. Falls back to the
+      // existing saved address if the form didn't supply one.
+      const newAddress = locationAddress || null;
       await sql`
         UPDATE clients SET
           last_seen_at   = NOW(),
           phone          = ${newPhone},
-          sms_consent_at = ${newConsent}
+          sms_consent_at = ${newConsent},
+          address        = COALESCE(${newAddress}, address)
         WHERE id = ${clientId}
       `;
     } else {
       const newClient = await sql`
-        INSERT INTO clients (workspace_id, name, email, phone, sms_consent_at, stage, source, last_seen_at)
+        INSERT INTO clients (workspace_id, name, email, phone, sms_consent_at, address, stage, source, last_seen_at)
         VALUES (${workspaceId}, ${clientName}, ${clientEmail},
                 ${clientPhone}, ${smsConsent ? new Date().toISOString() : null},
+                ${locationAddress},
                 'lead', 'Booking', NOW())
         RETURNING id
       `;
@@ -268,11 +312,11 @@ async function createBooking(req, res) {
     const insert = await sql`
       INSERT INTO bookings (
         workspace_id, service_id, client_id, client_name, client_email, client_phone,
-        date, start_min, end_min, notes, deposit_required
+        date, start_min, end_min, notes, deposit_required, location_address
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
-        ${date}, ${start}, ${end}, ${notes}, ${depositRequired}
+        ${date}, ${start}, ${end}, ${notes}, ${depositRequired}, ${locationAddress}
       )
       RETURNING *
     `;

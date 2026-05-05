@@ -86,6 +86,35 @@ export default async function handler(req, res) {
         return badRequest(res, `services[${idx}].depositAmount must be 0–100 when type is percent`);
       }
 
+      // Mobile / on-location service config.
+      const locationType = s?.locationType || 'in_person';
+      if (!['in_person', 'mobile', 'virtual'].includes(locationType)) {
+        return badRequest(res, `services[${idx}].locationType must be in_person / mobile / virtual`);
+      }
+      const travelBufferMinutes = Number.isInteger(s?.travelBufferMinutes)
+        ? s.travelBufferMinutes : Number(s?.travelBufferMinutes ?? 0);
+      if (!Number.isInteger(travelBufferMinutes)
+          || travelBufferMinutes < 0 || travelBufferMinutes > 240) {
+        return badRequest(res, `services[${idx}].travelBufferMinutes must be 0–240`);
+      }
+
+      // Cancellation / no-show policy. Both fees are optional; a 0
+      // fee means "no auto-charge — owner can still cancel manually."
+      const cancellationFeeAmount = Number(s?.cancellationFeeAmount ?? 0);
+      if (!Number.isFinite(cancellationFeeAmount) || cancellationFeeAmount < 0) {
+        return badRequest(res, `services[${idx}].cancellationFeeAmount must be non-negative`);
+      }
+      const cancellationWindowHours = Number.isInteger(s?.cancellationWindowHours)
+        ? s.cancellationWindowHours : Number(s?.cancellationWindowHours ?? 24);
+      if (!Number.isInteger(cancellationWindowHours)
+          || cancellationWindowHours < 0 || cancellationWindowHours > 720) {
+        return badRequest(res, `services[${idx}].cancellationWindowHours must be 0–720`);
+      }
+      const noShowFeeAmount = Number(s?.noShowFeeAmount ?? 0);
+      if (!Number.isFinite(noShowFeeAmount) || noShowFeeAmount < 0) {
+        return badRequest(res, `services[${idx}].noShowFeeAmount must be non-negative`);
+      }
+
       cleaned.push({
         id: s?.id || null,
         name,
@@ -100,6 +129,11 @@ export default async function handler(req, res) {
         intakeFormTemplateIds,
         depositType,
         depositAmount,
+        locationType,
+        travelBufferMinutes,
+        cancellationFeeAmount,
+        cancellationWindowHours,
+        noShowFeeAmount,
       });
     }
 
@@ -151,7 +185,12 @@ export default async function handler(req, res) {
             capacity = ${s.capacity},
             intake_form_template_ids = ${s.intakeFormTemplateIds},
             deposit_type = ${s.depositType},
-            deposit_amount = ${s.depositAmount}
+            deposit_amount = ${s.depositAmount},
+            location_type = ${s.locationType},
+            travel_buffer_minutes = ${s.travelBufferMinutes},
+            cancellation_fee_amount = ${s.cancellationFeeAmount},
+            cancellation_window_hours = ${s.cancellationWindowHours},
+            no_show_fee_amount = ${s.noShowFeeAmount}
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -162,12 +201,16 @@ export default async function handler(req, res) {
           INSERT INTO services (
             workspace_id, name, duration_minutes, price, display_order,
             description, photo_url, prep_instructions, reminder_minutes, capacity,
-            intake_form_template_ids, deposit_type, deposit_amount
+            intake_form_template_ids, deposit_type, deposit_amount,
+            location_type, travel_buffer_minutes,
+            cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
             ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity},
-            ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount}
+            ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount},
+            ${s.locationType}, ${s.travelBufferMinutes},
+            ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount}
           )
           RETURNING *
         `;

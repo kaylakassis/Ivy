@@ -11,6 +11,7 @@ import StripeConnectCard from './StripeConnectCard.jsx';
 import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
+import Memberships from './Memberships.jsx';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -126,13 +127,14 @@ export default function Finance() {
         )}
       </div>
 
-      {/* Section selector: Invoices / Recurring / Time / Expenses. */}
-      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start' }}>
+      {/* Section selector: Invoices / Recurring / Memberships / Time / Expenses. */}
+      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start', flexWrap: 'wrap' }}>
         {[
-          { id: 'invoices',  label: 'Invoices' },
-          { id: 'recurring', label: 'Recurring' },
-          { id: 'time',      label: 'Time' },
-          { id: 'expenses',  label: 'Expenses' },
+          { id: 'invoices',    label: 'Invoices' },
+          { id: 'recurring',   label: 'Recurring' },
+          { id: 'memberships', label: 'Memberships' },
+          { id: 'time',        label: 'Time' },
+          { id: 'expenses',    label: 'Expenses' },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => setSection(id)} style={{
             padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
@@ -147,6 +149,8 @@ export default function Finance() {
         <Expenses/>
       ) : section === 'recurring' ? (
         <Recurring/>
+      ) : section === 'memberships' ? (
+        <Memberships/>
       ) : section === 'time' ? (
         <Time/>
       ) : (

@@ -10,7 +10,7 @@
 import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
-import { verifyWebhookSignature } from '../../_lib/stripe.js';
+import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     }
 
     const { rows } = await sql`
-      SELECT stripe_webhook_secret_encrypted
+      SELECT stripe_webhook_secret_encrypted, stripe_secret_encrypted
       FROM finance_settings
       WHERE workspace_id = ${workspaceId}
     `;
@@ -38,8 +38,15 @@ export default async function handler(req, res) {
     if (!enc) return res.status(404).json({ error: 'Webhook not configured for this workspace' });
 
     let webhookSecret;
+    let workspaceStripeKey = null;
     try {
       webhookSecret = decrypt(enc);
+      // Same key the rest of the per-workspace flows use. May be
+      // missing on legacy rows that only had a webhook secret —
+      // the save-card branch below skips gracefully when null.
+      if (rows[0].stripe_secret_encrypted) {
+        workspaceStripeKey = decrypt(rows[0].stripe_secret_encrypted);
+      }
     } catch {
       return res.status(500).json({ error: 'Could not load webhook secret' });
     }
@@ -56,8 +63,26 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
     }
 
-    // Only one event type matters right now. Other events succeed quietly so
-    // Stripe doesn't keep retrying them.
+    // Subscription lifecycle for memberships. We only act on the
+    // events that move client_memberships state; everything else is
+    // 200-ignored so Stripe stops retrying.
+    if (event.type === 'customer.subscription.created'
+     || event.type === 'customer.subscription.updated'
+     || event.type === 'customer.subscription.deleted') {
+      const sub = event.data?.object || {};
+      const eventWorkspaceId = sub.metadata?.workspace_id;
+      if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch' });
+      }
+      if (sub.metadata?.purpose !== 'membership') {
+        return ok(res, { received: true, ignored: 'subscription not a membership' });
+      }
+      await applySubscriptionState({ workspaceId, sub });
+      return ok(res, { received: true, applied: 'membership-state' });
+    }
+
+    // Only checkout.session.completed remains as the path that
+    // moves money / saves cards. Other event types succeed quietly.
     if (event.type !== 'checkout.session.completed') {
       return ok(res, { received: true, ignored: event.type });
     }
@@ -72,6 +97,151 @@ export default async function handler(req, res) {
     if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
       return res.status(400).json({ error: 'workspace mismatch' });
     }
+
+    // Setup mode: client portal "save a card" flow. After Stripe
+    // confirms the SetupIntent, fetch the resulting PaymentMethod
+    // for the brand/last4/exp display fragments and stamp it on the
+    // client row, plus set it as the customer's default for future
+    // off-session charges.
+    if (session.mode === 'setup' && session.metadata?.purpose === 'save_card') {
+      const clientId = session.metadata?.client_id;
+      const setupIntentId = typeof session.setup_intent === 'string'
+        ? session.setup_intent
+        : session.setup_intent?.id;
+      if (!clientId || !setupIntentId) {
+        return ok(res, { received: true, ignored: 'setup metadata incomplete' });
+      }
+      try {
+        if (!workspaceStripeKey) {
+          return ok(res, { received: true, ignored: 'workspace secret missing' });
+        }
+        // Re-fetch the SetupIntent so we get the resulting
+        // payment_method id (which the SetupIntent confirms in
+        // Stripe AFTER the client clicks confirm in Checkout).
+        const siResp = await fetch(
+          `https://api.stripe.com/v1/setup_intents/${encodeURIComponent(setupIntentId)}`,
+          { headers: { Authorization: `Bearer ${workspaceStripeKey}` } },
+        );
+        const si = await siResp.json();
+        if (!siResp.ok) {
+          // eslint-disable-next-line no-console
+          console.error('[webhook] setup_intent fetch failed:', si?.error?.message);
+          return ok(res, { received: true, ignored: 'setup_intent fetch failed' });
+        }
+        const paymentMethodId = typeof si.payment_method === 'string'
+          ? si.payment_method
+          : si.payment_method?.id;
+        if (!paymentMethodId) return ok(res, { received: true, ignored: 'no payment_method on setup_intent' });
+        const pm = await fetchPaymentMethod({ secretKey: workspaceStripeKey, paymentMethodId });
+        const card = pm.card || {};
+        await sql`
+          UPDATE clients SET
+            payment_method_id = ${paymentMethodId},
+            payment_method_brand = ${card.brand || null},
+            payment_method_last4 = ${card.last4 || null},
+            payment_method_exp_month = ${card.exp_month || null},
+            payment_method_exp_year = ${card.exp_year || null},
+            updated_at = NOW()
+          WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+        `;
+        // Make this the customer's default so off-session charges (no-show
+        // fees, tips) don't have to specify the PM each time.
+        if (typeof session.customer === 'string') {
+          try {
+            await setDefaultPaymentMethod({
+              secretKey: workspaceStripeKey,
+              customerId: session.customer,
+              paymentMethodId,
+            });
+          } catch { /* non-fatal */ }
+        }
+        return ok(res, { received: true, marked: 'card-saved' });
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.error('[webhook] save-card flow failed:', err.message);
+        return ok(res, { received: true, ignored: 'save-card error: ' + err.message });
+      }
+    }
+
+    // Membership purchase: subscription Checkout completed. Webhook
+    // creates the client_memberships row; the customer.subscription.*
+    // events then keep status in sync over time.
+    if (session.mode === 'subscription' && session.metadata?.purpose === 'membership') {
+      const membershipId = session.metadata?.membership_id;
+      const clientIdMeta = session.metadata?.client_id || null;
+      const subscriptionId = typeof session.subscription === 'string'
+        ? session.subscription
+        : session.subscription?.id;
+      const customerId = typeof session.customer === 'string'
+        ? session.customer
+        : session.customer?.id;
+      if (!membershipId || !subscriptionId) {
+        return ok(res, { received: true, ignored: 'membership metadata incomplete' });
+      }
+      // Look up the membership template + the client row by the
+      // metadata's client_id (preferred) or by Stripe customer email
+      // fallback — the public sign-up flow may not have a client_id
+      // yet for first-time buyers.
+      const m = await sql`
+        SELECT id, name, price_cents, interval FROM memberships
+         WHERE id = ${membershipId} AND workspace_id = ${workspaceId}
+      `;
+      if (m.rows.length === 0) {
+        return ok(res, { received: true, ignored: 'unknown membership' });
+      }
+      const tier = m.rows[0];
+
+      let clientId = clientIdMeta;
+      if (!clientId && session.customer_details?.email) {
+        const cl = await sql`
+          SELECT id FROM clients
+           WHERE workspace_id = ${workspaceId}
+             AND email = ${String(session.customer_details.email).toLowerCase()}
+           LIMIT 1
+        `;
+        if (cl.rows.length > 0) clientId = cl.rows[0].id;
+        else {
+          // First-time buyer with no clients-row yet — provision one
+          // as a 'lead' so the membership has somewhere to attach.
+          const ins = await sql`
+            INSERT INTO clients (workspace_id, name, email, stage, source)
+            VALUES (${workspaceId},
+                    ${session.customer_details?.name || session.customer_details?.email},
+                    ${String(session.customer_details.email).toLowerCase()},
+                    'active', 'membership')
+            RETURNING id
+          `;
+          clientId = ins.rows[0].id;
+        }
+      }
+      if (!clientId) {
+        return ok(res, { received: true, ignored: 'no client linkage' });
+      }
+
+      // Persist Stripe customer id on the client row for future tips
+      // / fees off the same card.
+      if (customerId) {
+        await sql`UPDATE clients SET stripe_customer_id = ${customerId} WHERE id = ${clientId} AND stripe_customer_id IS NULL`;
+      }
+
+      // Idempotent: if we already saw this subscription, skip.
+      const exists = await sql`SELECT id FROM client_memberships WHERE stripe_subscription_id = ${subscriptionId}`;
+      if (exists.rows.length === 0) {
+        await sql`
+          INSERT INTO client_memberships (
+            workspace_id, client_id, membership_id,
+            membership_name, price_cents, interval,
+            stripe_subscription_id, status
+          ) VALUES (
+            ${workspaceId}, ${clientId}, ${tier.id},
+            ${tier.name}, ${tier.price_cents}, ${tier.interval},
+            ${subscriptionId}, 'active'
+          )
+        `;
+      }
+      return ok(res, { received: true, marked: 'membership-active' });
+    }
+
     if (session.payment_status !== 'paid') {
       return ok(res, { received: true, ignored: `payment_status=${session.payment_status}` });
     }
@@ -172,4 +342,52 @@ export default async function handler(req, res) {
   } catch (err) {
     return serverError(res, err);
   }
+}
+
+// Mirrors a Stripe subscription's lifecycle into client_memberships.
+// Called from customer.subscription.{created,updated,deleted}.
+//
+// Status mapping:
+//   'active' / 'trialing'              → 'active'
+//   'past_due' / 'unpaid'              → 'past_due'
+//   'canceled'                          → 'cancelled'
+//   'incomplete' / 'incomplete_expired' → 'incomplete'
+async function applySubscriptionState({ workspaceId, sub }) {
+  const subId = sub.id;
+  if (!subId) return;
+  const ours = await sql`
+    SELECT id, workspace_id FROM client_memberships
+     WHERE stripe_subscription_id = ${subId}
+     LIMIT 1
+  `;
+  if (ours.rows.length === 0) {
+    // Created hasn't reached us yet (race with the checkout-completed
+    // event); the next checkout-completed insert will pick this up.
+    return;
+  }
+  if (ours.rows[0].workspace_id !== workspaceId) {
+    // Defense-in-depth: drop any cross-tenant event.
+    return;
+  }
+  const status = mapSubStatus(sub.status);
+  const cancelAtPeriodEnd = !!sub.cancel_at_period_end;
+  const cpeMs = sub.current_period_end ? sub.current_period_end * 1000 : null;
+  const cancelledAt = (status === 'cancelled') ? new Date().toISOString() : null;
+  await sql`
+    UPDATE client_memberships SET
+      status = ${status},
+      cancel_at_period_end = ${cancelAtPeriodEnd},
+      current_period_end = ${cpeMs ? new Date(cpeMs).toISOString() : null},
+      cancelled_at = COALESCE(cancelled_at, ${cancelledAt}),
+      updated_at = NOW()
+    WHERE stripe_subscription_id = ${subId} AND workspace_id = ${workspaceId}
+  `;
+}
+
+function mapSubStatus(s) {
+  if (s === 'active' || s === 'trialing') return 'active';
+  if (s === 'past_due' || s === 'unpaid') return 'past_due';
+  if (s === 'canceled') return 'cancelled';
+  if (s === 'incomplete' || s === 'incomplete_expired') return 'incomplete';
+  return 'active';
 }

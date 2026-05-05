@@ -53,6 +53,12 @@ export function serializeService(row) {
     intakeFormTemplateIds: row.intake_form_template_ids || [],
     depositType:       row.deposit_type || 'none',
     depositAmount:     Number(row.deposit_amount || 0),
+    locationType:      row.location_type || 'in_person',
+    travelBufferMinutes: row.travel_buffer_minutes || 0,
+    cancellationFeeAmount:  Number(row.cancellation_fee_amount || 0),
+    cancellationWindowHours: Number.isInteger(row.cancellation_window_hours)
+      ? row.cancellation_window_hours : 24,
+    noShowFeeAmount:   Number(row.no_show_fee_amount || 0),
   };
 }
 
@@ -117,6 +123,13 @@ export function serializeBooking(row, opts = {}) {
     depositRequired:     Number(row.deposit_required || 0),
     depositPaid:         Number(row.deposit_paid || 0),
     depositPaidAt:       row.deposit_paid_at || null,
+    locationAddress:     redactClient ? null : (row.location_address || null),
+    noShowAt:            row.no_show_at || null,
+    feeChargedAmount:    Number(row.fee_charged_amount || 0),
+    feeChargedKind:      row.fee_charged_kind || null,
+    feeChargedAt:        row.fee_charged_at || null,
+    tipAmount:           Number(row.tip_amount || 0),
+    tipChargedAt:        row.tip_charged_at || null,
   };
 }
 
@@ -134,11 +147,24 @@ export function withinAvailability(availability, weekday, start, end) {
 // the EXACT same start/end window can co-exist up to `capacity`. Any
 // other overlap (different service, different exact slot, blocks,
 // external busy) still conflicts.
-export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1, excludeBookingId = null }) {
+// `travelBufferMin` (minutes) widens the conflict window symmetrically.
+// When set, a booking at 9:00–10:00 with a 30-min travel buffer treats
+// the slot as effectively reserving 8:30–10:30 of the owner's day —
+// keeps mobile providers from accidentally accepting back-to-back
+// bookings across town.
+export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1, excludeBookingId = null, travelBufferMin = 0 }) {
+  // For mobile services with travel time, widen the proposed booking's
+  // window symmetrically so an existing back-to-back booking (or block)
+  // counts as a conflict if the gap is shorter than the travel time
+  // needed to reach the next address.
+  const buf = Math.max(0, Number(travelBufferMin) || 0);
+  const startBuf = Math.max(0, start - buf);
+  const endBuf   = Math.min(24 * 60, end + buf);
+
   const blocks = await sql`
     SELECT 1 FROM calendar_blocks
     WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
-      AND start_min < ${end} AND end_min > ${start}
+      AND start_min < ${endBuf} AND end_min > ${startBuf}
     LIMIT 1
   `;
   if (blocks.rows.length > 0) return true;
@@ -148,7 +174,7 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
   const external = await sql`
     SELECT 1 FROM external_busy_blocks
     WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
-      AND start_min < ${end} AND end_min > ${start}
+      AND start_min < ${endBuf} AND end_min > ${startBuf}
     LIMIT 1
   `;
   if (external.rows.length > 0) return true;
@@ -161,19 +187,21 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
   // excludeBookingId lets a reschedule re-validate availability without
   // colliding with itself. The booking we're moving is still in the
   // table at its old slot (we soft-update); ignore it during the check.
+  // Note: buffered window applies to OTHER bookings too — ensures the
+  // gap respects travel time in both directions.
   const overlapping = excludeBookingId
     ? await sql`
         SELECT service_id, start_min, end_min FROM bookings
         WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
           AND cancelled_at IS NULL
-          AND start_min < ${end} AND end_min > ${start}
+          AND start_min < ${endBuf} AND end_min > ${startBuf}
           AND id <> ${excludeBookingId}
       `
     : await sql`
         SELECT service_id, start_min, end_min FROM bookings
         WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
           AND cancelled_at IS NULL
-          AND start_min < ${end} AND end_min > ${start}
+          AND start_min < ${endBuf} AND end_min > ${startBuf}
       `;
   let sameSlotSameService = 0;
   for (const r of overlapping.rows) {

@@ -185,6 +185,238 @@ export async function fetchSubscription({ secretKey, subscriptionId }) {
   return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, { secretKey });
 }
 
+// ─── Per-workspace card-on-file flow ─────────────────────────────────
+// These run against the workspace's connected Stripe account
+// (stripe_secret_encrypted). They power the client-portal "save a card
+// on file" flow and the off-session charging that powers no-show /
+// late-cancel fees + post-session tips.
+
+// Find or create a Stripe customer on the connected account for a
+// given client email. We only ever look up by email + check metadata
+// to confirm it's the right tenant — we never trust a client_id that
+// the browser handed us. The returned id is what we save on
+// clients.stripe_customer_id.
+export async function findOrCreateCustomer({ secretKey, email, name, workspaceId, clientId }) {
+  if (!email) throw new Error('email is required');
+  // Stripe doesn't have a search-by-email index by default, but the
+  // List API supports filtering by email and returns at most 100. We
+  // never have more than one customer per (workspace, email) because
+  // we always re-use this lookup, so the first match wins.
+  const list = await stripeFetch(
+    `/customers?email=${encodeURIComponent(email)}&limit=1`,
+    { secretKey },
+  );
+  if (Array.isArray(list.data) && list.data.length > 0) {
+    return list.data[0];
+  }
+  return stripeFetch('/customers', {
+    method: 'POST', secretKey,
+    body: {
+      email,
+      name: name || undefined,
+      'metadata[workspace_id]': workspaceId,
+      'metadata[client_id]': clientId || undefined,
+    },
+  });
+}
+
+// Mint a SetupIntent the browser uses with Stripe Elements / Checkout
+// in setup mode to save a card without charging. Webhook handles the
+// post-confirm step (storing payment_method_id on the client row).
+export async function createSetupIntent({ secretKey, customerId, workspaceId, clientId }) {
+  if (!customerId) throw new Error('customerId is required');
+  return stripeFetch('/setup_intents', {
+    method: 'POST', secretKey,
+    body: {
+      customer: customerId,
+      'payment_method_types[0]': 'card',
+      usage: 'off_session',
+      'metadata[workspace_id]': workspaceId,
+      'metadata[client_id]': clientId,
+    },
+  });
+}
+
+// Mint a Stripe Checkout session in 'setup' mode — used for the
+// portal "save a card" link. After the user completes Checkout, the
+// webhook (checkout.session.completed with mode='setup') stores the
+// resulting payment_method on the client row.
+export async function createSetupCheckoutSession({
+  secretKey, customerId, workspaceId, clientId, successUrl, cancelUrl,
+}) {
+  if (!customerId) throw new Error('customerId is required');
+  const session = await stripeFetch('/checkout/sessions', {
+    method: 'POST', secretKey,
+    body: {
+      mode: 'setup',
+      customer: customerId,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      'payment_method_types[0]': 'card',
+      'metadata[workspace_id]': workspaceId,
+      'metadata[client_id]': clientId,
+      'metadata[purpose]': 'save_card',
+      'setup_intent_data[metadata][workspace_id]': workspaceId,
+      'setup_intent_data[metadata][client_id]': clientId,
+      'setup_intent_data[metadata][purpose]': 'save_card',
+    },
+  });
+  return { id: session.id, url: session.url };
+}
+
+// Get full PaymentMethod info (brand, last4, exp) so we can render
+// "Visa · 4242 · expires 09/27" in the portal without storing more
+// than the bare minimum.
+export async function fetchPaymentMethod({ secretKey, paymentMethodId }) {
+  return stripeFetch(`/payment_methods/${encodeURIComponent(paymentMethodId)}`, { secretKey });
+}
+
+// Make a saved payment_method the customer's default for future
+// invoices / off-session charges. Without this, off-session charges
+// would have to specify the PM each time.
+export async function setDefaultPaymentMethod({ secretKey, customerId, paymentMethodId }) {
+  if (!customerId || !paymentMethodId) throw new Error('customerId + paymentMethodId required');
+  return stripeFetch(`/customers/${encodeURIComponent(customerId)}`, {
+    method: 'POST', secretKey,
+    body: {
+      'invoice_settings[default_payment_method]': paymentMethodId,
+    },
+  });
+}
+
+// Detach a saved payment method from a customer (the portal "remove
+// card" action). Stripe's detach endpoint also clears it from
+// invoice_settings.default_payment_method automatically.
+export async function detachPaymentMethod({ secretKey, paymentMethodId }) {
+  return stripeFetch(`/payment_methods/${encodeURIComponent(paymentMethodId)}/detach`, {
+    method: 'POST', secretKey,
+  });
+}
+
+// Off-session charge against a saved card. Used for late-cancel
+// fees, no-show fees, and post-session tips. Returns the
+// PaymentIntent so the caller can persist its id for future refunds.
+//
+// Stripe will return a 402 if the card requires authentication
+// (3DS) — the caller should surface that as "couldn't auto-charge,
+// please ask the client to update their card."
+export async function chargeOffSession({
+  secretKey, customerId, paymentMethodId,
+  amountCents, currency, description, metadata,
+  statementDescriptor,
+}) {
+  if (!customerId || !paymentMethodId) {
+    throw new Error('customerId + paymentMethodId required');
+  }
+  if (!Number.isInteger(amountCents) || amountCents <= 0) {
+    throw new Error('amountCents must be a positive integer');
+  }
+  const body = {
+    amount: amountCents,
+    currency: (currency || 'usd').toLowerCase(),
+    customer: customerId,
+    payment_method: paymentMethodId,
+    confirm: 'true',
+    off_session: 'true',
+    description: description || undefined,
+  };
+  // Stripe requires statement descriptor to be 5–22 chars, no
+  // <>"'\\* — clamp + sanitize defensively. Optional.
+  if (statementDescriptor) {
+    body.statement_descriptor = String(statementDescriptor)
+      .replace(/[<>"'\\*]/g, '')
+      .slice(0, 22);
+  }
+  if (metadata && typeof metadata === 'object') {
+    for (const [k, v] of Object.entries(metadata)) {
+      if (v == null) continue;
+      body[`metadata[${k}]`] = String(v);
+    }
+  }
+  return stripeFetch('/payment_intents', {
+    method: 'POST', secretKey, body,
+  });
+}
+
+// ─── Memberships (subscription products on the connected account) ────
+
+// Provision a Stripe Product + recurring Price on the connected
+// account at the moment a membership tier is saved. We store both
+// IDs on the memberships row so the public sign-up flow can reuse
+// them. Currency comes from finance_settings.
+export async function createMembershipProduct({
+  secretKey, name, description, priceCents, interval, currency,
+}) {
+  if (!name) throw new Error('name is required');
+  if (!Number.isInteger(priceCents) || priceCents < 0) {
+    throw new Error('priceCents must be a non-negative integer');
+  }
+  const product = await stripeFetch('/products', {
+    method: 'POST', secretKey,
+    body: { name, description: description || undefined },
+  });
+  const intervalMap = { week: 'week', month: 'month', quarter: 'month', year: 'year' };
+  const intervalCount = interval === 'quarter' ? 3 : 1;
+  const price = await stripeFetch('/prices', {
+    method: 'POST', secretKey,
+    body: {
+      product: product.id,
+      unit_amount: priceCents,
+      currency: (currency || 'usd').toLowerCase(),
+      'recurring[interval]': intervalMap[interval] || 'month',
+      'recurring[interval_count]': intervalCount,
+    },
+  });
+  return { productId: product.id, priceId: price.id };
+}
+
+// Build a Checkout Session for a membership purchase on the
+// connected account. The metadata is what the webhook uses to
+// stitch the resulting subscription back to a client_memberships row.
+export async function createMembershipCheckoutSession({
+  secretKey, priceId, customerId, customerEmail,
+  workspaceId, membershipId, clientId,
+  successUrl, cancelUrl,
+}) {
+  const body = {
+    mode: 'subscription',
+    success_url: successUrl,
+    cancel_url: cancelUrl,
+    'line_items[0][price]': priceId,
+    'line_items[0][quantity]': 1,
+    'metadata[workspace_id]': workspaceId,
+    'metadata[membership_id]': membershipId,
+    'metadata[purpose]': 'membership',
+    'subscription_data[metadata][workspace_id]': workspaceId,
+    'subscription_data[metadata][membership_id]': membershipId,
+    'subscription_data[metadata][purpose]': 'membership',
+  };
+  if (clientId) {
+    body['metadata[client_id]'] = clientId;
+    body['subscription_data[metadata][client_id]'] = clientId;
+  }
+  if (customerId) body.customer = customerId;
+  else if (customerEmail) body.customer_email = customerEmail;
+  const session = await stripeFetch('/checkout/sessions', {
+    method: 'POST', secretKey, body,
+  });
+  return { id: session.id, url: session.url, customer: session.customer };
+}
+
+// Cancel a subscription. `atPeriodEnd=true` sets cancel_at_period_end
+// so the member keeps access until the end of the cycle they paid for.
+export async function cancelSubscription({ secretKey, subscriptionId, atPeriodEnd = true }) {
+  if (atPeriodEnd) {
+    return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+      method: 'POST', secretKey,
+      body: { cancel_at_period_end: 'true' },
+    });
+  }
+  return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    method: 'DELETE', secretKey,
+  });
+}
+
 // Issue a refund against a payment_intent. amountCents omitted = full
 // refund of remaining balance. reason maps to Stripe's enum:
 // 'duplicate' | 'fraudulent' | 'requested_by_customer'.

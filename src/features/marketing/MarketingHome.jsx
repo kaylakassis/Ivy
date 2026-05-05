@@ -3,7 +3,7 @@
 //
 // Structure (top → bottom):
 //   Nav · Hero · ProductPreview (CSS mockup) · Features · BuiltFor (vertical
-//   cards) · Testimonials · Comparison (vs Calendly+Honeybook+Square) ·
+//   cards) · Testimonials · "Replace your stack" comparison ·
 //   FAQ · FounderNote · Pricing · CTA · Footer.
 //
 // All visuals are CSS-only — no images bundled — so the page stays light
@@ -17,12 +17,12 @@ import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
 
 const FEATURES = [
   { icon: 'Users',    title: 'Clients',         body: 'CRM with stages, notes, lifetime value, and a leads pipeline.' },
-  { icon: 'Calendar', title: 'Calendar',        body: 'Day/week/month views, recurring sessions, public booking link, reminders.' },
-  { icon: 'Dollar',   title: 'Invoicing',       body: 'Branded invoices, public payment view, follow-up nudges.' },
-  { icon: 'Doc',      title: 'Documents',       body: 'Send waivers, agreements, and intake forms — clients sign with one click.' },
-  { icon: 'Chat',     title: 'Messaging',       body: 'Two-way native chat between you and your clients. No SMS plans needed.' },
-  { icon: 'Trending', title: 'Goals & Tasks',   body: 'Live progress bars from real workspace data. Glow when you hit 100%.' },
-  { icon: 'Gift',     title: 'Rewards',         body: 'Auto-detect when a client earns a reward; one click to confirm + notify.' },
+  { icon: 'Calendar', title: 'Calendar',        body: 'Day/week/month views, recurring sessions, public booking link, reminders. Set services as in-person, mobile (you travel), or online.' },
+  { icon: 'Dollar',   title: 'Invoicing',       body: 'Branded invoices, recurring billing, time tracking, expenses — all under one money tab.' },
+  { icon: 'Lock',     title: 'Card on file',    body: "Clients save a card once. Auto-charge late-cancel + no-show fees, accept tips, and never chase money again." },
+  { icon: 'Heart',    title: 'Memberships',     body: 'Set up monthly tiers; clients subscribe straight from your booking page. Recurring revenue, no extra tools.' },
+  { icon: 'Doc',      title: 'Documents',       body: 'Multi-signer waivers, agreements, and intake forms — clients sign with one click. PDFs land flattened with a tamper-evident audit page.' },
+  { icon: 'Chat',     title: 'Messaging',       body: 'Two-way native chat between you and your clients. Prospects can ask questions before they book.' },
   { icon: 'Spark',    title: 'Ivy — AI coach',  body: 'Built-in business coach grounded in your real numbers. Every workspace is private.' },
 ];
 
@@ -41,7 +41,7 @@ function capitalize(s) {
 
 const TESTIMONIALS = [
   {
-    quote: 'I cancelled Calendly, Honeybook, and a separate invoicing tool the same week. THRYVE replaces all three and the AI coach is a real coach, not a chatbot.',
+    quote: 'I cut three subscriptions the same week. Bookings, invoices, and the AI coach all in one place — and the coach actually quotes my real numbers.',
     role: 'Massage therapist',
     location: 'Portland, OR',
   },
@@ -564,20 +564,23 @@ function Testimonials() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Comparison vs Calendly+Honeybook+Square. The competitive frame matters
-// — most visitors are deciding between THRYVE and a stack of three
-// existing tools. Showing the consolidation in one table closes the gap.
+// What THRYVE replaces. Job-to-be-done framing — names a category of
+// tool ("your booking app", "your invoicing tool") rather than any
+// specific brand, so the page stays out of comparison-disparagement
+// territory and ages well as competitors come and go.
 // ──────────────────────────────────────────────────────────────────────
 
 const COMPARE_ROWS = [
-  { label: 'Booking + calendar',     thryve: true, calendly: true,  honeybook: true,  square: true  },
-  { label: 'Branded invoices + Stripe', thryve: true, calendly: false, honeybook: true,  square: true  },
-  { label: 'Client CRM',             thryve: true, calendly: false, honeybook: true,  square: 'partial' },
-  { label: 'E-signing + intake forms', thryve: true, calendly: false, honeybook: true,  square: false },
-  { label: 'Direct messaging',       thryve: true, calendly: false, honeybook: true,  square: false },
-  { label: 'Client portal (always free)', thryve: true, calendly: false, honeybook: false, square: false },
-  { label: 'AI business coach',      thryve: true, calendly: false, honeybook: false, square: false },
-  { label: 'Per-tool subscription cost', thryve: 'One', calendly: '$', honeybook: '$$', square: '$' },
+  { label: 'Booking + calendar',           replaces: 'Your scheduling app' },
+  { label: 'Branded invoices + Stripe payments', replaces: 'Your invoicing tool' },
+  { label: 'Recurring invoicing + memberships',  replaces: 'Your subscription billing tool' },
+  { label: 'Client CRM with notes & history',    replaces: 'Your spreadsheet or CRM app' },
+  { label: 'E-signing + intake forms',     replaces: 'Your e-signature service' },
+  { label: 'Direct messaging w/ clients',  replaces: 'Texts + email threads' },
+  { label: 'Cards on file + auto-charge',  replaces: 'Manual payment chasing' },
+  { label: 'Public booking site + reviews', replaces: 'Your DIY web page' },
+  { label: 'Client portal (always free)',  replaces: 'Nothing — most solos don\'t have one' },
+  { label: 'AI business coach (Ivy)',      replaces: 'Generic AI tool subscription' },
 ];
 
 function Comparison() {
@@ -589,29 +592,28 @@ function Comparison() {
           One subscription, not five.
         </h2>
         <p style={{ margin: '10px auto 0', maxWidth: 580, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Most solo owners run Calendly + Honeybook + Square (or some
-          combination) plus an AI tool on top. THRYVE collapses all of it.
+          Most solo owners pay $15–$50 a month each for half a dozen
+          separate tools. THRYVE rolls every job into one system that
+          actually talks to itself.
         </p>
       </div>
       <div className="card" style={{ padding: 0, overflow: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 560 }}>
           <thead>
             <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
-              <th style={cmpHeader}></th>
-              <th style={{ ...cmpHeader, color: 'var(--accent)', fontWeight: 600 }}>THRYVE</th>
-              <th style={cmpHeader}>Calendly</th>
-              <th style={cmpHeader}>Honeybook</th>
-              <th style={cmpHeader}>Square</th>
+              <th style={cmpHeader}>Capability</th>
+              <th style={cmpHeader}>What you'd usually pay for</th>
+              <th style={{ ...cmpHeader, color: 'var(--accent)', fontWeight: 600, textAlign: 'right' }}>In THRYVE</th>
             </tr>
           </thead>
           <tbody>
             {COMPARE_ROWS.map((row) => (
               <tr key={row.label} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={cmpCell}>{row.label}</td>
-                <Cell v={row.thryve}    accent/>
-                <Cell v={row.calendly}/>
-                <Cell v={row.honeybook}/>
-                <Cell v={row.square}/>
+                <td style={{ ...cmpCell, color: 'var(--muted)' }}>{row.replaces}</td>
+                <td style={{ ...cmpCell, textAlign: 'right' }}>
+                  <Icons.Check size={14} sw={2.4} stroke="var(--accent)"/>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -623,15 +625,6 @@ function Comparison() {
 
 const cmpHeader = { padding: '12px 14px', fontSize: 12, fontWeight: 550, color: 'var(--muted)', whiteSpace: 'nowrap' };
 const cmpCell   = { padding: '11px 14px', color: 'var(--fg)' };
-
-function Cell({ v, accent }) {
-  let content;
-  if (v === true)  content = <Icons.Check size={14} sw={2.4} stroke={accent ? 'var(--accent)' : 'var(--ok)'}/>;
-  else if (v === false) content = <span style={{ color: 'var(--muted-2)', fontSize: 16 }}>—</span>;
-  else if (v === 'partial') content = <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>partial</span>;
-  else content = <span style={{ fontSize: 12.5, color: accent ? 'var(--accent)' : 'var(--fg-2)', fontWeight: accent ? 600 : 500 }}>{v}</span>;
-  return <td style={{ ...cmpCell, textAlign: 'center' }}>{content}</td>;
-}
 
 // ──────────────────────────────────────────────────────────────────────
 // FAQ

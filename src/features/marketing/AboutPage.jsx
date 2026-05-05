@@ -15,8 +15,8 @@ const BLOCKS = [
     kicker: 'The problem',
     heading: 'Solo owners pay for tools, not a system.',
     paragraphs: [
-      "Most one-person businesses run their operation on five or six tools — Calendly for booking, Honeybook or QuickBooks for invoicing, Square for payments, Mailchimp for email, Notion or a spreadsheet for the CRM, plus an AI tool on top. Each one charges $15–$50 a month. Each one has its own login, its own UI, and its own gaps.",
-      "The friction isn't in any single tool — it's in the seams between them. A booking lands in Calendly. The invoice goes out from Honeybook. The follow-up message gets typed in iMessage. None of them know about each other, so the owner glues them together with copy-paste and memory.",
+      "Most one-person businesses run their operation on five or six tools — one for booking, one for invoicing, another for payments, another for email, a spreadsheet or note app for the CRM, plus an AI tool on top. Each one charges $15–$50 a month. Each one has its own login, its own UI, and its own gaps.",
+      "The friction isn't in any single tool — it's in the seams between them. The booking lands in one app. The invoice goes out from another. The follow-up message gets typed in your texts. None of them know about each other, so the owner glues them together with copy-paste and memory.",
     ],
   },
   {

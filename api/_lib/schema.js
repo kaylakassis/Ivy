@@ -307,6 +307,24 @@ CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
 -- nullable because most rows are created by owners before the client signs up.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS user_id UUID REFERENCES users(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_clients_user ON clients(user_id);
+-- Saved address for mobile-service bookings. Captured at first booking;
+-- the public booker pre-fills it on subsequent visits.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
+-- Saved card on file (Stripe customer + default payment method per
+-- workspace). Workspace-scoped because Stripe Connect accounts are
+-- per-workspace — a client can have a card saved with biz A but not
+-- with biz B. We never store full PANs; only the Stripe handles +
+-- display fragments (brand, last 4 digits, exp month/year) so the
+-- portal UI can render "Visa ending in 4242" without an extra round
+-- trip.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS stripe_customer_id TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_method_id TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_method_brand TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_method_last4 TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_method_exp_month INT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_method_exp_year INT;
+CREATE INDEX IF NOT EXISTS idx_clients_stripe_customer
+  ON clients(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS calendar_settings (
   workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -355,6 +373,13 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_inbound_last_error
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS address_label TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+-- Mobile service area: how far the owner travels from their base
+-- location. Used in the public booking page to gate "where do you
+-- need us?" inputs and (eventually) drive Discover-by-distance for
+-- mobile providers. Nullable — owners who don't run mobile services
+-- leave it untouched.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS service_radius_miles INT
+  CHECK (service_radius_miles IS NULL OR (service_radius_miles > 0 AND service_radius_miles <= 500));
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_latlng
   ON calendar_settings(lat, lng) WHERE lat IS NOT NULL AND lng IS NOT NULL;
 -- Service-name search: pg_trgm makes ILIKE '%foo%' index-backed at scale.
@@ -540,6 +565,26 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_type TEXT NOT NULL DEFAULT
   CHECK (deposit_type IN ('none', 'percent', 'fixed'));
 ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 
+-- Mobile / on-location services. location_type tells the booking flow
+-- whether the service happens at the owner's place ('in_person'), at the
+-- client's address ('mobile'), or over video ('virtual'). For mobile,
+-- bookings carry a location_address; the service can also reserve
+-- travel time around itself so the next booking on the same day isn't
+-- stacked back-to-back across town.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS location_type TEXT NOT NULL DEFAULT 'in_person'
+  CHECK (location_type IN ('in_person', 'mobile', 'virtual'));
+ALTER TABLE services ADD COLUMN IF NOT EXISTS travel_buffer_minutes INT NOT NULL DEFAULT 0
+  CHECK (travel_buffer_minutes >= 0 AND travel_buffer_minutes <= 240);
+
+-- Cancellation + no-show fee policy. When fee_amount > 0 AND a card is
+-- on file for the client, late-cancel/no-show actions auto-charge the
+-- fee against the saved card. cancellation_window_hours is the
+-- "free-cancel" buffer — anything inside that window is "late."
+ALTER TABLE services ADD COLUMN IF NOT EXISTS cancellation_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE services ADD COLUMN IF NOT EXISTS cancellation_window_hours INT NOT NULL DEFAULT 24
+  CHECK (cancellation_window_hours >= 0 AND cancellation_window_hours <= 720);
+ALTER TABLE services ADD COLUMN IF NOT EXISTS no_show_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+
 -- Auto review requests: the daily cron mints a one-time token a few
 -- days after a completed booking, hashes it onto the row, and emails
 -- the client a "rate your experience" link. Once they submit (or the
@@ -604,6 +649,27 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_event_id TEXT;
 -- still go out even if the client later updates / deletes the row.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS client_phone TEXT;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS sms_sent JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Mobile / on-location address for this booking. NULL for in-person
+-- (at the owner's location) and virtual bookings. Captured at the
+-- booking step for mobile services (services.location_type = 'mobile').
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS location_address TEXT;
+-- Cancellation / no-show fee tracking. fee_charged_amount is what we
+-- actually charged (may differ from the service's policy if the owner
+-- waived it manually); fee_payment_intent links to the Stripe charge
+-- so refunds are possible. fee_charged_kind: 'late_cancel' | 'no_show'.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_charged_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_charged_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_charged_kind TEXT
+  CHECK (fee_charged_kind IS NULL OR fee_charged_kind IN ('late_cancel', 'no_show'));
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_payment_intent TEXT;
+-- No-show flag: marked by the owner when the client doesn't show up.
+-- Distinct from cancellation — the slot is consumed but no service
+-- happened. Surfaced in reports + can trigger a no-show fee charge.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS no_show_at TIMESTAMPTZ;
+-- Tip captured after the session (post-service email link or owner UI).
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_charged_at TIMESTAMPTZ;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_payment_intent TEXT;
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
 
 -- Messaging: one thread per (workspace, client). Mode controls whether the
@@ -836,6 +902,69 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_one_running
 -- Per-workspace default hourly rate. Stored on finance_settings so
 -- new entries can default to it without an extra round trip.
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS default_hourly_rate NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+-- Memberships: self-serve recurring subscriptions. Owners define
+-- one or more "membership" tiers (name, price, perks). Each tier
+-- gets a Stripe Product + Price provisioned on the connected
+-- account at first save; the public booking page surfaces a
+-- "Join the membership" card that opens a Stripe Checkout in
+-- subscription mode. Webhook lifecycle (customer.subscription.*)
+-- mirrors state into client_memberships.
+CREATE TABLE IF NOT EXISTS memberships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  -- Pricing snapshot. Stored on the row so the displayed price
+  -- always matches the Stripe Price (they're created together).
+  -- Currency comes from finance_settings.currency.
+  price_cents INT NOT NULL CHECK (price_cents >= 0),
+  interval TEXT NOT NULL DEFAULT 'month'
+    CHECK (interval IN ('week', 'month', 'quarter', 'year')),
+  -- Stripe handles. Created on the first save against the connected
+  -- account; reused on subsequent membership-checkout calls. NULL
+  -- when the workspace hasn't connected Stripe yet — UI gates the
+  -- public sign-up flow accordingly.
+  stripe_product_id TEXT,
+  stripe_price_id TEXT,
+  -- Free-form JSONB list of perks (["Unlimited bookings", "10% off products"]).
+  perks JSONB NOT NULL DEFAULT '[]'::jsonb,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  display_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_memberships_workspace
+  ON memberships(workspace_id, active, display_order);
+
+-- Per-client membership state. One row per (workspace, client,
+-- membership) — a client can have multiple historical subscriptions
+-- to the same tier (cancelled, re-joined). We DON'T enforce uniqueness
+-- on (client, membership) so the audit trail of past tiers is preserved.
+CREATE TABLE IF NOT EXISTS client_memberships (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  membership_id UUID REFERENCES memberships(id) ON DELETE SET NULL,
+  -- Snapshot at sign-up time so the row stays meaningful even if the
+  -- owner edits / deletes the underlying tier.
+  membership_name TEXT NOT NULL,
+  price_cents INT NOT NULL,
+  interval TEXT NOT NULL,
+  stripe_subscription_id TEXT UNIQUE,
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('active', 'past_due', 'cancelled', 'incomplete')),
+  current_period_end TIMESTAMPTZ,
+  cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  cancelled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_client_memberships_workspace
+  ON client_memberships(workspace_id, status, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_client_memberships_client
+  ON client_memberships(client_id, status);
 
 -- Recurring invoices. Each row defines a template + schedule that
 -- the daily cron uses to mint a fresh invoices row at every interval.

@@ -15,7 +15,7 @@ const ENTRIES = [
     date: '2026-05-05',
     tag: 'launch',
     title: 'Public marketing site',
-    body: 'New landing page with product preview, vertical-specific sections, comparison vs Calendly/Honeybook/Square, FAQ, and a founder note. Plus per-vertical pages at /for/:slug for SEO.',
+    body: 'New landing page with product preview, vertical-specific sections, "what THRYVE replaces" stack comparison, FAQ, and a founder note. Plus per-vertical pages at /for/:slug for SEO.',
   },
   {
     date: '2026-05-04',

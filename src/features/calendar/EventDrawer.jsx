@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
 import { minToHM, parseISO, RECURRENCE_OPTIONS } from './utils.js';
+import { api } from '../../lib/api.js';
 
 export default function EventDrawer({
   event, services,
@@ -109,7 +110,36 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
         )}
       </div>
 
-      {/* Actions */}
+      {/* Booking-detail extras: location, no-show + tip + late-cancel
+          fee. Surfaced before the destructive cancel actions so they
+          aren't visually grouped with "Cancel booking." */}
+      {event.locationAddress && (
+        <InfoRow label="Address" value={event.locationAddress}/>
+      )}
+      {(event.noShowAt || Number(event.feeChargedAmount) > 0 || Number(event.tipAmount) > 0) && (
+        <div style={{
+          marginTop: 14, padding: '10px 12px', borderRadius: 10,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55,
+        }}>
+          {event.noShowAt && <div>No-show recorded {new Date(event.noShowAt).toLocaleDateString()}.</div>}
+          {Number(event.feeChargedAmount) > 0 && (
+            <div>
+              {event.feeChargedKind === 'late_cancel' ? 'Late-cancel fee' : 'No-show fee'} charged:
+              {' '}<b>${Number(event.feeChargedAmount).toFixed(2)}</b>
+            </div>
+          )}
+          {Number(event.tipAmount) > 0 && (
+            <div>Tip: <b>${Number(event.tipAmount).toFixed(2)}</b></div>
+          )}
+        </div>
+      )}
+
+      {!event.cancelledAt && !event.noShowAt && (
+        <BookingExtraActions event={event}/>
+      )}
+
+      {/* Cancel actions */}
       <div style={{ display: 'flex', gap: 10, marginTop: 24, flexDirection: 'column' }}>
         {confirmKind === 'occurrence' ? (
           <ConfirmRow
@@ -151,6 +181,150 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
 
 function ruleLabel(rule) {
   return RECURRENCE_OPTIONS.find((r) => r.value === rule)?.label || rule;
+}
+
+// No-show + tip + manual-fee actions. All hit endpoints that
+// off-session-charge against the client's saved card; if no card is
+// on file, the no-show endpoint still records the no-show but skips
+// the charge, and the tip / fee endpoints surface a clear error.
+function BookingExtraActions({ event }) {
+  const [openAction, setOpenAction] = useState(null); // 'no_show' | 'tip' | 'late_cancel'
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+  const [success, setSuccess] = useState(null);
+  const [tipAmount, setTipAmount] = useState('');
+  const [feeAmount, setFeeAmount] = useState('');
+
+  const close = () => {
+    setOpenAction(null); setError(null); setSuccess(null);
+    setTipAmount(''); setFeeAmount('');
+  };
+
+  const markNoShow = async (chargeFee) => {
+    setBusy(true); setError(null);
+    try {
+      const r = await api.post('/calendar/bookings/no-show', { id: event.id, chargeFee });
+      setSuccess(r.charged
+        ? `Marked no-show + charged $${r.chargeAmount.toFixed(2)}.`
+        : (r.chargeError ? `Marked no-show — charge failed: ${r.chargeError}` : 'Marked no-show.'));
+      setTimeout(close, 2500);
+    } catch (e) {
+      setError(e.message || 'Failed');
+    } finally { setBusy(false); }
+  };
+
+  const charge = async (kind, amount) => {
+    setBusy(true); setError(null);
+    try {
+      const path = kind === 'tip' ? '/calendar/bookings/tip' : '/calendar/bookings/charge-fee';
+      const body = kind === 'tip'
+        ? { id: event.id, amount: Number(amount) }
+        : { id: event.id, kind, amount: Number(amount) || undefined };
+      const r = await api.post(path, body);
+      setSuccess(`Charged $${(r.chargeAmount || amount).toFixed(2)} to the card on file.`);
+      setTimeout(close, 2500);
+    } catch (e) {
+      setError(e.message || 'Charge failed');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Quick actions</div>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+        <button className="btn btn-outline" onClick={() => setOpenAction('no_show')}
+          style={{ fontSize: 12, padding: '8px 10px', justifyContent: 'center' }}>
+          No-show
+        </button>
+        <button className="btn btn-outline" onClick={() => setOpenAction('late_cancel')}
+          style={{ fontSize: 12, padding: '8px 10px', justifyContent: 'center' }}>
+          Charge fee
+        </button>
+        <button className="btn btn-outline" onClick={() => setOpenAction('tip')}
+          style={{ fontSize: 12, padding: '8px 10px', justifyContent: 'center' }}>
+          Add tip
+        </button>
+      </div>
+
+      {openAction && (
+        <div style={{
+          marginTop: 10, padding: 12, borderRadius: 10,
+          background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+          display: 'flex', flexDirection: 'column', gap: 10,
+        }}>
+          {error && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 8,
+              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+              color: 'var(--danger)', fontSize: 12,
+            }}>{error}</div>
+          )}
+          {success && (
+            <div style={{
+              padding: '8px 12px', borderRadius: 8,
+              background: 'color-mix(in srgb, var(--ok) 8%, var(--surface))',
+              border: '1px solid var(--ok)',
+              color: 'var(--ok)', fontSize: 12,
+            }}>{success}</div>
+          )}
+          {!success && openAction === 'no_show' && (
+            <>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                Mark this booking as a no-show. If you set a no-show fee on the service AND there's a card on file, we'll auto-charge.
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline" disabled={busy} onClick={() => markNoShow(false)}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}>
+                  Mark only
+                </button>
+                <button className="btn btn-primary" disabled={busy} onClick={() => markNoShow(true)}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}>
+                  Mark + charge fee
+                </button>
+              </div>
+            </>
+          )}
+          {!success && openAction === 'late_cancel' && (
+            <>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                Manually charge a late-cancel fee against the card on file. Leave amount blank to use the policy amount.
+              </div>
+              <input type="number" min="0" step="0.01"
+                value={feeAmount} onChange={(e) => setFeeAmount(e.target.value)}
+                placeholder="Amount in $ (optional)"
+                style={inputSty}/>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline" disabled={busy} onClick={close}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}>Cancel</button>
+                <button className="btn btn-primary" disabled={busy}
+                  onClick={() => charge('late_cancel', feeAmount)}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}>Charge</button>
+              </div>
+            </>
+          )}
+          {!success && openAction === 'tip' && (
+            <>
+              <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                Charge a tip against the client's card on file.
+              </div>
+              <input type="number" min="0" step="0.01"
+                value={tipAmount} onChange={(e) => setTipAmount(e.target.value)}
+                placeholder="Tip amount in $"
+                autoFocus
+                style={inputSty}/>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button className="btn btn-outline" disabled={busy} onClick={close}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}>Cancel</button>
+                <button className="btn btn-primary" disabled={busy || !tipAmount}
+                  onClick={() => charge('tip', tipAmount)}
+                  style={{ flex: 1, justifyContent: 'center', fontSize: 12 }}>Charge tip</button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
+    </div>
+  );
 }
 
 function ConfirmRow({ text, onCancel, onConfirm, busy }) {
