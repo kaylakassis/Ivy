@@ -50,6 +50,9 @@ const SignPage      = lazy(() => import('./features/documents/SignPage.jsx'));
 const PublicInvoice = lazy(() => import('./features/finance/PublicInvoice.jsx'));
 const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
 const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
+const ChangelogPage = lazy(() => import('./features/marketing/ChangelogPage.jsx'));
+const AboutPage     = lazy(() => import('./features/marketing/AboutPage.jsx'));
+const VerticalPage  = lazy(() => import('./features/marketing/VerticalPage.jsx'));
 
 // Centered, low-key spinner. Avoids blank-flash but doesn't fight the
 // destination page's own loader for visual real estate. Lives inside
@@ -96,6 +99,11 @@ export default function App() {
         {/* Legal (public, no auth) */}
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms"   element={<TermsPage />} />
+
+        {/* Marketing — extra public surfaces beyond the home page. */}
+        <Route path="/changelog"   element={<ChangelogPage />} />
+        <Route path="/about"       element={<AboutPage />} />
+        <Route path="/for/:slug"   element={<VerticalPage />} />
 
         {/* First-run wizard for new owners. Auth-gated but no AppShell so it
             can't get caught in RoleRouter's "redirect un-onboarded users to

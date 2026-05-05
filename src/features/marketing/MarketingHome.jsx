@@ -12,6 +12,8 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
+import { api } from '../../lib/api.js';
+import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
 
 const FEATURES = [
   { icon: 'Users',    title: 'Clients',         body: 'CRM with stages, notes, lifetime value, and a leads pipeline.' },
@@ -24,13 +26,18 @@ const FEATURES = [
   { icon: 'Spark',    title: 'Ivy — AI coach',  body: 'Built-in business coach grounded in your real numbers. Every workspace is private.' },
 ];
 
-const VERTICALS = [
-  { icon: 'Spark',    name: 'Massage & wellness',   line: 'Intake forms auto-send before sessions. Reminders cut no-shows.' },
-  { icon: 'Gift',     name: 'Hair, nails & beauty', line: 'Deposits on booking, packages for repeat clients, referral rewards.' },
-  { icon: 'Trending', name: 'Personal training',    line: 'Group classes with capacity, recurring sessions, payment-on-booking.' },
-  { icon: 'Doc',      name: 'Coaches & consultants', line: 'Discovery calls, retainers, signed agreements — all in the same thread.' },
-  { icon: 'Check',    name: 'Cleaners & home services', line: 'Recurring jobs, upfront deposits, automatic invoices on completion.' },
-];
+// Derive the home's BuiltFor cards from the shared verticalsData so
+// the home + per-vertical pages stay in sync. Each card is a clickable
+// link to /for/<slug>.
+const VERTICALS = Object.entries(VERTICAL_DATA).map(([slug, v]) => ({
+  slug,
+  icon: v.icon,
+  name: capitalize(v.angle),
+  line: v.homeLine || v.headline,
+}));
+function capitalize(s) {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 const TESTIMONIALS = [
   {
@@ -481,9 +488,12 @@ function BuiltFor() {
         {VERTICALS.map((v) => {
           const Icon = Icons[v.icon];
           return (
-            <div key={v.name} className="card" style={{
-              padding: 18, display: 'flex', flexDirection: 'column', gap: 6,
-            }}>
+            <Link key={v.slug} to={`/for/${v.slug}`} className="card"
+              style={{
+                padding: 18, display: 'flex', flexDirection: 'column', gap: 6,
+                textDecoration: 'none', color: 'inherit',
+                transition: 'border-color .15s, transform .05s',
+              }}>
               <div style={{
                 width: 30, height: 30, borderRadius: 8,
                 background: 'var(--accent)', color: 'var(--accent-ink)',
@@ -495,7 +505,13 @@ function BuiltFor() {
               <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--fg-2)' }}>
                 {v.line}
               </p>
-            </div>
+              <span style={{
+                fontSize: 11.5, color: 'var(--accent)', fontWeight: 600,
+                marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4,
+              }}>
+                See more <Icons.Arrow size={10} sw={2}/>
+              </span>
+            </Link>
           );
         })}
       </div>
@@ -763,32 +779,132 @@ function Footer() {
   return (
     <footer style={{
       borderTop: '1px solid var(--border)',
-      padding: '24px 24px 40px',
+      padding: '32px 24px 40px',
       marginTop: 24,
     }}>
       <div style={{
         maxWidth: 1100, margin: '0 auto',
-        display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',
+        gap: 32, alignItems: 'flex-start',
       }}>
-        <Brand/>
-        <div style={{ flex: 1 }}/>
-        <div style={{
-          display: 'flex', gap: 18, fontSize: 12.5, color: 'var(--muted)',
-        }}>
-          <a href="#features" style={{ color: 'inherit', textDecoration: 'none' }}>Features</a>
-          <a href="#compare" style={{ color: 'inherit', textDecoration: 'none' }}>Compare</a>
-          <a href="#faq" style={{ color: 'inherit', textDecoration: 'none' }}>FAQ</a>
-          <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>
-          <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</Link>
-          <Link to="/signin" style={{ color: 'inherit', textDecoration: 'none' }}>Sign in</Link>
+        <div>
+          <Brand/>
+          <p style={{
+            margin: '14px 0 0', maxWidth: 280,
+            fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5,
+          }}>
+            One workspace. Every part of running your business. Made for solo owners.
+          </p>
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom: 10 }}>Product</div>
+          <FooterLinkList items={[
+            { label: 'Features',  href: '#features' },
+            { label: 'Compare',   href: '#compare' },
+            { label: 'FAQ',       href: '#faq' },
+            { label: 'Changelog', to: '/changelog' },
+          ]}/>
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom: 10 }}>Company</div>
+          <FooterLinkList items={[
+            { label: 'About',     to: '/about' },
+            { label: 'Privacy',   to: '/privacy' },
+            { label: 'Terms',     to: '/terms' },
+            { label: 'Sign in',   to: '/signin' },
+          ]}/>
+        </div>
+        <div>
+          <div className="metric-label" style={{ marginBottom: 10 }}>Stay close</div>
+          <p style={{
+            margin: '0 0 10px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.5,
+          }}>
+            Short, weekly notes for solo founders. No spam. Unsubscribe with one click.
+          </p>
+          <NewsletterSignup source="home"/>
         </div>
       </div>
       <div style={{
-        maxWidth: 1100, margin: '12px auto 0',
+        maxWidth: 1100, margin: '32px auto 0', paddingTop: 16,
+        borderTop: '1px solid var(--border)',
         fontSize: 11, color: 'var(--muted-2)', textAlign: 'center',
       }}>
-        © {new Date().getFullYear()} THRYVE Business OS. Made for solo owners.
+        © {new Date().getFullYear()} THRYVE Business OS.
       </div>
     </footer>
+  );
+}
+
+function FooterLinkList({ items }) {
+  return (
+    <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {items.map((it) => (
+        <li key={it.label}>
+          {it.to ? (
+            <Link to={it.to} style={{ color: 'var(--fg-2)', textDecoration: 'none', fontSize: 13 }}>
+              {it.label}
+            </Link>
+          ) : (
+            <a href={it.href} style={{ color: 'var(--fg-2)', textDecoration: 'none', fontSize: 13 }}>
+              {it.label}
+            </a>
+          )}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+// Tiny inline newsletter form. Posts to /api/newsletter, optimistic
+// success state, never shows "you're already subscribed" (we treat
+// duplicates as success to avoid being a subscription-checking oracle).
+export function NewsletterSignup({ source }) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr]   = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (busy) return;
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/newsletter', { email: email.trim().toLowerCase(), source });
+      setDone(true);
+    } catch (ex) {
+      setErr(ex.message || 'Could not subscribe.');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (done) {
+    return (
+      <div style={{
+        padding: '8px 12px', borderRadius: 8, fontSize: 12.5,
+        background: 'color-mix(in srgb, var(--ok) 10%, transparent)',
+        color: 'var(--ok)', border: '1px solid var(--ok)',
+        display: 'inline-flex', alignItems: 'center', gap: 6,
+      }}>
+        <Icons.Check size={12} sw={2.4}/> You're on the list.
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={submit} style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+        placeholder="you@email.com"
+        style={{
+          flex: 1, minWidth: 140, padding: '8px 10px', borderRadius: 8,
+          background: 'var(--surface)', border: '1px solid var(--border-strong)',
+          fontSize: 13, color: 'var(--fg)', outline: 'none',
+        }}/>
+      <button type="submit" disabled={busy || !email.trim()} className="btn btn-primary"
+        style={{ padding: '8px 12px', fontSize: 12.5 }}>
+        {busy ? '…' : 'Subscribe'}
+      </button>
+      {err && <div style={{ fontSize: 11, color: 'var(--danger)', flexBasis: '100%' }}>{err}</div>}
+    </form>
   );
 }

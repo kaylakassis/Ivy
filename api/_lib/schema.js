@@ -200,6 +200,22 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_target
   ON audit_events(target_user_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_events_actor
   ON audit_events(actor_user_id, created_at DESC);
+
+-- Newsletter signups from the public marketing site. Anonymous
+-- (no auth) so we treat the email as the unique key. source tracks
+-- where the form was — 'home', 'changelog', etc. — so we can see
+-- which pages convert.
+CREATE TABLE IF NOT EXISTS newsletter_subscribers (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL UNIQUE,
+  source TEXT,
+  ip TEXT,
+  user_agent TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  unsubscribed_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_newsletter_created
+  ON newsletter_subscribers(created_at DESC);
 -- Backfill: any user already past the whole 14-day window when this column
 -- lands gets marked as fully sent so the cron doesn't retroactively spam
 -- pre-existing accounts. Self-correcting via the empty-jsonb check.
