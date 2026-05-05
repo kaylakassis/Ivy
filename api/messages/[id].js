@@ -32,8 +32,17 @@ export default async function handler(req, res) {
     if (!thread) return notFound(res, 'Thread not found');
 
     if (req.method === 'GET') {
+      // Defense-in-depth: re-scope by JOINing message_threads + filtering
+      // workspace_id in the same query. fetchOwnedThread above already
+      // verified ownership, but if a future refactor accidentally drops
+      // that guard the JOIN here keeps the leak path closed.
       const msgs = await sql`
-        SELECT * FROM messages WHERE thread_id = ${id} ORDER BY created_at
+        SELECT m.*
+          FROM messages m
+          JOIN message_threads t ON t.id = m.thread_id
+         WHERE m.thread_id = ${id}
+           AND t.workspace_id = ${workspaceId}
+         ORDER BY m.created_at
       `;
       // Mark thread read for the owner side. Re-scope to workspace_id for
       // defense-in-depth (matches the POST/PATCH paths below).

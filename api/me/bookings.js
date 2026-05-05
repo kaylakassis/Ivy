@@ -23,9 +23,11 @@ export default async function handler(req, res) {
       `SELECT b.id, b.workspace_id, b.client_id, b.service_id,
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
               s.name AS service_name,
-              s.duration_minutes, s.price
+              s.duration_minutes, s.price, s.capacity AS service_capacity,
+              cs.slug AS biz_slug
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
        WHERE b.client_id = ANY($1)
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 500`,
@@ -45,11 +47,18 @@ export default async function handler(req, res) {
         startMin: r.start_min,
         endMin: r.end_min,
         notes: r.notes,
+        serviceId: r.service_id,
         serviceName: r.service_name,
+        serviceCapacity: r.service_capacity || 1,
         durationMinutes: r.duration_minutes,
         price: r.price != null ? Number(r.price) : null,
         cancelledAt: r.cancelled_at,
         businessName: m?.businessName || 'Business',
+        // Slug + workspaceId let the client-side reschedule modal fetch
+        // the public availability + slot grid without duplicating
+        // server-side scoping logic. Don't echo workspaceId externally
+        // — but the slug is already public.
+        bizSlug: r.biz_slug || null,
         clientId: r.client_id,
       };
       if (r.cancelled_at) cancelled.push(item);

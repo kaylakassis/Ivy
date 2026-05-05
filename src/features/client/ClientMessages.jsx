@@ -5,6 +5,7 @@
 // Lives on its own state hooks (no shared store with the owner Messages
 // because of different endpoints + different unread accounting).
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
@@ -41,6 +42,9 @@ export default function ClientMessages() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  // Deep link: ClientHome's "Message" buttons pass ?clientId=<id> so
+  // we can auto-select the right thread (or create one) on landing.
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const refreshThreads = useCallback(async () => {
     const r = await api.get('/me/threads');
@@ -74,6 +78,27 @@ export default function ClientMessages() {
     });
     setSelectedId(r.thread.id);
   }, []);
+
+  // Deep-link consumer: when ClientHome sends us here with ?clientId=<id>,
+  // open the matching thread (or create one) and strip the param so a
+  // refresh doesn't re-trigger.
+  const consumedRef = useRef(false);
+  useEffect(() => {
+    if (consumedRef.current) return;
+    if (loading) return;
+    const cid = searchParams.get('clientId');
+    if (!cid) return;
+    consumedRef.current = true;
+    const existing = threads.find((t) => t.clientId === cid);
+    if (existing) {
+      setSelectedId(existing.id);
+    } else if ((ctx?.memberships || []).some((m) => m.clientId === cid)) {
+      startThreadFor(cid).catch(() => {});
+    }
+    const next = new URLSearchParams(searchParams);
+    next.delete('clientId');
+    setSearchParams(next, { replace: true });
+  }, [loading, threads, searchParams, ctx, startThreadFor, setSearchParams]);
 
   if (loading) return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>

@@ -10,7 +10,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
   serializeSession, serializeMessage, workspaceContext,
-  generateReply, fetchOwnedSession, getDailyUsage,
+  generateReply, fetchOwnedSession, getDailyUsage, sanitizeUserText,
 } from '../_lib/ivy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -57,7 +57,10 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = await readBody(req);
-      const text = (body.text || '').toString().trim();
+      // Sanitize before any further processing: strips NUL, control
+      // chars, zero-width chars, and bidi overrides that prompt-
+      // injection attempts use to hide instructions in plain sight.
+      const text = sanitizeUserText((body.text || '').toString()).trim();
       // Validate + normalize attachment if present. Allow an empty text
       // when an attachment is attached — "analyze this" is implicit.
       const attachment = parseAttachment(body.attachment);

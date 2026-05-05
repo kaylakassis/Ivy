@@ -19,21 +19,67 @@ export default async function handler(req, res) {
 
     const byClient = new Map(memberships.map((m) => [m.clientId, m]));
 
+    // Surface documents where the user is EITHER the legacy recipient
+    // OR a signer in the multi-signer flow. The DISTINCT + UNION
+    // handles the overlap (a multi-signer doc has the active recipient
+    // in BOTH columns at any given moment).
     const { rows } = await sql.query(
-      `SELECT id, recipient_client_id, name, kind, status,
-              sent_at, completed_at, updated_at,
-              jsonb_array_length(fields) AS field_count,
-              page_count
-       FROM documents
-       WHERE recipient_client_id = ANY($1)
-         AND status <> 'draft'
-       ORDER BY updated_at DESC
-       LIMIT 500`,
+      `SELECT DISTINCT ON (d.id)
+              d.id, d.recipient_client_id, d.name, d.kind, d.status,
+              d.sent_at, d.completed_at, d.updated_at, d.declined_at,
+              d.decline_reason, d.final_pdf_url, d.completion_hash,
+              jsonb_array_length(d.fields) AS field_count,
+              d.page_count
+         FROM documents d
+        WHERE d.status <> 'draft'
+          AND (
+            d.recipient_client_id = ANY($1)
+            OR EXISTS (
+              SELECT 1 FROM document_signers ds
+               WHERE ds.document_id = d.id
+                 AND ds.client_id = ANY($1)
+            )
+          )
+        ORDER BY d.id, d.updated_at DESC
+        LIMIT 500`,
       [myIds],
     );
 
+    // Pull every signer for the docs we just listed, scoped to the
+    // user's own client_ids so we only show THEIR signing status —
+    // not other signers' names, emails, IPs, etc.
+    const docIds = rows.map((r) => r.id);
+    const signerByDoc = new Map();
+    let totalsByDoc = new Map();
+    if (docIds.length > 0) {
+      const sr = await sql.query(
+        `SELECT document_id, client_id, status, signed_at, declined_at, order_index
+           FROM document_signers
+          WHERE document_id = ANY($1::uuid[])
+            AND client_id = ANY($2)`,
+        [docIds, myIds],
+      );
+      for (const row of sr.rows) {
+        signerByDoc.set(row.document_id, row);
+      }
+      // Total signer count per doc, used for "You're signer X of Y" copy.
+      const tr = await sql.query(
+        `SELECT document_id, COUNT(*)::int AS total
+           FROM document_signers
+          WHERE document_id = ANY($1::uuid[])
+          GROUP BY document_id`,
+        [docIds],
+      );
+      totalsByDoc = new Map(tr.rows.map((r) => [r.document_id, r.total]));
+    }
+
+    // Re-sort by updated_at since DISTINCT ON forces ordering by id first.
+    rows.sort((a, b) => (b.updated_at?.getTime?.() || 0) - (a.updated_at?.getTime?.() || 0));
+
     const documents = rows.map((r) => {
       const m = byClient.get(r.recipient_client_id);
+      const mySigner = signerByDoc.get(r.id);
+      const totalSigners = totalsByDoc.get(r.id) || 0;
       return {
         id: r.id,
         name: r.name,
@@ -41,10 +87,26 @@ export default async function handler(req, res) {
         status: r.status,
         sentAt: r.sent_at,
         completedAt: r.completed_at,
+        declinedAt: r.declined_at,
+        declineReason: r.decline_reason,
         updatedAt: r.updated_at,
         fieldCount: r.field_count || 0,
         pageCount: r.page_count || 1,
+        // For multi-signer docs that have completed, surface the URL
+        // of the final flattened PDF so the client can download their
+        // copy. Single-signer / written docs leave this null.
+        finalPdfUrl: r.final_pdf_url || null,
+        completionHash: r.completion_hash || null,
         businessName: m?.businessName || 'Business',
+        // Per-user signer view: where THIS signer stands in the chain,
+        // not other signers' personal info.
+        mySigner: mySigner ? {
+          status:     mySigner.status,
+          signedAt:   mySigner.signed_at || null,
+          declinedAt: mySigner.declined_at || null,
+          orderIndex: mySigner.order_index,
+        } : null,
+        totalSigners,
       };
     });
     return ok(res, { documents });

@@ -66,6 +66,8 @@ export default function ClientHome() {
 
       {isClient && (
         <>
+          <NeedsAttention summary={summary}/>
+
           <div className="grid-auto-sm">
             <Stat label="Unread messages" value={summary.unreadMessages}
               icon="Chat" tone={summary.unreadMessages > 0 ? 'accent' : 'muted'} to="/me/messages"/>
@@ -102,7 +104,8 @@ export default function ClientHome() {
                       Listed as {m.clientName}
                     </div>
                   </div>
-                  <Link to="/me/messages" className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>
+                  <Link to={`/me/messages?clientId=${encodeURIComponent(m.clientId)}`}
+                    className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>
                     Message <Icons.Chat size={12} sw={1.8}/>
                   </Link>
                 </div>
@@ -225,6 +228,66 @@ function PackagesCard() {
                 }}/>
               </div>
             </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Hero card that aggregates the few "you should do this now" items
+// — pending documents, open invoices, reviews to leave — into a
+// single bold prompt above the at-a-glance stat grid. Hides itself
+// when there's nothing actionable so the home page stays calm.
+function NeedsAttention({ summary }) {
+  const items = [];
+  if (summary.pendingDocs > 0) {
+    items.push({
+      label: `${summary.pendingDocs} document${summary.pendingDocs === 1 ? '' : 's'} to sign`,
+      icon: 'Doc', to: '/me/documents', tone: 'warn',
+    });
+  }
+  if (summary.openInvoices > 0) {
+    items.push({
+      label: `${summary.openInvoices} invoice${summary.openInvoices === 1 ? '' : 's'} to pay`,
+      icon: 'Dollar', to: '/me/invoices', tone: 'warn',
+    });
+  }
+  if (summary.pendingReviews > 0) {
+    items.push({
+      label: `${summary.pendingReviews} review${summary.pendingReviews === 1 ? '' : 's'} to leave`,
+      icon: 'Check', to: '/me/bookings?tab=past', tone: 'accent',
+    });
+  }
+  if (items.length === 0) return null;
+
+  return (
+    <div className="card" style={{
+      padding: 18,
+      borderColor: 'var(--accent)',
+      background: 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface))',
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icons.Bell size={14} sw={1.8} stroke="var(--accent)"/>
+        <div className="metric-label" style={{ color: 'var(--accent)' }}>Needs your attention</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {items.map((it) => {
+          const Icon = Icons[it.icon];
+          return (
+            <Link key={it.to} to={it.to}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 10,
+                padding: '10px 12px', borderRadius: 10,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                textDecoration: 'none', color: 'var(--fg)',
+                fontSize: 13.5, fontWeight: 600,
+              }}>
+              {Icon && <Icon size={14} sw={1.8} stroke={it.tone === 'warn' ? 'var(--warn)' : 'var(--accent)'}/>}
+              <span style={{ flex: 1 }}>{it.label}</span>
+              <Icons.Arrow size={13} stroke="var(--muted)"/>
+            </Link>
           );
         })}
       </div>

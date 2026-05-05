@@ -11,6 +11,7 @@ const STATUS_META = {
   sent:      { label: 'Awaiting your signature', color: 'var(--warn)' },
   completed: { label: 'Signed',                  color: 'var(--ok)' },
   voided:    { label: 'Voided',                  color: 'var(--muted)' },
+  declined:  { label: 'Declined',                color: 'var(--danger)' },
 };
 
 function fmtDate(iso) {
@@ -122,12 +123,30 @@ function Section({ title, docs, onOpen, opening, accent }) {
                 <div style={{ fontSize: 14, fontWeight: 600 }}>{d.name}</div>
                 <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
                   From {d.businessName}
+                  {d.kind === 'pdf' && <> · PDF{d.pageCount > 1 ? ` (${d.pageCount} pages)` : ''}</>}
                   {d.status === 'sent' && d.fieldCount > 0 && (
                     <> · {d.fieldCount} field{d.fieldCount === 1 ? '' : 's'} to fill</>
                   )}
                   {d.sentAt && <> · Sent {fmtDate(d.sentAt)}</>}
-                  {d.completedAt && <> · Signed {fmtDate(d.completedAt)}</>}
+                  {d.completedAt && <> · Completed {fmtDate(d.completedAt)}</>}
                 </div>
+                {/* Per-user signer status for multi-signer docs. */}
+                {d.totalSigners > 1 && d.mySigner && (
+                  <div style={{ fontSize: 11.5, color: 'var(--fg-2)', marginTop: 4 }}>
+                    You're signer {d.mySigner.orderIndex + 1} of {d.totalSigners}
+                    {d.mySigner.status === 'completed' && d.mySigner.signedAt && (
+                      <> · You signed {fmtDate(d.mySigner.signedAt)}</>
+                    )}
+                    {d.mySigner.status === 'awaiting' && <> · Your turn now</>}
+                    {d.mySigner.status === 'pending'  && <> · Waiting on earlier signers</>}
+                    {d.mySigner.status === 'declined' && <> · You declined</>}
+                  </div>
+                )}
+                {d.status === 'declined' && d.declineReason && (
+                  <div style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 4, fontStyle: 'italic' }}>
+                    Reason: "{d.declineReason}"
+                  </div>
+                )}
               </div>
               <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, padding: '3px 10px', borderRadius: 99,
                 background: 'color-mix(in srgb, ' + meta.color + ' 14%, transparent)',
@@ -136,11 +155,32 @@ function Section({ title, docs, onOpen, opening, accent }) {
                 <span style={{ width: 6, height: 6, borderRadius: 99, background: meta.color }}/>
                 {meta.label}
               </div>
-              <button onClick={() => onOpen(d.id)} disabled={opening === d.id || d.status === 'voided'}
-                className={d.status === 'sent' ? 'btn btn-primary' : 'btn btn-outline'}
+              {/* Download for completed PDFs. The server only sets
+                  finalPdfUrl after every signer has finished, so its
+                  presence implies the doc is fully bound. */}
+              {d.finalPdfUrl && d.status === 'completed' && (
+                <a href={d.finalPdfUrl} target="_blank" rel="noopener noreferrer"
+                  className="btn btn-outline"
+                  style={{ padding: '6px 12px', fontSize: 12 }}
+                  title="Download the signed PDF">
+                  <Icons.Doc size={12} sw={2}/> Download
+                </a>
+              )}
+              <button onClick={() => onOpen(d.id)}
+                disabled={opening === d.id || d.status === 'voided' || d.status === 'declined'
+                          || (d.totalSigners > 1 && d.mySigner?.status === 'pending')}
+                className={d.status === 'sent' && d.mySigner?.status !== 'pending' ? 'btn btn-primary' : 'btn btn-outline'}
                 style={{ padding: '6px 12px', fontSize: 12,
-                  opacity: (opening === d.id || d.status === 'voided') ? 0.5 : 1 }}>
-                {opening === d.id ? 'Opening…' : d.status === 'sent' ? 'Open & sign' : 'View'}
+                  opacity: (opening === d.id || d.status === 'voided'
+                            || d.status === 'declined'
+                            || (d.totalSigners > 1 && d.mySigner?.status === 'pending')) ? 0.5 : 1 }}>
+                {opening === d.id
+                  ? 'Opening…'
+                  : (d.totalSigners > 1 && d.mySigner?.status === 'pending')
+                    ? 'Waiting'
+                    : d.status === 'sent' && d.mySigner?.status !== 'completed'
+                      ? 'Open & sign'
+                      : 'View'}
                 <Icons.Arrow size={11} sw={2}/>
               </button>
             </div>

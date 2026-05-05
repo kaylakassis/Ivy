@@ -134,7 +134,7 @@ export function withinAvailability(availability, weekday, start, end) {
 // the EXACT same start/end window can co-exist up to `capacity`. Any
 // other overlap (different service, different exact slot, blocks,
 // external busy) still conflicts.
-export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1 }) {
+export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1, excludeBookingId = null }) {
   const blocks = await sql`
     SELECT 1 FROM calendar_blocks
     WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
@@ -158,12 +158,23 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
   //   2. Same-service overlap with DIFFERENT start/end (not exact slot)
   //      → conflict (one therapist, can't run two groups stacked)
   //   3. Same-service, EXACT same slot → allowed up to capacity
-  const overlapping = await sql`
-    SELECT service_id, start_min, end_min FROM bookings
-    WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
-      AND cancelled_at IS NULL
-      AND start_min < ${end} AND end_min > ${start}
-  `;
+  // excludeBookingId lets a reschedule re-validate availability without
+  // colliding with itself. The booking we're moving is still in the
+  // table at its old slot (we soft-update); ignore it during the check.
+  const overlapping = excludeBookingId
+    ? await sql`
+        SELECT service_id, start_min, end_min FROM bookings
+        WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
+          AND cancelled_at IS NULL
+          AND start_min < ${end} AND end_min > ${start}
+          AND id <> ${excludeBookingId}
+      `
+    : await sql`
+        SELECT service_id, start_min, end_min FROM bookings
+        WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
+          AND cancelled_at IS NULL
+          AND start_min < ${end} AND end_min > ${start}
+      `;
   let sameSlotSameService = 0;
   for (const r of overlapping.rows) {
     const isExactSlot = r.start_min === start && r.end_min === end;

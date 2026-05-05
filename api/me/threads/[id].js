@@ -37,9 +37,20 @@ export default async function handler(req, res) {
     const membership = memberships.find((m) => m.clientId === thread.client_id);
 
     if (req.method === 'GET') {
-      const msgs = await sql`
-        SELECT * FROM messages WHERE thread_id = ${id} ORDER BY created_at
-      `;
+      // Defense-in-depth: re-scope the messages SELECT by JOINing
+      // message_threads and filtering client_id = ANY(myIds). Thread
+      // ownership is already verified by the SELECT above, but a future
+      // regression there shouldn't open a path to read a stranger's
+      // messages just because they know the thread_id.
+      const msgs = await sql.query(
+        `SELECT m.*
+           FROM messages m
+           JOIN message_threads t ON t.id = m.thread_id
+          WHERE m.thread_id = $1
+            AND t.client_id = ANY($2)
+          ORDER BY m.created_at`,
+        [id, myIds],
+      );
       // Clear the client's unread badge once they've opened the thread.
       // Defense-in-depth: re-scope to client_id = ANY(myIds) so a future
       // regression in the SELECT above can't be coerced into clearing

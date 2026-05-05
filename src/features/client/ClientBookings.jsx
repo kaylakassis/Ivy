@@ -5,6 +5,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
+import { slotsForDate } from '../calendar/utils.js';
 
 function fmtDay(iso) {
   const d = new Date(iso + 'T00:00:00');
@@ -31,6 +32,7 @@ export default function ClientBookings() {
   const [confirming, setConfirming] = useState(null); // booking object pending cancel
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelErr, setCancelErr]   = useState(null);
+  const [rescheduling, setRescheduling] = useState(null); // booking pending reschedule
   // Bookings the user can review — fetched server-side so we know which
   // past rows haven't been reviewed yet without a per-row probe.
   const [pendingReviewIds, setPendingReviewIds] = useState(new Set());
@@ -125,8 +127,10 @@ export default function ClientBookings() {
           {rows.map((b, i) => (
             <BookingRow key={b.id} booking={b} first={i === 0}
               cancellable={tab === 'upcoming' && !b.cancelledAt}
+              reschedulable={tab === 'upcoming' && !b.cancelledAt && !!b.bizSlug && !!b.serviceId}
               reviewable={tab === 'past' && pendingReviewIds.has(b.id)}
               onCancel={() => { setCancelErr(null); setConfirming(b); }}
+              onReschedule={() => setRescheduling(b)}
               onReview={() => setReviewing(b)}/>
           ))}
         </div>
@@ -155,11 +159,22 @@ export default function ClientBookings() {
           }}
         />
       )}
+
+      {rescheduling && (
+        <RescheduleDialog
+          booking={rescheduling}
+          onClose={() => setRescheduling(null)}
+          onRescheduled={async () => {
+            const fresh = await api.get('/me/bookings');
+            setData(fresh);
+            setRescheduling(null);
+          }}/>
+      )}
     </div>
   );
 }
 
-function BookingRow({ booking, first, cancellable, reviewable, onCancel, onReview }) {
+function BookingRow({ booking, first, cancellable, reschedulable, reviewable, onCancel, onReschedule, onReview }) {
   const d = new Date(booking.date + 'T00:00:00');
   return (
     <div style={{
@@ -204,6 +219,13 @@ function BookingRow({ booking, first, cancellable, reviewable, onCancel, onRevie
           style={{ fontSize: 12, padding: '6px 12px' }}
           title="Leave a review of this session">
           <Icons.Check size={12} sw={2}/> Leave review
+        </button>
+      )}
+      {reschedulable && (
+        <button onClick={onReschedule} className="btn btn-outline"
+          style={{ fontSize: 12, padding: '6px 12px' }}
+          title="Move this booking to a different time">
+          <Icons.Calendar size={12} sw={2}/> Reschedule
         </button>
       )}
       {cancellable && (
@@ -388,5 +410,186 @@ function Star({ filled }) {
       stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>
+  );
+}
+
+// Reschedule modal: fetches the workspace's public calendar by slug,
+// renders a date picker + computed slot grid for the booking's
+// service. Submit PATCHes /api/me/bookings/:id with rescheduleTo.
+function RescheduleDialog({ booking, onClose, onRescheduled }) {
+  const [cal, setCal]         = useState(null);
+  const [calErr, setCalErr]   = useState(null);
+  const [date, setDate]       = useState(booking.date);
+  const [pick, setPick]       = useState(null);
+  const [busy, setBusy]       = useState(false);
+  const [submitErr, setSubmitErr] = useState(null);
+
+  useEffect(() => {
+    let live = true;
+    api.get('/calendar/public/' + encodeURIComponent(booking.bizSlug))
+      .then((r) => live && setCal(r.calendar))
+      .catch((e) => live && setCalErr(e));
+    return () => { live = false; };
+  }, [booking.bizSlug]);
+
+  const svc = cal?.services.find((s) => s.id === booking.serviceId)
+    || (booking.durationMinutes ? { id: booking.serviceId, durationMinutes: booking.durationMinutes } : null);
+
+  // slotsForDate is from the calendar utils — same logic the public
+  // booking page uses, so the slot grid here matches what a fresh
+  // booking would show. Reuses the same conflict / availability rules.
+  const dateObj = (() => {
+    try { return new Date(date + 'T00:00:00'); }
+    catch { return new Date(); }
+  })();
+  let slots = [];
+  if (cal && svc) {
+    try {
+      slots = slotsForDate(cal, dateObj, svc) || [];
+    } catch {
+      // Defensive: malformed availability shouldn't crash the modal.
+    }
+  }
+
+  // Same-slot-as-current is allowed (server self-excludes). Past
+  // dates filtered client-side; server will refuse anyway.
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  const submit = async () => {
+    if (!pick) { setSubmitErr('Pick a new time first.'); return; }
+    setBusy(true); setSubmitErr(null);
+    try {
+      await api.patch('/me/bookings/' + booking.id, {
+        rescheduleTo: { date, startMin: pick.start, endMin: pick.end },
+      });
+      onRescheduled?.();
+    } catch (e) {
+      setSubmitErr(e.message || 'Could not reschedule. Try a different slot.');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={() => !busy && onClose()} style={{
+      position: 'fixed', inset: 0, background: 'rgba(20,18,14,0.5)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center',
+      zIndex: 100, padding: 16,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} className="card"
+        style={{ width: '100%', maxWidth: 540, padding: 22, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 10,
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Calendar size={18} sw={2}/></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 15, fontWeight: 600 }}>Reschedule booking</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+              {booking.serviceName || 'Session'} · {booking.businessName}
+            </div>
+          </div>
+          <button type="button" onClick={() => !busy && onClose()}
+            className="btn btn-ghost" style={{ padding: 6 }}>
+            <Icons.X size={14}/>
+          </button>
+        </div>
+
+        <div style={{
+          padding: 10, borderRadius: 10,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          fontSize: 12.5, color: 'var(--muted)',
+        }}>
+          Currently <b style={{ color: 'var(--fg-2)' }}>
+            {fmtDay(booking.date)} at {fmtTime(booking.startMin)}
+          </b>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>
+            Pick a new date
+          </div>
+          <input type="date" value={date}
+            min={new Date().toISOString().slice(0, 10)}
+            onChange={(e) => { setDate(e.target.value); setPick(null); }}
+            style={{
+              padding: '10px 12px', borderRadius: 10,
+              background: 'var(--surface)', border: '1px solid var(--border-strong)',
+              color: 'var(--fg)', fontSize: 14, outline: 'none',
+            }}/>
+        </div>
+
+        <div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8, fontWeight: 500 }}>
+            Available times
+          </div>
+          {calErr ? (
+            <div style={{
+              padding: 10, borderRadius: 10,
+              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+              color: 'var(--danger)', fontSize: 12.5,
+            }}>Couldn't load availability: {calErr.message}</div>
+          ) : !cal ? (
+            <div style={{ color: 'var(--muted)', fontSize: 12.5 }}>Loading availability…</div>
+          ) : slots.filter((s) => s.available).length === 0 ? (
+            <div style={{
+              padding: 16, borderRadius: 10,
+              background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
+              color: 'var(--muted)', fontSize: 12.5, textAlign: 'center',
+            }}>
+              No openings on that date — try another day.
+            </div>
+          ) : (
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(110px, 1fr))',
+              gap: 6, maxHeight: 260, overflowY: 'auto',
+            }}>
+              {slots.filter((s) => s.available).map((s) => {
+                const selected = pick?.start === s.start;
+                const isCurrent = date === booking.date && s.start === booking.startMin;
+                return (
+                  <button key={s.start} type="button"
+                    onClick={() => setPick(s)}
+                    style={{
+                      padding: '8px 10px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+                      cursor: 'pointer',
+                      background: selected ? 'var(--accent)' : 'var(--surface-2)',
+                      color: selected ? 'var(--accent-ink)' : 'var(--fg-2)',
+                      border: `1px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                    }}>
+                    {fmtTime(s.start)}
+                    {isCurrent && (
+                      <div style={{ fontSize: 9.5, fontWeight: 600, color: selected ? 'var(--accent-ink)' : 'var(--muted)', marginTop: 2 }}>
+                        current
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {submitErr && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)', fontSize: 12.5,
+          }}>{submitErr}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10 }}>
+          <button onClick={() => !busy && onClose()}
+            className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} disabled={busy}>
+            Cancel
+          </button>
+          <button onClick={submit} disabled={busy || !pick}
+            className="btn btn-primary" style={{ flex: 2, justifyContent: 'center' }}>
+            {busy ? 'Moving…' : 'Confirm reschedule'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }

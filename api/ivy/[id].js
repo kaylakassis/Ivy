@@ -17,9 +17,17 @@ export default async function handler(req, res) {
     if (!session) return notFound(res, 'Session not found');
 
     if (req.method === 'GET') {
+      // Defense-in-depth: re-scope ivy_messages SELECT by JOINing
+      // ivy_sessions and filtering workspace_id. fetchOwnedSession
+      // already gated the request, but the JOIN keeps the leak path
+      // closed if that guard ever regresses.
       const { rows } = await sql`
-        SELECT * FROM ivy_messages WHERE session_id = ${id}
-        ORDER BY created_at ASC
+        SELECT m.*
+          FROM ivy_messages m
+          JOIN ivy_sessions s ON s.id = m.session_id
+         WHERE m.session_id = ${id}
+           AND s.workspace_id = ${workspaceId}
+         ORDER BY m.created_at ASC
       `;
       return ok(res, {
         session: serializeSession(session),
