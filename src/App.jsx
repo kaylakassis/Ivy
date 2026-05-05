@@ -48,6 +48,7 @@ const PublicBooking = lazy(() => import('./features/calendar/PublicBooking.jsx')
 const PublicSite    = lazy(() => import('./features/website/PublicSite.jsx'));
 const SignPage      = lazy(() => import('./features/documents/SignPage.jsx'));
 const PublicInvoice = lazy(() => import('./features/finance/PublicInvoice.jsx'));
+const ReviewPage    = lazy(() => import('./features/reviews/ReviewPage.jsx'));
 const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
 const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
 const ChangelogPage = lazy(() => import('./features/marketing/ChangelogPage.jsx'));
@@ -95,6 +96,7 @@ export default function App() {
         <Route path="/site/:handle"    element={<PublicSite />} />
         <Route path="/sign/:token"     element={<SignPage />} />
         <Route path="/invoice/:token"  element={<PublicInvoice />} />
+        <Route path="/review/:token"   element={<ReviewPage />} />
 
         {/* Legal (public, no auth) */}
         <Route path="/privacy" element={<PrivacyPage />} />

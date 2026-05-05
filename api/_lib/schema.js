@@ -540,6 +540,16 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_type TEXT NOT NULL DEFAULT
   CHECK (deposit_type IN ('none', 'percent', 'fixed'));
 ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 
+-- Auto review requests: the daily cron mints a one-time token a few
+-- days after a completed booking, hashes it onto the row, and emails
+-- the client a "rate your experience" link. Once they submit (or the
+-- cron caps out at the retry limit), the hash gets nulled so the
+-- token can't be reused.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS review_request_token_hash TEXT;
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS review_requested_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_bookings_review_request_token
+  ON bookings(review_request_token_hash) WHERE review_request_token_hash IS NOT NULL;
+
 -- Per-booking deposit tracking. deposit_required is the snapshot of
 -- what's owed at booking time (price * percent or fixed); deposit_paid
 -- is what's actually been collected. payment_intent enables Stripe
