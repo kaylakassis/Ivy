@@ -78,7 +78,7 @@ export default function Documents() {
       </div>
 
       {/* Status tabs */}
-      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 4, borderRadius: 10, alignSelf: 'flex-start' }}>
+      <div className="tab-row">
         {[
           { id: 'all', label: 'All' },
           { id: 'draft', label: 'Drafts' },

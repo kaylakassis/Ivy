@@ -1147,7 +1147,7 @@ function BuyGiftCardModal({ slug, bizName, onClose }) {
           </div>
         </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 12 }}>
+        <div className="form-2col" style={{ marginTop: 12 }}>
           <Field label="From (your name)">
             <input value={senderName} onChange={(e) => setSenderName(e.target.value)} required
               style={inputSty}/>

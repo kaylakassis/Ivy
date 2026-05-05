@@ -129,8 +129,8 @@ export default function Finance() {
         )}
       </div>
 
-      {/* Section selector: Invoices / Recurring / Memberships / Time / Expenses. */}
-      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start', flexWrap: 'wrap' }}>
+      {/* Section selector: Invoices / Estimates / Recurring / Memberships / Gift cards / Time / Expenses. */}
+      <div className="tab-row">
         {[
           { id: 'invoices',    label: 'Invoices' },
           { id: 'quotes',      label: 'Estimates' },
@@ -145,6 +145,7 @@ export default function Finance() {
             background: section === id ? 'var(--surface)' : 'transparent',
             color: section === id ? 'var(--fg)' : 'var(--muted)',
             boxShadow: section === id ? 'var(--shadow-sm)' : 'none',
+            whiteSpace: 'nowrap',
           }}>{label}</button>
         ))}
       </div>
@@ -204,7 +205,7 @@ function InvoicesSection({
       </div>
 
       {/* Status tabs */}
-      <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 4, borderRadius: 10, alignSelf: 'flex-start' }}>
+      <div className="tab-row">
         {[
           { id: 'all', label: 'All' },
           { id: 'draft', label: 'Drafts' },

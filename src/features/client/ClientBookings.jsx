@@ -94,7 +94,7 @@ export default function ClientBookings() {
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
-      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start' }}>
+      <div className="tab-row">
         {TABS.map((t) => {
           const on = tab === t.id;
           return (

@@ -185,7 +185,7 @@ function RewardsManager({ r }) {
       )}
 
       {/* Tabs */}
-      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start' }}>
+      <div className="tab-row">
         {[
           { id: 'rules', label: 'Rules', count: r.rules.length },
           { id: 'redemptions', label: 'Redemptions', count: r.redemptions.length },

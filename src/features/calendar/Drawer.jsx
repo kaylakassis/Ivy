@@ -9,7 +9,12 @@ export default function Drawer({ title, subtitle, onClose, children, width = 460
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 95,
       }}/>
       <div style={{
-        position: 'fixed', right: 0, top: 0, bottom: 0, width,
+        position: 'fixed', right: 0, top: 0, bottom: 0,
+        // Cap width to viewport on phones so the drawer never extends
+        // past the screen edge. On desktop (>460px wide) it stays
+        // exactly `width` pixels; on phones it goes full-width.
+        width: `min(100vw, ${width}px)`,
+        maxWidth: '100vw',
         background: 'var(--surface)', borderLeft: '1px solid var(--border)',
         zIndex: 100, display: 'flex', flexDirection: 'column',
         boxShadow: '-20px 0 40px -12px rgba(0,0,0,0.18)',

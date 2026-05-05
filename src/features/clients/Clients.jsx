@@ -143,7 +143,7 @@ export default function Clients() {
 
       {/* Filter + search */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', gap: 4, background: 'var(--surface-2)', padding: 4, borderRadius: 10 }}>
+        <div className="tab-row">
           {[['all','All'],['active','Active'],['leads','Leads'],['paused','Paused']].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
               padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',

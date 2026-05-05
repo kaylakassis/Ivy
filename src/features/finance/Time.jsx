@@ -117,7 +117,7 @@ export default function Time() {
         </div>
       )}
 
-      <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start' }}>
+      <div className="tab-row">
         {[
           { id: 'all',     label: 'All',          n: entries.length },
           { id: 'running', label: 'Running',      n: running ? 1 : 0 },

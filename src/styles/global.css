@@ -172,9 +172,12 @@ img, svg, video { max-width: 100%; height: auto; }
     font-size: 16px;
   }
 
-  /* Larger touch targets on buttons */
-  .btn { padding: 10px 14px; min-height: 40px; }
-  .btn-ghost { min-height: 36px; }
+  /* WCAG 2.5.5 recommends 44x44 minimum touch targets on mobile.
+     Bump primary/outline/secondary buttons to 44px; keep ghost at
+     40px since it's used inline in dense rows where 44 would burst
+     the layout. */
+  .btn { padding: 12px 14px; min-height: 44px; }
+  .btn-ghost { min-height: 40px; }
 
   /* Slightly tighter card radius / padding on small screens */
   .card { border-radius: 12px; }
@@ -294,6 +297,42 @@ img, svg, video { max-width: 100%; height: auto; }
   .table-scroll > * {
     min-width: 760px;
   }
+}
+
+/* Horizontally-scrollable segmented tab row. Used for section selectors
+   that have too many tabs to wrap cleanly on phones (Finance has 7
+   sub-tabs). On desktop it behaves like a normal flex row; on mobile
+   it scrolls horizontally without showing an ugly wrap to two lines. */
+.tab-row {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-2);
+  border-radius: 10px;
+  align-self: flex-start;
+  max-width: 100%;
+}
+@media (max-width: 720px) {
+  .tab-row {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    align-self: stretch;
+  }
+  .tab-row::-webkit-scrollbar { display: none; }
+  .tab-row > * { flex-shrink: 0; }
+}
+
+/* Two-column form grid that collapses to a single column on mobile.
+   Common pattern for "From / To" or "Sender / Recipient" pairs in
+   modals. Replaces inline `gridTemplateColumns: '1fr 1fr'` style. */
+.form-2col {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+@media (max-width: 540px) {
+  .form-2col { grid-template-columns: 1fr; }
 }
 
 /* Page padding override for mobile so the 24-32px desktop padding doesn't
