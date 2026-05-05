@@ -1,7 +1,8 @@
 // Documents list view: header, status tabs, table, editor drawer + send modal.
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { api } from '../../lib/api.js';
 import { useDocuments } from './state.js';
 import DocumentEditor from './DocumentEditor.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
@@ -15,7 +16,7 @@ const STATUS_META = {
 };
 
 export default function Documents() {
-  const { documents, loading, error, create, update, remove, send, uploadPdf } = useDocuments();
+  const { documents, loading, error, create, createFromTemplate, update, remove, send, uploadPdf } = useDocuments();
   const [tab, setTab]               = useState('all');
   const [openId, setOpenId]         = useState(null);
   const [creatingOpen, setCreating] = useState(false);
@@ -40,6 +41,11 @@ export default function Documents() {
 
   const handleCreate = async (input) => {
     const d = await create(input);
+    setCreating(false);
+    setOpenId(d.id);
+  };
+  const handleCreateFromTemplate = async (templateId) => {
+    const d = await createFromTemplate(templateId);
     setCreating(false);
     setOpenId(d.id);
   };
@@ -110,14 +116,20 @@ export default function Documents() {
             <div>Document</div><div>Status</div><div>Signers</div><div>Updated</div><div/>
           </div>
           {rows.length === 0 ? (
-            <div style={{ padding: 48 }}>
+            <div style={{ padding: 48, textAlign: 'center' }}>
               <EmptyNote
                 icon="Doc"
                 title={tab === 'all' ? 'No documents yet' : `No ${tab}`}
                 hint={tab === 'all'
-                  ? 'Click "New document" to create your first waiver, agreement, or intake form.'
+                  ? 'Pick a template or start blank — waivers, agreements, intake forms, NDAs.'
                   : 'Try a different tab.'}
               />
+              {tab === 'all' && (
+                <button className="btn btn-primary" onClick={() => setCreating(true)}
+                  style={{ marginTop: 18 }}>
+                  <Icons.Plus size={13} sw={2}/> Browse templates
+                </button>
+              )}
             </div>
           ) : rows.map((d, i) => (
             <DocRow key={d.id} doc={d} first={i === 0} onOpen={() => setOpenId(d.id)}/>
@@ -126,7 +138,11 @@ export default function Documents() {
       </div>
 
       {creatingOpen && (
-        <CreateDocumentModal onCreate={handleCreate} onClose={() => setCreating(false)}/>
+        <CreateDocumentModal
+          onCreate={handleCreate}
+          onCreateFromTemplate={handleCreateFromTemplate}
+          onClose={() => setCreating(false)}
+        />
       )}
       {openDoc && (
         <DocumentEditor
@@ -238,25 +254,61 @@ function SignerCell({ doc }) {
   );
 }
 
-function CreateDocumentModal({ onCreate, onClose }) {
-  const [name, setName] = useState('');
-  const [body, setBody] = useState('');
-  const [busy, setBusy] = useState(false);
-  const [err, setErr]   = useState(null);
+// Gallery for picking a starter template OR launching a blank doc.
+// Templates are static, served by /api/documents/templates so the
+// list can grow without redeploying the frontend. Categories are
+// chip filters across the top.
+function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
+  const [templates, setTemplates] = useState([]);
+  const [loadingTpl, setLoadingTpl] = useState(true);
+  const [tplErr, setTplErr] = useState(null);
+  const [activeCat, setActiveCat] = useState('All');
+  const [busyId, setBusyId] = useState(null);
+  const [err, setErr] = useState(null);
 
-  const submit = async (e) => {
+  // Blank-document inline form state.
+  const [blankOpen, setBlankOpen] = useState(false);
+  const [blankName, setBlankName] = useState('');
+  const [blankBody, setBlankBody] = useState('');
+
+  useEffect(() => {
+    let live = true;
+    api.get('/documents/templates')
+      .then((r) => live && setTemplates(r.templates || []))
+      .catch((e) => live && setTplErr(e))
+      .finally(() => live && setLoadingTpl(false));
+    return () => { live = false; };
+  }, []);
+
+  const cats = useMemo(() => {
+    const seen = new Set();
+    for (const t of templates) seen.add(t.category);
+    return ['All', ...Array.from(seen).sort()];
+  }, [templates]);
+
+  const visible = useMemo(() => {
+    if (activeCat === 'All') return templates;
+    return templates.filter((t) => t.category === activeCat);
+  }, [templates, activeCat]);
+
+  const pickTemplate = async (t) => {
+    setBusyId(t.id); setErr(null);
+    try { await onCreateFromTemplate(t.id); }
+    catch (ex) { setErr(ex.message || 'Could not create'); setBusyId(null); }
+  };
+
+  const submitBlank = async (e) => {
     e.preventDefault();
-    if (!name.trim()) { setErr('Name is required'); return; }
-    setBusy(true); setErr(null);
+    if (!blankName.trim()) { setErr('Name is required'); return; }
+    setBusyId('__blank'); setErr(null);
     try {
       await onCreate({
-        name: name.trim(),
+        name: blankName.trim(),
         kind: 'written',
-        contentHtml: body || `<p>Replace this with your document text.</p>`,
+        contentHtml: blankBody || `<p>Replace this with your document text.</p>`,
         fields: [],
       });
-    } catch (ex) { setErr(ex.message || 'Could not create'); }
-    finally { setBusy(false); }
+    } catch (ex) { setErr(ex.message || 'Could not create'); setBusyId(null); }
   };
 
   return (
@@ -264,55 +316,211 @@ function CreateDocumentModal({ onCreate, onClose }) {
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="card" style={{ padding: 24, width: '100%', maxWidth: 540 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
+      <div onClick={(e) => e.stopPropagation()}
+        className="card scroll" style={{
+          padding: 0, width: '100%', maxWidth: 880,
+          maxHeight: 'calc(100vh - 40px)',
+          display: 'flex', flexDirection: 'column',
+        }}>
+
+        {/* Header */}
+        <div style={{
+          padding: '20px 24px',
+          borderBottom: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 12,
+        }}>
           <div style={{
-            width: 34, height: 34, borderRadius: 10,
+            width: 38, height: 38, borderRadius: 10,
             background: 'var(--accent-soft)', color: 'var(--accent)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-          }}><Icons.Doc size={16} sw={1.8}/></div>
-          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600, flex: 1 }}>New document</h3>
+          }}><Icons.Doc size={18} sw={1.8}/></div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>New document</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+              Start from a vetted template or build your own.
+            </div>
+          </div>
           <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
             <Icons.X size={15}/>
           </button>
         </div>
 
-        <Field label="Name" hint="e.g., Intro Waiver, Cancellation Policy, New Client Intake">
-          <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus
-            style={inputSty}/>
-        </Field>
-        <Field label="Body (optional — you can fill it in after)" hint="Plain text or simple HTML.">
-          <textarea value={body} onChange={(e) => setBody(e.target.value)} rows={6}
-            placeholder="Write the body of your document here…"
-            style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
-        </Field>
-
-        {err && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8, marginBottom: 14,
-            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-            color: 'var(--danger)', fontSize: 12.5,
-          }}>{err}</div>
-        )}
-
-        <div style={{ display: 'flex', gap: 10, marginTop: 6 }}>
-          <button type="button" className="btn btn-outline" style={{ flex: 1, justifyContent: 'center' }} onClick={onClose}>
-            Cancel
-          </button>
-          <button type="submit" className="btn btn-primary" disabled={busy}
-            style={{ flex: 2, justifyContent: 'center', opacity: busy ? 0.6 : 1 }}>
-            {busy ? 'Creating…' : 'Create draft'}
-          </button>
+        {/* Disclaimer */}
+        <div style={{
+          padding: '10px 24px',
+          background: 'var(--surface-2)',
+          borderBottom: '1px solid var(--border)',
+          fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5,
+        }}>
+          Templates are starting points, not legal advice. Review and adapt the
+          language to your jurisdiction and situation. For binding agreements,
+          consult an attorney.
         </div>
-      </form>
+
+        {/* Body */}
+        <div style={{ padding: '18px 24px', flex: 1, overflowY: 'auto' }}>
+          {/* Blank doc tile */}
+          <div style={{
+            padding: 14, borderRadius: 10,
+            border: '1px dashed var(--border-strong)',
+            background: 'var(--surface)',
+            marginBottom: 18,
+          }}>
+            {!blankOpen ? (
+              <button type="button" onClick={() => setBlankOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 12,
+                  width: '100%', padding: 4, background: 'transparent',
+                  border: 0, cursor: 'pointer', textAlign: 'left',
+                }}>
+                <div style={{
+                  width: 38, height: 38, borderRadius: 10,
+                  background: 'var(--surface-2)', color: 'var(--fg-2)',
+                  border: '1px solid var(--border)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  flexShrink: 0,
+                }}><Icons.Plus size={16} sw={2}/></div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 13.5 }}>Start from scratch</div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                    Empty document, no fields. You can always upload a PDF after.
+                  </div>
+                </div>
+                <Icons.Arrow size={13} stroke="var(--muted)"/>
+              </button>
+            ) : (
+              <form onSubmit={submitBlank} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                <Field label="Name" hint="e.g., Intro Waiver, Service Agreement.">
+                  <input value={blankName} onChange={(e) => setBlankName(e.target.value)}
+                    required autoFocus style={inputSty}/>
+                </Field>
+                <Field label="Body (optional)">
+                  <textarea value={blankBody} onChange={(e) => setBlankBody(e.target.value)}
+                    rows={4}
+                    placeholder="Write the body of your document here…"
+                    style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
+                </Field>
+                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                  <button type="button" className="btn btn-outline" onClick={() => setBlankOpen(false)}
+                    style={{ flex: 1, justifyContent: 'center' }}>
+                    Back
+                  </button>
+                  <button type="submit" className="btn btn-primary"
+                    disabled={busyId === '__blank'}
+                    style={{ flex: 2, justifyContent: 'center' }}>
+                    {busyId === '__blank' ? 'Creating…' : 'Create draft'}
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+
+          {/* Category chips */}
+          {cats.length > 1 && (
+            <div style={{
+              display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 14,
+            }}>
+              {cats.map((c) => (
+                <button key={c} type="button" onClick={() => setActiveCat(c)}
+                  style={{
+                    padding: '5px 12px', borderRadius: 99, fontSize: 12, fontWeight: 600,
+                    border: '1px solid var(--border-strong)',
+                    background: activeCat === c ? 'var(--accent)' : 'var(--surface)',
+                    color: activeCat === c ? 'var(--accent-ink)' : 'var(--fg-2)',
+                    cursor: 'pointer',
+                  }}>{c}</button>
+              ))}
+            </div>
+          )}
+
+          {loadingTpl && (
+            <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+              Loading templates…
+            </div>
+          )}
+          {tplErr && (
+            <div style={{
+              padding: 12, borderRadius: 10,
+              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+              color: 'var(--danger)', fontSize: 12.5,
+            }}>Couldn't load templates: {tplErr.message}</div>
+          )}
+
+          {/* Template grid */}
+          {!loadingTpl && !tplErr && (
+            <div style={{
+              display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10,
+            }}>
+              {visible.map((t) => (
+                <button key={t.id} type="button" onClick={() => pickTemplate(t)}
+                  disabled={!!busyId}
+                  style={{
+                    padding: 14, borderRadius: 10,
+                    border: '1px solid var(--border)', background: 'var(--surface)',
+                    textAlign: 'left', cursor: busyId ? 'wait' : 'pointer',
+                    display: 'flex', flexDirection: 'column', gap: 6,
+                    transition: 'border-color .1s, background .1s',
+                    opacity: busyId && busyId !== t.id ? 0.5 : 1,
+                  }}
+                  onMouseEnter={(e) => {
+                    if (busyId) return;
+                    e.currentTarget.style.borderColor = 'var(--accent)';
+                    e.currentTarget.style.background = 'var(--surface-2)';
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.borderColor = 'var(--border)';
+                    e.currentTarget.style.background = 'var(--surface)';
+                  }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{
+                      fontSize: 9.5, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                      background: 'var(--surface-2)', color: 'var(--muted)',
+                      letterSpacing: '0.06em', textTransform: 'uppercase',
+                    }}>{t.category}</span>
+                    {t.suggestedSigners > 1 && (
+                      <span style={{
+                        fontSize: 9.5, fontWeight: 700, padding: '2px 8px', borderRadius: 99,
+                        background: 'var(--accent-soft)', color: 'var(--accent)',
+                        letterSpacing: '0.06em', textTransform: 'uppercase',
+                      }}>{t.suggestedSigners} signers</span>
+                    )}
+                  </div>
+                  <div style={{ fontWeight: 600, fontSize: 13.5, color: 'var(--fg)' }}>
+                    {busyId === t.id ? 'Creating…' : t.name}
+                  </div>
+                  <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                    {t.description}
+                  </div>
+                  <div style={{ fontSize: 10.5, color: 'var(--muted-2)', marginTop: 4 }}>
+                    {t.fieldCount} {t.fieldCount === 1 ? 'field' : 'fields'}
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+
+          {!loadingTpl && !tplErr && visible.length === 0 && (
+            <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+              No templates in this category yet.
+            </div>
+          )}
+
+          {err && (
+            <div style={{
+              marginTop: 14, padding: '8px 12px', borderRadius: 8,
+              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+              color: 'var(--danger)', fontSize: 12.5,
+            }}>{err}</div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
 
 function Field({ label, hint, children }) {
   return (
-    <div style={{ marginBottom: 14 }}>
+    <div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>{hint}</div>}

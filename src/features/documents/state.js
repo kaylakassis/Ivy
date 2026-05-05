@@ -28,6 +28,16 @@ export function useDocuments() {
     return r.document;
   }, []);
 
+  // Clone a built-in starter template (api/_lib/documentTemplates.js)
+  // into a fresh draft. Single round trip — the server handles the
+  // body + field copy. Returns the new doc so callers can immediately
+  // open it in the editor.
+  const createFromTemplate = useCallback(async (templateId, name) => {
+    const r = await api.post('/documents/templates', { templateId, name });
+    setDocuments((ds) => [r.document, ...ds]);
+    return r.document;
+  }, []);
+
   const update = useCallback(async (id, patch) => {
     const r = await api.patch('/documents/' + id, patch);
     setDocuments((ds) => ds.map((d) => d.id === id ? r.document : d));
@@ -89,7 +99,7 @@ export function useDocuments() {
     return patched.document;
   }, []);
 
-  return { documents, loading, error, refresh, create, update, remove, send, void: voidDoc, uploadPdf };
+  return { documents, loading, error, refresh, create, createFromTemplate, update, remove, send, void: voidDoc, uploadPdf };
 }
 
 // Local-only page counter so we can stamp page_count on the row at
