@@ -780,6 +780,43 @@ ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_status_check;
 ALTER TABLE invoices ADD CONSTRAINT invoices_status_check
   CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'voided', 'refunded'));
 
+-- Recurring invoices. Each row defines a template + schedule that
+-- the daily cron uses to mint a fresh invoices row at every interval.
+-- The template's items / tax / discount / notes get copied snapshot-
+-- style into each generated invoice so the owner can edit the
+-- template later without retroactively rewriting issued invoices.
+--
+-- cadence drives advancement of next_run_at. status='paused' skips
+-- runs without ending the schedule; status='ended' closes it. When
+-- auto_send is TRUE the generated invoice is sent + emailed
+-- automatically; when FALSE it lands as a draft for owner review.
+CREATE TABLE IF NOT EXISTS recurring_invoices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  client_name TEXT,
+  client_email TEXT,
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  tax_rate NUMERIC(6,3) NOT NULL DEFAULT 0,
+  discount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  notes TEXT,
+  cadence TEXT NOT NULL CHECK (cadence IN ('weekly','biweekly','monthly','quarterly','yearly')),
+  next_run_at DATE NOT NULL,
+  end_date DATE,
+  status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active','paused','ended')),
+  auto_send BOOLEAN NOT NULL DEFAULT TRUE,
+  last_run_at TIMESTAMPTZ,
+  last_invoice_id UUID REFERENCES invoices(id) ON DELETE SET NULL,
+  occurrences_run INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_recurring_invoices_workspace
+  ON recurring_invoices(workspace_id, status, next_run_at);
+CREATE INDEX IF NOT EXISTS idx_recurring_invoices_due
+  ON recurring_invoices(next_run_at) WHERE status = 'active';
+
 -- Goals + Tasks. Goals track progress against a target (revenue / clients /
 -- sessions / custom). Tasks are simple to-dos; "smart" tasks of certain types
 -- can auto-complete from app activity (e.g. send-invoice flips when an invoice

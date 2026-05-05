@@ -9,6 +9,7 @@ import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import StripeConnectCard from './StripeConnectCard.jsx';
 import Expenses from './Expenses.jsx';
+import Recurring from './Recurring.jsx';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -26,7 +27,7 @@ export default function Finance() {
   } = useInvoices();
 
   const [tab, setTab]               = useState('all');
-  const [section, setSection]       = useState('invoices'); // 'invoices' | 'expenses'
+  const [section, setSection]       = useState('invoices'); // 'invoices' | 'recurring' | 'expenses'
   const [openId, setOpenId]         = useState(null);
   const [creatingBusy, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
@@ -124,11 +125,12 @@ export default function Finance() {
         )}
       </div>
 
-      {/* Section selector: Invoices vs Expenses. */}
+      {/* Section selector: Invoices / Recurring / Expenses. */}
       <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface-2)', borderRadius: 10, alignSelf: 'flex-start' }}>
         {[
-          { id: 'invoices', label: 'Invoices' },
-          { id: 'expenses', label: 'Expenses' },
+          { id: 'invoices',  label: 'Invoices' },
+          { id: 'recurring', label: 'Recurring' },
+          { id: 'expenses',  label: 'Expenses' },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => setSection(id)} style={{
             padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
@@ -141,6 +143,8 @@ export default function Finance() {
 
       {section === 'expenses' ? (
         <Expenses/>
+      ) : section === 'recurring' ? (
+        <Recurring/>
       ) : (
         <InvoicesSection
           invoices={invoices} summary={summary} counts={counts} rows={rows}
