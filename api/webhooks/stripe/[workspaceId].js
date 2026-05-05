@@ -153,6 +153,7 @@ export default async function handler(req, res) {
 
     notifyOwnerSafe({
       workspaceId,
+      type: 'payments',
       payload: {
         title: 'Invoice paid',
         body: `${inv.number} · ${fmtMoney(totals.total)}`,

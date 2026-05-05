@@ -88,6 +88,7 @@ export default async function handler(req, res) {
       // Notify the workspace owner (best-effort).
       notifyOwnerSafe({
         workspaceId: thread.workspace_id,
+        type: 'messages',
         payload: {
           title: `Message from ${thread.client_name || 'a client'}`,
           body: preview,

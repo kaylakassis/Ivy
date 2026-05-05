@@ -159,6 +159,7 @@ async function signDoc(req, res) {
 
     notifyOwnerSafe({
       workspaceId: doc.workspace_id,
+      type: 'documents',
       payload: {
         title: 'Document signed',
         body: `${doc.recipient_name || 'A client'} completed "${doc.name}"`,

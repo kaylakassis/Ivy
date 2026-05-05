@@ -21,7 +21,7 @@ import { SCHEMA_SQL } from './schema.js';
 // One cheap SELECT to detect whether the latest schema is applied. Update
 // this when a new schema delta ships so the next cold start triggers the
 // full migration once.
-const PROBE_QUERY = 'SELECT 1 FROM audit_events LIMIT 1';
+const PROBE_QUERY = 'SELECT notification_prefs FROM users LIMIT 1';
 
 let applied = false;
 let inFlight = null;

@@ -124,6 +124,7 @@ export default async function handler(req, res) {
             if (r.client_id) {
               notifyClientSafe({
                 clientId: r.client_id,
+                type: 'bookings',
                 payload: {
                   title: `Reminder: ${r.service_name || 'Session'} ${describeWindow(minsNum)}`,
                   body: `${r.biz_name || 'Your business'} · ${fmtDay(dateISO)} at ${fmtTime(r.start_min)}`,

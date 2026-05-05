@@ -66,6 +66,7 @@ export default async function handler(req, res) {
       // account or haven't enabled push).
       notifyClientSafe({
         clientId: thread.client_id,
+        type: 'messages',
         payload: {
           title: 'New message',
           body: preview,

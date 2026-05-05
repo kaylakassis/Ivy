@@ -105,6 +105,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS walkthrough_completed_at TIMESTAMPTZ;
 --                also be 'regular' + sponsored if needed; user_type just
 --                records the primary classification for admin filtering.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT 'regular';
+-- Per-user, per-type notification opt-outs. Keys are notification type
+-- ids (messages | bookings | documents | payments | support); values
+-- are booleans. Missing key → enabled. Set false → muted. Not using a
+-- separate column per type so we can add new types later without a
+-- schema change.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;
 -- Idempotent constraint via DROP IF EXISTS + ADD. Two plain statements
 -- play nicer with our naive migration runner than a DO block would.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_type_check;

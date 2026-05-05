@@ -123,6 +123,7 @@ export default async function handler(req, res) {
 
     notifyClientSafe({
       clientId,
+      type: 'documents',
       payload: {
         title: 'Document needs your signature',
         body: doc.name,

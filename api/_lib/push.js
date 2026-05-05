@@ -38,19 +38,40 @@ export function publicVapidKey() {
   return process.env.VAPID_PUBLIC_KEY || null;
 }
 
+// Notification types — keep in sync with the toggle list in the
+// /account → Notifications card and /api/me/notifications. Each
+// sendPushToUser call passes one of these so the user's per-type
+// opt-out is honored.
+export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support'];
+
+// Returns true if the user hasn't opted out of `type`. Missing key →
+// enabled by default. Failure to look up → enabled (don't drop a
+// notification because of a transient DB blip).
+async function userAllowsType(userId, type) {
+  if (!type) return true;
+  if (!NOTIFY_TYPES.includes(type)) return true;
+  try {
+    const { rows } = await sql`SELECT notification_prefs FROM users WHERE id = ${userId}`;
+    const prefs = rows[0]?.notification_prefs || {};
+    return prefs[type] !== false;
+  } catch {
+    return true;
+  }
+}
+
 // Send a notification to every subscription for `userId`. Each
 // notification is best-effort; a 404 / 410 from the push provider
 // means the subscription is dead and we delete it. Other errors log
 // but don't fail the caller.
 //
-// `payload` becomes the body of the push event in the service worker.
-// Keep payloads small (under 4 KB total after encryption headers).
+// `type` (optional but strongly recommended) gates the send on the
+// user's notification_prefs. Pass one of NOTIFY_TYPES — calls that
+// don't pass a type send unconditionally (admin-side, system-critical).
 //
 // `payload`:
 //   { title, body, url?, tag?, icon?, data? }
 //   url   → where the user lands when they click
-//   tag   → coalesces multiple notifications into one (e.g. tag by
-//           message-thread id so stacked messages collapse)
+//   tag   → coalesces multiple notifications into one
 //   data  → arbitrary JSON the SW can read
 // Resolve the workspace owner's user id (the only push target on the
 // owner side — staff/team isn't a thing yet).
@@ -70,17 +91,17 @@ export async function clientUserId(clientId) {
 }
 
 // Convenience: notify a workspace owner. Resolves owner → user → push.
-export async function notifyOwner({ workspaceId, payload }) {
+export async function notifyOwner({ workspaceId, payload, type }) {
   const userId = await ownerUserIdForWorkspace(workspaceId);
   if (!userId) return { ok: false, reason: 'no owner', sent: 0 };
-  return sendPushToUser({ userId, payload });
+  return sendPushToUser({ userId, payload, type });
 }
 
 // Convenience: notify the user behind a clients row (if claimed).
-export async function notifyClient({ clientId, payload }) {
+export async function notifyClient({ clientId, payload, type }) {
   const userId = await clientUserId(clientId);
   if (!userId) return { ok: false, reason: 'unclaimed', sent: 0 };
-  return sendPushToUser({ userId, payload });
+  return sendPushToUser({ userId, payload, type });
 }
 
 // Fire-and-forget wrapper. Swallows everything so callers never have to
@@ -89,9 +110,14 @@ export async function notifyClient({ clientId, payload }) {
 export function notifyOwnerSafe(args)  { return notifyOwner(args).catch((e) => console.warn('[push] notifyOwner', e.message)); }
 export function notifyClientSafe(args) { return notifyClient(args).catch((e) => console.warn('[push] notifyClient', e.message)); }
 
-export async function sendPushToUser({ userId, payload }) {
+export async function sendPushToUser({ userId, payload, type }) {
   if (!configure()) return { ok: false, reason: 'not configured', sent: 0 };
   if (!userId || !payload?.title) return { ok: false, reason: 'bad args', sent: 0 };
+
+  // Honor the user's per-type opt-out before any DB / network work.
+  if (type && !(await userAllowsType(userId, type))) {
+    return { ok: true, sent: 0, reason: 'muted' };
+  }
 
   const { rows } = await sql`
     SELECT id, endpoint, p256dh_key, auth_key

@@ -296,6 +296,7 @@ async function send_message_to_client({ workspaceId, args }) {
   // Best-effort push to the client.
   notifyClientSafe({
     clientId,
+    type: 'messages',
     payload: {
       title: 'New message',
       body: preview,

@@ -107,6 +107,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     if (source === 'public') {
       tasks.push(notifyOwnerSafe({
         workspaceId,
+        type: 'bookings',
         payload: {
           title: 'New booking',
           body: `${ctx.client_name || 'A client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,

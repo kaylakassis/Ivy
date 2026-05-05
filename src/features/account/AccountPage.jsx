@@ -612,15 +612,18 @@ function NotificationsCard() {
             }}>{err}</div>
           )}
           {active ? (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 12, color: 'var(--ok)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                <Icons.Check size={12} sw={2.4}/> Notifications are on for this device.
-              </span>
-              <button className="btn btn-outline" onClick={disable} disabled={busy}
-                style={{ padding: '6px 12px', fontSize: 12 }}>
-                {busy ? 'Turning off…' : 'Turn off on this device'}
-              </button>
-            </div>
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 14 }}>
+                <span style={{ fontSize: 12, color: 'var(--ok)', display: 'inline-flex', alignItems: 'center', gap: 5 }}>
+                  <Icons.Check size={12} sw={2.4}/> Notifications are on for this device.
+                </span>
+                <button className="btn btn-outline" onClick={disable} disabled={busy}
+                  style={{ padding: '6px 12px', fontSize: 12 }}>
+                  {busy ? 'Turning off…' : 'Turn off on this device'}
+                </button>
+              </div>
+              <NotificationPrefs/>
+            </>
           ) : (
             <button className="btn btn-primary" onClick={enable} disabled={busy}>
               {busy ? 'Enabling…' : 'Enable notifications'}
@@ -629,6 +632,123 @@ function NotificationsCard() {
         </>
       )}
     </div>
+  );
+}
+
+// Per-type opt-out toggles. Lives below the device-level enable/disable
+// row so the workflow reads top-down: turn ON in this browser, then
+// pick which notification types you want to receive. Each toggle PATCHes
+// /api/me/notifications optimistically — server is authoritative on
+// the next page load.
+const PREF_LABELS = {
+  messages:  { label: 'Messages',  hint: 'New chat messages from clients (or businesses, if you\'re a client).' },
+  bookings:  { label: 'Bookings',  hint: 'New bookings on your calendar + reminders before sessions.' },
+  documents: { label: 'Documents', hint: 'Documents to sign, signatures completed, overdue reminders.' },
+  payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
+  support:   { label: 'Support',   hint: 'When THRYVE Support replies to your conversation.' },
+};
+
+function NotificationPrefs() {
+  const [prefs, setPrefs] = useState(null);
+  const [types, setTypes] = useState([]);
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/me/notifications')
+      .then((r) => {
+        if (cancelled) return;
+        setPrefs(r.prefs || {});
+        setTypes(r.types || []);
+      })
+      .catch((e) => { if (!cancelled) setErr(e.message); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const toggle = async (type) => {
+    if (!prefs) return;
+    const next = !prefs[type];
+    // Optimistic
+    setPrefs((p) => ({ ...p, [type]: next }));
+    setBusy(type); setErr(null);
+    try {
+      const r = await api.patch('/me/notifications', { prefs: { [type]: next } });
+      setPrefs(r.prefs);
+    } catch (e) {
+      // Revert on failure
+      setPrefs((p) => ({ ...p, [type]: !next }));
+      setErr(e.message || 'Could not update');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>What to notify me about</div>
+      {err && (
+        <div style={{
+          padding: '6px 10px', borderRadius: 8, fontSize: 12,
+          background: 'rgba(155,44,44,0.08)', color: 'var(--danger)',
+          border: '1px solid rgba(155,44,44,0.25)', marginBottom: 10,
+        }}>{err}</div>
+      )}
+      {!prefs && (
+        <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading preferences…</div>
+      )}
+      {prefs && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {types.map((t) => {
+            const meta = PREF_LABELS[t] || { label: t, hint: '' };
+            const on = prefs[t] !== false;
+            return (
+              <label key={t} style={{
+                display: 'flex', alignItems: 'flex-start', gap: 12,
+                padding: '10px 12px', borderRadius: 10,
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                cursor: busy === t ? 'wait' : 'pointer',
+              }}>
+                <Switch checked={on} disabled={busy === t} onChange={() => toggle(t)}/>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 600 }}>{meta.label}</div>
+                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                    {meta.hint}
+                  </div>
+                </div>
+              </label>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// Tiny iOS-style toggle. Inline-styled because we already have a few
+// in the app and another generic component is not worth it.
+function Switch({ checked, disabled, onChange }) {
+  return (
+    <button type="button" role="switch" aria-checked={checked}
+      onClick={onChange} disabled={disabled}
+      style={{
+        flexShrink: 0, marginTop: 1,
+        width: 36, height: 22, borderRadius: 999,
+        background: checked ? 'var(--accent)' : 'var(--border-strong)',
+        border: 0, padding: 2,
+        cursor: disabled ? 'wait' : 'pointer',
+        transition: 'background 0.15s ease',
+        opacity: disabled ? 0.6 : 1,
+      }}>
+      <span style={{
+        display: 'block',
+        width: 18, height: 18, borderRadius: 999,
+        background: '#fff',
+        transform: checked ? 'translateX(14px)' : 'translateX(0)',
+        transition: 'transform 0.15s ease',
+        boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
+      }}/>
+    </button>
   );
 }
 

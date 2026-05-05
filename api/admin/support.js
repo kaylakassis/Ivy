@@ -110,6 +110,7 @@ async function reply(req, res) {
   // Best-effort push to the user so they know support replied.
   sendPushToUser({
     userId: tr.rows[0].user_id,
+    type: 'support',
     payload: {
       title: 'THRYVE Support replied',
       body: preview,

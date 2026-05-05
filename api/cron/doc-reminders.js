@@ -59,6 +59,7 @@ export default async function handler(req, res) {
 
         await notifyOwnerSafe({
           workspaceId: d.workspace_id,
+          type: 'documents',
           payload: {
             title: 'Document still unsigned',
             body: `${recipient} hasn't signed "${d.name}" — ${days} day${days === 1 ? '' : 's'} now.`,
@@ -70,6 +71,7 @@ export default async function handler(req, res) {
         if (d.recipient_client_id) {
           await notifyClientSafe({
             clientId: d.recipient_client_id,
+            type: 'documents',
             payload: {
               title: 'Reminder: document waiting for you',
               body: `Please sign "${d.name}" when you have a moment.`,
