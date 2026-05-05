@@ -32,6 +32,10 @@ export default function PublicBooking() {
   const [busy, setBusy]   = useState(false);
   const [bookErr, setBookErr] = useState(null);
 
+  // "Have a question?" prospect-message modal state. Lets a visitor
+  // talk to the business before committing to a slot.
+  const [contactOpen, setContactOpen] = useState(false);
+
   useEffect(() => {
     let live = true;
     api.get('/calendar/public/' + encodeURIComponent(slug))
@@ -205,6 +209,35 @@ export default function PublicBooking() {
     <PageWrap tweaks={tweaks}>
       <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
 
+      {/* "Have a question?" CTA — pinned just under the header on the
+          slot picker step. We hide it on the success/confirmed/details
+          steps to avoid distracting from the active booking flow. */}
+      {step === 'pick' && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+          padding: '10px 14px', borderRadius: 10, marginBottom: 14,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          fontSize: 13, color: 'var(--fg-2)',
+        }}>
+          <Icons.Chat size={14} stroke="var(--accent)"/>
+          <span style={{ flex: 1, minWidth: 200 }}>
+            Have a question before booking? Send {cal.settings.bizName || 'them'} a message.
+          </span>
+          <button onClick={() => setContactOpen(true)}
+            className="btn btn-outline" style={{ fontSize: 12.5, padding: '6px 12px' }}>
+            Message us
+          </button>
+        </div>
+      )}
+
+      {contactOpen && (
+        <ContactModal
+          slug={slug}
+          bizName={cal.settings.bizName}
+          onClose={() => setContactOpen(false)}
+        />
+      )}
+
       {step === 'waitlisted' ? (
         <div className="card" style={{ padding: 36 }}>
           <div style={{ textAlign: 'center' }}>
@@ -363,6 +396,20 @@ export default function PublicBooking() {
                         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
                           {s.durationMinutes} min · ${Number(s.price).toLocaleString()}
                         </div>
+                        {s.depositType && s.depositType !== 'none' && Number(s.depositAmount) > 0 && (
+                          <div style={{
+                            display: 'inline-flex', alignItems: 'center', gap: 4,
+                            marginTop: 6, padding: '2px 7px', borderRadius: 99,
+                            fontSize: 10, fontWeight: 600,
+                            background: selected ? 'var(--surface)' : 'var(--surface)',
+                            color: 'var(--fg-2)', border: '1px solid var(--border-strong)',
+                          }}>
+                            <Icons.Lock size={9} sw={1.8}/>
+                            Deposit: {s.depositType === 'percent'
+                              ? `${Number(s.depositAmount)}%`
+                              : `$${Number(s.depositAmount).toFixed(2)}`}
+                          </div>
+                        )}
                         {s.description && (
                           <p style={{
                             margin: '8px 0 0', fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.45,
@@ -599,3 +646,129 @@ const inputSty = {
   background: 'var(--surface)', border: '1px solid var(--border-strong)',
   color: 'var(--fg)', fontSize: 14, outline: 'none',
 };
+
+// Pre-booking message modal. Hits the public contact endpoint, which
+// auto-creates a "lead" client + thread on the owner's side. The
+// owner gets push + email; replies email the prospect back through
+// the existing /api/messages/:id reply path (now branding-aware).
+function ContactModal({ slug, bizName, onClose }) {
+  const [name, setName]       = useState('');
+  const [email, setEmail]     = useState('');
+  const [message, setMessage] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+  const [done, setDone] = useState(false);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim() || !message.trim()) {
+      setErr('Please fill in all fields'); return;
+    }
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch(
+        '/api/calendar/public/contact?slug=' + encodeURIComponent(slug),
+        {
+          method: 'POST',
+          credentials: 'omit',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: name.trim(),
+            email: email.trim(),
+            message: message.trim(),
+          }),
+        }
+      );
+      if (!res.ok) {
+        const j = await res.json().catch(() => ({}));
+        throw new Error(j.error || `HTTP ${res.status}`);
+      }
+      setDone(true);
+    } catch (ex) {
+      setErr(ex.message || 'Could not send');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={busy ? null : onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} className="card"
+        style={{ width: '100%', maxWidth: 480, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Chat size={16} sw={1.8}/></div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
+              {done ? 'Message sent' : `Message ${bizName || 'us'}`}
+            </h3>
+            {!done && (
+              <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                We'll reply by email — usually within a day.
+              </div>
+            )}
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+            <Icons.X size={15}/>
+          </button>
+        </div>
+
+        {done ? (
+          <>
+            <p style={{ margin: '0 0 18px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+              Got it — your message is on its way to <b>{bizName || 'them'}</b>.
+              Keep an eye on <b>{email}</b> for their reply, usually within a day.
+              You can come back here any time to book once you've heard back.
+            </p>
+            <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+              <button className="btn btn-primary" onClick={onClose}>Close</button>
+            </div>
+          </>
+        ) : (
+          <form onSubmit={submit}>
+            <Field label="Your name">
+              <input value={name} onChange={(e) => setName(e.target.value)}
+                required autoFocus style={inputSty}/>
+            </Field>
+            <Field label="Email" hint="We'll reply here.">
+              <input type="email" value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                required style={inputSty}/>
+            </Field>
+            <Field label="What's your question?">
+              <textarea value={message} onChange={(e) => setMessage(e.target.value)}
+                rows={5} maxLength={4000} required
+                placeholder="Hi! I'm wondering about…"
+                style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
+            </Field>
+            {err && (
+              <div style={{
+                padding: '8px 12px', borderRadius: 8, marginBottom: 14,
+                background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+                color: 'var(--danger)', fontSize: 12.5,
+              }}>{err}</div>
+            )}
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button type="button" className="btn btn-outline"
+                onClick={onClose} disabled={busy}
+                style={{ flex: 1, justifyContent: 'center' }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary"
+                disabled={busy}
+                style={{ flex: 2, justifyContent: 'center', opacity: busy ? 0.6 : 1 }}>
+                {busy ? 'Sending…' : 'Send message'}
+              </button>
+            </div>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+}

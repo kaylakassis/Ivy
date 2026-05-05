@@ -10,6 +10,13 @@ import { fetchOwnedThread, serializeThread, serializeMessage } from '../_lib/mes
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { notifyClientSafe } from '../_lib/push.js';
+import { sendEmail, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
+import { appUrl } from '../_lib/tokens.js';
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 const VALID_MODES = new Set(['two-way', 'one-way']);
 
@@ -62,7 +69,7 @@ export default async function handler(req, res) {
           unread_client = unread_client + 1
         WHERE id = ${id} AND workspace_id = ${workspaceId}
       `;
-      // Notify the client (no-op if they haven't claimed their portal
+      // Push to the client (no-op if they haven't claimed their portal
       // account or haven't enabled push).
       notifyClientSafe({
         clientId: thread.client_id,
@@ -74,6 +81,45 @@ export default async function handler(req, res) {
           tag: `thread-${id}`,
         },
       });
+
+      // Email the client too. Critical for prospects who messaged
+      // through the public contact form before claiming a THRYVE
+      // portal account — without this, owner replies would just sit
+      // in their THRYVE inbox where the prospect can't see them.
+      // For clients with portal accounts the email also acts as a
+      // backup channel (push may be disabled / dismissed).
+      if (thread.client_email) {
+        try {
+          const branding = await fetchBranding(workspaceId);
+          const ownerName = branding.businessName || 'your business';
+          const portalUrl = thread.client_user_id
+            ? `${appUrl()}/me/messages/${id}`
+            : `${appUrl()}/signup?email=${encodeURIComponent(thread.client_email)}`;
+          await sendEmail({
+            to: thread.client_email,
+            subject: `New message from ${ownerName}`,
+            // Reply-To routes the prospect's email-reply directly to
+            // the owner so the conversation can continue even before
+            // they claim a portal account.
+            replyTo: branding.replyTo,
+            html: emailShell({
+              heading: 'You have a new message',
+              body: `<p>Hi ${escapeHtml((thread.client_name || '').split(/\s+/)[0] || 'there')},</p>
+                <p><strong>${escapeHtml(branding.businessName || 'Your business')}</strong> sent you a message:</p>
+                <blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #C7BFA8;background:#F6F5F1;border-radius:6px;font-size:14px;line-height:1.55;color:#3F3D38;white-space:pre-wrap;">${escapeHtml(text)}</blockquote>
+                <p>You can reply by hitting Reply on this email${thread.client_user_id ? ' or by opening your THRYVE portal' : ''}.</p>`,
+              ctaText: thread.client_user_id ? 'Open my portal' : 'Open in your portal',
+              ctaUrl: portalUrl,
+              footer: `Replying to this email reaches ${escapeHtml(branding.businessName || 'your business')} directly.`,
+              branding,
+            }),
+          });
+        } catch (mailErr) {
+          // eslint-disable-next-line no-console
+          console.error('[messages] reply email failed:', mailErr.message);
+        }
+      }
+
       return created(res, { message: serializeMessage(inserted.rows[0]) });
     }
 

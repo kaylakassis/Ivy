@@ -801,6 +801,42 @@ ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_status_check;
 ALTER TABLE invoices ADD CONSTRAINT invoices_status_check
   CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'voided', 'refunded'));
 
+-- Time tracking. One row per timer entry; the running entry has
+-- ended_at = NULL. duration_seconds is computed at stop, or live in
+-- the UI from started_at. Once an entry is rolled into an invoice
+-- (via /api/time-entries/bill), invoice_id is set and status flips
+-- to 'billed' so it doesn't get billed again. Hourly rate is a
+-- snapshot at start so changing the default later doesn't rewrite
+-- the time you've already tracked.
+CREATE TABLE IF NOT EXISTS time_entries (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  service_id UUID REFERENCES services(id) ON DELETE SET NULL,
+  description TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  ended_at TIMESTAMPTZ,
+  duration_seconds INT,
+  hourly_rate NUMERIC(12,2) NOT NULL DEFAULT 0,
+  billable BOOLEAN NOT NULL DEFAULT TRUE,
+  status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running','stopped','billed')),
+  invoice_id UUID REFERENCES invoices(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_time_entries_workspace
+  ON time_entries(workspace_id, status, started_at DESC);
+CREATE INDEX IF NOT EXISTS idx_time_entries_client
+  ON time_entries(client_id, status) WHERE client_id IS NOT NULL;
+-- One workspace can only have ONE running entry at a time. Enforced
+-- with a partial unique index — keeps the timer UI simple (single
+-- start/stop button) without race-condition surprises.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_one_running
+  ON time_entries(workspace_id) WHERE status = 'running';
+-- Per-workspace default hourly rate. Stored on finance_settings so
+-- new entries can default to it without an extra round trip.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS default_hourly_rate NUMERIC(12,2) NOT NULL DEFAULT 0;
+
 -- Recurring invoices. Each row defines a template + schedule that
 -- the daily cron uses to mint a fresh invoices row at every interval.
 -- The template's items / tax / discount / notes get copied snapshot-
