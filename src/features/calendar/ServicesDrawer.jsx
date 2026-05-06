@@ -285,12 +285,14 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           <input value={service.name} onChange={(e) => onChange({ name: e.target.value })} style={inputSty} autoFocus/>
         </Field>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
-          <Field label="Duration (min)">
-            <input type="number" min={5} max={1440} step={5} value={service.durationMinutes}
-              onChange={(e) => onChange({ durationMinutes: Math.max(5, Math.min(1440, Number(e.target.value) || 0)) })}
-              style={inputSty}/>
-          </Field>
+        <Field label="Duration">
+          <DurationPicker
+            value={service.durationMinutes}
+            onChange={(m) => onChange({ durationMinutes: Math.max(5, Math.min(1440, m)) })}
+          />
+        </Field>
+
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <Field label="Price ($)">
             <input type="number" min={0} step={1} value={service.price}
               onChange={(e) => onChange({ price: Math.max(0, Number(e.target.value) || 0) })}
@@ -578,6 +580,104 @@ function Field({ label, hint, children }) {
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
+    </div>
+  );
+}
+
+// Duration picker — preset chips for the four common appointment lengths
+// plus a Custom chip that reveals a free-form number input. The current
+// value drives which chip is highlighted; if it matches one of the
+// presets the input stays hidden, otherwise it shows so the owner can
+// fine-tune (e.g. a 75-min service or a 90-min deep tissue).
+const DURATION_PRESETS = [15, 30, 45, 60];
+
+function DurationPicker({ value, onChange }) {
+  const numeric = Number(value) || 0;
+  const matchesPreset = DURATION_PRESETS.includes(numeric);
+  // Once the user opens Custom, keep it open even if they happen to type
+  // a preset value — they expressed intent to fine-tune. Reset is via
+  // tapping a preset chip.
+  const [customOpen, setCustomOpen] = useState(!matchesPreset && numeric > 0);
+
+  const pickPreset = (m) => {
+    setCustomOpen(false);
+    onChange(m);
+  };
+  const pickCustom = () => {
+    setCustomOpen(true);
+    // Don't reset the value — the owner may have typed a number already
+    // and just want to fine-tune from there. If the current value is a
+    // preset, leave it; the input will display it editable.
+  };
+
+  const showInput = customOpen || (!matchesPreset && numeric > 0);
+
+  return (
+    <div>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+        {DURATION_PRESETS.map((m) => {
+          const active = !showInput && numeric === m;
+          return (
+            <button
+              key={m}
+              type="button"
+              onClick={() => pickPreset(m)}
+              style={{
+                padding: '8px 14px', borderRadius: 8,
+                border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border-strong)'),
+                background: active ? 'var(--accent-soft)' : 'var(--surface)',
+                color: active ? 'var(--accent)' : 'var(--fg)',
+                fontSize: 13, fontWeight: 600,
+                cursor: 'pointer',
+                minWidth: 64,
+                transition: 'background .12s ease, border-color .12s ease',
+              }}
+            >
+              {m} min
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          onClick={pickCustom}
+          style={{
+            padding: '8px 14px', borderRadius: 8,
+            border: '1px solid ' + (showInput ? 'var(--accent)' : 'var(--border-strong)'),
+            background: showInput ? 'var(--accent-soft)' : 'var(--surface)',
+            color: showInput ? 'var(--accent)' : 'var(--fg)',
+            fontSize: 13, fontWeight: 600,
+            cursor: 'pointer',
+            minWidth: 80,
+          }}
+        >
+          Custom
+        </button>
+      </div>
+      {showInput && (
+        <div style={{
+          marginTop: 8, display: 'flex', alignItems: 'center', gap: 8,
+        }}>
+          <input
+            type="number"
+            min={5}
+            max={1440}
+            step={1}
+            autoFocus={customOpen}
+            value={numeric || ''}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              onChange(Number.isFinite(n) ? n : 0);
+            }}
+            placeholder="e.g. 75"
+            style={{
+              ...inputSty,
+              maxWidth: 120,
+              textAlign: 'right',
+            }}
+          />
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>minutes</span>
+        </div>
+      )}
     </div>
   );
 }
