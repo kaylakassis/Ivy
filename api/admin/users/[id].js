@@ -23,11 +23,9 @@
 //     sendResetLink: true        → emails them a fresh password-reset link
 //     sendVerificationLink: true → emails them a fresh email-verification link
 //                                  (no-op if already verified)
-//     resendWelcome: 'day1'|'day3'|'day7'|'day14'
-//                            → re-fires that welcome-sequence beat using the
-//                              same renderer the cron uses. Useful when a
-//                              user reports they "never got" an early email.
-//                              Owner vs client variant is auto-detected.
+//     resendWelcome: true        → re-fires the welcome email the user got
+//                                  at signup. Owner vs client variant is
+//                                  auto-detected from workspace ownership.
 //
 // DELETE /api/admin/users/:id
 //   Hard-delete the user. Cascades through the FK chain (workspaces,
@@ -40,7 +38,7 @@ import { requireSuperAdmin, emailIsSuperAdmin, getAdminActor } from '../../_lib/
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { createToken, invalidateUserTokens, KIND_RESET, KIND_VERIFY, appUrl } from '../../_lib/tokens.js';
 import { recordAudit } from '../../_lib/audit.js';
-import { WELCOME_BEATS } from '../../_lib/welcome-content.js';
+import { renderWelcome } from '../../_lib/welcome-content.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
 const VALID_ROLES = new Set([
@@ -181,36 +179,20 @@ async function patchUser(u, req, res) {
     }
   }
 
-  // Resend a specific welcome-sequence beat. Uses the exact same renderer
-  // the cron uses, so the message body is identical to the original.
-  // For owner-only beats (day3, day14), re-firing on a client-only user
-  // would otherwise return null — we fall back to a clear 400 so the
-  // operator knows to pick a different beat.
-  if ('resendWelcome' in body && body.resendWelcome) {
-    const beat = String(body.resendWelcome);
-    const seq = WELCOME_BEATS[beat];
-    if (!seq) return badRequest(res, `Unknown welcome beat: ${beat}`);
+  // Resend the welcome email — same content the user gets at signup.
+  // Owner vs client variant is auto-detected from workspace ownership.
+  if (body.resendWelcome === true) {
     const variant = u.is_owner ? 'owner' : 'client';
-    const out = seq.render({
+    const out = renderWelcome({
       name: firstName(u.name),
       appUrl: appUrl(),
       variant,
     });
-    if (!out) {
-      return badRequest(res, `${beat} isn't part of the ${variant} sequence — pick a different beat.`);
-    }
     try {
       await sendEmail({ to: u.email, subject: out.subject, html: out.html });
-      // Mark welcome_sent.<beat> so the cron doesn't re-send the same
-      // beat next run. NOW()::text is the same shape used by the cron.
-      await sql`
-        UPDATE users
-        SET welcome_sent = welcome_sent || jsonb_build_object(${beat}, NOW()::text)
-        WHERE id = ${u.id}
-      `;
       await recordAudit(req, {
         actor, targetUserId: u.id, action: 'user.resend_welcome',
-        meta: { beat, variant },
+        meta: { variant },
       });
     } catch (err) {
       // eslint-disable-next-line no-console

@@ -12,6 +12,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { renderWelcome } from '../_lib/welcome-content.js';
 import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
@@ -24,6 +25,11 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
+}
+
+function firstName(name) {
+  if (!name) return null;
+  return String(name).trim().split(/\s+/)[0] || null;
 }
 
 const VERIFY_TTL_MIN = 60 * 24; // 24 hours
@@ -118,7 +124,8 @@ export default async function handler(req, res) {
     setSessionCookie(res, signSession(user.id));
 
     // Fire-and-(mostly)-forget the verification email — don't fail signup
-    // if the email service hiccups.
+    // if the email service hiccups. The user sees an in-app banner and
+    // can resend; an admin can also resend from the user-detail modal.
     try {
       const raw = await createToken({ userId: user.id, kind: KIND_VERIFY, ttlMinutes: VERIFY_TTL_MIN });
       const link = `${appUrl()}/verify-email?token=${encodeURIComponent(raw)}`;
@@ -126,7 +133,7 @@ export default async function handler(req, res) {
         to: emailKey,
         subject: 'Confirm your email for THRYVE',
         html: emailShell({
-          heading: 'Welcome to THRYVE',
+          heading: 'Confirm your email',
           body: `<p>${user.name ? `Hi ${escapeHtml(user.name)},` : 'Hi,'}</p>
                  <p>Tap the button below to confirm this is your email. It keeps your account secure and unlocks email notifications.</p>
                  <p>This link expires in 24 hours.</p>`,
@@ -136,9 +143,21 @@ export default async function handler(req, res) {
         }),
       });
     } catch (mailErr) {
-      // Log via response side-channel? No — just continue. User sees a banner
-      // and can resend from inside the app.
       console.error('[signup] verification email failed:', mailErr.message);
+    }
+
+    // Welcome email — separate from verification so the warm onboarding
+    // copy lands in the inbox immediately, not a day later via cron.
+    // Owner vs client variant gates booking-link copy vs portal copy.
+    try {
+      const out = renderWelcome({
+        name: firstName(cleanName),
+        appUrl: appUrl(),
+        variant: role === 'client' ? 'client' : 'owner',
+      });
+      await sendEmail({ to: emailKey, subject: out.subject, html: out.html });
+    } catch (mailErr) {
+      console.error('[signup] welcome email failed:', mailErr.message);
     }
 
     return created(res, { user, role });

@@ -513,27 +513,13 @@ function UserDetailModal({ user, onClose, onChanged }) {
             }}>
             View as user →
           </button>
-        </div>
-
-        <div className="metric-label" style={{ marginTop: 8 }}>Resend welcome email</div>
-        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
-          {['day1', 'day3', 'day7', 'day14'].map((beat) => {
-            const label = `Day ${beat.replace('day', '')}`;
-            const k = `Welcome ${label} sent`;
-            return (
-              <button key={beat} disabled={!!busy}
-                className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
-                onClick={() => action(k,
-                  () => api.patch(`/admin/users/${user.id}`, { resendWelcome: beat }),
-                  { keepOpen: true })}>
-                {busy === k ? '…' : label}
-              </button>
-            );
-          })}
-          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
-            Re-fires the matching email from the welcome sequence.
-            Day 3 & Day 14 are owner-only.
-          </span>
+          <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
+            title="Re-send the welcome email this user got at signup."
+            onClick={() => action('Welcome email sent',
+              () => api.patch(`/admin/users/${user.id}`, { resendWelcome: true }),
+              { keepOpen: true })}>
+            {busy === 'Welcome email sent' ? '…' : 'Resend welcome email'}
+          </button>
         </div>
 
         <div className="metric-label" style={{ marginTop: 8, color: 'var(--danger)' }}>Danger zone</div>
