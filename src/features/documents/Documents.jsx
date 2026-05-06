@@ -277,7 +277,6 @@ function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
   // Blank-document inline form state.
   const [blankOpen, setBlankOpen] = useState(false);
   const [blankName, setBlankName] = useState('');
-  const [blankBody, setBlankBody] = useState('');
 
   useEffect(() => {
     let live = true;
@@ -310,10 +309,13 @@ function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
     if (!blankName.trim()) { setErr('Name is required'); return; }
     setBusyId('__blank'); setErr(null);
     try {
+      // Empty body — the user writes it in the rich editor that opens
+      // immediately after creation. Default seeded fields are added by
+      // the editor when fields[] is empty (see DocumentEditor.defaultFields).
       await onCreate({
         name: blankName.trim(),
         kind: 'written',
-        contentHtml: blankBody || `<p>Replace this with your document text.</p>`,
+        contentHtml: '',
         fields: [],
       });
     } catch (ex) { setErr(ex.message || 'Could not create'); setBusyId(null); }
@@ -397,26 +399,23 @@ function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
                 <Icons.Arrow size={13} stroke="var(--muted)"/>
               </button>
             ) : (
-              <form onSubmit={submitBlank} style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-                <Field label="Name" hint="e.g., Intro Waiver, Service Agreement.">
+              <form onSubmit={submitBlank} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+                <Field label="Name your document" hint="You'll write the body and place fields in the next step.">
                   <input value={blankName} onChange={(e) => setBlankName(e.target.value)}
-                    required autoFocus style={inputSty}/>
+                    required autoFocus
+                    placeholder="e.g., Intro waiver, service agreement, intake form"
+                    style={inputSty}/>
                 </Field>
-                <Field label="Body (optional)">
-                  <textarea value={blankBody} onChange={(e) => setBlankBody(e.target.value)}
-                    rows={4}
-                    placeholder="Write the body of your document here…"
-                    style={{ ...inputSty, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
-                </Field>
-                <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+                <div style={{ display: 'flex', gap: 10, marginTop: 2 }}>
                   <button type="button" className="btn btn-outline" onClick={() => setBlankOpen(false)}
                     style={{ flex: 1, justifyContent: 'center' }}>
                     Back
                   </button>
                   <button type="submit" className="btn btn-primary"
-                    disabled={busyId === '__blank'}
+                    disabled={busyId === '__blank' || !blankName.trim()}
                     style={{ flex: 2, justifyContent: 'center' }}>
-                    {busyId === '__blank' ? 'Creating…' : 'Create draft'}
+                    {busyId === '__blank' ? 'Opening editor…' : 'Continue'}
+                    <Icons.Arrow size={12} sw={2}/>
                   </button>
                 </div>
               </form>

@@ -463,6 +463,67 @@ img, svg, video { max-width: 100%; height: auto; }
   to { transform: rotate(360deg); }
 }
 
+/* ======================================================================
+   Document editor — DocuSign-style two-pane editor.
+   - .rt-content: contenteditable surface for the body text editor.
+   - .doc-editor-panes: side-by-side editor + preview on desktop, stacks
+     to a single column controlled by mobile tabs (Edit / Preview)
+     under 900px.
+   - .doc-preview-body: typography for the "paper page" preview so the
+     headings + lists look like a real document.
+   ====================================================================== */
+.rt-content:empty::before {
+  content: attr(data-placeholder);
+  color: var(--muted);
+  font-style: italic;
+  pointer-events: none;
+}
+.rt-content h1, .rt-content h2 {
+  font-family: var(--font-display);
+  font-size: 22px; font-weight: 500; letter-spacing: -0.02em;
+  margin: 0 0 6px; color: var(--fg);
+}
+.rt-content h3 {
+  font-family: var(--font-display);
+  font-size: 16px; font-weight: 500; letter-spacing: -0.015em;
+  margin: 14px 0 4px; color: var(--fg);
+}
+.rt-content p  { margin: 0 0 10px; }
+.rt-content ul, .rt-content ol { margin: 0 0 10px 24px; padding: 0; }
+.rt-content li { margin: 0 0 4px; }
+.rt-content strong { font-weight: 700; }
+.rt-content em     { font-style: italic; }
+
+.doc-preview-body h1, .doc-preview-body h2 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 22px; font-weight: 500; letter-spacing: -0.02em;
+  margin: 22px 0 10px; color: #0F0F0F;
+}
+.doc-preview-body h3 {
+  font-family: 'Fraunces', Georgia, serif;
+  font-size: 17px; font-weight: 500; letter-spacing: -0.015em;
+  margin: 18px 0 6px; color: #0F0F0F;
+}
+.doc-preview-body p  { margin: 0 0 12px; }
+.doc-preview-body ul, .doc-preview-body ol { margin: 0 0 12px 24px; padding: 0; }
+.doc-preview-body li { margin: 0 0 5px; }
+.doc-preview-body strong { font-weight: 700; }
+.doc-preview-body em     { font-style: italic; }
+
+/* Mobile tabs (Edit / Preview) appear under 900px so the preview can
+   live below the editor without overflowing. Below that breakpoint the
+   panes stack vertically and only one is visible at a time. */
+@media (max-width: 900px) {
+  .doc-mobile-tabs       { display: inline-flex !important; }
+  .doc-editor-panes      { flex-direction: column !important; }
+  .doc-editor-pane-left  { max-width: 100% !important; border-right: 0 !important;
+                            border-bottom: 1px solid var(--border); }
+  .doc-editor-pane-left[data-mobile-tab="preview"]  { display: none; }
+  .doc-editor-pane-right[data-mobile-tab="edit"]    { display: none; }
+  .doc-preview-shell     { padding: 14px !important; max-height: none !important; }
+  .doc-preview-page      { padding: 28px 24px 36px !important; }
+}
+
 /* Marketing-home "Built for [vertical]" headline — each new word slides
    in from below + fades; the outgoing word's lifecycle is implicit
    (React's `key` change unmounts it). Animation runs on every freshly
