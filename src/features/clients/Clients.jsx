@@ -8,6 +8,7 @@ import { useClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
+import { useViewport } from '../../lib/viewport.js';
 
 const DAY = 86400e3;
 
@@ -29,6 +30,7 @@ export default function Clients() {
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const { isMobile } = useViewport();
 
   // Deep-link support so other pages can route here with a modal opened.
   // Used by Dashboard hero "Add client" and per-client quick actions.
@@ -173,17 +175,21 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* Table */}
+      {/* Table — desktop/tablet keeps the 6-column grid; mobile collapses
+          to a stacked card list since six fixed-width columns can't fit
+          a phone viewport without horizontal scroll. */}
       <div className="card" style={{ overflow: 'hidden' }}>
-        <div style={{
-          display: 'grid', gridTemplateColumns: '1.6fr 110px 120px 140px 140px 40px',
-          padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
-          fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
-          background: 'var(--surface-2)',
-        }}>
-          <div>Client</div><div>Stage</div><div>Since</div><div>Last seen</div>
-          <div style={{ textAlign: 'right' }}>Lifetime</div><div/>
-        </div>
+        {!isMobile && (
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1.6fr 110px 120px 140px 140px 40px',
+            padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
+            fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
+            background: 'var(--surface-2)',
+          }}>
+            <div>Client</div><div>Stage</div><div>Since</div><div>Last seen</div>
+            <div style={{ textAlign: 'right' }}>Lifetime</div><div/>
+          </div>
+        )}
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading…</div>
         ) : rows.length === 0 ? (
@@ -197,10 +203,17 @@ export default function Clients() {
             />
           </div>
         ) : rows.map((c, i) => (
-          <ClientRow key={c.id} client={c} first={i === 0}
-            onOpen={() => setOpenId(c.id)}
-            onStage={(st) => setStage(c.id, st)}
-            onDelete={() => remove(c.id)}/>
+          isMobile ? (
+            <ClientCardMobile key={c.id} client={c} first={i === 0}
+              onOpen={() => setOpenId(c.id)}
+              onStage={(st) => setStage(c.id, st)}
+              onDelete={() => remove(c.id)}/>
+          ) : (
+            <ClientRow key={c.id} client={c} first={i === 0}
+              onOpen={() => setOpenId(c.id)}
+              onStage={(st) => setStage(c.id, st)}
+              onDelete={() => remove(c.id)}/>
+          )
         ))}
       </div>
 
@@ -262,6 +275,56 @@ function ClientRow({ client, first, onOpen, onStage, onDelete }) {
         {client.lifetimeValue > 0 ? '$' + client.lifetimeValue.toLocaleString() : '—'}
       </div>
       <div style={{ textAlign: 'right', color: 'var(--muted)' }} onClick={(e) => e.stopPropagation()}>
+        <RowMenu client={client} onStage={onStage} onOpen={onOpen} onDelete={onDelete}/>
+      </div>
+    </div>
+  );
+}
+
+// Mobile variant — same data, stacked vertically. Two visible lines
+// (avatar+name+email, stage chip + last seen + lifetime) so the phone
+// shows enough to triage clients without horizontal scroll.
+function ClientCardMobile({ client, first, onOpen, onStage, onDelete }) {
+  const initials = client.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+  const lastSeen = timeAgo(client.lastSeenAt);
+  return (
+    <div
+      onClick={onOpen}
+      style={{
+        padding: '14px 16px',
+        borderTop: first ? 'none' : '1px solid var(--border)',
+        cursor: 'pointer',
+        display: 'flex', alignItems: 'center', gap: 12,
+      }}
+    >
+      <div style={{
+        width: 40, height: 40, borderRadius: 99, flexShrink: 0,
+        background: 'var(--accent-soft)', color: 'var(--accent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: 13, fontWeight: 600,
+      }}>{initials || '?'}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          fontSize: 14, fontWeight: 600,
+          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+        }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{client.name}</span>
+          {client.lifetimeValue > 0 && (
+            <span className="mono-num" style={{ fontSize: 12.5, color: 'var(--fg-2)', flexShrink: 0 }}>
+              ${client.lifetimeValue.toLocaleString()}
+            </span>
+          )}
+        </div>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8, marginTop: 4,
+          fontSize: 11.5, color: 'var(--muted)',
+        }}>
+          <StageChip stage={client.stage}/>
+          {lastSeen && <span>· Last seen {lastSeen}</span>}
+        </div>
+      </div>
+      <div onClick={(e) => e.stopPropagation()} style={{ color: 'var(--muted)' }}>
         <RowMenu client={client} onStage={onStage} onOpen={onOpen} onDelete={onDelete}/>
       </div>
     </div>

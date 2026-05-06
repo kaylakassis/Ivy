@@ -48,14 +48,14 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      <div className="tab-row" style={{ display: 'flex', gap: 6 }}>
         {TABS.map((t) => {
           const Icon = Icons[t.icon] || Icons.Check;
           const active = tab === t.id;
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`btn ${active ? 'btn-primary' : 'btn-outline'}`}
-              style={{ padding: '7px 14px', fontSize: 13 }}>
+              style={{ padding: '7px 14px', fontSize: 13, whiteSpace: 'nowrap' }}>
               <Icon size={13} sw={1.7}/> {t.label}
             </button>
           );

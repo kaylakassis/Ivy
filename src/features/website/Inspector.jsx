@@ -3,10 +3,10 @@ import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES } from './sections.js';
 
-export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDelete, onToggleVisible }) {
+export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDelete, onToggleVisible, mobile = false }) {
   if (!section) {
     return (
-      <Shell title="Inspector">
+      <Shell title="Inspector" mobile={mobile}>
         <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13, lineHeight: 1.55 }}>
           Click a section in the canvas to edit it.
         </div>
@@ -19,7 +19,7 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
   const Editor = EDITORS[section.type] || FallbackEditor;
 
   return (
-    <Shell title={cfg?.label || section.type}>
+    <Shell title={cfg?.label || section.type} mobile={mobile}>
       <div style={{ padding: 14, display: 'flex', gap: 6 }}>
         <IconBtn onClick={onMoveUp} title="Move up"><Icons.ArrowUp size={14} /></IconBtn>
         <IconBtn onClick={onMoveDown} title="Move down"><Icons.ArrowDown size={14} /></IconBtn>
@@ -39,12 +39,17 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
   );
 }
 
-function Shell({ title, children }) {
+function Shell({ title, children, mobile = false }) {
   return (
     <aside style={{
-      width: 320, minWidth: 320,
+      // Same responsive treatment as SectionLibrary: full-width pane on
+      // mobile (only one panel visible at a time), fixed 320px rail
+      // everywhere else.
+      width: mobile ? '100%' : 320,
+      minWidth: mobile ? 0 : 320,
+      flex: mobile ? 1 : '0 0 auto',
       background: 'var(--surface)',
-      borderLeft: '1px solid var(--border)',
+      borderLeft: mobile ? 'none' : '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
       height: '100%',
     }}>

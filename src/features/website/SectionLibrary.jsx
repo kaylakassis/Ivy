@@ -3,12 +3,17 @@ import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_LIST, SECTION_TYPES } from './sections.js';
 
-export default function SectionLibrary({ site, selectedId, onSelect, onAdd, onMove }) {
+export default function SectionLibrary({ site, selectedId, onSelect, onAdd, onMove, mobile = false }) {
   return (
     <aside style={{
-      width: 260, minWidth: 260,
+      // On mobile the library takes the full width since it's the only
+      // pane visible (we tab between Sections / Canvas / Edit). On
+      // desktop/tablet it stays as a fixed left rail.
+      width: mobile ? '100%' : 260,
+      minWidth: mobile ? 0 : 260,
+      flex: mobile ? 1 : '0 0 auto',
       background: 'var(--surface)',
-      borderRight: '1px solid var(--border)',
+      borderRight: mobile ? 'none' : '1px solid var(--border)',
       display: 'flex', flexDirection: 'column',
       height: '100%',
     }}>

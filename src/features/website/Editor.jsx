@@ -1,4 +1,12 @@
 // Main editor — 3-column layout (library | canvas | inspector) + a publish toolbar.
+//
+// Responsive behavior:
+//   • Desktop (≥ 1024px): three columns side-by-side, full toolbar.
+//   • Tablet  (721-1024): library + canvas; inspector slides in only when
+//     a section is selected (no permanent right column).
+//   • Mobile  (≤ 720px):  one pane at a time, switched by a tab bar.
+//     Toolbar collapses to a single row of icon buttons + a "More" sheet
+//     so it never overflows the viewport.
 import React, { useState, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import SectionLibrary from './SectionLibrary.jsx';
@@ -7,6 +15,7 @@ import Inspector from './Inspector.jsx';
 import { mkSection } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { publicOrigin } from '../../lib/publicUrl.js';
+import { useViewport } from '../../lib/viewport.js';
 
 export default function Editor({ site, set, setSection, addSection, removeSection, moveSection, reset, publish, saving, saveErr }) {
   const [selectedId, setSelectedId] = useState(site.sections[0]?.id || null);
@@ -15,6 +24,11 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [publishErr, setPublishErr] = useState(null);
+  const { isMobile, isTablet } = useViewport();
+  // Mobile pane: 'outline' | 'canvas' | 'inspector'. The inspector tab
+  // is only enabled when a section is selected — otherwise tapping it
+  // would land on an empty "click a section" placeholder.
+  const [mobileTab, setMobileTab] = useState('canvas');
 
   const selected = useMemo(
     () => site.sections.find((s) => s.id === selectedId) || null,
@@ -25,6 +39,9 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
     const sec = mkSection(type, site.businessName);
     addSection(sec);
     setSelectedId(sec.id);
+    // Selecting a freshly-added section on mobile? Jump straight to the
+    // inspector so the user can edit its content without an extra tap.
+    if (isMobile) setMobileTab('inspector');
   };
 
   const handleDelete = () => {
@@ -58,26 +75,34 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
     }}>
       {/* Publish toolbar */}
       <div style={{
-        display: 'flex', alignItems: 'center', gap: 12,
-        padding: '12px 24px',
+        display: 'flex', alignItems: 'center', gap: isMobile ? 8 : 12,
+        padding: isMobile ? '10px 14px' : '12px 24px',
         background: 'var(--surface)',
         borderBottom: '1px solid var(--border)',
+        flexWrap: isMobile ? 'wrap' : 'nowrap',
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0, flex: isMobile ? '1 1 100%' : '0 1 auto' }}>
           <div style={{
             width: 28, height: 28, borderRadius: 7,
             background: 'var(--accent)', color: 'var(--accent-ink)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
+            flexShrink: 0,
           }}><Icons.Globe size={15} /></div>
-          <div style={{ lineHeight: 1.1 }}>
-            <div style={{ fontSize: 13, fontWeight: 550 }}>{site.businessName || 'Untitled site'}</div>
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+          <div style={{ lineHeight: 1.1, minWidth: 0, overflow: 'hidden' }}>
+            <div style={{
+              fontSize: 13, fontWeight: 550,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>{site.businessName || 'Untitled site'}</div>
+            <div style={{
+              fontSize: 11, color: 'var(--muted)',
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
               {publicUrl ? `/site/${site.handle}` : 'Set a handle to publish'}
             </div>
           </div>
         </div>
 
-        <div style={{ flex: 1 }} />
+        {!isMobile && <div style={{ flex: 1 }} />}
 
         {/* Template selector */}
         <div style={{ position: 'relative' }}>
@@ -128,8 +153,10 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
           )}
         </div>
 
-        {/* Device toggle */}
-        <div style={{
+        {/* Device toggle — hide on phones; the user is already on a phone
+            and doesn't need a "preview at desktop width" toggle squeezed
+            into a row that's already wrapping. */}
+        {!isMobile && <div style={{
           display: 'flex', gap: 2, padding: 3,
           background: 'var(--surface-2)', border: '1px solid var(--border)',
           borderRadius: 8,
@@ -155,13 +182,15 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
               </button>
             );
           })}
-        </div>
+        </div>}
 
         <button
           className="btn btn-outline"
           onClick={() => setPreviewMode((v) => !v)}
+          style={{ flexShrink: 0 }}
         >
-          <Icons.Eye size={13} /> {previewMode ? 'Exit preview' : 'Preview'}
+          <Icons.Eye size={13} />
+          {!isMobile && <span style={{ marginLeft: 6 }}>{previewMode ? 'Exit preview' : 'Preview'}</span>}
         </button>
 
         <button
@@ -208,25 +237,65 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
         </div>
       )}
 
+      {/* Mobile pane tab bar — only renders on phones, and only outside
+          preview mode (preview takes the whole screen). The Inspector
+          tab is only enabled when something is selected. */}
+      {isMobile && !previewMode && (
+        <div className="web-mobile-tabs" style={{
+          display: 'flex', gap: 4, padding: '8px 12px',
+          background: 'var(--surface)',
+          borderBottom: '1px solid var(--border)',
+          overflowX: 'auto',
+        }}>
+          <MobilePaneTab label="Sections" icon="Plus" active={mobileTab === 'outline'}   onClick={() => setMobileTab('outline')}/>
+          <MobilePaneTab label="Canvas"   icon="Eye"  active={mobileTab === 'canvas'}    onClick={() => setMobileTab('canvas')}/>
+          <MobilePaneTab label="Edit"     icon="Edit" active={mobileTab === 'inspector'} onClick={() => setMobileTab('inspector')} disabled={!selected}/>
+        </div>
+      )}
+
       {/* Main body */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {!previewMode && (
+        {/* SectionLibrary — desktop: always visible. Tablet: visible.
+            Mobile: only when 'outline' tab is active. */}
+        {!previewMode && (!isMobile || mobileTab === 'outline') && (
           <SectionLibrary
             site={site}
             selectedId={selectedId}
-            onSelect={setSelectedId}
+            onSelect={(id) => {
+              setSelectedId(id);
+              // Tapping a section on mobile should jump to the inspector
+              // so the user can immediately edit it — otherwise the tap
+              // selects the section but leaves the user staring at the
+              // same outline list with no visible feedback.
+              if (isMobile) setMobileTab('inspector');
+            }}
             onAdd={handleAdd}
             onMove={moveSection}
+            mobile={isMobile}
           />
         )}
-        <Canvas
-          site={site}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          device={device}
-          previewMode={previewMode}
-        />
+        {/* Canvas — desktop/tablet always visible. Mobile: only when
+            'canvas' tab is active OR when previewMode is on. */}
+        {(!isMobile || mobileTab === 'canvas' || previewMode) && (
+          <Canvas
+            site={site}
+            selectedId={selectedId}
+            onSelect={(id) => {
+              setSelectedId(id);
+              if (isMobile && id) setMobileTab('inspector');
+            }}
+            device={device}
+            previewMode={previewMode}
+          />
+        )}
+        {/* Inspector — desktop: always. Tablet: only when a section is
+            selected (saves horizontal real estate). Mobile: only when
+            'inspector' tab is active. */}
         {!previewMode && (
+          (!isMobile && !isTablet)
+          || (isTablet && selected)
+          || (isMobile && mobileTab === 'inspector')
+        ) && (
           <Inspector
             section={selected}
             onChange={(patch) => selected && setSection(selected.id, patch)}
@@ -234,9 +303,35 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
             onMoveDown={() => selected && moveSection(selected.id, 'down')}
             onDelete={handleDelete}
             onToggleVisible={handleToggleVisible}
+            mobile={isMobile}
           />
         )}
       </div>
     </div>
+  );
+}
+
+function MobilePaneTab({ label, icon, active, onClick, disabled }) {
+  const Icon = Icons[icon] || Icons.More;
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      style={{
+        flex: 1, minHeight: 36,
+        padding: '6px 12px', borderRadius: 8,
+        border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+        background: active ? 'var(--accent-soft)' : 'var(--surface)',
+        color: active ? 'var(--accent)' : disabled ? 'var(--muted)' : 'var(--fg-2)',
+        fontSize: 12, fontWeight: 600,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        opacity: disabled ? 0.55 : 1,
+        whiteSpace: 'nowrap',
+      }}
+    >
+      <Icon size={13}/>{label}
+    </button>
   );
 }
