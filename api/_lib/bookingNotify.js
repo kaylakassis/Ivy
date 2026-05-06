@@ -40,7 +40,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         b.id, b.client_id, b.client_name, b.client_email,
         b.date, b.start_min, b.end_min, b.notes,
         b.video_room_url, b.location_address,
-        s.name AS service_name, s.location_type,
+        s.name AS service_name, s.location_type, s.location_label,
         cs.biz_name,
         cs.slug,
         u.email AS owner_email,
@@ -88,8 +88,13 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         dateLabel,
         timeLabel,
         notes: ctx.notes,
-        videoRoomUrl: ctx.video_room_url,
-        locationAddress: ctx.location_address,
+        videoRoomUrl: ctx.location_type === 'virtual' && ctx.location_label
+          ? ctx.location_label
+          : ctx.video_room_url,
+        // Mobile bookings carry the address the client supplied. In-person
+        // bookings fall back to the service's saved venue ("My home studio",
+        // "123 Main St"). Either way, surfaces in the "Where" row.
+        locationAddress: ctx.location_address || (ctx.location_type === 'in_person' ? ctx.location_label : null),
         source,
         branding,
       }));

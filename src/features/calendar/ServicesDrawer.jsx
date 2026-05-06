@@ -62,6 +62,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       depositType: 'none',
       depositAmount: 0,
       locationType: 'in_person',
+      locationLabel: '',
       travelBufferMinutes: 0,
       cancellationFeeAmount: 0,
       cancellationWindowHours: 24,
@@ -98,6 +99,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
         depositType: s.depositType || 'none',
         depositAmount: Number(s.depositAmount) || 0,
         locationType: s.locationType || 'in_person',
+        locationLabel: (s.locationLabel || '').trim() || null,
         travelBufferMinutes: Math.max(0, Math.min(240, Number(s.travelBufferMinutes) || 0)),
         cancellationFeeAmount: Math.max(0, Number(s.cancellationFeeAmount) || 0),
         cancellationWindowHours: Math.max(0, Math.min(720, Number(s.cancellationWindowHours) || 24)),
@@ -294,15 +296,28 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
 
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
           <Field label="Price ($)">
-            <input type="number" min={0} step={1} value={service.price}
-              onChange={(e) => onChange({ price: Math.max(0, Number(e.target.value) || 0) })}
-              style={inputSty}/>
+            <NumericInput
+              value={service.price}
+              onChange={(n) => onChange({ price: Math.max(0, n) })}
+              min={0}
+              defaultOnBlank={0}
+              style={inputSty}
+            />
           </Field>
           <Field label="Capacity"
-            hint={service.capacity > 1 ? 'Group / class' : '1-on-1'}>
-            <input type="number" min={1} max={1000} step={1} value={service.capacity || 1}
-              onChange={(e) => onChange({ capacity: Math.max(1, Math.min(1000, Number(e.target.value) || 1)) })}
-              style={inputSty}/>
+            hint={
+              service.capacity > 1
+                ? `Group / class — up to ${service.capacity} clients can book the same time slot.`
+                : '1-on-1 — only one client can book each slot.'
+            }>
+            <NumericInput
+              value={service.capacity}
+              onChange={(n) => onChange({ capacity: Math.max(1, Math.min(1000, n)) })}
+              min={1}
+              max={1000}
+              defaultOnBlank={1}
+              style={inputSty}
+            />
           </Field>
         </div>
 
@@ -369,35 +384,66 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           </div>
         </Field>
 
-        {/* Where does this service happen? */}
+        {/* Where does this service happen? — three rows by location type:
+            in_person → text input for the venue/address
+            mobile    → number input for travel buffer (the address comes
+                        from the client at booking time)
+            virtual   → text input for an optional default meeting URL
+                        (overrides the auto-generated Jitsi room) */}
         <Field label="Where does it happen?"
           hint={service.locationType === 'mobile'
-            ? 'You travel to the client. They enter their address at booking.'
+            ? 'You travel to the client. They enter their address when they book.'
             : service.locationType === 'virtual'
-            ? 'Online — clients join over video.'
-            : 'At your location. Default for most service businesses.'}>
-          <div className="form-2col" style={{ gap: 8 }}>
-            <select value={service.locationType || 'in_person'}
-              onChange={(e) => onChange({ locationType: e.target.value })}
-              style={inputSty}>
-              <option value="in_person">At your place</option>
-              <option value="mobile">You travel to client</option>
-              <option value="virtual">Online / video</option>
-            </select>
-            <input type="number" min={0} max={240} step={5}
-              value={service.travelBufferMinutes || 0}
-              onChange={(e) => onChange({ travelBufferMinutes: Math.max(0, Math.min(240, Number(e.target.value) || 0)) })}
-              disabled={(service.locationType || 'in_person') !== 'mobile'}
-              placeholder="Travel buffer (min)"
-              style={{
-                ...inputSty,
-                opacity: (service.locationType || 'in_person') !== 'mobile' ? 0.5 : 1,
-              }}/>
-          </div>
-          {service.locationType === 'mobile' && Number(service.travelBufferMinutes) > 0 && (
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
-              {service.travelBufferMinutes} minutes blocked off before + after each booking so you can drive between locations.
-            </div>
+            ? 'Online — clients join over video. We generate a meeting link automatically; set your own below to override.'
+            : 'At your place. Add the address or room name below so clients know exactly where to come.'}>
+          <select value={service.locationType || 'in_person'}
+            onChange={(e) => onChange({ locationType: e.target.value })}
+            style={{ ...inputSty, marginBottom: 8 }}>
+            <option value="in_person">At your place</option>
+            <option value="mobile">You travel to the client</option>
+            <option value="virtual">Online / video</option>
+          </select>
+
+          {/* In-person → free-form address. */}
+          {(service.locationType || 'in_person') === 'in_person' && (
+            <input
+              value={service.locationLabel || ''}
+              onChange={(e) => onChange({ locationLabel: e.target.value })}
+              placeholder="123 Main St, Suite 4 · or 'My home studio'"
+              maxLength={500}
+              style={inputSty}
+            />
+          )}
+
+          {/* Mobile → travel buffer minutes around each booking. */}
+          {service.locationType === 'mobile' && (
+            <>
+              <NumericInput
+                value={service.travelBufferMinutes || 0}
+                onChange={(n) => onChange({ travelBufferMinutes: Math.max(0, Math.min(240, n)) })}
+                min={0}
+                max={240}
+                defaultOnBlank={0}
+                placeholder="Travel buffer (min)"
+                style={inputSty}
+              />
+              {Number(service.travelBufferMinutes) > 0 && (
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
+                  {service.travelBufferMinutes} minutes blocked off before + after each booking so you can drive between locations.
+                </div>
+              )}
+            </>
+          )}
+
+          {/* Virtual → optional override URL. */}
+          {service.locationType === 'virtual' && (
+            <input
+              value={service.locationLabel || ''}
+              onChange={(e) => onChange({ locationLabel: e.target.value })}
+              placeholder="https://zoom.us/j/your-personal-room"
+              maxLength={500}
+              style={inputSty}
+            />
           )}
         </Field>
 
@@ -581,6 +627,58 @@ function Field({ label, hint, children }) {
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
     </div>
+  );
+}
+
+// Numeric input that doesn't fight the user. The naïve
+//   <input type="number" value={n} onChange={(e) => set(Number(e.target.value) || 1)} />
+// pattern collapses to its fallback (1, 0, …) the moment the user
+// backspaces the field empty — so changing "1" to "5" requires
+// highlight-and-replace, and capacity / price feel stuck.
+//
+// This wrapper holds a raw string locally and only commits to the
+// parent on blur or when the typed value is a clean integer. Empty /
+// in-progress states stay editable. The `defaultOnBlank` value is what
+// gets committed if the user blurs while the field is empty.
+function NumericInput({ value, onChange, min, max, defaultOnBlank = 0, style, ...rest }) {
+  const [draft, setDraft] = useState(String(value ?? ''));
+  // Sync from outside when the parent value changes for non-typing
+  // reasons (preset chip click, modal reopen with another service).
+  useEffect(() => {
+    if (Number(draft) === Number(value)) return;
+    setDraft(String(value ?? ''));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [value]);
+
+  const commit = (raw) => {
+    const trimmed = raw.trim();
+    if (trimmed === '') return onChange(defaultOnBlank);
+    const n = Number(trimmed);
+    if (!Number.isFinite(n)) return onChange(defaultOnBlank);
+    onChange(n);
+  };
+
+  return (
+    <input
+      type="number"
+      inputMode="numeric"
+      value={draft}
+      onChange={(e) => {
+        const v = e.target.value;
+        setDraft(v);
+        // Live-commit only when the value parses cleanly to a number
+        // — the "draft empty" and "draft = '-'" intermediate states
+        // stay local until blur.
+        if (v.trim() === '') return; // wait for blur
+        const n = Number(v);
+        if (Number.isFinite(n)) onChange(n);
+      }}
+      onBlur={() => commit(draft)}
+      min={min}
+      max={max}
+      style={style}
+      {...rest}
+    />
   );
 }
 

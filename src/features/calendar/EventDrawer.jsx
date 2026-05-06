@@ -65,10 +65,14 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
       <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '—'}/>
       {event.notes && <InfoRow label="Notes" value={event.notes}/>}
 
-      {/* Mobile address + video room URL surfaced for the owner so they
-          know where to go (or how to dial in). */}
+      {/* Mobile address (from client) + in-person venue (from service)
+          + video room URL surfaced for the owner so they know where to
+          go or how to dial in. */}
       {event.locationAddress && (
         <InfoRow label="Address" value={event.locationAddress}/>
+      )}
+      {!event.locationAddress && svc?.locationType === 'in_person' && svc?.locationLabel && (
+        <InfoRow label="Where" value={svc.locationLabel}/>
       )}
       {event.videoRoomUrl && (
         <div style={{ marginTop: 12, padding: '10px 12px', borderRadius: 10,

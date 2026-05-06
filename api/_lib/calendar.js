@@ -59,6 +59,7 @@ export function serializeService(row) {
     depositType:       row.deposit_type || 'none',
     depositAmount:     Number(row.deposit_amount || 0),
     locationType:      row.location_type || 'in_person',
+    locationLabel:     row.location_label || '',
     travelBufferMinutes: row.travel_buffer_minutes || 0,
     cancellationFeeAmount:  Number(row.cancellation_fee_amount || 0),
     cancellationWindowHours: Number.isInteger(row.cancellation_window_hours)

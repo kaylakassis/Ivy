@@ -575,6 +575,13 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS location_type TEXT NOT NULL DEFAUL
   CHECK (location_type IN ('in_person', 'mobile', 'virtual'));
 ALTER TABLE services ADD COLUMN IF NOT EXISTS travel_buffer_minutes INT NOT NULL DEFAULT 0
   CHECK (travel_buffer_minutes >= 0 AND travel_buffer_minutes <= 240);
+-- Per-service venue. For in_person services, a free-form address /
+-- room / suite string shown on booking confirmations and the public
+-- page so clients know exactly where to come. For virtual services, a
+-- default meeting URL the owner uses (overrides the auto-Jitsi room
+-- when set). Empty for mobile (the address comes from the client at
+-- booking time and lives on the booking row itself).
+ALTER TABLE services ADD COLUMN IF NOT EXISTS location_label TEXT;
 
 -- Cancellation + no-show fee policy. When fee_amount > 0 AND a card is
 -- on file for the client, late-cancel/no-show actions auto-charge the
