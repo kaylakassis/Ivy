@@ -32,9 +32,14 @@ export function serializeSettings(row) {
   };
 }
 
-// Categories for Discover. Owners pick one (or none). Kept short so the chip
-// row doesn't overflow on small screens — add carefully.
-export const DISCOVER_CATEGORIES = ['Wellness', 'Beauty', 'Fitness', 'Health', 'Professional'];
+// Categories for Discover. Owners pick one (or none). The set MUST stay
+// in sync with src/lib/categories.js on the client — the server-side
+// list gates which values can be saved on a workspace.
+export const DISCOVER_CATEGORIES = [
+  'Wellness', 'Beauty', 'Fitness', 'Health',
+  'Home', 'Pet', 'Creative', 'Education', 'Events',
+  'Professional', 'Other',
+];
 export const DISCOVER_CATEGORY_SET = new Set(DISCOVER_CATEGORIES);
 
 export function serializeService(row) {

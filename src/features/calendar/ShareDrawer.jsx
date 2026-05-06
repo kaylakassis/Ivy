@@ -6,8 +6,10 @@ import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
 import { slugify } from './utils.js';
 import { api } from '../../lib/api.js';
+import { publicOrigin } from '../../lib/publicUrl.js';
+import { CATEGORY_IDS } from '../../lib/categories.js';
 
-const CATEGORIES = ['Wellness', 'Beauty', 'Fitness', 'Health', 'Professional'];
+const CATEGORIES = CATEGORY_IDS;
 
 export default function ShareDrawer({ settings, onSave, onClose }) {
   const [bizName, setBizName] = useState(settings.bizName || '');
@@ -84,7 +86,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   };
   const savedSlug = settings.slug || null;
   const isPublished = !!savedSlug;
-  const shareUrl = savedSlug ? `${window.location.origin}/book/${savedSlug}` : '';
+  const shareUrl = savedSlug ? `${publicOrigin()}/book/${savedSlug}` : '';
 
   const save = async () => {
     if (!dirty || busy) return;

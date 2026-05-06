@@ -6,6 +6,7 @@ import Canvas from './Canvas.jsx';
 import Inspector from './Inspector.jsx';
 import { mkSection } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
+import { publicOrigin } from '../../lib/publicUrl.js';
 
 export default function Editor({ site, set, setSection, addSection, removeSection, moveSection, reset, publish, saving, saveErr }) {
   const [selectedId, setSelectedId] = useState(site.sections[0]?.id || null);
@@ -48,7 +49,7 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
       setPublishing(false);
     }
   };
-  const publicUrl = site.handle ? `${window.location.origin}/site/${site.handle}` : null;
+  const publicUrl = site.handle ? `${publicOrigin()}/site/${site.handle}` : null;
 
   return (
     <div style={{

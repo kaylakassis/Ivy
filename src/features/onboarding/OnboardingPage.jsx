@@ -15,6 +15,8 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useAuth } from '../../lib/auth.jsx';
+import { publicOrigin } from '../../lib/publicUrl.js';
+import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
 
 const STEPS = [
   { id: 'welcome',      label: 'Welcome' },
@@ -24,44 +26,9 @@ const STEPS = [
   { id: 'done',         label: "You're set" },
 ];
 
-const CATEGORIES = [
-  { id: 'Wellness',     label: 'Wellness',     icon: 'Spark',  hint: 'Massage, acupuncture, energy work' },
-  { id: 'Beauty',       label: 'Beauty',       icon: 'Gift',   hint: 'Hair, nails, skin, brows, lashes' },
-  { id: 'Fitness',      label: 'Fitness',      icon: 'Trending', hint: 'Personal training, yoga, pilates' },
-  { id: 'Health',       label: 'Health',       icon: 'Check',  hint: 'Therapy, nutrition, coaching' },
-  { id: 'Professional', label: 'Professional', icon: 'Doc',    hint: 'Consulting, design, freelance work' },
-];
-
-// Starter packs the wizard offers when a category is picked. The user
-// can add any subset to their workspace in one click. Prices are
-// placeholders — we want them tweaked, not blindly accepted.
-const SERVICE_PACKS = {
-  Wellness: [
-    { name: '60-min massage',  durationMinutes: 60, price: 120 },
-    { name: '90-min massage',  durationMinutes: 90, price: 170 },
-    { name: 'Initial consult', durationMinutes: 30, price: 0 },
-  ],
-  Beauty: [
-    { name: 'Cut & style',  durationMinutes: 60, price: 90 },
-    { name: 'Color',        durationMinutes: 120, price: 180 },
-    { name: 'Manicure',     durationMinutes: 45, price: 50 },
-  ],
-  Fitness: [
-    { name: '60-min training session', durationMinutes: 60, price: 95 },
-    { name: 'Group class',             durationMinutes: 60, price: 25 },
-    { name: 'Free consultation',       durationMinutes: 30, price: 0 },
-  ],
-  Health: [
-    { name: 'Initial intake',     durationMinutes: 60, price: 150 },
-    { name: 'Follow-up session',  durationMinutes: 50, price: 120 },
-    { name: 'Discovery call',     durationMinutes: 20, price: 0 },
-  ],
-  Professional: [
-    { name: 'Discovery call',     durationMinutes: 30, price: 0 },
-    { name: '60-min consult',     durationMinutes: 60, price: 200 },
-    { name: 'Strategy workshop',  durationMinutes: 120, price: 600 },
-  ],
-};
+// CATEGORIES + SERVICE_PACKS now come from src/lib/categories.js so the
+// onboarding wizard, the calendar share drawer, and any future caller
+// stay in sync from one source of truth.
 
 const WEEKDAYS = [
   { idx: 1, short: 'Mon', long: 'Monday' },
@@ -339,7 +306,7 @@ function Bullet({ icon, label, hint }) {
 // ---- Step 1: Business name + slug + tagline + category ----
 function Business({ bizName, setBizName, slug, setSlug, tagline, setTagline,
                     category, setCategory, onBack, onSave, busy }) {
-  const origin = (typeof window !== 'undefined' ? window.location.origin : '');
+  const origin = publicOrigin();
   const validSlug = /^[a-z0-9][a-z0-9-]{1,39}$/.test(slug || '');
   const canSave = !busy && bizName.trim().length > 0 && validSlug;
 
@@ -681,7 +648,7 @@ function minToHM(min) {
 
 // ---- Step 4: Done ----
 function Done({ slug, bizName, servicesCount, onFinish, onBack, busy }) {
-  const origin = (typeof window !== 'undefined' ? window.location.origin : '');
+  const origin = publicOrigin();
   const link = slug ? `${origin}/book/${slug}` : null;
   const [copied, setCopied] = useState(false);
 
