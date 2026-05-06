@@ -18,9 +18,16 @@
 //                                         updates real period_end on payment)
 //     userType       legacy alias for role; only accepts the first three
 //                    values. Kept for back-compat with older admin clients.
-//     password       setting a new one without going through email
-//     name           rename
-//     sendResetLink: true → emails them a reset link
+//     password               setting a new one without going through email
+//     name                   rename
+//     sendResetLink: true        → emails them a fresh password-reset link
+//     sendVerificationLink: true → emails them a fresh email-verification link
+//                                  (no-op if already verified)
+//     resendWelcome: 'day1'|'day3'|'day7'|'day14'
+//                            → re-fires that welcome-sequence beat using the
+//                              same renderer the cron uses. Useful when a
+//                              user reports they "never got" an early email.
+//                              Owner vs client variant is auto-detected.
 //
 // DELETE /api/admin/users/:id
 //   Hard-delete the user. Cascades through the FK chain (workspaces,
@@ -31,8 +38,9 @@ import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { requireSuperAdmin, emailIsSuperAdmin, getAdminActor } from '../../_lib/admin.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
-import { createToken, KIND_RESET, appUrl } from '../../_lib/tokens.js';
+import { createToken, invalidateUserTokens, KIND_RESET, KIND_VERIFY, appUrl } from '../../_lib/tokens.js';
 import { recordAudit } from '../../_lib/audit.js';
+import { WELCOME_BEATS } from '../../_lib/welcome-content.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
 const VALID_ROLES = new Set([
@@ -52,7 +60,12 @@ export default async function handler(req, res) {
 
   try {
     const id = (req.query.id || '').toString();
-    const r = await sql`SELECT id, email, name, user_type FROM users WHERE id = ${id}`;
+    const r = await sql`
+      SELECT u.id, u.email, u.name, u.user_type, u.email_verified_at,
+             EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id) AS is_owner
+        FROM users u
+       WHERE u.id = ${id}
+    `;
     if (r.rows.length === 0) return notFound(res, 'User not found');
     const u = r.rows[0];
 
@@ -130,7 +143,88 @@ async function patchUser(u, req, res) {
     }
   }
 
+  // Fresh email-verification link. Burns older live verify tokens so only
+  // the latest one works. No-op if the user already verified — return a
+  // soft note so the UI can show "already verified" rather than a generic
+  // success.
+  if (body.sendVerificationLink === true) {
+    if (u.email_verified_at) {
+      return ok(res, { ok: true, alreadyVerified: true });
+    }
+    try {
+      await invalidateUserTokens({ userId: u.id, kind: KIND_VERIFY });
+      const raw = await createToken({ userId: u.id, kind: KIND_VERIFY, ttlMinutes: 60 * 24 });
+      const link = `${appUrl()}/verify-email?token=${encodeURIComponent(raw)}`;
+      await sendEmail({
+        to: u.email,
+        subject: 'Confirm your email for THRYVE',
+        html: emailShell({
+          heading: 'Confirm your email',
+          body: `<p>${u.name ? `Hi ${escapeHtml(u.name)},` : 'Hi,'}</p>
+                 <p>An admin sent you a fresh link to confirm your THRYVE
+                 email. Click below to activate notifications and finish
+                 setting up your account.</p>
+                 <p>This link is good for 24 hours.</p>`,
+          ctaText: 'Confirm my email',
+          ctaUrl: link,
+          footer: `If this looks unexpected, reply to this email and we'll sort it out.`,
+        }),
+      });
+      await recordAudit(req, {
+        actor, targetUserId: u.id, action: 'user.send_verification_link',
+        meta: {},
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[admin/users/:id] verification-link email failed:', err.message);
+      return badRequest(res, `Could not send email: ${err.message}`);
+    }
+  }
+
+  // Resend a specific welcome-sequence beat. Uses the exact same renderer
+  // the cron uses, so the message body is identical to the original.
+  // For owner-only beats (day3, day14), re-firing on a client-only user
+  // would otherwise return null — we fall back to a clear 400 so the
+  // operator knows to pick a different beat.
+  if ('resendWelcome' in body && body.resendWelcome) {
+    const beat = String(body.resendWelcome);
+    const seq = WELCOME_BEATS[beat];
+    if (!seq) return badRequest(res, `Unknown welcome beat: ${beat}`);
+    const variant = u.is_owner ? 'owner' : 'client';
+    const out = seq.render({
+      name: firstName(u.name),
+      appUrl: appUrl(),
+      variant,
+    });
+    if (!out) {
+      return badRequest(res, `${beat} isn't part of the ${variant} sequence — pick a different beat.`);
+    }
+    try {
+      await sendEmail({ to: u.email, subject: out.subject, html: out.html });
+      // Mark welcome_sent.<beat> so the cron doesn't re-send the same
+      // beat next run. NOW()::text is the same shape used by the cron.
+      await sql`
+        UPDATE users
+        SET welcome_sent = welcome_sent || jsonb_build_object(${beat}, NOW()::text)
+        WHERE id = ${u.id}
+      `;
+      await recordAudit(req, {
+        actor, targetUserId: u.id, action: 'user.resend_welcome',
+        meta: { beat, variant },
+      });
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.warn('[admin/users/:id] welcome resend failed:', err.message);
+      return badRequest(res, `Could not send email: ${err.message}`);
+    }
+  }
+
   return ok(res, { ok: true });
+}
+
+function firstName(name) {
+  if (!name) return null;
+  return String(name).trim().split(/\s+/)[0] || null;
 }
 
 async function deleteUser(u, req, res) {

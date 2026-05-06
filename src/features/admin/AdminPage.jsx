@@ -412,14 +412,19 @@ function UserDetailModal({ user, onClose, onChanged }) {
   const [info, setInfo] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  const action = async (label, fn) => {
+  // `keepOpen` skips the onChanged callback so the modal stays open and
+  // the success message is visible. Use for fire-and-forget actions
+  // that don't change anything visible in the modal (e.g. resending an
+  // email, where the row in the list doesn't need to reload either).
+  const action = async (label, fn, { keepOpen = false } = {}) => {
     setBusy(label); setErr(null); setInfo(null);
     try {
-      await fn();
+      const result = await fn();
       setInfo(`${label} ✓`);
-      onChanged?.();
+      if (!keepOpen) onChanged?.();
+      return result;
     }
-    catch (e) { setErr(e.message); }
+    catch (e) { setErr(e.message); return null; }
     finally { setBusy(null); }
   };
 
@@ -475,15 +480,27 @@ function UserDetailModal({ user, onClose, onChanged }) {
         <div className="metric-label" style={{ marginTop: 8 }}>Actions</div>
         <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
           <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
-            onClick={() => action('Reset link sent', () => api.patch(`/admin/users/${user.id}`, { sendResetLink: true }))}>
-            Send password-reset link
+            onClick={() => action('Reset link sent',
+              () => api.patch(`/admin/users/${user.id}`, { sendResetLink: true }),
+              { keepOpen: true })}>
+            {busy === 'Reset link sent' ? '…' : 'Send password-reset link'}
+          </button>
+          <button disabled={!!busy || !!user.emailVerifiedAt} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
+            title={user.emailVerifiedAt ? 'Already verified — no need to resend.' : 'Send a fresh email-verification link.'}
+            onClick={async () => {
+              const r = await action('Verification link sent',
+                () => api.patch(`/admin/users/${user.id}`, { sendVerificationLink: true }),
+                { keepOpen: true });
+              if (r?.alreadyVerified) setInfo('Already verified — no email sent.');
+            }}>
+            {busy === 'Verification link sent' ? '…' : 'Send verification email'}
           </button>
           <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
             onClick={async () => {
               const pw = prompt('New password (min 8 chars):'); if (!pw) return;
               await action('Password set', () => api.patch(`/admin/users/${user.id}`, { password: pw }));
             }}>
-            Set password manually
+            {busy === 'Password set' ? '…' : 'Set password manually'}
           </button>
           <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
             onClick={async () => {
@@ -496,6 +513,27 @@ function UserDetailModal({ user, onClose, onChanged }) {
             }}>
             View as user →
           </button>
+        </div>
+
+        <div className="metric-label" style={{ marginTop: 8 }}>Resend welcome email</div>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+          {['day1', 'day3', 'day7', 'day14'].map((beat) => {
+            const label = `Day ${beat.replace('day', '')}`;
+            const k = `Welcome ${label} sent`;
+            return (
+              <button key={beat} disabled={!!busy}
+                className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
+                onClick={() => action(k,
+                  () => api.patch(`/admin/users/${user.id}`, { resendWelcome: beat }),
+                  { keepOpen: true })}>
+                {busy === k ? '…' : label}
+              </button>
+            );
+          })}
+          <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+            Re-fires the matching email from the welcome sequence.
+            Day 3 & Day 14 are owner-only.
+          </span>
         </div>
 
         <div className="metric-label" style={{ marginTop: 8, color: 'var(--danger)' }}>Danger zone</div>
