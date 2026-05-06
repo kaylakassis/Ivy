@@ -45,7 +45,10 @@ export default function ViewToggle() {
   return (
     <div role="group" aria-label="View switcher" style={{
       position: 'fixed',
-      bottom: 'calc(env(safe-area-inset-bottom, 0px) + 18px)',
+      // `bottom` lives in CSS (.view-toggle) so the
+      // `body.has-mobile-nav .view-toggle` media-query override can lift
+      // the pill above the bottom nav. Setting it inline here would
+      // override the CSS and the pill would sit ON TOP of the nav.
       left: '50%', transform: 'translateX(-50%)',
       // Sits above the Paywall (z-index 200) so a paywalled owner can
       // always escape back to the free client portal.
@@ -54,8 +57,6 @@ export default function ViewToggle() {
       background: 'var(--surface)', border: '1px solid var(--border-strong)',
       borderRadius: 999, boxShadow: 'var(--shadow)',
     }}
-    // Bottom-nav on mobile sits at the bottom; nudge the pill up so it
-    // doesn't collide. Body class set by both shells.
     className="view-toggle"
     >
       <ToggleButton

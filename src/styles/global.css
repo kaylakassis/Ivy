@@ -160,19 +160,26 @@ img, svg, video { max-width: 100%; height: auto; }
 }
 .scroll-x::-webkit-scrollbar { display: none; }
 
+/* Floating Business/Client view-toggle pill. Default sits 18px above the
+   bottom; the mobile rule below lifts it clear of the bottom nav. The
+   value is owned by CSS (NOT inline) so the media-query override can
+   actually apply. */
+.view-toggle { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); }
+
 /* Reserve space for the mobile bottom nav. Pages opt in by adding the
    `has-mobile-nav` class to their root container, OR the body class is
    set automatically by AppShell when it renders the bottom nav. */
 @media (max-width: 720px) {
   body.has-mobile-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
-  /* Bottom nav (64px) + floating ViewToggle pill (~52px including
-     gap). Ensures content always scrolls clear of both — previously
-     the pill could overlap the last few rows of any page that
-     didn't use .page-pad's 96px bottom (e.g. Dashboard). */
-  body.has-mobile-nav .app-root > div { padding-bottom: 132px; }
-  /* Bottom-nav owns the bottom 64px on mobile — bump the floating
-     view-toggle pill above it so they don't collide. */
-  body.has-mobile-nav .view-toggle { bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); }
+  /* Bottom nav (~64px) + floating ViewToggle pill (~52px) + breathing
+     room. Ensures content always scrolls clear of both. */
+  body.has-mobile-nav .app-root > div { padding-bottom: 148px; }
+  /* Bottom-nav is ~64px tall plus safe-area; lift the pill 88px above
+     the bottom so it sits ABOVE the nav with ~16px of breathing room.
+     Previously 76px landed the pill *on top of* the nav icons. */
+  body.has-mobile-nav .view-toggle {
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
+  }
 }
 
 
