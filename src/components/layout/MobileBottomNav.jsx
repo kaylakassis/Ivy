@@ -1,8 +1,11 @@
 // Fixed-bottom 5-slot nav for mobile. Picks the most-used routes; the
 // hamburger drawer covers the rest (Finance, Goals, Rewards, Documents, Website).
+// Super-admins get a 6th slot so the Admin console is reachable without
+// opening the drawer — they tend to bounce in/out of it constantly.
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
+import { useAuth } from '../../lib/auth.jsx';
 
 const PRIMARY = [
   { id: 'dashboard', to: '/dashboard', icon: 'Home',     label: 'Home' },
@@ -12,10 +15,14 @@ const PRIMARY = [
   { id: 'ivy',       to: '/ivy',       icon: 'Spark',    label: 'Ivy' },
 ];
 
+const ADMIN_ITEM = { id: 'admin', to: '/admin', icon: 'Settings', label: 'Admin' };
+
 export default function MobileBottomNav() {
+  const { user } = useAuth();
+  const items = user?.isSuperAdmin ? [...PRIMARY, ADMIN_ITEM] : PRIMARY;
   return (
     <nav className="mobile-nav" aria-label="Primary">
-      {PRIMARY.map((item) => {
+      {items.map((item) => {
         const Icon = Icons[item.icon];
         return (
           <NavLink key={item.to}

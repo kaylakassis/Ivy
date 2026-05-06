@@ -172,8 +172,8 @@ export function SimpleNav() {
       borderBottom: '1px solid var(--border)',
     }}>
       <div style={{
-        maxWidth: 1100, margin: '0 auto', padding: '14px 24px',
-        display: 'flex', alignItems: 'center', gap: 12,
+        maxWidth: 1100, margin: '0 auto', padding: '14px 20px',
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       }}>
         <Link to="/" style={{
           display: 'flex', alignItems: 'center', gap: 10,
@@ -192,9 +192,9 @@ export function SimpleNav() {
           }}>thryve</span>
         </Link>
         <div style={{ flex: 1 }}/>
-        <Link to="/changelog" className="btn btn-ghost"
+        <Link to="/changelog" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Changelog</Link>
-        <Link to="/about" className="btn btn-ghost"
+        <Link to="/about" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>About</Link>
         <Link to="/signin" className="btn btn-ghost"
           style={{ padding: '8px 14px', fontSize: 13, color: 'var(--fg-2)' }}>Sign in</Link>

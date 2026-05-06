@@ -26,12 +26,13 @@ export default function AuthPage({ mode = 'signin' }) {
   const mismatch = isSignUp && confirm.length > 0 && confirm !== password;
   const canSubmit = !busy
     && (!isSignUp
-      || (password.length >= 8 && confirm === password && acceptedTerms));
+      || (name.trim().length > 0 && password.length >= 8 && confirm === password && acceptedTerms));
 
   const submit = async (e) => {
     e.preventDefault();
     setErr(null);
     if (isSignUp) {
+      if (!name.trim()) { setErr('Please share your name'); return; }
       if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
       if (password !== confirm) { setErr("Passwords don't match"); return; }
       if (!acceptedTerms) {
@@ -42,7 +43,7 @@ export default function AuthPage({ mode = 'signin' }) {
     setBusy(true);
     try {
       if (isSignUp) {
-        await signUp(email, password, name || null, role, refCode);
+        await signUp(email, password, name.trim(), role, refCode);
         nav(role === 'client' ? '/me' : '/', { replace: true });
       } else {
         await signIn(email, password);
@@ -93,8 +94,10 @@ export default function AuthPage({ mode = 'signin' }) {
             <Field label="I'm signing up as a…">
               <RoleToggle value={role} onChange={setRole}/>
             </Field>
-            <Field label="Your name (optional)">
-              <input value={name} onChange={(e) => setName(e.target.value)} autoComplete="name" style={inputS} />
+            <Field label="Your name">
+              <input value={name} onChange={(e) => setName(e.target.value)}
+                required minLength={1}
+                autoComplete="name" style={inputS} />
             </Field>
           </>
         )}

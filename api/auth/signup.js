@@ -15,6 +15,17 @@ import { sendEmail, emailShell } from '../_lib/email.js';
 import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
+// Used to render the user's name into the verification email body.
+// Without this the line `${escapeHtml(user.name)}` throws ReferenceError
+// the moment a name is provided — historically suppressed by the
+// surrounding try/catch, which manifested as "verification email
+// silently doesn't arrive when the user typed their name."
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[c]));
+}
+
 const VERIFY_TTL_MIN = 60 * 24; // 24 hours
 
 export default async function handler(req, res) {
@@ -26,6 +37,10 @@ export default async function handler(req, res) {
     if (typeof password !== 'string' || password.length < 8) {
       return badRequest(res, 'Password must be at least 8 characters');
     }
+    // Name is required so we can address the user in emails + show
+    // them in client portals. Trim + cap length defensively.
+    const cleanName = (name || '').toString().trim().slice(0, 200);
+    if (!cleanName) return badRequest(res, 'Your name is required');
     // Hard requirement: signup cannot proceed without an explicit
     // acceptance of the current Terms version. Refuse the request
     // rather than silently default — we want the proof.
@@ -56,7 +71,7 @@ export default async function handler(req, res) {
     const password_hash = await hashPassword(password);
     const insertUser = await sql`
       INSERT INTO users (email, password_hash, name, terms_version, terms_accepted_at)
-      VALUES (${emailKey}, ${password_hash}, ${name || null}, ${CURRENT_TERMS_VERSION}, NOW())
+      VALUES (${emailKey}, ${password_hash}, ${cleanName}, ${CURRENT_TERMS_VERSION}, NOW())
       RETURNING id, email, name, created_at, email_verified_at
     `;
     const user = insertUser.rows[0];
@@ -130,8 +145,4 @@ export default async function handler(req, res) {
   } catch (err) {
     return serverError(res, err);
   }
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

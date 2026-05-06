@@ -161,16 +161,16 @@ function Nav() {
     }}>
       <div style={{
         maxWidth: 1100, margin: '0 auto',
-        padding: '14px 24px',
-        display: 'flex', alignItems: 'center', gap: 12,
+        padding: '14px 20px',
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
       }}>
         <Brand/>
         <div style={{ flex: 1 }}/>
-        <a href="#features" className="btn btn-ghost"
+        <a href="#features" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Features</a>
-        <a href="#compare" className="btn btn-ghost"
+        <a href="#compare" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Compare</a>
-        <a href="#faq" className="btn btn-ghost"
+        <a href="#faq" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>FAQ</a>
         <Link to="/signin" className="btn btn-ghost"
           style={{ padding: '8px 14px', fontSize: 13, color: 'var(--fg-2)' }}>

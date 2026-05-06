@@ -97,7 +97,16 @@ function AppShellInner() {
             isTablet={viewport.isTablet}
             onMenuClick={() => setDrawerOpen(true)}
           />
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* Bottom padding reserves space for the floating ViewToggle
+              pill (sits at bottom: 18, ~50px tall) so it can never
+              overlap the last row of content. .page-pad already adds
+              96px on pages that opt in; this catches pages that don't
+              (Dashboard, etc.). Mobile gets its own reservation via
+              body.has-mobile-nav rules. */}
+          <div style={{
+            flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
+            paddingBottom: viewport.isMobile ? 0 : 80,
+          }}>
             <Outlet />
           </div>
         </main>

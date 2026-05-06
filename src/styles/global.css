@@ -144,6 +144,13 @@ html { -webkit-text-size-adjust: 100%; }
 body { overflow-x: hidden; }
 img, svg, video { max-width: 100%; height: auto; }
 
+/* Hide marketing-page secondary nav links (Features / Compare / FAQ) on
+   narrow viewports — at < 720px the row of 5+ buttons can't fit and
+   was overflowing the right edge. Sign in + Get started stay visible. */
+@media (max-width: 720px) {
+  .marketing-nav-secondary { display: none !important; }
+}
+
 /* Horizontal scroll-snap helper for tab pickers / chip rows on mobile.
    Add `className="scroll-x"` to any horizontal flex row that overflows. */
 .scroll-x {
@@ -158,11 +165,16 @@ img, svg, video { max-width: 100%; height: auto; }
    set automatically by AppShell when it renders the bottom nav. */
 @media (max-width: 720px) {
   body.has-mobile-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
-  body.has-mobile-nav .app-root > div { padding-bottom: 64px; }
+  /* Bottom nav (64px) + floating ViewToggle pill (~52px including
+     gap). Ensures content always scrolls clear of both — previously
+     the pill could overlap the last few rows of any page that
+     didn't use .page-pad's 96px bottom (e.g. Dashboard). */
+  body.has-mobile-nav .app-root > div { padding-bottom: 132px; }
   /* Bottom-nav owns the bottom 64px on mobile — bump the floating
      view-toggle pill above it so they don't collide. */
   body.has-mobile-nav .view-toggle { bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); }
 }
+
 
 /* MOBILE: < 720px ------------------------------------------- */
 @media (max-width: 720px) {
