@@ -1,5 +1,6 @@
 // Owner-side Messages: thread list (left) + conversation (right).
-// Text-only for now. Attachments + doc-cards land in later phases.
+// Composer supports text, dictation (voice → text), and voice memos
+// (recorded audio + automatic transcription, both saved on the message).
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -8,6 +9,8 @@ import { useThreads, useThread } from './state.js';
 import { fmtTime, fmtTimestampHeader, computeTimestampPoints } from './utils.js';
 import NewThreadModal from './NewThreadModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
+import { useDictation, useVoiceMemo } from '../../lib/speech.js';
+import { upload } from '@vercel/blob/client';
 
 export default function Messages() {
   const { threads, loading, error, startThread, updateThread, setMode } = useThreads();
@@ -180,7 +183,10 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
   const { thread, messages, loading, error, send } = useThread(threadId);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
+  const [voiceErr, setVoiceErr] = useState(null);
   const scrollRef = useRef(null);
+  const dictation = useDictation();
+  const memo = useVoiceMemo();
 
   // Mark read in the parent's threads list once GET returns (server already did it).
   useEffect(() => {
@@ -216,6 +222,10 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
 
   const submit = async (e) => {
     e?.preventDefault?.();
+    // Stop a running dictation first so its final transcript flushes
+    // into the input. Without this, the user's last spoken phrase
+    // sometimes gets cut.
+    if (dictation.listening) dictation.stop();
     const text = input.trim();
     if (!text || sending) return;
     setSending(true);
@@ -226,6 +236,70 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
       setSending(false);
     }
   };
+
+  const toggleDictation = () => {
+    setVoiceErr(null);
+    if (dictation.listening) {
+      dictation.stop();
+      return;
+    }
+    if (!dictation.supported) {
+      setVoiceErr('Voice input not supported in this browser');
+      return;
+    }
+    // Snapshot the existing input so the dictated transcript appends
+    // rather than replaces — useful when the owner has already typed
+    // a few words and just wants to dictate the rest.
+    const prefix = input.trim() ? input.trim() + ' ' : '';
+    dictation.start((transcript) => setInput(prefix + transcript));
+  };
+
+  // Voice memo recording: hold down or tap-to-toggle. We use tap-to-
+  // toggle because press-and-hold is fiddly on touch devices and a
+  // disorienting gesture for first-time users. Tap once to start, tap
+  // Send to finish + send (or X to cancel).
+  const startVoiceMemo = async () => {
+    setVoiceErr(null);
+    if (!memo.supported) {
+      setVoiceErr('Recording not supported in this browser');
+      return;
+    }
+    await memo.start();
+  };
+
+  const sendVoiceMemo = async () => {
+    if (!memo.recording) return;
+    setSending(true);
+    try {
+      const result = await memo.stop();
+      if (!result || !result.blob || result.blob.size === 0) return;
+      // Upload the audio blob directly to Vercel Blob storage. Bypasses
+      // our 4.5MB serverless body limit and matches how image
+      // attachments work.
+      const ext = result.mime.includes('mp4') ? 'm4a'
+                : result.mime.includes('ogg') ? 'ogg'
+                : result.mime.includes('mpeg') ? 'mp3'
+                : 'webm';
+      const path = `messages/voice-${Date.now()}.${ext}`;
+      const uploaded = await upload(path, result.blob, {
+        access: 'public',
+        handleUploadUrl: '/api/messages/upload-token',
+        contentType: result.mime,
+      });
+      await send(result.transcript || '', [{
+        url: uploaded.url,
+        type: result.mime,
+        name: 'Voice message',
+        durationMs: result.durationMs,
+      }]);
+    } catch (err) {
+      setVoiceErr(err.message || 'Could not send voice message');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const cancelVoiceMemo = () => { memo.cancel(); setVoiceErr(null); };
 
   const tsPoints = computeTimestampPoints(messages);
 
@@ -317,32 +391,71 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
             Broadcast mode — clients can&apos;t reply to this thread.
           </div>
         )}
-        <div style={{
-          display: 'flex', alignItems: 'flex-end', gap: 8,
-          padding: 6, borderRadius: 14,
-          background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
-        }}>
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
-            }}
-            placeholder="Write a message…"
-            rows={1}
-            style={{
-              flex: 1, resize: 'none', minHeight: 32, maxHeight: 200,
-              padding: '8px 10px', border: 0, outline: 'none',
-              background: 'transparent', color: 'var(--fg)',
-              fontSize: 14, fontFamily: 'inherit', lineHeight: 1.45,
-            }}
+        {voiceErr && (
+          <div style={{
+            fontSize: 11, color: 'var(--danger)', marginBottom: 8,
+            padding: '6px 10px', borderRadius: 8,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          }}>{voiceErr}</div>
+        )}
+
+        {memo.recording ? (
+          <RecordingBar
+            elapsedMs={memo.elapsedMs}
+            transcript={memo.transcript}
+            onSend={sendVoiceMemo}
+            onCancel={cancelVoiceMemo}
+            sending={sending}
           />
-          <button className="btn btn-primary"
-            type="submit" disabled={sending || !input.trim()}
-            style={{ padding: '8px 14px', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
-            {sending ? '…' : <Icons.Arrow size={14} sw={2.2}/>}
-          </button>
-        </div>
+        ) : (
+          <div style={{
+            display: 'flex', alignItems: 'flex-end', gap: 8,
+            padding: 6, borderRadius: 14,
+            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+          }}>
+            <textarea
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); }
+              }}
+              placeholder={dictation.listening ? 'Listening…' : 'Write a message…'}
+              rows={1}
+              style={{
+                flex: 1, resize: 'none', minHeight: 32, maxHeight: 200,
+                padding: '8px 10px', border: 0, outline: 'none',
+                background: 'transparent', color: 'var(--fg)',
+                fontSize: 14, fontFamily: 'inherit', lineHeight: 1.45,
+              }}
+            />
+            {/* Dictation: voice → text into the composer. Hidden when
+                the browser doesn't expose Web Speech API. */}
+            {dictation.supported && (
+              <ComposerIconButton
+                title={dictation.listening ? 'Stop dictating' : 'Dictate'}
+                onClick={toggleDictation}
+                pulse={dictation.listening}
+                tone={dictation.listening ? 'accent' : 'muted'}
+              >
+                <DictationIcon active={dictation.listening}/>
+              </ComposerIconButton>
+            )}
+            {/* Voice memo: records audio + transcribes simultaneously. */}
+            {memo.supported && (
+              <ComposerIconButton
+                title="Record voice message"
+                onClick={startVoiceMemo}
+              >
+                <MicIcon/>
+              </ComposerIconButton>
+            )}
+            <button className="btn btn-primary"
+              type="submit" disabled={sending || !input.trim()}
+              style={{ padding: '8px 14px', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
+              {sending ? '…' : <Icons.Arrow size={14} sw={2.2}/>}
+            </button>
+          </div>
+        )}
       </form>
     </div>
   );
@@ -351,6 +464,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
 function Bubble({ message }) {
   const mine = message.sender === 'biz';
   const isSystem = message.sender === 'system';
+  const audioAtt = (message.attachments || []).find((a) => (a.type || '').startsWith('audio/'));
 
   if (isSystem) {
     return (
@@ -363,7 +477,7 @@ function Bubble({ message }) {
   return (
     <div style={{
       alignSelf: mine ? 'flex-end' : 'flex-start',
-      maxWidth: '72%',
+      maxWidth: '78%',
       padding: '9px 13px', borderRadius: 18,
       background: mine ? 'var(--accent)' : 'var(--surface)',
       color: mine ? 'var(--accent-ink)' : 'var(--fg)',
@@ -371,7 +485,132 @@ function Bubble({ message }) {
       fontSize: 14, lineHeight: 1.45,
       wordBreak: 'break-word', whiteSpace: 'pre-wrap',
     }}>
-      {message.text}
+      {audioAtt && <AudioPlayer url={audioAtt.url} mine={mine} durationMs={audioAtt.durationMs}/>}
+      {message.text && (
+        <div style={{
+          marginTop: audioAtt ? 6 : 0,
+          fontSize: audioAtt ? 13 : 14,
+          opacity: audioAtt ? 0.92 : 1,
+        }}>
+          {message.text}
+        </div>
+      )}
+    </div>
+  );
+}
+
+
+// ── Composer helpers ──────────────────────────────────────────────
+
+function ComposerIconButton({ children, title, onClick, pulse, tone }) {
+  const accent = tone === "accent";
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      style={{
+        flex: "0 0 auto",
+        width: 38, height: 38, borderRadius: 999,
+        border: "1px solid " + (accent ? "var(--accent)" : "var(--border)"),
+        background: accent ? "var(--accent-soft)" : "var(--surface)",
+        color: accent ? "var(--accent)" : "var(--fg-2)",
+        display: "flex", alignItems: "center", justifyContent: "center",
+        cursor: "pointer",
+        transition: "background .12s, border-color .12s",
+        animation: pulse ? "msg-mic-pulse 1.4s ease-in-out infinite" : undefined,
+      }}
+    >
+      {children}
+    </button>
+  );
+}
+
+function MicIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="9" y="3" width="6" height="12" rx="3"/>
+      <path d="M5 11a7 7 0 0 0 14 0"/>
+      <path d="M12 18v3"/>
+    </svg>
+  );
+}
+
+function DictationIcon({ active }) {
+  return (
+    <svg width="18" height="16" viewBox="0 0 24 18" fill="none" stroke="currentColor"
+         strokeWidth="2" strokeLinecap="round">
+      <path d="M3 9h2"/>
+      <path d="M7 5v8" opacity={active ? "1" : "0.85"}/>
+      <path d="M11 2v14"/>
+      <path d="M15 5v8" opacity={active ? "1" : "0.85"}/>
+      <path d="M19 9h2"/>
+    </svg>
+  );
+}
+
+// Big red record bar that takes the place of the regular composer while
+// a voice memo is being captured. Shows the elapsed counter, the live
+// transcript so the owner sees what is being captured, and Send/Cancel.
+function RecordingBar({ elapsedMs, transcript, onSend, onCancel, sending }) {
+  const sec = Math.floor(elapsedMs / 1000);
+  const m = Math.floor(sec / 60);
+  const s = String(sec % 60).padStart(2, "0");
+  return (
+    <div style={{
+      display: "flex", alignItems: "center", gap: 10,
+      padding: "10px 12px", borderRadius: 14,
+      background: "color-mix(in srgb, var(--danger) 6%, var(--surface-2))",
+      border: "1px solid color-mix(in srgb, var(--danger) 35%, var(--border-strong))",
+    }}>
+      <span style={{
+        width: 10, height: 10, borderRadius: 999, background: "var(--danger)",
+        animation: "msg-mic-pulse 1.2s ease-in-out infinite",
+        flex: "0 0 auto",
+      }}/>
+      <span className="mono-num" style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", flex: "0 0 auto" }}>
+        {m}:{s}
+      </span>
+      <span style={{
+        flex: 1, minWidth: 0, fontSize: 13, color: "var(--muted)",
+        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
+      }}>
+        {transcript || "Recording…"}
+      </span>
+      <button type="button" onClick={onCancel} disabled={sending}
+        className="btn btn-ghost" style={{ fontSize: 12, padding: "4px 10px" }}>
+        Cancel
+      </button>
+      <button type="button" onClick={onSend} disabled={sending}
+        className="btn btn-primary" style={{ fontSize: 12, padding: "6px 14px" }}>
+        {sending ? "Sending…" : "Send"}
+      </button>
+    </div>
+  );
+}
+
+function AudioPlayer({ url, mine, durationMs }) {
+  const totalSec = durationMs ? Math.round(durationMs / 1000) : 0;
+  const m = Math.floor(totalSec / 60);
+  const s = String(totalSec % 60).padStart(2, "0");
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 200 }}>
+      <audio controls preload="metadata" src={url} style={{
+        flex: 1, height: 36,
+        // Keep the player in our brand by tinting the controls — Chromium
+        // respects accentColor, Safari uses its own appearance.
+        accentColor: mine ? "var(--accent-ink)" : "var(--accent)",
+      }}/>
+      {totalSec > 0 && (
+        <span className="mono-num" style={{
+          fontSize: 11, opacity: 0.85,
+          color: mine ? "var(--accent-ink)" : "var(--muted)",
+        }}>
+          {m}:{s}
+        </span>
+      )}
     </div>
   );
 }

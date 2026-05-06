@@ -80,14 +80,17 @@ export function useThread(threadId) {
     return () => { live = false; };
   }, [threadId]);
 
-  const send = useCallback(async (text) => {
-    if (!threadId || !text.trim()) return null;
-    const r = await api.post('/messages/' + threadId, { text });
+  const send = useCallback(async (text, attachments) => {
+    if (!threadId) return null;
+    const trimmed = (text || '').trim();
+    const atts = Array.isArray(attachments) ? attachments : [];
+    if (!trimmed && atts.length === 0) return null;
+    const r = await api.post('/messages/' + threadId, { text: trimmed, attachments: atts });
     setMessages((m) => [...m, r.message]);
     setThread((t) => t ? {
       ...t,
       lastMessageAt: r.message.createdAt,
-      lastPreview: text.slice(0, 200),
+      lastPreview: (trimmed || (atts.some((a) => (a.type || '').startsWith('audio/')) ? '🎙️ Voice message' : 'Attachment')).slice(0, 200),
     } : t);
     return r.message;
   }, [threadId]);

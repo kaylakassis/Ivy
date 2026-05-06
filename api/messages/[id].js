@@ -59,15 +59,30 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       const body = await readBody(req);
       const text = (body.text || '').toString().trim();
-      if (!text) return badRequest(res, 'Message text is required');
+      // Voice memos send an empty text (or a transcript) plus an audio
+      // attachment. Either text or at least one attachment must be
+      // present — both empty would be a no-op.
+      const rawAttachments = Array.isArray(body.attachments) ? body.attachments : [];
+      const attachments = rawAttachments
+        .map((a) => ({
+          url: String(a?.url || '').slice(0, 1000),
+          type: String(a?.type || '').slice(0, 80),
+          name: a?.name ? String(a.name).slice(0, 200) : null,
+          durationMs: Number.isFinite(Number(a?.durationMs)) ? Number(a.durationMs) : null,
+        }))
+        .filter((a) => a.url && a.type);
+      if (!text && attachments.length === 0) {
+        return badRequest(res, 'Message text or attachment is required');
+      }
       if (text.length > 4000) return badRequest(res, 'Message is too long');
 
       const inserted = await sql`
-        INSERT INTO messages (thread_id, sender, text)
-        VALUES (${id}, 'biz', ${text})
+        INSERT INTO messages (thread_id, sender, text, attachments)
+        VALUES (${id}, 'biz', ${text}, ${JSON.stringify(attachments)}::jsonb)
         RETURNING *
       `;
-      const preview = text.slice(0, 200);
+      const audioOnly = !text && attachments.some((a) => a.type.startsWith('audio/'));
+      const preview = (text || (audioOnly ? '🎙️ Voice message' : 'Attachment')).slice(0, 200);
       // Defense-in-depth: thread ownership is already verified by
       // fetchOwnedThread above, but include workspace_id on the UPDATE so
       // a future regression in the ownership check can't open a leak.

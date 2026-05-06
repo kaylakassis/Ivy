@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
 import { minToHM, parseISO, RECURRENCE_OPTIONS } from './utils.js';
 import { api } from '../../lib/api.js';
+import CollectInPersonModal from '../finance/CollectInPersonModal.jsx';
 
 export default function EventDrawer({
   event, services,
@@ -223,6 +224,34 @@ function BookingExtraActions({ event }) {
   const [success, setSuccess] = useState(null);
   const [tipAmount, setTipAmount] = useState('');
   const [feeAmount, setFeeAmount] = useState('');
+  // Collect-in-person flow: hits /api/calendar/bookings/collect, gets
+  // back an invoice row + a fresh pay-link URL, then hands the invoice
+  // to the shared CollectInPersonModal which renders the QR + share
+  // shortcuts. The modal itself re-mints the token on open, so we pass
+  // the invoice through and let it handle the rest.
+  const [collectInvoice, setCollectInvoice] = useState(null);
+  const [collectErr, setCollectErr] = useState(null);
+
+  const total       = Number(event.bookingTotal || 0);
+  const depositPaid = Number(event.depositPaid || 0);
+  const balance     = Math.max(0, total - depositPaid);
+  const canCollect  = balance > 0 && !event.cancelledAt;
+
+  const startCollect = async () => {
+    if (!canCollect) return;
+    setCollectErr(null);
+    setBusy(true);
+    try {
+      const r = await api.post('/calendar/bookings/collect', { id: event.id });
+      // The endpoint returns an invoice; CollectInPersonModal will mint
+      // its own fresh pay-link on open via /api/invoices/pay-link.
+      setCollectInvoice(r.invoice);
+    } catch (e) {
+      setCollectErr(e.message || 'Could not generate pay link');
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const close = () => {
     setOpenAction(null); setError(null); setSuccess(null);
@@ -260,7 +289,14 @@ function BookingExtraActions({ event }) {
   return (
     <div style={{ marginTop: 18 }}>
       <div className="metric-label" style={{ marginBottom: 8 }}>Quick actions</div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
+        {canCollect && (
+          <button className="btn btn-primary" onClick={startCollect} disabled={busy}
+            style={{ fontSize: 12, padding: '8px 10px', justifyContent: 'center', gridColumn: '1 / -1' }}
+            title={`Collect $${balance.toFixed(2)} in person via QR / SMS link`}>
+            {busy ? 'Generating link…' : `Collect $${balance.toFixed(2)} in person`}
+          </button>
+        )}
         <button className="btn btn-outline" onClick={() => setOpenAction('no_show')}
           style={{ fontSize: 12, padding: '8px 10px', justifyContent: 'center' }}>
           No-show
@@ -270,10 +306,24 @@ function BookingExtraActions({ event }) {
           Charge fee
         </button>
         <button className="btn btn-outline" onClick={() => setOpenAction('tip')}
-          style={{ fontSize: 12, padding: '8px 10px', justifyContent: 'center' }}>
+          style={{ fontSize: 12, padding: '8px 10px', justifyContent: 'center', gridColumn: '1 / -1' }}>
           Add tip
         </button>
       </div>
+
+      {collectErr && (
+        <div style={{
+          marginTop: 10, padding: '8px 12px', borderRadius: 8,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12,
+        }}>{collectErr}</div>
+      )}
+      {collectInvoice && (
+        <CollectInPersonModal
+          invoice={collectInvoice}
+          onClose={() => setCollectInvoice(null)}
+        />
+      )}
 
       {openAction && (
         <div style={{

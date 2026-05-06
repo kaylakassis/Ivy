@@ -562,6 +562,13 @@ img, svg, video { max-width: 100%; height: auto; }
   .support-grid { grid-template-columns: 1fr; }
 }
 
+/* Messages voice memo + dictation — pulsing red dot for the recording
+   indicator and a subtle ring on the dictate button while listening. */
+@keyframes msg-mic-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1); }
+  50%      { opacity: 0.45; transform: scale(0.92); }
+}
+
 /* Ivy floating dock — global FAB + slide-in panel. Mounted in AppShell so
    it follows the owner across every route in the business app. */
 .ivy-dock-fab:hover {
