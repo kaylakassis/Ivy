@@ -25,7 +25,7 @@ function configure() {
     _configured = false;
     return false;
   }
-  webpush.setVapidDetails(subj || 'mailto:support@thryve.app', pub, priv);
+  webpush.setVapidDetails(subj || 'mailto:support@getthryve.ai', pub, priv);
   _configured = true;
   return true;
 }

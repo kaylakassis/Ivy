@@ -31,7 +31,7 @@ export default function TermsPage() {
         contract. You're responsible for keeping your credentials safe
         and for everything that happens under your account. Notify us
         immediately at{' '}
-        <a href="mailto:support@thryve.app" style={{ color: 'var(--accent)' }}>support@thryve.app</a>{' '}
+        <a href="mailto:support@getthryve.ai" style={{ color: 'var(--accent)' }}>support@getthryve.ai</a>{' '}
         if you suspect unauthorized access.</P>
 
       <H2>2. The Service is informational, not professional advice</H2>
@@ -260,7 +260,7 @@ export default function TermsPage() {
 
       <H2>18. Contact</H2>
       <P>Questions about these Terms:{' '}
-        <a href="mailto:support@thryve.app" style={{ color: 'var(--accent)' }}>support@thryve.app</a>.
+        <a href="mailto:support@getthryve.ai" style={{ color: 'var(--accent)' }}>support@getthryve.ai</a>.
       </P>
     </LegalPage>
   );

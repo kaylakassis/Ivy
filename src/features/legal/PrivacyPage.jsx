@@ -11,7 +11,7 @@ export default function PrivacyPage() {
         This Privacy Policy explains what information THRYVE ("we", "us", "the
         Service") collects from you, how we use it, and what choices you have.
         If anything here is unclear, please email us at{' '}
-        <a href="mailto:privacy@thryve.app" style={{ color: 'var(--accent)' }}>privacy@thryve.app</a>.
+        <a href="mailto:privacy@getthryve.ai" style={{ color: 'var(--accent)' }}>privacy@getthryve.ai</a>.
       </P>
 
       <H2>What we collect</H2>
@@ -71,7 +71,7 @@ export default function PrivacyPage() {
         <li><strong>Access.</strong> Request a copy of your data — visit Account Settings → Export, or email us.</li>
         <li><strong>Deletion.</strong> Delete your account at any time from Account Settings, or email us. We honor the request within 30 days.</li>
         <li><strong>Correction.</strong> Most fields are editable directly in the app. For anything you can't edit yourself, email us.</li>
-        <li><strong>Objection / restriction.</strong> EU and UK residents may object to processing or request restriction; reach us at privacy@thryve.app.</li>
+        <li><strong>Objection / restriction.</strong> EU and UK residents may object to processing or request restriction; reach us at privacy@getthryve.ai.</li>
         <li><strong>Complaint.</strong> EU residents may also file a complaint with their local data protection authority.</li>
       </UL>
 
@@ -98,7 +98,7 @@ export default function PrivacyPage() {
 
       <H2>Contact</H2>
       <P>Questions about this policy:{' '}
-        <a href="mailto:privacy@thryve.app" style={{ color: 'var(--accent)' }}>privacy@thryve.app</a>.
+        <a href="mailto:privacy@getthryve.ai" style={{ color: 'var(--accent)' }}>privacy@getthryve.ai</a>.
       </P>
     </LegalPage>
   );

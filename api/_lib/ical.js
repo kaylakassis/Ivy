@@ -105,7 +105,7 @@ export function buildICalFeed({ bizName, bookings, services }) {
     const summary = `${svc?.name || 'Appointment'} — ${firstName(b.client_name)}`;
     const dtstart = fmtLocal(b.date, b.start_min);
     const dtend   = fmtLocal(b.date, b.end_min);
-    const uid     = `${b.id}@thryve.app`;
+    const uid     = `${b.id}@getthryve.ai`;
     const rrule   = rruleFor(b.recurrence_rule, b.recurrence_until);
     const ex      = exDates(b.cancelled_occurrences);
 

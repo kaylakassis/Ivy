@@ -2,18 +2,18 @@
 // Returns Resend's verification status for every domain in your account.
 // Use after adding DNS records to confirm SPF / DKIM / DMARC are healthy.
 //
-//   curl https://thryve-pink.vercel.app/api/admin/email-status \
+//   curl https://getthryve.ai/api/admin/email-status \
 //     -H "x-admin-secret: $ADMIN_SECRET"
 //
 // Sample response:
 //   {
 //     "ok": true,
-//     "from": "THRYVE <noreply@thryve.app>",
-//     "replyTo": "support@thryve.app",
+//     "from": "THRYVE <noreply@getthryve.ai>",
+//     "replyTo": "support@getthryve.ai",
 //     "domains": [
 //       {
 //         "id": "...",
-//         "name": "thryve.app",
+//         "name": "getthryve.ai",
 //         "status": "verified",
 //         "region": "us-east-1",
 //         "createdAt": "2026-...",

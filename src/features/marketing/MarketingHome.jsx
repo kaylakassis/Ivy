@@ -116,7 +116,7 @@ export default function MarketingHome() {
     };
     document.title = 'THRYVE — the all-in-one business OS for solo entrepreneurs';
     const desc = "Clients, calendar, invoicing, messages, docs, goals, rewards, and an AI coach — all in one workspace. Built for massage therapists, stylists, trainers, coaches, and anyone running a small business solo.";
-    const url  = typeof window !== 'undefined' ? window.location.origin : 'https://thryve.app';
+    const url  = typeof window !== 'undefined' ? window.location.origin : 'https://getthryve.ai';
     upsert('name', 'description',          desc);
     upsert('property', 'og:title',         'THRYVE — the all-in-one business OS');
     upsert('property', 'og:description',   desc);
@@ -295,7 +295,7 @@ function ProductPreview() {
             background: 'var(--surface)', border: '1px solid var(--border)',
             fontSize: 11, color: 'var(--muted)',
           }}>
-            thryve.app/dashboard
+            getthryve.ai/dashboard
           </div>
         </div>
 

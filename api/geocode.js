@@ -14,7 +14,7 @@ import { badRequest, methodNotAllowed, ok, serverError } from './_lib/json.js';
 
 const NOMINATIM = 'https://nominatim.openstreetmap.org/search';
 // Nominatim's usage policy requires a real User-Agent identifying the app.
-const UA = 'THRYVE/1.0 (https://thryve.app; geocoding via Nominatim)';
+const UA = 'THRYVE/1.0 (https://getthryve.ai; geocoding via Nominatim)';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
