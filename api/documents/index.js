@@ -58,13 +58,17 @@ export default async function handler(req, res) {
       const body = await readBody(req);
       const name = (body.name || '').toString().trim();
       const kind = body.kind || 'written';
-      const contentHtml = body.contentHtml ? String(body.contentHtml).slice(0, 200000) : null;
+      // Accept empty string on create — the new UX is "name the doc,
+      // then write the body in the editor that opens." Truncate at
+      // 200k for written docs; pass through null/empty for upload-kind
+      // docs that don't have HTML at all.
+      const rawHtml = body.contentHtml == null ? '' : String(body.contentHtml);
+      const contentHtml = rawHtml.slice(0, 200000);
       const fields = cleanFields(body.fields ?? []);
 
       if (!name) return badRequest(res, 'Name is required');
       if (name.length > 200) return badRequest(res, 'Name too long');
       if (!VALID_KINDS.has(kind)) return badRequest(res, 'Invalid kind');
-      if (kind === 'written' && !contentHtml) return badRequest(res, 'Written documents need contentHtml');
       if (fields === null) return badRequest(res, 'Invalid fields');
 
       const isTemplate = !!body.isTemplate;
