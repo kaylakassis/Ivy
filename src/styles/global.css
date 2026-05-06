@@ -463,6 +463,24 @@ img, svg, video { max-width: 100%; height: auto; }
   to { transform: rotate(360deg); }
 }
 
+/* Marketing-home "Built for [vertical]" headline — each new word slides
+   in from below + fades; the outgoing word's lifecycle is implicit
+   (React's `key` change unmounts it). Animation runs on every freshly
+   keyed word. */
+@keyframes rotating-vertical-in {
+  0%   { transform: translateY(100%); opacity: 0; }
+  35%  { transform: translateY(0);    opacity: 1; }
+  100% { transform: translateY(0);    opacity: 1; }
+}
+.rotating-vertical-word {
+  animation: rotating-vertical-in 600ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Still cycle the words (the message is "we fit every kind of
+     business") but skip the slide. */
+  .rotating-vertical-word { animation: none; }
+}
+
 /* Onboarding wizard — the per-step label row under the progress bar
    (Welcome · Your business · Services · …). Hidden on phones where it
    would compress to two-character truncations; the "Step X of Y"

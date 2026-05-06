@@ -473,49 +473,135 @@ function Features() {
 // on long-tail queries like "booking software for massage therapists".
 // ──────────────────────────────────────────────────────────────────────
 
+// Wide list of service-business archetypes that THRYVE actually fits.
+// Don't trim aggressively — the whole point of this section is to
+// communicate "we are NOT limited to 5 verticals." Every entry is a
+// real type of solo service business that books, invoices, and
+// messages clients. Order is shuffled so the rotation feels random.
+const ROTATING_VERTICALS = [
+  'massage therapists', 'hair stylists', 'personal trainers', 'business coaches',
+  'cleaners', 'dog walkers', 'pet groomers', 'yoga instructors', 'pilates teachers',
+  'photographers', 'videographers', 'makeup artists', 'nail techs', 'lash artists',
+  'brow artists', 'estheticians', 'tattoo artists', 'piercers', 'chiropractors',
+  'acupuncturists', 'physical therapists', 'doulas', 'birth coaches', 'lactation consultants',
+  'tutors', 'music teachers', 'voice coaches', 'language tutors', 'dance instructors',
+  'handymen', 'electricians', 'plumbers', 'painters', 'lawn-care pros',
+  'pool techs', 'locksmiths', 'mobile mechanics', 'mobile detailers', 'interior designers',
+  'life coaches', 'career coaches', 'consultants', 'freelance designers', 'copywriters',
+  'therapists', 'counselors', 'nutritionists', 'dietitians', 'lawyers',
+  'accountants', 'real-estate agents', 'home stagers', 'event planners', 'wedding planners',
+  'florists', 'caterers', 'private chefs', 'bartenders', 'DJs',
+  'tour guides', 'driving instructors', 'sailing instructors', 'sports coaches', 'tennis pros',
+  'golf pros', 'climbing coaches', 'martial-arts instructors', 'reiki practitioners', 'sound healers',
+];
+
 function BuiltFor() {
   return (
-    <section style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 28 }}>
+    <section style={{ maxWidth: 1100, margin: '0 auto', padding: '64px 24px' }}>
+      <div style={{ textAlign: 'center' }}>
         <div className="metric-label">Built for</div>
-        <h2 className="page-title" style={{ margin: '8px 0 0', fontSize: 30 }}>
-          Whatever you do, the same tool fits.
+        <h2 className="page-title" style={{
+          margin: '10px 0 0',
+          // Stack the static prefix above the rotating word on phones so
+          // the word never has to truncate, then put them inline at >=
+          // small-tablet widths. clamp() keeps it readable everywhere.
+          fontSize: 'clamp(28px, 5.4vw, 44px)',
+          lineHeight: 1.05,
+          letterSpacing: '-0.025em',
+        }}>
+          <span style={{ display: 'inline-block', marginRight: '0.35em' }}>Built for</span>
+          <RotatingVertical/>
         </h2>
+        <p style={{
+          margin: '20px auto 0', maxWidth: 560,
+          fontSize: 15, lineHeight: 1.55, color: 'var(--fg-2)',
+        }}>
+          If you take appointments, send invoices, or manage clients —
+          THRYVE fits. The same tool, every solo service business.
+        </p>
+      </div>
+
+      {/* Compact chip row that links to the per-vertical SEO pages. The
+          big rotating word is the emotional pitch; this row is the
+          "yes, we have a real page for what I do" reassurance, plus the
+          long-tail SEO surface ("massage therapy software" etc.). */}
+      <div style={{
+        marginTop: 32,
+        display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center',
+      }}>
+        {VERTICALS.map((v) => (
+          <Link key={v.slug} to={`/for/${v.slug}`}
+            style={{
+              display: 'inline-flex', alignItems: 'center', gap: 6,
+              padding: '8px 14px', borderRadius: 999,
+              background: 'var(--surface)',
+              border: '1px solid var(--border-strong)',
+              color: 'var(--fg-2)', textDecoration: 'none',
+              fontSize: 13, fontWeight: 550,
+              transition: 'border-color .15s, color .15s',
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.borderColor = 'var(--accent)';
+              e.currentTarget.style.color = 'var(--accent)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.borderColor = 'var(--border-strong)';
+              e.currentTarget.style.color = 'var(--fg-2)';
+            }}>
+            {v.name} <Icons.Arrow size={11} sw={2}/>
+          </Link>
+        ))}
       </div>
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12,
+        marginTop: 14, textAlign: 'center',
+        fontSize: 12, color: 'var(--muted)',
       }}>
-        {VERTICALS.map((v) => {
-          const Icon = Icons[v.icon];
-          return (
-            <Link key={v.slug} to={`/for/${v.slug}`} className="card"
-              style={{
-                padding: 18, display: 'flex', flexDirection: 'column', gap: 6,
-                textDecoration: 'none', color: 'inherit',
-                transition: 'border-color .15s, transform .05s',
-              }}>
-              <div style={{
-                width: 30, height: 30, borderRadius: 8,
-                background: 'var(--accent)', color: 'var(--accent-ink)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {Icon && <Icon size={15} sw={1.7}/>}
-              </div>
-              <h3 style={{ margin: '4px 0 0', fontSize: 14.5, fontWeight: 600 }}>{v.name}</h3>
-              <p style={{ margin: 0, fontSize: 12.5, lineHeight: 1.5, color: 'var(--fg-2)' }}>
-                {v.line}
-              </p>
-              <span style={{
-                fontSize: 11.5, color: 'var(--accent)', fontWeight: 600,
-                marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4,
-              }}>
-                See more <Icons.Arrow size={10} sw={2}/>
-              </span>
-            </Link>
-          );
-        })}
+        Don't see your vertical? Doesn't matter — if it's a service
+        business, it works.
       </div>
     </section>
+  );
+}
+
+// Rotates through ROTATING_VERTICALS, swapping the visible word every
+// ~2.2s. Each new word slides in from below + fades; the outgoing word
+// slides up + fades. Fixed-height container so the headline never
+// reflows. Honors prefers-reduced-motion: if the user has it set,
+// the word still rotates (so the message lands) but without the slide.
+function RotatingVertical() {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const id = setInterval(() => {
+      setI((n) => (n + 1) % ROTATING_VERTICALS.length);
+    }, 2200);
+    return () => clearInterval(id);
+  }, []);
+  return (
+    <span className="rotating-vertical" style={{
+      display: 'inline-block',
+      verticalAlign: 'baseline',
+      // Container height tracks the line-height of the parent. overflow
+      // hidden clips the slide animation to the headline band.
+      height: '1.05em',
+      lineHeight: '1.05em',
+      overflow: 'hidden',
+      position: 'relative',
+      // Min-width so very short words ("DJs") don't collapse the
+      // headline width and cause it to jiggle on each swap.
+      minWidth: '5ch',
+    }}>
+      <span key={i} className="rotating-vertical-word"
+        style={{
+          display: 'inline-block',
+          color: 'var(--accent)',
+          fontFamily: 'var(--font-display)',
+          fontWeight: 500,
+          letterSpacing: '-0.02em',
+          whiteSpace: 'nowrap',
+        }}>
+        {ROTATING_VERTICALS[i]}
+      </span>
+    </span>
   );
 }
 
@@ -597,34 +683,46 @@ function Comparison() {
           actually talks to itself.
         </p>
       </div>
-      <div className="card" style={{ padding: 0, overflow: 'auto' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5, minWidth: 560 }}>
-          <thead>
-            <tr style={{ background: 'var(--surface-2)', textAlign: 'left' }}>
-              <th style={cmpHeader}>Capability</th>
-              <th style={cmpHeader}>What you'd usually pay for</th>
-              <th style={{ ...cmpHeader, color: 'var(--accent)', fontWeight: 600, textAlign: 'right' }}>In THRYVE</th>
-            </tr>
-          </thead>
-          <tbody>
-            {COMPARE_ROWS.map((row) => (
-              <tr key={row.label} style={{ borderTop: '1px solid var(--border)' }}>
-                <td style={cmpCell}>{row.label}</td>
-                <td style={{ ...cmpCell, color: 'var(--muted)' }}>{row.replaces}</td>
-                <td style={{ ...cmpCell, textAlign: 'right' }}>
-                  <Icons.Check size={14} sw={2.4} stroke="var(--accent)"/>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {/* Card-stack layout that works on every viewport — no horizontal
+          scroll on mobile (the old 3-col table overflowed at < 720px,
+          forcing users to swipe sideways to see the checkmark). Each row
+          shows the capability, what it replaces, and a tick. */}
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {COMPARE_ROWS.map((row, i) => (
+          <div key={row.label} style={{
+            display: 'flex', alignItems: 'center', gap: 14,
+            padding: '14px 16px',
+            borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+          }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{
+                fontSize: 14, fontWeight: 600, color: 'var(--fg)',
+                lineHeight: 1.35,
+              }}>
+                {row.label}
+              </div>
+              <div style={{
+                fontSize: 12.5, color: 'var(--muted)', marginTop: 3,
+                lineHeight: 1.4,
+              }}>
+                Replaces: {row.replaces}
+              </div>
+            </div>
+            <div style={{
+              flexShrink: 0,
+              width: 28, height: 28, borderRadius: 99,
+              background: 'var(--accent-soft)',
+              color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icons.Check size={14} sw={2.4} stroke="currentColor"/>
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   );
 }
-
-const cmpHeader = { padding: '12px 14px', fontSize: 12, fontWeight: 550, color: 'var(--muted)', whiteSpace: 'nowrap' };
-const cmpCell   = { padding: '11px 14px', color: 'var(--fg)' };
 
 // ──────────────────────────────────────────────────────────────────────
 // FAQ
