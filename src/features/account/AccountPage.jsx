@@ -275,16 +275,6 @@ function AdminPanel() {
         />
         <SendTestEmailRow/>
         <ActionRow
-          label="Trigger welcome-email cron now"
-          desc="Sends any due welcome-sequence beats to eligible users immediately."
-          fetcher={() => api.post('/cron/welcome-emails')}
-          actionLabel="Run now"
-          successText={(r) => {
-            const total = Object.values(r.summary || {}).reduce((s, v) => s + (v?.sent || 0), 0);
-            return `Sent ${total} email${total === 1 ? '' : 's'} across all beats.`;
-          }}
-        />
-        <ActionRow
           label="Trigger booking-reminder cron now"
           desc="Forces an immediate scan of upcoming bookings for due reminders."
           fetcher={() => api.post('/cron/booking-reminders')}

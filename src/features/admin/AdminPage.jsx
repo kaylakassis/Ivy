@@ -163,6 +163,7 @@ function Overview() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <EmailHealthBanner/>
       <DateRangeBar {...dr}/>
       {err && <ErrCard msg={err}/>}
       {!data && !err && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
@@ -186,6 +187,84 @@ function Overview() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Email-delivery health banner. Hidden when everything's healthy. Loud
+// when EMAIL_FROM is the Resend sandbox or the configured sending
+// domain isn't verified — those states mean welcome / verification /
+// reset / invoice emails will silently fail to deliver to real users.
+function EmailHealthBanner() {
+  const [state, setState] = useState({ loading: true });
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/admin/email-status')
+      .then((r) => { if (!cancelled) setState({ loading: false, data: r }); })
+      .catch((e) => { if (!cancelled) setState({ loading: false, err: e.message }); });
+    return () => { cancelled = true; };
+  }, []);
+
+  if (state.loading || state.err) return null;
+  const { from, domains = [] } = state.data || {};
+  const onSandbox = !from || /resend\.dev/i.test(from);
+  const verified = domains.find((d) => d.status === 'verified');
+  if (!onSandbox && verified) return null;
+
+  // Pull the From-domain so the link to Resend's dashboard is unambiguous.
+  const fromDomain = (() => {
+    const m = (from || '').match(/<([^>]+)>/);
+    return ((m ? m[1] : from) || '').split('@').pop() || '';
+  })();
+
+  return (
+    <div role="alert" style={{
+      padding: 14, borderRadius: 12,
+      background: 'rgba(155,44,44,0.08)',
+      border: '1px solid var(--danger)',
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <Icons.Settings size={14} sw={2} stroke="var(--danger)"/>
+        <strong style={{ color: 'var(--danger)', fontSize: 13 }}>
+          Email delivery is broken
+        </strong>
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        {onSandbox ? (
+          <>
+            <code>EMAIL_FROM</code> is on Resend's sandbox
+            (<code>{from || 'onboarding@resend.dev'}</code>).
+            That address only delivers to your own verified Resend-account email,
+            so welcome, verification, reset, and invoice emails are silently
+            failing for everyone else.
+          </>
+        ) : (
+          <>
+            The sending domain <code>{fromDomain}</code> isn't verified in
+            Resend yet, so emails will be rejected at send time.
+          </>
+        )}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+        <strong>To fix:</strong>
+        <ol style={{ margin: '4px 0 0 18px', padding: 0 }}>
+          <li>
+            Add a domain at{' '}
+            <a href="https://resend.com/domains" target="_blank" rel="noopener"
+              style={{ color: 'var(--accent)', fontWeight: 600 }}>
+              resend.com/domains
+            </a>{' '}
+            and copy the SPF / DKIM / DMARC records into your DNS provider.
+          </li>
+          <li>Wait for Resend to mark the domain <strong>verified</strong> (usually &lt;30 min).</li>
+          <li>
+            Set <code>EMAIL_FROM='THRYVE &lt;noreply@your-domain.com&gt;'</code> in
+            Vercel project settings (and optionally <code>EMAIL_REPLY_TO</code>).
+          </li>
+          <li>Redeploy. This banner disappears when everything checks out.</li>
+        </ol>
+      </div>
     </div>
   );
 }
