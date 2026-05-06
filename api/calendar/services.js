@@ -75,8 +75,8 @@ export default async function handler(req, res) {
       }
 
       const depositType = s?.depositType || 'none';
-      if (!['none', 'percent', 'fixed'].includes(depositType)) {
-        return badRequest(res, `services[${idx}].depositType must be none / percent / fixed`);
+      if (!['none', 'percent', 'fixed', 'full'].includes(depositType)) {
+        return badRequest(res, `services[${idx}].depositType must be none / percent / fixed / full`);
       }
       const depositAmount = Number(s?.depositAmount ?? 0);
       if (!Number.isFinite(depositAmount) || depositAmount < 0) {

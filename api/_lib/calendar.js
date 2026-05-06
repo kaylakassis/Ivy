@@ -86,6 +86,9 @@ export function depositFor(service, totalPrice) {
   if (type === 'fixed') {
     return Math.min(price, Math.max(0, Math.round(amt * 100) / 100));
   }
+  if (type === 'full') {
+    return Math.round(price * 100) / 100;
+  }
   return 0;
 }
 

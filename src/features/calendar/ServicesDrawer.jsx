@@ -357,31 +357,21 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           />
         </Field>
 
-        <Field label="Deposit"
-          hint={service.depositType === 'percent'
-            ? `Charged at booking. ${Math.round((Number(service.price || 0) * Number(service.depositAmount || 0)) / 100 * 100) / 100} of $${Number(service.price || 0).toFixed(0)}.`
-            : service.depositType === 'fixed'
-            ? `Flat amount charged at booking. Balance owed at session.`
-            : 'Pay the full price after the session (default).'}>
-          <div className="form-2col" style={{ gap: 8 }}>
-            <select value={service.depositType || 'none'}
-              onChange={(e) => onChange({ depositType: e.target.value })}
-              style={inputSty}>
-              <option value="none">No deposit</option>
-              <option value="percent">% of price</option>
-              <option value="fixed">Fixed $ amount</option>
-            </select>
-            <input type="number" min={0} step={service.depositType === 'percent' ? 1 : 0.01}
-              max={service.depositType === 'percent' ? 100 : 1e7}
-              value={service.depositAmount || 0}
-              onChange={(e) => onChange({ depositAmount: Math.max(0, Number(e.target.value) || 0) })}
-              disabled={(service.depositType || 'none') === 'none'}
-              placeholder={service.depositType === 'percent' ? '50' : '25.00'}
-              style={{
-                ...inputSty,
-                opacity: (service.depositType || 'none') === 'none' ? 0.5 : 1,
-              }}/>
-          </div>
+        <Field label="What's charged at booking?"
+          hint={
+            service.depositType === 'full'
+              ? `Clients pay the full $${Number(service.price || 0).toFixed(0)} when they book — nothing owed at the session.`
+              : service.depositType === 'percent'
+              ? `${service.depositAmount || 0}% deposit at booking ($${(Number(service.price || 0) * Number(service.depositAmount || 0) / 100).toFixed(2)}) — balance owed at the session.`
+              : service.depositType === 'fixed'
+              ? `Flat $${Number(service.depositAmount || 0).toFixed(2)} deposit at booking — balance owed at the session.`
+              : 'Free to book — pay the full price at the session.'
+          }>
+          <DepositPicker
+            depositType={service.depositType || 'none'}
+            depositAmount={service.depositAmount || 0}
+            onChange={(patch) => onChange(patch)}
+          />
         </Field>
 
         {/* Where does this service happen? — three rows by location type:
@@ -626,6 +616,80 @@ function Field({ label, hint, children }) {
       <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, fontWeight: 500 }}>{label}</div>
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
+    </div>
+  );
+}
+
+// Deposit picker — four options as radio cards: none, percent, fixed, full.
+// Picking percent/fixed reveals an inline amount input. Picking 'full' or
+// 'none' hides the input since neither needs an amount.
+const DEPOSIT_OPTIONS = [
+  { id: 'none',    label: 'No deposit',       sub: 'Free to book' },
+  { id: 'percent', label: '% deposit',        sub: 'e.g. 50% upfront' },
+  { id: 'fixed',   label: '$ deposit',        sub: 'Flat amount' },
+  { id: 'full',    label: 'Pay in full',      sub: 'Required to book' },
+];
+function DepositPicker({ depositType, depositAmount, onChange }) {
+  const showAmount = depositType === 'percent' || depositType === 'fixed';
+  return (
+    <div>
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
+        gap: 8,
+      }}>
+        {DEPOSIT_OPTIONS.map((opt) => {
+          const active = depositType === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              onClick={() => onChange({
+                depositType: opt.id,
+                // Reset amount when switching to none/full; otherwise keep the
+                // current number so the user doesn't lose their typed value
+                // when toggling between percent and fixed.
+                depositAmount: (opt.id === 'none' || opt.id === 'full') ? 0 : depositAmount,
+              })}
+              style={{
+                textAlign: 'left',
+                padding: '10px 12px',
+                borderRadius: 10,
+                border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border-strong)'),
+                background: active ? 'var(--accent-soft)' : 'var(--surface)',
+                color: active ? 'var(--accent)' : 'var(--fg)',
+                cursor: 'pointer',
+                transition: 'border-color .12s ease, background .12s ease',
+              }}
+            >
+              <div style={{ fontSize: 12.5, fontWeight: 600, marginBottom: 2 }}>{opt.label}</div>
+              <div style={{ fontSize: 11, color: active ? 'var(--accent)' : 'var(--muted)', opacity: active ? 0.85 : 1 }}>
+                {opt.sub}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      {showAmount && (
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 8 }}>
+          <NumericInput
+            value={depositAmount}
+            onChange={(n) => onChange({
+              depositAmount: depositType === 'percent'
+                ? Math.max(0, Math.min(100, n))
+                : Math.max(0, n),
+            })}
+            min={0}
+            max={depositType === 'percent' ? 100 : 1e7}
+            defaultOnBlank={0}
+            placeholder={depositType === 'percent' ? '50' : '25.00'}
+            style={{ ...inputSty, maxWidth: 140, textAlign: 'right' }}
+          />
+          <span style={{ fontSize: 13, color: 'var(--muted)' }}>
+            {depositType === 'percent' ? 'percent' : 'dollars'}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

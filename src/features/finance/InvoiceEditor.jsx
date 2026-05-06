@@ -2,8 +2,10 @@
 // Locked when status='paid' or 'voided'.
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
+import CollectInPersonModal from './CollectInPersonModal.jsx';
 
 export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMarkPaid, onVoid, onDelete, onRefund }) {
+  const [collectOpen, setCollectOpen] = useState(false);
   const isLocked = invoice.status === 'paid' || invoice.status === 'voided' || invoice.status === 'refunded';
   const refundedAmount = Number(invoice.refundedAmount || 0);
   const remaining = Math.max(0, Number(invoice.total || 0) - refundedAmount);
@@ -342,6 +344,13 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
                       Mark paid
                     </button>
                   )}
+                  {invoice.status !== 'paid' && (
+                    <button className="btn btn-outline" disabled={busy}
+                      onClick={async () => { await save(); setCollectOpen(true); }}
+                      title="Show a QR + link the customer can scan to pay on their phone">
+                      <Icons.Phone size={13}/> Collect in person
+                    </button>
+                  )}
                   <button className="btn btn-primary" disabled={busy}
                     onClick={async () => { await save(); onSend(); }}>
                     <Icons.Mail size={13}/>
@@ -353,6 +362,12 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
           )}
         </div>
       </div>
+      {collectOpen && (
+        <CollectInPersonModal
+          invoice={invoice}
+          onClose={() => setCollectOpen(false)}
+        />
+      )}
     </div>
   );
 }
