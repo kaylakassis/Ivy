@@ -98,72 +98,214 @@ function stripHtml(s = '') {
   return s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 }
 
-// Branded-but-minimal email shell. Looks decent, won't break in any client.
+// ─────────────────────────────────────────────────────────────────────
+// Branded email shell
+// ─────────────────────────────────────────────────────────────────────
+//
+// Visual goal: match the THRYVE marketing site & app's "calm" theme so
+// the emails feel continuous with the product instead of a random
+// transactional template.
+//
+// Why every CSS rule lives inline (not <style>):
+//   Gmail strips <style> in the message body for many client versions,
+//   Outlook 2007-2019 ignores almost all <style>, and Yahoo/AOL behave
+//   inconsistently. Inline styles render in every client we care about
+//   without needing to maintain two parallel versions. The single
+//   <style> block in <head> below is for prefers-color-scheme: dark
+//   (auto-flip when the recipient's client is in dark mode), which
+//   gracefully no-ops in clients that don't support it.
+//
+// Layout uses tables instead of divs for the same reason: Outlook on
+// Windows still uses the Word HTML rendering engine, which silently
+// breaks margin/padding on block elements outside of <td>. Tables are
+// the lowest-common-denominator that renders identically everywhere.
 //
 // Optional `branding` ({ businessName, logoUrl, accentColor, emailSignature })
 // applies the workspace owner's chosen presentation. When absent or
-// partially set, the shell falls back to THRYVE defaults — same look
-// the app shipped with before per-workspace branding existed.
+// partially set, the shell falls back to THRYVE defaults.
 export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding }) {
   const accent = sanitizeColor(branding?.accentColor) || '#2E3168';
+  const accentInk = '#FFFFFF';
   const businessName = (branding?.businessName || '').trim();
   const logoUrl = sanitizeUrl(branding?.logoUrl);
   const sig = (branding?.emailSignature || '').trim();
 
-  const cta = ctaText && ctaUrl
-    ? `<p style="margin:32px 0;text-align:center;">
-         <a href="${ctaUrl}" style="display:inline-block;padding:13px 24px;background:${accent};color:#FFFFFF;
-            text-decoration:none;border-radius:10px;font-weight:550;font-size:14px;">
-           ${ctaText}
-         </a>
-       </p>
-       <p style="font-size:12px;color:#85827B;word-break:break-all;">
-         Or paste this link into your browser: <br/>${ctaUrl}
-       </p>`
-    : '';
+  // Brand tokens — mirror tokens.css ".dir-calm". Hard-coded because
+  // email clients can't read CSS variables.
+  const C = {
+    page:         '#F6F5F1',
+    surface:      '#FFFFFF',
+    surface2:     '#FAF8F3',
+    border:       '#E8E4DC',
+    borderStrong: '#D9D3C6',
+    fg:           '#141414',
+    fg2:          '#3F3D38',
+    muted:        '#6E6A62',
+    muted2:       '#A9A59B',
+  };
+  const fontDisplay = `'Fraunces','Iowan Old Style',Georgia,serif`;
+  const fontSans    = `-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,Arial,sans-serif`;
 
-  // Header: owner's logo if uploaded, else owner's business name in
-  // serif type, else "thryve" wordmark.
-  const headerInner = logoUrl
+  // Letterhead: logo > business name > THRYVE wordmark. The "OS" /
+  // "Business OS" subtitle is dropped when a workspace is branded so
+  // the recipient sees the actual business as the sender.
+  const headerLeft = logoUrl
     ? `<img src="${logoUrl}" alt="${escapeAttr(businessName || 'Logo')}"
-         style="max-height:42px;max-width:200px;width:auto;height:auto;display:block;"/>`
+         style="max-height:36px;max-width:180px;width:auto;height:auto;display:block;border:0;"/>`
     : (businessName
-       ? `<div style="font-family:'Fraunces',Georgia,serif;font-size:22px;letter-spacing:-0.02em;font-weight:500;color:#141414;">${escapeText(businessName)}</div>`
-       : `<div style="font-family:'Fraunces',Georgia,serif;font-size:22px;letter-spacing:-0.02em;font-weight:500;">thryve</div>`);
+       ? `<div style="font-family:${fontDisplay};font-size:22px;letter-spacing:-0.02em;font-weight:500;color:${C.fg};line-height:1;">${escapeText(businessName)}</div>`
+       : `<table role="presentation" cellpadding="0" cellspacing="0" border="0">
+            <tr>
+              <td style="vertical-align:middle;padding-right:10px;">
+                <div style="width:30px;height:30px;border-radius:8px;background:${accent};text-align:center;line-height:30px;">
+                  <span style="font-family:${fontDisplay};font-weight:600;font-size:15px;color:${accentInk};">t</span>
+                </div>
+              </td>
+              <td style="vertical-align:middle;">
+                <div style="font-family:${fontDisplay};font-size:21px;letter-spacing:-0.02em;font-weight:500;color:${C.fg};line-height:1;">thryve</div>
+              </td>
+            </tr>
+          </table>`);
 
-  // Owner-supplied signature renders below the body, above the
-  // optional caller-supplied footer. Both go through escape: the
-  // signature is treated as plain text with line breaks preserved.
-  const sigBlock = sig
-    ? `<div style="font-size:13px;color:#3F3D38;line-height:1.6;margin:24px 0 0;white-space:pre-wrap;">${escapeText(sig)}</div>`
+  const headerRight = businessName
+    ? '' // workspaces don't show "Business OS" tag; their name IS the brand
+    : `<div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;color:${C.muted};text-align:right;">Business OS</div>`;
+
+  // CTA button. Bulletproof double-table pattern so Outlook + Gmail +
+  // Apple Mail all render the same pill. The link is wrapped twice so
+  // the click target fills the padded area.
+  const cta = ctaText && ctaUrl
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:28px 0 4px;">
+         <tr>
+           <td align="center" bgcolor="${accent}"
+               style="border-radius:10px;background:${accent};">
+             <a href="${ctaUrl}"
+                style="display:inline-block;padding:14px 28px;font-family:${fontSans};font-size:14.5px;font-weight:600;color:${accentInk};text-decoration:none;border-radius:10px;letter-spacing:-0.005em;line-height:1;">
+               ${escapeText(ctaText)}
+             </a>
+           </td>
+         </tr>
+       </table>
+       <div style="font-size:11.5px;color:${C.muted};line-height:1.55;margin-top:14px;">
+         Trouble with the button? Paste this link into your browser:
+       </div>
+       <div style="font-size:11.5px;color:${C.fg2};line-height:1.55;word-break:break-all;margin-top:2px;">
+         <a href="${ctaUrl}" style="color:${C.fg2};text-decoration:underline;">${escapeText(ctaUrl)}</a>
+       </div>`
     : '';
 
-  // Bottom-of-page byline. When branded, credit the business but
-  // keep a small "Sent via THRYVE" mark for accountability.
-  const sentByline = businessName
-    ? `Sent by ${escapeText(businessName)} via THRYVE`
-    : 'Sent by THRYVE Business OS';
+  const sigBlock = sig
+    ? `<div style="font-size:13px;color:${C.fg2};line-height:1.65;margin:28px 0 0;white-space:pre-wrap;">${escapeText(sig)}</div>`
+    : '';
+
+  const footerByline = businessName
+    ? `Sent by <strong style="color:${C.fg2};">${escapeText(businessName)}</strong> via THRYVE`
+    : `Made with care · <a href="https://getthryve.ai" style="color:${C.muted};text-decoration:none;">getthryve.ai</a>`;
+
+  // Dark-mode rule lives in a single <style> in <head>. Apple Mail,
+  // recent Gmail, recent Outlook honor it; everywhere else it
+  // silently falls back to the calm theme — that's fine.
+  const darkBlock = `
+    <style>
+      @media (prefers-color-scheme: dark) {
+        body, table { background:#0D0E0C !important; }
+        .thryve-card     { background:#16181A !important; border-color:#262A2D !important; }
+        .thryve-band     { background:#1D2022 !important; border-color:#262A2D !important; }
+        .thryve-fg       { color:#F3F3EE !important; }
+        .thryve-fg2      { color:#C9CAC3 !important; }
+        .thryve-muted    { color:#8A8D85 !important; }
+        .thryve-muted2   { color:#5F625C !important; }
+        .thryve-link     { color:#C9CAC3 !important; }
+      }
+    </style>
+  `;
 
   return `<!doctype html>
-<html><body style="margin:0;padding:24px;background:#F6F5F1;font-family:-apple-system,system-ui,'Inter',sans-serif;color:#141414;">
-  <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
-    <tr><td align="center">
-      <table role="presentation" width="520" cellpadding="0" cellspacing="0"
-             style="background:#FFFFFF;border:1px solid #E8E4DC;border-radius:14px;overflow:hidden;">
-        <tr><td style="padding:32px 32px 8px;">${headerInner}</td></tr>
-        <tr><td style="padding:8px 32px 32px;">
-          <h1 style="margin:0 0 16px;font-family:'Fraunces',Georgia,serif;font-size:24px;letter-spacing:-0.025em;font-weight:500;line-height:1.2;">${heading}</h1>
-          <div style="font-size:15px;line-height:1.6;color:#3F3D38;">${body}</div>
-          ${cta}
-          ${sigBlock}
-          ${footer ? `<hr style="border:0;border-top:1px solid #E8E4DC;margin:32px 0 16px;"/>
-                     <div style="font-size:12px;color:#85827B;line-height:1.55;">${footer}</div>` : ''}
-        </td></tr>
-      </table>
-      <div style="font-size:11px;color:#A9A59B;margin-top:14px;">${sentByline}</div>
-    </td></tr>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="color-scheme" content="light dark"/>
+  <meta name="supported-color-schemes" content="light dark"/>
+  <title>${escapeText(heading || 'THRYVE')}</title>
+  ${darkBlock}
+</head>
+<body style="margin:0;padding:0;background:${C.page};font-family:${fontSans};color:${C.fg};-webkit-font-smoothing:antialiased;mso-line-height-rule:exactly;">
+  <!-- Hidden preheader: shows as the inbox-list preview text. -->
+  <div style="display:none;font-size:1px;color:${C.page};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeText(stripHtml(body || '').slice(0, 110))}</div>
+
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.page};">
+    <tr>
+      <td align="center" style="padding:32px 16px;">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" border="0"
+               class="thryve-card"
+               style="max-width:600px;width:100%;background:${C.surface};border:1px solid ${C.border};border-radius:16px;overflow:hidden;box-shadow:0 1px 2px rgba(20,14,0,0.04),0 12px 32px -16px rgba(20,14,0,0.10);">
+
+          <!-- Letterhead band -->
+          <tr>
+            <td class="thryve-band"
+                style="padding:18px 28px;background:${C.surface2};border-bottom:1px solid ${C.border};">
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+                <tr>
+                  <td style="vertical-align:middle;">${headerLeft}</td>
+                  <td style="vertical-align:middle;text-align:right;">${headerRight}</td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Body -->
+          <tr>
+            <td style="padding:36px 32px 28px;">
+              <h1 class="thryve-fg"
+                  style="margin:0 0 18px;font-family:${fontDisplay};font-size:26px;letter-spacing:-0.025em;font-weight:500;line-height:1.2;color:${C.fg};">
+                ${heading}
+              </h1>
+              <div class="thryve-fg2"
+                   style="font-size:15px;line-height:1.7;color:${C.fg2};">
+                ${body}
+              </div>
+              ${cta}
+              ${sigBlock}
+            </td>
+          </tr>
+
+          ${footer ? `
+          <!-- Inline footer (caller-supplied legalese) -->
+          <tr>
+            <td style="padding:0 32px 28px;">
+              <hr style="border:0;border-top:1px solid ${C.border};margin:0 0 16px;"/>
+              <div class="thryve-muted"
+                   style="font-size:12px;color:${C.muted};line-height:1.6;">
+                ${footer}
+              </div>
+            </td>
+          </tr>
+          ` : ''}
+
+          <!-- Brand stripe at the very bottom -->
+          <tr>
+            <td class="thryve-band"
+                style="padding:16px 28px;background:${C.surface2};border-top:1px solid ${C.border};text-align:center;">
+              <div class="thryve-muted2"
+                   style="font-size:11px;color:${C.muted2};letter-spacing:0.04em;">
+                ${footerByline}
+              </div>
+            </td>
+          </tr>
+        </table>
+
+        <!-- Tagline below the card. Tiny, no boilerplate. -->
+        <div class="thryve-muted2"
+             style="margin-top:16px;font-size:11px;color:${C.muted2};line-height:1.5;max-width:600px;">
+          THRYVE is the all-in-one business OS for solo entrepreneurs.<br/>
+          One workspace · clients, calendar, invoices, messages, docs.
+        </div>
+      </td>
+    </tr>
   </table>
-</body></html>`;
+</body>
+</html>`;
 }
 
 function sanitizeColor(c) {
