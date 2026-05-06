@@ -1,7 +1,14 @@
-// Ivy Pro store. One initial GET pulls sessions + workspace context; clicking a
+// Ivy store. One initial GET pulls sessions + workspace context; clicking a
 // session pulls its messages on demand. Sending posts to /api/ivy and the
 // server returns both turns at once.
-import { useEffect, useState, useCallback, useRef } from 'react';
+//
+// State lives in a provider mounted in AppShell so every consumer
+// (the floating IvyDock at the corner + the full-page IvyPro route)
+// shares the same sessions, messages, draft, and in-flight request.
+// Without the provider each useIvy() call would maintain its own copy
+// and a chat started in the dock wouldn't carry into the full-page
+// view (and vice versa).
+import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
 
 const EMPTY_CTX = {
@@ -9,7 +16,22 @@ const EMPTY_CTX = {
   upcomingSessions: 0, quietClients: 0,
 };
 
+const IvyCtx = createContext(null);
+
+export function IvyProvider({ children }) {
+  const value = useIvyState();
+  return <IvyCtx.Provider value={value}>{children}</IvyCtx.Provider>;
+}
+
 export function useIvy() {
+  const ctx = useContext(IvyCtx);
+  if (!ctx) {
+    throw new Error('useIvy must be used inside <IvyProvider> (mounted in AppShell).');
+  }
+  return ctx;
+}
+
+function useIvyState() {
   const [sessions, setSessions]   = useState([]);
   const [activeId, setActiveId]   = useState(null);
   const [messages, setMessages]   = useState([]);

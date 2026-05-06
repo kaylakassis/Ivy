@@ -20,7 +20,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useViewport } from '../../lib/viewport.js';
-import { useIvy } from './state.js';
+import { useIvy } from './state.jsx';
 
 const HIDE_PREFIXES = [
   // Don't render in places where the bubble would be noise / out of
@@ -47,13 +47,23 @@ export default function IvyDock() {
     || HIDE_PREFIXES.some((p) => location.pathname === p || location.pathname.startsWith(p));
 
   // Cmd/Ctrl + I toggles the dock. Useful for power users who live in
-  // the keyboard. We don't override the Cmd+I that some editors use
-  // because we only intercept inside the app shell anyway.
+  // the keyboard. Bail out if the user is typing into a regular input
+  // or rich-text editor elsewhere on the page — Cmd+I is the standard
+  // italic shortcut and we don't want to swallow it from an unrelated
+  // editor (the document body editor, message composer, etc.).
   useEffect(() => {
     if (hidden) return;
+    function isEditableTarget(el) {
+      if (!el) return false;
+      const tag = (el.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') return true;
+      if (el.isContentEditable) return true;
+      return false;
+    }
     function onKey(e) {
       const key = (e.key || '').toLowerCase();
       if (key === 'i' && (e.metaKey || e.ctrlKey) && !e.altKey && !e.shiftKey) {
+        if (isEditableTarget(e.target) || isEditableTarget(document.activeElement)) return;
         e.preventDefault();
         setOpen((v) => !v);
       }

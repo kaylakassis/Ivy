@@ -18,13 +18,14 @@ export default async function handler(req, res) {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
   // Vercel cron requests carry an Authorization: Bearer <CRON_SECRET>
-  // header when CRON_SECRET is set. Reject unauthorized hits if it's
-  // configured; if not, leave the route open (early-stage deploys).
+  // header. Refuse to run when the secret is unset — leaving the route
+  // open made sense in early-stage deploys but production must always
+  // require auth, otherwise anyone can trigger a sync of every
+  // workspace's Google calendar on demand.
   const expected = process.env.CRON_SECRET;
-  if (expected) {
-    const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-    if (got !== expected) return res.status(401).json({ error: 'Unauthorized' });
-  }
+  if (!expected) return res.status(500).json({ error: 'CRON_SECRET not configured' });
+  const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
+  if (got !== expected) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
     const { rows } = await sql`

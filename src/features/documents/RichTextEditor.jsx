@@ -51,7 +51,11 @@ export default function RichTextEditor({
 
   const emit = useCallback(() => {
     if (!ref.current) return;
-    const html = ref.current.innerHTML || '';
+    const html = normalizeHtml(ref.current.innerHTML || '');
+    // Keep `lastHtml` in sync with what we ship out, not the raw DOM —
+    // otherwise the next `value` round-trip from the parent looks like
+    // a foreign value and the prop-sync effect rewrites the DOM, which
+    // jumps the caret.
     lastHtml.current = html;
     onChange(html);
   }, [onChange]);
@@ -162,6 +166,22 @@ function Sep() {
   return <span style={{
     width: 1, height: 18, background: 'var(--border)', margin: '0 4px',
   }}/>;
+}
+
+// Browsers (Chromium especially) emit <b> and <i> from execCommand even
+// though the recipient-side sanitizer at SignPage only whitelists
+// <strong>/<em>. Without this swap, every owner bold/italic silently
+// disappears for the signer. Also rewrites stray <div> wrappers (which
+// formatBlock can produce on the first line of an empty editor) to
+// <p> so they survive the sanitizer too.
+function normalizeHtml(html) {
+  return html
+    .replace(/<b\b([^>]*)>/gi, '<strong$1>')
+    .replace(/<\/b>/gi, '</strong>')
+    .replace(/<i\b([^>]*)>/gi, '<em$1>')
+    .replace(/<\/i>/gi, '</em>')
+    .replace(/<div\b([^>]*)>/gi, '<p$1>')
+    .replace(/<\/div>/gi, '</p>');
 }
 
 function BulletIcon() {

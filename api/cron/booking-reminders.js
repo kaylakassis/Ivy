@@ -32,7 +32,8 @@ const LOOKBACK_MIN  = 70;
 const LOOKAHEAD_MIN = 5;
 
 export default async function handler(req, res) {
-  const cronAuth = req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+  const cronAuth = !!process.env.CRON_SECRET
+    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
     && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
   // Third path: signed-in super-admin clicking the in-app trigger button.

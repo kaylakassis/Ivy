@@ -26,7 +26,8 @@ const REPEAT_AFTER_HOURS = 24 * 7;  // then once a week
 const MAX_PER_RUN = 200;
 
 export default async function handler(req, res) {
-  const cronAuth = req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+  const cronAuth = !!process.env.CRON_SECRET
+    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
     && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
   const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;

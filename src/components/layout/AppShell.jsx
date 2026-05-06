@@ -20,6 +20,7 @@ import ImpersonationBanner from '../ImpersonationBanner.jsx';
 import CommandPalette from '../CommandPalette.jsx';
 import TermsAcceptModal from '../TermsAcceptModal.jsx';
 import IvyDock from '../../features/ivy/IvyDock.jsx';
+import { IvyProvider } from '../../features/ivy/state.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -28,7 +29,9 @@ import { UserContextProvider, useUserContext } from '../../lib/userContext.jsx';
 export default function AppShell() {
   return (
     <UserContextProvider>
-      <AppShellInner/>
+      <IvyProvider>
+        <AppShellInner/>
+      </IvyProvider>
     </UserContextProvider>
   );
 }

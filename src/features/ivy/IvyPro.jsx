@@ -7,7 +7,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
-import { useIvy } from './state.js';
+import { useIvy } from './state.jsx';
 
 export default function IvyPro() {
   const [tweaks] = useTweaks();
