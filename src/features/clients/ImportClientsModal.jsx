@@ -353,8 +353,7 @@ function PreviewStep({
       <div style={{
         marginBottom: 14, border: '1px solid var(--border)', borderRadius: 10,
         background: 'var(--surface-2)', padding: 10,
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
-      }}>
+      }} className="form-2col">
         <label style={{ fontSize: 11.5, color: 'var(--fg-2)' }}>
           <div style={{ marginBottom: 4, fontWeight: 600 }}>Tag everyone in this batch</div>
           <input

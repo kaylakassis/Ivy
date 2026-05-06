@@ -276,10 +276,7 @@ function Timer({ running, defaultRate, onStart, onStop }) {
         )}
       </div>
 
-      <div style={{
-        marginTop: 16,
-        display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
-      }}>
+      <div className="form-2col" style={{ marginTop: 16 }}>
         <input value={description} onChange={(e) => setDescription(e.target.value)}
           placeholder="What are you working on?"
           style={{ ...inputS, gridColumn: '1 / -1' }}/>
@@ -446,7 +443,7 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
             <input value={description} onChange={(e) => setDescription(e.target.value)}
               disabled={isLocked} style={inputS}/>
           </Field>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="form-2col">
             <Field label="Client">
               <select value={clientId} onChange={(e) => setClientId(e.target.value)}
                 disabled={isLocked} style={inputS}>

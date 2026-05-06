@@ -262,9 +262,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
           </Field>
 
           {/* Cadence */}
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12,
-          }}>
+          <div className="form-2col" style={{ gap: 12 }}>
             <Field label="Cadence">
               <select value={cadence} onChange={(e) => setCadence(e.target.value)} style={inputS}>
                 {Object.entries(CADENCE_LABEL).map(([id, label]) => (
@@ -337,7 +335,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
                   fontSize: 13, fontWeight: 600, color: 'var(--fg)',
                   textAlign: 'right', alignSelf: 'center',
                 }}>{fmtMoney((Number(it.quantity) || 0) * (Number(it.rate) || 0))}</div>
-                <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: 4, color: 'var(--danger)' }}>
+                <button className="btn btn-ghost" onClick={() => removeItem(i)} style={{ padding: '8px 10px', minHeight: 36, color: 'var(--danger)' }}>
                   <Icons.X size={13}/>
                 </button>
               </div>
@@ -345,7 +343,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
           </div>
 
           {/* Tax / discount */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
+          <div className="form-2col" style={{ gap: 12 }}>
             <Field label="Tax rate (%)">
               <input type="number" min="0" max="100" step="0.001"
                 value={taxRate} onChange={(e) => setTaxRate(e.target.value)} style={inputS}/>

@@ -10,7 +10,12 @@
   --border-strong: #D9D3C6;
   --fg: #141414;
   --fg-2: #3F3D38;
-  --muted: #85827B;
+  /* --muted bumped from #85827B to #6E6A62 to clear WCAG AA 4.5:1
+     contrast on both --surface (#FFFFFF) and --surface-2 (#FAF8F3).
+     The previous value was ~4.1:1 — borderline failing for body
+     text. The new value reads as "calm grey" but is reliably
+     readable for visual-impairment users. */
+  --muted: #6E6A62;
   --muted-2: #A9A59B;
 
   --accent: #2E3168;

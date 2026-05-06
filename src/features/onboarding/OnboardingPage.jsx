@@ -533,7 +533,7 @@ function Services({ services, setServices, category, draft, setDraft, onBack, on
         </div>
         <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}
           placeholder="Service name" style={inputS}/>
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+        <div className="form-2col" style={{ gap: 8 }}>
           <Field label="Duration (min)">
             <input type="number" min={5} step={5} value={draft.durationMinutes}
               onChange={(e) => setDraft({ ...draft, durationMinutes: e.target.value })}

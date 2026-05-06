@@ -250,7 +250,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
             </select>
           </Field>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="form-2col">
             <Field label="Issue date">
               <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)}
                 disabled={isLocked} style={inputS}/>
@@ -303,7 +303,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
             ))}
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="form-2col">
             <Field label="Tax rate (%)">
               <input type="number" min="0" max="100" step="0.001"
                 value={taxRate} onChange={(e) => setTaxRate(e.target.value)}

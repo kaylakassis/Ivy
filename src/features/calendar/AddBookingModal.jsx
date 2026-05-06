@@ -143,7 +143,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
               </select>
             </Field>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="form-2col">
               <Field label="Client name">
                 <input value={clientName} onChange={(e) => setClientName(e.target.value)} required style={inputSty}/>
               </Field>
@@ -152,7 +152,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
               </Field>
             </div>
 
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div className="form-2col">
               <Field label="Date">
                 <input type="date" value={date} onChange={(e) => setDate(e.target.value)} style={inputSty}/>
               </Field>

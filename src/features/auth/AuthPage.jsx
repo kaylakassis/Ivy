@@ -222,7 +222,7 @@ function RoleToggle({ value, onChange }) {
     { id: 'client', label: 'Client / customer', hint: 'I book with a business that uses THRYVE.' },
   ];
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+    <div className="form-2col" style={{ gap: 8 }}>
       {options.map((o) => {
         const on = value === o.id;
         return (

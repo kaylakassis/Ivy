@@ -2,6 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
 import { useDocuments } from './state.js';
 import DocumentEditor from './DocumentEditor.jsx';
@@ -50,12 +51,19 @@ export default function Documents() {
     setOpenId(d.id);
   };
 
-  if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading documents…</div>;
+  if (loading) return (
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <SkelRowList rows={5}/>
+    </div>
+  );
   if (error) {
     return (
       <div style={{ padding: 48 }}>
         <div className="card" style={{ padding: 40 }}>
-          <EmptyNote icon="Doc" title="Couldn't load documents" hint={error.message || 'Try refreshing.'}/>
+          <EmptyNote icon="Doc"
+            title="Couldn't load documents"
+            hint={error.message || 'Try refreshing.'}
+            action={<button className="btn btn-outline" onClick={() => window.location.reload()}>Retry</button>}/>
         </div>
       </div>
     );

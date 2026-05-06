@@ -46,7 +46,7 @@ export default function ImpersonationBanner() {
       <button onClick={stop} disabled={busy}
         style={{
           marginLeft: 'auto',
-          padding: '4px 12px', borderRadius: 6, fontSize: 12,
+          padding: '8px 14px', minHeight: 36, borderRadius: 6, fontSize: 12.5,
           background: 'rgba(255,255,255,0.2)', color: '#fff',
           border: '1px solid rgba(255,255,255,0.4)',
           cursor: busy ? 'wait' : 'pointer',

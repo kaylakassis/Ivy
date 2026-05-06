@@ -606,7 +606,7 @@ export default function PublicBooking() {
                 This business hasn't published any services yet.
               </div>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))', gap: 10 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))', gap: 10 }}>
                 {cal.services.map((s) => {
                   const selected = serviceId === s.id;
                   return (
@@ -814,7 +814,7 @@ function ReviewsBlock({ summary }) {
           </>
         )}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(280px, 100%), 1fr))', gap: 12 }}>
         {summary.recent.slice(0, 6).map((r) => (
           <div key={r.id} style={{
             padding: 14, borderRadius: 10,
@@ -925,7 +925,7 @@ function MembershipsBlock({ memberships, bizName, onJoin }) {
       </div>
       <div style={{
         display: 'grid', gap: 10,
-        gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))',
       }}>
         {memberships.map((m) => (
           <button key={m.id} type="button" onClick={() => onJoin(m)}
@@ -1135,11 +1135,19 @@ function BuyGiftCardModal({ slug, bizName, onClose }) {
         </div>
 
         <Field label="Amount">
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 6 }}>
+          <div style={{
+            display: 'grid',
+            // 4 cols on tablet+, 2 cols on phones so each amount
+            // button has a sane touch target without needing to
+            // shrink the font.
+            gridTemplateColumns: 'repeat(auto-fit, minmax(72px, 1fr))',
+            gap: 6,
+          }}>
             {[2500, 5000, 7500, 10000, 15000, 20000, 25000, 50000].map((cents) => (
               <button key={cents} type="button" onClick={() => setAmount(cents)}
                 style={{
-                  padding: '8px 6px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+                  padding: '12px 8px', borderRadius: 8, fontSize: 13, fontWeight: 600,
+                  minHeight: 44,
                   border: `1px solid ${amount === cents ? 'var(--accent)' : 'var(--border-strong)'}`,
                   background: amount === cents ? 'var(--accent)' : 'var(--surface-2)',
                   color: amount === cents ? 'var(--accent-ink)' : 'var(--fg-2)',

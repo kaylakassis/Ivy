@@ -315,7 +315,7 @@ function NewGoalForm({ onCreate, onCancel }) {
     }}>
       <input value={title} onChange={(e) => setTitle(e.target.value)} autoFocus
         placeholder="What are you aiming for?" style={inputS}/>
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+      <div className="form-2col" style={{ gap: 8 }}>
         <select value={type} onChange={(e) => setType(e.target.value)} style={inputS}>
           {GOAL_TYPES.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
         </select>

@@ -273,7 +273,7 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
           placeholder="10-pack of Cut & Style" style={inputSty} required/>
       </Field>
 
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+      <div className="form-2col">
         <Field label="Sessions" hint="Total credits the bundle includes.">
           <input type="number" min="1" max="1000"
             value={sessionCount} onChange={(e) => setSessionCount(e.target.value)}

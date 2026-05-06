@@ -259,7 +259,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
               style={{ ...inputS, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
           </Field>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="form-2col">
             <Field label="Price ($)">
               <input type="number" min="0" step="0.01"
                 value={priceDollars}

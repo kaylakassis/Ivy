@@ -346,7 +346,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             : service.depositType === 'fixed'
             ? `Flat amount charged at booking. Balance owed at session.`
             : 'Pay the full price after the session (default).'}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div className="form-2col" style={{ gap: 8 }}>
             <select value={service.depositType || 'none'}
               onChange={(e) => onChange({ depositType: e.target.value })}
               style={inputSty}>
@@ -374,7 +374,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             : service.locationType === 'virtual'
             ? 'Online — clients join over video.'
             : 'At your location. Default for most service businesses.'}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div className="form-2col" style={{ gap: 8 }}>
             <select value={service.locationType || 'in_person'}
               onChange={(e) => onChange({ locationType: e.target.value })}
               style={inputSty}>
@@ -405,7 +405,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             manually. */}
         <Field label="Cancellation policy"
           hint={`Cancellations within ${service.cancellationWindowHours ?? 24}h ${Number(service.cancellationFeeAmount) > 0 ? `auto-charge $${Number(service.cancellationFeeAmount).toFixed(2)} to the saved card on file` : 'are flagged as late but no fee charges'}.`}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <div className="form-2col" style={{ gap: 8 }}>
             <input type="number" min={0} step={1} max={720}
               value={service.cancellationWindowHours ?? 24}
               onChange={(e) => onChange({ cancellationWindowHours: Math.max(0, Math.min(720, Number(e.target.value) || 0)) })}

@@ -97,7 +97,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
           )}
 
           {/* Dates */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="form-2col">
             <Field label="Issue date">
               <input type="date" value={issueDate} onChange={(e) => setIssueDate(e.target.value)}
                 disabled={isLocked} style={inputS}/>
@@ -173,7 +173,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
           </div>
 
           {/* Tax + discount */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+          <div className="form-2col">
             <Field label="Tax rate (%)">
               <input type="number" min={0} max={100} step={0.5} value={taxRate}
                 onChange={(e) => setTaxRate(Number(e.target.value))}
@@ -241,12 +241,22 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
         }}>
           {confirm === 'delete' ? (
             <ConfirmRow text="Delete this draft?" onCancel={() => setConfirm(null)}
-              onConfirm={async () => { setBusy(true); try { await onDelete(); } finally { setBusy(false); } }}
+              onConfirm={async () => {
+                setBusy(true); setErr(null);
+                try { await onDelete(); }
+                catch (e) { setErr(e.message || 'Delete failed'); }
+                finally { setBusy(false); }
+              }}
               busy={busy}/>
           ) : confirm === 'void' ? (
             <ConfirmRow text="Void this invoice? The view link stops working."
               onCancel={() => setConfirm(null)}
-              onConfirm={async () => { setBusy(true); try { await onVoid(); setConfirm(null); } finally { setBusy(false); } }}
+              onConfirm={async () => {
+                setBusy(true); setErr(null);
+                try { await onVoid(); setConfirm(null); }
+                catch (e) { setErr(e.message || 'Void failed'); }
+                finally { setBusy(false); }
+              }}
               busy={busy}/>
           ) : confirm === 'paid' ? (
             <>
@@ -259,7 +269,12 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
               </select>
               <button className="btn btn-ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</button>
               <button className="btn btn-primary" disabled={busy}
-                onClick={async () => { setBusy(true); try { await onMarkPaid(paidMethod); setConfirm(null); } finally { setBusy(false); } }}>
+                onClick={async () => {
+                  setBusy(true); setErr(null);
+                  try { await onMarkPaid(paidMethod); setConfirm(null); }
+                  catch (e) { setErr(e.message || 'Mark-paid failed'); }
+                  finally { setBusy(false); }
+                }}>
                 Confirm payment
               </button>
             </>

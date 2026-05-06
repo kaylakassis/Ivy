@@ -136,7 +136,7 @@ export default function Expenses() {
                 </div>
                 <button onClick={(ev) => { ev.stopPropagation(); remove(e.id); }}
                   className="btn btn-ghost"
-                  style={{ padding: 4, color: 'var(--muted)' }}
+                  style={{ padding: '8px 10px', minHeight: 36, color: 'var(--muted)' }}
                   title="Delete">
                   <Icons.X size={13}/>
                 </button>
@@ -212,7 +212,7 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
           </button>
         </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+        <div className="form-2col">
           <Field label="Date">
             <input type="date" value={date} onChange={(e) => setDate(e.target.value)}
               required style={inputSty}/>
