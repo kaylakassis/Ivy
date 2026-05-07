@@ -41,6 +41,11 @@ import { recordAudit } from '../../_lib/audit.js';
 import { renderWelcome } from '../../_lib/welcome-content.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
+// Same reason as /api/auth/signup — this PATCH can fire emails
+// (sendVerificationLink, sendResetLink, resendWelcome). Default 10s
+// is tight when Resend is slow.
+export const config = { maxDuration: 30 };
+
 const VALID_ROLES = new Set([
   'regular', 'sponsored', 'affiliate',
   'business-trial', 'business-active',

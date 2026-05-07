@@ -47,7 +47,7 @@ function warnIfSandbox() {
   }
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
+export async function sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs = 8000 }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
   warnIfSandbox();
@@ -68,14 +68,31 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers }) {
   // inbox treatment). Keys are passed through as-is.
   if (headers && typeof headers === 'object') body.headers = headers;
 
-  const res = await fetch(RESEND_URL, {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${key}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify(body),
-  });
+  // Hard cap each Resend call so a hung connection can't drag the
+  // surrounding serverless function over its budget. Resend usually
+  // responds in 200-1500ms; 8s is generous and still well below the
+  // signup function's 30s ceiling.
+  const ctrl = new AbortController();
+  const t = setTimeout(() => ctrl.abort(), timeoutMs);
+  let res;
+  try {
+    res = await fetch(RESEND_URL, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${key}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(body),
+      signal: ctrl.signal,
+    });
+  } catch (err) {
+    clearTimeout(t);
+    if (err.name === 'AbortError') {
+      throw new Error(`Resend timed out after ${timeoutMs}ms — request never completed.`);
+    }
+    throw err;
+  }
+  clearTimeout(t);
 
   if (!res.ok) {
     const detail = await res.text().catch(() => '');

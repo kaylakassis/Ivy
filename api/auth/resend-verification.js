@@ -9,6 +9,10 @@ import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const VERIFY_TTL_MIN = 60 * 24;
 
+// Bump from default 10s — Resend can take 1-3s on a cold path and a
+// timeout here would silently kill the email mid-send.
+export const config = { maxDuration: 30 };
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;

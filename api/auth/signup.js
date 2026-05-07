@@ -16,6 +16,11 @@ import { renderWelcome } from '../_lib/welcome-content.js';
 import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
+// Vercel default function timeout is 10s, which is tight when we're
+// awaiting two Resend API calls in series after the DB work. Bump it
+// so a slow email provider can't tank a successful signup.
+export const config = { maxDuration: 30 };
+
 // Used to render the user's name into the verification email body.
 // Without this the line `${escapeHtml(user.name)}` throws ReferenceError
 // the moment a name is provided — historically suppressed by the
@@ -123,13 +128,20 @@ export default async function handler(req, res) {
 
     setSessionCookie(res, signSession(user.id));
 
-    // Fire-and-(mostly)-forget the verification email — don't fail signup
-    // if the email service hiccups. The user sees an in-app banner and
-    // can resend; an admin can also resend from the user-detail modal.
-    try {
-      const raw = await createToken({ userId: user.id, kind: KIND_VERIFY, ttlMinutes: VERIFY_TTL_MIN });
+    // Send the verification + welcome emails in parallel so we wait
+    // ~max(t1, t2) instead of t1 + t2 — Resend's API can take 1-3s
+    // each on a cold path, and back-to-back awaits used to push the
+    // function over Vercel's 10s timeout, killing the second send
+    // mid-flight. Promise.allSettled ensures one failure doesn't
+    // cancel the other; the response carries which (if any) failed
+    // so the frontend can show "verification email couldn't be sent —
+    // resend it from your account" instead of silently swallowing.
+    const verifyTokenP = createToken({
+      userId: user.id, kind: KIND_VERIFY, ttlMinutes: VERIFY_TTL_MIN,
+    });
+    const verifyEmailP = verifyTokenP.then((raw) => {
       const link = `${appUrl()}/verify-email?token=${encodeURIComponent(raw)}`;
-      await sendEmail({
+      return sendEmail({
         to: emailKey,
         subject: 'Confirm your email for THRYVE',
         html: emailShell({
@@ -142,25 +154,38 @@ export default async function handler(req, res) {
           footer: `If you didn't create a THRYVE account, you can ignore this email.`,
         }),
       });
-    } catch (mailErr) {
-      console.error('[signup] verification email failed:', mailErr.message);
+    });
+
+    const welcomeOut = renderWelcome({
+      name: firstName(cleanName),
+      appUrl: appUrl(),
+      variant: role === 'client' ? 'client' : 'owner',
+    });
+    const welcomeEmailP = sendEmail({
+      to: emailKey, subject: welcomeOut.subject, html: welcomeOut.html,
+    });
+
+    const [verifyResult, welcomeResult] = await Promise.allSettled([
+      verifyEmailP, welcomeEmailP,
+    ]);
+    const emailErrors = {};
+    if (verifyResult.status === 'rejected') {
+      console.error('[signup] verification email failed:', verifyResult.reason?.message);
+      emailErrors.verification = verifyResult.reason?.message || 'send failed';
+    }
+    if (welcomeResult.status === 'rejected') {
+      console.error('[signup] welcome email failed:', welcomeResult.reason?.message);
+      emailErrors.welcome = welcomeResult.reason?.message || 'send failed';
     }
 
-    // Welcome email — separate from verification so the warm onboarding
-    // copy lands in the inbox immediately, not a day later via cron.
-    // Owner vs client variant gates booking-link copy vs portal copy.
-    try {
-      const out = renderWelcome({
-        name: firstName(cleanName),
-        appUrl: appUrl(),
-        variant: role === 'client' ? 'client' : 'owner',
-      });
-      await sendEmail({ to: emailKey, subject: out.subject, html: out.html });
-    } catch (mailErr) {
-      console.error('[signup] welcome email failed:', mailErr.message);
-    }
-
-    return created(res, { user, role });
+    return created(res, {
+      user, role,
+      // Surface email send errors to the client. Frontend can show a
+      // banner ("we couldn't send your verification email — resend it
+      // from your account page") instead of pretending everything
+      // worked. Empty object means both succeeded.
+      emailErrors: Object.keys(emailErrors).length ? emailErrors : undefined,
+    });
   } catch (err) {
     return serverError(res, err);
   }

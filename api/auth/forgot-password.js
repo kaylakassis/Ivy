@@ -11,6 +11,9 @@ import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const TTL_MINUTES = 60; // reset links last 1 hour
 
+// Allow more headroom for the Resend call. Default 10s is too tight.
+export const config = { maxDuration: 30 };
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
