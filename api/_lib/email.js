@@ -64,9 +64,17 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, tim
   const reply = replyTo || replyToAddress();
   if (reply) body.reply_to = reply;
 
-  // Allow callers to pass extra headers (e.g. List-Unsubscribe for nicer
-  // inbox treatment). Keys are passed through as-is.
-  if (headers && typeof headers === 'object') body.headers = headers;
+  // Default List-Unsubscribe headers for every send. Gmail bumps senders
+  // that don't expose a one-click unsubscribe to spam more aggressively
+  // (RFC 8058, mandatory for 5K+/day senders since 2024). The mailto:
+  // form is the universal fallback; the https form lets clients show a
+  // native "Unsubscribe" link in the inbox header. Callers can override
+  // by passing their own `headers` object.
+  const defaultHeaders = {
+    'List-Unsubscribe': `<mailto:${replyToAddress() || 'hello@getthryve.ai'}?subject=unsubscribe>, <${process.env.APP_URL || 'https://getthryve.ai'}/account?tab=notifications>`,
+    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+  };
+  body.headers = { ...defaultHeaders, ...(headers && typeof headers === 'object' ? headers : {}) };
 
   // Hard cap each Resend call so a hung connection can't drag the
   // surrounding serverless function over its budget. Resend usually

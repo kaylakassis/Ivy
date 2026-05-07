@@ -3,20 +3,52 @@
 // (api/admin/users/[id].js → resendWelcome: true).
 //
 // Owner vs client variant is selected by the caller — owners get the
-// dark THRYVE-branded onboarding template (designed in Resend, exported
-// as raw HTML), client-only users get the "your portal" pitch built
-// from the standard emailShell.
-import { emailShell } from './email.js';
-
-const WELCOME_FOOTER = `<p style="margin:0;font-size:11px;color:#85827B;line-height:1.5;">
-  You're getting this because you just signed up for THRYVE.
-  Reply to this email any time — we read everything.
-</p>`;
+// "build your business" pitch, clients get the "consolidate every
+// service provider" pitch. Both share a compliance footer with
+// privacy/terms links, postal address, and verification-email nudge.
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
   }[c]));
+}
+
+// Shared compliance + housekeeping footer. Slots in identically across
+// both variants so any edits stay consistent.
+//
+//   • Verification-email reminder — every signup gets a separate
+//     "confirm your email" message in addition to the welcome; mention
+//     it here so people don't miss it in spam.
+//   • Reply-to invitation
+//   • Privacy / Terms links
+//   • Postal address (placeholder until configured — CAN-SPAM /
+//     CASL want a real one)
+//   • Copyright
+function renderFooter(appUrl) {
+  const year = new Date().getUTCFullYear();
+  return `
+                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
+                    <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #2a2a2a;padding-bottom:1em;border-style:solid;border-width:2px" />
+                    <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55">
+                      <strong style="color:#ffffff;font-weight:600">Heads-up:</strong> we also sent you a separate email asking you to confirm your address. If you don't see it, check spam — confirming unlocks notifications.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:10px">
+                      Reply to this email any time — we read everything.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:14px">
+                      <a href="${appUrl}/privacy" style="color:#9ca3af;text-decoration:underline" target="_blank">Privacy</a>
+                      &nbsp;&middot;&nbsp;
+                      <a href="${appUrl}/terms" style="color:#9ca3af;text-decoration:underline" target="_blank">Terms</a>
+                      &nbsp;&middot;&nbsp;
+                      <a href="${appUrl}/account?tab=notifications" style="color:#9ca3af;text-decoration:underline" target="_blank">Email preferences</a>
+                    </p>
+                    <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:10px">
+                      [YOUR THRYVE ADDRESS]
+                    </p>
+                    <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:6px">
+                      © ${year} THRYVE. All rights reserved.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>`;
 }
 
 export function renderWelcome({ name, appUrl, variant }) {
@@ -32,19 +64,15 @@ export function renderWelcome({ name, appUrl, variant }) {
   };
 }
 
-// Dark-themed onboarding template designed in Resend. Returned as a
-// complete HTML document (own DOCTYPE + body) — sendEmail() ships it
-// to Resend as-is, no shell wrapper.
+// Owner welcome — dark THRYVE-branded onboarding template (designed in
+// Resend, exported as raw HTML). Returned as a complete document; no
+// emailShell wrapper. Adds the trial / pricing line and the shared
+// compliance footer.
 //
-// Variables:
-//   {first_name} — handled here. When the user didn't enter a name we
-//                  drop both the comma and the placeholder so the H1
-//                  reads "Welcome to THRYVE." instead of "Welcome to
-//                  THRYVE, ."
-//   appUrl       — every CTA / link target is built relative to this
-//                  so dev/preview deploys point at themselves and
-//                  production points at https://getthryve.ai (set via
-//                  APP_URL).
+// Variables resolved server-side:
+//   {{{first_name}}}    → escapeHtml(name) with empty-string fallback
+//   https://getthryve.ai → ${appUrl}/<route> so dev/preview deploys
+//                          point at themselves
 function renderOwnerWelcome({ name, appUrl }) {
   const greetSuffix = name ? `, ${escapeHtml(name)}` : '';
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -122,7 +150,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                       Most founders feel the magic on their very first task. Pick one and let THRYVE show you what it can do.
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:12px">
-                      → <a href="${appUrl}/account" rel="noopener noreferrer nofollow" style="color:#ffffff;text-decoration:underline" target="_blank">Create your domain</a>
+                      → <a href="${appUrl}/onboarding" rel="noopener noreferrer nofollow" style="color:#ffffff;text-decoration:underline" target="_blank">Set up your booking link</a>
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:12px">
                       → <a href="${appUrl}/clients" rel="noopener noreferrer nofollow" style="color:#ffffff;text-decoration:underline" target="_blank">Add your clients</a>
@@ -133,20 +161,6 @@ function renderOwnerWelcome({ name, appUrl }) {
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:40px">
                       → <a href="${appUrl}/ivy" rel="noopener noreferrer nofollow" style="color:#ffffff;text-decoration:underline" target="_blank">Meet your AI assistant</a>
                     </p>
-                    <table width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="padding:28px;box-sizing:border-box;background-color:#f5f5f3;border-radius:12px;margin-bottom:40px">
-                      <tbody>
-                        <tr>
-                          <td>
-                            <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#1a1a1a;font-style:italic;margin-top:0;margin-bottom:12px">
-                              "I replaced six subscriptions with THRYVE in a single weekend, for a fraction of the cost. My business has never moved faster."
-                            </p>
-                            <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em;color:#1a1a1a">
-                              <em>— THRYVE User</em>
-                            </p>
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
                     <h2 style="margin:0;padding:0;font-size:35px;line-height:1.44em;padding-top:0.389em;font-weight:600;letter-spacing:-0.4px;margin-top:0;margin-bottom:12px;text-align:center">
                       <span style="color:#ffffff">This is just the beginning.</span>
                     </h2>
@@ -164,15 +178,13 @@ function renderOwnerWelcome({ name, appUrl }) {
                     <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:32px;margin-bottom:4px">
                       Welcome to the future of business OS,
                     </p>
-                    <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;font-weight:600;margin-top:0;margin-bottom:0">
+                    <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;font-weight:600;margin-top:0;margin-bottom:24px">
                       Kayla Kassis, Founder of THRYVE.
                     </p>
-                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
-                    <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #eaeaea;padding-bottom:1em;border-style:solid;border-width:2px" />
-                    <p style="margin:0;padding:0;font-size:11px;color:#737373;line-height:1.5">
-                      You're getting this because you just signed up for THRYVE. Reply to this email any time — we read everything.
+                    <p style="margin:0;padding:0;font-size:13px;color:#9ca3af;line-height:1.55;font-style:italic;margin-top:8px">
+                      You're on a 28-day free trial — after that it's $39/month. Cancel anytime from your account.
                     </p>
-                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
+                    ${renderFooter(appUrl)}
                   </td>
                 </tr>
               </tbody>
@@ -185,12 +197,9 @@ function renderOwnerWelcome({ name, appUrl }) {
 </html>`;
 }
 
-// Client-side welcome — same dark aesthetic as the owner template, but
-// the value prop is reversed: instead of "build your business," it's
-// "consolidate every business you book with into one inbox / wallet /
-// calendar." Designed to land hard and short — clients have one
-// immediate action ("open my dashboard") and don't need a six-section
-// onboarding tour.
+// Client welcome — same dark aesthetic as the owner template, value
+// prop reversed: instead of "build your business," it's "consolidate
+// every business you book with into one inbox / wallet / calendar."
 function renderClientWelcome({ name, appUrl }) {
   const greetSuffix = name ? `, ${escapeHtml(name)}` : '';
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -287,15 +296,7 @@ function renderClientWelcome({ name, appUrl }) {
                     <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;font-weight:600;margin-top:0;margin-bottom:0">
                       Kayla Kassis, Founder of THRYVE.
                     </p>
-                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
-                    <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #eaeaea;padding-bottom:1em;border-style:solid;border-width:2px" />
-                    <p style="margin:0;padding:0;font-size:11px;color:#737373;line-height:1.5">
-                      You're getting this because you just signed up for THRYVE. Reply to this email any time — we read everything.
-                    </p>
-                    <p style="margin:0;padding:0;font-size:11px;color:#737373;line-height:1.5;margin-top:8px">
-                      © 2026 THRYVE. All rights reserved.
-                    </p>
-                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
+                    ${renderFooter(appUrl)}
                   </td>
                 </tr>
               </tbody>

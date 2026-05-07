@@ -185,7 +185,68 @@ function Overview() {
             <Stat label="Churn rate"        value={`${data.churn.ratePct}%`}
               hint={`${data.churn.cancelledInWindow} cancelled / ${data.churn.activeAtWindowStart} active at window start`}/>
           </div>
+          <SystemCard/>
         </>
+      )}
+    </div>
+  );
+}
+
+// One-click migration trigger. Re-running the schema is idempotent —
+// every statement uses IF NOT EXISTS / IF EXISTS — so this is safe to
+// click after any deploy that adds columns or tweaks constraints.
+// Lives at the bottom of the Overview tab so it's discoverable without
+// owning a whole tab. Shows last-run state inline so you can tell
+// whether anyone has applied the latest schema yet.
+function SystemCard() {
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const run = async () => {
+    setBusy(true); setErr(null); setResult(null);
+    try {
+      const r = await api.post('/admin/migrate');
+      setResult(r);
+    } catch (e) {
+      setErr(e.message || 'Migration failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Database schema</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+            Re-applies every CREATE / ALTER in the schema file. Safe to click — every
+            statement is idempotent. Run after any deploy that adds a new column.
+          </div>
+        </div>
+        <button className="btn btn-outline" onClick={run} disabled={busy}
+          style={{ flexShrink: 0 }}>
+          {busy ? 'Running…' : 'Run migrations'}
+        </button>
+      </div>
+      {result && (
+        <div style={{
+          marginTop: 12, padding: '8px 12px', borderRadius: 8,
+          background: 'color-mix(in srgb, var(--ok) 8%, var(--surface-2))',
+          border: '1px solid var(--ok)', color: 'var(--ok)', fontSize: 12,
+        }}>
+          ✓ Applied {result.applied} statements.
+        </div>
+      )}
+      {err && (
+        <div style={{
+          marginTop: 12, padding: '8px 12px', borderRadius: 8,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12,
+        }}>
+          {err}
+        </div>
       )}
     </div>
   );
