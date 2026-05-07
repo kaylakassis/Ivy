@@ -22,21 +22,8 @@ function escapeHtml(s) {
 export function renderWelcome({ name, appUrl, variant }) {
   if (variant === 'client') {
     return {
-      subject: 'Welcome to THRYVE — your client portal',
-      html: emailShell({
-        heading: `Welcome${name ? `, ${name}` : ''} 👋`,
-        body: `<p>You've got a free THRYVE account, and that's a good thing —
-          it means every business you book with on THRYVE shows up in one
-          place: appointments, invoices, forms to sign, direct messages.</p>
-          <p><strong>One tap and you're in.</strong> Your portal lives at
-          <code style="font-family:inherit;background:#F1EEE6;padding:2px 6px;border-radius:6px;">/me</code>.</p>
-          <p>If you're new to THRYVE, browse the Discover tab to find
-          businesses near you — filter by category, price, distance, or
-          rating — and book in two taps.</p>`,
-        ctaText: 'Open my portal',
-        ctaUrl: `${appUrl}/me`,
-        footer: WELCOME_FOOTER,
-      }),
+      subject: name ? `Welcome to THRYVE, ${name}` : 'Welcome to THRYVE',
+      html: renderClientWelcome({ name, appUrl }),
     };
   }
   return {
@@ -184,6 +171,129 @@ function renderOwnerWelcome({ name, appUrl }) {
                     <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #eaeaea;padding-bottom:1em;border-style:solid;border-width:2px" />
                     <p style="margin:0;padding:0;font-size:11px;color:#737373;line-height:1.5">
                       You're getting this because you just signed up for THRYVE. Reply to this email any time — we read everything.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </body>
+</html>`;
+}
+
+// Client-side welcome — same dark aesthetic as the owner template, but
+// the value prop is reversed: instead of "build your business," it's
+// "consolidate every business you book with into one inbox / wallet /
+// calendar." Designed to land hard and short — clients have one
+// immediate action ("open my dashboard") and don't need a six-section
+// onboarding tour.
+function renderClientWelcome({ name, appUrl }) {
+  const greetSuffix = name ? `, ${escapeHtml(name)}` : '';
+  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html dir="ltr" lang="en">
+  <head>
+    <meta content="width=device-width" name="viewport" />
+    <meta content="text/html; charset=UTF-8" http-equiv="Content-Type" />
+    <meta name="x-apple-disable-message-reformatting" />
+    <meta content="IE=edge" http-equiv="X-UA-Compatible" />
+    <meta content="telephone=no,address=no,email=no,date=no,url=no" name="format-detection" />
+  </head>
+  <body style="background-color:#000000">
+    <div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0" data-skip-in-text="true">
+      Every service provider you use, in one place.
+    </div>
+    <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation" align="center">
+      <tbody>
+        <tr>
+          <td style="font-family:-apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;font-size:1em;min-height:100%;line-height:155%;background-color:#000000;color:#ffffff">
+            <table align="left" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation" style="max-width:600px;align:left;width:100%;color:#000000;background-color:#000000;padding:0;border-radius:0;border-color:#000000;line-height:155%">
+              <tbody>
+                <tr style="width:100%">
+                  <td>
+                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
+                    <h3 style="margin:0;padding:0;font-size:1.4em;line-height:1.08em;padding-top:0.389em;font-weight:600">
+                      <span style="color:#cdff45">THRYVE</span>
+                    </h3>
+                    <h1 style="margin:0;padding:0;font-size:2.25em;line-height:1.44em;padding-top:0.389em;font-weight:600">
+                      <span style="color:#ffffff">Welcome to THRYVE${greetSuffix}.</span>
+                    </h1>
+                    <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:24px">
+                      Every service provider you book with — your stylist, your trainer, your therapist, your contractor, your tutor — now lives in one place. Bills, bookings, memberships, messages. No more hunting through ten different texts and inboxes.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:40px">
+                      Your portal's ready. Tap in and you'll feel the difference immediately.
+                    </p>
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation">
+                      <tbody style="width:100%">
+                        <tr style="width:100%">
+                          <td align="left">
+                            <a href="${appUrl}/me" style="line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px;margin:0;padding:12px 50px;background-color:#cdff45;color:#000000;border-radius:4px;font-weight:500;font-size:15px;text-align:center;margin-bottom:48px" target="_blank">
+                              <span style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px">Open my dashboard →</span>
+                            </a>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #e8e8e4;padding-bottom:1em;border-style:solid;border-width:2px;margin-top:0;margin-bottom:40px" />
+                    <h2 style="margin:0;padding:0;font-size:35px;line-height:1.44em;font-weight:600;letter-spacing:-0.5px;margin-top:0;margin-bottom:24px">
+                      <span style="color:#ffffff">What's waiting for you</span>
+                    </h2>
+                    <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#ffffff;margin-top:0;margin-bottom:6px">
+                      01 Pay every bill in one place
+                    </p>
+                    <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:24px">
+                      Every invoice from every provider, lined up. Tap to pay with the card already on file. No more chasing emails or guessing what you owe.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#ffffff;margin-top:0;margin-bottom:6px">
+                      02 Stay ahead of every renewal
+                    </p>
+                    <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:24px">
+                      Memberships and recurring services in one view. Cancel, pause, or upgrade with one tap — and never get auto-charged for something you forgot about.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#ffffff;margin-top:0;margin-bottom:6px">
+                      03 Message your providers directly
+                    </p>
+                    <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:24px">
+                      Every reply lands in your THRYVE inbox — not buried in your texts. Voice memos, photos, signed documents, all in one thread.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#ffffff;margin-top:0;margin-bottom:6px">
+                      04 Find new providers near you
+                    </p>
+                    <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:0;margin-bottom:40px">
+                      Browse the Discover tab — filter by category, price, distance, or rating — and book in two taps. The whole experience, from finding to paying, never leaves THRYVE.
+                    </p>
+                    <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #e8e8e4;padding-bottom:1em;border-style:solid;border-width:2px;margin-top:0;margin-bottom:40px" />
+                    <h2 style="margin:0;padding:0;font-size:35px;line-height:1.44em;padding-top:0.389em;font-weight:600;letter-spacing:-0.4px;margin-top:0;margin-bottom:12px;text-align:center">
+                      <span style="color:#ffffff">Your life just got simpler.</span>
+                    </h2>
+                    <table align="center" width="100%" border="0" cellpadding="0" cellspacing="0" role="presentation">
+                      <tbody style="width:100%">
+                        <tr style="width:100%">
+                          <td align="center">
+                            <a href="${appUrl}/me" style="line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px;margin:0;padding:12px 50px;background-color:#cdff45;color:#000000;border-radius:4px;font-weight:500;font-size:15px;text-align:center;margin-bottom:8px" target="_blank">
+                              <span style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px">Open THRYVE</span>
+                            </a>
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+                    <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;margin-top:32px;margin-bottom:4px">
+                      Glad you're here,
+                    </p>
+                    <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ffffff;font-weight:600;margin-top:0;margin-bottom:0">
+                      Kayla Kassis, Founder of THRYVE.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
+                    <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #eaeaea;padding-bottom:1em;border-style:solid;border-width:2px" />
+                    <p style="margin:0;padding:0;font-size:11px;color:#737373;line-height:1.5">
+                      You're getting this because you just signed up for THRYVE. Reply to this email any time — we read everything.
+                    </p>
+                    <p style="margin:0;padding:0;font-size:11px;color:#737373;line-height:1.5;margin-top:8px">
+                      © 2026 THRYVE. All rights reserved.
                     </p>
                     <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
                   </td>
