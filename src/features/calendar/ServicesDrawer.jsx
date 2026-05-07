@@ -9,11 +9,12 @@
 //   reminder_minutes (array of "minutes before appointment" — defaults to
 //     7d/2d/1d/2h, fully customizable)
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { upload } from '@vercel/blob/client';
 
 const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
 
@@ -321,9 +322,11 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           </Field>
         </div>
 
-        <Field label="Photo URL" hint="Paste a public image URL. (Drag-and-drop uploads coming next.)">
-          <input value={service.photoUrl} onChange={(e) => onChange({ photoUrl: e.target.value })}
-            placeholder="https://…" style={inputSty}/>
+        <Field label="Photo" hint="Shown to clients on your booking page. JPG/PNG/WebP/HEIC, up to 5 MB.">
+          <PhotoUploader
+            value={service.photoUrl}
+            onChange={(photoUrl) => onChange({ photoUrl })}
+          />
         </Field>
 
         <Field label="Description" hint="Shown to clients on your booking page.">
@@ -606,6 +609,163 @@ function ClientPreview({ services }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
+
+// Photo upload — replaces the old "paste a URL" input. Two ways to add
+// a photo:
+//   • Choose from library (a regular file picker — desktop and mobile)
+//   • Take photo (mobile only — uses `capture="environment"` to launch
+//     the camera straight into rear-facing capture, the same trick the
+//     iOS App Store uses for product photos)
+//
+// Uploads go through @vercel/blob/client → /api/calendar/services/photo-token,
+// the same client-token pattern the message attachments and branding
+// logo upload use. While uploading we show a small progress state and
+// disable both buttons. The committed URL only lands on `service.photoUrl`
+// once the upload finishes; the parent's existing save flow ships it
+// to the API on the next "Save services" click.
+function PhotoUploader({ value, onChange }) {
+  const fileRef = useRef(null);
+  const cameraRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  // Detect mobile-ish devices so we only show "Take photo" where the
+  // capture attribute can actually launch a camera. Desktop browsers
+  // ignore `capture` and just open the file picker again, which would
+  // be a confusing duplicate button.
+  const isMobile = typeof navigator !== 'undefined'
+    && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
+
+  const startUpload = async (file) => {
+    if (!file) return;
+    setErr(null);
+    if (!file.type.startsWith('image/')) {
+      setErr('Please pick an image file.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErr('Photo must be under 5 MB.');
+      return;
+    }
+    setBusy(true);
+    try {
+      // Path is rebuilt server-side; we just need a unique-ish name.
+      // addRandomSuffix on the server adds a hash so name collisions
+      // can't overwrite each other's files.
+      const ext = (file.name.split('.').pop() || 'jpg').toLowerCase().slice(0, 5);
+      const blob = await upload(`services/photo-${Date.now()}.${ext}`, file, {
+        access: 'public',
+        handleUploadUrl: '/api/calendar/services/photo-token',
+        contentType: file.type || 'image/jpeg',
+      });
+      onChange(blob.url);
+    } catch (e) {
+      setErr(e.message || 'Upload failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        onChange={(e) => { startUpload(e.target.files?.[0]); e.target.value = ''; }}
+        style={{ display: 'none' }}
+      />
+      <input
+        ref={cameraRef}
+        type="file"
+        accept="image/*"
+        capture="environment"
+        onChange={(e) => { startUpload(e.target.files?.[0]); e.target.value = ''; }}
+        style={{ display: 'none' }}
+      />
+
+      {value ? (
+        <div style={{
+          position: 'relative',
+          width: '100%',
+          aspectRatio: '16/9',
+          borderRadius: 12,
+          overflow: 'hidden',
+          background: `url(${value}) center/cover, var(--surface-2)`,
+          border: '1px solid var(--border)',
+        }}>
+          <button
+            type="button"
+            onClick={() => onChange('')}
+            disabled={busy}
+            title="Remove photo"
+            style={{
+              position: 'absolute', top: 8, right: 8,
+              width: 28, height: 28, borderRadius: 999,
+              border: 'none', cursor: 'pointer',
+              background: 'rgba(0,0,0,0.55)', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}
+          >
+            <Icons.X size={13}/>
+          </button>
+          <button
+            type="button"
+            onClick={() => fileRef.current?.click()}
+            disabled={busy}
+            style={{
+              position: 'absolute', bottom: 8, right: 8,
+              padding: '6px 10px', borderRadius: 8,
+              border: 'none', cursor: 'pointer',
+              background: 'rgba(0,0,0,0.55)', color: '#fff',
+              fontSize: 11, fontWeight: 600,
+            }}
+          >
+            Replace
+          </button>
+        </div>
+      ) : (
+        <div style={{
+          border: '1px dashed var(--border-strong)',
+          borderRadius: 12,
+          padding: 18,
+          background: 'var(--surface-2)',
+          textAlign: 'center',
+          color: 'var(--muted)',
+        }}>
+          <Icons.Image size={26} sw={1.4}/>
+          <div style={{ fontSize: 12, marginTop: 6, color: 'var(--fg-2)' }}>
+            {busy ? 'Uploading…' : 'No photo yet'}
+          </div>
+          <div style={{
+            display: 'flex', gap: 8, marginTop: 12, justifyContent: 'center',
+            flexWrap: 'wrap',
+          }}>
+            <button type="button" disabled={busy}
+              onClick={() => fileRef.current?.click()}
+              className="btn btn-outline" style={{ fontSize: 12 }}>
+              <Icons.Image size={13}/> Choose photo
+            </button>
+            {isMobile && (
+              <button type="button" disabled={busy}
+                onClick={() => cameraRef.current?.click()}
+                className="btn btn-outline" style={{ fontSize: 12 }}>
+                <Icons.Camera size={13}/> Take photo
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
+      {err && (
+        <div style={{
+          marginTop: 8, fontSize: 11.5, color: 'var(--danger)',
+          padding: '6px 10px', borderRadius: 8,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+        }}>{err}</div>
+      )}
     </div>
   );
 }
