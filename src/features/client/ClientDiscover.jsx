@@ -7,12 +7,14 @@
 //
 // State lives in URL search params so links are shareable / bookmarkable
 // and the back button rewinds the filter, not the route.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
+import { publicOrigin } from '../../lib/publicUrl.js';
 
 const CATEGORIES = ['All', 'Wellness', 'Beauty', 'Fitness', 'Health', 'Professional'];
 
@@ -50,6 +52,13 @@ export default function ClientDiscover() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // Slug of the currently expanded business card. Drives the BusinessExpandedView
+  // overlay that renders over the grid. Lives in component state instead
+  // of the URL so the back-button doesn't navigate away from Discover.
+  const [openSlug, setOpenSlug] = useState(null);
+  // When a review is posted from inside the expanded view, bump this so
+  // the underlying grid refetches its rating/count cells.
+  const reloadGrid = useCallback(() => setReloadKey((n) => n + 1), []);
 
   // Debounce text input so each keystroke doesn't fire a request.
   const debouncedQ = useDebounced(q, 220);
@@ -193,14 +202,20 @@ export default function ClientDiscover() {
             {businesses.length} match{businesses.length === 1 ? '' : 'es'}
             {radiusKm != null && lat != null && <> · within {radiusKm} km of you</>}
           </div>
-          <div style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-            gap: 16,
-          }}>
-            {businesses.map((b) => <BusinessCard key={b.slug} biz={b} q={q}/>)}
+          <div className="discover-grid">
+            {businesses.map((b) => (
+              <BusinessCard key={b.slug} biz={b} q={q}
+                onOpen={() => setOpenSlug(b.slug)}/>
+            ))}
           </div>
         </>
+      )}
+      {openSlug && (
+        <BusinessExpandedView
+          slug={openSlug}
+          onClose={() => setOpenSlug(null)}
+          onReviewPosted={reloadGrid}
+        />
       )}
     </div>
   );
@@ -461,81 +476,101 @@ function useDebounced(value, ms) {
 
 // ─── Card ───────────────────────────────────────────────────────────
 
-function BusinessCard({ biz, q }) {
+function BusinessCard({ biz, q, onOpen }) {
   const initial = (biz.bizName || '?').trim()[0]?.toUpperCase() || '?';
-  const banner  = bannerFor(biz.slug || biz.bizName || '?');
-  const href    = `/book/${biz.slug}`;
+  const fallbackBanner = bannerFor(biz.slug || biz.bizName || '?');
+  const accent = biz.accentColor || null;
+  // Cover priority: real service photo > workspace's accent gradient > fallback hashed pastel.
+  const coverBg = biz.coverPhotoUrl
+    ? `linear-gradient(0deg, rgba(0,0,0,0.18), rgba(0,0,0,0)), url(${biz.coverPhotoUrl}) center/cover`
+    : accent
+    ? `linear-gradient(135deg, ${accent}, ${accent}cc)`
+    : fallbackBanner;
+
   return (
-    <a href={href} target="_blank" rel="noreferrer"
-      className="card"
+    <button type="button" onClick={onOpen}
+      className="card discover-card"
       style={{
         overflow: 'hidden', display: 'flex', flexDirection: 'column',
-        textDecoration: 'none', color: 'inherit', cursor: 'pointer',
-        padding: 0,
+        cursor: 'pointer', padding: 0, textAlign: 'left',
+        border: '1px solid var(--border)',
       }}>
       <div style={{
-        height: 96, background: banner, position: 'relative',
-        display: 'flex', alignItems: 'flex-end', padding: 14,
+        aspectRatio: '4 / 3', background: coverBg, position: 'relative',
+        display: 'flex', alignItems: 'flex-end', padding: 12,
       }}>
-        <div style={{ position: 'absolute', top: 12, right: 12, display: 'flex', gap: 6 }}>
+        <div style={{ position: 'absolute', top: 10, right: 10, display: 'flex', gap: 6 }}>
           {biz.ratingAvg != null && biz.reviewCount > 0 && (
             <div style={{
               padding: '3px 8px', borderRadius: 99,
-              background: 'rgba(255,255,255,0.92)',
+              background: 'rgba(15,15,15,0.78)',
               fontSize: 10.5, fontWeight: 700,
-              color: '#333',
+              color: '#fff', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
               display: 'inline-flex', alignItems: 'center', gap: 4,
             }} title={`${biz.reviewCount} review${biz.reviewCount === 1 ? '' : 's'}`}>
-              <span style={{ color: '#E0A82E' }}>★</span>
+              <span style={{ color: '#FFD24A' }}>★</span>
               {biz.ratingAvg.toFixed(1)}
-              <span style={{ opacity: 0.5, fontWeight: 500 }}>({biz.reviewCount})</span>
+              <span style={{ opacity: 0.7, fontWeight: 500 }}>({biz.reviewCount})</span>
             </div>
           )}
-          {biz.category && (
-            <div style={{
-              padding: '3px 8px', borderRadius: 99,
-              background: 'rgba(255,255,255,0.85)',
-              fontSize: 10.5, fontWeight: 600,
-              color: '#333', letterSpacing: '0.04em', textTransform: 'uppercase',
-            }}>{biz.category}</div>
-          )}
         </div>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12,
-          background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '2px solid #fff', boxShadow: '0 4px 12px rgba(0,0,0,0.08)',
-          fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19,
-          color: '#333',
-        }}>{initial}</div>
+        {/* Logo / initial badge — pinned bottom-left over the cover. */}
+        {biz.logoUrl ? (
+          <img src={biz.logoUrl} alt={biz.bizName}
+            style={{
+              width: 44, height: 44, borderRadius: 12, objectFit: 'cover',
+              background: '#fff', border: '2px solid #fff',
+              boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+            }}/>
+        ) : (
+          <div style={{
+            width: 44, height: 44, borderRadius: 12,
+            background: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            border: '2px solid #fff', boxShadow: '0 4px 12px rgba(0,0,0,0.18)',
+            fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 19,
+            color: accent || '#333',
+          }}>{initial}</div>
+        )}
       </div>
 
-      <div style={{ padding: 16, flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ padding: 14, flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-          <div style={{ fontSize: 15, fontWeight: 600, flex: 1 }}>{biz.bizName}</div>
+          <div style={{
+            fontSize: 14.5, fontWeight: 600, flex: 1, minWidth: 0,
+            overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{biz.bizName}</div>
           {biz.distanceKm != null && (
-            <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+            <div style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>
               {fmtDistance(biz.distanceKm)}
             </div>
           )}
         </div>
+        {biz.category && (
+          <div style={{
+            display: 'inline-block', alignSelf: 'flex-start',
+            padding: '2px 8px', borderRadius: 6,
+            fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em',
+            textTransform: 'uppercase',
+            background: 'var(--surface-2)', color: 'var(--muted)',
+          }}>{biz.category}</div>
+        )}
         {biz.tagline && (
-          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.45,
-            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>
+          <div style={{
+            fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.4,
+            display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden',
+          }}>
             {biz.tagline}
           </div>
         )}
-        {biz.addressLabel && (
-          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{biz.addressLabel}</div>
-        )}
 
-        {/* Show matched services when there's a query */}
+        {/* Matched services only show on filtered queries — clearer signal */}
         {q && biz.matchingServices && biz.matchingServices.length > 0 && (
-          <div style={{ marginTop: 4, display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {biz.matchingServices.map((s) => (
+          <div style={{ marginTop: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
+            {biz.matchingServices.slice(0, 2).map((s) => (
               <div key={s.id} style={{
                 display: 'flex', alignItems: 'baseline', justifyContent: 'space-between',
-                fontSize: 12, color: 'var(--fg-2)',
-                background: 'var(--surface-2)', padding: '4px 8px', borderRadius: 6,
+                fontSize: 11.5, color: 'var(--fg-2)',
+                background: 'var(--surface-2)', padding: '3px 7px', borderRadius: 5,
               }}>
                 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {s.name}
@@ -550,21 +585,22 @@ function BusinessCard({ biz, q }) {
 
         <div style={{
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          fontSize: 12, color: 'var(--muted)', marginTop: 'auto', paddingTop: 8,
+          fontSize: 11.5, color: 'var(--muted)', marginTop: 'auto', paddingTop: 6,
         }}>
           <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-            <Icons.Doc size={12} sw={1.7}/>
-            {biz.serviceCount} service{biz.serviceCount === 1 ? '' : 's'}
-            {biz.minPrice != null && biz.minPrice > 0 && (
-              <> · from ${Number(biz.minPrice).toFixed(0)}</>
-            )}
+            {biz.minPrice != null && biz.minPrice > 0
+              ? <>From ${Number(biz.minPrice).toFixed(0)}</>
+              : <>{biz.serviceCount} service{biz.serviceCount === 1 ? '' : 's'}</>}
           </span>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--accent)', fontWeight: 600 }}>
-            Book <Icons.Arrow size={11} sw={2.2}/>
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 4,
+            color: accent || 'var(--accent)', fontWeight: 600, fontSize: 11.5,
+          }}>
+            View <Icons.Arrow size={11} sw={2.2}/>
           </span>
         </div>
       </div>
-    </a>
+    </button>
   );
 }
 
@@ -572,4 +608,504 @@ function fmtDistance(km) {
   if (km < 1) return `${Math.round(km * 1000)} m`;
   if (km < 10) return `${km.toFixed(1)} km`;
   return `${Math.round(km)} km`;
+}
+
+// ─── Expanded view ──────────────────────────────────────────────────
+//
+// Big modal sheet that pops over the grid when a card is clicked.
+// Loads /api/businesses/:slug, shows hero (cover + logo + accent),
+// services, reviews (+ a review form when the signed-in user is
+// eligible), and a "Visit site" CTA that opens the public booking
+// page in a new tab.
+//
+// On desktop we render as a centered card; on phones the same modal
+// behaves as a full-screen sheet so the content has room to breathe.
+function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
+  const [data, setData]     = useState(null);
+  const [error, setError]   = useState(null);
+  const [loading, setLoading] = useState(true);
+  // Bumped after a review post so the same view re-fetches eligibility
+  // + the recent-reviews list and updates the inline summary.
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let live = true;
+    setLoading(true);
+    setError(null);
+    api.get('/businesses/' + encodeURIComponent(slug))
+      .then((r) => { if (live) setData(r); })
+      .catch((e) => { if (live) setError(e); })
+      .finally(() => { if (live) setLoading(false); });
+    return () => { live = false; };
+  }, [slug, reloadKey]);
+
+  // Esc closes — drawer-style escape hatch.
+  useEffect(() => {
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      document.body.style.overflow = '';
+    };
+  }, [onClose]);
+
+  const biz = data?.business;
+  const accent = biz?.accentColor || 'var(--accent)';
+  const fallback = bannerFor(slug);
+  const cover = biz?.coverPhotoUrl
+    ? `linear-gradient(0deg, rgba(0,0,0,0.35), rgba(0,0,0,0)), url(${biz.coverPhotoUrl}) center/cover`
+    : biz?.accentColor
+    ? `linear-gradient(135deg, ${accent}, ${accent}cc)`
+    : fallback;
+  const visitHref = biz ? `${publicOrigin()}/book/${biz.slug}` : '#';
+
+  return createPortal(
+    <div
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 200,
+        background: 'rgba(0,0,0,0.55)',
+        display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
+        padding: 0, overflowY: 'auto',
+      }}>
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="discover-sheet"
+        style={{
+          width: '100%', maxWidth: 880,
+          background: 'var(--surface)',
+          color: 'var(--fg)',
+          borderRadius: 0, // overridden on desktop in CSS
+          minHeight: '100vh',
+          margin: 0,
+          overflow: 'hidden',
+          boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
+        }}>
+        {/* Hero */}
+        <div style={{
+          position: 'relative',
+          height: 220,
+          background: cover,
+        }}>
+          <button onClick={onClose} aria-label="Close"
+            style={{
+              position: 'absolute', top: 14, right: 14,
+              width: 36, height: 36, borderRadius: 999,
+              border: 'none', cursor: 'pointer',
+              background: 'rgba(15,15,15,0.6)', color: '#fff',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)',
+            }}>
+            <Icons.X size={16}/>
+          </button>
+        </div>
+
+        {/* Header card — overlaps the hero */}
+        <div style={{ padding: '0 22px', marginTop: -38 }}>
+          <div style={{
+            display: 'flex', alignItems: 'flex-end', gap: 14,
+          }}>
+            {biz?.logoUrl ? (
+              <img src={biz.logoUrl} alt={biz.bizName}
+                style={{
+                  width: 76, height: 76, borderRadius: 18, objectFit: 'cover',
+                  background: '#fff', border: '3px solid var(--surface)',
+                  boxShadow: '0 6px 16px rgba(0,0,0,0.18)', flexShrink: 0,
+                }}/>
+            ) : (
+              <div style={{
+                width: 76, height: 76, borderRadius: 18,
+                background: 'var(--surface)', border: '3px solid var(--surface)',
+                boxShadow: '0 6px 16px rgba(0,0,0,0.18)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 30,
+                color: accent, flexShrink: 0,
+              }}>{(biz?.bizName || slug)[0]?.toUpperCase()}</div>
+            )}
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: 8 }}>
+              <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg)' }}>
+                {biz?.bizName || slug}
+              </div>
+              {data?.reviews?.summary?.count > 0 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 6, marginTop: 4,
+                  fontSize: 12.5, color: 'var(--fg-2)',
+                }}>
+                  <Stars value={data.reviews.summary.avg || 0}/>
+                  <span style={{ fontWeight: 600 }}>{(data.reviews.summary.avg || 0).toFixed(1)}</span>
+                  <span style={{ color: 'var(--muted)' }}>({data.reviews.summary.count})</span>
+                </div>
+              )}
+              {biz?.category && (
+                <div style={{
+                  display: 'inline-block', marginTop: 6,
+                  padding: '2px 8px', borderRadius: 6,
+                  fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em',
+                  textTransform: 'uppercase',
+                  background: 'var(--surface-2)', color: 'var(--muted)',
+                }}>{biz.category}</div>
+              )}
+            </div>
+          </div>
+
+          {biz?.tagline && (
+            <p style={{
+              fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.55,
+              margin: '14px 0 0',
+            }}>{biz.tagline}</p>
+          )}
+          {biz?.addressLabel && (
+            <div style={{
+              fontSize: 12.5, color: 'var(--muted)', marginTop: 8,
+              display: 'flex', alignItems: 'center', gap: 6,
+            }}>
+              <Icons.Globe size={12} sw={1.7}/> {biz.addressLabel}
+            </div>
+          )}
+
+          {/* CTA row */}
+          <div style={{
+            display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap',
+          }}>
+            <a href={visitHref} target="_blank" rel="noreferrer"
+              className="btn"
+              style={{
+                background: accent, color: pickInk(accent),
+                fontSize: 13.5, fontWeight: 600, padding: '10px 18px',
+                borderRadius: 10, textDecoration: 'none',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+              <Icons.Arrow size={13} sw={2.2}/> Visit site & book
+            </a>
+            {biz?.siteHandle && (
+              <a href={`/site/${biz.siteHandle}`} target="_blank" rel="noreferrer"
+                className="btn btn-outline"
+                style={{
+                  fontSize: 13.5, fontWeight: 500, padding: '10px 18px',
+                  display: 'inline-flex', alignItems: 'center', gap: 6,
+                }}>
+                <Icons.Globe size={13} sw={1.7}/> View website
+              </a>
+            )}
+          </div>
+        </div>
+
+        {loading && (
+          <div style={{ padding: 40, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
+            Loading…
+          </div>
+        )}
+
+        {error && (
+          <div style={{ padding: 22 }}>
+            <EmptyNote icon="Globe" title="Couldn't load this business"
+              hint={error.message || 'Try again in a moment.'}/>
+          </div>
+        )}
+
+        {/* Site preview / services */}
+        {data && !loading && (
+          <>
+            {biz?.siteHandle ? (
+              <section style={{ padding: '24px 22px 0' }}>
+                <SectionTitle>Their website</SectionTitle>
+                <div style={{
+                  marginTop: 10, position: 'relative',
+                  borderRadius: 14, overflow: 'hidden',
+                  border: '1px solid var(--border)',
+                  background: 'var(--surface-2)',
+                  height: 480,
+                }}>
+                  <iframe
+                    src={`/site/${biz.siteHandle}`}
+                    title={biz.bizName}
+                    style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
+                    sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+                  />
+                </div>
+              </section>
+            ) : null}
+
+            {data.services && data.services.length > 0 && (
+              <section style={{ padding: '24px 22px 0' }}>
+                <SectionTitle>Services</SectionTitle>
+                <div style={{
+                  marginTop: 10, display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(230px, 1fr))',
+                  gap: 10,
+                }}>
+                  {data.services.map((s) => (
+                    <div key={s.id} className="card"
+                      style={{ padding: 12, display: 'flex', gap: 10, alignItems: 'center' }}>
+                      {s.photoUrl ? (
+                        <img src={s.photoUrl} alt={s.name}
+                          style={{ width: 52, height: 52, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }}/>
+                      ) : (
+                        <div style={{
+                          width: 52, height: 52, borderRadius: 10,
+                          background: 'var(--surface-2)', flexShrink: 0,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          color: 'var(--muted)',
+                        }}><Icons.Spark size={18} sw={1.6}/></div>
+                      )}
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div style={{
+                          fontSize: 13, fontWeight: 600, lineHeight: 1.3,
+                          overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        }}>{s.name}</div>
+                        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+                          {s.durationMinutes} min{s.price > 0 ? ` · $${s.price.toFixed(0)}` : ''}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {/* Reviews */}
+            <section style={{ padding: '24px 22px 32px' }}>
+              <SectionTitle>
+                Reviews
+                {data.reviews.summary.count > 0 && (
+                  <span style={{ marginLeft: 8, color: 'var(--muted)', fontWeight: 500 }}>
+                    {data.reviews.summary.count}
+                  </span>
+                )}
+              </SectionTitle>
+
+              <ReviewSection
+                slug={biz.slug}
+                summary={data.reviews.summary}
+                recent={data.reviews.recent}
+                eligibility={data.eligibility}
+                accent={accent}
+                onPosted={() => { setReloadKey((n) => n + 1); onReviewPosted?.(); }}
+              />
+            </section>
+          </>
+        )}
+      </div>
+    </div>,
+    document.body,
+  );
+}
+
+function SectionTitle({ children }) {
+  return (
+    <h3 style={{
+      fontSize: 16, fontWeight: 600, margin: 0, color: 'var(--fg)',
+      letterSpacing: '-0.01em',
+    }}>{children}</h3>
+  );
+}
+
+function Stars({ value, size = 14 }) {
+  const v = Math.max(0, Math.min(5, Number(value) || 0));
+  return (
+    <span aria-label={`${v.toFixed(1)} stars`} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 1, fontSize: size,
+      color: '#FFD24A', letterSpacing: 1,
+    }}>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span key={i} style={{ opacity: i <= Math.round(v) ? 1 : 0.28 }}>★</span>
+      ))}
+    </span>
+  );
+}
+
+function ReviewSection({ slug, summary, recent, eligibility, accent, onPosted }) {
+  return (
+    <div style={{ marginTop: 12 }}>
+      {summary.count > 0 ? (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16,
+          padding: '12px 14px', borderRadius: 12,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+        }}>
+          <div style={{
+            fontSize: 28, fontWeight: 700, lineHeight: 1, color: 'var(--fg)',
+          }}>{(summary.avg || 0).toFixed(1)}</div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <Stars value={summary.avg || 0}/>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              Based on {summary.count} verified review{summary.count === 1 ? '' : 's'}
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div style={{
+          padding: '16px 14px', borderRadius: 12,
+          background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
+          fontSize: 13, color: 'var(--muted)', textAlign: 'center', marginBottom: 16,
+        }}>
+          No reviews yet. {eligibility?.canReview ? 'Be the first to leave one.' : ''}
+        </div>
+      )}
+
+      {/* Review form — only when the signed-in user is eligible AND
+          hasn't already reviewed this workspace. */}
+      {eligibility && (
+        eligibility.canReview ? (
+          <ReviewForm slug={slug} accent={accent} onPosted={onPosted}/>
+        ) : eligibility.hasReviewed ? (
+          <div style={{
+            padding: '12px 14px', borderRadius: 10,
+            background: 'color-mix(in srgb, var(--ok) 8%, var(--surface-2))',
+            border: '1px solid var(--ok)',
+            fontSize: 12.5, color: 'var(--ok)',
+            display: 'flex', alignItems: 'center', gap: 8,
+          }}>
+            <Icons.Check size={14}/> You've already reviewed this business — thanks!
+          </div>
+        ) : eligibility.reason === 'no-booking-or-message' || eligibility.reason === 'not-a-client' ? (
+          <div style={{
+            padding: '12px 14px', borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55,
+          }}>
+            Reviews are only open to verified clients. Book or message this business once and you'll be able to leave one.
+          </div>
+        ) : null
+      )}
+
+      {/* Recent reviews */}
+      {recent && recent.length > 0 && (
+        <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {recent.map((r) => (
+            <div key={r.id} style={{
+              padding: '12px 14px', borderRadius: 12,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+            }}>
+              <div style={{
+                display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6,
+              }}>
+                <Stars value={r.rating} size={12}/>
+                <span style={{ fontSize: 12.5, fontWeight: 600 }}>{r.reviewerName}</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  · {fmtRelative(r.createdAt)}
+                </span>
+              </div>
+              {r.text && (
+                <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+                  {r.text}
+                </div>
+              )}
+              {r.ownerResponse && (
+                <div style={{
+                  marginTop: 10, padding: '8px 10px', borderRadius: 8,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5,
+                }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4, fontWeight: 600 }}>
+                    Owner response
+                  </div>
+                  {r.ownerResponse}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ReviewForm({ slug, accent, onPosted }) {
+  const [rating, setRating] = useState(0);
+  const [text, setText]     = useState('');
+  const [busy, setBusy]     = useState(false);
+  const [err, setErr]       = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!rating) { setErr('Pick a star rating first.'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.post(`/businesses/${encodeURIComponent(slug)}/reviews`, {
+        rating, text: text.trim() || null,
+      });
+      onPosted();
+    } catch (e2) {
+      setErr(e2.message || 'Could not post your review');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <form onSubmit={submit} style={{
+      padding: 14, borderRadius: 12,
+      background: 'var(--surface-2)',
+      border: '1px solid var(--border-strong)',
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{ fontSize: 12.5, fontWeight: 600 }}>Leave a review</div>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+        {[1, 2, 3, 4, 5].map((n) => (
+          <button key={n} type="button"
+            onClick={() => setRating(n)}
+            aria-label={`${n} star${n === 1 ? '' : 's'}`}
+            style={{
+              padding: 2, fontSize: 28, lineHeight: 1,
+              background: 'transparent', border: 'none', cursor: 'pointer',
+              color: n <= rating ? '#FFD24A' : 'var(--border-strong)',
+              transition: 'color .12s ease',
+            }}>
+            ★
+          </button>
+        ))}
+      </div>
+      <textarea
+        value={text} onChange={(e) => setText(e.target.value)}
+        rows={3} maxLength={2000}
+        placeholder="Tell other clients what you thought (optional)"
+        style={{
+          width: '100%', resize: 'vertical', minHeight: 70,
+          padding: '8px 10px', borderRadius: 8,
+          border: '1px solid var(--border-strong)',
+          background: 'var(--surface)', color: 'var(--fg)',
+          fontSize: 13, fontFamily: 'inherit', lineHeight: 1.5,
+          outline: 'none',
+        }}/>
+      {err && (
+        <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>
+      )}
+      <button type="submit" disabled={busy || !rating}
+        style={{
+          alignSelf: 'flex-start',
+          padding: '8px 16px', borderRadius: 8,
+          border: 'none', cursor: busy || !rating ? 'default' : 'pointer',
+          background: accent, color: pickInk(accent),
+          fontSize: 13, fontWeight: 600,
+          opacity: busy || !rating ? 0.5 : 1,
+        }}>
+        {busy ? 'Posting…' : 'Post review'}
+      </button>
+    </form>
+  );
+}
+
+function fmtRelative(iso) {
+  if (!iso) return '';
+  const d = (Date.now() - new Date(iso).getTime()) / 86400e3;
+  if (d < 1)   return 'today';
+  if (d < 2)   return 'yesterday';
+  if (d < 30)  return `${Math.round(d)}d ago`;
+  if (d < 365) return `${Math.round(d / 30)}mo ago`;
+  return `${Math.round(d / 365)}y ago`;
+}
+
+// Mirror the email-shell luminance check so a dark accent gets light
+// button text and a bright accent gets dark text. Default to dark
+// (matches CFFF50 default and most owner-chosen lime/yellow accents).
+function pickInk(hex) {
+  const m = /^#([0-9a-fA-F]{6})$/.exec(hex || '');
+  if (!m) return '#0B0C08';
+  const r = parseInt(m[1].slice(0, 2), 16);
+  const g = parseInt(m[1].slice(2, 4), 16);
+  const b = parseInt(m[1].slice(4, 6), 16);
+  const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  return lum > 140 ? '#0B0C08' : '#F3F3EE';
 }

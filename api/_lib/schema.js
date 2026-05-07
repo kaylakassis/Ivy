@@ -412,6 +412,11 @@ CREATE INDEX IF NOT EXISTS idx_reviews_workspace_recent
   ON reviews(workspace_id, status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_booking
   ON reviews(booking_id) WHERE booking_id IS NOT NULL;
+-- One review per signed-in client per business — prevents a verified
+-- client from spamming. Only fires when reviewer_user_id is set, so
+-- token-issued reviews (no logged-in user) still pass through cleanly.
+CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_user
+  ON reviews(workspace_id, reviewer_user_id) WHERE reviewer_user_id IS NOT NULL;
 
 -- Mirror of busy times from the owner's connected external calendar
 -- (Google for now). Treated as opaque blockers in slot availability
