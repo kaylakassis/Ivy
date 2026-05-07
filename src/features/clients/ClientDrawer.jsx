@@ -5,6 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { upload } from '@vercel/blob/client';
 
 export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
   const initials = (client.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
@@ -88,12 +89,11 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
           padding: '20px 24px', borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'flex-start', gap: 14,
         }}>
-          <div style={{
-            width: 52, height: 52, borderRadius: 99, flexShrink: 0,
-            background: 'var(--accent-soft)', color: 'var(--accent)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: 18, fontWeight: 600,
-          }}>{initials}</div>
+          <ClientAvatar
+            initials={initials}
+            photoUrl={client.photoUrl}
+            onChange={(photoUrl) => safeUpdate({ photoUrl })}
+          />
           <div style={{ flex: 1, minWidth: 0 }}>
             <InlineText
               value={client.name || ''}
@@ -181,6 +181,12 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
 
           {/* Packages */}
           <ClientPackages client={client}/>
+
+          {/* Documents — files attached directly to this client. Per-row
+              shape: { url, type, name, uploadedAt }. Trainers stash
+              before/after photos here; intake-form scans, consent
+              forms, and similar live here too. */}
+          <ClientAttachments client={client} onSave={safeUpdate}/>
 
           {/* Notes */}
           <Notes client={client} onSave={safeUpdate}/>
@@ -653,5 +659,195 @@ function SellPackageForm({ templates, busy, onSubmit, onCancel }) {
         </button>
       </div>
     </form>
+  );
+}
+
+
+// ─── Profile photo + attachments ────────────────────────────────────
+
+// Avatar that doubles as a photo upload trigger. Click → file picker;
+// a long-press would be nice on mobile but the regular tap is enough
+// for the v1. Falls back to the initials chip when no photo is set.
+function ClientAvatar({ initials, photoUrl, onChange }) {
+  const fileRef = useRef(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const pick = async (file) => {
+    if (!file) return;
+    if (!file.type.startsWith("image/")) { setErr("Pick an image"); return; }
+    if (file.size > 10 * 1024 * 1024) { setErr("Under 10 MB"); return; }
+    setErr(null); setBusy(true);
+    try {
+      const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
+      const blob = await upload(`clients/photo-${Date.now()}.${ext}`, file, {
+        access: "public",
+        handleUploadUrl: "/api/clients/upload-token",
+        contentType: file.type || "image/jpeg",
+      });
+      onChange(blob.url);
+    } catch (e) {
+      setErr(e.message || "Upload failed");
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{ position: "relative", flexShrink: 0 }}>
+      <input ref={fileRef} type="file"
+        accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+        onChange={(e) => { pick(e.target.files?.[0]); e.target.value = ""; }}
+        style={{ display: "none" }}/>
+      <button type="button" onClick={() => fileRef.current?.click()} disabled={busy}
+        title={photoUrl ? "Replace photo" : "Add photo"}
+        aria-label={photoUrl ? "Replace photo" : "Add photo"}
+        style={{
+          width: 52, height: 52, borderRadius: 99, padding: 0,
+          background: photoUrl ? `url(${photoUrl}) center/cover` : "var(--accent-soft)",
+          color: "var(--accent)",
+          border: photoUrl ? "1px solid var(--border)" : "none",
+          display: "flex", alignItems: "center", justifyContent: "center",
+          fontSize: 18, fontWeight: 600,
+          cursor: busy ? "default" : "pointer",
+          opacity: busy ? 0.6 : 1,
+        }}>
+        {!photoUrl && initials}
+      </button>
+      {photoUrl && (
+        <button type="button" onClick={() => onChange("")} disabled={busy}
+          title="Remove photo" aria-label="Remove photo"
+          style={{
+            position: "absolute", bottom: -4, right: -4,
+            width: 20, height: 20, borderRadius: 999,
+            border: "1px solid var(--border)",
+            background: "var(--surface)", color: "var(--muted)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            cursor: "pointer",
+          }}>
+          <Icons.X size={10}/>
+        </button>
+      )}
+      {err && (
+        <div style={{
+          position: "absolute", top: "100%", left: 0, marginTop: 4,
+          fontSize: 10.5, color: "var(--danger)", whiteSpace: "nowrap",
+        }}>{err}</div>
+      )}
+    </div>
+  );
+}
+
+function ClientAttachments({ client, onSave }) {
+  const fileRef = useRef(null);
+  const items = Array.isArray(client.attachments) ? client.attachments : [];
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const addFile = async (file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setErr("Each file must be under 10 MB"); return; }
+    setErr(null); setBusy(true);
+    try {
+      const ext = (file.name.split(".").pop() || "bin").toLowerCase().slice(0, 5);
+      const blob = await upload(`clients/${client.id}-${Date.now()}.${ext}`, file, {
+        access: "public",
+        handleUploadUrl: "/api/clients/upload-token",
+        contentType: file.type || "application/octet-stream",
+      });
+      const next = [
+        ...items,
+        { url: blob.url, type: file.type || "application/octet-stream", name: file.name, uploadedAt: new Date().toISOString() },
+      ];
+      await onSave({ attachments: next });
+    } catch (e) {
+      setErr(e.message || "Upload failed");
+    } finally { setBusy(false); }
+  };
+
+  const removeAt = async (i) => {
+    const next = items.filter((_, idx) => idx !== i);
+    await onSave({ attachments: next });
+  };
+
+  return (
+    <div style={{ marginTop: 22 }}>
+      <Section label="Documents"/>
+      <div style={{
+        marginTop: 8, padding: 12, borderRadius: 12,
+        background: "var(--surface-2)", border: "1px solid var(--border)",
+      }}>
+        <input ref={fileRef} type="file"
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+          onChange={(e) => { addFile(e.target.files?.[0]); e.target.value = ""; }}
+          style={{ display: "none" }}/>
+
+        {items.length === 0 ? (
+          <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.55, marginBottom: 10 }}>
+            No documents yet. Add intake forms, before / after photos, signed agreements — anything you need to keep with this client.
+          </div>
+        ) : (
+          <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+            {items.map((a, i) => {
+              const isImage = (a.type || "").startsWith("image/");
+              return (
+                <li key={a.url + i} style={{
+                  display: "flex", alignItems: "center", gap: 10,
+                  padding: "8px 10px", borderRadius: 10,
+                  background: "var(--surface)", border: "1px solid var(--border)",
+                }}>
+                  {isImage ? (
+                    <a href={a.url} target="_blank" rel="noreferrer"
+                      style={{ flexShrink: 0, lineHeight: 0 }}>
+                      <img src={a.url} alt={a.name || ""}
+                        style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }}/>
+                    </a>
+                  ) : (
+                    <div style={{
+                      width: 40, height: 40, borderRadius: 8, flexShrink: 0,
+                      background: "var(--surface-2)", color: "var(--muted)",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                    }}><Icons.FileIcon size={18} sw={1.6}/></div>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <a href={a.url} target="_blank" rel="noreferrer"
+                      style={{
+                        fontSize: 13, fontWeight: 500, color: "var(--fg)",
+                        textDecoration: "none",
+                        overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                        display: "block",
+                      }}>
+                      {a.name || "Untitled"}
+                    </a>
+                    <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                      {a.uploadedAt ? new Date(a.uploadedAt).toLocaleDateString() : ""}
+                    </div>
+                  </div>
+                  <button type="button" onClick={() => removeAt(i)}
+                    title="Remove" aria-label="Remove"
+                    className="btn btn-ghost"
+                    style={{ padding: 4, color: "var(--muted)" }}>
+                    <Icons.X size={13}/>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+
+        <button type="button" disabled={busy} onClick={() => fileRef.current?.click()}
+          className="btn btn-outline"
+          style={{
+            marginTop: items.length === 0 ? 0 : 10,
+            fontSize: 12.5, padding: "6px 12px",
+          }}>
+          <Icons.Plus size={11} sw={2.2}/> {busy ? "Uploading…" : "Add file"}
+        </button>
+
+        {err && (
+          <div style={{
+            marginTop: 8, fontSize: 11.5, color: "var(--danger)",
+          }}>{err}</div>
+        )}
+      </div>
+    </div>
   );
 }

@@ -85,6 +85,34 @@ export default async function handler(req, res) {
         push('referred_by_client_id', ref);
       }
       if ('lastSeenAt' in body) push('last_seen_at', body.lastSeenAt ? new Date(body.lastSeenAt).toISOString() : null);
+      if ('address' in body) {
+        push('address', body.address ? String(body.address).trim().slice(0, 500) : null);
+      }
+      if ('photoUrl' in body) {
+        push('photo_url', body.photoUrl ? String(body.photoUrl).slice(0, 1000) : null);
+      }
+      if ('attachments' in body) {
+        if (!Array.isArray(body.attachments)) {
+          return badRequest(res, 'attachments must be an array');
+        }
+        if (body.attachments.length > 100) {
+          return badRequest(res, 'Up to 100 attachments per client');
+        }
+        // Sanitize each entry — only the URL/type/name/uploadedAt
+        // shape we control. Strip anything else clients send so a
+        // client-side bug can't poison the row with arbitrary JSON.
+        const cleaned = body.attachments.map((a) => ({
+          url:        String(a?.url || '').slice(0, 1000),
+          type:       String(a?.type || '').slice(0, 80),
+          name:       a?.name ? String(a.name).slice(0, 200) : null,
+          uploadedAt: a?.uploadedAt ? String(a.uploadedAt).slice(0, 40) : new Date().toISOString(),
+        })).filter((a) => a.url && a.type);
+        // Cast inline because the dynamic query builder produces a
+        // bare $N placeholder; without the cast PG won't assign TEXT
+        // to a JSONB column.
+        values.push(JSON.stringify(cleaned));
+        sets.push(`attachments = $${values.length}::jsonb`);
+      }
 
       if (sets.length === 0) return ok(res, { client: serializeClient(existing) });
 

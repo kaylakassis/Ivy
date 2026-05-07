@@ -58,23 +58,33 @@ export default async function handler(req, res) {
       const email = body.email ? body.email.toString().trim().toLowerCase() : null;
       const source = body.source ? body.source.toString().slice(0, 60) : null;
       const stage = VALID_STAGES.has(body.stage) ? body.stage : 'lead';
+      const address = body.address ? body.address.toString().trim().slice(0, 500) : null;
+      const photoUrl = body.photoUrl ? body.photoUrl.toString().slice(0, 1000) : null;
 
       if (!name) return badRequest(res, 'Name is required');
       if (name.length > 120) return badRequest(res, 'Name too long');
+      // Email is now required so the client can be invited to the
+      // portal, get booking confirmations, and receive invoices.
+      if (!email) return badRequest(res, 'Email is required');
 
-      // Optional phone — normalized to E.164 or rejected outright if
-      // malformed so we never store junk that breaks Twilio later.
-      let phone = null;
-      if (body.phone) {
-        phone = normalizePhone(body.phone);
-        if (!phone) return badRequest(res, 'Phone number is not a valid format');
-      }
+      // Phone now required + normalized to E.164. Bookings, SMS
+      // reminders, and 2FA flows all depend on it being present and
+      // dial-able.
+      if (!body.phone) return badRequest(res, 'Phone number is required');
+      const phone = normalizePhone(body.phone);
+      if (!phone) return badRequest(res, 'Phone number is not a valid format');
       const smsConsentAt = body.smsConsent ? new Date().toISOString() : null;
 
       const tags = source ? [source] : [];
       const { rows } = await sql`
-        INSERT INTO clients (workspace_id, name, email, phone, sms_consent_at, stage, tags, source)
-        VALUES (${workspaceId}, ${name}, ${email}, ${phone}, ${smsConsentAt}, ${stage}, ${tags}, ${source})
+        INSERT INTO clients (
+          workspace_id, name, email, phone, sms_consent_at, stage,
+          tags, source, address, photo_url
+        )
+        VALUES (
+          ${workspaceId}, ${name}, ${email}, ${phone}, ${smsConsentAt}, ${stage},
+          ${tags}, ${source}, ${address}, ${photoUrl}
+        )
         RETURNING *
       `;
       // Best-effort invite. Skip when no email or already invited.

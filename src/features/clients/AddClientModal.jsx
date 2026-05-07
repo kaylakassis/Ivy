@@ -1,4 +1,7 @@
-// Modal: collect name, email, source — adds as a lead.
+// Modal: collect name + email + phone (all required) + source — adds as a lead.
+// Photo upload + per-client attachments live in the full ClientDrawer
+// once the lead exists, since upload-then-cancel without a row leaves
+// orphan files in Blob.
 import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 
@@ -7,11 +10,19 @@ const SOURCES = ['Referral', 'Instagram', 'Website', 'Email', 'Walk-in', 'Other'
 export default function AddClientModal({ onClose, onAdd }) {
   const [name, setName]     = useState('');
   const [email, setEmail]   = useState('');
+  const [phone, setPhone]   = useState('');
   const [source, setSource] = useState('Referral');
   const [busy, setBusy]     = useState(false);
   const [err, setErr]       = useState(null);
 
-  const canAdd = name.trim().length > 0;
+  const trimmedName = name.trim();
+  const trimmedEmail = email.trim();
+  const trimmedPhone = phone.trim();
+  // All three are required. Email validity is a loose check — the
+  // server runs the strict one and rejects if needed.
+  const emailLooksValid = /\S+@\S+\.\S+/.test(trimmedEmail);
+  const phoneLooksValid = trimmedPhone.replace(/\D/g, '').length >= 7;
+  const canAdd = trimmedName.length > 0 && emailLooksValid && phoneLooksValid;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -19,7 +30,12 @@ export default function AddClientModal({ onClose, onAdd }) {
     setBusy(true);
     setErr(null);
     try {
-      await onAdd({ name: name.trim(), email: email.trim() || null, source });
+      await onAdd({
+        name: trimmedName,
+        email: trimmedEmail,
+        phone: trimmedPhone,
+        source,
+      });
     } catch (ex) {
       setErr(ex.message || 'Could not add client');
     } finally {
@@ -33,7 +49,7 @@ export default function AddClientModal({ onClose, onAdd }) {
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="card" style={{ padding: 28, width: '100%', maxWidth: 440 }}>
+        className="card" style={{ padding: 28, width: '100%', maxWidth: 460 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 10,
@@ -45,13 +61,22 @@ export default function AddClientModal({ onClose, onAdd }) {
             <Icons.X size={15}/>
           </button>
         </div>
+
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <input value={name} onChange={(e) => setName(e.target.value)}
-            placeholder="Name" autoFocus required style={inputS}/>
-          <input value={email} onChange={(e) => setEmail(e.target.value)}
-            type="email" placeholder="Email (optional)" style={inputS}/>
-          <div>
-            <div className="metric-label" style={{ marginBottom: 6 }}>Source</div>
+          <Field label="Name">
+            <input value={name} onChange={(e) => setName(e.target.value)}
+              placeholder="Full name" autoFocus required style={inputS}/>
+          </Field>
+          <Field label="Email">
+            <input value={email} onChange={(e) => setEmail(e.target.value)}
+              type="email" placeholder="name@example.com" required style={inputS}/>
+          </Field>
+          <Field label="Phone">
+            <input value={phone} onChange={(e) => setPhone(e.target.value)}
+              type="tel" inputMode="tel" autoComplete="tel"
+              placeholder="(555) 555-5555" required style={inputS}/>
+          </Field>
+          <Field label="Source">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
               {SOURCES.map((s) => (
                 <button key={s} type="button" onClick={() => setSource(s)} style={{
@@ -62,7 +87,7 @@ export default function AddClientModal({ onClose, onAdd }) {
                 }}>{s}</button>
               ))}
             </div>
-          </div>
+          </Field>
         </div>
 
         {err && (
@@ -87,7 +112,17 @@ export default function AddClientModal({ onClose, onAdd }) {
   );
 }
 
+function Field({ label, children }) {
+  return (
+    <div>
+      <div className="metric-label" style={{ marginBottom: 6 }}>{label}</div>
+      {children}
+    </div>
+  );
+}
+
 const inputS = {
+  width: '100%',
   padding: '10px 12px',
   border: '1px solid var(--border-strong)',
   borderRadius: 10,
@@ -95,4 +130,5 @@ const inputS = {
   background: 'var(--surface)',
   color: 'var(--fg)',
   outline: 0,
+  boxSizing: 'border-box',
 };

@@ -18,13 +18,36 @@ const STRIPE_BASE = 'https://api.stripe.com/v1';
 // when you connect Stripe in Vercel → Storage. The legacy
 // THRYVE_STRIPE_* and STRIPE_PLATFORM_SECRET names from earlier setups
 // remain as fallbacks so existing deployments don't have to migrate.
+//
+// We warn (once per cold start) when BOTH the Vercel-injected name
+// AND a legacy name are set — that's an ambiguity flag, the operator
+// should remove the legacy var to avoid drift.
+let _legacyWarned = false;
+function warnIfLegacyShadowed() {
+  if (_legacyWarned) return;
+  _legacyWarned = true;
+  const dupes = [];
+  if (process.env.STRIPE_SECRET_KEY && (process.env.THRYVE_STRIPE_SECRET || process.env.STRIPE_PLATFORM_SECRET)) {
+    dupes.push('STRIPE_SECRET_KEY (Vercel) is set alongside legacy THRYVE_STRIPE_SECRET/STRIPE_PLATFORM_SECRET — delete the legacy ones.');
+  }
+  if (process.env.STRIPE_WEBHOOK_SECRET && process.env.THRYVE_STRIPE_WEBHOOK_SECRET) {
+    dupes.push('STRIPE_WEBHOOK_SECRET (Vercel) is set alongside legacy THRYVE_STRIPE_WEBHOOK_SECRET — delete the legacy one.');
+  }
+  if (dupes.length) {
+    // eslint-disable-next-line no-console
+    console.warn('[stripe] env-var migration:\n  • ' + dupes.join('\n  • '));
+  }
+}
+
 export function platformStripeSecret() {
+  warnIfLegacyShadowed();
   return process.env.STRIPE_SECRET_KEY
     || process.env.THRYVE_STRIPE_SECRET
     || process.env.STRIPE_PLATFORM_SECRET
     || null;
 }
 export function platformWebhookSecret() {
+  warnIfLegacyShadowed();
   return process.env.STRIPE_WEBHOOK_SECRET
     || process.env.THRYVE_STRIPE_WEBHOOK_SECRET
     || null;

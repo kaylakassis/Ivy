@@ -326,6 +326,14 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS payment_method_exp_year INT;
 CREATE INDEX IF NOT EXISTS idx_clients_stripe_customer
   ON clients(stripe_customer_id) WHERE stripe_customer_id IS NOT NULL;
 
+-- Profile fields. Owners can attach a profile photo + a list of files
+-- per client (e.g. trainer before/after photos, intake-form scans,
+-- consent forms). Files live in Vercel Blob; we store the public URL +
+-- mime + filename + uploaded-at in a JSONB array. Capped at 100
+-- attachments per client by application logic — no DB constraint.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS photo_url TEXT;
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 CREATE TABLE IF NOT EXISTS calendar_settings (
   workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
   biz_name TEXT NOT NULL DEFAULT 'My business',

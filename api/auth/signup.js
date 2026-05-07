@@ -13,6 +13,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { renderWelcome } from '../_lib/welcome-content.js';
+import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
@@ -179,7 +180,10 @@ export default async function handler(req, res) {
     }
 
     return created(res, {
-      user, role,
+      // Decorate with isSuperAdmin so the sidebar shows the Admin tab on
+      // first paint when the signing-up email matches SUPER_ADMIN_EMAIL.
+      user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) },
+      role,
       // Surface email send errors to the client. Frontend can show a
       // banner ("we couldn't send your verification email — resend it
       // from your account page") instead of pretending everything

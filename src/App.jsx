@@ -14,6 +14,7 @@ import AuthPage from './features/auth/AuthPage.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
 import RootRouter from './features/marketing/RootRouter.jsx';
 import ClientShell from './features/client/ClientShell.jsx';
+import { ErrorBoundary } from './lib/monitoring.js';
 
 // ── Lazy: business app pages ──
 const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
@@ -76,10 +77,39 @@ function RouteFallback() {
   );
 }
 
+// Page-scoped failure card. The root ErrorBoundary in main.jsx still
+// catches anything that escapes this one — but for "a single route
+// crashed," landing here keeps the rest of the shell (sidebar, topbar,
+// nav, ViewToggle) interactive so the user can navigate away instead
+// of being stuck on the full FatalFallback screen.
+function RouteCrash({ resetError }) {
+  return (
+    <div style={{
+      minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24,
+    }}>
+      <div className="card" style={{
+        maxWidth: 460, padding: 28, textAlign: 'center',
+      }}>
+        <div style={{
+          fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500,
+          letterSpacing: '-0.02em', marginBottom: 8,
+        }}>This page hit a snag.</div>
+        <div style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.55, marginBottom: 18 }}>
+          We've logged the error. You can retry, or pick another tab from the menu.
+        </div>
+        <button onClick={resetError} className="btn btn-primary"
+          style={{ padding: '8px 18px' }}>Try again</button>
+      </div>
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <>
     <Suspense fallback={<RouteFallback/>}>
+      <ErrorBoundary fallback={({ resetError }) => <RouteCrash resetError={resetError}/>}>
       <Routes>
         {/* Public marketing landing — also handles "I'm logged in, where to?"
             redirect for authenticated users. */}
@@ -146,6 +176,7 @@ export default function App() {
           <Route path="/me/discover"  element={<ClientDiscover />} />
         </Route>
       </Routes>
+      </ErrorBoundary>
     </Suspense>
     <ViewToggle/>
     </>

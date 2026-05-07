@@ -1,6 +1,7 @@
 // POST /api/auth/login  { email, password }
 import { sql } from '../_lib/db.js';
 import { verifyPassword, signSession, setSessionCookie, validEmail } from '../_lib/auth.js';
+import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -36,8 +37,14 @@ export default async function handler(req, res) {
     if (!okPw) return unauthorized(res, 'Invalid email or password');
 
     setSessionCookie(res, signSession(user.id));
+    // Decorate the user payload with isSuperAdmin so the sidebar /
+    // bottom-nav / command-palette show the Admin tab on first paint.
+    // /api/auth/me also adds this on subsequent loads; doing it here
+    // avoids the "refresh once and Admin appears" papercut.
     const { password_hash, ...safe } = user;
-    return ok(res, { user: safe });
+    return ok(res, {
+      user: { ...safe, isSuperAdmin: emailIsSuperAdmin(safe.email) },
+    });
   } catch (err) {
     return serverError(res, err);
   }
