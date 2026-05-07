@@ -595,6 +595,18 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS travel_buffer_minutes INT NOT NULL
 -- booking time and lives on the booking row itself).
 ALTER TABLE services ADD COLUMN IF NOT EXISTS location_label TEXT;
 
+-- Visibility model. 'public' = listed on Discover + the public booking
+-- page; 'private' = bookable by direct link/ID but not in any list;
+-- 'only_me' = completely hidden from clients (effectively a draft).
+-- Same three states power services, packages, and websites so the
+-- owner UI can render one selector everywhere.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'
+  CHECK (visibility IN ('public', 'private', 'only_me'));
+ALTER TABLE packages ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'
+  CHECK (visibility IN ('public', 'private', 'only_me'));
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT 'public'
+  CHECK (visibility IN ('public', 'private', 'only_me'));
+
 -- Cancellation + no-show fee policy. When fee_amount > 0 AND a card is
 -- on file for the client, late-cancel/no-show actions auto-charge the
 -- fee against the saved card. cancellation_window_hours is the

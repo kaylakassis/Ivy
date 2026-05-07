@@ -103,6 +103,13 @@ export default async function handler(req, res) {
         ? null
         : String(s.locationLabel).trim().slice(0, 500) || null;
 
+      // Visibility — three-state. Default 'public' so existing services
+      // that don't send the field stay listed.
+      const visibility = s?.visibility || 'public';
+      if (!['public', 'private', 'only_me'].includes(visibility)) {
+        return badRequest(res, `services[${idx}].visibility must be public / private / only_me`);
+      }
+
       // Cancellation / no-show policy. Both fees are optional; a 0
       // fee means "no auto-charge — owner can still cancel manually."
       const cancellationFeeAmount = Number(s?.cancellationFeeAmount ?? 0);
@@ -191,6 +198,7 @@ export default async function handler(req, res) {
         depositAmount,
         locationType,
         locationLabel,
+        visibility,
         travelBufferMinutes,
         cancellationFeeAmount,
         cancellationWindowHours,
@@ -251,6 +259,7 @@ export default async function handler(req, res) {
             deposit_amount = ${s.depositAmount},
             location_type = ${s.locationType},
             location_label = ${s.locationLabel},
+            visibility = ${s.visibility},
             travel_buffer_minutes = ${s.travelBufferMinutes},
             cancellation_fee_amount = ${s.cancellationFeeAmount},
             cancellation_window_hours = ${s.cancellationWindowHours},
@@ -268,7 +277,7 @@ export default async function handler(req, res) {
             workspace_id, name, duration_minutes, price, display_order,
             description, photo_url, prep_instructions, reminder_minutes, capacity,
             intake_form_template_ids, deposit_type, deposit_amount,
-            location_type, location_label, travel_buffer_minutes,
+            location_type, location_label, visibility, travel_buffer_minutes,
             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount,
             add_ons, custom_fields
           )
@@ -276,7 +285,7 @@ export default async function handler(req, res) {
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
             ${s.description}, ${s.photoUrl}, ${s.prepInstructions}, ${s.reminderMinutes}, ${s.capacity},
             ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount},
-            ${s.locationType}, ${s.locationLabel}, ${s.travelBufferMinutes},
+            ${s.locationType}, ${s.locationLabel}, ${s.visibility}, ${s.travelBufferMinutes},
             ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount},
             ${JSON.stringify(s.addOns)}::jsonb, ${JSON.stringify(s.customFields)}::jsonb
           )

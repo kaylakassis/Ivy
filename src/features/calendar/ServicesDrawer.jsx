@@ -13,6 +13,7 @@ import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
 import { upload } from '@vercel/blob/client';
 
@@ -64,6 +65,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       depositAmount: 0,
       locationType: 'in_person',
       locationLabel: '',
+      visibility: 'public',
       travelBufferMinutes: 0,
       cancellationFeeAmount: 0,
       cancellationWindowHours: 24,
@@ -101,6 +103,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
         depositAmount: Number(s.depositAmount) || 0,
         locationType: s.locationType || 'in_person',
         locationLabel: (s.locationLabel || '').trim() || null,
+        visibility: ['public','private','only_me'].includes(s.visibility) ? s.visibility : 'public',
         travelBufferMinutes: Math.max(0, Math.min(240, Number(s.travelBufferMinutes) || 0)),
         cancellationFeeAmount: Math.max(0, Number(s.cancellationFeeAmount) || 0),
         cancellationWindowHours: Math.max(0, Math.min(720, Number(s.cancellationWindowHours) || 24)),
@@ -321,6 +324,20 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             />
           </Field>
         </div>
+
+        <Field label="Visibility"
+          hint={
+            service.visibility === 'only_me'
+              ? "Hidden from everyone except you. Use this to draft a service before launch."
+              : service.visibility === 'private'
+              ? "Hidden from your booking page and Discover. Bookable by anyone you give the direct link to."
+              : "Listed on your booking page and on Discover. Anyone can find and book it."
+          }>
+          <VisibilityPicker
+            value={service.visibility || 'public'}
+            onChange={(visibility) => onChange({ visibility })}
+          />
+        </Field>
 
         <Field label="Photo" hint="Shown to clients on your booking page. JPG/PNG/WebP/HEIC, up to 5 MB.">
           <PhotoUploader

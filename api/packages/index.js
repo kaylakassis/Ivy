@@ -77,6 +77,11 @@ export default async function handler(req, res) {
       const sv = validateServiceIds(body.serviceIds);
       if (!sv.ok) return badRequest(res, sv.error);
 
+      const visibility = body.visibility || 'public';
+      if (!['public', 'private', 'only_me'].includes(visibility)) {
+        return badRequest(res, 'visibility must be public / private / only_me');
+      }
+
       // Validate serviceIds belong to this workspace before storing.
       if (sv.value.length > 0) {
         const { rows: own } = await sql.query(
@@ -89,8 +94,8 @@ export default async function handler(req, res) {
       }
 
       const { rows } = await sql`
-        INSERT INTO packages (workspace_id, name, description, service_ids, session_count, price, expiry_days)
-        VALUES (${workspaceId}, ${name}, ${description}, ${sv.value}, ${sessionCount}, ${price}, ${expiryDays})
+        INSERT INTO packages (workspace_id, name, description, service_ids, session_count, price, expiry_days, visibility)
+        VALUES (${workspaceId}, ${name}, ${description}, ${sv.value}, ${sessionCount}, ${price}, ${expiryDays}, ${visibility})
         RETURNING *
       `;
       return created(res, { package: serializePackage(rows[0]) });

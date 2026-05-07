@@ -104,6 +104,15 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
 
         {!isMobile && <div style={{ flex: 1 }} />}
 
+        {/* Visibility selector — Public / Link only / Only me. Mirrors
+            the same control on Services + Packages so owners learn one
+            mental model for "where does this show up". */}
+        <SiteVisibilityButton
+          visibility={site.visibility || 'public'}
+          onChange={(v) => set({ visibility: v })}
+          isMobile={isMobile}
+        />
+
         {/* Template selector */}
         <div style={{ position: 'relative' }}>
           <button className="btn btn-outline" onClick={() => setShowTemplateMenu((v) => !v)}>
@@ -333,5 +342,71 @@ function MobilePaneTab({ label, icon, active, onClick, disabled }) {
     >
       <Icon size={13}/>{label}
     </button>
+  );
+}
+
+// Compact visibility dropdown for the publish toolbar. Same three
+// states as the per-service / per-package picker. Click → small
+// popover with three radio cards. The cog status icon next to the
+// label tells the owner at a glance which mode is active without
+// opening the menu.
+function SiteVisibilityButton({ visibility, onChange, isMobile }) {
+  const [open, setOpen] = useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    const onDown = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, []);
+  const labels = { public: 'Public', private: 'Link only', only_me: 'Only me' };
+  const icons  = { public: 'Globe',  private: 'Lock',      only_me: 'EyeOff' };
+  const subs   = {
+    public:  'Listed on Discover and your booking page.',
+    private: 'Hidden from lists. Anyone with /site/<handle> can view.',
+    only_me: 'Hidden from everyone except you.',
+  };
+  const Icon = Icons[icons[visibility]] || Icons.Globe;
+  return (
+    <div ref={ref} style={{ position: 'relative' }}>
+      <button className="btn btn-outline" onClick={() => setOpen((o) => !o)}
+        title={subs[visibility]}>
+        <Icon size={13} sw={1.7}/>
+        {!isMobile && <span style={{ marginLeft: 4 }}>{labels[visibility]}</span>}
+        <Icons.ArrowDown size={11} sw={2}/>
+      </button>
+      {open && (
+        <div className="card" style={{
+          position: 'absolute', top: 'calc(100% + 4px)', right: 0, zIndex: 60,
+          minWidth: 240, padding: 8, boxShadow: 'var(--shadow)',
+        }}>
+          {['public', 'private', 'only_me'].map((id) => {
+            const RowIcon = Icons[icons[id]] || Icons.Globe;
+            const active = visibility === id;
+            return (
+              <button key={id} type="button"
+                onClick={() => { onChange(id); setOpen(false); }}
+                style={{
+                  width: '100%', textAlign: 'left',
+                  padding: '8px 10px', borderRadius: 8,
+                  background: active ? 'var(--accent-soft)' : 'transparent',
+                  color: active ? 'var(--accent)' : 'var(--fg)',
+                  border: 'none', cursor: 'pointer',
+                  display: 'flex', flexDirection: 'column', gap: 2,
+                }}>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600 }}>
+                  <RowIcon size={13} sw={1.7}/> {labels[id]}
+                </span>
+                <span style={{
+                  fontSize: 11, color: active ? 'var(--accent)' : 'var(--muted)',
+                  opacity: active ? 0.85 : 1, lineHeight: 1.45,
+                }}>
+                  {subs[id]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }

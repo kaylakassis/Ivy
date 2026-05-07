@@ -44,8 +44,13 @@ async function getCalendar(req, res) {
     if (settings.rows.length === 0) return notFound(res, 'No booking page for that handle');
     const s = settings.rows[0];
 
+    // Public booking page hides 'only_me' services entirely (they're
+    // drafts the owner doesn't want anyone to see) but keeps 'private'
+    // ones — clients with a direct link/share can still book those.
     const services = await sql`
-      SELECT * FROM services WHERE workspace_id = ${s.workspace_id}
+      SELECT * FROM services
+      WHERE workspace_id = ${s.workspace_id}
+        AND visibility != 'only_me'
       ORDER BY display_order, created_at
     `;
     const blocks = await sql`
@@ -189,14 +194,19 @@ async function createBooking(req, res) {
     if (!serviceId) return badRequest(res, 'Pick a service');
 
     // Verify service belongs to this workspace and duration matches.
+    // Reject bookings on 'only_me' services (drafts the owner shouldn't
+    // be receiving bookings for); 'private' is bookable by direct link.
     const svcRows = await sql`
       SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount,
              location_type, travel_buffer_minutes,
-             custom_fields, add_ons
+             custom_fields, add_ons, visibility
         FROM services
        WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
     if (svcRows.rows.length === 0) return badRequest(res, 'Unknown service');
+    if (svcRows.rows[0].visibility === 'only_me') {
+      return badRequest(res, 'This service is not available to book.');
+    }
     const svc = svcRows.rows[0];
     const serviceCapacity = Math.max(1, Number(svc.capacity) || 1);
     const locationType  = svc.location_type || 'in_person';

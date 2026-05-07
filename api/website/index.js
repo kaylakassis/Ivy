@@ -21,6 +21,7 @@ function serialize(row) {
     sections:      row.sections || [],
     customDomain:  row.custom_domain,
     launched:      row.launched,
+    visibility:    row.visibility || 'public',
     publishedAt:   row.published_at,
     updatedAt:     row.updated_at,
   };
@@ -69,6 +70,12 @@ export default async function handler(req, res) {
       }
       if ('customDomain' in body) patch.customDomain = body.customDomain ? String(body.customDomain).slice(0, 255) : null;
       if ('launched' in body) patch.launched = !!body.launched;
+      if ('visibility' in body) {
+        if (!['public', 'private', 'only_me'].includes(body.visibility)) {
+          return badRequest(res, 'visibility must be public / private / only_me');
+        }
+        patch.visibility = body.visibility;
+      }
 
       if (patch.handle) {
         const clash = await sql`
@@ -89,6 +96,7 @@ export default async function handler(req, res) {
           sections       = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
           custom_domain  = COALESCE(${patch.customDomain ?? null},   custom_domain),
           launched       = COALESCE(${patch.launched ?? null},       launched),
+          visibility     = COALESCE(${patch.visibility ?? null},     visibility),
           updated_at     = NOW()
         WHERE workspace_id = ${workspaceId}
         RETURNING *

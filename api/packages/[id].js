@@ -76,6 +76,13 @@ export default async function handler(req, res) {
         }
       }
       if ('active' in body) push('active', !!body.active);
+      if ('visibility' in body) {
+        const v = body.visibility;
+        if (!['public', 'private', 'only_me'].includes(v)) {
+          return badRequest(res, 'visibility must be public / private / only_me');
+        }
+        push('visibility', v);
+      }
 
       if (sets.length === 0) return ok(res, { package: serializePackage(found.rows[0]) });
 

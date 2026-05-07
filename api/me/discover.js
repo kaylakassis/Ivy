@@ -156,22 +156,26 @@ export default async function handler(req, res) {
         cs.brand_logo_url,
         cs.brand_accent_color,
         ${distSelect} AS distance_km,
-        (SELECT COUNT(*)::int FROM services s WHERE s.workspace_id = cs.workspace_id) AS service_count,
-        (SELECT MIN(price)::numeric FROM services s WHERE s.workspace_id = cs.workspace_id) AS min_price,
-        (SELECT MAX(price)::numeric FROM services s WHERE s.workspace_id = cs.workspace_id) AS max_price,
+        (SELECT COUNT(*)::int FROM services s WHERE s.workspace_id = cs.workspace_id AND s.visibility = 'public') AS service_count,
+        (SELECT MIN(price)::numeric FROM services s WHERE s.workspace_id = cs.workspace_id AND s.visibility = 'public') AS min_price,
+        (SELECT MAX(price)::numeric FROM services s WHERE s.workspace_id = cs.workspace_id AND s.visibility = 'public') AS max_price,
         (
           SELECT s_cover.photo_url
           FROM services s_cover
-          WHERE s_cover.workspace_id = cs.workspace_id AND s_cover.photo_url IS NOT NULL
+          WHERE s_cover.workspace_id = cs.workspace_id
+            AND s_cover.photo_url IS NOT NULL
+            AND s_cover.visibility = 'public'
           ORDER BY s_cover.display_order ASC LIMIT 1
         ) AS cover_photo_url,
-        (SELECT w.handle FROM websites w WHERE w.workspace_id = cs.workspace_id AND w.launched = TRUE) AS site_handle,
+        (SELECT w.handle FROM websites w
+          WHERE w.workspace_id = cs.workspace_id AND w.launched = TRUE
+            AND w.visibility = 'public') AS site_handle,
         (
           SELECT json_agg(json_build_object(
             'id', s2.id, 'name', s2.name, 'price', s2.price,
             'durationMinutes', s2.duration_minutes
           ) ORDER BY s2.price ASC NULLS LAST)
-          FROM services s2 WHERE s2.workspace_id = cs.workspace_id
+          FROM services s2 WHERE s2.workspace_id = cs.workspace_id AND s2.visibility = 'public'
             ${qPattern ? `AND s2.name ILIKE ${push(qPattern)}` : ''}
             ${priceMin != null ? `AND s2.price >= ${push(priceMin)}` : ''}
             ${priceMax != null ? `AND s2.price <= ${push(priceMax)}` : ''}

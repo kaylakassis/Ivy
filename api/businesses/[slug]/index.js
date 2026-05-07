@@ -46,7 +46,7 @@ export default async function handler(req, res) {
         cs.workspace_id, cs.slug, cs.biz_name, cs.tagline, cs.category,
         cs.address_label, cs.lat, cs.lng, cs.timezone, cs.availability,
         cs.brand_logo_url, cs.brand_accent_color, cs.brand_email_signature,
-        w.handle AS website_handle, w.launched AS website_launched
+        w.handle AS website_handle, w.launched AS website_launched, w.visibility AS website_visibility
       FROM calendar_settings cs
       LEFT JOIN websites w ON w.workspace_id = cs.workspace_id
       WHERE cs.slug = ${slug} AND cs.discoverable = TRUE
@@ -55,12 +55,15 @@ export default async function handler(req, res) {
     const row = cs.rows[0];
     const workspaceId = row.workspace_id;
 
-    // Services — show all visible ones, sorted by display_order then price.
+    // Services — only the publicly-listed ones for the Discover surface.
+    // 'private' services exist but are intentionally not surfaced here
+    // (clients with a direct link can still book them on /book/[slug]),
+    // and 'only_me' services are hidden everywhere.
     const svcRows = await sql`
       SELECT id, name, description, duration_minutes, price, photo_url,
              display_order, location_type, location_label, capacity
       FROM services
-      WHERE workspace_id = ${workspaceId}
+      WHERE workspace_id = ${workspaceId} AND visibility = 'public'
       ORDER BY display_order ASC, price ASC
     `;
 
@@ -137,8 +140,10 @@ export default async function handler(req, res) {
     }
 
     // Photo gallery — every distinct photo_url across the workspace's
-    // services, ordered by display_order. Discover surfaces this as a
-    // horizontally-scrolling gallery in the expanded card.
+    // PUBLIC services, ordered by display_order. The svcRows query
+    // already filters visibility='public' so this inherits the cut.
+    // Discover surfaces this as a horizontally-scrolling gallery in
+    // the expanded card.
     const gallery = svcRows.rows
       .map((s) => s.photo_url)
       .filter((u, i, arr) => u && arr.indexOf(u) === i);
@@ -159,7 +164,10 @@ export default async function handler(req, res) {
         availability: row.availability || null,
         logoUrl:      row.brand_logo_url || null,
         accentColor:  row.brand_accent_color || null,
-        siteHandle:   row.website_launched ? row.website_handle : null,
+        // Site only surfaces here when it's both launched AND public.
+        // Private sites stay reachable by direct /site/<handle> link.
+        siteHandle:   (row.website_launched && row.website_visibility === 'public')
+          ? row.website_handle : null,
         bookUrl:      `/book/${row.slug}`,
       },
       gallery,

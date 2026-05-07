@@ -11,6 +11,7 @@ export function serializePackage(row) {
     price:          Number(row.price || 0),
     expiryDays:     row.expiry_days,
     active:         !!row.active,
+    visibility:     row.visibility || 'public',
     createdAt:      row.created_at,
     updatedAt:      row.updated_at,
   };

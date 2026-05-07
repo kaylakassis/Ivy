@@ -10,10 +10,16 @@ export default async function handler(req, res) {
     const { handle } = req.query;
     if (!handle || typeof handle !== 'string') return notFound(res);
 
+    // 'only_me' sites are hidden from public lookup the same way an
+    // unpublished site is — 404 with no detail so the slug doesn't
+    // become a probe oracle. 'private' sites stay reachable by direct
+    // link (same model services + packages use).
     const { rows } = await sql`
-      SELECT handle, business_name, template, sections, published_at
+      SELECT handle, business_name, template, sections, published_at, visibility
       FROM websites
-      WHERE handle = ${handle.toLowerCase()} AND published_at IS NOT NULL
+      WHERE handle = ${handle.toLowerCase()}
+        AND published_at IS NOT NULL
+        AND visibility != 'only_me'
     `;
     if (rows.length === 0) return notFound(res, 'Site not published');
 

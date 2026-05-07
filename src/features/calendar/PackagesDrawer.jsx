@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
+import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
 
 export default function PackagesDrawer({ services, onClose }) {
@@ -231,6 +232,7 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
   const [expiryDays, setExpiryDays]     = useState(pkg.expiryDays ?? '');
   const [serviceIds, setServiceIds]     = useState(pkg.serviceIds || []);
   const [active, setActive]             = useState(pkg.active !== false);
+  const [visibility, setVisibility]     = useState(pkg.visibility || 'public');
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
 
@@ -246,6 +248,7 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
         expiryDays: expiryDays === '' ? null : Number(expiryDays),
         serviceIds,
         active,
+        visibility,
       };
       if (isNew) await api.post('/packages', body);
       else       await api.patch('/packages/' + pkg.id, body);
@@ -300,6 +303,17 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
 
       <Field label="Valid for">
         <ServicePicker services={services} selected={serviceIds} onChange={setServiceIds}/>
+      </Field>
+
+      <Field label="Visibility"
+        hint={
+          visibility === 'only_me'
+            ? "Hidden from everyone except you. Good for drafts."
+            : visibility === 'private'
+            ? "Hidden from your booking page. Sellable by direct link only."
+            : "Listed wherever your packages are sold."
+        }>
+        <VisibilityPicker value={visibility} onChange={setVisibility}/>
       </Field>
 
       {!isNew && (
