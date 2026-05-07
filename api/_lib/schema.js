@@ -564,11 +564,13 @@ CREATE INDEX IF NOT EXISTS idx_services_workspace ON services(workspace_id, disp
 ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_type TEXT NOT NULL DEFAULT 'none'
   CHECK (deposit_type IN ('none', 'percent', 'fixed', 'full'));
 ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
--- 'full' was added later. Drop and re-add the CHECK so existing
--- databases provisioned before this migration accept it.
-ALTER TABLE services DROP CONSTRAINT IF EXISTS services_deposit_type_check;
-ALTER TABLE services ADD CONSTRAINT services_deposit_type_check
-  CHECK (deposit_type IN ('none', 'percent', 'fixed', 'full'));
+-- 'full' was added later. The CHECK in the ADD COLUMN above is only
+-- applied on first creation — for existing databases the inline check
+-- still has the old (none/percent/fixed) values. We drop ANY existing
+-- check constraint that references deposit_type by introspecting
+-- pg_constraint, then add a fresh one. This is name-agnostic so it
+-- survives whatever Postgres auto-named the original constraint.
+DO $deposit_type_check$ BEGIN IF EXISTS (SELECT 1 FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid WHERE t.relname = 'services' AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%deposit_type%' AND pg_get_constraintdef(c.oid) NOT LIKE '%full%') THEN EXECUTE (SELECT 'ALTER TABLE services DROP CONSTRAINT ' || quote_ident(conname) FROM pg_constraint c JOIN pg_class t ON t.oid = c.conrelid WHERE t.relname = 'services' AND c.contype = 'c' AND pg_get_constraintdef(c.oid) LIKE '%deposit_type%' LIMIT 1); ALTER TABLE services ADD CONSTRAINT services_deposit_type_check_v2 CHECK (deposit_type IN ('none', 'percent', 'fixed', 'full')); END IF; END $deposit_type_check$;
 
 -- Mobile / on-location services. location_type tells the booking flow
 -- whether the service happens at the owner's place ('in_person'), at the
