@@ -26,16 +26,35 @@ export default function PrivacyPage() {
         rate-limit records (used to block brute-force attempts on the sign-in
         page). These are kept for up to 30 days and contain IP addresses but
         no business data.</P>
-      <P><strong>What we don't collect.</strong> We don't run third-party
-        analytics, ad pixels, or session-replay tools. We don't sell or rent
-        your data to anyone.</P>
+      <P><strong>Product analytics.</strong> We track how the product is
+        used at a platform level — sign-ups, active users, feature
+        adoption, conversion funnels, retention, revenue across the
+        platform, and similar metrics. This includes per-account usage
+        data (which features you touch, how often, and broad outcomes
+        like "client booked" / "invoice paid") so we can improve
+        THRYVE, prioritize features, and inform our marketing and
+        growth efforts.</P>
+      <P><strong>What we will never do.</strong> We do not sell, rent,
+        or trade your personal information or your business data to
+        third parties for their own marketing purposes. Period. Your
+        client lists, invoices, messages, documents, and bookings
+        remain yours and are never packaged or licensed to anyone.</P>
 
       <H2>How we use it</H2>
       <UL>
-        <li>To run the product (show you your clients, send a magic link, etc.)</li>
+        <li>To run the product (show you your clients, send a magic link, etc.).</li>
         <li>To send transactional email — sign-in confirmations, password resets, invoice notifications, document signing requests.</li>
         <li>To detect and stop abuse (rate limits, fraud signals).</li>
         <li>To respond to support requests when you contact us.</li>
+        <li>To measure product performance and revenue at an
+            aggregate level — which features get used, how usage
+            translates into outcomes, what our churn looks like — so
+            we can build a better product and focus our marketing on
+            the audiences it's working for.</li>
+        <li>To send you product updates, tips, and growth content via
+            email. You can opt out of marketing email at any time
+            from Account Settings; we'll still send transactional
+            messages your account requires.</li>
       </UL>
       <P>We don't use your data to train AI models. Conversations with Ivy are
         sent to Anthropic's API to generate replies; Anthropic does not train
@@ -76,9 +95,12 @@ export default function PrivacyPage() {
       </UL>
 
       <H2>Cookies and tracking</H2>
-      <P>We use a single cookie — a signed session cookie — to keep you logged
-        in. It's HttpOnly, Secure, and SameSite=Lax, and it expires when you
-        sign out. We don't use third-party cookies or analytics trackers.</P>
+      <P>We use a session cookie — HttpOnly, Secure, SameSite=Lax — to
+        keep you logged in. We do not run third-party advertising
+        trackers or session-replay tools. We do use first-party
+        analytics (event logs we own and store ourselves) to measure
+        feature usage and product performance as described under
+        "Product analytics" above.</P>
 
       <H2>Security</H2>
       <P>Passwords are hashed with bcrypt. All traffic is encrypted in transit

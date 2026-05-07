@@ -135,6 +135,21 @@ export default function TermsPage() {
         provided required notices to data subjects, and that you will
         respond to their rights requests as required by applicable law
         (including GDPR/CCPA where applicable).</P>
+      <P><strong>Product analytics &amp; aggregate metrics.</strong>
+        We measure how the Service is used at the platform level —
+        sign-ups, active accounts, feature adoption, conversion,
+        retention, revenue across the platform, and similar usage
+        signals — and we use those metrics to improve the product and
+        inform our marketing and growth efforts. We may publish or
+        share aggregate, de-identified statistics ("our customers
+        average X bookings per month") that cannot be linked back to
+        you or your clients.</P>
+      <P><strong>We will never sell your data.</strong> We do not
+        sell, rent, or trade Customer Data, your personal
+        information, or your clients' personal information to third
+        parties for their own marketing or commercial use. Period.
+        See the Privacy Policy for the full list of sub-processors
+        who handle data only to operate the Service on our behalf.</P>
 
       <H2>8. Service availability</H2>
       <P>We aim to keep THRYVE available but make no uptime guarantee.
