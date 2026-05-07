@@ -168,18 +168,14 @@ img, svg, video { max-width: 100%; height: auto; }
 
 /* Reserve space for the mobile bottom nav. Pages opt in by adding the
    `has-mobile-nav` class to their root container, OR the body class is
-   set automatically by AppShell when it renders the bottom nav. */
+   set automatically by AppShell when it renders the bottom nav.
+   Floating ViewToggle pill no longer renders on mobile (it lives in
+   the hamburger drawer now), so the reservation only needs to clear
+   the bottom-nav itself. */
 @media (max-width: 720px) {
   body.has-mobile-nav { padding-bottom: env(safe-area-inset-bottom, 0); }
-  /* Bottom nav (~64px) + floating ViewToggle pill (~52px) + breathing
-     room. Ensures content always scrolls clear of both. */
-  body.has-mobile-nav .app-root > div { padding-bottom: 148px; }
-  /* Bottom-nav is ~64px tall plus safe-area; lift the pill 88px above
-     the bottom so it sits ABOVE the nav with ~16px of breathing room.
-     Previously 76px landed the pill *on top of* the nav icons. */
-  body.has-mobile-nav .view-toggle {
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 88px);
-  }
+  /* Bottom nav (~64px) + breathing room. */
+  body.has-mobile-nav .app-root > div { padding-bottom: 88px; }
 }
 
 

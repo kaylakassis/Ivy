@@ -1,7 +1,7 @@
 // Slide-in drawer for mobile. Triggered from the hamburger button in
 // Topbar; closes on backdrop tap, ESC, or route change (handled by AppShell).
 import React, { useEffect } from 'react';
-import { NavLink, useNavigate } from 'react-router-dom';
+import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 import { NAV } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
@@ -16,8 +16,17 @@ function initialsOf(user) {
 export default function MobileDrawer({ direction, onClose }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
   // Match Sidebar's filter — non-super-admins don't see the Admin link.
   const visibleNav = NAV.filter((n) => !n.superAdminOnly || user?.isSuperAdmin);
+  // Mirror the floating ViewToggle's URL-based logic so the drawer
+  // version of the switcher stays in sync without needing /api/me.
+  const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
+  const goView = (target) => {
+    const dest = target === 'client' ? '/me' : '/dashboard';
+    nav(dest);
+    onClose();
+  };
 
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
@@ -97,6 +106,25 @@ export default function MobileDrawer({ direction, onClose }) {
           padding: 12, borderTop: '1px solid var(--border)',
           display: 'flex', flexDirection: 'column', gap: 10,
         }}>
+          {/* Business ↔ Client view switcher. Lives here on mobile (not
+              floating over the page) so it can't sit on top of action
+              sheets and bottom-row controls. Same Tailwind-style
+              segmented pill the desktop version uses. */}
+          <div role="group" aria-label="View switcher" style={{
+            display: 'flex', gap: 4, padding: 4,
+            background: 'var(--surface)',
+            border: '1px solid var(--border-strong)',
+            borderRadius: 999,
+          }}>
+            <DrawerViewBtn
+              active={!onClient} onClick={() => goView('business')}
+              icon="Trending" label="Business"
+            />
+            <DrawerViewBtn
+              active={onClient} onClick={() => goView('client')}
+              icon="Users" label="Client" sub="free"
+            />
+          </div>
           <NavLink to="/account"
             className="nav-item"
             style={{ padding: '10px 12px' }}>
@@ -131,5 +159,34 @@ export default function MobileDrawer({ direction, onClose }) {
         </div>
       </aside>
     </>
+  );
+}
+
+function DrawerViewBtn({ active, onClick, icon, label, sub }) {
+  const Icon = Icons[icon];
+  return (
+    <button type="button" onClick={onClick}
+      style={{
+        flex: 1,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        padding: '8px 12px', borderRadius: 999,
+        border: 'none', cursor: 'pointer',
+        background: active ? 'var(--accent)' : 'transparent',
+        color: active ? 'var(--accent-ink)' : 'var(--fg-2)',
+        fontSize: 12.5, fontWeight: 600,
+        transition: 'background .12s, color .12s',
+      }}>
+      {Icon && <Icon size={13} sw={1.7}/>}
+      <span>{label}</span>
+      {sub && (
+        <span style={{
+          fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em',
+          textTransform: 'uppercase',
+          padding: '2px 5px', borderRadius: 5, marginLeft: 2,
+          background: active ? 'rgba(255,255,255,0.18)' : 'var(--accent-soft)',
+          color: active ? 'var(--accent-ink)' : 'var(--accent)',
+        }}>{sub}</span>
+      )}
+    </button>
   );
 }

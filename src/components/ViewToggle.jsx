@@ -2,17 +2,21 @@
 // renders on every route, regardless of which shell is active. Pure URL-based
 // — no /api/me dependency that can hide it on slow/failed fetches.
 //
-// Hidden on routes where view-switching makes no sense:
-//   • Marketing landing, sign-in/up, password flows, email verification
-//   • Public-link pages (book, sign, invoice, public site)
-//   • Onboarding wizard
-//   • Legal pages
+// Hidden on:
+//   • Routes where view-switching makes no sense (marketing landing,
+//     sign-in/up, password flows, email verification, public-link pages,
+//     onboarding wizard, legal pages — see HIDE_PREFIXES below).
+//   • Mobile viewport — the floating pill kept covering action sheets
+//     and bottom-row controls. The same Business / Client switch is
+//     surfaced inside the hamburger drawer on phones (see
+//     MobileDrawer.jsx → renderViewSwitch).
 //
 // Going to Business as an unsubscribed user lands them in AppShell, which
 // then renders the Paywall — gating lives in one place.
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
+import { useViewport } from '../lib/viewport.js';
 
 // Anything that's not a logged-in shell route. Conservative allowlist would
 // flicker the pill on auth state changes; explicit denylist keeps the pill
@@ -27,12 +31,16 @@ const HIDE_PREFIXES = [
 export default function ViewToggle() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { isMobile } = useViewport();
 
   // Hide on routes that have no concept of "Business vs Client view".
   if (location.pathname === '/') return null;
   if (HIDE_PREFIXES.some((p) => location.pathname === p || location.pathname.startsWith(p))) {
     return null;
   }
+  // Mobile: surfaced in the hamburger drawer instead, so the floating
+  // pill doesn't sit on top of action sheets and bottom-row controls.
+  if (isMobile) return null;
 
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
   const view = onClient ? 'client' : 'business';
