@@ -9,7 +9,7 @@
 // and the back button rewinds the filter, not the route.
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelRowList } from '../../components/Skeleton.jsx';
@@ -621,9 +621,12 @@ function fmtDistance(km) {
 // On desktop we render as a centered card; on phones the same modal
 // behaves as a full-screen sheet so the content has room to breathe.
 function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
+  const navigate = useNavigate();
   const [data, setData]     = useState(null);
   const [error, setError]   = useState(null);
   const [loading, setLoading] = useState(true);
+  const [msgBusy, setMsgBusy] = useState(false);
+  const [msgErr, setMsgErr] = useState(null);
   // Bumped after a review post so the same view re-fetches eligibility
   // + the recent-reviews list and updates the inline summary.
   const [reloadKey, setReloadKey] = useState(0);
@@ -651,14 +654,40 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
   }, [onClose]);
 
   const biz = data?.business;
+  const gallery = data?.gallery || [];
   const accent = biz?.accentColor || 'var(--accent)';
   const fallback = bannerFor(slug);
-  const cover = biz?.coverPhotoUrl
-    ? `linear-gradient(0deg, rgba(0,0,0,0.35), rgba(0,0,0,0)), url(${biz.coverPhotoUrl}) center/cover`
+  // Hero cover prefers the first gallery photo (uploaded by the
+  // business), falls back to the workspace's accent color, and
+  // finally to the deterministic pastel banner so a brand-new
+  // workspace still has a hero.
+  const heroCover = gallery[0]
+    ? `linear-gradient(0deg, rgba(0,0,0,0.35), rgba(0,0,0,0)), url(${gallery[0]}) center/cover`
     : biz?.accentColor
     ? `linear-gradient(135deg, ${accent}, ${accent}cc)`
     : fallback;
   const visitHref = biz ? `${publicOrigin()}/book/${biz.slug}` : '#';
+
+  // Message button — starts (or reuses) a thread with this workspace
+  // by handing the client_id we already loaded with the eligibility
+  // payload. Falls through to /me/messages?threadId=<id> so the
+  // existing Messages page does the rest. When the user isn't a
+  // client of this business yet, the button is disabled with copy
+  // explaining why (you have to book or be added first).
+  const startMessage = async () => {
+    if (!data?.eligibility?.clientId || msgBusy) return;
+    setMsgBusy(true); setMsgErr(null);
+    try {
+      const r = await api.post('/me/threads', { clientId: data.eligibility.clientId });
+      const threadId = r?.thread?.id;
+      onClose();
+      navigate(threadId ? `/me/messages?threadId=${threadId}` : '/me/messages');
+    } catch (e) {
+      setMsgErr(e.message || 'Could not open the message thread');
+      setMsgBusy(false);
+    }
+  };
+  const canMessage = !!data?.eligibility?.clientId;
 
   return createPortal(
     <div
@@ -686,7 +715,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
         <div style={{
           position: 'relative',
           height: 220,
-          background: cover,
+          background: heroCover,
         }}>
           <button onClick={onClose} aria-label="Close"
             style={{
@@ -764,31 +793,41 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
             </div>
           )}
 
-          {/* CTA row */}
-          <div style={{
-            display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap',
-          }}>
-            <a href={visitHref} target="_blank" rel="noreferrer"
-              className="btn"
-              style={{
-                background: accent, color: pickInk(accent),
-                fontSize: 13.5, fontWeight: 600, padding: '10px 18px',
-                borderRadius: 10, textDecoration: 'none',
-                display: 'inline-flex', alignItems: 'center', gap: 6,
-              }}>
-              <Icons.Arrow size={13} sw={2.2}/> Visit site & book
-            </a>
-            {biz?.siteHandle && (
-              <a href={`/site/${biz.siteHandle}`} target="_blank" rel="noreferrer"
-                className="btn btn-outline"
-                style={{
-                  fontSize: 13.5, fontWeight: 500, padding: '10px 18px',
-                  display: 'inline-flex', alignItems: 'center', gap: 6,
-                }}>
-                <Icons.Globe size={13} sw={1.7}/> View website
-              </a>
-            )}
+          {/* Three big CTAs — Google-Business-style action row.
+              Always-visible. Disabled states explain themselves. */}
+          <div className="discover-ctas" style={{ marginTop: 20 }}>
+            <ActionButton
+              icon="Calendar"
+              label="Book"
+              href={visitHref}
+              accent={accent}
+              primary
+            />
+            <ActionButton
+              icon="Globe"
+              label="Website"
+              href={biz?.siteHandle ? `/site/${biz.siteHandle}` : null}
+              accent={accent}
+              hint={biz?.siteHandle ? null : 'No website yet'}
+            />
+            <ActionButton
+              icon="Chat"
+              label="Message"
+              onClick={canMessage ? startMessage : null}
+              accent={accent}
+              busy={msgBusy}
+              hint={canMessage
+                ? null
+                : 'Book or join their client list to message them'}
+            />
           </div>
+          {msgErr && (
+            <div style={{
+              marginTop: 10, padding: '8px 12px', borderRadius: 8,
+              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+              fontSize: 12, color: 'var(--danger)',
+            }}>{msgErr}</div>
+          )}
         </div>
 
         {loading && (
@@ -804,28 +843,43 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
           </div>
         )}
 
-        {/* Site preview / services */}
+        {/* Snapshot sections — Google Business shape: photos, hours,
+            services, reviews. Iframe of the workspace's published
+            site is gone (it took up too much real estate and was
+            blocked from many of the page's interactive controls
+            anyway by the sandbox). The "Website" CTA above takes
+            interested users straight there. */}
         {data && !loading && (
           <>
-            {biz?.siteHandle ? (
-              <section style={{ padding: '24px 22px 0' }}>
-                <SectionTitle>Their website</SectionTitle>
-                <div style={{
-                  marginTop: 10, position: 'relative',
-                  borderRadius: 14, overflow: 'hidden',
-                  border: '1px solid var(--border)',
-                  background: 'var(--surface-2)',
-                  height: 480,
-                }}>
-                  <iframe
-                    src={`/site/${biz.siteHandle}`}
-                    title={biz.bizName}
-                    style={{ width: '100%', height: '100%', border: 0, display: 'block' }}
-                    sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
-                  />
+            {gallery.length > 0 && (
+              <section style={{ padding: '24px 0 0' }}>
+                <div style={{ padding: '0 22px' }}>
+                  <SectionTitle>Photos</SectionTitle>
+                </div>
+                <div className="discover-gallery">
+                  {gallery.map((url, i) => (
+                    <a key={url} href={url} target="_blank" rel="noreferrer"
+                      style={{
+                        flex: '0 0 auto',
+                        width: 200, aspectRatio: '4 / 3',
+                        borderRadius: 12, overflow: 'hidden',
+                        background: `url(${url}) center/cover, var(--surface-2)`,
+                        border: '1px solid var(--border)',
+                        cursor: 'zoom-in',
+                      }}
+                      aria-label={`Photo ${i + 1} of ${gallery.length}`}
+                    />
+                  ))}
                 </div>
               </section>
-            ) : null}
+            )}
+
+            {biz?.availability && (
+              <section style={{ padding: '24px 22px 0' }}>
+                <SectionTitle>Hours</SectionTitle>
+                <HoursList availability={biz.availability} />
+              </section>
+            )}
 
             {data.services && data.services.length > 0 && (
               <section style={{ padding: '24px 22px 0' }}>
@@ -899,6 +953,108 @@ function SectionTitle({ children }) {
       letterSpacing: '-0.01em',
     }}>{children}</h3>
   );
+}
+
+// One of the three big CTAs in the expanded card. Renders as <a> when
+// `href` is set, <button> when `onClick` is set, and a disabled chip
+// otherwise (with the hint as a tooltip + below the icon). Visually
+// matches Google Business's action row: icon stacked over a label.
+function ActionButton({ icon, label, href, onClick, accent, primary, busy, hint }) {
+  const Icon = Icons[icon] || Icons.Spark;
+  const disabled = !href && !onClick;
+  const baseStyle = {
+    flex: 1,
+    padding: '12px 8px',
+    borderRadius: 12,
+    border: primary
+      ? `1px solid ${accent}`
+      : '1px solid var(--border)',
+    background: primary ? accent : 'var(--surface-2)',
+    color: primary ? pickInk(accent) : 'var(--fg)',
+    fontSize: 12.5, fontWeight: 600,
+    cursor: disabled ? 'not-allowed' : 'pointer',
+    opacity: disabled ? 0.5 : busy ? 0.7 : 1,
+    textDecoration: 'none',
+    display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6,
+    minHeight: 70,
+    transition: 'transform .12s ease, background .12s ease',
+    textAlign: 'center',
+  };
+  const inner = (
+    <>
+      <Icon size={20} sw={1.7} stroke="currentColor"/>
+      <span>{busy ? 'Opening…' : label}</span>
+    </>
+  );
+  if (href) {
+    return (
+      <a href={href} target="_blank" rel="noreferrer" style={baseStyle} title={hint || ''}>
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <button type="button" onClick={onClick} disabled={disabled || busy}
+      style={{ ...baseStyle, fontFamily: 'inherit' }}
+      title={hint || ''}>
+      {inner}
+    </button>
+  );
+}
+
+// Weekly schedule. `availability` is { 0..6: [{start, end}, …] } where
+// 0 = Sunday and start/end are minutes-from-midnight in the workspace's
+// local time. Closed days collapse to "Closed". Today's row is bolded
+// so the most-asked question ("are they open right now?") gets the
+// fastest answer.
+function HoursList({ availability }) {
+  const today = new Date().getDay();
+  const labels = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+  return (
+    <div style={{
+      marginTop: 10, padding: '12px 14px',
+      background: 'var(--surface-2)',
+      border: '1px solid var(--border)',
+      borderRadius: 12,
+      display: 'flex', flexDirection: 'column', gap: 6,
+      fontSize: 13,
+    }}>
+      {labels.map((label, i) => {
+        const intervals = availability[i] || availability[String(i)] || [];
+        const isToday = i === today;
+        const text = intervals.length === 0
+          ? 'Closed'
+          : intervals.map((iv) => `${minToLabel(iv.start)} – ${minToLabel(iv.end)}`).join(', ');
+        return (
+          <div key={i} style={{
+            display: 'flex', justifyContent: 'space-between', gap: 16,
+            color: isToday ? 'var(--fg)' : 'var(--fg-2)',
+            fontWeight: isToday ? 600 : 400,
+          }}>
+            <span>{label}{isToday && <span style={{
+              marginLeft: 6, fontSize: 10, padding: '1px 6px', borderRadius: 4,
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+              letterSpacing: '0.04em', textTransform: 'uppercase', fontWeight: 700,
+            }}>Today</span>}</span>
+            <span style={{
+              color: intervals.length === 0 ? 'var(--muted)' : 'inherit',
+              fontVariantNumeric: 'tabular-nums',
+            }}>{text}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function minToLabel(min) {
+  if (min == null || !Number.isFinite(min)) return '';
+  const h = Math.floor(min / 60);
+  const m = Math.round(min % 60);
+  const am = h < 12;
+  const h12 = ((h + 11) % 12) + 1;
+  const mm = m === 0 ? '' : `:${String(m).padStart(2, '0')}`;
+  return `${h12}${mm} ${am ? 'AM' : 'PM'}`;
 }
 
 function Stars({ value, size = 14 }) {

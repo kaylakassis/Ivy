@@ -4,9 +4,36 @@
 //
 // All calls take an explicit `secretKey` — we never read it from env. This
 // keeps the door open for per-workspace keys without surprises.
+//
+// `platformStripeSecret()` and `platformWebhookSecret()` resolve the
+// "THRYVE's own Stripe account" credentials with a fallback chain so a
+// single Vercel-injected STRIPE_SECRET_KEY (from the Vercel Stripe
+// integration) covers every legacy variable name we used to read.
 import crypto from 'node:crypto';
 
 const STRIPE_BASE = 'https://api.stripe.com/v1';
+
+// Preference order: the Vercel Stripe integration auto-injects
+// STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / STRIPE_PUBLISHABLE_KEY
+// when you connect Stripe in Vercel → Storage. The legacy
+// THRYVE_STRIPE_* and STRIPE_PLATFORM_SECRET names from earlier setups
+// remain as fallbacks so existing deployments don't have to migrate.
+export function platformStripeSecret() {
+  return process.env.STRIPE_SECRET_KEY
+    || process.env.THRYVE_STRIPE_SECRET
+    || process.env.STRIPE_PLATFORM_SECRET
+    || null;
+}
+export function platformWebhookSecret() {
+  return process.env.STRIPE_WEBHOOK_SECRET
+    || process.env.THRYVE_STRIPE_WEBHOOK_SECRET
+    || null;
+}
+export function platformPublishableKey() {
+  return process.env.STRIPE_PUBLISHABLE_KEY
+    || process.env.THRYVE_STRIPE_PUBLISHABLE_KEY
+    || null;
+}
 
 function formEncode(params, prefix = '') {
   const out = [];

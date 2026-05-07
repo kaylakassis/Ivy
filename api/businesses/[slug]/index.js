@@ -39,11 +39,12 @@ export default async function handler(req, res) {
     const slug = (req.query.slug || '').toString().toLowerCase();
     if (!slug) return notFound(res);
 
-    // Pull business + branding + website handle in one round-trip.
+    // Pull business + branding + website handle + weekly availability
+    // in one round-trip.
     const cs = await sql`
       SELECT
         cs.workspace_id, cs.slug, cs.biz_name, cs.tagline, cs.category,
-        cs.address_label, cs.lat, cs.lng,
+        cs.address_label, cs.lat, cs.lng, cs.timezone, cs.availability,
         cs.brand_logo_url, cs.brand_accent_color, cs.brand_email_signature,
         w.handle AS website_handle, w.launched AS website_launched
       FROM calendar_settings cs
@@ -126,8 +127,21 @@ export default async function handler(req, res) {
           reason = 'no-booking-or-message';
         }
       }
-      eligibility = { canReview, hasReviewed, reason };
+      // clientId surfaces the matched client row (when there is one)
+      // so the Discover UI can hand it to /api/me/threads to start a
+      // direct message thread without an extra round-trip.
+      eligibility = {
+        canReview, hasReviewed, reason,
+        clientId: clientIds[0] || null,
+      };
     }
+
+    // Photo gallery — every distinct photo_url across the workspace's
+    // services, ordered by display_order. Discover surfaces this as a
+    // horizontally-scrolling gallery in the expanded card.
+    const gallery = svcRows.rows
+      .map((s) => s.photo_url)
+      .filter((u, i, arr) => u && arr.indexOf(u) === i);
 
     return ok(res, {
       business: {
@@ -138,11 +152,17 @@ export default async function handler(req, res) {
         addressLabel: row.address_label || '',
         lat:          row.lat == null ? null : Number(row.lat),
         lng:          row.lng == null ? null : Number(row.lng),
+        timezone:     row.timezone || null,
+        // Weekday → array of { start, end } intervals in minutes-from-
+        // midnight (workspace-local time). Same shape the public
+        // booking page already consumes from /api/calendar/public.
+        availability: row.availability || null,
         logoUrl:      row.brand_logo_url || null,
         accentColor:  row.brand_accent_color || null,
         siteHandle:   row.website_launched ? row.website_handle : null,
         bookUrl:      `/book/${row.slug}`,
       },
+      gallery,
       services: svcRows.rows.map((s) => ({
         id:               s.id,
         name:             s.name,

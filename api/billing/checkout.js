@@ -10,7 +10,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { createSubscriptionCheckoutSession } from '../_lib/stripe.js';
+import { createSubscriptionCheckoutSession, platformStripeSecret } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -18,10 +18,10 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   try {
-    const secretKey = process.env.THRYVE_STRIPE_SECRET;
+    const secretKey = platformStripeSecret();
     const priceId   = process.env.THRYVE_STRIPE_PRICE_ID;
     if (!secretKey || !priceId) {
-      return badRequest(res, 'Subscription billing is not configured yet — set THRYVE_STRIPE_SECRET and THRYVE_STRIPE_PRICE_ID.');
+      return badRequest(res, 'Subscription billing is not configured yet — set STRIPE_SECRET_KEY (the Vercel Stripe integration provides this) and THRYVE_STRIPE_PRICE_ID.');
     }
 
     const user = await requireUser(req, res);

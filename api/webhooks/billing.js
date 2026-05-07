@@ -11,7 +11,7 @@
 // bytes; any re-encoding breaks verification.
 import { sql } from '../_lib/db.js';
 import { readRawBody } from '../_lib/body.js';
-import { verifyWebhookSignature, fetchSubscription } from '../_lib/stripe.js';
+import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, platformWebhookSecret } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -25,8 +25,8 @@ export const config = { api: { bodyParser: false } };
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   try {
-    const secretKey     = process.env.THRYVE_STRIPE_SECRET;
-    const webhookSecret = process.env.THRYVE_STRIPE_WEBHOOK_SECRET;
+    const secretKey     = platformStripeSecret();
+    const webhookSecret = platformWebhookSecret();
     if (!secretKey || !webhookSecret) {
       return res.status(500).json({ error: 'THRYVE Stripe billing is not configured' });
     }

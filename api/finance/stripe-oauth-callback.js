@@ -10,7 +10,7 @@
 import jwt from 'jsonwebtoken';
 import { sql } from '../_lib/db.js';
 import { encrypt } from '../_lib/secrets.js';
-import { fetchAccountSummary } from '../_lib/stripe.js';
+import { fetchAccountSummary, platformStripeSecret } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
 
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
     }
     const workspaceId = claims.workspaceId;
 
-    const platformSecret = process.env.STRIPE_PLATFORM_SECRET || process.env.THRYVE_STRIPE_SECRET;
+    const platformSecret = platformStripeSecret();
     if (!platformSecret) return safeRedirect(500, { stripe: 'error', detail: 'no-platform-secret' });
 
     // Exchange the auth code for a connected-account access token.
