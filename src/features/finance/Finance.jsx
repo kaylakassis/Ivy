@@ -1,5 +1,5 @@
-// Finance dashboard + invoices list. Online card collection via Stripe lives
-// in the StripeConnectCard near the top of the page.
+// Finance dashboard + invoices list. Multi-processor settings live in
+// PaymentProviderCard near the top of the page.
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -7,7 +7,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { useInvoices } from './state.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
-import StripeConnectCard from './StripeConnectCard.jsx';
+import PaymentProviderCard from './PaymentProviderCard.jsx';
 import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
@@ -182,7 +182,7 @@ function InvoicesSection({
 }) {
   return (
     <>
-      <StripeConnectCard/>
+      <PaymentProviderCard/>
 
       {/* Summary cards */}
       <div className="grid-auto">

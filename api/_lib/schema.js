@@ -879,6 +879,34 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connected_at TIMEST
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_user_id TEXT;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_livemode BOOLEAN;
 
+-- Multi-processor support. Each workspace picks one provider that
+-- handles every owner→client charge. 'stripe' is the default for back-
+-- compat with everything that's been live.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS payment_provider TEXT NOT NULL DEFAULT 'stripe'
+  CHECK (payment_provider IN ('stripe', 'square', 'paypal'));
+
+-- Square Connect (OAuth). Owners click Connect → Square → return with
+-- the access_token + refresh_token + merchant_id we encrypt and stash.
+-- Tokens rotate; the refresh_token outlasts the access token. We use
+-- the merchant's first location as the default for checkouts unless
+-- they pick another in settings.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS square_credentials_encrypted TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS square_merchant_id TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS square_location_id TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS square_account_label TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS square_connected_at TIMESTAMPTZ;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS square_environment TEXT;
+
+-- PayPal Commerce Platform (Partner Referrals). Owners click Connect →
+-- PayPal → return with their merchant_id; we don't store an OAuth token
+-- because PayPal asks the platform to mint short-lived tokens with its
+-- own client_id+secret + the merchant's id (auth-assertion pattern).
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_merchant_id TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_account_label TEXT;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_connected_at TIMESTAMPTZ;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_payments_enabled BOOLEAN;
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_environment TEXT;
+
 -- Invoices. Line items live in JSONB to keep editing transactional and simple
 -- (each item: { id, description, quantity, rate }).
 CREATE TABLE IF NOT EXISTS invoices (

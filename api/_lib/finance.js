@@ -4,6 +4,43 @@ import { sql } from './db.js';
 export const VALID_STATUS = new Set(['draft', 'sent', 'paid', 'overdue', 'voided', 'refunded']);
 export const VALID_PAID_METHOD = new Set(['card', 'ach', 'cash', 'check', 'transfer', 'other']);
 
+// Generalized finance_settings fetcher used by the multi-provider
+// payments layer. Returns a normalized object (or null when no row
+// exists yet); never throws on a missing connection — that's a
+// caller-side decision now that more than one processor exists.
+export async function fetchFinanceSettings(workspaceId) {
+  const r = await sql`
+    SELECT * FROM finance_settings WHERE workspace_id = ${workspaceId}
+  `;
+  const row = r.rows[0];
+  if (!row) return null;
+  return {
+    workspaceId:                  row.workspace_id,
+    paymentProvider:              row.payment_provider || 'stripe',
+    currency:                     (row.currency || 'USD').toUpperCase(),
+    // Stripe (Connect)
+    stripeConnectUserId:          row.stripe_connect_user_id || null,
+    stripeConnectLivemode:        row.stripe_connect_livemode,
+    stripeAccountLabel:           row.stripe_account_label || null,
+    stripeConnectedAt:            row.stripe_connected_at || null,
+    stripeSecretEncrypted:        row.stripe_secret_encrypted || null,
+    stripeWebhookSecretEncrypted: row.stripe_webhook_secret_encrypted || null,
+    // Square
+    squareCredentialsEncrypted:   row.square_credentials_encrypted || null,
+    squareMerchantId:             row.square_merchant_id || null,
+    squareLocationId:             row.square_location_id || null,
+    squareAccountLabel:           row.square_account_label || null,
+    squareConnectedAt:            row.square_connected_at || null,
+    squareEnvironment:            row.square_environment || null,
+    // PayPal Commerce
+    paypalMerchantId:             row.paypal_merchant_id || null,
+    paypalAccountLabel:           row.paypal_account_label || null,
+    paypalConnectedAt:            row.paypal_connected_at || null,
+    paypalPaymentsEnabled:        !!row.paypal_payments_enabled,
+    paypalEnvironment:            row.paypal_environment || null,
+  };
+}
+
 // Round to 2dp (avoid float-drift on totals).
 const round2 = (n) => Math.round(Number(n || 0) * 100) / 100;
 

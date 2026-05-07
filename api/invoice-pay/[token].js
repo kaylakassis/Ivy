@@ -13,8 +13,7 @@
 import { sql } from '../_lib/db.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { computeTotals } from '../_lib/finance.js';
-import { decrypt } from '../_lib/secrets.js';
-import { createCheckoutSession } from '../_lib/stripe.js';
+import { getProvider } from '../_lib/payments/index.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
@@ -47,53 +46,41 @@ export default async function handler(req, res) {
     const inv = invRows[0];
     if (!inv) return notFound(res, 'This invoice link is invalid, has expired, or was already paid.');
 
-    // Load Stripe creds for the issuing workspace.
-    const { rows: csRows } = await sql`
-      SELECT
-        stripe_secret_encrypted,
-        stripe_webhook_secret_encrypted IS NOT NULL AS webhook_configured,
-        currency
-      FROM finance_settings
-      WHERE workspace_id = ${inv.workspace_id}
-    `;
-    const cs = csRows[0];
-    if (!cs?.stripe_secret_encrypted || !cs.webhook_configured) {
-      return badRequest(res, 'Online payment is not enabled for this invoice.');
-    }
-
-    let secretKey;
-    try {
-      secretKey = decrypt(cs.stripe_secret_encrypted);
-    } catch {
-      return serverError(res, new Error('Could not load payment credentials.'));
-    }
-
     const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
     if (!(totals.total > 0)) return badRequest(res, 'Nothing to pay on this invoice.');
     const totalCents = Math.round(totals.total * 100);
-    const currency = (cs.currency || 'USD').toUpperCase();
 
     const base = appUrl();
-    // Land back on the public invoice with a flag the UI uses to show a
-    // "thanks — payment received" state. The webhook is the source of truth
-    // for the actual paid status.
     const successUrl = `${base}/invoice/${encodeURIComponent(rawToken)}?paid=1`;
     const cancelUrl  = `${base}/invoice/${encodeURIComponent(rawToken)}?cancelled=1`;
 
-    const session = await createCheckoutSession({
-      secretKey,
-      invoice: { id: inv.id, number: inv.number, workspace_id: inv.workspace_id },
-      currency,
-      totalCents,
-      successUrl,
-      cancelUrl,
-      customerEmail: inv.client_email || undefined,
-    });
-
-    await sql`
-      UPDATE invoices SET stripe_session_id = ${session.id}, updated_at = NOW()
-      WHERE id = ${inv.id}
-    `;
+    // Multi-provider checkout. The workspace's selected payment_provider
+    // (Stripe / Square / PayPal) decides which adapter mints the link.
+    // Each adapter throws if it isn't connected — we surface the
+    // friendly message back to the public-pay page.
+    let session;
+    try {
+      const { adapter, name, settings } = await getProvider(inv.workspace_id);
+      session = await adapter.createCheckoutSession({
+        workspaceId: inv.workspace_id,
+        settings,
+        amountCents: totalCents,
+        currency: (settings?.currency || 'USD').toUpperCase(),
+        description: `Invoice ${inv.number}`,
+        metadata: { invoice_id: inv.id, invoice_number: inv.number, workspace_id: inv.workspace_id },
+        successUrl,
+        cancelUrl,
+        customerEmail: inv.client_email || undefined,
+      });
+      // Stash the provider session id so reconciliation jobs can
+      // correlate later. The same column is reused across providers.
+      await sql`
+        UPDATE invoices SET stripe_session_id = ${session.sessionId}, updated_at = NOW()
+        WHERE id = ${inv.id}
+      `;
+    } catch (e) {
+      return badRequest(res, e.message || 'Online payment is not enabled for this invoice.');
+    }
 
     return ok(res, { url: session.url });
   } catch (err) {
