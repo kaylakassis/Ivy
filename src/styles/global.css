@@ -11,7 +11,12 @@ body {
 button { font: inherit; border: 0; background: none; cursor: pointer; color: inherit; }
 input, textarea { font: inherit; color: inherit; }
 
-.app-root { min-height: 100vh; background: var(--page); color: var(--fg); }
+/* On iOS with viewport-fit=cover, the system clock / dynamic island
+   sit on top of the document. Without an explicit top inset the
+   first thing rendered (verify-email banner, impersonation banner,
+   etc.) bleeds into the notch area. env() resolves to 0 on every
+   non-iOS platform so this is a no-op there. */
+.app-root { min-height: 100vh; background: var(--page); color: var(--fg); padding-top: env(safe-area-inset-top, 0); }
 
 .mono-num {
   font-variant-numeric: tabular-nums;
