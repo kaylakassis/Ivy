@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { upload } from '@vercel/blob/client';
+import ClientGallery from './ClientGallery.jsx';
 
 export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
   const initials = (client.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
@@ -187,6 +188,14 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
               count reflect the current state every time the drawer
               opens. Skipped for fresh leads (no bookings yet). */}
           <ClientAnalyticsBlock client={client}/>
+
+          {/* Photo gallery — active clients only. Trainers stash
+              before/after, stylists keep transformation albums,
+              contractors document job-site progress. Leads don't
+              get a gallery per the product spec. */}
+          {client.stage === 'active' && (
+            <ClientGallery client={client} onSave={safeUpdate}/>
+          )}
 
           {/* Documents — files attached directly to this client. Per-row
               shape: { url, type, name, uploadedAt }. Trainers stash

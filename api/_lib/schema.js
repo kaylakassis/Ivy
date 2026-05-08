@@ -339,6 +339,13 @@ CREATE INDEX IF NOT EXISTS idx_clients_stripe_customer
 -- attachments per client by application logic — no DB constraint.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Per-client photo gallery — distinct from `attachments` (which carries
+-- arbitrary files like signed PDFs and intake-form scans). Each entry
+-- shape: { id, url, blobPathname, caption?, takenAt?, uploadedAt }.
+-- Personal trainers stash before/after photos here, stylists keep
+-- transformation albums, contractors document job-site progress —
+-- the surface is the same across verticals.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS gallery_photos JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS calendar_settings (
   workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,

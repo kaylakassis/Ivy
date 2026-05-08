@@ -18,6 +18,7 @@ export function serializeClient(row) {
     address:       row.address || null,
     photoUrl:      row.photo_url || null,
     attachments:   Array.isArray(row.attachments) ? row.attachments : [],
+    galleryPhotos: Array.isArray(row.gallery_photos) ? row.gallery_photos : [],
     joinedAt:      row.joined_at,
     lastSeenAt:    row.last_seen_at,
     createdAt:     row.created_at,

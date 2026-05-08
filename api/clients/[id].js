@@ -3,6 +3,7 @@
 //   PATCH  → update name / email / stage / tags / notes / lifetime_value / last_seen_at
 //   DELETE → remove
 
+import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
@@ -112,6 +113,29 @@ export default async function handler(req, res) {
         // to a JSONB column.
         values.push(JSON.stringify(cleaned));
         sets.push(`attachments = $${values.length}::jsonb`);
+      }
+      if ('galleryPhotos' in body) {
+        if (!Array.isArray(body.galleryPhotos)) {
+          return badRequest(res, 'galleryPhotos must be an array');
+        }
+        if (body.galleryPhotos.length > 200) {
+          return badRequest(res, 'Up to 200 gallery photos per client');
+        }
+        // Same defense-in-depth shape sanitization as attachments —
+        // we only persist the keys we render. Caption is optional;
+        // takenAt is when the photo was actually taken (per the
+        // owner's annotation); uploadedAt is the upload time we set
+        // server-side if missing.
+        const cleanedGallery = body.galleryPhotos.map((p) => ({
+          id:           p?.id ? String(p.id).slice(0, 64) : crypto.randomUUID(),
+          url:          String(p?.url || '').slice(0, 1000),
+          blobPathname: p?.blobPathname ? String(p.blobPathname).slice(0, 400) : null,
+          caption:      p?.caption ? String(p.caption).slice(0, 280) : null,
+          takenAt:      p?.takenAt ? String(p.takenAt).slice(0, 40) : null,
+          uploadedAt:   p?.uploadedAt ? String(p.uploadedAt).slice(0, 40) : new Date().toISOString(),
+        })).filter((p) => p.url);
+        values.push(JSON.stringify(cleanedGallery));
+        sets.push(`gallery_photos = $${values.length}::jsonb`);
       }
 
       if (sets.length === 0) return ok(res, { client: serializeClient(existing) });
