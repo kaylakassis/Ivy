@@ -131,6 +131,7 @@ export default function PaymentProviderCard() {
           onSwitch={() => switchTo('paypal')}
           onChanged={refresh}
           busy={busy}
+          comingSoon
         />
       </div>
 
@@ -153,6 +154,7 @@ function ProviderRow({
   provider, platformReady, active,
   connectHref, disconnectPath,
   onSwitch, onChanged, busy,
+  comingSoon = false,
 }) {
   const [disconnecting, setDisconnecting] = useState(false);
   const disconnect = async () => {
@@ -169,18 +171,26 @@ function ProviderRow({
       border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
       background: active ? 'var(--accent-soft)' : 'var(--surface)',
       display: 'flex', alignItems: 'flex-start', gap: 12, flexWrap: 'wrap',
+      opacity: comingSoon ? 0.65 : 1,
     }}>
       <div style={{ flex: 1, minWidth: 220 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
           <strong style={{ fontSize: 13.5, color: 'var(--fg)' }}>{label}</strong>
-          {active && (
+          {comingSoon && (
+            <span style={{
+              padding: '2px 7px', borderRadius: 999,
+              background: 'var(--surface-2)', color: 'var(--muted)',
+              fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+            }}>Coming soon</span>
+          )}
+          {!comingSoon && active && (
             <span style={{
               padding: '2px 7px', borderRadius: 999,
               background: 'var(--accent)', color: 'var(--accent-ink)',
               fontSize: 10, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
             }}>Active</span>
           )}
-          {connected && !active && (
+          {!comingSoon && connected && !active && (
             <span style={{
               padding: '2px 7px', borderRadius: 999,
               background: 'var(--surface-2)', color: 'var(--ok)',
@@ -189,7 +199,7 @@ function ProviderRow({
           )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{description}</div>
-        {connected && provider?.merchantId && (
+        {!comingSoon && connected && provider?.merchantId && (
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
             {provider.label || label}
             {provider.environment ? ` · ${provider.environment}` : ''}
@@ -198,7 +208,11 @@ function ProviderRow({
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-        {!platformReady ? (
+        {comingSoon ? (
+          <span style={{ fontSize: 11, color: 'var(--muted)', alignSelf: 'center' }}>
+            Coming soon
+          </span>
+        ) : !platformReady ? (
           <span style={{ fontSize: 11, color: 'var(--muted)', alignSelf: 'center' }}>
             Not configured on this deploy
           </span>
