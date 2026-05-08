@@ -1,9 +1,9 @@
-// POST /api/finance/stripe-oauth-init
+// GET /api/finance/stripe-oauth-init
 //
-// Returns the Stripe Connect OAuth URL the owner should redirect to.
-// We sign a short-lived state token tying the request to the
-// workspace + a CSRF nonce; the callback endpoint verifies the same
-// state before storing the connected account id.
+// Owner-only. Redirects the browser to Stripe Connect's OAuth
+// authorize page. We sign a short-lived state token tying the
+// request to the workspace + a CSRF nonce; the callback endpoint
+// verifies the same state before storing the connected account id.
 //
 // Required env:
 //   STRIPE_CONNECT_CLIENT_ID  ca_xxx — your Connect platform client_id
@@ -11,15 +11,17 @@
 //   APP_URL                   used to build the redirect_uri
 //   JWT_SECRET                signs the state token (already required
 //                             for sessions)
+//
+// GET (instead of POST) so a plain <a href> works as the Connect link
+// — matches the Square + PayPal init endpoints and keeps the
+// PaymentProviderCard simple. The state token is the CSRF gate.
 import jwt from 'jsonwebtoken';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireSameOrigin } from '../_lib/security.js';
 import { appUrl } from '../_lib/tokens.js';
-import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
-  if (!requireSameOrigin(req, res)) return;
+  if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
     const user = await requireUser(req, res);
     if (!user) return;
@@ -27,7 +29,7 @@ export default async function handler(req, res) {
 
     const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
     if (!clientId) {
-      return badRequest(res, 'STRIPE_CONNECT_CLIENT_ID is not configured. Falling back to manual key entry.');
+      return badRequest(res, 'Stripe Connect is not configured on this deploy yet — set STRIPE_CONNECT_CLIENT_ID in Vercel.');
     }
     const secret = process.env.JWT_SECRET;
     if (!secret) return badRequest(res, 'JWT_SECRET is not configured.');
@@ -46,12 +48,12 @@ export default async function handler(req, res) {
       scope: 'read_write',
       redirect_uri: redirectUri,
       state,
-      // Pre-fill what we know to skip Stripe's first form for the user.
       'stripe_user[email]':       user.email || '',
       'stripe_user[business_name]': '',
     });
     const url = `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
-    return ok(res, { url });
+    res.writeHead(302, { Location: url });
+    res.end();
   } catch (err) {
     return serverError(res, err);
   }
