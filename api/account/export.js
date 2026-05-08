@@ -58,30 +58,60 @@ export default async function handler(req, res) {
       sql`SELECT * FROM websites         WHERE workspace_id = ${workspaceId}`,
     ]);
 
+    // Strip every encrypted-credential blob and OAuth refresh-token from
+    // the export. These columns hold workspace credentials (Stripe secret
+    // key, Square OAuth, Google refresh token, etc.) — even encrypted,
+    // they should never leave the server in a user-facing download.
+    // The ENCRYPTION_KEY rotates independently; pairing an exported blob
+    // with a leaked key reproduces live credentials.
+    const SENSITIVE_KEYS = [
+      'stripe_secret_encrypted',
+      'stripe_webhook_secret_encrypted',
+      'stripe_publishable_key',
+      'square_credentials_encrypted',
+      'paypal_credentials_encrypted',
+      'google_refresh_token_encrypted',
+      'twilio_auth_token_encrypted',
+      'sms_twilio_auth_token_encrypted',
+      'ical_feed_token_hash',
+      'review_request_token_hash',
+      'invoice_view_token_hash',
+      'quote_view_token_hash',
+      'sign_token_hash',
+      'password_hash',
+    ];
+    const stripSensitive = (row) => {
+      if (!row || typeof row !== 'object') return row;
+      const out = { ...row };
+      for (const k of SENSITIVE_KEYS) delete out[k];
+      return out;
+    };
+    const stripRows = (rows) => Array.isArray(rows) ? rows.map(stripSensitive) : rows;
+
     const payload = {
       thryve_export_version: 1,
       exported_at: new Date().toISOString(),
-      user:               profile.rows[0] || null,
-      workspace:          workspace.rows[0] || null,
-      website:            website.rows[0] || null,
-      clients:            clients.rows,
-      services:           services.rows,
-      calendar_settings:  calendarSettings.rows[0] || null,
-      calendar_blocks:    calendarBlocks.rows,
-      bookings:           bookings.rows,
-      message_threads:    messageThreads.rows,
-      messages:           messages.rows,
-      documents:          documents.rows,
-      finance_settings:   financeSettings.rows[0] || null,
-      invoices:           invoices.rows,
-      tasks:              tasks.rows,
-      goals:              goals.rows,
-      reward_settings:    rewardSettings.rows[0] || null,
-      reward_rules:       rewardRules.rows,
-      reward_redemptions: rewardRedemptions.rows,
-      ivy_sessions:       ivySessions.rows,
-      ivy_messages:       ivyMessages.rows,
-      ivy_usage:          ivyUsage.rows,
+      user:               stripSensitive(profile.rows[0] || null),
+      workspace:          stripSensitive(workspace.rows[0] || null),
+      website:            stripSensitive(website.rows[0] || null),
+      clients:            stripRows(clients.rows),
+      services:           stripRows(services.rows),
+      calendar_settings:  stripSensitive(calendarSettings.rows[0] || null),
+      calendar_blocks:    stripRows(calendarBlocks.rows),
+      bookings:           stripRows(bookings.rows),
+      message_threads:    stripRows(messageThreads.rows),
+      messages:           stripRows(messages.rows),
+      documents:          stripRows(documents.rows),
+      finance_settings:   stripSensitive(financeSettings.rows[0] || null),
+      invoices:           stripRows(invoices.rows),
+      tasks:              stripRows(tasks.rows),
+      goals:              stripRows(goals.rows),
+      reward_settings:    stripSensitive(rewardSettings.rows[0] || null),
+      reward_rules:       stripRows(rewardRules.rows),
+      reward_redemptions: stripRows(rewardRedemptions.rows),
+      ivy_sessions:       stripRows(ivySessions.rows),
+      ivy_messages:       stripRows(ivyMessages.rows),
+      ivy_usage:          stripRows(ivyUsage.rows),
     };
 
     const filename = `thryve-export-${new Date().toISOString().slice(0, 10)}.json`;

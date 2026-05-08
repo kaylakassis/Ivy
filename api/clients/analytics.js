@@ -1,9 +1,15 @@
-// GET /api/clients/analytics?id=<clientId>
+// GET /api/clients/analytics?id=<clientId>&windowDays=<n>
 //
 // Per-client analytics computed on the fly. Used by ClientDrawer to
 // surface show rate, total bookings, signed-document count, etc.
 // Computed at read time so the numbers always reflect the freshest
 // state — no separate stats table to keep in sync.
+//
+// windowDays (optional, default 30, min 1, max 3650). When supplied,
+// every booking-derived metric is restricted to bookings whose date
+// falls within the trailing window. Signed documents are not windowed
+// (the lifetime list is the useful surface for "what have they
+// signed?"). Pass 0 / negative / "all" / leave unset → defaults apply.
 //
 // Lives at /api/clients/analytics rather than /api/clients/<id>/analytics
 // because Vercel's file-based routing treats /api/clients/[id].js and a
@@ -40,25 +46,56 @@ export default async function handler(req, res) {
     `;
     if (cl.rows.length === 0) return notFound(res, 'Client not found');
 
+    // Window: clamp to [1, 3650]. 0/negative/missing/'all' → unrestricted
+    // (we use 100k days, effectively lifetime). Sent by the Clients page
+    // as the user-selected conversion/churn window so per-client metrics
+    // share the same time horizon as the page-level rollups.
+    const windowRaw = req.query.windowDays;
+    let windowDays = null;
+    if (windowRaw != null && windowRaw !== '' && String(windowRaw).toLowerCase() !== 'all') {
+      const n = Number(windowRaw);
+      if (Number.isFinite(n) && n >= 1) {
+        windowDays = Math.min(3650, Math.floor(n));
+      }
+    }
+
     // Bookings rollup. Treat any booking with no_show_at set as a
     // no-show; cancelled_at as cancelled. "Completed" = non-cancelled,
     // non-no-show booking whose end time is in the past.
-    const { rows: agg } = await sql`
-      SELECT
-        COUNT(*)::int AS total,
-        COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int AS no_shows,
-        COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled,
-        COUNT(*) FILTER (
-          WHERE no_show_at IS NULL
-            AND cancelled_at IS NULL
-            AND (date + (end_min || ' minutes')::interval) < NOW()
-        )::int AS completed,
-        MIN(date) AS first_at,
-        MAX(date) AS last_at,
-        SUM(booking_total)::numeric AS total_revenue
-      FROM bookings
-      WHERE workspace_id = ${workspaceId} AND client_id = ${id}
-    `;
+    const { rows: agg } = windowDays
+      ? await sql`
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int AS no_shows,
+            COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled,
+            COUNT(*) FILTER (
+              WHERE no_show_at IS NULL
+                AND cancelled_at IS NULL
+                AND (date + (end_min || ' minutes')::interval) < NOW()
+            )::int AS completed,
+            MIN(date) AS first_at,
+            MAX(date) AS last_at,
+            SUM(booking_total)::numeric AS total_revenue
+          FROM bookings
+          WHERE workspace_id = ${workspaceId} AND client_id = ${id}
+            AND date >= (CURRENT_DATE - (${windowDays}::int || ' days')::interval)
+        `
+      : await sql`
+          SELECT
+            COUNT(*)::int AS total,
+            COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int AS no_shows,
+            COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled,
+            COUNT(*) FILTER (
+              WHERE no_show_at IS NULL
+                AND cancelled_at IS NULL
+                AND (date + (end_min || ' minutes')::interval) < NOW()
+            )::int AS completed,
+            MIN(date) AS first_at,
+            MAX(date) AS last_at,
+            SUM(booking_total)::numeric AS total_revenue
+          FROM bookings
+          WHERE workspace_id = ${workspaceId} AND client_id = ${id}
+        `;
     const a = agg[0] || {};
     const totalBookings    = a.total || 0;
     const noShowBookings   = a.no_shows || 0;

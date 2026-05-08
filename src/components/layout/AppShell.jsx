@@ -47,7 +47,14 @@ function AppShellInner() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [walkthroughOverride, setWalkthroughOverride] = useState(null);
   const { ctx, refresh } = useUserContext();
-  const current = NAV.find(n => n.to === location.pathname) || NAV[0];
+  // /account is reached from the sidebar profile menu and isn't in
+  // NAV proper. Resolve it explicitly so the Topbar shows the right
+  // title + the right tutorial (rather than falling back to NAV[0]
+  // and blasting the Dashboard tutorial on every Account visit).
+  const ACCOUNT = { id: 'account', to: '/account' };
+  const current = location.pathname === '/account'
+    ? ACCOUNT
+    : (NAV.find(n => n.to === location.pathname) || NAV[0]);
   const t = TITLES[current.id] || TITLES.dashboard;
 
   // Paywall only applies to owners. Client-only users land here briefly

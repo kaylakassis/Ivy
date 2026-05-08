@@ -171,7 +171,7 @@ export const TUTORIALS = {
     ],
   },
 
-  messages: {
+  comms: {
     title: 'Messages',
     intro: "Every conversation with every client in one inbox. Replaces the 'where did I last text Sarah from?' moment.",
     steps: [
@@ -194,7 +194,7 @@ export const TUTORIALS = {
     ],
   },
 
-  documents: {
+  docs: {
     title: 'Documents',
     intro: 'Contracts, intake forms, waivers, e-signatures — built in. No DocuSign needed.',
     steps: [

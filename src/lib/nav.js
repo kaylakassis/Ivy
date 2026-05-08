@@ -31,4 +31,8 @@ export const TITLES = {
   website:   { title: 'Website',       subtitle: 'Public presence' },
   ivy:       { title: 'Ivy Pro',       subtitle: 'Your AI coach' },
   admin:     { title: 'Admin',         subtitle: 'Operator console' },
+  // /account isn't in NAV (it's reached from the sidebar profile menu)
+  // but it has its own tutorial and Topbar title block, so it needs an
+  // entry here for AppShell to look up.
+  account:   { title: 'Account',       subtitle: 'Settings & billing' },
 };

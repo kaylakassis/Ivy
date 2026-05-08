@@ -8,7 +8,7 @@ import { api } from '../../lib/api.js';
 import { upload } from '@vercel/blob/client';
 import ClientGallery from './ClientGallery.jsx';
 
-export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
+export default function ClientDrawer({ client, onClose, onUpdate, onDelete, analyticsWindowDays }) {
   const initials = (client.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
   const [confirmDel, setConfirmDel] = useState(false);
   const [busyDel, setBusyDel] = useState(false);
@@ -187,7 +187,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
               /api/clients/analytics so show rate / cadence / signed-doc
               count reflect the current state every time the drawer
               opens. Skipped for fresh leads (no bookings yet). */}
-          <ClientAnalyticsBlock client={client}/>
+          <ClientAnalyticsBlock client={client} windowDays={analyticsWindowDays}/>
 
           {/* Photo gallery — active clients only. Trainers stash
               before/after, stylists keep transformation albums,
@@ -873,17 +873,19 @@ function ClientAttachments({ client, onSave }) {
 // 4-cell stats grid (show rate, total bookings, no-shows, avg cadence)
 // + a list of every signed document tied to this client. Skipped for
 // fresh leads who have no bookings to roll up.
-function ClientAnalyticsBlock({ client }) {
+function ClientAnalyticsBlock({ client, windowDays }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);
   useEffect(() => {
     let live = true;
     setData(null); setErr(null);
-    api.get('/clients/analytics?id=' + encodeURIComponent(client.id))
+    const qs = '/clients/analytics?id=' + encodeURIComponent(client.id)
+      + (windowDays ? '&windowDays=' + encodeURIComponent(windowDays) : '');
+    api.get(qs)
       .then((r) => { if (live) setData(r); })
       .catch((e) => { if (live) setErr(e); });
     return () => { live = false; };
-  }, [client.id]);
+  }, [client.id, windowDays]);
 
   if (err) return null; // silent — analytics are nice-to-have, never block the drawer
   if (!data) {

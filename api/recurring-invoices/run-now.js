@@ -66,7 +66,7 @@ export default async function handler(req, res) {
         occurrences_run  = occurrences_run + 1,
         status           = ${overEnd ? 'ended' : s.status},
         updated_at       = NOW()
-      WHERE id = ${id}
+      WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *
     `;
 

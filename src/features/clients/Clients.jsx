@@ -230,6 +230,7 @@ export default function Clients() {
       {openClient && (
         <ClientDrawer
           client={openClient}
+          analyticsWindowDays={analyticsWindow}
           onClose={() => setOpenId(null)}
           onUpdate={(patch) => update(openClient.id, patch)}
           onDelete={async () => { await remove(openClient.id); setOpenId(null); }}

@@ -401,6 +401,10 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 -- leave it untouched.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS service_radius_miles INT
   CHECK (service_radius_miles IS NULL OR (service_radius_miles > 0 AND service_radius_miles <= 500));
+-- IANA timezone name (e.g. "America/Los_Angeles"). Owner sets it during
+-- onboarding so booking confirmations + Discover cards display the right
+-- local time. Nullable for legacy rows; consumers fall back to UTC.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS timezone TEXT;
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_latlng
   ON calendar_settings(lat, lng) WHERE lat IS NOT NULL AND lng IS NOT NULL;
 -- Service-name search: pg_trgm makes ILIKE '%foo%' index-backed at scale.
@@ -722,6 +726,9 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS no_show_at TIMESTAMPTZ;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_charged_at TIMESTAMPTZ;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS tip_payment_intent TEXT;
+-- Mutation timestamp. Initial CREATE TABLE bookings predates this so it
+-- only ships via ALTER. Backfill with NOW() so existing rows aren't NULL.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW();
 
 -- Virtual / online services. Auto-generated meeting URL minted on
 -- insert when the underlying service.location_type = 'virtual'.
