@@ -2,11 +2,15 @@
 // Returns only fields needed to render a published site. Unpublished sites 404.
 
 import { sql } from '../../_lib/db.js';
+import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
+    // Public — no requireUser path. Self-heal schema on cold-start so
+    // the visibility filter below survives a fresh deploy.
+    await ensureSchemaApplied();
     const { handle } = req.query;
     if (!handle || typeof handle !== 'string') return notFound(res);
 

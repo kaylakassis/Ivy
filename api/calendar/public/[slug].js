@@ -8,6 +8,7 @@ import { sql } from '../../_lib/db.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { requireSameOrigin } from '../../_lib/security.js';
+import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
   hasConflict, withinAvailability, depositFor, mintVideoRoomUrl,
@@ -28,6 +29,10 @@ import {
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
+  // Public endpoint never goes through requireUser, so bootstrap the
+  // schema here on cold-start to self-heal columns/tables added in
+  // recent deploys (e.g. services.visibility).
+  await ensureSchemaApplied();
   if (req.method === 'GET')  return getCalendar(req, res);
   if (req.method === 'POST') return createBooking(req, res);
   return methodNotAllowed(res, ['GET', 'POST']);

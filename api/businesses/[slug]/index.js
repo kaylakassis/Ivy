@@ -14,6 +14,7 @@
 import { sql } from '../../_lib/db.js';
 import { readSession } from '../../_lib/auth.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
+import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { serializeReview } from '../../_lib/reviews.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
@@ -30,6 +31,10 @@ async function maybeUser(req) {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
+    // Public — bypasses requireUser, so bootstrap the schema here on
+    // cold-start so columns like websites.visibility / services.visibility
+    // exist before the queries below run.
+    await ensureSchemaApplied();
     const ip = getClientIp(req);
     const blocked = await enforce(req, res, [
       { key: `biz-detail:ip:${ip}`, max: 240, windowSeconds: 60 * 60 },
