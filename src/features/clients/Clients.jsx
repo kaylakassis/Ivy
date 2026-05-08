@@ -27,6 +27,9 @@ export default function Clients() {
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
   const [leadWindow, setLeadWindow] = useState(30);
+  // Customizable window for conversion + churn rate calculations. Default
+  // 30 days; owners can dial up to 365 to look at trailing trends.
+  const [analyticsWindow, setAnalyticsWindow] = useState(30);
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -56,13 +59,16 @@ export default function Clients() {
     const active = clients.filter((c) => c.stage === 'active');
     const leads  = clients.filter((c) => c.stage === 'lead');
     const paused = clients.filter((c) => c.stage === 'paused');
-    const ninetyAgo = now - 90 * DAY;
-    const recentActives = active.filter((c) => new Date(c.joinedAt).getTime() >= ninetyAgo).length;
-    const recentLeads   = leads .filter((c) => new Date(c.joinedAt).getTime() >= ninetyAgo).length;
+    // Window the conversion + churn calculations to the configurable
+    // `analyticsWindow` (default 30d). Picking a longer window smooths
+    // out recent noise; shorter zooms in on the latest cohort.
+    const windowAgo = now - analyticsWindow * DAY;
+    const recentActives = active.filter((c) => new Date(c.joinedAt).getTime() >= windowAgo).length;
+    const recentLeads   = leads .filter((c) => new Date(c.joinedAt).getTime() >= windowAgo).length;
     const denomConv = recentActives + recentLeads;
     const conversionRate = denomConv === 0 ? 0 : Math.round((recentActives / denomConv) * 100);
     const churnCount = paused.filter((c) =>
-      new Date(c.lastSeenAt || c.joinedAt).getTime() >= ninetyAgo,
+      new Date(c.lastSeenAt || c.joinedAt).getTime() >= windowAgo,
     ).length;
     const denomChurn = active.length + paused.length;
     const churnRate = denomChurn === 0 ? 0 : Math.round((churnCount / denomChurn) * 100);
@@ -73,10 +79,10 @@ export default function Clients() {
       active, leads, paused,
       analytics: {
         recentActives, recentLeads, conversionRate, churnCount, churnRate,
-        leadsInWindow,
+        leadsInWindow, windowDays: analyticsWindow,
       },
     };
-  }, [clients, leadWindow]);
+  }, [clients, leadWindow, analyticsWindow]);
 
   const counts = { all: clients.length, active: active.length, leads: leads.length, paused: paused.length };
 
@@ -133,12 +139,16 @@ export default function Clients() {
           sub={`${leads.length} total leads`}
           icon={<Icons.Plus size={16} sw={2}/>}
           tone="accent"/>
-        <AnalyticCard label="Conversion rate" value={analytics.conversionRate + '%'}
-          sub={`${analytics.recentActives}/${analytics.recentActives + analytics.recentLeads} in last 90d`}
+        <AnalyticCard
+          label={<>Conversion rate · last <EditableNumber value={analyticsWindow} onChange={setAnalyticsWindow} min={1} max={365}/> days</>}
+          value={analytics.conversionRate + '%'}
+          sub={`${analytics.recentActives}/${analytics.recentActives + analytics.recentLeads} in window`}
           icon={<Icons.Trending size={16} sw={1.8}/>}
           tone={analytics.conversionRate >= 30 ? 'ok' : analytics.conversionRate >= 15 ? 'neutral' : 'warn'}/>
-        <AnalyticCard label="Churn rate" value={analytics.churnRate + '%'}
-          sub={`${analytics.churnCount} paused in 90d`}
+        <AnalyticCard
+          label={<>Churn rate · last <EditableNumber value={analyticsWindow} onChange={setAnalyticsWindow} min={1} max={365}/> days</>}
+          value={analytics.churnRate + '%'}
+          sub={`${analytics.churnCount} paused in window`}
           icon={<Icons.Clock size={16} sw={1.8}/>}
           tone={analytics.churnRate > 20 ? 'bad' : analytics.churnRate > 10 ? 'warn' : 'ok'}/>
       </div>

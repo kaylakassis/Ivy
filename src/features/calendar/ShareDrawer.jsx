@@ -7,6 +7,7 @@ import Drawer, { inputSty } from './Drawer.jsx';
 import { slugify } from './utils.js';
 import { api } from '../../lib/api.js';
 import { publicOrigin } from '../../lib/publicUrl.js';
+import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { CATEGORY_IDS } from '../../lib/categories.js';
 
 const CATEGORIES = CATEGORY_IDS;
@@ -24,6 +25,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState(null);
   const [copied, setCopied]   = useState(false);
+  const [qrOpen, setQrOpen]   = useState(false);
 
   // If the parent settings change (e.g. another save lands), pull them in.
   useEffect(() => { setBizName(settings.bizName || ''); }, [settings.bizName]);
@@ -311,18 +313,32 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
             {isPublished ? shareUrl : 'Save a handle above to generate your link'}
           </span>
         </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
           <button className="btn btn-primary" onClick={copy} disabled={!isPublished}
-            style={{ flex: 1, justifyContent: 'center', opacity: isPublished ? 1 : 0.5 }}>
+            style={{ flex: 1, justifyContent: 'center', opacity: isPublished ? 1 : 0.5, minWidth: 120 }}>
             {copied
               ? <><Icons.Check size={14} sw={2.2}/> Copied</>
               : <><Icons.Copy size={14}/> Copy link</>}
+          </button>
+          <button className="btn btn-outline" type="button"
+            onClick={() => setQrOpen(true)} disabled={!isPublished}
+            style={{ opacity: isPublished ? 1 : 0.5 }}
+            title="Generate a printable QR for this booking link">
+            <Icons.Image size={14}/> QR code
           </button>
           <a className="btn btn-outline" href={shareUrl || '#'} target="_blank" rel="noreferrer"
             style={{ pointerEvents: isPublished ? 'auto' : 'none', opacity: isPublished ? 1 : 0.5 }}>
             <Icons.Arrow size={14}/> Open
           </a>
         </div>
+        {qrOpen && (
+          <QRCodeModal
+            url={shareUrl}
+            label={`${savedSlug || 'Booking link'} QR`}
+            sublabel="Print on flyers, drop in stories, stick on the front desk — anyone who scans lands on your booking page."
+            onClose={() => setQrOpen(false)}
+          />
+        )}
         {isPublished && <LinkTest slug={savedSlug}/>}
       </div>
 

@@ -182,6 +182,12 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete }) {
           {/* Packages */}
           <ClientPackages client={client}/>
 
+          {/* Per-client analytics — fetched fresh from
+              /api/clients/analytics so show rate / cadence / signed-doc
+              count reflect the current state every time the drawer
+              opens. Skipped for fresh leads (no bookings yet). */}
+          <ClientAnalyticsBlock client={client}/>
+
           {/* Documents — files attached directly to this client. Per-row
               shape: { url, type, name, uploadedAt }. Trainers stash
               before/after photos here; intake-form scans, consent
@@ -848,6 +854,109 @@ function ClientAttachments({ client, onSave }) {
           }}>{err}</div>
         )}
       </div>
+    </div>
+  );
+}
+
+// ─── Per-client analytics ───────────────────────────────────────────
+//
+// Fetches /api/clients/analytics?id=<id> on mount and renders a tight
+// 4-cell stats grid (show rate, total bookings, no-shows, avg cadence)
+// + a list of every signed document tied to this client. Skipped for
+// fresh leads who have no bookings to roll up.
+function ClientAnalyticsBlock({ client }) {
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setData(null); setErr(null);
+    api.get('/clients/analytics?id=' + encodeURIComponent(client.id))
+      .then((r) => { if (live) setData(r); })
+      .catch((e) => { if (live) setErr(e); });
+    return () => { live = false; };
+  }, [client.id]);
+
+  if (err) return null; // silent — analytics are nice-to-have, never block the drawer
+  if (!data) {
+    return (
+      <div style={{ marginTop: 18 }}>
+        <Section label="Activity"/>
+        <div style={{ fontSize: 12, color: 'var(--muted)', padding: '6px 2px' }}>Loading…</div>
+      </div>
+    );
+  }
+
+  // Hide the whole block if the client genuinely has nothing to report
+  // (a brand-new lead with no bookings + no signed docs).
+  const empty = data.totalBookings === 0 && data.signedDocumentsCount === 0;
+  if (empty) return null;
+
+  const showRatePct = data.showRate == null
+    ? '—'
+    : Math.round(data.showRate * 100) + '%';
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <Section label="Activity"/>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8,
+        marginTop: 6,
+      }}>
+        <MiniStat label="Show rate"   value={showRatePct}/>
+        <MiniStat label="Bookings"    value={String(data.totalBookings)}/>
+        <MiniStat label="No-shows"    value={String(data.noShowBookings)}/>
+        <MiniStat
+          label="Cadence"
+          value={data.averageDaysBetweenBookings != null
+            ? `${data.averageDaysBetweenBookings}d`
+            : '—'}
+        />
+      </div>
+
+      {data.totalBookings >= 3 && (
+        <div style={{
+          marginTop: 8, padding: '8px 10px',
+          background: 'var(--surface-2)', borderRadius: 8,
+          fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5,
+        }}>
+          {data.completedBookings} completed
+          {data.cancelledBookings > 0 ? ` · ${data.cancelledBookings} cancelled` : ''}
+          {data.totalRevenue > 0 ? ` · $${Math.round(data.totalRevenue).toLocaleString()} earned` : ''}
+        </div>
+      )}
+
+      {data.signedDocumentsCount > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div style={{
+            fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase',
+            letterSpacing: '0.06em', fontWeight: 600, marginBottom: 6,
+          }}>
+            Signed documents · {data.signedDocumentsCount}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {data.signedDocuments.map((d) => (
+              <div key={d.id} style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '7px 10px', borderRadius: 8,
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                fontSize: 12.5,
+              }}>
+                <Icons.Doc size={13} sw={1.7} stroke="var(--muted)"/>
+                <span style={{
+                  flex: 1, minWidth: 0,
+                  overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                  color: 'var(--fg)',
+                }}>{d.name}</span>
+                <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  {d.signedAt
+                    ? new Date(d.signedAt).toLocaleDateString([], { month: 'short', day: 'numeric', year: '2-digit' })
+                    : ''}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

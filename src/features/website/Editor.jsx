@@ -15,6 +15,7 @@ import Inspector from './Inspector.jsx';
 import { mkSection } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { publicOrigin } from '../../lib/publicUrl.js';
+import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 
 export default function Editor({ site, set, setSection, addSection, removeSection, moveSection, reset, publish, saving, saveErr }) {
@@ -23,6 +24,7 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
   const [previewMode, setPreviewMode] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
   const [publishing, setPublishing] = useState(false);
+  const [siteQrOpen, setSiteQrOpen] = useState(false);
   const [publishErr, setPublishErr] = useState(null);
   const { isMobile, isTablet } = useViewport();
   // Mobile pane: 'outline' | 'canvas' | 'inspector'. The inspector tab
@@ -243,7 +245,23 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
           >
             <Icons.Copy size={12} /> Copy
           </button>
+          <button
+            className="btn btn-ghost"
+            style={{ padding: '2px 6px', fontSize: 11, color: 'var(--accent)' }}
+            onClick={() => setSiteQrOpen(true)}
+            title="Generate a QR code for this website"
+          >
+            <Icons.Image size={12} /> QR
+          </button>
         </div>
+      )}
+      {siteQrOpen && publicUrl && (
+        <QRCodeModal
+          url={publicUrl}
+          label={`${site.businessName || site.handle || 'Website'} QR`}
+          sublabel="Print, drop in a story, or hand out at events. Anyone who scans lands on your published mini-site."
+          onClose={() => setSiteQrOpen(false)}
+        />
       )}
 
       {/* Mobile pane tab bar — only renders on phones, and only outside

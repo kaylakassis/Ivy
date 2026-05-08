@@ -1,0 +1,140 @@
+// GET /api/clients/analytics?id=<clientId>
+//
+// Per-client analytics computed on the fly. Used by ClientDrawer to
+// surface show rate, total bookings, signed-document count, etc.
+// Computed at read time so the numbers always reflect the freshest
+// state — no separate stats table to keep in sync.
+//
+// Lives at /api/clients/analytics rather than /api/clients/<id>/analytics
+// because Vercel's file-based routing treats /api/clients/[id].js and a
+// parametric folder /api/clients/[id]/... as a conflict.
+//
+// Returned shape (all fields nullable when there's no data yet):
+//   {
+//     totalBookings, completedBookings, noShowBookings, cancelledBookings,
+//     showRate (0..1 | null),
+//     firstBookingAt, lastBookingAt,
+//     averageDaysBetweenBookings,
+//     totalRevenue,
+//     averageBookingValue,
+//     signedDocumentsCount, signedDocuments: [{ id, name, signedAt }],
+//   }
+import { sql } from '../_lib/db.js';
+import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireSameOrigin } from '../_lib/security.js';
+import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+
+export default async function handler(req, res) {
+  if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
+  if (!requireSameOrigin(req, res)) return;
+  try {
+    const user = await requireUser(req, res);
+    if (!user) return;
+    const workspaceId = await ensureWorkspace(user.id);
+
+    const id = (req.query.id || '').toString();
+    if (!id) return badRequest(res, 'Missing client id');
+
+    const cl = await sql`
+      SELECT id FROM clients WHERE id = ${id} AND workspace_id = ${workspaceId}
+    `;
+    if (cl.rows.length === 0) return notFound(res, 'Client not found');
+
+    // Bookings rollup. Treat any booking with no_show_at set as a
+    // no-show; cancelled_at as cancelled. "Completed" = non-cancelled,
+    // non-no-show booking whose end time is in the past.
+    const { rows: agg } = await sql`
+      SELECT
+        COUNT(*)::int AS total,
+        COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int AS no_shows,
+        COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled,
+        COUNT(*) FILTER (
+          WHERE no_show_at IS NULL
+            AND cancelled_at IS NULL
+            AND (date + (end_min || ' minutes')::interval) < NOW()
+        )::int AS completed,
+        MIN(date) AS first_at,
+        MAX(date) AS last_at,
+        SUM(booking_total)::numeric AS total_revenue
+      FROM bookings
+      WHERE workspace_id = ${workspaceId} AND client_id = ${id}
+    `;
+    const a = agg[0] || {};
+    const totalBookings    = a.total || 0;
+    const noShowBookings   = a.no_shows || 0;
+    const cancelledBookings = a.cancelled || 0;
+    const completedBookings = a.completed || 0;
+    // Show rate = completed / (completed + no_show). Cancellations
+    // don't count against you; most owners reschedule them. NULL when
+    // there aren't enough data points to mean anything (< 2 events).
+    const showRateDenom = completedBookings + noShowBookings;
+    const showRate = showRateDenom >= 2 ? completedBookings / showRateDenom : null;
+
+    // Average days between bookings — proxy for cadence. Only computed
+    // with 3+ non-cancelled bookings so a one-off doesn't trick owners
+    // into reading too much into a single gap.
+    let averageDaysBetweenBookings = null;
+    if (totalBookings >= 3) {
+      const { rows: dates } = await sql`
+        SELECT date FROM bookings
+        WHERE workspace_id = ${workspaceId} AND client_id = ${id}
+          AND cancelled_at IS NULL
+        ORDER BY date ASC
+      `;
+      const ts = dates.map((r) => new Date(r.date).getTime()).filter(Number.isFinite);
+      if (ts.length >= 2) {
+        let sumDelta = 0;
+        for (let i = 1; i < ts.length; i++) sumDelta += (ts[i] - ts[i - 1]);
+        averageDaysBetweenBookings = Math.round(
+          (sumDelta / (ts.length - 1)) / (24 * 60 * 60 * 1000),
+        );
+      }
+    }
+
+    // Signed documents tied to this client. Two source paths:
+    //   • Legacy single-signer flow: documents.recipient_client_id + completed_at
+    //   • New multi-signer flow:     document_signers.client_id   + signed_at
+    // Union both so the drawer reflects every signed doc regardless of
+    // which sending path the owner used.
+    const { rows: docs } = await sql`
+      SELECT id, name, signed_at FROM (
+        SELECT d.id, d.name, d.completed_at AS signed_at
+        FROM documents d
+        WHERE d.workspace_id = ${workspaceId}
+          AND d.recipient_client_id = ${id}
+          AND d.status = 'completed'
+          AND d.completed_at IS NOT NULL
+        UNION
+        SELECT d.id, d.name, ds.signed_at
+        FROM documents d
+        JOIN document_signers ds ON ds.document_id = d.id
+        WHERE d.workspace_id = ${workspaceId}
+          AND ds.client_id = ${id}
+          AND ds.signed_at IS NOT NULL
+      ) merged
+      ORDER BY signed_at DESC
+      LIMIT 50
+    `;
+
+    return ok(res, {
+      totalBookings,
+      completedBookings,
+      noShowBookings,
+      cancelledBookings,
+      showRate,
+      firstBookingAt: a.first_at || null,
+      lastBookingAt:  a.last_at  || null,
+      averageDaysBetweenBookings,
+      totalRevenue: Number(a.total_revenue || 0),
+      averageBookingValue: completedBookings > 0
+        ? Math.round((Number(a.total_revenue || 0) / completedBookings) * 100) / 100
+        : 0,
+      signedDocumentsCount: docs.length,
+      signedDocuments: docs.map((d) => ({
+        id: d.id, name: d.name, signedAt: d.signed_at,
+      })),
+    });
+  } catch (err) {
+    return serverError(res, err);
+  }
+}
