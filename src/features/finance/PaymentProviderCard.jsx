@@ -33,7 +33,10 @@ export default function PaymentProviderCard() {
   useEffect(() => { refresh(); }, [refresh]);
 
   // Surface the ?stripe / ?square / ?paypal flags from OAuth callbacks
-  // so the user gets immediate feedback on the connect attempt.
+  // so the user gets immediate feedback on the connect attempt. The
+  // callback uses `detail` (Stripe's existing pattern) or `msg`
+  // (Square/PayPal); we read both so error reasons surface verbatim
+  // instead of the generic "try again."
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const stripeFlag = params.get('stripe');
@@ -42,10 +45,15 @@ export default function PaymentProviderCard() {
     if (stripeFlag || squareFlag || paypalFlag) {
       const ok = stripeFlag === 'connected' || squareFlag === 'connected' || paypalFlag === 'connected';
       if (ok) refresh();
-      else setErr(params.get('msg') || 'Connect failed — try again.');
+      else {
+        const reason = params.get('msg') || params.get('detail') || '';
+        setErr(reason
+          ? `Connect failed — ${reason}`
+          : 'Connect failed — try again.');
+      }
       // strip the params so a refresh doesn't re-show the banner
       const u = new URL(window.location.href);
-      ['stripe', 'square', 'paypal', 'msg'].forEach((k) => u.searchParams.delete(k));
+      ['stripe', 'square', 'paypal', 'msg', 'detail'].forEach((k) => u.searchParams.delete(k));
       window.history.replaceState({}, '', u.pathname + (u.search || '') + u.hash);
     }
   }, [refresh]);
