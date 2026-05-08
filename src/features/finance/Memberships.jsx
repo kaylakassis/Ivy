@@ -182,7 +182,10 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
   const [name, setName] = useState(tier?.name || '');
   const [description, setDescription] = useState(tier?.description || '');
   const [priceDollars, setPriceDollars] = useState(tier ? (Number(tier.priceCents) / 100).toFixed(2) : '');
-  const [interval, setInterval] = useState(tier?.interval || 'month');
+  // Renamed from setInterval to avoid shadowing the global setInterval
+  // — keeps the door closed if anyone later reaches for a window timer
+  // inside this component.
+  const [interval, setIntervalValue] = useState(tier?.interval || 'month');
   const [perks, setPerks] = useState((tier?.perks || []).join('\n'));
   const [active, setActive] = useState(tier ? !!tier.active : true);
   const [err, setErr] = useState(null);
@@ -269,7 +272,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
                 style={{ ...inputS, opacity: !isNew ? 0.6 : 1 }}/>
             </Field>
             <Field label="Billed every">
-              <select value={interval} onChange={(e) => setInterval(e.target.value)}
+              <select value={interval} onChange={(e) => setIntervalValue(e.target.value)}
                 disabled={!isNew}
                 style={{ ...inputS, opacity: !isNew ? 0.6 : 1 }}>
                 <option value="week">Week</option>

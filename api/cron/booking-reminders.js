@@ -126,7 +126,7 @@ export default async function handler(req, res) {
             // claimed the portal or enabled push). Idempotency rides on
             // the reminders_sent stamp above — we only get here once.
             if (r.client_id) {
-              notifyClientSafe({
+              await notifyClientSafe({
                 clientId: r.client_id,
                 type: 'bookings',
                 payload: {

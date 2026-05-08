@@ -279,7 +279,11 @@ function BookingExtraActions({ event }) {
         ? { id: event.id, amount: Number(amount) }
         : { id: event.id, kind, amount: Number(amount) || undefined };
       const r = await api.post(path, body);
-      setSuccess(`Charged $${(r.chargeAmount || amount).toFixed(2)} to the card on file.`);
+      // r.chargeAmount comes back as a number; `amount` here is the raw
+      // form-input string. Coerce so the success toast doesn't crash on
+      // "0.toFixed is not a function" when the server omits chargeAmount.
+      const charged = Number(r.chargeAmount || amount) || 0;
+      setSuccess(`Charged $${charged.toFixed(2)} to the card on file.`);
       setTimeout(close, 2500);
     } catch (e) {
       setError(e.message || 'Charge failed');

@@ -19,7 +19,14 @@ export default async function handler(req, res) {
 
   try {
     // PayPal's URL params include merchantIdInPayPal and a permissionsGranted flag.
-    const { merchantIdInPayPal, wid, permissionsGranted } = req.query || {};
+    // Vercel's query parser hands back arrays for repeated params; coerce
+    // each value to a single string so the DB writes don't blow up on a
+    // crafted ?wid=a&wid=b URL.
+    const q = req.query || {};
+    const first = (v) => Array.isArray(v) ? v[0] : v;
+    const wid                  = first(q.wid);
+    const merchantIdInPayPal   = first(q.merchantIdInPayPal);
+    const permissionsGranted   = first(q.permissionsGranted);
     if (!wid) return back('error', 'Missing workspace context');
     if (!merchantIdInPayPal) return back('error', 'PayPal did not return a merchant id');
     if (permissionsGranted === 'false') return back('error', 'PayPal permissions were not granted');

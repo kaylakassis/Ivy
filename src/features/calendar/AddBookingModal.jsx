@@ -66,9 +66,13 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
           && (p.serviceIds.length === 0 || p.serviceIds.includes(serviceId))
         );
         setEligiblePackages(eligible);
-        if (clientPackageId && !eligible.some((p) => p.id === clientPackageId)) {
-          setClientPackageId(null);
-        }
+        // Use the functional setState form so we don't read a stale
+        // clientPackageId from this effect's closure when the user
+        // picks a package and then changes service in quick succession.
+        setClientPackageId((current) => {
+          if (!current) return current;
+          return eligible.some((p) => p.id === current) ? current : null;
+        });
       } catch {
         if (!cancelled) setEligiblePackages([]);
       }

@@ -94,8 +94,10 @@ export default async function handler(req, res) {
         WHERE id = ${id} AND workspace_id = ${workspaceId}
       `;
       // Push to the client (no-op if they haven't claimed their portal
-      // account or haven't enabled push).
-      notifyClientSafe({
+      // account or haven't enabled push). Awaited because Vercel kills
+      // un-awaited fetches the moment the response is sent — fire-and-
+      // forget here means the push silently drops on the no-email path.
+      await notifyClientSafe({
         clientId: thread.client_id,
         type: 'messages',
         payload: {
