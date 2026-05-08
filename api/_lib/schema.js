@@ -96,6 +96,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS welcome_sent JSONB NOT NULL DEFAULT '
 -- the Account page via a Replay button that POSTs { reset: true } and
 -- nulls this back out.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS walkthrough_completed_at TIMESTAMPTZ;
+-- Per-tab tutorial completion. Map of { [tabId]: 'completed' | 'skipped' }
+-- so the Topbar info-button can auto-open the walkthrough on a tab's
+-- first visit and stay quiet on subsequent visits. Owners can re-open
+-- any tab's tutorial via the persistent (i) button regardless of the
+-- map state — this only drives auto-trigger.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorials_completed JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- User classification — independent of subscription state.
 --   'regular'    default. Honors normal billing rules.

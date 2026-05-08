@@ -21,6 +21,8 @@ import CommandPalette from '../CommandPalette.jsx';
 import TermsAcceptModal from '../TermsAcceptModal.jsx';
 import IvyDock from '../../features/ivy/IvyDock.jsx';
 import { IvyProvider } from '../../features/ivy/state.jsx';
+import TutorialOverlay from '../TutorialOverlay.jsx';
+import { TutorialProvider } from '../../lib/tutorialState.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -30,7 +32,9 @@ export default function AppShell() {
   return (
     <UserContextProvider>
       <IvyProvider>
-        <AppShellInner/>
+        <TutorialProvider>
+          <AppShellInner/>
+        </TutorialProvider>
       </IvyProvider>
     </UserContextProvider>
   );
@@ -97,6 +101,7 @@ function AppShellInner() {
           <Topbar
             title={t.title}
             subtitle={t.subtitle}
+            tabId={current.id}
             isMobile={viewport.isMobile}
             isTablet={viewport.isTablet}
             onMenuClick={() => setDrawerOpen(true)}
@@ -143,6 +148,10 @@ function AppShellInner() {
           (when applicable) the walkthrough overlay isn't covering the
           screen. Otherwise the FAB peeks through the modal scrim. */}
       {!needsPaywall && !showWalkthrough && <IvyDock/>}
+      {/* Per-tab tutorial overlay. Reads activeTabId from TutorialProvider;
+          renders nothing until a tab is opened (auto-trigger from Topbar
+          on first visit, or manual via the (i) button). */}
+      <TutorialOverlay/>
     </div>
   );
 }

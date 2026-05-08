@@ -4,9 +4,16 @@
 //
 // Search input is a button that opens the global CommandPalette via a
 // synthetic Cmd+K keydown — keeps this component dumb.
-import React from 'react';
+//
+// Adds an info (i) button next to the title that opens the tab's
+// tutorial overlay. On a tab's first visit (not in tutorials_completed)
+// the tutorial auto-opens after a brief render delay so the page has
+// a chance to paint behind the modal.
+import React, { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
+import { useTutorial } from '../../lib/tutorialState.jsx';
+import { getTutorial } from '../../lib/tutorials.js';
 
 // Synthesize the same Cmd+K event the CommandPalette listens for. This
 // keeps the topbar dumb (no prop drilling) and the palette as the single
@@ -17,9 +24,26 @@ function openPalette() {
   }));
 }
 
-export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, children }) {
+export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, tabId, children }) {
   const compact = isMobile || isTablet;
   const navigate = useNavigate();
+  const tutorial = useTutorial();
+  const hasTutorial = tabId && getTutorial(tabId);
+  // Auto-open the tutorial on a tab's first ever visit. Once the GET
+  // /me/tutorials response says we've seen this tab, we never auto-
+  // open again — the (i) button is the manual replay path.
+  const lastAutoTabRef = useRef(null);
+  useEffect(() => {
+    if (!hasTutorial) return;
+    if (!tutorial.ready) return;
+    if (tutorial.seen(tabId)) return;
+    if (lastAutoTabRef.current === tabId) return; // don't reopen if user just dismissed
+    lastAutoTabRef.current = tabId;
+    // Slight delay so the page paints first; popping the modal on top
+    // of an empty surface feels jarring.
+    const t = setTimeout(() => tutorial.open(tabId), 350);
+    return () => clearTimeout(t);
+  }, [tabId, tutorial.ready, hasTutorial]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <header style={{
@@ -48,13 +72,46 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
             <span style={{ color: 'var(--fg-2)' }}>{title}</span>
           </div>
         )}
-        <h1 className="page-title" style={{
-          margin: 0,
-          fontSize: isMobile ? 20 : 28,
-          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-        }}>
-          {isMobile ? title : (subtitle || title)}
-        </h1>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, minWidth: 0 }}>
+          <h1 className="page-title" style={{
+            margin: 0,
+            fontSize: isMobile ? 20 : 28,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            minWidth: 0,
+          }}>
+            {isMobile ? title : (subtitle || title)}
+          </h1>
+          {hasTutorial && (
+            <button type="button"
+              onClick={() => tutorial.open(tabId)}
+              aria-label={`Replay ${title} tutorial`}
+              title={`Replay ${title} tutorial`}
+              style={{
+                width: 26, height: 26, borderRadius: 999,
+                border: '1px solid var(--border)',
+                background: 'var(--surface)',
+                color: 'var(--muted)',
+                fontSize: 13, fontFamily: 'var(--font-display)',
+                fontStyle: 'italic', fontWeight: 600,
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                cursor: 'pointer', flexShrink: 0,
+                transition: 'background .12s, color .12s, border-color .12s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--accent-soft)';
+                e.currentTarget.style.color = 'var(--accent)';
+                e.currentTarget.style.borderColor = 'var(--accent)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = 'var(--surface)';
+                e.currentTarget.style.color = 'var(--muted)';
+                e.currentTarget.style.borderColor = 'var(--border)';
+              }}
+            >
+              i
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Both forms route to the same global CommandPalette via a synthetic

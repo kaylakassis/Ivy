@@ -617,6 +617,12 @@ img, svg, video { max-width: 100%; height: auto; }
 }
 .discover-gallery::-webkit-scrollbar { display: none; }
 
+/* Tutorial overlay fade-in (per-tab walkthrough modal). */
+@keyframes tutorial-fade-in {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.985); }
+  100% { opacity: 1; transform: translateY(0)   scale(1); }
+}
+
 /* Messages voice memo + dictation — pulsing red dot for the recording
    indicator and a subtle ring on the dictate button while listening. */
 @keyframes msg-mic-pulse {
