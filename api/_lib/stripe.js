@@ -80,7 +80,7 @@ function formEncode(params, prefix = '') {
   return out.filter(Boolean).join('&');
 }
 
-async function stripeFetch(path, { method = 'GET', secretKey, body }) {
+async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, body }) {
   if (!secretKey || typeof secretKey !== 'string') {
     throw new Error('Stripe secret key is required');
   }
@@ -88,6 +88,10 @@ async function stripeFetch(path, { method = 'GET', secretKey, body }) {
     Authorization: `Bearer ${secretKey}`,
     Accept: 'application/json',
   };
+  // Stripe-Account header lets us act on behalf of a connected account
+  // using the platform secret key — the auth pattern Account Links
+  // (Express) uses instead of OAuth-issued per-account secret keys.
+  if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
   let payload;
   if (body) {
     payload = formEncode(body);
@@ -105,22 +109,95 @@ async function stripeFetch(path, { method = 'GET', secretKey, body }) {
   return json;
 }
 
-// Returns { id, label, livemode } so the UI can confirm the right account is
-// connected. We prefer business_profile.name, then email, then the account id.
-export async function fetchAccountSummary(secretKey) {
-  const acct = await stripeFetch('/account', { secretKey });
+// Returns { id, label, livemode, chargesEnabled, detailsSubmitted } so
+// the UI can confirm the right account is connected and onboarding is
+// complete. We prefer business_profile.name, then email, then the
+// account id.
+//
+// Two call shapes:
+//   • fetchAccountSummary(secretKey)                       — legacy
+//   • fetchAccountSummary({ secretKey, stripeAccount })    — Account Links
+// In the Account Links shape, secretKey is the platform secret and
+// stripeAccount is the acct_xxx we're inspecting.
+export async function fetchAccountSummary(arg) {
+  const opts = typeof arg === 'string'
+    ? { secretKey: arg }
+    : { secretKey: arg.secretKey, stripeAccount: arg.stripeAccount };
+  const acct = await stripeFetch('/account', opts);
   const label =
     acct.business_profile?.name ||
     acct.settings?.dashboard?.display_name ||
     acct.email ||
     acct.id;
-  return { id: acct.id, label, livemode: !!acct.charges_enabled && !acct.id?.startsWith('acct_test_') };
+  return {
+    id: acct.id,
+    label,
+    livemode: !!acct.charges_enabled && !acct.id?.startsWith('acct_test_'),
+    chargesEnabled: !!acct.charges_enabled,
+    detailsSubmitted: !!acct.details_submitted,
+    payoutsEnabled: !!acct.payouts_enabled,
+  };
+}
+
+// ─── Account Links (modern Connect onboarding) ───────────────────────
+// Used by stripe-oauth-init to create an Express account on demand and
+// hand the owner a Stripe-hosted onboarding link. Returns { id }.
+export async function createConnectedAccount({
+  secretKey, email, country, businessName,
+}) {
+  if (!secretKey) throw new Error('Platform secret required to create connected account');
+  const body = {
+    type: 'express',
+    country: (country || 'US').toUpperCase(),
+    email: email || undefined,
+    'capabilities[card_payments][requested]': 'true',
+    'capabilities[transfers][requested]': 'true',
+  };
+  if (businessName) body['business_profile[name]'] = businessName;
+  const acct = await stripeFetch('/accounts', { method: 'POST', secretKey, body });
+  return { id: acct.id };
+}
+
+// Mints a one-time Account Link the owner uses to complete (or refresh)
+// Stripe Express onboarding. Returns { url, expiresAt }.
+export async function createAccountLink({
+  secretKey, accountId, refreshUrl, returnUrl, type = 'account_onboarding',
+}) {
+  if (!secretKey) throw new Error('Platform secret required to create account link');
+  if (!accountId) throw new Error('accountId required');
+  const link = await stripeFetch('/account_links', {
+    method: 'POST', secretKey,
+    body: {
+      account: accountId,
+      refresh_url: refreshUrl,
+      return_url: returnUrl,
+      type,
+    },
+  });
+  return { url: link.url, expiresAt: link.expires_at };
+}
+
+// Express dashboard login link for an already-onboarded account. Used
+// when the owner clicks "Open Stripe dashboard" from /finance.
+export async function createLoginLink({ secretKey, accountId }) {
+  if (!secretKey) throw new Error('Platform secret required');
+  if (!accountId) throw new Error('accountId required');
+  const link = await stripeFetch(
+    `/accounts/${encodeURIComponent(accountId)}/login_links`,
+    { method: 'POST', secretKey },
+  );
+  return { url: link.url };
 }
 
 // Creates a Stripe Checkout session for a single invoice. The invoice's
 // id+workspace are baked into metadata so the webhook can look it up.
+//
+// stripeAccount (optional): when present, the call runs against the
+// connected acct via Stripe-Account header (Account Links / Express
+// flow). When absent, secretKey is the connected account's own secret
+// (legacy Standard OAuth).
 export async function createCheckoutSession({
-  secretKey, invoice, currency, totalCents,
+  secretKey, stripeAccount, invoice, currency, totalCents,
   successUrl, cancelUrl, customerEmail,
 }) {
   const body = {
@@ -136,11 +213,8 @@ export async function createCheckoutSession({
     'metadata[workspace_id]': invoice.workspace_id,
     payment_intent_data: { metadata: { invoice_id: invoice.id, workspace_id: invoice.workspace_id } },
   };
-  // formEncode handles nested objects, but Stripe is picky about its own
-  // bracketed style — we pass already-flattened keys to keep it predictable.
-  // For payment_intent_data.metadata, formEncode will recurse correctly.
   const session = await stripeFetch('/checkout/sessions', {
-    method: 'POST', secretKey, body,
+    method: 'POST', secretKey, stripeAccount, body,
   });
   return { id: session.id, url: session.url };
 }
@@ -246,21 +320,17 @@ export async function fetchSubscription({ secretKey, subscriptionId }) {
 // to confirm it's the right tenant — we never trust a client_id that
 // the browser handed us. The returned id is what we save on
 // clients.stripe_customer_id.
-export async function findOrCreateCustomer({ secretKey, email, name, workspaceId, clientId }) {
+export async function findOrCreateCustomer({ secretKey, stripeAccount, email, name, workspaceId, clientId }) {
   if (!email) throw new Error('email is required');
-  // Stripe doesn't have a search-by-email index by default, but the
-  // List API supports filtering by email and returns at most 100. We
-  // never have more than one customer per (workspace, email) because
-  // we always re-use this lookup, so the first match wins.
   const list = await stripeFetch(
     `/customers?email=${encodeURIComponent(email)}&limit=1`,
-    { secretKey },
+    { secretKey, stripeAccount },
   );
   if (Array.isArray(list.data) && list.data.length > 0) {
     return list.data[0];
   }
   return stripeFetch('/customers', {
-    method: 'POST', secretKey,
+    method: 'POST', secretKey, stripeAccount,
     body: {
       email,
       name: name || undefined,
@@ -273,10 +343,10 @@ export async function findOrCreateCustomer({ secretKey, email, name, workspaceId
 // Mint a SetupIntent the browser uses with Stripe Elements / Checkout
 // in setup mode to save a card without charging. Webhook handles the
 // post-confirm step (storing payment_method_id on the client row).
-export async function createSetupIntent({ secretKey, customerId, workspaceId, clientId }) {
+export async function createSetupIntent({ secretKey, stripeAccount, customerId, workspaceId, clientId }) {
   if (!customerId) throw new Error('customerId is required');
   return stripeFetch('/setup_intents', {
-    method: 'POST', secretKey,
+    method: 'POST', secretKey, stripeAccount,
     body: {
       customer: customerId,
       'payment_method_types[0]': 'card',
@@ -287,16 +357,12 @@ export async function createSetupIntent({ secretKey, customerId, workspaceId, cl
   });
 }
 
-// Mint a Stripe Checkout session in 'setup' mode — used for the
-// portal "save a card" link. After the user completes Checkout, the
-// webhook (checkout.session.completed with mode='setup') stores the
-// resulting payment_method on the client row.
 export async function createSetupCheckoutSession({
-  secretKey, customerId, workspaceId, clientId, successUrl, cancelUrl,
+  secretKey, stripeAccount, customerId, workspaceId, clientId, successUrl, cancelUrl,
 }) {
   if (!customerId) throw new Error('customerId is required');
   const session = await stripeFetch('/checkout/sessions', {
-    method: 'POST', secretKey,
+    method: 'POST', secretKey, stripeAccount,
     body: {
       mode: 'setup',
       customer: customerId,
@@ -314,32 +380,23 @@ export async function createSetupCheckoutSession({
   return { id: session.id, url: session.url };
 }
 
-// Get full PaymentMethod info (brand, last4, exp) so we can render
-// "Visa · 4242 · expires 09/27" in the portal without storing more
-// than the bare minimum.
-export async function fetchPaymentMethod({ secretKey, paymentMethodId }) {
-  return stripeFetch(`/payment_methods/${encodeURIComponent(paymentMethodId)}`, { secretKey });
+export async function fetchPaymentMethod({ secretKey, stripeAccount, paymentMethodId }) {
+  return stripeFetch(`/payment_methods/${encodeURIComponent(paymentMethodId)}`, { secretKey, stripeAccount });
 }
 
-// Make a saved payment_method the customer's default for future
-// invoices / off-session charges. Without this, off-session charges
-// would have to specify the PM each time.
-export async function setDefaultPaymentMethod({ secretKey, customerId, paymentMethodId }) {
+export async function setDefaultPaymentMethod({ secretKey, stripeAccount, customerId, paymentMethodId }) {
   if (!customerId || !paymentMethodId) throw new Error('customerId + paymentMethodId required');
   return stripeFetch(`/customers/${encodeURIComponent(customerId)}`, {
-    method: 'POST', secretKey,
+    method: 'POST', secretKey, stripeAccount,
     body: {
       'invoice_settings[default_payment_method]': paymentMethodId,
     },
   });
 }
 
-// Detach a saved payment method from a customer (the portal "remove
-// card" action). Stripe's detach endpoint also clears it from
-// invoice_settings.default_payment_method automatically.
-export async function detachPaymentMethod({ secretKey, paymentMethodId }) {
+export async function detachPaymentMethod({ secretKey, stripeAccount, paymentMethodId }) {
   return stripeFetch(`/payment_methods/${encodeURIComponent(paymentMethodId)}/detach`, {
-    method: 'POST', secretKey,
+    method: 'POST', secretKey, stripeAccount,
   });
 }
 
@@ -351,7 +408,7 @@ export async function detachPaymentMethod({ secretKey, paymentMethodId }) {
 // (3DS) — the caller should surface that as "couldn't auto-charge,
 // please ask the client to update their card."
 export async function chargeOffSession({
-  secretKey, customerId, paymentMethodId,
+  secretKey, stripeAccount, customerId, paymentMethodId,
   amountCents, currency, description, metadata,
   statementDescriptor,
 }) {
@@ -370,8 +427,6 @@ export async function chargeOffSession({
     off_session: 'true',
     description: description || undefined,
   };
-  // Stripe requires statement descriptor to be 5–22 chars, no
-  // <>"'\\* — clamp + sanitize defensively. Optional.
   if (statementDescriptor) {
     body.statement_descriptor = String(statementDescriptor)
       .replace(/[<>"'\\*]/g, '')
@@ -384,7 +439,7 @@ export async function chargeOffSession({
     }
   }
   return stripeFetch('/payment_intents', {
-    method: 'POST', secretKey, body,
+    method: 'POST', secretKey, stripeAccount, body,
   });
 }
 
@@ -395,20 +450,20 @@ export async function chargeOffSession({
 // IDs on the memberships row so the public sign-up flow can reuse
 // them. Currency comes from finance_settings.
 export async function createMembershipProduct({
-  secretKey, name, description, priceCents, interval, currency,
+  secretKey, stripeAccount, name, description, priceCents, interval, currency,
 }) {
   if (!name) throw new Error('name is required');
   if (!Number.isInteger(priceCents) || priceCents < 0) {
     throw new Error('priceCents must be a non-negative integer');
   }
   const product = await stripeFetch('/products', {
-    method: 'POST', secretKey,
+    method: 'POST', secretKey, stripeAccount,
     body: { name, description: description || undefined },
   });
   const intervalMap = { week: 'week', month: 'month', quarter: 'month', year: 'year' };
   const intervalCount = interval === 'quarter' ? 3 : 1;
   const price = await stripeFetch('/prices', {
-    method: 'POST', secretKey,
+    method: 'POST', secretKey, stripeAccount,
     body: {
       product: product.id,
       unit_amount: priceCents,
@@ -420,11 +475,8 @@ export async function createMembershipProduct({
   return { productId: product.id, priceId: price.id };
 }
 
-// Build a Checkout Session for a membership purchase on the
-// connected account. The metadata is what the webhook uses to
-// stitch the resulting subscription back to a client_memberships row.
 export async function createMembershipCheckoutSession({
-  secretKey, priceId, customerId, customerEmail,
+  secretKey, stripeAccount, priceId, customerId, customerEmail,
   workspaceId, membershipId, clientId,
   successUrl, cancelUrl,
 }) {
@@ -448,34 +500,29 @@ export async function createMembershipCheckoutSession({
   if (customerId) body.customer = customerId;
   else if (customerEmail) body.customer_email = customerEmail;
   const session = await stripeFetch('/checkout/sessions', {
-    method: 'POST', secretKey, body,
+    method: 'POST', secretKey, stripeAccount, body,
   });
   return { id: session.id, url: session.url, customer: session.customer };
 }
 
-// Cancel a subscription. `atPeriodEnd=true` sets cancel_at_period_end
-// so the member keeps access until the end of the cycle they paid for.
-export async function cancelSubscription({ secretKey, subscriptionId, atPeriodEnd = true }) {
+export async function cancelSubscription({ secretKey, stripeAccount, subscriptionId, atPeriodEnd = true }) {
   if (atPeriodEnd) {
     return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, {
-      method: 'POST', secretKey,
+      method: 'POST', secretKey, stripeAccount,
       body: { cancel_at_period_end: 'true' },
     });
   }
   return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, {
-    method: 'DELETE', secretKey,
+    method: 'DELETE', secretKey, stripeAccount,
   });
 }
 
-// Issue a refund against a payment_intent. amountCents omitted = full
-// refund of remaining balance. reason maps to Stripe's enum:
-// 'duplicate' | 'fraudulent' | 'requested_by_customer'.
-export async function createRefund({ secretKey, paymentIntent, amountCents, reason }) {
+export async function createRefund({ secretKey, stripeAccount, paymentIntent, amountCents, reason }) {
   if (!paymentIntent) throw new Error('paymentIntent is required');
   const body = { payment_intent: paymentIntent };
   if (amountCents != null) body.amount = amountCents;
   if (reason) body.reason = reason;
-  const refund = await stripeFetch('/refunds', { method: 'POST', secretKey, body });
+  const refund = await stripeFetch('/refunds', { method: 'POST', secretKey, stripeAccount, body });
   return {
     id:     refund.id,
     amount: refund.amount,

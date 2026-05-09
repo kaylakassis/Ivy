@@ -45,17 +45,12 @@ export default function StripeConnectCard() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const startOauth = async () => {
+  const startOauth = () => {
+    // The init endpoint is GET + 302-redirect to Stripe-hosted onboarding,
+    // so we navigate the browser directly. (Account Links flow — Stripe
+    // handles the entire onboarding UX.)
     setOauthBusy(true); setOauthErr(null);
-    try {
-      const r = await api.post('/finance/stripe-oauth-init', {});
-      if (r.url) window.location.href = r.url;
-    } catch (e) {
-      // Most common reason: STRIPE_CONNECT_CLIENT_ID isn't set on the
-      // platform. Surface a tip pointing at the manual fallback.
-      setOauthErr(e.message || 'Could not start Stripe OAuth.');
-      setOauthBusy(false);
-    }
+    window.location.href = '/api/finance/stripe-oauth-init';
   };
 
   if (status === null) {

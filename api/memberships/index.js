@@ -47,6 +47,8 @@ export default async function handler(req, res) {
         const creds = await loadStripeCreds(workspaceId);
         const ids = await createMembershipProduct({
           secretKey: creds.secretKey,
+
+          stripeAccount: creds.stripeAccount,
           name: m.name,
           description: m.description,
           priceCents: m.priceCents,

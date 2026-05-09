@@ -1,23 +1,34 @@
 // GET /api/finance/stripe-oauth-init
 //
-// Owner-only. Redirects the browser to Stripe Connect's OAuth
-// authorize page. We sign a short-lived state token tying the
-// request to the workspace + a CSRF nonce; the callback endpoint
-// verifies the same state before storing the connected account id.
+// Owner-only. Kicks off the Stripe Connect onboarding flow using the
+// modern Account Links (Express) pattern:
+//
+//   1. Find or create an Express connected account for the workspace
+//      (we keep the acct_xxx id forever; resuming onboarding reuses it).
+//   2. Mint a one-time Account Link that takes the owner to a
+//      Stripe-hosted onboarding form.
+//   3. 302 to that link.
+//
+// On return, Stripe redirects to /api/finance/stripe-oauth-callback,
+// which marks the row as connected once charges_enabled flips true.
+//
+// Why this instead of /oauth/authorize:
+//   • No "Standard OAuth" toggle in the dashboard required.
+//   • No redirect URI registration in the dashboard required.
+//   • Owners don't need a pre-existing Stripe account.
+//   • Stripe is gradually retiring Standard OAuth for new platforms.
 //
 // Required env:
-//   STRIPE_CONNECT_CLIENT_ID  ca_xxx — your Connect platform client_id
-//                             (Stripe Dashboard → Connect → Settings)
-//   APP_URL                   used to build the redirect_uri
-//   JWT_SECRET                signs the state token (already required
-//                             for sessions)
-//
-// GET (instead of POST) so a plain <a href> works as the Connect link
-// — matches the Square + PayPal init endpoints and keeps the
-// PaymentProviderCard simple. The state token is the CSRF gate.
-import jwt from 'jsonwebtoken';
+//   STRIPE_SECRET_KEY  sk_xxx — your platform secret (Vercel Stripe
+//                      integration sets this automatically; falls back to
+//                      THRYVE_STRIPE_SECRET / STRIPE_PLATFORM_SECRET).
+//   APP_URL            used to build refresh + return URLs.
+import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { appUrl } from '../_lib/tokens.js';
+import {
+  platformStripeSecret, createConnectedAccount, createAccountLink,
+} from '../_lib/stripe.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -27,32 +38,54 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
 
-    const clientId = process.env.STRIPE_CONNECT_CLIENT_ID;
-    if (!clientId) {
-      return badRequest(res, 'Stripe Connect is not configured on this deploy yet — set STRIPE_CONNECT_CLIENT_ID in Vercel.');
+    const platformKey = platformStripeSecret();
+    if (!platformKey) {
+      return badRequest(res, 'Stripe is not configured on this deploy yet — set STRIPE_SECRET_KEY in Vercel.');
     }
-    const secret = process.env.JWT_SECRET;
-    if (!secret) return badRequest(res, 'JWT_SECRET is not configured.');
 
-    // 10-minute state token — bound to the workspace so a leaked URL
-    // can't connect a different workspace's Stripe.
-    const state = jwt.sign(
-      { workspaceId, kind: 'stripe-oauth' },
-      secret,
-      { expiresIn: '10m' },
-    );
-    const redirectUri = `${appUrl()}/api/finance/stripe-oauth-callback`;
-    const params = new URLSearchParams({
-      response_type: 'code',
-      client_id: clientId,
-      scope: 'read_write',
-      redirect_uri: redirectUri,
-      state,
-      'stripe_user[email]':       user.email || '',
-      'stripe_user[business_name]': '',
+    // Reuse an existing acct if the owner has been here before but
+    // didn't finish onboarding. Acct rows persist across attempts.
+    const existing = await sql`
+      SELECT stripe_connect_user_id
+        FROM finance_settings
+       WHERE workspace_id = ${workspaceId}
+    `;
+    let accountId = existing.rows[0]?.stripe_connect_user_id || null;
+
+    if (!accountId) {
+      const acct = await createConnectedAccount({
+        secretKey: platformKey,
+        email:     user.email || undefined,
+        country:   'US',
+      });
+      accountId = acct.id;
+
+      // Persist immediately so a refresh / redirect / closed tab during
+      // onboarding doesn't orphan the acct on Stripe's side.
+      await sql`
+        INSERT INTO finance_settings (
+          workspace_id, stripe_connect_user_id, stripe_onboarding_status
+        ) VALUES (${workspaceId}, ${accountId}, 'pending')
+        ON CONFLICT (workspace_id) DO UPDATE SET
+          stripe_connect_user_id   = EXCLUDED.stripe_connect_user_id,
+          stripe_onboarding_status = 'pending'
+      `;
+    }
+
+    // Build the onboarding link. refresh_url brings them back here if
+    // the link expires; return_url is where Stripe sends them when the
+    // form is submitted (whether or not it's actually complete — we
+    // re-check status server-side in the callback).
+    const base = appUrl();
+    const link = await createAccountLink({
+      secretKey:  platformKey,
+      accountId,
+      refreshUrl: `${base}/api/finance/stripe-oauth-init`,
+      returnUrl:  `${base}/api/finance/stripe-oauth-callback`,
+      type:       'account_onboarding',
     });
-    const url = `https://connect.stripe.com/oauth/authorize?${params.toString()}`;
-    res.writeHead(302, { Location: url });
+
+    res.writeHead(302, { Location: link.url });
     res.end();
   } catch (err) {
     return serverError(res, err);

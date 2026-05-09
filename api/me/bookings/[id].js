@@ -275,6 +275,8 @@ async function maybeChargeLateCancel({ booking, myIds }) {
     const creds = await loadStripeCreds(booking.workspace_id);
     const pi = await chargeOffSession({
       secretKey: creds.secretKey,
+
+      stripeAccount: creds.stripeAccount,
       customerId: row.stripe_customer_id,
       paymentMethodId: row.payment_method_id,
       amountCents: Math.round(feeAmount * 100),

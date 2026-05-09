@@ -47,14 +47,19 @@ export default async function handler(req, res) {
       sql`SELECT biz_name, slug, availability, tagline
             FROM calendar_settings WHERE workspace_id = ${workspaceId}`,
       sql`SELECT COUNT(*)::int AS n FROM services WHERE workspace_id = ${workspaceId}`,
-      sql`SELECT stripe_secret_encrypted FROM finance_settings WHERE workspace_id = ${workspaceId}`,
+      sql`SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status
+            FROM finance_settings WHERE workspace_id = ${workspaceId}`,
       sql`SELECT launched, published_at FROM websites WHERE workspace_id = ${workspaceId}`,
       sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${workspaceId}`,
       sql`SELECT COUNT(*)::int AS n FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL`,
     ]);
     const settings = cs.rows[0] || {};
     const serviceCount = sv.rows[0]?.n || 0;
-    const stripeConnected = !!fs.rows[0]?.stripe_secret_encrypted;
+    // Either flow counts as connected: legacy Standard secret OR
+    // completed Express (Account Links) onboarding.
+    const fsRow = fs.rows[0] || {};
+    const stripeConnected = !!fsRow.stripe_secret_encrypted
+      || (!!fsRow.stripe_connect_user_id && fsRow.stripe_onboarding_status === 'complete');
     const websiteRow = ws2.rows[0] || null;
     const websiteLive = !!websiteRow?.launched && !!websiteRow?.published_at;
     const clientCount = cl.rows[0]?.n || 0;

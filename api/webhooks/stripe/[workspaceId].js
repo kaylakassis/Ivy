@@ -11,6 +11,7 @@ import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
+import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
@@ -45,18 +46,17 @@ export default async function handler(req, res) {
     if (!enc) return res.status(404).json({ error: 'Webhook not configured for this workspace' });
 
     let webhookSecret;
-    let workspaceStripeKey = null;
-    try {
-      webhookSecret = decrypt(enc);
-      // Same key the rest of the per-workspace flows use. May be
-      // missing on legacy rows that only had a webhook secret —
-      // the save-card branch below skips gracefully when null.
-      if (rows[0].stripe_secret_encrypted) {
-        workspaceStripeKey = decrypt(rows[0].stripe_secret_encrypted);
-      }
-    } catch {
-      return res.status(500).json({ error: 'Could not load webhook secret' });
-    }
+    try { webhookSecret = decrypt(enc); }
+    catch { return res.status(500).json({ error: 'Could not load webhook secret' }); }
+
+    // Resolve credentials for downstream Stripe API calls (SetupIntent
+    // fetch, payment-method ops). loadStripeCreds returns the right
+    // shape for both flows; if the workspace has neither legacy secret
+    // nor completed Account-Links onboarding, the save-card branches
+    // below skip gracefully.
+    let workspaceCreds = null;
+    try { workspaceCreds = await loadStripeCreds(workspaceId); }
+    catch { /* no_stripe_connection — non-fatal here */ }
 
     const rawBody = await readRawBody(req);
     let event;
@@ -119,15 +119,21 @@ export default async function handler(req, res) {
         return ok(res, { received: true, ignored: 'setup metadata incomplete' });
       }
       try {
-        if (!workspaceStripeKey) {
-          return ok(res, { received: true, ignored: 'workspace secret missing' });
+        if (!workspaceCreds) {
+          return ok(res, { received: true, ignored: 'workspace stripe not connected' });
         }
         // Re-fetch the SetupIntent so we get the resulting
         // payment_method id (which the SetupIntent confirms in
         // Stripe AFTER the client clicks confirm in Checkout).
+        const siHeaders = {
+          Authorization: `Bearer ${workspaceCreds.secretKey}`,
+        };
+        if (workspaceCreds.stripeAccount) {
+          siHeaders['Stripe-Account'] = workspaceCreds.stripeAccount;
+        }
         const siResp = await fetch(
           `https://api.stripe.com/v1/setup_intents/${encodeURIComponent(setupIntentId)}`,
-          { headers: { Authorization: `Bearer ${workspaceStripeKey}` } },
+          { headers: siHeaders },
         );
         const si = await siResp.json();
         if (!siResp.ok) {
@@ -139,7 +145,11 @@ export default async function handler(req, res) {
           ? si.payment_method
           : si.payment_method?.id;
         if (!paymentMethodId) return ok(res, { received: true, ignored: 'no payment_method on setup_intent' });
-        const pm = await fetchPaymentMethod({ secretKey: workspaceStripeKey, paymentMethodId });
+        const pm = await fetchPaymentMethod({
+          secretKey: workspaceCreds.secretKey,
+          stripeAccount: workspaceCreds.stripeAccount,
+          paymentMethodId,
+        });
         const card = pm.card || {};
         await sql`
           UPDATE clients SET
@@ -156,8 +166,9 @@ export default async function handler(req, res) {
         if (typeof session.customer === 'string') {
           try {
             await setDefaultPaymentMethod({
-              secretKey: workspaceStripeKey,
-              customerId: session.customer,
+              secretKey:     workspaceCreds.secretKey,
+              stripeAccount: workspaceCreds.stripeAccount,
+              customerId:    session.customer,
               paymentMethodId,
             });
           } catch { /* non-fatal */ }

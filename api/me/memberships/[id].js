@@ -41,6 +41,8 @@ export default async function handler(req, res) {
       const creds = await loadStripeCreds(cm.workspace_id);
       await cancelSubscription({
         secretKey: creds.secretKey,
+
+        stripeAccount: creds.stripeAccount,
         subscriptionId: cm.stripe_subscription_id,
         atPeriodEnd: true,
       });

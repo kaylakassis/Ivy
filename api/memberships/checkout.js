@@ -86,6 +86,8 @@ export default async function handler(req, res) {
     if (!stripeCustomerId) {
       const cust = await findOrCreateCustomer({
         secretKey: creds.secretKey,
+
+        stripeAccount: creds.stripeAccount,
         email: buyerEmail, name: buyerName,
         workspaceId, clientId,
       });
@@ -102,6 +104,8 @@ export default async function handler(req, res) {
     const base = appUrl();
     const session = await createMembershipCheckoutSession({
       secretKey: creds.secretKey,
+
+      stripeAccount: creds.stripeAccount,
       priceId: tier.stripe_price_id,
       customerId: stripeCustomerId,
       workspaceId,

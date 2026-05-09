@@ -1,24 +1,24 @@
-// GET /api/finance/stripe-oauth-callback?code=...&state=...
+// GET /api/finance/stripe-oauth-callback
 //
-// Stripe redirects here after the owner authorizes the Connect app.
-// We verify the state token, exchange the code for an acct_xxx id +
-// access token, encrypt + store both, and bounce back to /finance with
-// a flash query param so the UI can render a "connected" toast.
+// Stripe redirects here when the owner finishes (or abandons) the
+// hosted Express onboarding form. Unlike Standard OAuth, there's no
+// `code` to exchange — the connected account already exists. We just
+// re-fetch the account from Stripe, persist its current state, and
+// bounce back to /finance with a flash query param.
 //
-// On any failure we redirect to /finance?stripe=error to keep the user
-// in-app with a readable message instead of a JSON dump.
-import jwt from 'jsonwebtoken';
+// The owner is signed-in throughout the flow (returnUrl points back at
+// our app), so we use requireUser to scope the workspace.
 import { sql } from '../_lib/db.js';
-import { encrypt } from '../_lib/secrets.js';
-import { fetchAccountSummary, platformStripeSecret } from '../_lib/stripe.js';
+import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { appUrl } from '../_lib/tokens.js';
+import { platformStripeSecret, fetchAccountSummary } from '../_lib/stripe.js';
 import { methodNotAllowed } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
 
   const home = appUrl();
-  const safeRedirect = (status, params) => {
+  const safeRedirect = (params) => {
     const qs = new URLSearchParams(params).toString();
     res.statusCode = 302;
     res.setHeader('Location', `${home}/finance?${qs}`);
@@ -26,84 +26,55 @@ export default async function handler(req, res) {
   };
 
   try {
-    const code  = (req.query.code  || '').toString();
-    const state = (req.query.state || '').toString();
-    const declined = (req.query.error || '').toString();
+    const user = await requireUser(req, res);
+    if (!user) return;
+    const workspaceId = await ensureWorkspace(user.id);
 
-    if (declined) {
-      return safeRedirect(302, { stripe: 'declined', detail: declined.slice(0, 80) });
-    }
-    if (!code || !state) return safeRedirect(400, { stripe: 'error', detail: 'missing-params' });
+    const platformKey = platformStripeSecret();
+    if (!platformKey) return safeRedirect({ stripe: 'error', detail: 'no-platform-secret' });
 
-    const secret = process.env.JWT_SECRET;
-    if (!secret) return safeRedirect(500, { stripe: 'error', detail: 'no-jwt-secret' });
+    const r = await sql`
+      SELECT stripe_connect_user_id
+        FROM finance_settings
+       WHERE workspace_id = ${workspaceId}
+    `;
+    const accountId = r.rows[0]?.stripe_connect_user_id;
+    if (!accountId) return safeRedirect({ stripe: 'error', detail: 'no-account' });
 
-    let claims;
-    try { claims = jwt.verify(state, secret); }
-    catch { return safeRedirect(400, { stripe: 'error', detail: 'bad-state' }); }
-    if (claims.kind !== 'stripe-oauth' || !claims.workspaceId) {
-      return safeRedirect(400, { stripe: 'error', detail: 'bad-state' });
-    }
-    const workspaceId = claims.workspaceId;
-
-    const platformSecret = platformStripeSecret();
-    if (!platformSecret) return safeRedirect(500, { stripe: 'error', detail: 'no-platform-secret' });
-
-    // Exchange the auth code for a connected-account access token.
-    // Stripe's token endpoint takes form-urlencoded, NOT JSON.
-    const tokenRes = await fetch('https://connect.stripe.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        client_secret: platformSecret,
-        code,
-        grant_type: 'authorization_code',
-      }).toString(),
-    });
-    if (!tokenRes.ok) {
-      const detail = await tokenRes.text().catch(() => '');
-      return safeRedirect(400, { stripe: 'error', detail: detail.slice(0, 100) || `http-${tokenRes.status}` });
-    }
-    const tok = await tokenRes.json();
-    // tok = { access_token, refresh_token, scope, livemode, stripe_user_id, stripe_publishable_key, ... }
-
-    if (!tok.stripe_user_id || !tok.access_token) {
-      return safeRedirect(500, { stripe: 'error', detail: 'incomplete-exchange' });
-    }
-
-    // Fetch a friendly label for the connected account.
-    let label = tok.stripe_user_id;
+    // Pull the current state of the connected account. Stripe may have
+    // collected partial info — we treat charges_enabled as the bar for
+    // "connected enough to receive payments". details_submitted alone
+    // means the form was filled out but Stripe hasn't finished verifying.
+    let summary;
     try {
-      const summary = await fetchAccountSummary(tok.access_token);
-      if (summary?.label) label = summary.label;
-    } catch { /* fall back to acct id */ }
+      summary = await fetchAccountSummary({
+        secretKey: platformKey,
+        stripeAccount: accountId,
+      });
+    } catch (err) {
+      return safeRedirect({ stripe: 'error', detail: (err.message || '').slice(0, 100) });
+    }
 
+    if (!summary.detailsSubmitted) {
+      // Owner abandoned the form. Keep the acct around so the next
+      // Connect-button click resumes where they left off.
+      return safeRedirect({ stripe: 'incomplete' });
+    }
+
+    const status = summary.chargesEnabled ? 'complete' : 'pending';
     await sql`
-      INSERT INTO finance_settings (
-        workspace_id, stripe_publishable_key, stripe_secret_encrypted,
-        stripe_account_label, stripe_connected_at,
-        stripe_connect_user_id, stripe_connect_livemode
-      )
-      VALUES (
-        ${workspaceId},
-        ${tok.stripe_publishable_key || null},
-        ${encrypt(tok.access_token)},
-        ${label},
-        NOW(),
-        ${tok.stripe_user_id},
-        ${!!tok.livemode}
-      )
-      ON CONFLICT (workspace_id) DO UPDATE SET
-        stripe_publishable_key   = EXCLUDED.stripe_publishable_key,
-        stripe_secret_encrypted  = EXCLUDED.stripe_secret_encrypted,
-        stripe_account_label     = EXCLUDED.stripe_account_label,
-        stripe_connected_at      = EXCLUDED.stripe_connected_at,
-        stripe_connect_user_id   = EXCLUDED.stripe_connect_user_id,
-        stripe_connect_livemode  = EXCLUDED.stripe_connect_livemode
+      UPDATE finance_settings SET
+        stripe_account_label     = ${summary.label},
+        stripe_connect_livemode  = ${!!summary.livemode},
+        stripe_connected_at      = NOW(),
+        stripe_onboarding_status = ${status}
+      WHERE workspace_id = ${workspaceId}
     `;
 
-    return safeRedirect(302, { stripe: 'connected' });
+    return safeRedirect({
+      stripe: status === 'complete' ? 'connected' : 'pending',
+    });
   } catch (err) {
-    return safeRedirect(500, { stripe: 'error', detail: (err.message || '').slice(0, 100) });
+    return safeRedirect({ stripe: 'error', detail: (err.message || '').slice(0, 100) });
   }
 }

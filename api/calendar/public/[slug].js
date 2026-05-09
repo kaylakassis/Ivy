@@ -19,8 +19,8 @@ import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
-import { decrypt } from '../../_lib/secrets.js';
 import { createCheckoutSession } from '../../_lib/stripe.js';
+import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { sendClientInvite } from '../../_lib/clientNotify.js';
 import {
@@ -456,22 +456,24 @@ async function createBooking(req, res) {
     let depositCheckoutUrl = null;
     if (depositRequired > 0) {
       try {
-        const fs = await sql`
-          SELECT stripe_secret_encrypted, currency
-          FROM finance_settings WHERE workspace_id = ${workspaceId}
-        `;
-        const enc = fs.rows[0]?.stripe_secret_encrypted;
-        if (enc) {
-          const secretKey = decrypt(enc);
+        // loadStripeCreds throws on no_stripe_connection; we swallow
+        // (deposit becomes manual) so the booking still completes.
+        let creds = null;
+        try { creds = await loadStripeCreds(workspaceId); }
+        catch (credsErr) {
+          if (credsErr.code !== 'no_stripe_connection') throw credsErr;
+        }
+        if (creds) {
           const base = appUrl();
           const session = await createCheckoutSession({
-            secretKey,
+            secretKey:     creds.secretKey,
+            stripeAccount: creds.stripeAccount,
             invoice: {
               id: `bookdep_${b.id}`,
               number: `Deposit · ${b.id.slice(0, 8)}`,
               workspace_id: workspaceId,
             },
-            currency: (fs.rows[0]?.currency || 'USD').toUpperCase(),
+            currency:   creds.currency,
             totalCents: Math.round(depositRequired * 100),
             successUrl: `${base}/book/${encodeURIComponent(slug)}?deposit=paid`,
             cancelUrl:  `${base}/book/${encodeURIComponent(slug)}?deposit=cancelled`,

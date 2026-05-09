@@ -21,6 +21,7 @@ export async function fetchFinanceSettings(workspaceId) {
     // Stripe (Connect)
     stripeConnectUserId:          row.stripe_connect_user_id || null,
     stripeConnectLivemode:        row.stripe_connect_livemode,
+    stripeOnboardingStatus:       row.stripe_onboarding_status || null,
     stripeAccountLabel:           row.stripe_account_label || null,
     stripeConnectedAt:            row.stripe_connected_at || null,
     stripeSecretEncrypted:        row.stripe_secret_encrypted || null,

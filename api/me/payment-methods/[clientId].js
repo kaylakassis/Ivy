@@ -37,7 +37,11 @@ export default async function handler(req, res) {
     // a card on file.
     try {
       const creds = await loadStripeCreds(c.workspace_id);
-      await detachPaymentMethod({ secretKey: creds.secretKey, paymentMethodId: c.payment_method_id });
+      await detachPaymentMethod({
+        secretKey:       creds.secretKey,
+        stripeAccount:   creds.stripeAccount,
+        paymentMethodId: c.payment_method_id,
+      });
     } catch {
       // ignore — we still want to scrub locally below
     }

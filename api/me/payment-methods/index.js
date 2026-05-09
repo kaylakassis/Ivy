@@ -82,6 +82,8 @@ export default async function handler(req, res) {
       if (!customerId) {
         const cust = await findOrCreateCustomer({
           secretKey: creds.secretKey,
+
+          stripeAccount: creds.stripeAccount,
           email: c.email, name: c.name,
           workspaceId: c.workspace_id, clientId: c.id,
         });
@@ -98,6 +100,8 @@ export default async function handler(req, res) {
       const base = appUrl();
       const session = await createSetupCheckoutSession({
         secretKey: creds.secretKey,
+
+        stripeAccount: creds.stripeAccount,
         customerId,
         workspaceId: c.workspace_id,
         clientId: c.id,

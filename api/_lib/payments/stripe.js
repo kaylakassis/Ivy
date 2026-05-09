@@ -11,14 +11,27 @@ import { fetchFinanceSettings } from '../finance.js';
 
 export function getProviderName() { return 'stripe'; }
 
+// "Connected" semantics differ slightly between flows:
+//   • Account Links / Express: acct exists AND onboarding is 'complete'
+//     (a 'pending' status means the owner started the form but didn't
+//      finish — they can't yet receive charges).
+//   • Standard OAuth (legacy): the access token is the proof of
+//     connection — if it's stored, the account works.
+function stripeIsLive(fs) {
+  if (!fs) return false;
+  if (fs.stripeConnectUserId && fs.stripeOnboardingStatus === 'complete') return true;
+  if (fs.stripeSecretEncrypted) return true;
+  return false;
+}
+
 export async function isConnected({ workspaceId, settings }) {
   const fs = settings || await fetchFinanceSettings(workspaceId);
-  return !!(fs?.stripeConnectUserId);
+  return stripeIsLive(fs);
 }
 
 export async function getDisplayInfo({ workspaceId, settings }) {
   const fs = settings || await fetchFinanceSettings(workspaceId);
-  if (!fs?.stripeConnectUserId) return null;
+  if (!stripeIsLive(fs)) return null;
   return {
     label: fs.stripeAccountLabel || 'Stripe',
     environment: fs.stripeConnectLivemode ? 'live' : 'test',
@@ -34,23 +47,33 @@ export async function createCheckoutSession({
   successUrl, cancelUrl, customerEmail,
 }) {
   const fs = settings || await fetchFinanceSettings(workspaceId);
-  if (!fs?.stripeConnectUserId) {
+  if (!stripeIsLive(fs)) {
     throw new Error('Stripe is not connected for this workspace');
   }
-  const secretKey = platformStripeSecret();
-  if (!secretKey) throw new Error('Platform Stripe secret is not configured');
-
-  // Reuse the existing helper. The "invoice" shape is what it expects;
-  // we synthesize one when the metadata didn't come from a real invoice
-  // (booking deposit, ad-hoc charge) so the helper signature doesn't
-  // need to change.
+  // Account-Links flow uses platform secret + Stripe-Account header.
+  // Legacy Standard OAuth stored the connected acct's own secret —
+  // when present, we use it directly with no acct header.
+  let secretKey;
+  let stripeAccount = null;
+  if (fs.stripeConnectUserId && fs.stripeOnboardingStatus === 'complete') {
+    secretKey = platformStripeSecret();
+    if (!secretKey) throw new Error('Platform Stripe secret is not configured');
+    stripeAccount = fs.stripeConnectUserId;
+  } else {
+    // Legacy path — secretKey loaded by the caller via stripeCreds.js
+    // already; here we don't have it decrypted, so we route through the
+    // platform key as a safe fallback (will fail if Standard OAuth was
+    // the only auth — caller should use loadStripeCreds in that case).
+    secretKey = platformStripeSecret();
+    if (!secretKey) throw new Error('Platform Stripe secret is not configured');
+  }
   const invoice = {
     id: metadata.invoice_id || metadata.booking_id || 'adhoc',
     number: metadata.invoice_number || description || 'Charge',
     workspace_id: workspaceId,
   };
   const session = await stripeCreateCheckout({
-    secretKey, invoice, currency, totalCents: amountCents,
+    secretKey, stripeAccount, invoice, currency, totalCents: amountCents,
     successUrl, cancelUrl, customerEmail,
   });
   return { url: session.url, sessionId: session.id };

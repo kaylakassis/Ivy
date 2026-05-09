@@ -898,6 +898,13 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connected_at TIMEST
 -- account via Stripe-Account header — no need to store their secret key.
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_user_id TEXT;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_livemode BOOLEAN;
+-- Onboarding status for the Account Links (Express) flow:
+--   • pending  → Express acct created, owner hasn't finished Stripe-hosted onboarding yet
+--   • complete → onboarding finished, charges_enabled=true, ready to receive payments
+-- NULL for legacy Standard OAuth rows (those are 'complete' by definition since
+-- the OAuth grant is what created the row in the first place).
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_onboarding_status TEXT
+  CHECK (stripe_onboarding_status IS NULL OR stripe_onboarding_status IN ('pending', 'complete'));
 
 -- Multi-processor support. Each workspace picks one provider that
 -- handles every owner→client charge. 'stripe' is the default for back-

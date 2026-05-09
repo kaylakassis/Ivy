@@ -61,6 +61,8 @@ export default async function handler(req, res) {
     const creds = await loadStripeCreds(workspaceId);
     const pi = await chargeOffSession({
       secretKey: creds.secretKey,
+
+      stripeAccount: creds.stripeAccount,
       customerId: b.stripe_customer_id,
       paymentMethodId: b.payment_method_id,
       amountCents: Math.round(amount * 100),

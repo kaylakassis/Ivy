@@ -17,8 +17,8 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { decrypt } from '../_lib/secrets.js';
 import { createRefund } from '../_lib/stripe.js';
+import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/finance.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -68,20 +68,22 @@ export default async function handler(req, res) {
 
     let stripeRefundId = null;
     if (inv.stripe_payment_intent) {
-      // Card refund — needs the workspace's stripe secret.
-      const cs = await sql`
-        SELECT stripe_secret_encrypted FROM finance_settings WHERE workspace_id = ${workspaceId}
-      `;
-      const enc = cs.rows[0]?.stripe_secret_encrypted;
-      if (!enc) {
-        return badRequest(res, 'Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually below.');
+      // Card refund — needs the workspace's Stripe credentials.
+      // loadStripeCreds returns the right shape for both Standard
+      // OAuth (secretKey only) and Account Links (platform secret +
+      // Stripe-Account header).
+      let creds;
+      try { creds = await loadStripeCreds(workspaceId); }
+      catch (err) {
+        if (err.code === 'no_stripe_connection') {
+          return badRequest(res, 'Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually below.');
+        }
+        return serverError(res, err);
       }
-      let secretKey;
-      try { secretKey = decrypt(enc); }
-      catch { return serverError(res, new Error('Could not load Stripe credentials')); }
       try {
         const r = await createRefund({
-          secretKey,
+          secretKey:     creds.secretKey,
+          stripeAccount: creds.stripeAccount,
           paymentIntent: inv.stripe_payment_intent,
           amountCents: Math.round(amount * 100),
           reason,

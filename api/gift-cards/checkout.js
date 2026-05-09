@@ -14,15 +14,17 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
-async function stripeCheckout(secretKey, body) {
+async function stripeCheckout({ secretKey, stripeAccount }, body) {
   const params = new URLSearchParams();
   for (const [k, v] of Object.entries(body)) params.set(k, String(v));
+  const headers = {
+    Authorization: `Bearer ${secretKey}`,
+    'Content-Type': 'application/x-www-form-urlencoded',
+  };
+  if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
   const res = await fetch('https://api.stripe.com/v1/checkout/sessions', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${secretKey}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
+    headers,
     body: params.toString(),
   });
   const j = await res.json();
@@ -83,7 +85,10 @@ export default async function handler(req, res) {
     // Pass everything the webhook needs as metadata. We delay code
     // generation until payment completes — if Stripe declines, we
     // never issue an unredeemable code.
-    const session = await stripeCheckout(creds.secretKey, {
+    const session = await stripeCheckout({
+      secretKey:     creds.secretKey,
+      stripeAccount: creds.stripeAccount,
+    }, {
       mode: 'payment',
       success_url: `${base}/book/${encodeURIComponent(slug)}?giftcard=ok`,
       cancel_url:  `${base}/book/${encodeURIComponent(slug)}?giftcard=cancel`,

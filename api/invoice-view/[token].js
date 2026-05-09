@@ -40,11 +40,17 @@ async function loadBusinessMeta(workspaceId) {
 // stored). Without webhook signing, paid invoices wouldn't auto-mark, so
 // we hide the Pay button.
 async function isStripeReady(workspaceId) {
+  // Either flow counts: legacy Standard secret OR Account-Links acct
+  // with finished onboarding. Webhook signing secret still required —
+  // without it, paid invoices can't auto-mark.
   const { rows } = await sql`
     SELECT 1 FROM finance_settings
     WHERE workspace_id = ${workspaceId}
-      AND stripe_secret_encrypted IS NOT NULL
       AND stripe_webhook_secret_encrypted IS NOT NULL
+      AND (
+        stripe_secret_encrypted IS NOT NULL
+        OR (stripe_connect_user_id IS NOT NULL AND stripe_onboarding_status = 'complete')
+      )
     LIMIT 1
   `;
   return rows.length > 0;
