@@ -20,8 +20,10 @@ import { SCHEMA_SQL } from './schema.js';
 
 // One cheap SELECT to detect whether the latest schema is applied. Update
 // this when a new schema delta ships so the next cold start triggers the
-// full migration once.
-const PROBE_QUERY = 'SELECT 1 FROM gift_cards LIMIT 1';
+// full migration once. We point at the most recently-added column rather
+// than a long-lived table so adding new columns reliably triggers a
+// re-migration without needing a manual /admin click.
+const PROBE_QUERY = "SELECT early_access_enabled FROM app_settings WHERE id = 1 LIMIT 1";
 
 let applied = false;
 let inFlight = null;
