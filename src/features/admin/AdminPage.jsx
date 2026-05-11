@@ -24,6 +24,7 @@ const TABS = [
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
   { id: 'export',     label: 'Export',     icon: 'Doc' },
+  { id: 'settings',   label: 'Settings',   icon: 'Settings' },
 ];
 
 export default function AdminPage() {
@@ -69,6 +70,7 @@ export default function AdminPage() {
       {tab === 'blast'      && <BlastTab/>}
       {tab === 'audit'      && <AuditTab/>}
       {tab === 'export'     && <ExportTab/>}
+      {tab === 'settings'   && <SettingsTab/>}
     </div>
   );
 }
@@ -1272,4 +1274,145 @@ function Pill({ text }) {
 function fmtN(n) { return Number(n || 0).toLocaleString(); }
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+// ─── Settings tab ────────────────────────────────────────────────────
+// Holds operator-level toggles. Currently only the temporary "early
+// access" password gate that blocks new signups + logins. Flip the
+// toggle off to remove the gate instantly; setting the password to
+// empty also clears it.
+function SettingsTab() {
+  const [state, setState] = useState(null);
+  const [busy, setBusy]   = useState(false);
+  const [pwField, setPwField] = useState('');
+  const [showPw, setShowPw]   = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const load = async () => {
+    try {
+      const r = await api.get('/admin/early-access');
+      setState(r);
+    } catch (e) {
+      setErr(e.message || 'Failed to load gate settings');
+    }
+  };
+  useEffect(() => { load(); }, []);
+
+  const save = async (patch) => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const r = await api.patch('/admin/early-access', patch);
+      setState(r);
+      setMsg('Saved');
+      setTimeout(() => setMsg(null), 2500);
+      if ('password' in patch) setPwField('');
+    } catch (e) {
+      setErr(e.message || 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!state) {
+    return <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading settings…</div>;
+  }
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div>
+          <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Early access password gate</h3>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 600 }}>
+            When this is on, new visitors must enter the access password before
+            they can sign up or sign in. Already-signed-in sessions and the
+            public booking pages aren't affected. Turn it off to disable.
+          </p>
+        </div>
+
+        {/* Toggle row */}
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 14,
+          padding: '12px 14px', borderRadius: 10,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+        }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>
+              {state.enabled ? 'Gate is ON' : 'Gate is OFF'}
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+              {state.enabled
+                ? 'Signup and login require the access password.'
+                : 'Signup and login are open to anyone.'}
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={() => save({ enabled: !state.enabled })}
+            disabled={busy || (!state.hasPassword && !state.enabled)}
+            className={`btn ${state.enabled ? 'btn-outline' : 'btn-primary'}`}
+            title={(!state.hasPassword && !state.enabled) ? 'Set a password before enabling' : ''}
+          >
+            {state.enabled ? 'Turn off' : 'Turn on'}
+          </button>
+        </div>
+
+        {/* Password set / change */}
+        <div>
+          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', fontWeight: 500, marginBottom: 6 }}>
+            {state.hasPassword ? 'Change password' : 'Set password'}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ flex: 1, position: 'relative' }}>
+              <input
+                type={showPw ? 'text' : 'password'}
+                value={pwField}
+                onChange={(e) => setPwField(e.target.value)}
+                placeholder={state.hasPassword ? 'New password' : 'Pick a password (6+ chars)'}
+                className="input"
+                style={{ width: '100%', padding: '9px 70px 9px 12px', fontSize: 13.5 }}
+              />
+              <button type="button"
+                onClick={() => setShowPw(!showPw)}
+                style={{
+                  position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                  fontSize: 11, color: 'var(--muted)', padding: '4px 8px',
+                }}>
+                {showPw ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <button
+              type="button"
+              className="btn btn-primary"
+              disabled={busy || pwField.length < 6}
+              onClick={() => save({ password: pwField })}
+            >
+              Save
+            </button>
+          </div>
+          {state.hasPassword && (
+            <button
+              type="button"
+              onClick={() => save({ password: '' })}
+              disabled={busy}
+              style={{
+                marginTop: 8, fontSize: 11.5, color: 'var(--danger)',
+                padding: '4px 0', background: 'transparent',
+              }}
+            >
+              Clear password (also turns gate off)
+            </button>
+          )}
+          {state.updatedAt && (
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 8 }}>
+              Last changed {new Date(state.updatedAt).toLocaleString()}
+            </div>
+          )}
+        </div>
+
+        {msg && <div style={{ fontSize: 12, color: 'var(--ok)' }}>✓ {msg}</div>}
+        {err && <ErrCard msg={err}/>}
+      </div>
+    </div>
+  );
 }

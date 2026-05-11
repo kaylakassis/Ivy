@@ -1355,4 +1355,18 @@ CREATE TABLE IF NOT EXISTS ivy_usage (
   PRIMARY KEY (workspace_id, day, model)
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_usage_workspace ON ivy_usage(workspace_id, day DESC);
+
+-- Global platform settings. Singleton row (id = 1) holds toggles that
+-- aren't workspace-scoped — currently just the temporary "early access"
+-- password gate that blocks signup/signin until the admin disables it.
+-- When early_access_enabled = TRUE, the auth endpoints require a valid
+-- gate cookie; otherwise normal flow.
+CREATE TABLE IF NOT EXISTS app_settings (
+  id INT PRIMARY KEY DEFAULT 1,
+  early_access_enabled BOOLEAN NOT NULL DEFAULT FALSE,
+  early_access_password_hash TEXT,
+  early_access_updated_at TIMESTAMPTZ,
+  CONSTRAINT app_settings_singleton CHECK (id = 1)
+);
+INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 `;

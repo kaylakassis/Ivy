@@ -11,6 +11,7 @@ import AppShell from './components/layout/AppShell.jsx';
 import ViewToggle from './components/ViewToggle.jsx';
 import RequireAuth from './features/auth/RequireAuth.jsx';
 import AuthPage from './features/auth/AuthPage.jsx';
+import EarlyAccessGate from './features/auth/EarlyAccessGate.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
 import RootRouter from './features/marketing/RootRouter.jsx';
 import ClientShell from './features/client/ClientShell.jsx';
@@ -117,8 +118,8 @@ export default function App() {
 
         {/* Auth — primary entry pages are eager (first paint); the
             secondary flows (forgot/reset/verify) load lazily. */}
-        <Route path="/signin"          element={<AuthPage mode="signin" />} />
-        <Route path="/signup"          element={<AuthPage mode="signup" />} />
+        <Route path="/signin"          element={<EarlyAccessGate><AuthPage mode="signin" /></EarlyAccessGate>} />
+        <Route path="/signup"          element={<EarlyAccessGate><AuthPage mode="signup" /></EarlyAccessGate>} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
         <Route path="/verify-email"    element={<VerifyEmailPage />} />

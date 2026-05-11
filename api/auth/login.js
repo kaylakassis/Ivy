@@ -5,11 +5,16 @@ import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { requireGate } from '../_lib/earlyAccess.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
+  // Temporary early-access gate: blocks login when the operator has
+  // turned it on in /admin → Settings. Visitor must POST the gate
+  // password to /api/early-access/verify first (sets ea_pass cookie).
+  if (!(await requireGate(req, res))) return;
   try {
     const { email, password } = await readBody(req);
     if (!validEmail(email) || typeof password !== 'string') {

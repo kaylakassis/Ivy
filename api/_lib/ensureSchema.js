@@ -30,8 +30,13 @@ let inFlight = null;
 // comments (--) BEFORE splitting so a `;` inside a comment can't shred
 // a fragment off (and so the same `;` inside a comment can't make us
 // ship a quote-orphaned chunk to the database). String-literal-aware:
-// `;` inside a single-quoted string is preserved.
-function splitStatements(sqlText) {
+// `;` inside a single-quoted string is preserved. Also dollar-quote
+// aware: `;` inside a $tag$ ... $tag$ block (DO blocks etc.) is
+// preserved verbatim regardless of nesting.
+//
+// Exported so api/admin/migrate.js uses the same splitter as the
+// cold-start bootstrap — keeps the two paths from drifting apart.
+export function splitStatements(sqlText) {
   // Step 1: strip line comments. We can do this naively at the line
   // level because schema.js doesn't use `--` inside literals.
   const noComments = sqlText
@@ -39,14 +44,45 @@ function splitStatements(sqlText) {
     .map((line) => line.replace(/--.*$/, ''))
     .join('\n');
 
-  // Step 2: walk the text, tracking single-quoted strings so a `;`
-  // inside a quoted string doesn't cut off the statement (e.g. a
-  // CHECK constraint's allowed values).
+  // Step 2: walk the text, tracking single-quoted strings AND
+  // dollar-quoted blocks so an embedded `;` doesn't cut off the
+  // statement (e.g. a CHECK constraint's allowed values, or the body
+  // of a DO $tag$ ... END $tag$; block).
   const stmts = [];
   let buf = '';
   let inString = false;
+  let dollarTag = null; // when inside $tag$...$tag$, this holds 'tag'
   for (let i = 0; i < noComments.length; i++) {
     const ch = noComments[i];
+
+    // Dollar-quote handling: once inside a $tag$ block, we look only
+    // for the matching closing $tag$. Nothing else (quotes, comments,
+    // semicolons) terminates a statement until we see the end tag.
+    if (dollarTag !== null) {
+      const closer = `$${dollarTag}$`;
+      if (noComments.slice(i, i + closer.length) === closer) {
+        buf += closer;
+        i += closer.length - 1;
+        dollarTag = null;
+        continue;
+      }
+      buf += ch;
+      continue;
+    }
+
+    // Detect the start of a dollar-quoted block when not in a string.
+    // Tag is the [A-Za-z0-9_]* between two `$`s.
+    if (!inString && ch === '$') {
+      const rest = noComments.slice(i + 1);
+      const m = rest.match(/^([A-Za-z0-9_]*)\$/);
+      if (m) {
+        dollarTag = m[1];
+        buf += '$' + m[1] + '$';
+        i += m[0].length;
+        continue;
+      }
+    }
+
     if (ch === "'") {
       // Postgres '' is an escaped single quote inside a string.
       if (inString && noComments[i + 1] === "'") {
