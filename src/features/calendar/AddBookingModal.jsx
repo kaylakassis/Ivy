@@ -15,6 +15,17 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   // Optional preset from "Book" quick-action in ClientDrawer. Looks up
   // the client by id and prefills name/email so the owner only needs
   // to pick service + time.
+  // Load active staff for the picker — silent failure since the
+  // picker is optional and stays hidden if there's no staff list.
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/staff').then((r) => {
+      if (cancelled) return;
+      setStaffOptions(r.staff || []);
+    }).catch(() => { /* hide the picker if loading fails */ });
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (!defaultClientId) return;
     let cancelled = false;
@@ -40,6 +51,8 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   // null = haven't looked up yet.
   const [eligiblePackages, setEligiblePackages] = useState(null);
   const [clientPackageId, setClientPackageId]   = useState(null);
+  const [staffId, setStaffId]                   = useState(null);
+  const [staffOptions, setStaffOptions]         = useState([]);
 
   // Look up the client by email after the owner has typed something
   // plausible, then load their active packages covering the selected
@@ -102,6 +115,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
         recurrenceUntil: recurrenceUntil || null,
         skipConflictCheck: override,
         clientPackageId: clientPackageId || null,
+        staffId: staffId || null,
       });
       onClose();
     } catch (ex) {
@@ -197,6 +211,22 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
                     <option key={p.id} value={p.id}>
                       {p.name} — {p.creditsRemaining} of {p.creditsTotal} left
                       {p.expiresAt ? ` · expires ${new Date(p.expiresAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+            )}
+
+            {staffOptions.length > 0 && (
+              <Field label="Staff (optional)"
+                hint="Assign this booking to a specific practitioner. Leave blank for the owner.">
+                <select value={staffId || ''}
+                  onChange={(e) => setStaffId(e.target.value || null)}
+                  style={inputSty}>
+                  <option value="">— Owner / unassigned —</option>
+                  {staffOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}{s.role ? ` · ${s.role}` : ''}
                     </option>
                   ))}
                 </select>

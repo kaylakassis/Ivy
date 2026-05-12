@@ -36,6 +36,7 @@ export default async function handler(req, res) {
     const recurrenceRule  = body.recurrenceRule  ? String(body.recurrenceRule)  : null;
     const recurrenceUntil = body.recurrenceUntil ? String(body.recurrenceUntil) : null;
     const skipConflictCheck = !!body.skipConflictCheck;
+    const staffId = body.staffId ? String(body.staffId) : null;
 
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return badRequest(res, 'date must be YYYY-MM-DD');
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
@@ -109,16 +110,26 @@ export default async function handler(req, res) {
       if (!ok) return badRequest(res, 'Package has no credits left, is expired, or doesn\'t cover this service');
     }
 
+    // Verify staff (if supplied) belongs to this workspace + is active.
+    // Defense-in-depth — never trust the browser-sent staff id alone.
+    if (staffId) {
+      const st = await sql`
+        SELECT id FROM staff_members
+         WHERE id = ${staffId} AND workspace_id = ${workspaceId} AND active = TRUE
+      `;
+      if (st.rows.length === 0) return badRequest(res, 'Unknown or inactive staff member');
+    }
+
     const insert = await sql`
       INSERT INTO bookings (
         workspace_id, service_id, client_id, client_name, client_email,
         date, start_min, end_min, notes, recurrence_rule, recurrence_until,
-        client_package_id
+        client_package_id, staff_id
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${resolvedClientId}, ${clientName}, ${clientEmail},
         ${date}, ${start}, ${end}, ${notes}, ${recurrenceRule}, ${recurrenceUntil},
-        ${clientPackageId}
+        ${clientPackageId}, ${staffId}
       )
       RETURNING *
     `;

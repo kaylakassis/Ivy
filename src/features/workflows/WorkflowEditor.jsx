@@ -34,6 +34,9 @@ const ACTIONS = [
   { id: 'send_sms',      label: 'Send SMS' },
   { id: 'create_task',   label: 'Create a task' },
   { id: 'send_document', label: 'Send a document for signing' },
+  { id: 'wait',          label: 'Wait (N days / hours)' },
+  { id: 'if_has_tag',    label: 'Only continue if client HAS tag' },
+  { id: 'if_lacks_tag',  label: 'Only continue if client LACKS tag' },
 ];
 
 export default function WorkflowEditor({ workflow, onClose, onSave, busy }) {
@@ -251,6 +254,12 @@ function defaultAction(type) {
   if (type === 'send_document') return {
     type, config: { templateId: '' },
   };
+  if (type === 'wait') return {
+    type, config: { days: 3, hours: 0 },
+  };
+  if (type === 'if_has_tag' || type === 'if_lacks_tag') return {
+    type, config: { tag: '' },
+  };
   return { type, config: {} };
 }
 
@@ -353,6 +362,46 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
               Manage templates in <a href="/documents" style={{ color: 'var(--accent)' }}>/documents</a> → Templates.
               We'll clone the template into a draft for this client; you review + send from Documents.
             </div>
+          </Sub>
+        </>
+      )}
+
+      {action.type === 'wait' && (
+        <>
+          <Sub label="Pause for"
+               hint="Workflow continues to the next action after this delay. Resumes hourly via cron — actual fire time may be ±1h.">
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <input className="input" type="number" min={0} max={365}
+                style={{ ...inputStyle, width: 80 }}
+                value={action.config.days ?? 0}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  onUpdate({ days: Number.isFinite(n) && n >= 0 ? n : 0 });
+                }}/>
+              <span style={{ fontSize: 13 }}>days</span>
+              <input className="input" type="number" min={0} max={23}
+                style={{ ...inputStyle, width: 80 }}
+                value={action.config.hours ?? 0}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  onUpdate({ hours: Number.isFinite(n) && n >= 0 ? n : 0 });
+                }}/>
+              <span style={{ fontSize: 13 }}>hours</span>
+            </div>
+          </Sub>
+        </>
+      )}
+
+      {(action.type === 'if_has_tag' || action.type === 'if_lacks_tag') && (
+        <>
+          <Sub label="Tag"
+               hint={action.type === 'if_has_tag'
+                 ? 'Subsequent actions only run if the client has this tag (case-insensitive).'
+                 : 'Subsequent actions only run if the client does NOT have this tag.'}>
+            <input className="input" style={inputStyle}
+              value={action.config.tag || ''}
+              onChange={(e) => onUpdate({ tag: e.target.value })}
+              placeholder='e.g. "vip" or "new-client"'/>
           </Sub>
         </>
       )}

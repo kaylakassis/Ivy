@@ -25,7 +25,12 @@ import { sendClientSms } from './sms.js';
 import { appUrl } from './tokens.js';
 
 const VALID_TRIGGERS = new Set(['lead_created', 'client_created', 'client_inactive', 'booking_completed']);
-const VALID_ACTIONS  = new Set(['send_email', 'send_sms', 'create_task', 'send_document']);
+const VALID_ACTIONS  = new Set([
+  'send_email', 'send_sms', 'create_task', 'send_document',
+  'wait',           // pause N days/hours, resume from the next action via cron
+  'if_has_tag',     // skip remaining actions if client.tags does NOT include cfg.tag
+  'if_lacks_tag',   // skip remaining actions if client.tags DOES include cfg.tag
+]);
 
 export function validateWorkflowShape(body) {
   const name = (body.name || '').toString().trim();
@@ -66,6 +71,21 @@ export function validateWorkflowShape(body) {
     }
     if (a.type === 'send_document') {
       if (!cfg.templateId) throw new Error(`Action ${i + 1}: pick a document template`);
+    }
+    if (a.type === 'wait') {
+      const d = Number(cfg.days || 0);
+      const h = Number(cfg.hours || 0);
+      if (!Number.isFinite(d) || !Number.isFinite(h) || d < 0 || h < 0) {
+        throw new Error(`Action ${i + 1}: wait needs days + hours (non-negative numbers)`);
+      }
+      if (d === 0 && h === 0) {
+        throw new Error(`Action ${i + 1}: wait must be at least 1 hour`);
+      }
+      if (d > 365) throw new Error(`Action ${i + 1}: wait can't exceed 365 days`);
+    }
+    if (a.type === 'if_has_tag' || a.type === 'if_lacks_tag') {
+      const tag = String(cfg.tag || '').trim();
+      if (!tag) throw new Error(`Action ${i + 1}: condition needs a tag`);
     }
     return { type: a.type, config: cfg };
   });
@@ -120,9 +140,16 @@ export async function triggerWorkflow({ workspaceId, triggerType, client, contex
 
 // Executes one workflow for one client. Handles dedupe + per-action
 // error trapping + insert of the workflow_runs audit row.
-async function runWorkflow({ workflow, client, context = {} }) {
+//
+// startIndex defaults to 0 — when a workflow resumes after a `wait`
+// action, the cron passes the index of the next action to execute.
+// isResume tells us to skip the same-day dedupe check (a wait that
+// crosses midnight would otherwise re-trigger dedupe).
+async function runWorkflow({ workflow, client, context = {}, startIndex = 0, isResume = false }) {
   // Dedupe: skip if this workflow already fired for this client today.
-  if (client?.id) {
+  // Resumed runs bypass dedupe — they're the SAME logical run, just
+  // continuing across a wait boundary.
+  if (client?.id && !isResume) {
     const dup = await sql`
       SELECT id FROM workflow_runs
        WHERE workflow_id = ${workflow.id}
@@ -150,8 +177,62 @@ async function runWorkflow({ workflow, client, context = {} }) {
   const actions = Array.isArray(workflow.actions) ? workflow.actions : [];
   const results = [];
   let okCount = 0, failCount = 0;
+  let waited = false;
+  let conditionFailed = false;
 
-  for (const a of actions) {
+  // i starts at startIndex so resumed runs pick up where the prior
+  // wave left off. Each iteration either: (a) hits a wait → persists
+  // a pending row and breaks; (b) hits a failing condition → skips the
+  // rest; (c) executes the action.
+  for (let i = startIndex; i < actions.length; i++) {
+    const a = actions[i];
+
+    // wait: persist a pending row and stop. The cron resumes from i+1.
+    if (a.type === 'wait') {
+      const cfg = a.config || {};
+      const days = Number(cfg.days || 0);
+      const hours = Number(cfg.hours || 0);
+      const intervalSql = `${days} days ${hours} hours`;
+      await sql`
+        INSERT INTO workflow_pending_runs (
+          workflow_id, workspace_id, client_id, client_snapshot,
+          next_action_index, resume_at, context
+        ) VALUES (
+          ${workflow.id}, ${workflow.workspace_id}, ${client?.id || null},
+          ${JSON.stringify({
+            id: client?.id || null,
+            name: client?.name || null,
+            email: client?.email || null,
+            phone: client?.phone || null,
+            sms_consent_at: client?.sms_consent_at || null,
+            tags: client?.tags || [],
+          })}::jsonb,
+          ${i + 1},
+          NOW() + ${intervalSql}::interval,
+          ${JSON.stringify(context)}::jsonb
+        )
+      `;
+      results.push({ type: 'wait', status: 'queued', days, hours });
+      waited = true;
+      break;
+    }
+
+    // if_has_tag / if_lacks_tag: gate the rest of the workflow on a
+    // client.tag check. Tags are case-insensitive matched.
+    if (a.type === 'if_has_tag' || a.type === 'if_lacks_tag') {
+      const targetTag = String(a.config?.tag || '').toLowerCase();
+      const tags = Array.isArray(client?.tags) ? client.tags.map((t) => String(t).toLowerCase()) : [];
+      const has = tags.includes(targetTag);
+      const passes = a.type === 'if_has_tag' ? has : !has;
+      results.push({ type: a.type, status: passes ? 'pass' : 'stop', tag: targetTag, has });
+      if (!passes) {
+        conditionFailed = true;
+        break;
+      }
+      continue;
+    }
+
+    // Regular action — execute, capture pass/fail, continue loop.
     try {
       // eslint-disable-next-line no-await-in-loop
       const r = await executeAction({
@@ -168,7 +249,9 @@ async function runWorkflow({ workflow, client, context = {} }) {
   }
 
   let status;
-  if (okCount === 0 && failCount === 0) status = 'skipped';
+  if (waited) status = 'waiting';
+  else if (conditionFailed && okCount === 0 && failCount === 0) status = 'stopped';
+  else if (okCount === 0 && failCount === 0) status = 'skipped';
   else if (failCount === 0) status = 'succeeded';
   else if (okCount === 0)   status = 'failed';
   else                      status = 'partial';
@@ -306,6 +389,57 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
 //
 // To keep this from running off the rails, we cap to 500 fires per
 // invocation. Real-world workspaces won't hit that.
+// Resume any waiting workflows whose resume_at has passed. Called by
+// the workflows cron alongside evaluateScheduledWorkflows. Each pending
+// row resumes execution from next_action_index against the captured
+// client_snapshot (not the live client row — see schema comment).
+export async function resumeWaitingWorkflows({ limit = 200 } = {}) {
+  const { rows: pending } = await sql`
+    SELECT p.*, w.* FROM workflow_pending_runs p
+    JOIN workflows w ON w.id = p.workflow_id
+    WHERE p.resume_at <= NOW()
+      AND w.enabled = TRUE
+    ORDER BY p.resume_at ASC
+    LIMIT ${Math.max(1, Math.min(500, limit))}
+  `;
+  let resumed = 0;
+  for (const row of pending) {
+    // The JOIN aliased some columns — rebuild the workflow object
+    // from the row. workflows columns: id, workspace_id, name, ...,
+    // actions, trigger_type, etc.
+    const workflow = {
+      id:             row.workflow_id,
+      workspace_id:   row.workspace_id,
+      name:           row.name,
+      trigger_type:   row.trigger_type,
+      trigger_config: row.trigger_config,
+      actions:        row.actions,
+      enabled:        row.enabled,
+    };
+    const client = row.client_snapshot || {};
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await runWorkflow({
+        workflow,
+        client,
+        context: row.context || {},
+        startIndex: row.next_action_index || 0,
+        isResume: true,
+      });
+      // eslint-disable-next-line no-await-in-loop
+      await sql`DELETE FROM workflow_pending_runs WHERE id = ${row.id}`;
+      resumed++;
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error(`[resumeWaitingWorkflows] pending=${row.id} failed:`, err.message);
+      // Leave the row in place; next cron pass retries. After 7 days
+      // of consistent failures we could prune, but for v1 a manual
+      // dashboard cleanup is fine.
+    }
+  }
+  return { resumed };
+}
+
 export async function evaluateScheduledWorkflows({ limit = 500 } = {}) {
   const { rows: workflows } = await sql`
     SELECT * FROM workflows

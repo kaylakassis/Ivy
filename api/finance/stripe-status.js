@@ -119,13 +119,25 @@ async function readStatus(workspaceId) {
   if (!connected) {
     return { connected: false, pending: false, webhookUrl };
   }
+  // 'flow' tells the UI which webhook architecture is in use:
+  //   • account-links: events flow through the single platform webhook
+  //     (/api/webhooks/stripe-platform). Owner doesn't need to configure
+  //     anything — no "Webhook signing not set" warning should appear.
+  //   • standard-oauth: legacy path that requires the owner to paste
+  //     their workspace's webhook signing secret here.
+  const flow = connectedNew ? 'account-links' : 'standard-oauth';
   return {
     connected: true,
     pending,
+    flow,
     accountLabel: r.stripe_account_label || null,
     publishable: r.stripe_publishable_key || null,
     livemode: !!r.stripe_connect_livemode,
     onboardingStatus: r.stripe_onboarding_status || null,
+    // For Account-Links the platform webhook handles events; the
+    // per-workspace webhook_configured flag is irrelevant. Surfacing
+    // it as `true` would lie; surfacing as `false` confuses owners.
+    // We bypass the surface entirely in the UI when flow=account-links.
     webhookConfigured: !!r.webhook_configured,
     connectedAt: r.stripe_connected_at,
     webhookUrl,

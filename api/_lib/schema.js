@@ -1448,7 +1448,7 @@ CREATE TABLE IF NOT EXISTS workflow_runs (
   workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
-  status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed', 'skipped', 'partial')),
+  status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed', 'skipped', 'partial', 'waiting', 'stopped')),
   action_results JSONB NOT NULL DEFAULT '[]'::jsonb,
   context JSONB NOT NULL DEFAULT '{}'::jsonb,
   error TEXT,
@@ -1464,4 +1464,74 @@ CREATE INDEX IF NOT EXISTS idx_workflow_runs_workspace
 CREATE INDEX IF NOT EXISTS idx_workflow_runs_dedupe
   ON workflow_runs(workflow_id, client_id, ((triggered_at)::date))
   WHERE client_id IS NOT NULL;
+-- Update the status CHECK constraint on existing workflow_runs rows so
+-- previously-deployed databases accept the new 'waiting' + 'stopped'
+-- statuses. CREATE TABLE IF NOT EXISTS won't refresh the constraint.
+ALTER TABLE workflow_runs DROP CONSTRAINT IF EXISTS workflow_runs_status_check;
+ALTER TABLE workflow_runs ADD CONSTRAINT workflow_runs_status_check
+  CHECK (status IN ('succeeded', 'failed', 'skipped', 'partial', 'waiting', 'stopped'));
+
+-- Deferred-action queue for workflows that include a wait_step. When
+-- a workflow's action list hits a wait_step, we stop executing,
+-- snapshot the client + remaining context, and INSERT a row here with
+-- resume_at = NOW() + the wait interval. The workflows cron picks up
+-- rows where resume_at <= NOW() and resumes the workflow from
+-- next_action_index.
+--
+-- client_snapshot stores name/email/phone/sms_consent_at because the
+-- live clients row may have changed between schedule and resume
+-- (renamed, opted-out of SMS, etc.) — we resume against the snapshot
+-- so the message reads consistently with what the owner approved.
+CREATE TABLE IF NOT EXISTS workflow_pending_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  client_snapshot JSONB NOT NULL DEFAULT '{}'::jsonb,
+  next_action_index INT NOT NULL DEFAULT 0,
+  resume_at TIMESTAMPTZ NOT NULL,
+  context JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_pending_resume
+  ON workflow_pending_runs(resume_at);
+CREATE INDEX IF NOT EXISTS idx_workflow_pending_workflow
+  ON workflow_pending_runs(workflow_id);
+
+-- Multi-staff / chair rental. Workspace owners who hire (or share
+-- chair space with) other practitioners can model each as a staff_member
+-- row. Bookings get a staff_id so each practitioner's calendar can be
+-- filtered independently. user_id is optional — staff who claim a
+-- portal account get linked so they can see their own appointments
+-- via /me. owner_managed=TRUE means the workspace owner inputs all
+-- changes (no portal login needed); FALSE means the staff member has
+-- their own login (future v2).
+CREATE TABLE IF NOT EXISTS staff_members (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  email TEXT,
+  phone TEXT,
+  role TEXT,
+  color TEXT,
+  hourly_rate NUMERIC(12,2),
+  commission_rate NUMERIC(5,2),
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  owner_managed BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_staff_members_workspace
+  ON staff_members(workspace_id, active);
+CREATE INDEX IF NOT EXISTS idx_staff_members_user
+  ON staff_members(user_id) WHERE user_id IS NOT NULL;
+
+-- Optional staff assignment on each booking. NULL = owner (the
+-- workspace's original solo practitioner). The Calendar UI lets the
+-- owner filter by staff_id to see one practitioner's schedule at a time.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_id UUID
+  REFERENCES staff_members(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_staff_date
+  ON bookings(workspace_id, staff_id, date) WHERE staff_id IS NOT NULL;
 `;

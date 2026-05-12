@@ -132,6 +132,7 @@ export function serializeBooking(row, opts = {}) {
       : (row.recurrence_until || null),
     cancelledOccurrences,
     clientPackageId:     row.client_package_id || null,
+    staffId:             row.staff_id || null,
     depositRequired:     Number(row.deposit_required || 0),
     depositPaid:         Number(row.deposit_paid || 0),
     depositPaidAt:       row.deposit_paid_at || null,

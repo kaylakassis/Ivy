@@ -63,6 +63,18 @@ export default async function handler(req, res) {
         }
         push('recurrence_until', body.recurrenceUntil || null);
       }
+      if ('staffId' in body) {
+        const sid = body.staffId ? String(body.staffId) : null;
+        if (sid) {
+          // eslint-disable-next-line no-await-in-loop
+          const st = await sql`
+            SELECT id FROM staff_members
+             WHERE id = ${sid} AND workspace_id = ${workspaceId} AND active = TRUE
+          `;
+          if (st.rows.length === 0) return badRequest(res, 'Unknown or inactive staff member');
+        }
+        push('staff_id', sid);
+      }
 
       if (sets.length === 0) return ok(res, { booking: serializeBooking(found.rows[0]) });
 

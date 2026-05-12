@@ -186,6 +186,64 @@ export async function createCheckoutSession({
   };
 }
 
+// Refund a Square payment. Square's refund API takes a payment_id
+// (one of the IDs Square emits on the payment.created webhook) plus
+// an amount (full refund when omitted) and an optional reason string.
+// Returns { id, amount, status, reason } shaped the same as the
+// Stripe + PayPal adapters.
+//
+// Square refunds settle async: status starts at PENDING, flips to
+// COMPLETED via the refund.updated webhook. The caller sees PENDING
+// in the response and that's expected; the bookkeeping update in
+// /api/invoices/refund stamps stripe_refund_id (legacy column name)
+// regardless so the audit trail is intact.
+export async function createRefund({
+  workspaceId, settings,
+  paymentIntent,  // the Square payment ID — caller passes invoice.stripe_payment_intent which works for both providers
+  amountCents,
+  currency = 'USD',
+  reason,
+}) {
+  if (!paymentIntent) throw new Error('paymentIntent (Square payment_id) is required');
+  const fs = settings || await fetchFinanceSettings(workspaceId);
+  const creds = await loadSquareCreds(fs);
+  const env = fs.squareEnvironment || squareEnv();
+
+  const body = {
+    idempotency_key: crypto.randomUUID(),
+    payment_id: paymentIntent,
+    reason: reason ? String(reason).slice(0, 192) : undefined,
+  };
+  if (amountCents != null) {
+    body.amount_money = {
+      amount: Math.round(Number(amountCents)),
+      currency: currency.toUpperCase(),
+    };
+  }
+
+  const res = await fetch(`${squareApiBase(env)}/v2/refunds`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${creds.access_token}`,
+      'Square-Version': '2024-10-17',
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = j?.errors?.[0]?.detail || j?.errors?.[0]?.code || `HTTP ${res.status}`;
+    throw new Error(`Square refused the refund: ${msg}`);
+  }
+  const refund = j.refund || {};
+  return {
+    id:     refund.id || null,
+    amount: Number(refund.amount_money?.amount || 0),
+    status: (refund.status || 'PENDING').toLowerCase(),
+    reason: refund.reason || reason || null,
+  };
+}
+
 // Webhook signature: HMAC-SHA1 of (notification_url + raw_body) with
 // the signature key from the Square Developer Dashboard. Returns the
 // parsed event JSON; throws on mismatch / missing key.

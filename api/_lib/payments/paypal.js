@@ -210,6 +210,75 @@ export async function createCheckoutSession({
   };
 }
 
+// Refund a PayPal capture. paymentIntent is the capture ID (PayPal's
+// equivalent of Stripe's payment_intent). PayPal Partner refunds run
+// against the connected merchant via the auth-assertion header so the
+// platform doesn't need OAuth tokens for each merchant.
+//
+// Returns { id, amount, status, reason } matching Stripe + Square
+// shapes so /api/invoices/refund doesn't have to branch.
+export async function createRefund({
+  workspaceId, settings,
+  paymentIntent,  // PayPal capture ID
+  amountCents,
+  currency = 'USD',
+  reason,
+}) {
+  if (!paymentIntent) throw new Error('paymentIntent (PayPal capture ID) is required');
+  const fs = settings || await fetchFinanceSettings(workspaceId);
+  if (!fs?.paypalMerchantId) throw new Error('PayPal is not connected for this workspace');
+
+  const token = await platformAccessToken();
+  const env = fs.paypalEnvironment || paypalEnv();
+  const body = {};
+  if (amountCents != null) {
+    body.amount = {
+      value:         (Number(amountCents) / 100).toFixed(2),
+      currency_code: currency.toUpperCase(),
+    };
+  }
+  if (reason) body.note_to_payer = String(reason).slice(0, 255);
+
+  // PayPal-Auth-Assertion: base64 JSON identifying the merchant we're
+  // acting on behalf of. Format: header.payload.signature where the
+  // signature segment is empty for Partner integrations using the
+  // PARTNER token. (Same pattern createCheckoutSession uses.)
+  const assertHeader = Buffer.from(JSON.stringify({ alg: 'none' })).toString('base64url');
+  const assertPayload = Buffer.from(JSON.stringify({
+    iss: process.env.PAYPAL_CLIENT_ID,
+    payer_id: fs.paypalMerchantId,
+  })).toString('base64url');
+  const authAssertion = `${assertHeader}.${assertPayload}.`;
+
+  const res = await fetch(
+    `${paypalApiBase(env)}/v2/payments/captures/${encodeURIComponent(paymentIntent)}/refund`,
+    {
+      method: 'POST',
+      headers: {
+        'Authorization':         `Bearer ${token}`,
+        'Content-Type':          'application/json',
+        'PayPal-Auth-Assertion': authAssertion,
+        'PayPal-Request-Id':     crypto.randomUUID(),
+        'Prefer':                'return=representation',
+      },
+      body: JSON.stringify(body),
+    },
+  );
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = j?.message
+      || j?.details?.[0]?.description
+      || `HTTP ${res.status}`;
+    throw new Error(`PayPal refused the refund: ${msg}`);
+  }
+  return {
+    id:     j.id || null,
+    amount: Math.round(Number(j.amount?.value || 0) * 100),
+    status: (j.status || 'PENDING').toLowerCase(),
+    reason: reason || null,
+  };
+}
+
 // PayPal webhook signature verification: POST to /v1/notifications/
 // verify-webhook-signature with the headers + body and let PayPal tell
 // us if it's authentic. Heavier than HMAC but PayPal's recommended path.

@@ -11,6 +11,7 @@ import {
 } from './utils.js';
 import AvailabilityDrawer from './AvailabilityDrawer.jsx';
 import ShareDrawer from './ShareDrawer.jsx';
+import StaffDrawer from './StaffDrawer.jsx';
 import SyncDrawer from './SyncDrawer.jsx';
 import PackagesDrawer from './PackagesDrawer.jsx';
 import EventDrawer from './EventDrawer.jsx';
@@ -23,7 +24,7 @@ const VIEW_KEY = 'thryve:calendar:view';
 
 export default function Calendar() {
   const {
-    cal, loading, error,
+    cal, loading, error, refresh,
     patchSettings, saveAvailability, saveServices,
     addBlock, updateBlock, removeBlock,
     createBooking, updateBooking, cancelBooking, cancelOccurrence,
@@ -97,13 +98,36 @@ export default function Calendar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isMobile]);
 
+  // Staff filter for the calendar view. null = show all. Otherwise we
+  // filter to bookings assigned to that specific staff id (use 'owner'
+  // sentinel to show only unassigned-to-staff bookings).
+  const [staffFilter, setStaffFilter] = useState(null);
+  const [staffList, setStaffList] = useState([]);
+  useEffect(() => {
+    let cancelled = false;
+    // Soft-fail: hide the filter pill if /api/staff isn't reachable.
+    import('../../lib/api.js').then(({ api }) => {
+      api.get('/staff').then((r) => {
+        if (!cancelled) setStaffList(r.staff || []);
+      }).catch(() => {});
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // Expand recurring bookings into per-occurrence rows for the views to render.
   // The hook is stable as long as the bookings array reference doesn't change.
   const expanded = useMemo(() =>
     expandedBookings(cal.bookings || [], { daysBack: 14, daysAhead: 365 }),
     [cal.bookings],
   );
-  const calForViews = useMemo(() => ({ ...cal, bookings: expanded }), [cal, expanded]);
+  // Apply the staff filter AFTER expansion so recurring bookings
+  // assigned to a staff member still surface on the picked staff's view.
+  const filtered = useMemo(() => {
+    if (!staffFilter) return expanded;
+    if (staffFilter === 'owner') return expanded.filter((b) => !b.staffId);
+    return expanded.filter((b) => b.staffId === staffFilter);
+  }, [expanded, staffFilter]);
+  const calForViews = useMemo(() => ({ ...cal, bookings: filtered }), [cal, filtered]);
 
   useEffect(() => { localStorage.setItem(VIEW_KEY, view); }, [view]);
 
@@ -254,6 +278,9 @@ export default function Calendar() {
           <button className="btn btn-outline" onClick={() => setDrawer('services')}>
             <Icons.Dollar size={14}/> {!isTablet && 'Services'}
           </button>
+          <button className="btn btn-outline" onClick={() => setDrawer('staff')}>
+            <Icons.Users size={14}/> {!isTablet && 'Staff'}
+          </button>
           <button className="btn btn-outline" onClick={() => setDrawer('packages')}
             data-tour="calendar-packages">
             <Icons.Doc size={14}/> {!isTablet && 'Packages'}
@@ -287,6 +314,41 @@ export default function Calendar() {
           <Legend color="var(--accent)" label="Booked"/>
           <Legend stripe label="Blocked"/>
           <Legend bordered label="Available"/>
+        </div>
+      )}
+
+      {/* Staff filter pills — only renders when the workspace has at
+          least one staff member. Hidden otherwise to avoid noise for
+          solo-practitioner workspaces. */}
+      {staffList.length > 0 && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+          padding: '6px 0 10px',
+        }}>
+          <span style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginRight: 4 }}>
+            Show
+          </span>
+          <button onClick={() => setStaffFilter(null)}
+            className={`btn ${staffFilter === null ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '4px 10px', fontSize: 11.5 }}>
+            Everyone
+          </button>
+          <button onClick={() => setStaffFilter('owner')}
+            className={`btn ${staffFilter === 'owner' ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '4px 10px', fontSize: 11.5 }}>
+            Just me (owner)
+          </button>
+          {staffList.map((s) => (
+            <button key={s.id} onClick={() => setStaffFilter(s.id)}
+              className={`btn ${staffFilter === s.id ? 'btn-primary' : 'btn-outline'}`}
+              style={{ padding: '4px 10px', fontSize: 11.5, display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span style={{
+                width: 8, height: 8, borderRadius: 4,
+                background: s.color || 'var(--muted)',
+              }}/>
+              {s.name}
+            </button>
+          ))}
         </div>
       )}
 
@@ -391,6 +453,9 @@ export default function Calendar() {
       )}
       {drawer === 'packages' && (
         <PackagesDrawer services={cal.services} onClose={() => setDrawer(null)}/>
+      )}
+      {drawer === 'staff' && (
+        <StaffDrawer onClose={() => setDrawer(null)} onChanged={refresh}/>
       )}
       {drawer === 'event' && selectedEvent && (
         <EventDrawer

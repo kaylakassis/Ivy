@@ -26,6 +26,9 @@ const ACTION_LABELS = {
   send_sms:      'Send SMS',
   create_task:   'Create a task',
   send_document: 'Send a document for signing',
+  wait:          'Wait',
+  if_has_tag:    'If client HAS tag',
+  if_lacks_tag:  'If client LACKS tag',
 };
 
 export default function Workflows() {

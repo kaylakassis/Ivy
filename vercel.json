@@ -9,7 +9,7 @@
     { "path": "/api/cron/doc-reminders",        "schedule": "0 16 * * *" },
     { "path": "/api/cron/recurring-invoices",   "schedule": "0 8 * * *" },
     { "path": "/api/cron/review-requests",      "schedule": "0 17 * * *" },
-    { "path": "/api/cron/workflows",            "schedule": "0 13 * * *" }
+    { "path": "/api/cron/workflows",            "schedule": "0 * * * *" }
   ],
   "rewrites": [
     { "source": "/((?!api/).*)", "destination": "/index.html" }

@@ -22,6 +22,7 @@ import {
   fetchAccountSummary, fetchPaymentMethod, setDefaultPaymentMethod,
 } from '../_lib/stripe.js';
 import { computeTotals } from '../_lib/finance.js';
+import { applySubscriptionState } from '../_lib/memberships.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -93,10 +94,30 @@ export default async function handler(req, res) {
       return ok(res, { received: true, applied: 'account-status' });
     }
 
+    // Membership subscription lifecycle. customer.subscription.* events
+    // move client_memberships state — created flips to 'active' when
+    // checkout completes; updated handles renewals/past_due; deleted
+    // marks cancelled. We require metadata.purpose='membership' so an
+    // owner's other Stripe subscriptions (if any) don't get mis-routed
+    // into THRYVE's membership table.
+    if (event.type === 'customer.subscription.created'
+     || event.type === 'customer.subscription.updated'
+     || event.type === 'customer.subscription.deleted') {
+      const sub = event.data?.object || {};
+      const eventWorkspaceId = sub.metadata?.workspace_id;
+      if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch' });
+      }
+      if (sub.metadata?.purpose !== 'membership') {
+        return ok(res, { received: true, ignored: 'subscription not a membership' });
+      }
+      const result = await applySubscriptionState({ workspaceId, sub });
+      return ok(res, { received: true, applied: 'membership-state', result });
+    }
+
     // checkout.session.completed — payment OR save-card flows. We
-    // ignore subscription mode here; recurring billing still rides
-    // the legacy per-workspace webhook because membership lifecycle
-    // is more involved. v2 can subsume that.
+    // ignore subscription mode here because the customer.subscription.*
+    // events above carry the full subscription state we need.
     if (event.type === 'checkout.session.completed') {
       const session = event.data?.object || {};
       const sessionId = session.id;

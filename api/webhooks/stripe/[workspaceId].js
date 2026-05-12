@@ -12,6 +12,7 @@ import { readRawBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
+import { applySubscriptionState } from '../../_lib/memberships.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
@@ -482,43 +483,6 @@ export default async function handler(req, res) {
 //   'active' / 'trialing'              → 'active'
 //   'past_due' / 'unpaid'              → 'past_due'
 //   'canceled'                          → 'cancelled'
-//   'incomplete' / 'incomplete_expired' → 'incomplete'
-async function applySubscriptionState({ workspaceId, sub }) {
-  const subId = sub.id;
-  if (!subId) return;
-  const ours = await sql`
-    SELECT id, workspace_id FROM client_memberships
-     WHERE stripe_subscription_id = ${subId}
-     LIMIT 1
-  `;
-  if (ours.rows.length === 0) {
-    // Created hasn't reached us yet (race with the checkout-completed
-    // event); the next checkout-completed insert will pick this up.
-    return;
-  }
-  if (ours.rows[0].workspace_id !== workspaceId) {
-    // Defense-in-depth: drop any cross-tenant event.
-    return;
-  }
-  const status = mapSubStatus(sub.status);
-  const cancelAtPeriodEnd = !!sub.cancel_at_period_end;
-  const cpeMs = sub.current_period_end ? sub.current_period_end * 1000 : null;
-  const cancelledAt = (status === 'cancelled') ? new Date().toISOString() : null;
-  await sql`
-    UPDATE client_memberships SET
-      status = ${status},
-      cancel_at_period_end = ${cancelAtPeriodEnd},
-      current_period_end = ${cpeMs ? new Date(cpeMs).toISOString() : null},
-      cancelled_at = COALESCE(cancelled_at, ${cancelledAt}),
-      updated_at = NOW()
-    WHERE stripe_subscription_id = ${subId} AND workspace_id = ${workspaceId}
-  `;
-}
-
-function mapSubStatus(s) {
-  if (s === 'active' || s === 'trialing') return 'active';
-  if (s === 'past_due' || s === 'unpaid') return 'past_due';
-  if (s === 'canceled') return 'cancelled';
-  if (s === 'incomplete' || s === 'incomplete_expired') return 'incomplete';
-  return 'active';
-}
+// Subscription-state logic moved to api/_lib/memberships.js so the
+// platform-level webhook for Account-Links workspaces can use the
+// same applySubscriptionState() + mapSubStatus() helpers.

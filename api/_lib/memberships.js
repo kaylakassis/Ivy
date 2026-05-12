@@ -68,3 +68,50 @@ export function cleanMembershipInput(body) {
 
   return { ok: true, sanitized: out };
 }
+
+// ─── Subscription state reconciliation (used by webhook handlers) ────
+//
+// Maps Stripe's subscription.status enum onto our compact set. Shared
+// across the per-workspace webhook (legacy Standard OAuth) and the
+// platform-level webhook (Account-Links) so they don't drift.
+export function mapSubStatus(s) {
+  if (s === 'active' || s === 'trialing') return 'active';
+  if (s === 'past_due' || s === 'unpaid') return 'past_due';
+  if (s === 'canceled') return 'cancelled';
+  if (s === 'incomplete' || s === 'incomplete_expired') return 'incomplete';
+  return 'active';
+}
+
+// Take a Stripe subscription object + the workspace_id it belongs to
+// and reconcile client_memberships. Returns:
+//   'ok'      — applied
+//   'race'    — subscription row hasn't reached us yet (checkout-completed
+//               flow will pick it up)
+//   'mismatch'— cross-tenant event, dropped
+//   'invalid' — no subscription id
+export async function applySubscriptionState({ workspaceId, sub }) {
+  const subId = sub?.id;
+  if (!subId) return 'invalid';
+  const ours = await sql`
+    SELECT id, workspace_id FROM client_memberships
+     WHERE stripe_subscription_id = ${subId}
+     LIMIT 1
+  `;
+  if (ours.rows.length === 0) return 'race';
+  if (ours.rows[0].workspace_id !== workspaceId) return 'mismatch';
+
+  const status = mapSubStatus(sub.status);
+  const cancelAtPeriodEnd = !!sub.cancel_at_period_end;
+  const cpeMs = sub.current_period_end ? sub.current_period_end * 1000 : null;
+  const cancelledAt = (status === 'cancelled') ? new Date().toISOString() : null;
+  await sql`
+    UPDATE client_memberships SET
+      status = ${status},
+      cancel_at_period_end = ${cancelAtPeriodEnd},
+      current_period_end = ${cpeMs ? new Date(cpeMs).toISOString() : null},
+      cancelled_at = COALESCE(cancelled_at, ${cancelledAt}),
+      updated_at = NOW()
+    WHERE stripe_subscription_id = ${subId} AND workspace_id = ${workspaceId}
+  `;
+  return 'ok';
+}

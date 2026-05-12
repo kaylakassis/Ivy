@@ -19,7 +19,9 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { createRefund } from '../_lib/stripe.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
-import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/finance.js';
+import { createRefund as squareCreateRefund } from '../_lib/payments/square.js';
+import { createRefund as paypalCreateRefund } from '../_lib/payments/paypal.js';
+import { fetchOwnedInvoice, serializeInvoice, computeTotals, fetchFinanceSettings } from '../_lib/finance.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const VALID_REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer']);
@@ -68,29 +70,53 @@ export default async function handler(req, res) {
 
     let stripeRefundId = null;
     if (inv.stripe_payment_intent) {
-      // Card refund — needs the workspace's Stripe credentials.
-      // loadStripeCreds returns the right shape for both Standard
-      // OAuth (secretKey only) and Account Links (platform secret +
-      // Stripe-Account header).
-      let creds;
-      try { creds = await loadStripeCreds(workspaceId); }
-      catch (err) {
-        if (err.code === 'no_stripe_connection') {
-          return badRequest(res, 'Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually below.');
-        }
-        return serverError(res, err);
-      }
+      // Card refund. Routes to the workspace's active payment provider
+      // (Stripe / Square / PayPal). The `stripe_payment_intent` column
+      // is named for legacy reasons — it stores whichever provider's
+      // payment ID was captured at checkout time. We dispatch by the
+      // provider currently configured on finance_settings.
+      const fs = await fetchFinanceSettings(workspaceId);
+      const provider = fs?.paymentProvider || 'stripe';
       try {
-        const r = await createRefund({
-          secretKey:     creds.secretKey,
-          stripeAccount: creds.stripeAccount,
-          paymentIntent: inv.stripe_payment_intent,
-          amountCents: Math.round(amount * 100),
-          reason,
-        });
-        stripeRefundId = r.id;
+        if (provider === 'square') {
+          const out = await squareCreateRefund({
+            workspaceId, settings: fs,
+            paymentIntent: inv.stripe_payment_intent,
+            amountCents: Math.round(amount * 100),
+            currency: fs.currency,
+            reason,
+          });
+          stripeRefundId = out.id;
+        } else if (provider === 'paypal') {
+          const out = await paypalCreateRefund({
+            workspaceId, settings: fs,
+            paymentIntent: inv.stripe_payment_intent,
+            amountCents: Math.round(amount * 100),
+            currency: fs.currency,
+            reason,
+          });
+          stripeRefundId = out.id;
+        } else {
+          // Default: Stripe. Same logic as before.
+          let creds;
+          try { creds = await loadStripeCreds(workspaceId); }
+          catch (err) {
+            if (err.code === 'no_stripe_connection') {
+              return badRequest(res, 'Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually below.');
+            }
+            return serverError(res, err);
+          }
+          const r = await createRefund({
+            secretKey:     creds.secretKey,
+            stripeAccount: creds.stripeAccount,
+            paymentIntent: inv.stripe_payment_intent,
+            amountCents: Math.round(amount * 100),
+            reason,
+          });
+          stripeRefundId = r.id;
+        }
       } catch (err) {
-        return badRequest(res, `Stripe refused the refund: ${err.message}`);
+        return badRequest(res, err.message || 'Refund failed');
       }
     }
 

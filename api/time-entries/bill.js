@@ -85,6 +85,14 @@ export default async function handler(req, res) {
       };
     });
 
+    // Pull the workspace's default tax rate from finance_settings so
+    // the billed invoice matches what the New Invoice flow generates.
+    // Falls back to 0 if not configured.
+    const fsRes = await sql`
+      SELECT default_tax_rate FROM finance_settings WHERE workspace_id = ${workspaceId}
+    `;
+    const defaultTaxRate = Number(fsRes.rows[0]?.default_tax_rate || 0);
+
     const num = await nextInvoiceNumber(workspaceId);
     const number = `INV-${num}`;
     const issueDate = new Date().toISOString().slice(0, 10);
@@ -94,21 +102,33 @@ export default async function handler(req, res) {
     const ins = await sql`
       INSERT INTO invoices (
         workspace_id, number, client_id, client_name, client_email,
-        issue_date, due_date, items, status, activity
+        issue_date, due_date, items, tax_rate, status, activity
       ) VALUES (
         ${workspaceId}, ${number}, ${cl.rows[0].id}, ${cl.rows[0].name}, ${cl.rows[0].email},
-        ${issueDate}, ${dueDate}, ${JSON.stringify(items)}::jsonb, 'draft',
+        ${issueDate}, ${dueDate}, ${JSON.stringify(items)}::jsonb, ${defaultTaxRate}, 'draft',
         ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Generated from ${entries.length} time entr${entries.length === 1 ? 'y' : 'ies'}` }])}::jsonb
       )
       RETURNING *
     `;
     const invoice = ins.rows[0];
 
-    await sql.query(
-      `UPDATE time_entries SET status = 'billed', invoice_id = $1, updated_at = NOW()
-        WHERE workspace_id = $2 AND id = ANY($3::uuid[])`,
+    // TOCTOU defense: only flip entries that are still 'stopped'.
+    // A concurrent bill call would otherwise let one owner double-bill
+    // the same hours. We compare affected count vs requested; if any
+    // raced, roll back the just-created invoice instead of orphaning.
+    const upd = await sql.query(
+      `UPDATE time_entries
+          SET status = 'billed', invoice_id = $1, updated_at = NOW()
+        WHERE workspace_id = $2
+          AND id = ANY($3::uuid[])
+          AND status = 'stopped'
+        RETURNING id`,
       [invoice.id, workspaceId, ids],
     );
+    if (upd.rows.length !== ids.length) {
+      await sql`DELETE FROM invoices WHERE id = ${invoice.id} AND workspace_id = ${workspaceId}`;
+      return badRequest(res, 'Some entries were billed by another request — refresh and try again.');
+    }
 
     return created(res, { invoice: serializeInvoice(invoice) });
   } catch (err) {

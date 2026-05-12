@@ -139,8 +139,25 @@ export default function StripeConnectCard() {
 function ConnectedView({ status, onDisconnected }) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  const [showWebhook, setShowWebhook] = useState(!status.webhookConfigured);
+  // Account-Links workspaces don't need a per-workspace webhook secret —
+  // events flow through the platform webhook. Only the legacy
+  // standard-oauth flow exposes the webhook-setup affordance.
+  const isAccountLinks = status.flow === 'account-links';
+  const [showWebhook, setShowWebhook] = useState(!isAccountLinks && !status.webhookConfigured);
   const [copied, setCopied] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+
+  const refreshStatus = async () => {
+    setRefreshing(true);
+    try {
+      await api.post('/finance/stripe-status', {});
+      // Parent's onDisconnected re-fetches /finance/stripe-status when
+      // we successfully disconnect; reuse it for refresh by calling
+      // the same callback (it just rerenders with new state).
+      onDisconnected();
+    } catch { /* surface nothing; user can retry */ }
+    finally { setRefreshing(false); }
+  };
 
   const disconnect = async () => {
     setBusy(true);
@@ -179,18 +196,40 @@ function ConnectedView({ status, onDisconnected }) {
             Stripe connected — {status.accountLabel || 'your account'}
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
-            {date && <>Connected {date} · </>}
-            {status.webhookConfigured ? 'Webhook signing configured' : (
-              <span style={{ color: 'var(--warn)' }}>
-                Webhook signing not set — paid invoices won't auto-mark
-              </span>
+            {date && <>Connected {date}</>}
+            {/* Webhook readiness messaging differs by flow:
+                  • account-links: platform webhook handles everything —
+                    show pending-onboarding status if it applies, else
+                    nothing.
+                  • standard-oauth: surface the legacy "webhook signing
+                    set / not set" warning the owner has to act on. */}
+            {isAccountLinks ? (
+              status.pending ? (
+                <> · <span style={{ color: 'var(--warn)' }}>
+                  Stripe is still verifying your account
+                </span></>
+              ) : null
+            ) : (
+              <> · {status.webhookConfigured ? 'Webhook signing configured' : (
+                <span style={{ color: 'var(--warn)' }}>
+                  Webhook signing not set — paid invoices won't auto-mark
+                </span>
+              )}</>
             )}
           </div>
         </div>
-        <button className="btn btn-ghost" onClick={() => setShowWebhook((v) => !v)}
-          style={{ color: 'var(--muted)' }}>
-          {showWebhook ? 'Hide setup' : 'Webhook URL'}
-        </button>
+        {isAccountLinks && status.pending && (
+          <button className="btn btn-outline" onClick={refreshStatus} disabled={refreshing}
+            title="Re-check with Stripe whether verification has finished">
+            {refreshing ? 'Checking…' : 'Refresh status'}
+          </button>
+        )}
+        {!isAccountLinks && (
+          <button className="btn btn-ghost" onClick={() => setShowWebhook((v) => !v)}
+            style={{ color: 'var(--muted)' }}>
+            {showWebhook ? 'Hide setup' : 'Webhook URL'}
+          </button>
+        )}
         {confirming ? (
           <>
             <button className="btn btn-ghost" onClick={() => setConfirming(false)} disabled={busy}>
@@ -208,7 +247,7 @@ function ConnectedView({ status, onDisconnected }) {
           </button>
         )}
       </div>
-      {showWebhook && status.webhookUrl && (
+      {showWebhook && !isAccountLinks && status.webhookUrl && (
         <div style={{
           marginTop: 12, padding: 10, borderRadius: 8,
           background: 'var(--surface-2)', border: '1px solid var(--border)',
