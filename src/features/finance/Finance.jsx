@@ -36,17 +36,23 @@ export default function Finance() {
   const [creatingBusy, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
 
-  const downloadTaxExport = () => {
+  const [exportMenuOpen, setExportMenuOpen] = useState(false);
+
+  // Prompt for year and trigger a CSV download. Used for the Schedule-C
+  // summary AND the QuickBooks/Xero importable exports — all three share
+  // the year-pick UX, only the URL differs.
+  const downloadCSV = (path) => {
     const year = new Date().getFullYear();
-    const input = window.prompt(`Tax-year export — which year?`, year);
+    const input = window.prompt('Which year?', year);
     if (!input) return;
     const y = parseInt(input, 10);
     if (!Number.isInteger(y) || y < 2000 || y > 2100) {
       window.alert('Year must be a 4-digit number.');
       return;
     }
-    // Open the CSV download in a new tab so the cookie auth carries.
-    window.location.href = `/api/finance/tax-export?year=${y}`;
+    setExportMenuOpen(false);
+    // Cookie auth carries because /api is same-origin.
+    window.location.href = path + (path.includes('?') ? '&' : '?') + 'year=' + y;
   };
 
   const counts = useMemo(() => ({
@@ -140,10 +146,54 @@ export default function Finance() {
             Send invoices, track payments, watch revenue grow.
           </div>
         </div>
-        <button className="btn btn-outline" onClick={downloadTaxExport}
-          title="Download Schedule C-style tax summary CSV">
-          <Icons.Doc size={13}/> Tax export
-        </button>
+        <div style={{ position: 'relative' }}>
+          <button className="btn btn-outline" onClick={() => setExportMenuOpen((v) => !v)}
+            title="Year-end CSV exports — for taxes or accounting software">
+            <Icons.Doc size={13}/> Export ▾
+          </button>
+          {exportMenuOpen && (
+            <>
+              {/* Backdrop catches outside clicks. */}
+              <div onClick={() => setExportMenuOpen(false)}
+                style={{ position: 'fixed', inset: 0, zIndex: 80 }}/>
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 90,
+                minWidth: 260, padding: 6,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 10, boxShadow: '0 10px 30px rgba(0,0,0,0.18)',
+              }}>
+                <ExportMenuHeader label="Taxes"/>
+                <ExportMenuItem
+                  label="Schedule C summary"
+                  hint="For your CPA"
+                  onClick={() => downloadCSV('/api/finance/tax-export')}
+                />
+                <ExportMenuHeader label="QuickBooks Online"/>
+                <ExportMenuItem
+                  label="Sales (invoices)"
+                  hint="Import as sales transactions"
+                  onClick={() => downloadCSV('/api/finance/accounting-export?format=quickbooks&type=invoices')}
+                />
+                <ExportMenuItem
+                  label="Purchases (expenses)"
+                  hint="Import as expense bills"
+                  onClick={() => downloadCSV('/api/finance/accounting-export?format=quickbooks&type=expenses')}
+                />
+                <ExportMenuHeader label="Xero"/>
+                <ExportMenuItem
+                  label="Sales (invoices)"
+                  hint="Import as sales invoices"
+                  onClick={() => downloadCSV('/api/finance/accounting-export?format=xero&type=invoices')}
+                />
+                <ExportMenuItem
+                  label="Purchases (expenses)"
+                  hint="Import as bills"
+                  onClick={() => downloadCSV('/api/finance/accounting-export?format=xero&type=expenses')}
+                />
+              </div>
+            </>
+          )}
+        </div>
         {section === 'invoices' && (
           <button className="btn btn-primary" onClick={startNew} disabled={creatingBusy}>
             <Icons.Plus size={13} sw={2}/> {creatingBusy ? 'Creating…' : 'New invoice'}
@@ -374,4 +424,32 @@ function SummaryCard({ label, value, sub, icon, tone = 'neutral' }) {
 function fmtMoney(n) {
   if (n == null) return '—';
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+}
+
+// Tiny dropdown helpers for the Export menu. Inline styles only —
+// nothing fancy, just a labeled group + clickable rows.
+function ExportMenuHeader({ label }) {
+  return (
+    <div style={{
+      padding: '8px 10px 4px', fontSize: 10.5, fontWeight: 600,
+      color: 'var(--muted)', letterSpacing: '0.06em', textTransform: 'uppercase',
+    }}>{label}</div>
+  );
+}
+
+function ExportMenuItem({ label, hint, onClick }) {
+  return (
+    <button onClick={onClick}
+      style={{
+        width: '100%', textAlign: 'left', display: 'block',
+        padding: '8px 10px', borderRadius: 6,
+        background: 'transparent', border: 0, cursor: 'pointer',
+      }}
+      onMouseEnter={(e) => { e.currentTarget.style.background = 'var(--surface-2)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.background = 'transparent'; }}
+    >
+      <div style={{ fontSize: 13, fontWeight: 550, color: 'var(--fg)' }}>{label}</div>
+      {hint && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1 }}>{hint}</div>}
+    </button>
+  );
 }
