@@ -307,6 +307,244 @@ export const PADDING_DENSITIES = {
 };
 
 // Starter pages for first-time users — applied by the wizard.
+// Kept for backward compat with any direct callers (the new Wizard
+// uses STARTER_PACKS below).
 export function starterSections(businessName) {
   return ['hero', 'services', 'about', 'booking', 'footer'].map((t) => mkSection(t, businessName));
 }
+
+// Helper that builds a section then patches its variant + a data
+// override on top in one call. Used by the pack definitions so they
+// can express things like "a hero with the split_image variant +
+// these specific copy strings" succinctly.
+function mk(type, businessName, { variant, animate, style, data } = {}) {
+  const sec = mkSection(type, businessName);
+  if (variant)        sec.variant = variant;
+  if (animate)        sec.animate = animate;
+  if (style)          sec.style = { ...sec.style, ...style };
+  if (data)           sec.data = { ...sec.data, ...data };
+  return sec;
+}
+
+// Build a page object compatible with state.js's mkPage shape.
+// Imported lazily to avoid a circular dependency.
+function buildPage({ slug = '', title = 'Home', sections = [], inNav = true } = {}) {
+  return {
+    id: `pg_${Date.now().toString(36)}_${Math.floor(Math.random() * 9999)}`,
+    slug, title, sections, inNav,
+  };
+}
+
+// STARTER_PACKS — opinionated starting points the Wizard offers up
+// front. Each pack defines:
+//   id, label, desc            — for the picker UI
+//   template, fontPair         — site-wide style hints (Wizard still
+//                                lets the owner override these later)
+//   icon                       — Icons key for the pack chip
+//   build(businessName)        — function returning a `pages` array
+//                                ready to drop into state.js's site.pages
+//
+// Packs lean into the new section types (stats, cta_banner, team,
+// pricing, newsletter, video, logos, pricing_table, blog, instagram,
+// code_snippet) + the variants we shipped (hero split_image / image_bg,
+// services list / cards_image) + per-section style + entry animations.
+export const STARTER_PACKS = {
+  service_pro: {
+    id: 'service_pro',
+    label: 'Service business',
+    desc: 'Single-page site — hero, services, testimonials, booking. The default for most owners.',
+    icon: 'Dollar',
+    template: 'clean',
+    fontPair: 'fraunces_inter',
+    build: (biz) => [
+      buildPage({
+        slug: '', title: 'Home', sections: [
+          mk('hero',         biz, { variant: 'center', animate: 'rise',
+                                    data: { sub: 'Book a session, send a message, or learn more about what I do.' } }),
+          mk('services',     biz, { variant: 'grid',   animate: 'rise' }),
+          mk('testimonials', biz, { animate: 'rise' }),
+          mk('booking',      biz, { animate: 'rise' }),
+          mk('contact',      biz, { animate: 'fade' }),
+          mk('footer',       biz),
+        ],
+      }),
+    ],
+  },
+
+  creative_studio: {
+    id: 'creative_studio',
+    label: 'Photographer / Creative',
+    desc: 'Image-first layout with gallery, about, and a press-logo strip. Multi-page: Home + Portfolio + Contact.',
+    icon: 'Image',
+    template: 'studio',
+    fontPair: 'fraunces_inter',
+    build: (biz) => [
+      buildPage({
+        slug: '', title: 'Home', sections: [
+          mk('hero',     biz, { variant: 'image_bg', animate: 'fade',
+                                data: { headline: biz || 'Your work, in focus.', sub: 'Selected work + how to book a session.', cta: 'View portfolio', ctaLink: '#portfolio' } }),
+          mk('logos',    biz, { animate: 'fade' }),
+          mk('about',    biz, { animate: 'rise' }),
+          mk('cta_banner', biz, { animate: 'zoom',
+                                  data: { headline: 'Ready to start?', sub: "Tell me about your project — I'll get back within 24 hours.", cta: 'Book a consultation' } }),
+          mk('footer',   biz),
+        ],
+      }),
+      buildPage({
+        slug: 'portfolio', title: 'Portfolio', sections: [
+          mk('hero',    biz, { variant: 'left', data: { headline: 'Portfolio', sub: 'A small selection of recent work.', cta: '' } }),
+          mk('gallery', biz, { animate: 'rise' }),
+          mk('footer',  biz),
+        ],
+      }),
+      buildPage({
+        slug: 'contact', title: 'Contact', sections: [
+          mk('hero',    biz, { variant: 'left', data: { headline: 'Get in touch', sub: '', cta: '' } }),
+          mk('contact', biz, { animate: 'fade' }),
+          mk('newsletter', biz, { animate: 'fade' }),
+          mk('footer',  biz),
+        ],
+      }),
+    ],
+  },
+
+  coach_consultant: {
+    id: 'coach_consultant',
+    label: 'Coach / Consultant',
+    desc: 'Pricing-forward — stats, testimonials, three-tier pricing, newsletter. Multi-page: Home + Pricing + Compare.',
+    icon: 'Users',
+    template: 'editorial',
+    fontPair: 'playfair_lato',
+    build: (biz) => [
+      buildPage({
+        slug: '', title: 'Home', sections: [
+          mk('hero',         biz, { variant: 'split_image', animate: 'rise',
+                                    data: { headline: 'A clearer path, on your terms.', sub: "I help busy professionals stop spinning and start moving.", cta: 'Book a free intro' } }),
+          mk('stats',        biz, { animate: 'rise' }),
+          mk('about',        biz, { animate: 'rise' }),
+          mk('testimonials', biz, { animate: 'rise' }),
+          mk('cta_banner',   biz, { animate: 'zoom',
+                                    data: { headline: 'See if we fit.', sub: '20-minute intro — no commitment.', cta: 'Schedule it' } }),
+          mk('newsletter',   biz, { animate: 'fade' }),
+          mk('footer',       biz),
+        ],
+      }),
+      buildPage({
+        slug: 'pricing', title: 'Pricing', sections: [
+          mk('hero',    biz, { variant: 'center', data: { headline: 'Simple pricing.', sub: 'Pick what fits where you are.', cta: '' } }),
+          mk('pricing', biz, { animate: 'rise' }),
+          mk('faq',     biz, { animate: 'fade' }),
+          mk('footer',  biz),
+        ],
+      }),
+      buildPage({
+        slug: 'compare', title: 'Compare plans', sections: [
+          mk('hero',          biz, { variant: 'center', data: { headline: 'Compare', sub: 'Feature by feature.', cta: '' } }),
+          mk('pricing_table', biz, { animate: 'rise' }),
+          mk('footer',        biz),
+        ],
+      }),
+    ],
+  },
+
+  studio_team: {
+    id: 'studio_team',
+    label: 'Studio / Team',
+    desc: 'Team-led — meet-the-team page, services, gallery, contact. Best for shops with 2+ practitioners.',
+    icon: 'Users',
+    template: 'wellness',
+    fontPair: 'fraunces_inter',
+    build: (biz) => [
+      buildPage({
+        slug: '', title: 'Home', sections: [
+          mk('hero',     biz, { variant: 'left', animate: 'rise',
+                                data: { headline: biz || 'A studio built for you.', sub: 'Modern care, traditional roots.', cta: 'Book now' } }),
+          mk('services', biz, { variant: 'cards_image', animate: 'rise' }),
+          mk('team',     biz, { animate: 'rise' }),
+          mk('testimonials', biz, { animate: 'fade' }),
+          mk('footer',   biz),
+        ],
+      }),
+      buildPage({
+        slug: 'about', title: 'About', sections: [
+          mk('hero',   biz, { variant: 'split_image', data: { headline: 'About us', sub: '', cta: '' } }),
+          mk('about',  biz, { animate: 'rise' }),
+          mk('team',   biz, { animate: 'rise' }),
+          mk('footer', biz),
+        ],
+      }),
+      buildPage({
+        slug: 'contact', title: 'Contact', sections: [
+          mk('hero',    biz, { variant: 'left', data: { headline: 'Visit', sub: '', cta: '' } }),
+          mk('contact', biz, { animate: 'fade' }),
+          mk('footer',  biz),
+        ],
+      }),
+    ],
+  },
+
+  premium_minimal: {
+    id: 'premium_minimal',
+    label: 'Premium / Minimalist',
+    desc: 'Quiet, confident — left-aligned hero, list services, single testimonial, generous whitespace.',
+    icon: 'Edit',
+    template: 'mono',
+    fontPair: 'space_inter',
+    build: (biz) => [
+      buildPage({
+        slug: '', title: 'Home', sections: [
+          mk('hero',         biz, { variant: 'left',  animate: 'rise',
+                                    style: { padding: 'spacious' },
+                                    data: { headline: biz || 'Considered work, on principle.', sub: 'Selected practice. Quiet results.', cta: 'Inquire' } }),
+          mk('services',     biz, { variant: 'list',  animate: 'rise',
+                                    style: { padding: 'spacious' } }),
+          mk('testimonials', biz, { animate: 'fade',
+                                    style: { padding: 'spacious' } }),
+          mk('cta_banner',   biz, { animate: 'zoom',
+                                    data: { headline: 'Inquire.', sub: 'Tell me about the work.', cta: 'Start a conversation' } }),
+          mk('footer',       biz),
+        ],
+      }),
+    ],
+  },
+
+  writer_speaker: {
+    id: 'writer_speaker',
+    label: 'Writer / Speaker',
+    desc: 'Editorial — blog strip, about, video, newsletter. Built for thought leaders.',
+    icon: 'Doc',
+    template: 'editorial',
+    fontPair: 'fraunces_fraunces',
+    build: (biz) => [
+      buildPage({
+        slug: '', title: 'Home', sections: [
+          mk('hero',       biz, { variant: 'center', animate: 'rise',
+                                  data: { headline: biz || 'Words that move readers.', sub: 'A weekly note on craft, business, and the in-between.', cta: 'Read latest', ctaLink: '#writing' } }),
+          mk('newsletter', biz, { animate: 'fade' }),
+          mk('blog',       biz, { animate: 'rise' }),
+          mk('video',      biz, { animate: 'rise' }),
+          mk('logos',      biz, { animate: 'fade' }),
+          mk('footer',     biz),
+        ],
+      }),
+      buildPage({
+        slug: 'writing', title: 'Writing', sections: [
+          mk('hero',   biz, { variant: 'left', data: { headline: 'Writing', sub: 'All essays — newest first.', cta: '' } }),
+          mk('blog',   biz, { animate: 'rise' }),
+          mk('footer', biz),
+        ],
+      }),
+      buildPage({
+        slug: 'speaking', title: 'Speaking', sections: [
+          mk('hero',     biz, { variant: 'split_image', data: { headline: 'Speaking', sub: 'Topics, audiences, and how to book.', cta: 'Inquire' } }),
+          mk('logos',    biz, { animate: 'fade' }),
+          mk('contact',  biz, { animate: 'fade' }),
+          mk('footer',   biz),
+        ],
+      }),
+    ],
+  },
+};
+
+export const STARTER_PACK_LIST = Object.values(STARTER_PACKS);
+
