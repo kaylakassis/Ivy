@@ -111,12 +111,36 @@ export default async function handler(req, res) {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error(`[stripe-oauth-init] step=${step} failed:`, err);
+
+    // Translate known Stripe gotchas into plain-English guidance.
+    // The catch-all still surfaces the raw Stripe message so anything
+    // we haven't anticipated is still debuggable.
+    const raw = (err.message || String(err)).toLowerCase();
+    let hint = null;
+    if (raw.includes('signed up for connect') || raw.includes('apply for connect')) {
+      hint = 'Your Stripe platform account hasn\'t enabled Connect yet. '
+        + 'Visit https://dashboard.stripe.com/connect/accounts/overview '
+        + '(or /test/connect/accounts/overview if your STRIPE_SECRET_KEY is a test key) '
+        + 'and click "Get started" to activate Connect. Takes ~2 minutes. '
+        + 'Then retry the Connect Stripe button.';
+    } else if (raw.includes('no such account')) {
+      hint = 'A connected account ID from the OTHER mode is saved on this workspace. '
+        + 'Disconnect Stripe in /finance and reconnect — the new connection will use the current mode.';
+    } else if (raw.includes('invalid api key') || raw.includes('no api key')) {
+      hint = 'STRIPE_SECRET_KEY in Vercel is missing or wrong. '
+        + 'Set it to a valid sk_live_… or sk_test_… key from https://dashboard.stripe.com/apikeys.';
+    } else if (raw.includes('country')) {
+      hint = 'Stripe rejected the connected-account country. THRYVE currently only supports US — '
+        + 'if you\'re outside the US, contact support to enable your region.';
+    }
+
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({
       error: 'Stripe init failed',
       step,
       message: err.message || String(err),
+      hint,
       stripeCode: err.stripeCode || null,
       stripeStatus: err.status || null,
     }));
