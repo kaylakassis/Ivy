@@ -1407,4 +1407,61 @@ CREATE INDEX IF NOT EXISTS idx_bookings_project  ON bookings(project_id)  WHERE 
 CREATE INDEX IF NOT EXISTS idx_invoices_project  ON invoices(project_id)  WHERE project_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_quotes_project    ON quotes(project_id)    WHERE project_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id) WHERE project_id IS NOT NULL;
+
+-- Workflows / automation. Owner defines a rule: "when X happens, do Y."
+--
+-- trigger_type values (v1):
+--   lead_created      — a client was inserted with stage='lead'
+--   client_created    — any new client row
+--   client_inactive   — client has not had a booking in trigger_config.daysInactive days
+--   booking_completed — a booking's end time has passed and it wasn't cancelled
+--
+-- actions is an array. Each entry shape:
+--   { type: 'send_email' | 'send_sms' | 'create_task' | 'send_document',
+--     config: { subject?, body?, taskTitle?, templateId?, ... } }
+--
+-- Tokens supported in body/subject text: {{firstName}}, {{clientName}},
+-- {{businessName}}, {{ownerName}}. Resolved at execution time.
+CREATE TABLE IF NOT EXISTS workflows (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  trigger_type TEXT NOT NULL
+    CHECK (trigger_type IN ('lead_created', 'client_created', 'client_inactive', 'booking_completed')),
+  trigger_config JSONB NOT NULL DEFAULT '{}'::jsonb,
+  actions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  enabled BOOLEAN NOT NULL DEFAULT TRUE,
+  last_run_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_workflows_workspace_trigger
+  ON workflows(workspace_id, trigger_type) WHERE enabled = TRUE;
+CREATE INDEX IF NOT EXISTS idx_workflows_workspace_updated
+  ON workflows(workspace_id, updated_at DESC);
+
+-- Audit log for each workflow execution. Lets owners see "did the
+-- birthday email actually go out?" without grepping server logs.
+CREATE TABLE IF NOT EXISTS workflow_runs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  status TEXT NOT NULL CHECK (status IN ('succeeded', 'failed', 'skipped', 'partial')),
+  action_results JSONB NOT NULL DEFAULT '[]'::jsonb,
+  context JSONB NOT NULL DEFAULT '{}'::jsonb,
+  error TEXT,
+  triggered_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_workflow
+  ON workflow_runs(workflow_id, triggered_at DESC);
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_workspace
+  ON workflow_runs(workspace_id, triggered_at DESC);
+-- Dedupe: prevent firing the same workflow twice for the same client on
+-- the same calendar day (saves an email storm if a row gets touched
+-- multiple times). Soft constraint — the executor checks before insert.
+CREATE INDEX IF NOT EXISTS idx_workflow_runs_dedupe
+  ON workflow_runs(workflow_id, client_id, ((triggered_at)::date))
+  WHERE client_id IS NOT NULL;
 `;

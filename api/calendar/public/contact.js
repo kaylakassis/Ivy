@@ -21,6 +21,7 @@ import { validEmail } from '../../_lib/auth.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
+import { triggerWorkflow } from '../../_lib/workflows.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
@@ -82,9 +83,25 @@ export default async function handler(req, res) {
       const ins = await sql`
         INSERT INTO clients (workspace_id, name, email, stage, source)
         VALUES (${workspaceId}, ${name}, ${email}, 'lead', 'public-contact')
-        RETURNING id
+        RETURNING *
       `;
       clientId = ins.rows[0].id;
+      // Fire lead_created + client_created workflows. Non-blocking
+      // — wrapped in try so a workflow failure can't break the
+      // contact-form flow.
+      try {
+        await triggerWorkflow({
+          workspaceId, triggerType: 'lead_created',
+          client: ins.rows[0], context: { source: 'public-contact' },
+        });
+        await triggerWorkflow({
+          workspaceId, triggerType: 'client_created',
+          client: ins.rows[0], context: { source: 'public-contact' },
+        });
+      } catch (wfErr) {
+        // eslint-disable-next-line no-console
+        console.error('[public-contact] workflow trigger failed:', wfErr.message);
+      }
     }
 
     // Find or create the thread for (workspace, client). The two-way

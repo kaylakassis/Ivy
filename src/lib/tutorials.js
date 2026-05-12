@@ -171,6 +171,29 @@ export const TUTORIALS = {
     ],
   },
 
+  workflows: {
+    title: 'Workflows',
+    intro: "Automate the follow-ups you keep meaning to set up. Pick a trigger, stack up the actions, and the platform runs them while you focus on the work itself.",
+    steps: [
+      {
+        title: 'Pick a trigger',
+        body: "Four triggers cover most of the real-world cases: new lead from your contact form, any new client, a client who's gone quiet, or a booking that just wrapped. The first two fire instantly; the last two run on a daily check.",
+      },
+      {
+        title: 'Stack the actions',
+        body: "Send an email, send an SMS (if the client opted in), create a task in your /goals tab, or send a document for signing. Run them in any sequence — each action is independent, so a failed SMS won't block the email.",
+      },
+      {
+        title: 'Use tokens',
+        body: "Drop {{firstName}}, {{clientName}}, {{businessName}}, or {{ownerName}} into the email/SMS body or task title. They're filled in at send time so every message reads custom-written.",
+      },
+      {
+        title: 'Watch it run',
+        body: "Each workflow card shows when it last fired and whether the actions succeeded. The toggle on each card turns the whole workflow off without losing the config.",
+      },
+    ],
+  },
+
   rewards: {
     title: 'Rewards',
     intro: 'Loyalty + referrals on autopilot. Reward repeat clients, incentivize them to bring friends, automate the whole thing.',
