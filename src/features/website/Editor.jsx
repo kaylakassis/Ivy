@@ -7,19 +7,37 @@
 //   • Mobile  (≤ 720px):  one pane at a time, switched by a tab bar.
 //     Toolbar collapses to a single row of icon buttons + a "More" sheet
 //     so it never overflows the viewport.
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import SectionLibrary from './SectionLibrary.jsx';
 import Canvas from './Canvas.jsx';
 import Inspector from './Inspector.jsx';
-import { mkSection } from './sections.js';
+import { mkSection, FONT_PAIRS } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { publicOrigin } from '../../lib/publicUrl.js';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 
-export default function Editor({ site, set, setSection, addSection, removeSection, moveSection, reset, publish, saving, saveErr }) {
-  const [selectedId, setSelectedId] = useState(site.sections[0]?.id || null);
+export default function Editor({
+  site, set, setSection, addSection, removeSection, moveSection,
+  duplicateSection,
+  currentPage, currentPageId, setCurrentPageId,
+  addPage, removePage, renamePage, movePage,
+  reset, publish, saving, saveErr,
+}) {
+  // Sections we're rendering / editing come from the CURRENT page,
+  // not the legacy top-level site.sections. Multi-page sites have
+  // pages with independent section lists; single-page sites still
+  // work because state.js seeds pages[0] from the legacy sections.
+  const activeSections = currentPage?.sections || site.sections || [];
+  const [selectedId, setSelectedId] = useState(activeSections[0]?.id || null);
+  const [pageMenuOpen, setPageMenuOpen] = useState(false);
+  // Reset selection when the active page changes — IDs are per-page so
+  // keeping the prior selectedId would mismatch the new section list.
+  useEffect(() => {
+    setSelectedId(activeSections[0]?.id || null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentPageId]);
   const [device, setDevice] = useState('desktop');
   const [previewMode, setPreviewMode] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
@@ -33,8 +51,8 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
   const [mobileTab, setMobileTab] = useState('canvas');
 
   const selected = useMemo(
-    () => site.sections.find((s) => s.id === selectedId) || null,
-    [site.sections, selectedId],
+    () => activeSections.find((s) => s.id === selectedId) || null,
+    [activeSections, selectedId],
   );
 
   const handleAdd = (type) => {
@@ -164,6 +182,10 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
           )}
         </div>
 
+        {/* Site-style affordances — font pair + custom CSS. Both apply
+            site-wide (every page, every section). */}
+        <SiteStyleButton site={site} set={set}/>
+
         {/* Device toggle — hide on phones; the user is already on a phone
             and doesn't need a "preview at desktop width" toggle squeezed
             into a row that's already wrapping. */}
@@ -280,6 +302,21 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
         </div>
       )}
 
+      {/* Page tabs — sites with > 1 page show a pill row that switches
+          which page is edited. Single-page sites hide it entirely so
+          the bar isn't noise. The "+ Page" button appends a new page. */}
+      {!previewMode && (
+        <PageTabs
+          pages={site.pages}
+          currentPageId={currentPageId}
+          onSelect={setCurrentPageId}
+          onAdd={() => addPage({ title: 'New page', slug: 'page-' + (site.pages.length + 1) })}
+          onRename={renamePage}
+          onMove={movePage}
+          onRemove={removePage}
+        />
+      )}
+
       {/* Main body */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
         {/* SectionLibrary — desktop: always visible. Tablet: visible.
@@ -306,6 +343,7 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
         {(!isMobile || mobileTab === 'canvas' || previewMode) && (
           <Canvas
             site={site}
+            sections={activeSections}
             selectedId={selectedId}
             onSelect={(id) => {
               setSelectedId(id);
@@ -328,6 +366,7 @@ export default function Editor({ site, set, setSection, addSection, removeSectio
             onChange={(patch) => selected && setSection(selected.id, patch)}
             onMoveUp={() => selected && moveSection(selected.id, 'up')}
             onMoveDown={() => selected && moveSection(selected.id, 'down')}
+            onDuplicate={() => selected && duplicateSection && duplicateSection(selected.id)}
             onDelete={handleDelete}
             onToggleVisible={handleToggleVisible}
             mobile={isMobile}
@@ -428,3 +467,191 @@ function SiteVisibilityButton({ visibility, onChange, isMobile }) {
     </div>
   );
 }
+
+// PageTabs — pill row above the main editor body. Renders the list of
+// pages for the site, lets the owner switch which page is being edited,
+// rename via prompt, reorder, and delete (with home-page protection).
+function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onRemove }) {
+  const [editingId, setEditingId] = useState(null);
+  const [draft, setDraft] = useState('');
+
+  if (!Array.isArray(pages) || pages.length === 0) return null;
+
+  const startRename = (p) => {
+    setEditingId(p.id);
+    setDraft(p.title);
+  };
+  const commitRename = (p) => {
+    if (draft.trim() && draft !== p.title) {
+      // Auto-derive slug from title only if this isn't the home page.
+      const patch = { title: draft.trim() };
+      if (p.slug !== '') {
+        patch.slug = draft.trim().toLowerCase()
+          .replace(/[^a-z0-9\s-]/g, '')
+          .replace(/\s+/g, '-')
+          .slice(0, 40);
+      }
+      onRename(p.id, patch);
+    }
+    setEditingId(null);
+  };
+
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap',
+      padding: '10px 16px',
+      background: 'var(--surface)',
+      borderBottom: '1px solid var(--border)',
+    }}>
+      <span style={{
+        fontSize: 11, color: 'var(--muted)',
+        textTransform: 'uppercase', letterSpacing: '0.08em',
+        marginRight: 4,
+      }}>Pages</span>
+      {pages.map((p) => {
+        const active = p.id === currentPageId;
+        const isHome = p.slug === '';
+        if (editingId === p.id) {
+          return (
+            <input key={p.id}
+              value={draft}
+              onChange={(e) => setDraft(e.target.value)}
+              onBlur={() => commitRename(p)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename(p);
+                if (e.key === 'Escape') setEditingId(null);
+              }}
+              autoFocus
+              style={{
+                padding: '5px 11px', fontSize: 12.5, borderRadius: 999,
+                border: '1px solid var(--accent)',
+                background: 'var(--surface)', color: 'var(--fg)',
+                outline: 'none', minWidth: 120,
+              }}/>
+          );
+        }
+        return (
+          <div key={p.id} style={{ display: 'inline-flex', alignItems: 'center', gap: 0 }}>
+            <button
+              onClick={() => onSelect(p.id)}
+              onDoubleClick={() => startRename(p)}
+              title="Click to switch · double-click to rename"
+              style={{
+                padding: '5px 11px', fontSize: 12.5,
+                borderTopLeftRadius: 999, borderBottomLeftRadius: 999,
+                borderTopRightRadius: !isHome ? 0 : 999,
+                borderBottomRightRadius: !isHome ? 0 : 999,
+                border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+                borderRight: !isHome ? '0' : undefined,
+                background: active ? 'var(--accent-soft)' : 'var(--surface-2)',
+                color: active ? 'var(--accent)' : 'var(--fg-2)',
+                cursor: 'pointer',
+                display: 'inline-flex', alignItems: 'center', gap: 6,
+              }}>
+              {isHome && <Icons.Home size={10} sw={1.7}/>}
+              {p.title}
+            </button>
+            {!isHome && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`Delete page "${p.title}"? The sections on it will be removed.`)) {
+                    onRemove(p.id);
+                  }
+                }}
+                title="Delete page"
+                style={{
+                  padding: '5px 8px', fontSize: 11,
+                  borderTopRightRadius: 999, borderBottomRightRadius: 999,
+                  border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
+                  background: active ? 'var(--accent-soft)' : 'var(--surface-2)',
+                  color: 'var(--muted)', cursor: 'pointer',
+                }}>×</button>
+            )}
+          </div>
+        );
+      })}
+      <button
+        onClick={onAdd}
+        style={{
+          padding: '5px 11px', fontSize: 12.5, borderRadius: 999,
+          border: '1px dashed var(--border-strong)',
+          background: 'transparent', color: 'var(--muted)',
+          cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 4,
+        }}>
+        <Icons.Plus size={11} sw={2}/> Page
+      </button>
+    </div>
+  );
+}
+
+// SiteStyleButton — toolbar dropdown that surfaces site-wide style
+// overrides decoupled from the template:
+//   • Font pair: 6 presets that override the template's font choice
+//   • Custom CSS: textarea injected as a <style> tag inside the site
+//     shell on both Canvas + PublicSite
+function SiteStyleButton({ site, set }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ position: 'relative' }}>
+      <button className="btn btn-outline" onClick={() => setOpen((v) => !v)}
+        title="Override fonts + drop custom CSS site-wide">
+        <Icons.Edit size={13}/> Style
+        <Icons.ArrowDown size={11}/>
+      </button>
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)}
+            style={{ position: 'fixed', inset: 0, zIndex: 60 }}/>
+          <div style={{
+            position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 70,
+            width: 360, padding: 16,
+            background: 'var(--surface)', border: '1px solid var(--border-strong)',
+            borderRadius: 10, boxShadow: 'var(--shadow, 0 10px 30px rgba(0,0,0,0.16))',
+            display: 'flex', flexDirection: 'column', gap: 14,
+          }}>
+            <div>
+              <label style={fieldLabelSt}>Font pair</label>
+              <select value={site.fontPair || ''}
+                onChange={(e) => set({ fontPair: e.target.value || null })}
+                style={fieldInputSt}>
+                <option value="">Use template default</option>
+                {Object.entries(FONT_PAIRS).map(([id, fp]) => (
+                  <option key={id} value={id}>{fp.label}</option>
+                ))}
+              </select>
+              <div style={fieldHintSt}>
+                Overrides the template's display + body fonts site-wide.
+              </div>
+            </div>
+            <div>
+              <label style={fieldLabelSt}>Custom CSS</label>
+              <textarea value={site.customCss || ''}
+                onChange={(e) => set({ customCss: e.target.value })}
+                placeholder="/* Style anything in your site — written exactly as standard CSS. */"
+                rows={6}
+                style={{ ...fieldInputSt, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, resize: 'vertical', minHeight: 120 }}/>
+              <div style={fieldHintSt}>
+                Injected as a &lt;style&gt; tag inside the site shell. Use to tweak
+                spacing, colors, hover states, fonts, etc. without changing the template.
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+const fieldLabelSt = {
+  display: 'block', fontSize: 11, fontWeight: 600,
+  color: 'var(--muted)', letterSpacing: '0.04em',
+  textTransform: 'uppercase', marginBottom: 6,
+};
+const fieldInputSt = {
+  width: '100%', padding: '8px 11px', fontSize: 13,
+  background: 'var(--surface-2)', border: '1px solid var(--border)',
+  color: 'var(--fg)', borderRadius: 8, outline: 'none',
+};
+const fieldHintSt = {
+  fontSize: 11.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5,
+};

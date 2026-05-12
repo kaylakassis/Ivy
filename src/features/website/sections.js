@@ -201,6 +201,57 @@ export const SECTION_TYPES = {
       ],
     }),
   },
+  pricing_table: {
+    label: 'Pricing comparison',
+    icon: 'Dollar',
+    desc: 'Feature-by-feature table comparing tiers (long-form vs short cards)',
+    default: () => ({
+      headline: 'Compare plans',
+      sub: '',
+      tiers: ['Starter', 'Standard', 'Premium'],
+      rows: [
+        { id: 'r1', label: 'Sessions per month', values: ['1', '3', 'Unlimited'] },
+        { id: 'r2', label: 'Email support',      values: ['✓', '✓', '✓'] },
+        { id: 'r3', label: 'SMS support',        values: ['',  '✓', '✓'] },
+        { id: 'r4', label: '24/7 access',        values: ['',  '',  '✓'] },
+        { id: 'r5', label: 'Price',              values: ['$99', '$199', '$399'] },
+      ],
+    }),
+  },
+  blog: {
+    label: 'Blog / posts',
+    icon: 'Doc',
+    desc: 'Recent posts strip — title + excerpt + link',
+    default: () => ({
+      headline: 'Latest writing',
+      sub: '',
+      posts: [
+        { id: 'p1', title: 'How I think about pricing', excerpt: 'A short snippet that previews the post.', url: '#',        date: '2026-04-12' },
+        { id: 'p2', title: 'The 3 questions I ask',     excerpt: 'A short snippet that previews the post.', url: '#',        date: '2026-03-28' },
+        { id: 'p3', title: 'My intake process, refined', excerpt: 'A short snippet that previews the post.', url: '#',       date: '2026-03-01' },
+      ],
+    }),
+  },
+  instagram: {
+    label: 'Instagram',
+    icon: 'Image',
+    desc: 'Instagram embed (single post or profile)',
+    default: () => ({
+      headline: 'Follow along',
+      sub: '',
+      url: '',  // https://www.instagram.com/p/<id>/  OR  /<handle>/
+    }),
+  },
+  code_snippet: {
+    label: 'Code / pre-formatted',
+    icon: 'Doc',
+    desc: 'Monospace code block (e.g. API examples, recipes, configs)',
+    default: () => ({
+      headline: '',
+      language: 'plain',
+      code: '// paste code here',
+    }),
+  },
 };
 
 export const SECTION_LIST = Object.entries(SECTION_TYPES).map(([type, cfg]) => ({ type, ...cfg }));
@@ -216,11 +267,36 @@ export function mkSection(type, businessName = '') {
     // Optional fields the editor sets to customize this instance:
     //   variant — which layout to use (one of cfg.variants[].id)
     //   style   — { background?, padding?, textAlign? } per-section overrides
+    //   animate — entry animation key (one of ANIMATIONS) or null
     variant: cfg.variants?.[0]?.id || null,
     style: {},
+    animate: null,
     data: cfg.default(businessName),
   };
 }
+
+// Available section entry animations. The renderer attaches a CSS class
+// + a sentinel that the IntersectionObserver upgrades when the section
+// scrolls into view.
+export const ANIMATIONS = {
+  fade:        { label: 'Fade in' },
+  rise:        { label: 'Fade up' },
+  slide_left:  { label: 'Slide from left' },
+  slide_right: { label: 'Slide from right' },
+  zoom:        { label: 'Subtle zoom' },
+};
+
+// Font-pair presets — owners can override the template's defaults.
+// Each preset names the display + body fonts; the renderer maps them
+// into the --site-font-display / --site-font-body CSS variables.
+export const FONT_PAIRS = {
+  fraunces_inter:     { label: 'Fraunces + Inter (classic serif + clean sans)',  display: "'Fraunces', Georgia, serif",        body: "'Inter', -apple-system, sans-serif" },
+  space_inter:        { label: 'Space Grotesk + Inter (modern editorial)',       display: "'Space Grotesk', 'Inter', sans-serif", body: "'Inter', sans-serif" },
+  fraunces_fraunces:  { label: 'Fraunces only (all-serif magazine)',             display: "'Fraunces', Georgia, serif",        body: "'Fraunces', Georgia, serif" },
+  inter_inter:        { label: 'Inter only (utilitarian)',                       display: "'Inter', sans-serif",               body: "'Inter', sans-serif" },
+  playfair_lato:      { label: 'Playfair Display + Lato (luxury feel)',          display: "'Playfair Display', Georgia, serif", body: "'Lato', -apple-system, sans-serif" },
+  dm_serif_dm_sans:   { label: 'DM Serif + DM Sans (matched display + sans)',    display: "'DM Serif Display', Georgia, serif", body: "'DM Sans', -apple-system, sans-serif" },
+};
 
 // Style densities for the per-section padding control. Editor exposes
 // these as a 3-way pill picker.

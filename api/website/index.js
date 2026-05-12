@@ -1,6 +1,15 @@
 // /api/website
 //   GET  → current user's website row (creates if missing)
 //   PUT  → upsert (partial) the website row; rejects duplicate handle
+//
+// New schema fields surfaced here:
+//   • pages       — array of page objects (multi-page sites)
+//   • customCss   — owner-supplied CSS injected into the rendered site
+//   • fontPair    — preset id overriding the template's font choice
+//
+// `sections` (legacy single-page) and `pages` (multi-page) coexist for
+// backward compat. If `pages` is empty, the renderer treats `sections`
+// as the home page. New sites populate `pages` from day 1.
 
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
@@ -8,8 +17,16 @@ import { readBody } from '../_lib/body.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 
-const ALLOWED_TEMPLATES = new Set(['clean', 'warm', 'bold']);
+const ALLOWED_TEMPLATES = new Set([
+  'clean', 'warm', 'bold',
+  'studio', 'wellness', 'editorial', 'mono', 'sunset', 'forest',
+]);
+const ALLOWED_FONT_PAIRS = new Set([
+  'fraunces_inter', 'space_inter', 'fraunces_fraunces',
+  'inter_inter', 'playfair_lato', 'dm_serif_dm_sans',
+]);
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
+const SLUG_RE   = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 
 function serialize(row) {
   if (!row) return null;
@@ -19,6 +36,9 @@ function serialize(row) {
     businessName:  row.business_name,
     template:      row.template,
     sections:      row.sections || [],
+    pages:         Array.isArray(row.pages) ? row.pages : [],
+    customCss:     row.custom_css || '',
+    fontPair:      row.font_pair || null,
     customDomain:  row.custom_domain,
     launched:      row.launched,
     visibility:    row.visibility || 'public',
@@ -34,6 +54,19 @@ async function getOrCreate(workspaceId) {
     INSERT INTO websites (workspace_id) VALUES (${workspaceId}) RETURNING *
   `;
   return created.rows[0];
+}
+
+// Validate + sanitize a single page object. Rejects entries that don't
+// match the shape so we don't persist arbitrary JSON.
+function sanitizePage(p, idx) {
+  if (!p || typeof p !== 'object') throw new Error(`Page ${idx + 1} is malformed`);
+  const id = String(p.id || '').slice(0, 64) || `p_${Date.now().toString(36)}_${idx}`;
+  // Empty slug is the home page; otherwise must match SLUG_RE.
+  const slug = p.slug === '' ? '' : String(p.slug || '').toLowerCase().slice(0, 40);
+  if (slug !== '' && !SLUG_RE.test(slug)) throw new Error(`Page ${idx + 1}: invalid slug`);
+  const title = String(p.title || 'Untitled').slice(0, 120);
+  const sections = Array.isArray(p.sections) ? p.sections : [];
+  return { id, slug, title, sections, inNav: p.inNav !== false };
 }
 
 export default async function handler(req, res) {
@@ -64,9 +97,35 @@ export default async function handler(req, res) {
         if (!ALLOWED_TEMPLATES.has(body.template)) return badRequest(res, 'Unknown template');
         patch.template = body.template;
       }
+      if ('fontPair' in body) {
+        if (body.fontPair == null) patch.fontPair = null;
+        else if (!ALLOWED_FONT_PAIRS.has(body.fontPair)) {
+          return badRequest(res, 'Unknown font pair');
+        } else {
+          patch.fontPair = body.fontPair;
+        }
+      }
+      if ('customCss' in body) {
+        const css = body.customCss == null ? null : String(body.customCss).slice(0, 32000);
+        patch.customCss = css;
+      }
       if ('sections' in body) {
         if (!Array.isArray(body.sections)) return badRequest(res, 'sections must be an array');
         patch.sections = body.sections;
+      }
+      if ('pages' in body) {
+        if (!Array.isArray(body.pages)) return badRequest(res, 'pages must be an array');
+        if (body.pages.length > 50) return badRequest(res, 'Up to 50 pages per site');
+        try {
+          patch.pages = body.pages.map(sanitizePage);
+          // Slug uniqueness across pages.
+          const slugs = patch.pages.map((p) => p.slug);
+          if (new Set(slugs).size !== slugs.length) {
+            return badRequest(res, 'Page slugs must be unique');
+          }
+        } catch (e) {
+          return badRequest(res, e.message);
+        }
       }
       if ('customDomain' in body) patch.customDomain = body.customDomain ? String(body.customDomain).slice(0, 255) : null;
       if ('launched' in body) patch.launched = !!body.launched;
@@ -93,7 +152,10 @@ export default async function handler(req, res) {
           handle         = COALESCE(${patch.handle ?? null},         handle),
           business_name  = COALESCE(${patch.businessName ?? null},   business_name),
           template       = COALESCE(${patch.template ?? null},       template),
+          font_pair      = COALESCE(${patch.fontPair ?? null},       font_pair),
+          custom_css     = COALESCE(${patch.customCss ?? null},      custom_css),
           sections       = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
+          pages          = COALESCE(${JSON.stringify(patch.pages ?? null)}::jsonb,    pages),
           custom_domain  = COALESCE(${patch.customDomain ?? null},   custom_domain),
           launched       = COALESCE(${patch.launched ?? null},       launched),
           visibility     = COALESCE(${patch.visibility ?? null},     visibility),

@@ -68,6 +68,23 @@ CREATE TABLE IF NOT EXISTS websites (
 );
 CREATE INDEX IF NOT EXISTS idx_websites_handle ON websites(handle);
 
+-- Multi-page sites + customization.
+--
+-- pages: ordered JSONB array of page objects. Each entry has:
+--   id, slug, title, sections (array), in_nav (bool)
+-- The legacy sections column above holds the HOME pages sections when
+-- pages is empty (backward compat for sites that have not migrated).
+-- New sites populate pages from day one with the home page having
+-- slug = empty string (i.e. the root URL).
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS pages JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Owner-supplied CSS injected into the rendered site. The public
+-- renderer wraps it in a style tag inside the var()-themed site shell
+-- so it scopes naturally to within the site wrapper.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS custom_css TEXT;
+-- Optional font-pair override that takes precedence over the template's
+-- font choices. Stored as a preset id; renderer maps to actual fonts.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS font_pair TEXT;
+
 CREATE TABLE IF NOT EXISTS rate_limits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key TEXT NOT NULL,

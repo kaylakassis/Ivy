@@ -9,7 +9,7 @@
 //
 // The wrapper here applies the style overrides as a thin shell around
 // whatever the per-section renderer outputs — keeps the renderers focused.
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
 
@@ -26,8 +26,50 @@ export default function SectionRenderer({ section, handle }) {
   const rendered = (
     <Comp data={section.data} handle={handle} variant={section.variant}/>
   );
-  return hasOverride ? <div style={wrapperStyle}>{rendered}</div> : rendered;
+  const inner = hasOverride ? <div style={wrapperStyle}>{rendered}</div> : rendered;
+  return section.animate ? <AnimateOnView animate={section.animate}>{inner}</AnimateOnView> : inner;
 }
+
+// Wraps a section in a div that fades / slides in when scrolled into
+// view. Uses IntersectionObserver once per mount; the section stays
+// in its visible state after the first reveal so scroll-up doesn't
+// re-trigger the animation.
+function AnimateOnView({ animate, children }) {
+  const ref = useRef(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof IntersectionObserver === 'undefined') {
+      setVisible(true);
+      return;
+    }
+    const io = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.isIntersecting) {
+          setVisible(true);
+          io.disconnect();
+          break;
+        }
+      }
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+
+  const off = ANIMATION_OFFSCREEN[animate] || ANIMATION_OFFSCREEN.fade;
+  const styleNow = visible
+    ? { opacity: 1, transform: 'none', transition: 'opacity 0.7s ease, transform 0.7s ease' }
+    : { ...off, transition: 'opacity 0.7s ease, transform 0.7s ease' };
+  return <div ref={ref} style={styleNow}>{children}</div>;
+}
+
+const ANIMATION_OFFSCREEN = {
+  fade:        { opacity: 0, transform: 'none' },
+  rise:        { opacity: 0, transform: 'translateY(28px)' },
+  slide_left:  { opacity: 0, transform: 'translateX(-32px)' },
+  slide_right: { opacity: 0, transform: 'translateX(32px)' },
+  zoom:        { opacity: 0, transform: 'scale(0.97)' },
+};
 
 const container = {
   padding: '80px 64px',
@@ -808,6 +850,181 @@ function Logos({ data }) {
   );
 }
 
+// ---------- Pricing comparison table ----------
+function PricingTable({ data }) {
+  const tiers = data.tiers || [];
+  const rows  = data.rows || [];
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={container}>
+        <Heading text={data.headline} sub={data.sub}/>
+        <div style={{
+          marginTop: 36, overflowX: 'auto',
+          borderRadius: 'var(--site-radius)',
+          border: '1px solid var(--site-border)',
+        }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', minWidth: 540 }}>
+            <thead>
+              <tr style={{ background: 'var(--site-surface)' }}>
+                <th style={{ padding: '16px 20px', textAlign: 'left', fontWeight: 500, fontSize: 13, color: 'var(--site-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                  &nbsp;
+                </th>
+                {tiers.map((t) => (
+                  <th key={t} style={{
+                    padding: '16px 20px', textAlign: 'center',
+                    fontFamily: 'var(--site-font-display)',
+                    fontSize: 18, fontWeight: 550,
+                  }}>{t}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr key={r.id} style={{ borderTop: '1px solid var(--site-border)' }}>
+                  <td style={{ padding: '14px 20px', fontSize: 14, color: 'var(--site-fg-2)' }}>{r.label}</td>
+                  {(r.values || []).map((v, i) => (
+                    <td key={i} style={{
+                      padding: '14px 20px', textAlign: 'center',
+                      fontSize: 14, color: v ? 'var(--site-fg)' : 'var(--site-muted)',
+                    }}>{v || '—'}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Blog / posts strip ----------
+function Blog({ data }) {
+  const posts = data.posts || [];
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={container}>
+        <Heading text={data.headline} sub={data.sub}/>
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, posts.length || 1))}, 1fr)`,
+          gap: 24, marginTop: 40,
+        }}>
+          {posts.map((p) => (
+            <a key={p.id} href={p.url || '#'} style={{
+              textDecoration: 'none', color: 'inherit',
+              padding: 24,
+              background: 'var(--site-surface)',
+              border: '1px solid var(--site-border)',
+              borderRadius: 'var(--site-radius)',
+              display: 'flex', flexDirection: 'column', gap: 12,
+            }}>
+              {p.date && (
+                <div style={{ fontSize: 11.5, color: 'var(--site-muted)', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+                  {fmtDate(p.date)}
+                </div>
+              )}
+              <div style={{
+                fontFamily: 'var(--site-font-display)', fontSize: 22, fontWeight: 500,
+                letterSpacing: '-0.015em', lineHeight: 1.2,
+              }}>{p.title}</div>
+              {p.excerpt && (
+                <p style={{ margin: 0, fontSize: 14, color: 'var(--site-fg-2)', lineHeight: 1.55 }}>
+                  {p.excerpt}
+                </p>
+              )}
+              <span style={{ fontSize: 13, color: 'var(--site-accent)', marginTop: 4 }}>Read →</span>
+            </a>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function fmtDate(iso) {
+  if (!iso) return '';
+  try {
+    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return iso; }
+}
+
+// ---------- Instagram embed ----------
+function Instagram({ data }) {
+  // We use Instagram's official oEmbed-style iframe pattern. The URL
+  // can be a post (/p/<id>/) or a reel (/reel/<id>/). For a profile
+  // link, we fall back to a "View on Instagram" CTA card since IG
+  // doesn't allow embedding profile feeds without their JS SDK.
+  const url = String(data.url || '').trim();
+  const isPost = /\/(p|reel)\//.test(url);
+  const embed = isPost ? `${url.replace(/\/$/, '')}/embed` : null;
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={{ ...container, maxWidth: 560, textAlign: 'center' }}>
+        {data.headline && <Heading text={data.headline} sub={data.sub}/>}
+        <div style={{ marginTop: data.headline ? 32 : 0 }}>
+          {embed ? (
+            <iframe src={embed} title="Instagram embed" style={{
+              width: '100%', maxWidth: 540, minHeight: 600, border: 0,
+              borderRadius: 'var(--site-radius)',
+              background: 'var(--site-surface)',
+            }} allowFullScreen scrolling="no"/>
+          ) : url ? (
+            <a href={url} target="_blank" rel="noreferrer" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 8,
+              padding: '14px 22px',
+              background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
+              borderRadius: 'var(--site-radius)', textDecoration: 'none', fontWeight: 600,
+            }}>
+              View on Instagram →
+            </a>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--site-muted)' }}>
+              Paste an Instagram post or reel URL in the Inspector.
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Code / pre-formatted block ----------
+function CodeSnippet({ data }) {
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={container}>
+        {data.headline && <Heading text={data.headline}/>}
+        <div style={{
+          marginTop: data.headline ? 24 : 0,
+          background: '#0E1116',
+          border: '1px solid var(--site-border)',
+          borderRadius: 'var(--site-radius)',
+          padding: 0, overflow: 'hidden',
+        }}>
+          {data.language && (
+            <div style={{
+              padding: '8px 18px',
+              background: 'rgba(255,255,255,0.04)',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              fontSize: 11, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
+              color: '#9EA9B5', textTransform: 'lowercase', letterSpacing: '0.05em',
+            }}>{data.language}</div>
+          )}
+          <pre style={{
+            margin: 0, padding: 20,
+            color: '#D1D8DF',
+            fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+            fontSize: 13, lineHeight: 1.55,
+            overflowX: 'auto',
+            whiteSpace: 'pre',
+          }}>{data.code || ''}</pre>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 const RENDERERS = {
   hero: Hero,
   services: Services,
@@ -825,4 +1042,8 @@ const RENDERERS = {
   newsletter: Newsletter,
   video: Video,
   logos: Logos,
+  pricing_table: PricingTable,
+  blog: Blog,
+  instagram: Instagram,
+  code_snippet: CodeSnippet,
 };

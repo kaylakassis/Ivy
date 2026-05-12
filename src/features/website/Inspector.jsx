@@ -1,9 +1,10 @@
 // Right-panel inspector — edits the currently selected section.
-import React from 'react';
+import React, { useState } from 'react';
+import { upload } from '@vercel/blob/client';
 import { Icons } from '../../components/Icons.jsx';
-import { SECTION_TYPES } from './sections.js';
+import { SECTION_TYPES, ANIMATIONS } from './sections.js';
 
-export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDelete, onToggleVisible, mobile = false }) {
+export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDuplicate, onDelete, onToggleVisible, mobile = false }) {
   if (!section) {
     return (
       <Shell title="Inspector" mobile={mobile}>
@@ -31,6 +32,11 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
         <IconBtn onClick={onToggleVisible} title={section.visible ? 'Hide section' : 'Show section'}>
           <Icons.Eye size={14} />
         </IconBtn>
+        {onDuplicate && (
+          <IconBtn onClick={onDuplicate} title="Duplicate section">
+            <Icons.Plus size={14} />
+          </IconBtn>
+        )}
         <div style={{ flex: 1 }} />
         <IconBtn onClick={onDelete} title="Delete section" danger>
           <Icons.Trash size={14} />
@@ -52,8 +58,85 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
         <Editor data={section.data} update={update} />
         <Divider/>
         <StyleControls style={section.style || {}} updateStyle={updateStyle}/>
+        <Divider/>
+        <AnimationPicker animate={section.animate || ''} onChange={(animate) => onChange({ animate: animate || null })}/>
       </div>
     </Shell>
+  );
+}
+
+function AnimationPicker({ animate, onChange }) {
+  return (
+    <FieldBlock label="Entry animation (when this section scrolls into view)">
+      <select value={animate || ''} onChange={(e) => onChange(e.target.value)}
+        style={inputS}>
+        <option value="">None</option>
+        {Object.entries(ANIMATIONS).map(([id, cfg]) => (
+          <option key={id} value={id}>{cfg.label}</option>
+        ))}
+      </select>
+    </FieldBlock>
+  );
+}
+
+// Reusable image-URL field with a "Browse / upload" button that pushes
+// to Vercel Blob via the existing /api/clients/upload-token endpoint
+// (image-only allowlist enforced server-side). Used by Inspector
+// section editors that need image fields.
+export function ImageInput({ value, onChange, placeholder = 'https://… or upload' }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+  const inputId = `img-up-${Math.random().toString(36).slice(2, 8)}`;
+
+  const onPick = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBusy(true); setErr(null);
+    try {
+      const result = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/clients/upload-token',
+        contentType: file.type,
+      });
+      onChange(result.url);
+    } catch (e2) {
+      setErr(e2.message || 'Upload failed');
+    } finally {
+      setBusy(false);
+      e.target.value = '';  // allow re-picking the same file
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input type="url" value={value || ''}
+          onChange={(e) => onChange(e.target.value)}
+          placeholder={placeholder} style={{ ...inputS, flex: 1 }}/>
+        <label htmlFor={inputId} style={{
+          display: 'inline-flex', alignItems: 'center', gap: 4,
+          padding: '8px 12px', fontSize: 12,
+          border: '1px solid var(--border-strong)',
+          background: 'var(--surface-2)', color: 'var(--fg)',
+          borderRadius: 'var(--radius-sm, 10px)',
+          cursor: busy ? 'wait' : 'pointer',
+          opacity: busy ? 0.6 : 1,
+        }}>
+          {busy ? '…' : 'Upload'}
+        </label>
+        <input id={inputId} type="file" accept="image/*"
+          onChange={onPick} disabled={busy}
+          style={{ display: 'none' }}/>
+      </div>
+      {value && (
+        <div style={{
+          aspectRatio: '16 / 9', borderRadius: 6,
+          background: `center/cover no-repeat url("${value}"), var(--surface-2)`,
+          border: '1px solid var(--border)',
+        }}/>
+      )}
+      {err && <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>}
+    </div>
   );
 }
 
@@ -298,7 +381,7 @@ const EDITORS = {
     <>
       <Row label="Headline"><TextInput value={data.headline} onChange={(e) => update({ headline: e.target.value })} /></Row>
       <Row label="Body"><TextArea rows={6} value={data.body} onChange={(e) => update({ body: e.target.value })} /></Row>
-      <Row label="Photo URL (optional)"><TextInput value={data.imgUrl} placeholder="https://…" onChange={(e) => update({ imgUrl: e.target.value })} /></Row>
+      <Row label="Photo"><ImageInput value={data.imgUrl} onChange={(v) => update({ imgUrl: v })} placeholder="Paste URL or upload"/></Row>
     </>
   ),
 

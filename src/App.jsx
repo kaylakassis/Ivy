@@ -129,7 +129,8 @@ export default function App() {
 
         {/* Public */}
         <Route path="/book/:slug"      element={<PublicBooking />} />
-        <Route path="/site/:handle"    element={<PublicSite />} />
+        <Route path="/site/:handle"        element={<PublicSite />} />
+        <Route path="/site/:handle/:slug"  element={<PublicSite />} />
         <Route path="/sign/:token"     element={<SignPage />} />
         <Route path="/invoice/:token"  element={<PublicInvoice />} />
         <Route path="/quote/:token"    element={<PublicQuote />} />

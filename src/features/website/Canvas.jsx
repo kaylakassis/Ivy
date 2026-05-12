@@ -3,21 +3,23 @@
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import SectionRenderer from './SectionRenderer.jsx';
 import { TEMPLATES } from './templates.js';
+import { FONT_PAIRS } from './sections.js';
 
 const DEVICE_WIDTHS = { desktop: 1200, tablet: 768, mobile: 390 };
 
-export default function Canvas({ site, selectedId, onSelect, device = 'desktop', previewMode = false }) {
+export default function Canvas({ site, sections, selectedId, onSelect, device = 'desktop', previewMode = false }) {
   const tpl = TEMPLATES[site.template] || TEMPLATES.clean;
   const width = DEVICE_WIDTHS[device] || DEVICE_WIDTHS.desktop;
+  // Editor passes the current-page's sections in; fall back to legacy
+  // site.sections for single-page sites that pre-date the multi-page
+  // migration.
+  const sourceSections = Array.isArray(sections) ? sections : (site.sections || []);
 
   const wrapRef  = useRef(null);
   const innerRef = useRef(null);
   const [scale, setScale] = useState(1);
   const [innerH, setInnerH] = useState(0);
 
-  // Fit the scaled preview to the available canvas width, then measure
-  // the inner content so the outer wrapper reserves the correct height
-  // (transform: scale alone doesn't reduce the element's box in layout).
   useEffect(() => {
     if (!wrapRef.current || !innerRef.current) return;
     const update = () => {
@@ -32,10 +34,20 @@ export default function Canvas({ site, selectedId, onSelect, device = 'desktop',
     ro.observe(innerRef.current);
     window.addEventListener('resize', update);
     return () => { ro.disconnect(); window.removeEventListener('resize', update); };
-  }, [width, site.sections, site.template]);
+  }, [width, sourceSections, site.template, site.fontPair, site.customCss]);
 
-  const tplStyle = useMemo(() => tpl.vars, [tpl]);
-  const visibleSections = site.sections.filter((s) => s.visible);
+  // Build CSS-var bag: template defaults first, font-pair override
+  // on top (so a font_pair preset wins over the template's fonts).
+  const tplStyle = useMemo(() => {
+    const vars = { ...tpl.vars };
+    const fp = site.fontPair && FONT_PAIRS[site.fontPair];
+    if (fp) {
+      vars['--site-font-display'] = fp.display;
+      vars['--site-font-body']    = fp.body;
+    }
+    return vars;
+  }, [tpl, site.fontPair]);
+  const visibleSections = sourceSections.filter((s) => s.visible);
 
   return (
     <div
@@ -91,6 +103,10 @@ export default function Canvas({ site, selectedId, onSelect, device = 'desktop',
                 />
               ))
             )}
+            {/* Owner-supplied CSS — wraps the rendered tree so styles
+                scope naturally to within the site shell. Empty when no
+                customCss is set. */}
+            {site.customCss && <style>{site.customCss}</style>}
           </div>
         </div>
       </div>
