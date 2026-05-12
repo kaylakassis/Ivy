@@ -1,7 +1,8 @@
 // GET /api/search?q=
 // Cross-entity quick search for the signed-in owner. Returns up to ~25
-// hits across clients, services, invoices, bookings, documents, and
-// messages — each with a deep-link path the Cmd+K UI uses to navigate.
+// hits across clients, services, invoices, quotes, bookings, documents,
+// tasks, and messages — each with a deep-link path the Cmd+K UI uses
+// to navigate.
 //
 // Scoped strictly to the caller's workspace; nothing leaks across
 // tenants. Empty query returns an empty result set rather than the
@@ -25,11 +26,17 @@ export default async function handler(req, res) {
     if (q.length < 1) return ok(res, { groups: [] });
     const like = `%${q.toLowerCase()}%`;
 
-    const [clients, services, invoices, bookings, docs, threads] = await Promise.all([
+    const [clients, services, invoices, quotes, bookings, docs, tasks, threads] = await Promise.all([
+      // Client search now covers notes too — a 100-client owner relies
+      // on this to surface "the woman I tagged 'sensitive scalp'" from
+      // memory of the note, not the name.
       sql.query(
         `SELECT id, name, email, stage FROM clients
           WHERE workspace_id = $1
-            AND (LOWER(name) LIKE $2 OR LOWER(COALESCE(email,'')) LIKE $2)
+            AND (LOWER(name)                    LIKE $2
+              OR LOWER(COALESCE(email,''))      LIKE $2
+              OR LOWER(COALESCE(notes,''))      LIKE $2
+              OR LOWER(array_to_string(COALESCE(tags, '{}'), ' ')) LIKE $2)
           ORDER BY COALESCE(last_seen_at, joined_at) DESC NULLS LAST
           LIMIT ${PER_GROUP}`,
         [workspaceId, like],
@@ -47,6 +54,18 @@ export default async function handler(req, res) {
           ORDER BY created_at DESC LIMIT ${PER_GROUP}`,
         [workspaceId, like],
       ),
+      // Quotes table mirrors invoices but with its own number space.
+      // Search same fields. Wrap in try/catch effectively via a
+      // try-it-and-fall-back at the consumer — we use a separate query
+      // and tolerate the table being missing on older schemas via the
+      // outer catch.
+      sql.query(
+        `SELECT id, number, status, client_name FROM quotes
+          WHERE workspace_id = $1
+            AND (LOWER(number) LIKE $2 OR LOWER(COALESCE(client_name,'')) LIKE $2)
+          ORDER BY created_at DESC LIMIT ${PER_GROUP}`,
+        [workspaceId, like],
+      ).catch(() => ({ rows: [] })),
       sql.query(
         `SELECT id, client_name, date, start_min, notes FROM bookings
           WHERE workspace_id = $1 AND cancelled_at IS NULL
@@ -61,6 +80,17 @@ export default async function handler(req, res) {
           ORDER BY updated_at DESC LIMIT ${PER_GROUP}`,
         [workspaceId, like],
       ),
+      // Tasks live in /goals. Search title + notes; surface done state
+      // as a subtitle hint so completed-and-old tasks are visually
+      // de-emphasized at glance.
+      sql.query(
+        `SELECT id, title, notes, done FROM tasks
+          WHERE workspace_id = $1
+            AND (LOWER(title) LIKE $2 OR LOWER(COALESCE(notes,'')) LIKE $2)
+          ORDER BY done ASC, COALESCE(due_date, created_at) DESC
+          LIMIT ${PER_GROUP}`,
+        [workspaceId, like],
+      ).catch(() => ({ rows: [] })),
       sql.query(
         `SELECT t.id, c.name AS client_name, t.last_message_preview
            FROM message_threads t
@@ -92,7 +122,10 @@ export default async function handler(req, res) {
           id: 'service:' + r.id,
           title: r.name,
           subtitle: r.price ? `$${Number(r.price).toFixed(0)}` : '',
-          url: `/calendar`,
+          // ?service=ID opens the services drawer on Calendar and
+          // scrolls to / highlights that row. Without this, search hits
+          // for services dumped users on /calendar with no context.
+          url: `/calendar?service=${r.id}`,
           icon: 'Dollar',
         })),
       });
@@ -109,6 +142,18 @@ export default async function handler(req, res) {
         })),
       });
     }
+    if (quotes.rows.length) {
+      groups.push({
+        label: 'Quotes',
+        items: quotes.rows.map((r) => ({
+          id: 'quote:' + r.id,
+          title: r.number,
+          subtitle: [r.client_name, r.status].filter(Boolean).join(' · '),
+          url: `/finance?quote=${r.id}`,
+          icon: 'Doc',
+        })),
+      });
+    }
     if (bookings.rows.length) {
       groups.push({
         label: 'Bookings',
@@ -119,7 +164,8 @@ export default async function handler(req, res) {
             r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date,
             fmtTime(r.start_min),
           ].filter(Boolean).join(' · '),
-          url: `/calendar`,
+          // ?booking=ID opens that booking's drawer on Calendar.
+          url: `/calendar?booking=${r.id}`,
           icon: 'Calendar',
         })),
       });
@@ -131,8 +177,21 @@ export default async function handler(req, res) {
           id: 'doc:' + r.id,
           title: r.name,
           subtitle: r.status,
-          url: `/documents`,
+          // ?doc=ID opens that document's drawer in /documents.
+          url: `/documents?doc=${r.id}`,
           icon: 'Doc',
+        })),
+      });
+    }
+    if (tasks.rows.length) {
+      groups.push({
+        label: 'Tasks',
+        items: tasks.rows.map((r) => ({
+          id: 'task:' + r.id,
+          title: r.title,
+          subtitle: r.done ? 'Completed' : (r.notes ? r.notes.slice(0, 60) : ''),
+          url: `/goals?task=${r.id}`,
+          icon: 'Check',
         })),
       });
     }

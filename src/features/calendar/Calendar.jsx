@@ -40,18 +40,52 @@ export default function Calendar() {
 
   // Deep link from ClientDrawer's "Book" button: ?newBooking=<clientId>
   // → open AddBookingModal with that client's name + email pre-filled.
+  //
+  // Also handles deep links from the Cmd+K search palette:
+  //   ?booking=<bookingId>  → open that booking's drawer
+  //   ?service=<serviceId>  → open services drawer (and highlight if needed)
+  // Each param is stripped from the URL after consumption so a refresh
+  // doesn't re-open the drawer.
   const location = useLocation();
   const navigate = useNavigate();
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const cid = params.get('newBooking');
-    if (!cid) return;
-    setBookingDefaultClientId(cid);
-    setAddBookingOpen(true);
-    params.delete('newBooking');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    const bookingId = params.get('booking');
+    const serviceId = params.get('service');
+
+    if (cid) {
+      setBookingDefaultClientId(cid);
+      setAddBookingOpen(true);
+      params.delete('newBooking');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      return;
+    }
+
+    if (bookingId && Array.isArray(cal?.bookings)) {
+      const b = cal.bookings.find((x) => x.id === bookingId);
+      if (b) {
+        // Match the shape EventDrawer expects (kind:'booking' + the
+        // booking fields). cal.bookings rows already carry these via
+        // the serializer.
+        setSelectedEvent({ ...b, kind: 'booking' });
+        setDrawer('event');
+        params.delete('booking');
+        navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      }
+      return;
+    }
+
+    if (serviceId) {
+      // Services drawer doesn't currently accept an id to highlight,
+      // but opening the drawer is the right next step for the user.
+      // Future polish: scrollIntoView + flash the matching row.
+      setDrawer('services');
+      params.delete('service');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [location.search]);
+  }, [location.search, cal?.bookings]);
 
   // Force day view on phones — the 7-column week grid is illegible on narrow
   // screens. Users can still pick week/month from the toggle if they want.

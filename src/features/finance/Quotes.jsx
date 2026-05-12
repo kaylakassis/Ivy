@@ -3,6 +3,7 @@
 // with a different lifecycle (draft → sent → accepted/declined →
 // optional auto-invoice).
 import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
@@ -36,6 +37,23 @@ export default function Quotes() {
     refresh().catch((e) => live && setError(e));
     return () => { live = false; };
   }, []);
+
+  // Cmd+K palette deep-link: /finance?quote=<id> → open that quote
+  // for edit. Requires the list to be loaded so we can find the row.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const quoteId = params.get('quote');
+    if (!quoteId || !Array.isArray(quotes)) return;
+    const found = quotes.find((q) => q.id === quoteId);
+    if (found) {
+      setEditing(found);
+      params.delete('quote');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, quotes]);
 
   if (quotes === null && !error) {
     return <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13 }}>Loading estimates…</div>;

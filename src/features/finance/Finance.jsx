@@ -82,17 +82,39 @@ export default function Finance() {
   // Deep link from ClientDrawer's Invoice button: ?newInvoice=<clientId>
   // → create a fresh draft for that client and open the editor. Strip
   // the param so a refresh doesn't re-create.
+  //
+  // Cmd+K palette deep-links:
+  //   /finance?invoice=<id> → open invoice for read/edit
+  //   /finance?quote=<id>   → switch to Quotes tab + open that quote
   const location = useLocation();
   const navigate = useNavigate();
   const consumedRef = useRef(false);
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const cid = params.get('newInvoice');
-    if (!cid || consumedRef.current) return;
-    consumedRef.current = true;
-    params.delete('newInvoice');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-    startNew(cid);
+    const invoiceId = params.get('invoice');
+    const quoteId   = params.get('quote');
+
+    if (cid && !consumedRef.current) {
+      consumedRef.current = true;
+      params.delete('newInvoice');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      startNew(cid);
+      return;
+    }
+    if (invoiceId) {
+      setOpenId(invoiceId);
+      params.delete('invoice');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      return;
+    }
+    if (quoteId) {
+      // Setting the tab + selected-id pair belongs in a quotes hook
+      // when one exists. For now, route to /finance with the Quotes
+      // tab; the QuotesPanel reads ?quote on its own.
+      setTab('quotes');
+      // Leave ?quote in the URL — QuotesPanel will consume + strip it.
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 

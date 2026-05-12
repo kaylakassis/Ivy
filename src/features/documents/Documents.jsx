@@ -1,5 +1,6 @@
 // Documents list view: header, status tabs, table, editor drawer + send modal.
 import React, { useState, useMemo, useEffect } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
@@ -22,6 +23,21 @@ export default function Documents() {
   const [openId, setOpenId]         = useState(null);
   const [creatingOpen, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
+
+  // Cmd+K palette deep-link: /documents?doc=<id> opens that document's
+  // editor. Param is stripped after consumption so a refresh doesn't
+  // re-open the drawer on a doc the user already closed.
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const docId = params.get('doc');
+    if (!docId) return;
+    setOpenId(docId);
+    params.delete('doc');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search]);
 
   const counts = useMemo(() => ({
     all:       documents.length,
