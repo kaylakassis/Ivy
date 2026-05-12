@@ -346,6 +346,8 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
         Anyone with the link can see your available slots and book — they can't see your other
         bookings, clients, or notes.
       </div>
+
+      {isPublished && <EmbedSnippets slug={savedSlug}/>}
     </Drawer>
   );
 }
@@ -397,5 +399,70 @@ function LinkTest({ slug }) {
         {state.kind === 'error'   && <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{state.status ? `${state.status}: ` : ''}{state.text}</span>}
       </div>
     </>
+  );
+}
+
+// Embed snippets — copyable <script> tags owners drop onto their own
+// website to render a THRYVE booking widget or contact form. The
+// script's loader lives at /embed.js (in public/); the inner page is
+// our /embed/book/:slug or /embed/contact/:slug route. Auto-sized via
+// postMessage so the host never has to set a fixed iframe height.
+function EmbedSnippets({ slug }) {
+  const origin = (typeof window !== 'undefined' && window.location)
+    ? window.location.origin : 'https://getthryve.ai';
+  const bookSnippet = `<script async src="${origin}/embed.js" data-thryve="book" data-slug="${slug}"></script>`;
+  const contactSnippet = `<script async src="${origin}/embed.js" data-thryve="contact" data-slug="${slug}"></script>`;
+  const [tab, setTab] = useState('book'); // 'book' | 'contact'
+  const [copied, setCopied] = useState(false);
+
+  const current = tab === 'book' ? bookSnippet : contactSnippet;
+  const copy = () => {
+    if (!navigator?.clipboard) return;
+    navigator.clipboard.writeText(current).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1400);
+    });
+  };
+
+  return (
+    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
+      <div>
+        <div style={{ fontSize: 13.5, fontWeight: 600 }}>Embed on your existing website</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.5 }}>
+          One-line snippet — drops a booking widget or a lead-capture form
+          right into your Squarespace / Wix / WordPress / Instagram-link page.
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6 }}>
+        <button onClick={() => setTab('book')}
+          className={`btn ${tab === 'book' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '5px 12px', fontSize: 12.5 }}>
+          Booking widget
+        </button>
+        <button onClick={() => setTab('contact')}
+          className={`btn ${tab === 'contact' ? 'btn-primary' : 'btn-outline'}`}
+          style={{ padding: '5px 12px', fontSize: 12.5 }}>
+          Lead form
+        </button>
+      </div>
+
+      <pre style={{
+        margin: 0, padding: '10px 12px',
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        borderRadius: 8, fontSize: 11.5, lineHeight: 1.55,
+        fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace',
+        whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: 'var(--fg-2)',
+      }}>{current}</pre>
+
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+        <button onClick={copy} className="btn btn-outline" style={{ padding: '6px 12px', fontSize: 12.5 }}>
+          {copied ? <><Icons.Check size={12} sw={2.4}/> Copied</> : <><Icons.Copy size={12}/> Copy snippet</>}
+        </button>
+        <span style={{ fontSize: 11, color: 'var(--muted)' }}>
+          Paste anywhere HTML is allowed. Iframe auto-resizes to fit.
+        </span>
+      </div>
+    </div>
   );
 }

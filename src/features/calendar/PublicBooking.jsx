@@ -1,18 +1,27 @@
 // /book/:slug — public booking page. Reads sanitized state from /api/calendar/public/:slug,
 // posts to /api/calendar/public/:slug/book to confirm.
+//
+// Also rendered as /embed/book/:slug with embedded=true. In embed mode
+// we shrink chrome (no marketing header, no reviews block, no
+// memberships banner), use transparent background, and post our
+// rendered height to the parent window for iframe auto-sizing.
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
+import { useEmbedResize } from '../../lib/embedResize.js';
 import {
   addDays, fmtDateISO, minToHM, parseISO, slotsForDate, startOfWeek, WEEKDAYS_SHORT,
 } from './utils.js';
 
-export default function PublicBooking() {
+export default function PublicBooking({ embedded = false }) {
   const { slug } = useParams();
   const [tweaks] = useTweaks();
+  // Auto-resize the iframe when running inside the embed route. No-op
+  // when the page is loaded standalone (the hook checks window.parent).
+  useEmbedResize(slug);
   const [cal, setCal] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -239,13 +248,17 @@ export default function PublicBooking() {
   };
 
   return (
-    <PageWrap tweaks={tweaks}>
-      <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
+    <PageWrap tweaks={tweaks} embedded={embedded}>
+      {!embedded && (
+        <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
+      )}
 
       {/* "Have a question?" CTA — pinned just under the header on the
           slot picker step. We hide it on the success/confirmed/details
-          steps to avoid distracting from the active booking flow. */}
-      {step === 'pick' && (
+          steps to avoid distracting from the active booking flow.
+          Also hidden in embed mode — the embed is meant for one job
+          (booking); the contact form has its own embed. */}
+      {step === 'pick' && !embedded && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           padding: '10px 14px', borderRadius: 10, marginBottom: 14,
@@ -273,8 +286,9 @@ export default function PublicBooking() {
 
       {/* Memberships card — only when the business has at least one
           active tier with a Stripe price. Visitors click a tier to
-          open the join modal. */}
-      {step === 'pick' && cal.memberships?.length > 0 && (
+          open the join modal. Hidden in embed mode to keep the widget
+          focused on the booking flow. */}
+      {step === 'pick' && cal.memberships?.length > 0 && !embedded && (
         <MembershipsBlock
           memberships={cal.memberships}
           bizName={cal.settings.bizName}
@@ -789,7 +803,7 @@ export default function PublicBooking() {
           the focus stays on the success state, but visible during the
           pick + details steps for social proof while the visitor is
           still deciding. */}
-      {step !== 'confirmed' && step !== 'waitlisted' && cal.reviews?.count > 0 && (
+      {step !== 'confirmed' && step !== 'waitlisted' && cal.reviews?.count > 0 && !embedded && (
         <ReviewsBlock summary={cal.reviews}/>
       )}
     </PageWrap>
@@ -867,10 +881,15 @@ function Stars({ rating, size = 12 }) {
   );
 }
 
-function PageWrap({ tweaks, children }) {
+function PageWrap({ tweaks, embedded, children }) {
+  // Embed mode: transparent background + tight padding so the host
+  // site's container styling shows through. Non-embed: full-page bg,
+  // generous padding, owns the whole viewport.
   return (
     <div className={`app-root dir-${tweaks.direction}`} style={{
-      minHeight: '100vh', padding: '40px 24px 80px', background: 'var(--page)',
+      minHeight: embedded ? 'auto' : '100vh',
+      padding: embedded ? '14px 16px 18px' : '40px 24px 80px',
+      background: embedded ? 'transparent' : 'var(--page)',
     }}>
       <div style={{ maxWidth: 820, margin: '0 auto' }}>{children}</div>
     </div>

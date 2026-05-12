@@ -49,6 +49,7 @@ const OnboardingPage     = lazy(() => import('./features/onboarding/OnboardingPa
 // ── Lazy: public surfaces (often a fresh visit's first hit) ──
 const PublicBooking = lazy(() => import('./features/calendar/PublicBooking.jsx'));
 const PublicSite    = lazy(() => import('./features/website/PublicSite.jsx'));
+const EmbedContact  = lazy(() => import('./features/embed/EmbedContact.jsx'));
 const SignPage      = lazy(() => import('./features/documents/SignPage.jsx'));
 const PublicInvoice = lazy(() => import('./features/finance/PublicInvoice.jsx'));
 const PublicQuote   = lazy(() => import('./features/finance/PublicQuote.jsx'));
@@ -131,6 +132,12 @@ export default function App() {
         <Route path="/invoice/:token"  element={<PublicInvoice />} />
         <Route path="/quote/:token"    element={<PublicQuote />} />
         <Route path="/review/:token"   element={<ReviewPage />} />
+
+        {/* Embeds — same components rendered inside iframes on the
+            owner's external website. embed.js (served from /public)
+            handles auto-sizing via postMessage. */}
+        <Route path="/embed/book/:slug"    element={<PublicBooking embedded />} />
+        <Route path="/embed/contact/:slug" element={<EmbedContact />} />
 
         {/* Legal (public, no auth) */}
         <Route path="/privacy" element={<PrivacyPage />} />
