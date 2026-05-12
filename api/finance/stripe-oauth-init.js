@@ -88,6 +88,20 @@ export default async function handler(req, res) {
     res.writeHead(302, { Location: link.url });
     res.end();
   } catch (err) {
-    return serverError(res, err);
+    // eslint-disable-next-line no-console
+    console.error('[stripe-oauth-init] failed:', err);
+    // This endpoint is owner-auth-gated, so leaking the underlying
+    // error message to the caller is fine and makes debugging
+    // connect failures tractable in the field. Common causes:
+    //   • STRIPE_SECRET_KEY missing / wrong mode pairing
+    //   • new schema column not yet migrated on production
+    //   • Stripe API rejected the account creation (country/email)
+    res.statusCode = 500;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({
+      error: 'Stripe init failed',
+      message: err.message || String(err),
+      stripeCode: err.stripeCode || null,
+    }));
   }
 }

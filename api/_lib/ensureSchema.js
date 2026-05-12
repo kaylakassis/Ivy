@@ -114,9 +114,26 @@ async function runProbe() {
 
 async function runFull() {
   const statements = splitStatements(SCHEMA_SQL);
-  for (const stmt of statements) {
-    // eslint-disable-next-line no-await-in-loop
-    await sql.query(stmt);
+  // Continue past individual statement failures rather than aborting
+  // the whole migration. Every statement is idempotent (IF NOT EXISTS,
+  // ON CONFLICT, etc.) so a single broken one shouldn't gate everything
+  // else from getting applied. Errors are surfaced in the logs so we
+  // can fix the offender; the caller still gets a working schema for
+  // every statement that DID succeed.
+  const failures = [];
+  for (let i = 0; i < statements.length; i++) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await sql.query(statements[i]);
+    } catch (err) {
+      failures.push({ index: i, message: err.message, preview: statements[i].slice(0, 120) });
+      // eslint-disable-next-line no-console
+      console.error(`[bootstrap] stmt ${i + 1}/${statements.length} failed:`, err.message, '|', statements[i].slice(0, 120));
+    }
+  }
+  if (failures.length > 0) {
+    // eslint-disable-next-line no-console
+    console.error(`[bootstrap] migration completed with ${failures.length} failures out of ${statements.length}`);
   }
 }
 
