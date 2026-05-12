@@ -33,16 +33,23 @@ import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
+  // Track which step failed so the error response is actionable.
+  // Owner-auth-gated endpoint, so leaking detail is fine.
+  let step = 'init';
   try {
+    step = 'auth';
     const user = await requireUser(req, res);
     if (!user) return;
+    step = 'workspace';
     const workspaceId = await ensureWorkspace(user.id);
 
+    step = 'platform-key';
     const platformKey = platformStripeSecret();
     if (!platformKey) {
       return badRequest(res, 'Stripe is not configured on this deploy yet — set STRIPE_SECRET_KEY in Vercel.');
     }
 
+    step = 'select-existing';
     // Reuse an existing acct if the owner has been here before but
     // didn't finish onboarding. Acct rows persist across attempts.
     const existing = await sql`
@@ -53,6 +60,7 @@ export default async function handler(req, res) {
     let accountId = existing.rows[0]?.stripe_connect_user_id || null;
 
     if (!accountId) {
+      step = 'create-account';
       const acct = await createConnectedAccount({
         secretKey: platformKey,
         email:     user.email || undefined,
@@ -60,6 +68,7 @@ export default async function handler(req, res) {
       });
       accountId = acct.id;
 
+      step = 'persist-account';
       // Persist immediately so a refresh / redirect / closed tab during
       // onboarding doesn't orphan the acct on Stripe's side.
       await sql`
@@ -72,6 +81,7 @@ export default async function handler(req, res) {
       `;
     }
 
+    step = 'create-link';
     // Build the onboarding link. refresh_url brings them back here if
     // the link expires; return_url is where Stripe sends them when the
     // form is submitted (whether or not it's actually complete — we
@@ -89,19 +99,15 @@ export default async function handler(req, res) {
     res.end();
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('[stripe-oauth-init] failed:', err);
-    // This endpoint is owner-auth-gated, so leaking the underlying
-    // error message to the caller is fine and makes debugging
-    // connect failures tractable in the field. Common causes:
-    //   • STRIPE_SECRET_KEY missing / wrong mode pairing
-    //   • new schema column not yet migrated on production
-    //   • Stripe API rejected the account creation (country/email)
+    console.error(`[stripe-oauth-init] step=${step} failed:`, err);
     res.statusCode = 500;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.end(JSON.stringify({
       error: 'Stripe init failed',
+      step,
       message: err.message || String(err),
       stripeCode: err.stripeCode || null,
+      stripeStatus: err.status || null,
     }));
   }
 }

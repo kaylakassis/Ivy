@@ -8,6 +8,16 @@ export const VALID_STATUS = new Set([
   'planning', 'active', 'on_hold', 'completed', 'cancelled',
 ]);
 
+// DATE columns come back from pg as JS Date in most configs and as raw
+// strings on some Neon serverless paths. Normalize both to YYYY-MM-DD
+// strings so the UI's <input type="date"> + display logic don't have
+// to branch.
+function dateOnly(v) {
+  if (!v) return null;
+  if (v instanceof Date) return v.toISOString().slice(0, 10);
+  return String(v).slice(0, 10);
+}
+
 export function serializeProject(row, counts) {
   if (!row) return null;
   return {
@@ -18,8 +28,8 @@ export function serializeProject(row, counts) {
     description:  row.description || null,
     status:       row.status,
     color:        row.color || null,
-    startsAt:     row.starts_at,
-    endsAt:       row.ends_at,
+    startsAt:     dateOnly(row.starts_at),
+    endsAt:       dateOnly(row.ends_at),
     amountQuoted: row.amount_quoted == null ? null : Number(row.amount_quoted),
     notes:        row.notes || null,
     createdAt:    row.created_at,

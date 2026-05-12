@@ -256,25 +256,36 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
   if (action.type === 'send_document') {
     const tmplId = cfg.templateId;
     if (!tmplId) throw new Error('No document template selected');
-    // Pull the template, clone its body into a new document for this
+    // Pull the template, clone its content into a new document for this
     // client, set status='draft'. Owner approves + sends from /documents
     // (we don't auto-fire the send email — that's another action the
     // owner can add explicitly with send_email after this).
+    //
+    // documents columns: name, kind, content_html, file_url, fields,
+    // recipient_*. We copy whichever content shape the template uses
+    // (written → content_html; pdf → file_url) so both template kinds
+    // round-trip cleanly.
     const tmpl = await sql`
-      SELECT name, body FROM documents
-       WHERE id = ${tmplId} AND workspace_id = ${workflow.workspace_id} AND is_template = TRUE
+      SELECT name, kind, content_html, file_url, fields
+        FROM documents
+       WHERE id = ${tmplId}
+         AND workspace_id = ${workflow.workspace_id}
+         AND is_template = TRUE
     `;
     if (tmpl.rows.length === 0) throw new Error('Template not found');
     const t = tmpl.rows[0];
     const ins = await sql`
       INSERT INTO documents (
-        workspace_id, name, body, status,
+        workspace_id, name, kind, content_html, file_url, fields, status,
         recipient_client_id, recipient_email, recipient_name,
         is_template
       ) VALUES (
         ${workflow.workspace_id},
         ${renderTokens(t.name, tokens) + ' — ' + (client?.name || '')},
-        ${t.body},
+        ${t.kind || 'written'},
+        ${t.content_html || null},
+        ${t.file_url || null},
+        ${JSON.stringify(t.fields || [])}::jsonb,
         'draft',
         ${client?.id || null},
         ${client?.email || null},
