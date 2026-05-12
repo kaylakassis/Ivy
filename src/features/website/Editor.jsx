@@ -324,6 +324,7 @@ export default function Editor({
         {!previewMode && (!isMobile || mobileTab === 'outline') && (
           <SectionLibrary
             site={site}
+            sections={activeSections}
             selectedId={selectedId}
             onSelect={(id) => {
               setSelectedId(id);
