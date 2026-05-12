@@ -1,15 +1,28 @@
-// /onboarding — first-run wizard for new business owners.
+// /onboarding — the universal save-and-resume setup wizard.
 //
-// Five steps, each saves on advance so closing mid-wizard doesn't lose work:
-//   1. Welcome
-//   2. Your business — name, slug, category, tagline
-//   3. Services — starter pack per category + ability to add/remove
-//   4. Availability — pick weekly windows; defaults to Mon–Fri 9-5
-//   5. You're set — booking link copy, install PWA hint, what's next
+// Ten steps. Each is independent and auto-saves through its real API
+// (PATCH /calendar for business basics, PUT /calendar/services, etc.)
+// AND posts a tiny navigational state update to /api/onboarding/state
+// so closing the tab mid-flow resumes exactly where the owner left off
+// on next sign-in.
 //
-// Final "Finish" sets workspaces.onboarded_at via /api/onboarding/complete
-// and bounces to /dashboard.
-import React, { useEffect, useState } from 'react';
+// Step ids (kept in sync with VALID_STEPS in api/onboarding/state.js):
+//   welcome      → intro slide, "let's get you set up"
+//   business     → name, handle (slug), tagline, category
+//   services     → at least one service to be bookable
+//   availability → weekday windows
+//   payments     → Stripe Connect (optional, can skip)
+//   branding     → logo + accent color (optional)
+//   first_client → manual add OR import (optional)
+//   website      → pick template + publish (optional)
+//   tour         → quick walk through the main tabs
+//   done         → celebrate + route to dashboard
+//
+// "Skip" on any optional step records the step into skippedSteps so
+// the dashboard checklist can keep nudging until it's actually done.
+// "Save & exit" exits without marking the wizard complete; the next
+// sign-in resumes here.
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
@@ -19,16 +32,17 @@ import { publicOrigin } from '../../lib/publicUrl.js';
 import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
 
 const STEPS = [
-  { id: 'welcome',      label: 'Welcome' },
-  { id: 'business',     label: 'Your business' },
-  { id: 'services',     label: 'Services' },
-  { id: 'availability', label: 'Availability' },
-  { id: 'done',         label: "You're set" },
+  { id: 'welcome',      label: 'Welcome',         optional: false },
+  { id: 'business',     label: 'Business',        optional: false },
+  { id: 'services',     label: 'Services',        optional: false },
+  { id: 'availability', label: 'Availability',    optional: false },
+  { id: 'payments',     label: 'Payments',        optional: true  },
+  { id: 'branding',     label: 'Branding',        optional: true  },
+  { id: 'first_client', label: 'First client',    optional: true  },
+  { id: 'website',      label: 'Website',         optional: true  },
+  { id: 'tour',         label: 'Quick tour',      optional: false },
+  { id: 'done',         label: 'Done',            optional: false },
 ];
-
-// CATEGORIES + SERVICE_PACKS now come from src/lib/categories.js so the
-// onboarding wizard, the calendar share drawer, and any future caller
-// stay in sync from one source of truth.
 
 const WEEKDAYS = [
   { idx: 1, short: 'Mon', long: 'Monday' },
@@ -47,50 +61,86 @@ const DEFAULT_AVAIL = {
 };
 
 function slugify(s) {
-  return String(s || '')
-    .toLowerCase()
-    .normalize('NFKD').replace(/[̀-ͯ]/g, '')
-    .replace(/[^a-z0-9]+/g, '-')
+  return String(s || '').toLowerCase()
+    .replace(/[^a-z0-9-]+/g, '-')
     .replace(/^-+|-+$/g, '')
     .slice(0, 40);
+}
+
+function prettifyError(e) {
+  return e?.message || 'Something went wrong.';
 }
 
 export default function OnboardingPage() {
   const [tweaks] = useTweaks();
   const { user } = useAuth();
   const nav = useNavigate();
-  const [step, setStep] = useState(0);
 
-  // Form state — pulled from existing settings so re-entering doesn't blow away.
-  const [bizName, setBizName] = useState('');
-  const [slug, setSlug]       = useState('');
+  // Navigational state — synced to /api/onboarding/state. completedSteps
+  // grows as the owner advances; skippedSteps tracks explicit "do this
+  // later" actions; currentStep is the step the resume-on-signin path
+  // jumps to.
+  const [stateLoaded, setStateLoaded] = useState(false);
+  const [currentStep, setCurrentStep] = useState('welcome');
+  const [completedSteps, setCompletedSteps] = useState([]);
+  const [skippedSteps, setSkippedSteps]     = useState([]);
+
+  // Form state — pre-filled from existing settings on mount so re-
+  // entering doesn't blow away earlier work.
+  const [bizName, setBizName]   = useState('');
+  const [slug, setSlug]         = useState('');
   const [slugTouched, setSlugTouched] = useState(false);
-  const [tagline, setTagline] = useState('');
+  const [tagline, setTagline]   = useState('');
   const [category, setCategory] = useState(null);
   const [services, setServices] = useState([]);
   const [draft, setDraft] = useState({ name: '', durationMinutes: 60, price: '' });
   const [availability, setAvailability] = useState(DEFAULT_AVAIL);
+  const [stripeStatus, setStripeStatus] = useState(null);
+  const [branding, setBranding] = useState({ logoUrl: '', accent: '' });
+  const [clientDraft, setClientDraft] = useState({ name: '', email: '', phone: '' });
+  const [clientsCount, setClientsCount] = useState(0);
+  const [websiteStatus, setWebsiteStatus] = useState(null);
+
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  const [exitedAt, setExitedAt] = useState(null);
 
+  // Load saved navigational state + existing settings on mount.
   useEffect(() => {
     let live = true;
-    api.get('/calendar')
-      .then((r) => {
-        if (!live) return;
-        const s = r.cal?.settings || {};
-        if (s.bizName && s.bizName !== 'My business') setBizName(s.bizName);
-        if (s.slug)     { setSlug(s.slug); setSlugTouched(true); }
-        if (s.tagline)  setTagline(s.tagline);
-        if (s.category) setCategory(s.category);
-        if (Array.isArray(r.cal?.services) && r.cal.services.length > 0) {
-          setServices(r.cal.services);
-        }
-        if (s.availability && Object.keys(s.availability).length > 0) {
-          setAvailability(s.availability);
-        }
-      })
-      .catch(() => { /* fresh workspace — fine */ });
+    Promise.all([
+      api.get('/onboarding/state').catch(() => ({ state: null })),
+      api.get('/calendar').catch(() => ({ cal: null })),
+      api.get('/clients?limit=1').catch(() => ({ clients: [] })),
+      api.get('/finance/stripe-status').catch(() => null),
+      api.get('/website').catch(() => null),
+    ]).then(([stateRes, calRes, clientsRes, stripeRes, webRes]) => {
+      if (!live) return;
+      const st = stateRes?.state;
+      if (st) {
+        setCurrentStep(st.currentStep || 'welcome');
+        setCompletedSteps(st.completedSteps || []);
+        setSkippedSteps(st.skippedSteps || []);
+      }
+      const s = calRes?.cal?.settings || {};
+      if (s.bizName && s.bizName !== 'My business') setBizName(s.bizName);
+      if (s.slug)     { setSlug(s.slug); setSlugTouched(true); }
+      if (s.tagline)  setTagline(s.tagline);
+      if (s.category) setCategory(s.category);
+      if (s.brandLogoUrl || s.brandAccentColor) {
+        setBranding({ logoUrl: s.brandLogoUrl || '', accent: s.brandAccentColor || '' });
+      }
+      if (Array.isArray(calRes?.cal?.services) && calRes.cal.services.length > 0) {
+        setServices(calRes.cal.services);
+      }
+      if (s.availability && Object.keys(s.availability).length > 0) {
+        setAvailability(s.availability);
+      }
+      setClientsCount((clientsRes?.clients || []).length);
+      setStripeStatus(stripeRes);
+      setWebsiteStatus(webRes);
+      setStateLoaded(true);
+    });
     return () => { live = false; };
   }, []);
 
@@ -100,10 +150,76 @@ export default function OnboardingPage() {
     setSlug(slugify(bizName));
   }, [bizName, slugTouched]);
 
-  const next = () => setStep((s) => Math.min(STEPS.length - 1, s + 1));
-  const back = () => setStep((s) => Math.max(0, s - 1));
+  // Persist navigational state. Debounced so each input doesn't hammer
+  // the API. Triggers on currentStep/completedSteps/skippedSteps change
+  // after the initial load.
+  const saveStateTimer = useRef(null);
+  useEffect(() => {
+    if (!stateLoaded) return;
+    if (saveStateTimer.current) clearTimeout(saveStateTimer.current);
+    saveStateTimer.current = setTimeout(() => {
+      api.patch('/onboarding/state', {
+        currentStep, completedSteps, skippedSteps,
+      }).catch(() => { /* swallow — auto-save is best-effort */ });
+    }, 400);
+    return () => { if (saveStateTimer.current) clearTimeout(saveStateTimer.current); };
+  }, [currentStep, completedSteps, skippedSteps, stateLoaded]);
 
-  // ---- Per-step save helpers ----
+  const stepIdx = STEPS.findIndex((s) => s.id === currentStep);
+  const stepSpec = STEPS[stepIdx] || STEPS[0];
+
+  const goNext = () => {
+    setCompletedSteps((p) => p.includes(currentStep) ? p : [...p, currentStep]);
+    setSkippedSteps((p) => p.filter((s) => s !== currentStep));
+    const next = STEPS[stepIdx + 1];
+    if (next) setCurrentStep(next.id);
+  };
+  const goBack = () => {
+    const prev = STEPS[stepIdx - 1];
+    if (prev) setCurrentStep(prev.id);
+  };
+  const skipStep = () => {
+    setSkippedSteps((p) => p.includes(currentStep) ? p : [...p, currentStep]);
+    setCompletedSteps((p) => p.filter((s) => s !== currentStep));
+    const next = STEPS[stepIdx + 1];
+    if (next) setCurrentStep(next.id);
+  };
+
+  // "Save & exit" — flushes state and bounces to dashboard WITHOUT
+  // marking onboarded_at. The next sign-in detects un-onboarded and
+  // routes back to /onboarding, picking up at currentStep.
+  const saveAndExit = async () => {
+    setBusy(true);
+    try {
+      await api.patch('/onboarding/state', {
+        currentStep, completedSteps, skippedSteps,
+      });
+    } catch { /* still bounce — best effort */ }
+    finally {
+      setExitedAt(Date.now());
+      nav('/dashboard?onboarding=resume', { replace: true });
+    }
+  };
+
+  // "Finish" — marks workspaces.onboarded_at + bounces. Final step CTA.
+  const finish = async () => {
+    setBusy(true); setErr(null);
+    try {
+      // Capture final state first so the dashboard checklist knows
+      // exactly which steps were skipped.
+      await api.patch('/onboarding/state', {
+        currentStep: 'done',
+        completedSteps: Array.from(new Set([...completedSteps, currentStep, 'done'])),
+        skippedSteps,
+      });
+      await api.post('/onboarding/complete');
+      nav('/dashboard?walkthrough=1', { replace: true });
+    } catch (e) { setErr(prettifyError(e)); setBusy(false); }
+  };
+
+  // ─── Per-step save helpers ──────────────────────────────────────────
+  // Each writes to its real API + advances the wizard. Saving is
+  // idempotent — re-clicking Continue doesn't duplicate work.
 
   const saveBusiness = async () => {
     setBusy(true); setErr(null);
@@ -117,7 +233,7 @@ export default function OnboardingPage() {
       else if (tagline === '') patch.tagline = null;
       if (category) patch.category = category;
       if (Object.keys(patch).length > 0) await api.patch('/calendar', patch);
-      next();
+      goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };
@@ -125,11 +241,8 @@ export default function OnboardingPage() {
   const saveServices = async () => {
     setBusy(true); setErr(null);
     try {
-      // Always PUT — server replaces the list in one shot. Pass the
-      // current services array even if empty so a user who removed
-      // everything has the empty state respected.
       await api.put('/calendar/services', { services });
-      next();
+      goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };
@@ -138,614 +251,653 @@ export default function OnboardingPage() {
     setBusy(true); setErr(null);
     try {
       await api.patch('/calendar', { availability });
-      next();
+      goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };
 
-  const finish = async () => {
+  const saveBranding = async () => {
     setBusy(true); setErr(null);
     try {
-      await api.post('/onboarding/complete');
-      nav('/dashboard?walkthrough=1', { replace: true });
-    } catch (e) { setErr(prettifyError(e)); setBusy(false); }
+      const patch = {};
+      if (branding.logoUrl !== undefined) patch.brandLogoUrl = branding.logoUrl || null;
+      if (branding.accent !== undefined)  patch.brandAccentColor = branding.accent || null;
+      if (Object.keys(patch).length > 0) await api.patch('/calendar', patch);
+      goNext();
+    } catch (e) { setErr(prettifyError(e)); }
+    finally { setBusy(false); }
   };
 
-  const skipAll = async () => {
-    setBusy(true);
-    try { await api.post('/onboarding/complete'); }
-    finally { nav('/dashboard', { replace: true }); }
+  const saveFirstClient = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const name = clientDraft.name.trim();
+      const email = clientDraft.email.trim();
+      if (!name || !email) {
+        setErr('Add the client\'s name + email, or skip for now.');
+        setBusy(false); return;
+      }
+      await api.post('/clients', { name, email, phone: clientDraft.phone || null, stage: 'active' });
+      setClientsCount((n) => n + 1);
+      setClientDraft({ name: '', email: '', phone: '' });
+      goNext();
+    } catch (e) { setErr(prettifyError(e)); }
+    finally { setBusy(false); }
   };
+
+  // ─── Render ─────────────────────────────────────────────────────────
+
+  if (!stateLoaded) {
+    return (
+      <Shell tweaks={tweaks}>
+        <div style={{ textAlign: 'center', padding: 40, color: 'var(--muted)', fontSize: 13 }}>
+          Loading your setup…
+        </div>
+      </Shell>
+    );
+  }
 
   return (
-    <div className={`app-root dir-${tweaks.direction}`}
-      style={{ minHeight: '100vh', background: 'var(--page)', display: 'flex', flexDirection: 'column' }}>
-      {/* Top bar */}
-      <div style={{
-        padding: '14px 24px', borderBottom: '1px solid var(--border)',
-        display: 'flex', alignItems: 'center', gap: 12,
-      }}>
-        <div style={{
-          width: 30, height: 30, borderRadius: 8,
-          background: 'var(--accent)', color: 'var(--accent-ink)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}><Icons.Logo size={20} color="currentColor"/></div>
-        <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18 }}>thryve</span>
-        <div style={{ flex: 1 }}/>
-        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-          Step {step + 1} of {STEPS.length}
-        </span>
-        <button onClick={skipAll} disabled={busy}
-          className="btn btn-ghost" style={{ padding: '6px 12px', fontSize: 12.5, color: 'var(--muted)' }}>
-          Skip for now
-        </button>
-      </div>
+    <Shell tweaks={tweaks}>
+      <ProgressRow steps={STEPS} currentStep={currentStep} completed={completedSteps} skipped={skippedSteps}
+        onJump={(id) => {
+          // Allow jumping to any step that's already been visited
+          // (completed OR skipped OR ≤ currentIdx). Future steps stay
+          // gated until the owner gets there normally.
+          const targetIdx = STEPS.findIndex((s) => s.id === id);
+          const visited = completedSteps.includes(id) || skippedSteps.includes(id) || targetIdx <= stepIdx;
+          if (visited) setCurrentStep(id);
+        }}/>
 
-      {/* Progress bar */}
-      <div style={{ padding: '14px 24px 0' }}>
-        <div style={{ height: 4, borderRadius: 99, background: 'var(--border)', overflow: 'hidden' }}>
+      <div className="card" style={{
+        padding: '32px 36px', marginTop: 18,
+        display: 'flex', flexDirection: 'column', gap: 18,
+      }}>
+        {currentStep === 'welcome'      && <WelcomeStep user={user}/>}
+        {currentStep === 'business'     && <BusinessStep
+          bizName={bizName} setBizName={setBizName}
+          slug={slug} setSlug={setSlug} setSlugTouched={setSlugTouched}
+          tagline={tagline} setTagline={setTagline}
+          category={category} setCategory={setCategory}/>}
+        {currentStep === 'services'     && <ServicesStep
+          services={services} setServices={setServices}
+          draft={draft} setDraft={setDraft} category={category}/>}
+        {currentStep === 'availability' && <AvailabilityStep
+          availability={availability} setAvailability={setAvailability}/>}
+        {currentStep === 'payments'     && <PaymentsStep stripeStatus={stripeStatus} setStripeStatus={setStripeStatus}/>}
+        {currentStep === 'branding'     && <BrandingStep branding={branding} setBranding={setBranding}/>}
+        {currentStep === 'first_client' && <FirstClientStep clientDraft={clientDraft} setClientDraft={setClientDraft}
+          clientsCount={clientsCount}/>}
+        {currentStep === 'website'      && <WebsiteStep websiteStatus={websiteStatus}/>}
+        {currentStep === 'tour'         && <TourStep/>}
+        {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}/>}
+
+        {err && (
           <div style={{
-            height: '100%', width: `${((step + 1) / STEPS.length) * 100}%`,
-            background: 'var(--accent)', transition: 'width .3s ease',
-          }}/>
+            padding: '8px 12px', borderRadius: 8,
+            background: 'rgba(155,44,44,0.10)', border: '1px solid rgba(155,44,44,0.30)',
+            color: 'var(--danger)', fontSize: 13,
+          }}>{err}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+          {stepIdx > 0 && stepIdx < STEPS.length - 1 && (
+            <button onClick={goBack} className="btn btn-ghost" disabled={busy}>
+              <Icons.ArrowLeft size={13}/> Back
+            </button>
+          )}
+          <div style={{ flex: 1 }}/>
+          {stepSpec.optional && currentStep !== 'done' && (
+            <button onClick={skipStep} className="btn btn-ghost" disabled={busy}
+              style={{ color: 'var(--muted)' }}>
+              Skip for now
+            </button>
+          )}
+          {currentStep !== 'done' && currentStep !== 'tour' && (
+            <button onClick={saveAndExit} className="btn btn-outline" disabled={busy}
+              style={{ color: 'var(--muted)' }}>
+              Save & exit
+            </button>
+          )}
+          <PrimaryCTA
+            currentStep={currentStep}
+            busy={busy}
+            onContinue={() => {
+              if (currentStep === 'welcome')      return goNext();
+              if (currentStep === 'business')     return saveBusiness();
+              if (currentStep === 'services')     return saveServices();
+              if (currentStep === 'availability') return saveAvailability();
+              if (currentStep === 'payments')     return goNext();
+              if (currentStep === 'branding')     return saveBranding();
+              if (currentStep === 'first_client') return saveFirstClient();
+              if (currentStep === 'website')      return goNext();
+              if (currentStep === 'tour')         return goNext();
+              if (currentStep === 'done')         return finish();
+            }}/>
         </div>
-        <div className="onboard-step-labels" style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8 }}>
-          {STEPS.map((s, i) => (
-            <div key={s.id} style={{
-              fontSize: 10.5, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
-              color: i <= step ? 'var(--accent)' : 'var(--muted)',
-            }}>
-              {s.label}
-            </div>
+      </div>
+    </Shell>
+  );
+}
+
+// ─── Step components ──────────────────────────────────────────────────
+
+function WelcomeStep({ user }) {
+  const name = (user?.name || '').split(/\s+/)[0] || 'there';
+  return (
+    <div style={{ textAlign: 'center', padding: '14px 0' }}>
+      <div style={{
+        width: 56, height: 56, borderRadius: 18, margin: '0 auto 18px',
+        background: 'var(--accent-soft)', color: 'var(--accent)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}><Icons.Spark size={26} sw={1.7}/></div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 30, fontWeight: 600, margin: '0 0 8px' }}>
+        Welcome, {name}.
+      </h1>
+      <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 520, margin: '0 auto' }}>
+        Let's get THRYVE working for your business. We'll set up the basics
+        in 10 quick steps — your business profile, services, availability,
+        payments, branding, your first client, and your website.
+        <br/><br/>
+        <strong>Auto-saves at every step</strong> — close the tab anytime and we'll
+        pick up where you left off. You can also skip any step you're not
+        ready for; we'll remind you later.
+      </p>
+    </div>
+  );
+}
+
+function BusinessStep({ bizName, setBizName, slug, setSlug, setSlugTouched, tagline, setTagline, category, setCategory }) {
+  return (
+    <>
+      <StepHeader title="What's your business?"
+        subtitle="The basics — clients see this on your booking page and in any reviews."/>
+      <Field label="Business name" required>
+        <input className="input" value={bizName} onChange={(e) => setBizName(e.target.value)}
+          placeholder="e.g. Maya's Massage Studio" autoFocus
+          style={inputStyle}/>
+      </Field>
+      <Field label="Booking page handle" required
+        hint={`Your public link will be ${publicOrigin()}/book/${slug || 'your-handle'}`}>
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          border: '1px solid var(--border-strong)', borderRadius: 10, background: 'var(--surface)',
+          overflow: 'hidden',
+        }}>
+          <span style={{ padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 13 }}>
+            /book/
+          </span>
+          <input value={slug}
+            onChange={(e) => { setSlug(slugify(e.target.value)); setSlugTouched(true); }}
+            placeholder="your-handle"
+            style={{ flex: 1, padding: '10px 12px', background: 'transparent', border: 0, outline: 'none', color: 'var(--fg)', fontSize: 14 }}/>
+        </div>
+      </Field>
+      <Field label="Tagline (optional)" hint="One line. Shown under your business name on the booking page.">
+        <input className="input" value={tagline} onChange={(e) => setTagline(e.target.value.slice(0, 140))}
+          placeholder="Massage therapy in downtown Austin" maxLength={140}
+          style={inputStyle}/>
+      </Field>
+      <Field label="Category (optional)" hint="Helps clients find you in our discovery directory.">
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          <button type="button" onClick={() => setCategory(null)}
+            className={`btn ${!category ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '5px 11px', fontSize: 12 }}>None</button>
+          {CATEGORIES.map((c) => (
+            <button key={c.id} type="button" onClick={() => setCategory(c.id)}
+              className={`btn ${category === c.id ? 'btn-primary' : 'btn-outline'}`}
+              style={{ padding: '5px 11px', fontSize: 12 }}>
+              {c.label}
+            </button>
           ))}
         </div>
-      </div>
-
-      {/* Step body */}
-      <div style={{
-        flex: 1, display: 'flex', alignItems: 'flex-start', justifyContent: 'center',
-        padding: '32px 24px',
-      }}>
-        <div className="card" style={{
-          width: '100%', maxWidth: 600, padding: 32,
-          display: 'flex', flexDirection: 'column', gap: 18,
-        }}>
-          {step === 0 && <Welcome user={user} onNext={next}/>}
-          {step === 1 && (
-            <Business
-              bizName={bizName} setBizName={setBizName}
-              slug={slug} setSlug={(v) => { setSlug(v); setSlugTouched(true); }}
-              tagline={tagline} setTagline={setTagline}
-              category={category} setCategory={setCategory}
-              onBack={back} onSave={saveBusiness} busy={busy}
-            />
-          )}
-          {step === 2 && (
-            <Services
-              services={services} setServices={setServices}
-              category={category}
-              draft={draft} setDraft={setDraft}
-              onBack={back} onSave={saveServices} busy={busy}
-            />
-          )}
-          {step === 3 && (
-            <Availability
-              availability={availability} setAvailability={setAvailability}
-              onBack={back} onSave={saveAvailability} busy={busy}
-            />
-          )}
-          {step === 4 && (
-            <Done slug={slug} bizName={bizName} servicesCount={services.length}
-              onFinish={finish} onBack={back} busy={busy}/>
-          )}
-          {err && (
-            <div style={{
-              padding: '8px 12px', borderRadius: 8,
-              background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-              color: 'var(--danger)', fontSize: 12.5,
-            }}>{err}</div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ---- Step 0: Welcome ----
-function Welcome({ user, onNext }) {
-  const first = user?.name ? user.name.split(' ')[0] : null;
-  return (
-    <>
-      <div style={{
-        width: 64, height: 64, borderRadius: 16, alignSelf: 'center',
-        background: 'var(--accent)', color: 'var(--accent-ink)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}><Icons.Spark size={32} sw={1.8}/></div>
-      <div style={{ textAlign: 'center' }}>
-        <h1 className="page-title" style={{ margin: 0, fontSize: 28, letterSpacing: '-0.02em' }}>
-          Welcome to THRYVE{first ? `, ${first}` : ''}.
-        </h1>
-        <p style={{ margin: '12px auto 0', fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.6, maxWidth: 460 }}>
-          Three minutes to set up the basics — your business, your services,
-          and when you're available. We'll prefill what we can. Everything
-          changes anytime.
-        </p>
-      </div>
-
-      <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-        gap: 10, marginTop: 4,
-      }}>
-        <Bullet icon="Calendar" label="Bookings" hint="Public link · auto-confirmations"/>
-        <Bullet icon="Dollar"   label="Invoices" hint="Stripe checkout · refunds"/>
-        <Bullet icon="Spark"    label="Ivy"      hint="AI coach on your data"/>
-      </div>
-
-      <button onClick={onNext} className="btn btn-primary"
-        style={{ justifyContent: 'center', padding: '12px 14px', alignSelf: 'stretch', marginTop: 8 }}>
-        Let's go <Icons.Arrow size={14} sw={2}/>
-      </button>
-    </>
-  );
-}
-function Bullet({ icon, label, hint }) {
-  const Icon = Icons[icon] || Icons.Check;
-  return (
-    <div style={{
-      padding: 12, borderRadius: 10,
-      background: 'var(--surface-2)', border: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column', gap: 4,
-    }}>
-      <Icon size={16} sw={1.7} stroke="var(--accent)"/>
-      <div style={{ fontSize: 12.5, fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>{hint}</div>
-    </div>
-  );
-}
-
-// ---- Step 1: Business name + slug + tagline + category ----
-function Business({ bizName, setBizName, slug, setSlug, tagline, setTagline,
-                    category, setCategory, onBack, onSave, busy }) {
-  const origin = publicOrigin();
-  const validSlug = /^[a-z0-9][a-z0-9-]{1,39}$/.test(slug || '');
-  const canSave = !busy && bizName.trim().length > 0 && validSlug;
-
-  return (
-    <>
-      <div>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 22 }}>Tell us about your business.</h2>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-          Drives your booking page, your invoices, and Ivy's recommendations.
-        </p>
-      </div>
-
-      <Field label="Business name">
-        <input value={bizName} onChange={(e) => setBizName(e.target.value)}
-          placeholder="e.g. Maple Massage Therapy" autoFocus style={inputS}/>
       </Field>
-
-      <Field label="Your booking link"
-        hint="Lowercase letters, numbers, and dashes — 2–40 characters.">
-        <div style={{
-          display: 'flex', alignItems: 'stretch',
-          border: '1px solid ' + (slug && !validSlug ? 'var(--danger)' : 'var(--border-strong)'),
-          borderRadius: 10, overflow: 'hidden', background: 'var(--surface)',
-        }}>
-          <span style={{
-            padding: '10px 12px', fontSize: 13, color: 'var(--muted)',
-            background: 'var(--surface-2)', borderRight: '1px solid var(--border)',
-            whiteSpace: 'nowrap',
-          }}>{origin}/book/</span>
-          <input value={slug} onChange={(e) => setSlug(e.target.value)}
-            placeholder="your-business" autoCapitalize="off" autoCorrect="off" spellCheck="false"
-            style={{ ...inputS, border: 0, padding: '10px 12px' }}/>
-        </div>
-      </Field>
-
-      <Field label="What do you do?" hint="Drives Ivy's coaching tone and which sample services we suggest next.">
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 8 }}>
-          {CATEGORIES.map((c) => {
-            const Icon = Icons[c.icon] || Icons.Check;
-            const active = category === c.id;
-            return (
-              <button key={c.id} type="button" onClick={() => setCategory(c.id)}
-                style={{
-                  padding: 12, borderRadius: 10, textAlign: 'left',
-                  background: active ? 'color-mix(in srgb, var(--accent-soft) 60%, var(--surface))' : 'var(--surface-2)',
-                  border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border)'),
-                  cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 4,
-                }}>
-                <Icon size={15} sw={1.7} stroke={active ? 'var(--accent)' : 'var(--fg-2)'}/>
-                <div style={{ fontSize: 13, fontWeight: 600 }}>{c.label}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>{c.hint}</div>
-              </button>
-            );
-          })}
-        </div>
-      </Field>
-
-      <Field label="Tagline (optional)" hint="One short line above your services on the booking page.">
-        <input value={tagline} onChange={(e) => setTagline(e.target.value.slice(0, 140))}
-          placeholder="Therapeutic massage in downtown Portland" style={inputS}/>
-      </Field>
-
-      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button onClick={onBack} type="button" className="btn btn-outline"
-          style={{ flex: 1, justifyContent: 'center' }}>Back</button>
-        <button onClick={onSave} type="button" className="btn btn-primary"
-          disabled={!canSave}
-          style={{ flex: 2, justifyContent: 'center', opacity: canSave ? 1 : 0.6 }}>
-          {busy ? 'Saving…' : 'Continue'} {!busy && <Icons.Arrow size={14} sw={2}/>}
-        </button>
-      </div>
     </>
   );
 }
 
-// ---- Step 2: Services with starter pack ----
-function Services({ services, setServices, category, draft, setDraft, onBack, onSave, busy }) {
-  const pack = (category && SERVICE_PACKS[category]) || [];
-  const isInList = (name) => services.some((s) => s.name.toLowerCase() === name.toLowerCase());
+function ServicesStep({ services, setServices, draft, setDraft, category }) {
+  const pack = SERVICE_PACKS[category] || null;
 
-  const addStarter = (s) => {
-    if (isInList(s.name)) return;
-    setServices((xs) => [...xs, { ...s }]);
-  };
-  const addAllStarters = () => {
-    setServices((xs) => {
-      const next = [...xs];
-      for (const s of pack) {
-        if (!next.some((x) => x.name.toLowerCase() === s.name.toLowerCase())) next.push({ ...s });
-      }
-      return next;
-    });
-  };
-  const addCustom = () => {
-    const name = draft.name.trim();
-    const dur  = Number(draft.durationMinutes);
-    const price = Number(draft.price || 0);
-    if (!name || !Number.isInteger(dur) || dur <= 0) return;
-    setServices((xs) => [...xs, { name, durationMinutes: dur, price }]);
+  const addService = () => {
+    if (!draft.name.trim()) return;
+    const price = Number(draft.price) || 0;
+    setServices((p) => [...p, {
+      id: 'tmp_' + Date.now(),
+      name: draft.name.trim(),
+      durationMinutes: Math.max(15, Number(draft.durationMinutes) || 60),
+      price,
+      visibility: 'public',
+    }]);
     setDraft({ name: '', durationMinutes: 60, price: '' });
   };
+  const removeService = (id) => setServices((p) => p.filter((s) => s.id !== id));
+  const applyPack = () => {
+    if (!pack) return;
+    setServices(pack.map((s, i) => ({
+      id: 'pk_' + i,
+      name: s.name,
+      durationMinutes: s.durationMinutes,
+      price: s.price,
+      visibility: 'public',
+    })));
+  };
 
   return (
     <>
-      <div>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 22 }}>What can clients book?</h2>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-          Add a few — pick from the starter pack, or write your own. Tweak names and prices anytime.
-        </p>
-      </div>
+      <StepHeader title="What do you offer?"
+        subtitle="Add 1–3 services to start. You can refine pricing + duration later from the Calendar tab."/>
 
-      {pack.length > 0 && (
+      {services.length === 0 && pack && (
         <div style={{
-          padding: 14, borderRadius: 10,
-          background: 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface-2))',
-          border: '1px solid var(--accent)',
-          display: 'flex', flexDirection: 'column', gap: 10,
+          padding: 12, borderRadius: 10, background: 'var(--surface-2)',
+          border: '1px solid var(--border)', display: 'flex',
+          alignItems: 'center', gap: 12,
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icons.Spark size={14} sw={1.8} stroke="var(--accent)"/>
-            <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-              Starter pack · {category}
-            </span>
-            <button onClick={addAllStarters} type="button"
-              style={{ marginLeft: 'auto', fontSize: 11.5, color: 'var(--accent)', background: 'transparent', border: 0, cursor: 'pointer', fontWeight: 600 }}>
-              Add all
-            </button>
+          <div style={{ flex: 1, fontSize: 12.5, color: 'var(--muted)' }}>
+            We've got a starter pack for {category} — load it as a starting point?
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {pack.map((s, i) => {
-              const used = isInList(s.name);
-              return (
-                <button key={i} type="button" onClick={() => addStarter(s)} disabled={used}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '8px 10px', borderRadius: 8, textAlign: 'left',
-                    background: used ? 'transparent' : 'var(--surface)',
-                    border: '1px solid ' + (used ? 'transparent' : 'var(--border)'),
-                    cursor: used ? 'default' : 'pointer',
-                    opacity: used ? 0.55 : 1,
-                  }}>
-                  <span style={{ fontSize: 13, fontWeight: 550, flex: 1 }}>{s.name}</span>
-                  <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{s.durationMinutes} min</span>
-                  <span style={{ fontSize: 12, color: 'var(--fg-2)', fontWeight: 600, minWidth: 44, textAlign: 'right' }}>
-                    {s.price > 0 ? `$${s.price}` : 'Free'}
-                  </span>
-                  {used
-                    ? <Icons.Check size={12} sw={2.4} stroke="var(--ok)"/>
-                    : <Icons.Plus size={12} sw={2} stroke="var(--accent)"/>}
-                </button>
-              );
-            })}
-          </div>
+          <button onClick={applyPack} className="btn btn-outline" style={{ fontSize: 12, padding: '5px 11px' }}>
+            Load starter pack
+          </button>
         </div>
       )}
 
       {services.length > 0 && (
-        <div>
-          <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 8 }}>
-            Your services ({services.length})
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            {services.map((s, i) => (
-              <div key={s.id || i} style={{
-                padding: '10px 12px', borderRadius: 10,
-                background: 'var(--surface-2)', border: '1px solid var(--border)',
-                display: 'flex', alignItems: 'center', gap: 12,
-              }}>
-                <div style={{ flex: 1 }}>
-                  <div style={{ fontSize: 13.5, fontWeight: 600 }}>{s.name}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-                    {s.durationMinutes} min{s.price ? ` · $${Number(s.price).toFixed(0)}` : ''}
-                  </div>
-                </div>
-                <button onClick={() => setServices(services.filter((_, j) => j !== i))}
-                  className="btn btn-ghost" style={{ padding: 4, color: 'var(--muted)' }}>
-                  <Icons.X size={13}/>
-                </button>
-              </div>
-            ))}
-          </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {services.map((s) => (
+            <div key={s.id} style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '8px 12px', borderRadius: 8,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+            }}>
+              <div style={{ flex: 1, fontSize: 13.5, fontWeight: 550 }}>{s.name}</div>
+              <div style={{ fontSize: 12, color: 'var(--muted)' }}>{s.durationMinutes}m · ${Number(s.price).toFixed(0)}</div>
+              <button onClick={() => removeService(s.id)} className="btn btn-ghost"
+                style={{ padding: 4, color: 'var(--danger)' }}>
+                <Icons.X size={12}/>
+              </button>
+            </div>
+          ))}
         </div>
       )}
 
       <div style={{
-        padding: 14, borderRadius: 10, background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
-        display: 'flex', flexDirection: 'column', gap: 10,
+        padding: 14, borderRadius: 10, border: '1px dashed var(--border-strong)',
+        display: 'flex', flexDirection: 'column', gap: 8,
       }}>
-        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-          Add a custom service
+        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+          Add a service
         </div>
-        <input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-          placeholder="Service name" style={inputS}/>
-        <div className="form-2col" style={{ gap: 8 }}>
-          <Field label="Duration (min)">
-            <input type="number" min={5} step={5} value={draft.durationMinutes}
-              onChange={(e) => setDraft({ ...draft, durationMinutes: e.target.value })}
-              style={inputS}/>
-          </Field>
-          <Field label="Price ($)">
-            <input type="number" min={0} value={draft.price}
-              onChange={(e) => setDraft({ ...draft, price: e.target.value })}
-              placeholder="0" style={inputS}/>
-          </Field>
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
+          <input className="input" value={draft.name}
+            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+            placeholder="Service name" style={inputStyle}/>
+          <input className="input" type="number" min={15} step={15} value={draft.durationMinutes}
+            onChange={(e) => setDraft({ ...draft, durationMinutes: Number(e.target.value) })}
+            placeholder="Minutes" style={inputStyle}/>
+          <input className="input" type="number" min={0} step="0.01" value={draft.price}
+            onChange={(e) => setDraft({ ...draft, price: e.target.value })}
+            placeholder="$ price" style={inputStyle}/>
+          <button onClick={addService} className="btn btn-primary" disabled={!draft.name.trim()}
+            style={{ padding: '0 14px', fontSize: 13 }}>
+            Add
+          </button>
         </div>
-        <button onClick={addCustom} disabled={!draft.name.trim()}
-          className="btn btn-outline" style={{ justifyContent: 'center', opacity: draft.name.trim() ? 1 : 0.5 }}>
-          <Icons.Plus size={13} sw={2}/> Add to list
-        </button>
-      </div>
-
-      <div style={{ display: 'flex', gap: 10 }}>
-        <button onClick={onBack} type="button" className="btn btn-outline"
-          style={{ flex: 1, justifyContent: 'center' }}>Back</button>
-        <button onClick={onSave} type="button" className="btn btn-primary"
-          disabled={busy}
-          style={{ flex: 2, justifyContent: 'center', opacity: busy ? 0.6 : 1 }}>
-          {busy ? 'Saving…' : services.length > 0 ? 'Continue' : 'Skip for now'}
-          {!busy && <Icons.Arrow size={14} sw={2}/>}
-        </button>
       </div>
     </>
   );
 }
 
-// ---- Step 3: Weekly availability ----
-function Availability({ availability, setAvailability, onBack, onSave, busy }) {
-  // Render-friendly state derived from availability map.
-  const isOn = (day) => Array.isArray(availability[day]) && availability[day].length > 0;
-  const window = (day) => (availability[day] && availability[day][0]) || { start: 540, end: 1020 };
-
-  const toggle = (day) => {
+function AvailabilityStep({ availability, setAvailability }) {
+  const toggleDay = (idx) => {
     setAvailability((prev) => {
+      const has = (prev[idx] || []).length > 0;
       const next = { ...prev };
-      if (next[day]) delete next[day];
-      else next[day] = [{ start: 540, end: 1020 }];
+      if (has) delete next[idx];
+      else next[idx] = [{ start: 540, end: 1020 }];
       return next;
     });
   };
-  const setRange = (day, key, value) => {
+  const updateWindow = (idx, field, val) => {
     setAvailability((prev) => {
-      const cur = prev[day]?.[0] || { start: 540, end: 1020 };
-      return { ...prev, [day]: [{ ...cur, [key]: Number(value) }] };
+      const cur = prev[idx]?.[0] || { start: 540, end: 1020 };
+      return { ...prev, [idx]: [{ ...cur, [field]: val }] };
     });
+  };
+  const fmt = (m) => {
+    const h = Math.floor(m / 60), mm = m % 60;
+    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+  };
+  const parse = (s) => {
+    const [h, m] = String(s || '').split(':').map((x) => parseInt(x, 10));
+    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
   };
 
   return (
     <>
-      <div>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 22 }}>When are you open?</h2>
-        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-          Default is Monday–Friday, 9 AM–5 PM. Toggle days off and adjust hours.
-          You can add multiple windows per day later from calendar settings.
-        </p>
-      </div>
-
+      <StepHeader title="When are you available?"
+        subtitle="Pick the weekdays you take bookings + your working window. Override per-day later from Calendar → Availability."/>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
         {WEEKDAYS.map((d) => {
-          const on = isOn(d.idx);
-          const w = window(d.idx);
+          const win = availability[d.idx]?.[0];
+          const on = !!win;
           return (
             <div key={d.idx} style={{
-              padding: '10px 12px', borderRadius: 10,
-              background: on ? 'var(--surface)' : 'var(--surface-2)',
-              border: '1px solid ' + (on ? 'var(--border-strong)' : 'var(--border)'),
-              display: 'flex', alignItems: 'center', gap: 12,
+              display: 'flex', alignItems: 'center', gap: 14,
+              padding: '8px 12px', borderRadius: 8,
+              background: on ? 'var(--surface-2)' : 'transparent',
+              border: '1px solid ' + (on ? 'var(--border)' : 'transparent'),
             }}>
-              <button type="button" onClick={() => toggle(d.idx)}
-                style={{
-                  display: 'inline-flex', alignItems: 'center', gap: 8,
-                  padding: '4px 10px', borderRadius: 8, fontSize: 13, fontWeight: 600,
-                  background: 'transparent', border: 0, cursor: 'pointer',
-                  color: on ? 'var(--fg)' : 'var(--muted)', minWidth: 90,
-                }}>
-                <span style={{
-                  display: 'inline-block', width: 14, height: 14, borderRadius: 4,
-                  background: on ? 'var(--accent)' : 'transparent',
-                  border: '1px solid ' + (on ? 'var(--accent)' : 'var(--border-strong)'),
-                  position: 'relative',
-                }}>
-                  {on && (
-                    <span style={{
-                      position: 'absolute', inset: 0,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      color: 'var(--accent-ink)', fontSize: 10, fontWeight: 800,
-                    }}>✓</span>
-                  )}
-                </span>
-                {d.short}
-              </button>
-              {on ? (
+              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, minWidth: 90 }}>
+                <input type="checkbox" checked={on} onChange={() => toggleDay(d.idx)}/>
+                {d.long}
+              </label>
+              {on && (
                 <>
-                  <TimeSelect value={w.start} onChange={(v) => setRange(d.idx, 'start', v)}/>
-                  <span style={{ color: 'var(--muted)', fontSize: 12 }}>to</span>
-                  <TimeSelect value={w.end}   onChange={(v) => setRange(d.idx, 'end', v)}/>
+                  <input type="time" value={fmt(win.start)}
+                    onChange={(e) => updateWindow(d.idx, 'start', parse(e.target.value))}
+                    style={{ ...inputStyle, padding: '6px 8px', width: 110 }}/>
+                  <span style={{ color: 'var(--muted)' }}>→</span>
+                  <input type="time" value={fmt(win.end)}
+                    onChange={(e) => updateWindow(d.idx, 'end', parse(e.target.value))}
+                    style={{ ...inputStyle, padding: '6px 8px', width: 110 }}/>
                 </>
-              ) : (
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>Closed</span>
               )}
             </div>
           );
         })}
       </div>
-
-      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button onClick={onBack} type="button" className="btn btn-outline"
-          style={{ flex: 1, justifyContent: 'center' }}>Back</button>
-        <button onClick={onSave} type="button" className="btn btn-primary"
-          disabled={busy}
-          style={{ flex: 2, justifyContent: 'center', opacity: busy ? 0.6 : 1 }}>
-          {busy ? 'Saving…' : 'Continue'} {!busy && <Icons.Arrow size={14} sw={2}/>}
-        </button>
-      </div>
     </>
   );
 }
 
-function TimeSelect({ value, onChange }) {
-  // 30-minute increments from 6 AM to 11:30 PM.
-  const opts = [];
-  for (let m = 6 * 60; m <= 23 * 60 + 30; m += 30) opts.push(m);
-  return (
-    <select value={value} onChange={(e) => onChange(e.target.value)}
-      style={{
-        padding: '6px 10px', borderRadius: 8, fontSize: 13,
-        background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
-        color: 'var(--fg)', outline: 'none', cursor: 'pointer',
-      }}>
-      {opts.map((m) => <option key={m} value={m}>{minToHM(m)}</option>)}
-    </select>
-  );
-}
-function minToHM(min) {
-  const h = Math.floor(min / 60), m = min % 60;
-  const ampm = h >= 12 ? 'PM' : 'AM';
-  const h12 = ((h + 11) % 12) + 1;
-  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
-}
-
-// ---- Step 4: Done ----
-function Done({ slug, bizName, servicesCount, onFinish, onBack, busy }) {
-  const origin = publicOrigin();
-  const link = slug ? `${origin}/book/${slug}` : null;
-  const [copied, setCopied] = useState(false);
-
-  const copy = async () => {
-    if (!link) return;
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1800);
-    } catch { /* ignore */ }
-  };
-
+function PaymentsStep({ stripeStatus }) {
+  const connected = !!stripeStatus?.connected;
+  const pending = !!stripeStatus?.pending;
   return (
     <>
-      <div style={{
-        width: 64, height: 64, borderRadius: 99, alignSelf: 'center',
-        background: 'var(--ok)', color: '#fff',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-      }}><Icons.Check size={32} sw={2.4}/></div>
-
-      <div style={{ textAlign: 'center' }}>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 26 }}>You're set.</h2>
-        <p style={{ margin: '10px auto 0', fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55, maxWidth: 460 }}>
-          {bizName ? <strong>{bizName}</strong> : 'Your workspace'} is live with
-          {' '}{servicesCount} service{servicesCount === 1 ? '' : 's'}. Share your booking
-          link to take your first appointment.
-        </p>
-      </div>
-
-      {link && (
-        <div style={{
-          padding: '12px 14px', borderRadius: 12, background: 'var(--surface-2)',
-          border: '1px solid var(--border-strong)',
-          display: 'flex', alignItems: 'center', gap: 10,
-        }}>
-          <Icons.Globe size={15} stroke="var(--accent)" sw={1.7}/>
-          <code style={{
-            fontSize: 13, color: 'var(--fg)', flex: 1, minWidth: 0,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-          }}>{link}</code>
-          <button onClick={copy} className="btn btn-outline"
-            style={{ padding: '5px 12px', fontSize: 12 }}>
-            {copied ? <><Icons.Check size={11} sw={2.4}/> Copied</> : 'Copy link'}
-          </button>
-        </div>
-      )}
-
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 10 }}>
-        <NextCard icon="Users" label="Add clients" hint="Bulk import from CSV."/>
-        <NextCard icon="Spark" label="Meet Ivy"     hint="AI coach grounded in your numbers."/>
-        <NextCard icon="Bell"  label="Notifications" hint="Push for messages, paid invoices, signed docs."/>
-      </div>
-
-      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-        <button onClick={onBack} type="button" className="btn btn-outline"
-          style={{ flex: 1, justifyContent: 'center' }}>Back</button>
-        <button onClick={onFinish} disabled={busy}
-          className="btn btn-primary" style={{ flex: 2, justifyContent: 'center', padding: '12px 14px' }}>
-          {busy ? 'Finishing…' : 'Open my dashboard'} {!busy && <Icons.Arrow size={14} sw={2}/>}
-        </button>
+      <StepHeader title="Take payments (optional)"
+        subtitle="Connect Stripe to take cards on your booking page + auto-charge deposits, tips, no-show fees. Skip if you're collecting in person for now."/>
+      <div className="card" style={{
+        padding: 18, display: 'flex', flexDirection: 'column', gap: 12,
+        background: connected ? 'color-mix(in srgb, var(--ok) 8%, transparent)' : 'var(--surface-2)',
+        border: '1px solid ' + (connected ? 'color-mix(in srgb, var(--ok) 30%, transparent)' : 'var(--border)'),
+      }}>
+        {connected ? (
+          <>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <Icons.Check size={16} sw={2.4} stroke="var(--ok)"/>
+              <strong style={{ fontSize: 14 }}>Stripe connected</strong>
+              {stripeStatus?.accountLabel && (
+                <span style={{ fontSize: 12, color: 'var(--muted)' }}>· {stripeStatus.accountLabel}</span>
+              )}
+            </div>
+            {pending && (
+              <div style={{ fontSize: 12.5, color: 'var(--warn)' }}>
+                Stripe is still verifying. You can keep setting up THRYVE; charges work as soon as verification finishes.
+              </div>
+            )}
+          </>
+        ) : (
+          <>
+            <div style={{ fontSize: 14 }}>
+              Stripe handles the cards. Connect once — funds settle to your own bank account.
+            </div>
+            <a href="/api/finance/stripe-oauth-init" className="btn btn-primary"
+              style={{ alignSelf: 'flex-start' }}>
+              <Icons.Spark size={13} sw={1.8}/> Connect Stripe
+            </a>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+              Takes ~3 minutes. We never see your bank info — it goes direct to Stripe.
+            </div>
+          </>
+        )}
       </div>
     </>
   );
 }
-function NextCard({ icon, label, hint }) {
-  const Icon = Icons[icon] || Icons.Check;
+
+function BrandingStep({ branding, setBranding }) {
   return (
-    <div style={{
-      padding: 12, borderRadius: 10,
-      background: 'var(--surface-2)', border: '1px solid var(--border)',
-      display: 'flex', flexDirection: 'column', gap: 4,
-    }}>
-      <Icon size={14} sw={1.7} stroke="var(--accent)"/>
-      <div style={{ fontSize: 12.5, fontWeight: 600 }}>{label}</div>
-      <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.4 }}>{hint}</div>
+    <>
+      <StepHeader title="Make it yours"
+        subtitle="Logo + an accent color so your booking page, invoices, and emails feel branded. Both optional — defaults look great too."/>
+      <Field label="Logo URL (optional)" hint="Paste a public URL or upload via Account → Branding. We'll wire upload here in the next pass.">
+        <input className="input" type="url" value={branding.logoUrl}
+          onChange={(e) => setBranding({ ...branding, logoUrl: e.target.value })}
+          placeholder="https://…" style={inputStyle}/>
+      </Field>
+      <Field label="Accent color">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <input type="color" value={branding.accent || '#8E826A'}
+            onChange={(e) => setBranding({ ...branding, accent: e.target.value })}
+            style={{ width: 50, height: 38, padding: 2, border: '1px solid var(--border)', borderRadius: 6, cursor: 'pointer' }}/>
+          <input className="input" value={branding.accent}
+            onChange={(e) => setBranding({ ...branding, accent: e.target.value })}
+            placeholder="#8E826A" style={{ ...inputStyle, fontFamily: 'monospace' }}/>
+        </div>
+      </Field>
+    </>
+  );
+}
+
+function FirstClientStep({ clientDraft, setClientDraft, clientsCount }) {
+  return (
+    <>
+      <StepHeader title="Add your first client"
+        subtitle={clientsCount > 0
+          ? `You already have ${clientsCount} client${clientsCount === 1 ? '' : 's'}! Add another, or skip — we'll keep going.`
+          : "Walking through with a real client makes the rest of the setup click. Add one now or skip to add later in bulk via Clients → Import."}/>
+      <Field label="Name" required>
+        <input className="input" value={clientDraft.name}
+          onChange={(e) => setClientDraft({ ...clientDraft, name: e.target.value })}
+          placeholder="Sarah Johnson" autoFocus style={inputStyle}/>
+      </Field>
+      <Field label="Email" required>
+        <input className="input" type="email" value={clientDraft.email}
+          onChange={(e) => setClientDraft({ ...clientDraft, email: e.target.value })}
+          placeholder="sarah@example.com" style={inputStyle}/>
+      </Field>
+      <Field label="Phone (optional)">
+        <input className="input" type="tel" value={clientDraft.phone}
+          onChange={(e) => setClientDraft({ ...clientDraft, phone: e.target.value })}
+          placeholder="+1 555 555-5555" style={inputStyle}/>
+      </Field>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+        We'll email them a portal invite so they can see their bookings + invoices in one place.
+      </div>
+    </>
+  );
+}
+
+function WebsiteStep({ websiteStatus }) {
+  const launched = !!websiteStatus?.website?.launched;
+  return (
+    <>
+      <StepHeader title="Build your website (optional)"
+        subtitle="Pick a template, drag-edit your sections, and publish in 10 minutes. Skip if you already have a site — you can embed a THRYVE booking widget onto it instead."/>
+      <div className="card" style={{
+        padding: 18, display: 'flex', flexDirection: 'column', gap: 12,
+        background: launched ? 'color-mix(in srgb, var(--ok) 8%, transparent)' : 'var(--surface-2)',
+        border: '1px solid ' + (launched ? 'color-mix(in srgb, var(--ok) 30%, transparent)' : 'var(--border)'),
+      }}>
+        {launched ? (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icons.Check size={16} sw={2.4} stroke="var(--ok)"/>
+            <strong style={{ fontSize: 14 }}>Website is live</strong>
+          </div>
+        ) : (
+          <>
+            <div style={{ fontSize: 14 }}>
+              Templates included — Clean, Modern, Lush, Lean.
+              Build at <code style={{ background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, fontSize: 12.5 }}>/website</code> any time.
+            </div>
+            <a href="/website" target="_blank" rel="noreferrer" className="btn btn-primary"
+              style={{ alignSelf: 'flex-start' }}>
+              <Icons.Arrow size={13} sw={1.8}/> Open Website builder
+            </a>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+              Opens in a new tab so you can keep this onboarding open. Hit "Continue" here once you've published — or "Skip for now" if you already have a site.
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
+
+function TourStep() {
+  const stops = [
+    { tab: 'Dashboard', icon: 'Home',     desc: 'The home page. Today\'s bookings, revenue this month, unread messages — at a glance.' },
+    { tab: 'Clients',   icon: 'Users',    desc: 'Every client + lead. Add, search, tag, drop notes. Click into a profile for their bookings + invoices.' },
+    { tab: 'Calendar',  icon: 'Calendar', desc: 'Schedule. Click any slot to add a booking. Share drawer copies your booking link + QR.' },
+    { tab: 'Finance',   icon: 'Dollar',   desc: 'Invoices, quotes, expenses, time tracking, memberships, gift cards. Year-end CSV export under "Export ▾".' },
+    { tab: 'Messages',  icon: 'Chat',     desc: 'Text + email threads with each client. Voice memos auto-transcribe.' },
+    { tab: 'Documents', icon: 'Doc',      desc: 'Contracts + intake forms. Send for e-signature, audit trail included.' },
+    { tab: 'Workflows', icon: 'Spark',    desc: 'Automate follow-ups — birthday emails, win-back nudges, new-lead sequences. Build from /workflows.' },
+    { tab: 'Ivy Pro',   icon: 'Spark',    desc: 'Your AI business coach. Ask questions grounded in your real data: "why am I losing clients?"' },
+  ];
+  return (
+    <>
+      <StepHeader title="Quick tour"
+        subtitle="A 30-second walkthrough of where everything lives, so you know exactly where to go after this."/>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {stops.map((s) => {
+          const Icon = Icons[s.icon] || Icons.Check;
+          return (
+            <div key={s.tab} style={{
+              display: 'flex', alignItems: 'flex-start', gap: 12,
+              padding: '10px 14px', borderRadius: 10,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 8,
+                background: 'var(--accent-soft)', color: 'var(--accent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                flexShrink: 0,
+              }}>
+                <Icon size={15} sw={1.7}/>
+              </div>
+              <div>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{s.tab}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.5 }}>{s.desc}</div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </>
+  );
+}
+
+function DoneStep({ skippedCount }) {
+  return (
+    <div style={{ textAlign: 'center', padding: '14px 0' }}>
+      <div style={{
+        width: 64, height: 64, borderRadius: 32, margin: '0 auto 18px',
+        background: 'color-mix(in srgb, var(--ok) 18%, transparent)',
+        color: 'var(--ok)',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+      }}><Icons.Check size={32} sw={2.4}/></div>
+      <h1 style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 30, fontWeight: 600, margin: '0 0 8px' }}>
+        You're ready.
+      </h1>
+      <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 480, margin: '0 auto' }}>
+        Everything's wired up. Hit Finish to land on your dashboard.
+        {skippedCount > 0 && (
+          <>
+            <br/><br/>
+            You skipped {skippedCount} step{skippedCount === 1 ? '' : 's'} — they'll
+            stay in the "Finish setup" checklist on your dashboard so you can come
+            back when you're ready.
+          </>
+        )}
+      </p>
     </div>
   );
 }
 
-const inputS = {
-  width: '100%', padding: '10px 12px', borderRadius: 10,
-  border: '1px solid var(--border-strong)', background: 'var(--surface)',
-  outline: 'none', fontSize: 14, color: 'var(--fg)',
-};
+// ─── Reusable bits ────────────────────────────────────────────────────
 
-function Field({ label, hint, children }) {
+function PrimaryCTA({ currentStep, onContinue, busy }) {
+  const label = currentStep === 'welcome' ? "Let's go"
+              : currentStep === 'done'    ? 'Finish'
+              : currentStep === 'tour'    ? 'Almost there'
+              : 'Save & continue';
   return (
-    <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-      <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--fg-2)' }}>{label}</span>
-      {children}
-      {hint && <span style={{ fontSize: 11, color: 'var(--muted)' }}>{hint}</span>}
-    </label>
+    <button onClick={onContinue} className="btn btn-primary" disabled={busy}>
+      {busy ? 'Saving…' : label}
+      {!busy && <Icons.Arrow size={13} sw={1.8}/>}
+    </button>
   );
 }
 
-function prettifyError(e) {
-  const msg = e?.message || 'Something went wrong';
-  // The api wrapper formats as "STATUS: detail" — strip the prefix for UI.
-  return msg.replace(/^\d+:\s*/, '');
+function ProgressRow({ steps, currentStep, completed, skipped, onJump }) {
+  const stepIdx = steps.findIndex((s) => s.id === currentStep);
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+      {steps.map((s, i) => {
+        const isCurrent = s.id === currentStep;
+        const isDone    = completed.includes(s.id);
+        const isSkip    = skipped.includes(s.id);
+        const visited   = isDone || isSkip || i <= stepIdx;
+        return (
+          <button key={s.id} onClick={() => onJump(s.id)} disabled={!visited}
+            title={s.label}
+            style={{
+              flex: 1, height: 6, borderRadius: 3,
+              background: isCurrent ? 'var(--accent)'
+                       : isDone    ? 'color-mix(in srgb, var(--ok) 60%, transparent)'
+                       : isSkip    ? 'color-mix(in srgb, var(--warn) 40%, transparent)'
+                       : visited   ? 'var(--border-strong)'
+                       :             'var(--border)',
+              cursor: visited ? 'pointer' : 'default',
+              border: 0,
+              transition: 'background 0.2s',
+            }}/>
+        );
+      })}
+    </div>
+  );
+}
+
+function StepHeader({ title, subtitle }) {
+  return (
+    <div style={{ marginBottom: 4 }}>
+      <h2 style={{
+        fontFamily: 'var(--font-display)', fontStyle: 'italic',
+        fontSize: 24, fontWeight: 600, margin: '0 0 6px',
+      }}>{title}</h2>
+      <p style={{ color: 'var(--muted)', fontSize: 13.5, margin: 0, lineHeight: 1.55 }}>{subtitle}</p>
+    </div>
+  );
+}
+
+function Field({ label, hint, required, children }) {
+  return (
+    <div>
+      <label style={{
+        display: 'block', fontSize: 11.5, fontWeight: 600,
+        color: 'var(--muted)', letterSpacing: '0.04em',
+        textTransform: 'uppercase', marginBottom: 6,
+      }}>{label}{required && <span style={{ color: 'var(--danger)' }}> *</span>}</label>
+      {children}
+      {hint && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5 }}>{hint}</div>}
+    </div>
+  );
+}
+
+const inputStyle = { padding: '10px 12px', fontSize: 14, width: '100%' };
+
+function Shell({ tweaks, children }) {
+  return (
+    <div className={`app-root dir-${tweaks.direction}`} style={{
+      minHeight: '100vh', padding: '40px 24px',
+      background: 'var(--page)',
+      display: 'flex', flexDirection: 'column', alignItems: 'center',
+    }}>
+      <div style={{ width: '100%', maxWidth: 680 }}>{children}</div>
+    </div>
+  );
 }

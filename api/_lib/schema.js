@@ -1534,4 +1534,23 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_id UUID
   REFERENCES staff_members(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_bookings_staff_date
   ON bookings(workspace_id, staff_id, date) WHERE staff_id IS NOT NULL;
+
+-- Onboarding progress per user. Tracks which step they're on, which
+-- steps they've finished, and which they explicitly skipped. The actual
+-- form data (business name, services, etc.) lives in its real table
+-- (calendar_settings, services, etc.) — this column only tracks the
+-- wizard's navigational state so we can resume mid-flow.
+--
+-- Shape:
+--   {
+--     currentStep: 'services',
+--     completedSteps: ['welcome', 'business'],
+--     skippedSteps: ['branding'],
+--     lastActiveAt: '2026-...'
+--   }
+--
+-- Dismissed checklist items (post-onboarding) also live here so the
+-- dashboard "Finish setting up" card doesn't keep nagging once an
+-- owner waves off a recommendation.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_state JSONB NOT NULL DEFAULT '{}'::jsonb;
 `;

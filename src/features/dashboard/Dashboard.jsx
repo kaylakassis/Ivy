@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import OnboardingChecklist from './SetupChecklist.jsx';
 
 const METRICS = [
   { k: 'mrr',     label: 'Monthly revenue' },
@@ -289,7 +290,10 @@ export default function Dashboard() {
     <div>
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <SetupChecklist/>
+        {/* Per-item dismissable checklist of skipped onboarding steps +
+            post-onboarding gaps. State persists via /api/onboarding/state
+            so dismissals carry across devices. */}
+        <OnboardingChecklist/>
         <div className="grid-auto">
           {METRICS.map(m => <MetricCard key={m.k} label={m.label} />)}
         </div>
