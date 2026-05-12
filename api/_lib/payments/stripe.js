@@ -8,6 +8,7 @@ import {
   verifyWebhookSignature, fetchCheckoutSession,
 } from '../stripe.js';
 import { fetchFinanceSettings } from '../finance.js';
+import { loadStripeCreds } from '../stripeCreds.js';
 
 export function getProviderName() { return 'stripe'; }
 
@@ -50,23 +51,12 @@ export async function createCheckoutSession({
   if (!stripeIsLive(fs)) {
     throw new Error('Stripe is not connected for this workspace');
   }
-  // Account-Links flow uses platform secret + Stripe-Account header.
-  // Legacy Standard OAuth stored the connected acct's own secret —
-  // when present, we use it directly with no acct header.
-  let secretKey;
-  let stripeAccount = null;
-  if (fs.stripeConnectUserId && fs.stripeOnboardingStatus === 'complete') {
-    secretKey = platformStripeSecret();
-    if (!secretKey) throw new Error('Platform Stripe secret is not configured');
-    stripeAccount = fs.stripeConnectUserId;
-  } else {
-    // Legacy path — secretKey loaded by the caller via stripeCreds.js
-    // already; here we don't have it decrypted, so we route through the
-    // platform key as a safe fallback (will fail if Standard OAuth was
-    // the only auth — caller should use loadStripeCreds in that case).
-    secretKey = platformStripeSecret();
-    if (!secretKey) throw new Error('Platform Stripe secret is not configured');
-  }
+  // Resolve the right credential pair via the central helper so we
+  // don't drift from stripeCreds.js's logic. Returns platform secret
+  // + Stripe-Account header for the Account-Links flow, and the
+  // connected acct's own secret (no header) for legacy Standard OAuth.
+  const creds = await loadStripeCreds(workspaceId);
+  const { secretKey, stripeAccount } = creds;
   const invoice = {
     id: metadata.invoice_id || metadata.booking_id || 'adhoc',
     number: metadata.invoice_number || description || 'Charge',

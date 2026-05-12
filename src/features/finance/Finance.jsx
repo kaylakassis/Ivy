@@ -57,11 +57,14 @@ export default function Finance() {
 
   const counts = useMemo(() => ({
     all:     invoices.length,
-    draft:   summary?.counts.draft   ?? invoices.filter((i) => i.status === 'draft').length,
-    sent:    summary?.counts.sent    ?? invoices.filter((i) => i.status === 'sent').length,
-    overdue: summary?.counts.overdue ?? invoices.filter((i) => i.status === 'overdue').length,
-    paid:    summary?.counts.paid    ?? invoices.filter((i) => i.status === 'paid').length,
-    voided:  summary?.counts.voided  ?? invoices.filter((i) => i.status === 'voided').length,
+    // Fully-optional chain: a summary without counts (defensive against
+    // schema drift) falls through to the local recount instead of
+    // throwing on .counts.draft of undefined.
+    draft:   summary?.counts?.draft   ?? invoices.filter((i) => i.status === 'draft').length,
+    sent:    summary?.counts?.sent    ?? invoices.filter((i) => i.status === 'sent').length,
+    overdue: summary?.counts?.overdue ?? invoices.filter((i) => i.status === 'overdue').length,
+    paid:    summary?.counts?.paid    ?? invoices.filter((i) => i.status === 'paid').length,
+    voided:  summary?.counts?.voided  ?? invoices.filter((i) => i.status === 'voided').length,
   }), [summary, invoices]);
 
   const rows = useMemo(() => {
@@ -115,11 +118,11 @@ export default function Finance() {
       return;
     }
     if (quoteId) {
-      // Setting the tab + selected-id pair belongs in a quotes hook
-      // when one exists. For now, route to /finance with the Quotes
-      // tab; the QuotesPanel reads ?quote on its own.
-      setTab('quotes');
-      // Leave ?quote in the URL — QuotesPanel will consume + strip it.
+      // Quotes is a SECTION (not a tab — `tab` is invoice-status
+      // filter). Switch section so the Quotes component mounts; it
+      // reads ?quote on its own and strips it after consumption.
+      setSection('quotes');
+      // Leave ?quote in the URL — Quotes.jsx consumes + strips it.
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
@@ -195,7 +198,10 @@ export default function Finance() {
           )}
         </div>
         {section === 'invoices' && (
-          <button className="btn btn-primary" onClick={startNew} disabled={creatingBusy}>
+          // Arrow wraps startNew so the click's SyntheticEvent doesn't
+          // land as the clientId arg — `...(clientId ? {clientId} : {})`
+          // below would otherwise spread the event into the API payload.
+          <button className="btn btn-primary" onClick={() => startNew()} disabled={creatingBusy}>
             <Icons.Plus size={13} sw={2}/> {creatingBusy ? 'Creating…' : 'New invoice'}
           </button>
         )}

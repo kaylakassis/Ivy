@@ -132,7 +132,11 @@ export async function fetchAccountSummary(arg) {
   return {
     id: acct.id,
     label,
-    livemode: !!acct.charges_enabled && !acct.id?.startsWith('acct_test_'),
+    // Stripe returns acct.livemode directly — true for live-mode keys,
+    // false for test-mode keys. The previous heuristic (`!startsWith
+    // 'acct_test_'`) was wrong: real Stripe IDs always start with
+    // `acct_` regardless of mode.
+    livemode: !!acct.livemode,
     chargesEnabled: !!acct.charges_enabled,
     detailsSubmitted: !!acct.details_submitted,
     payoutsEnabled: !!acct.payouts_enabled,

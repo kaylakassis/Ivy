@@ -70,9 +70,12 @@ export default function Calendar() {
         // the serializer.
         setSelectedEvent({ ...b, kind: 'booking' });
         setDrawer('event');
-        params.delete('booking');
-        navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
       }
+      // Strip the param either way — if the booking isn't in the list
+      // (cancelled, on a different visible range), we don't want the
+      // effect to keep re-firing on every cal.bookings change.
+      params.delete('booking');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
       return;
     }
 

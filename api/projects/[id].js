@@ -97,12 +97,27 @@ export default async function handler(req, res) {
       }
       if ('description' in body) push('description', body.description == null ? null : String(body.description).slice(0, 4000));
       if ('status' in body) {
-        if (!VALID_STATUS.has(body.status)) return badRequest(res, 'Invalid status');
-        push('status', body.status);
+        // Lowercase to match the index endpoint's intake + the
+        // CHECK constraint on the column. An external caller sending
+        // 'Active' would otherwise 400 even though the value is valid.
+        const s = String(body.status || '').toLowerCase();
+        if (!VALID_STATUS.has(s)) return badRequest(res, 'Invalid status');
+        push('status', s);
       }
       if ('color' in body)    push('color',     body.color    ? String(body.color).slice(0, 32) : null);
-      if ('startsAt' in body) push('starts_at', body.startsAt || null);
-      if ('endsAt' in body)   push('ends_at',   body.endsAt   || null);
+      if ('startsAt' in body) {
+        // Same shape as the index endpoint: slice to 10 chars + accept
+        // null. Postgres rejects malformed date strings with a 500;
+        // validate the YYYY-MM-DD shape up-front.
+        const v = body.startsAt ? String(body.startsAt).slice(0, 10) : null;
+        if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return badRequest(res, 'startsAt must be YYYY-MM-DD');
+        push('starts_at', v);
+      }
+      if ('endsAt' in body) {
+        const v = body.endsAt ? String(body.endsAt).slice(0, 10) : null;
+        if (v && !/^\d{4}-\d{2}-\d{2}$/.test(v)) return badRequest(res, 'endsAt must be YYYY-MM-DD');
+        push('ends_at', v);
+      }
       if ('amountQuoted' in body) {
         if (body.amountQuoted == null) push('amount_quoted', null);
         else {

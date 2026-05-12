@@ -69,7 +69,7 @@ export default async function handler(req, res) {
       if (!name) return badRequest(res, 'Name is required');
       if (name.length > 200) return badRequest(res, 'Name too long');
 
-      const status = (body.status || 'active').toString();
+      const status = (body.status || 'active').toString().toLowerCase();
       if (!VALID_STATUS.has(status)) return badRequest(res, 'Invalid status');
 
       // Verify the client (if supplied) belongs to this workspace —

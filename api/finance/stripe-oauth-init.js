@@ -38,6 +38,17 @@ export default async function handler(req, res) {
   let step = 'init';
   try {
     step = 'auth';
+    // requireUser 401-JSONs on missing session — but this endpoint is
+    // reached via a top-level <a href> click, so a raw JSON response
+    // would just appear in the address bar. Sniff the cookie first;
+    // if there's no session, redirect to /signin so the user lands
+    // somewhere useful.
+    if (!req.headers.cookie || !/(?:^|;\s*)thryve_session=/.test(req.headers.cookie)) {
+      const dest = encodeURIComponent('/finance');
+      res.writeHead(302, { Location: `/signin?next=${dest}` });
+      res.end();
+      return;
+    }
     const user = await requireUser(req, res);
     if (!user) return;
     step = 'workspace';

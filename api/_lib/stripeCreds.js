@@ -33,9 +33,19 @@ export async function loadStripeCreds(workspaceId) {
   `;
   const row = r.rows[0];
 
-  // Account Links / Express path — preferred when an acct id exists,
-  // regardless of whether a legacy secret was ever stored.
-  if (row?.stripe_connect_user_id && row.stripe_onboarding_status !== 'pending') {
+  // Account Links / Express path — preferred when an acct id exists.
+  //
+  // We accept ANY persisted acct id regardless of onboarding_status,
+  // including 'pending'. Stripe's verification flow often holds
+  // `charges_enabled=false` for hours after the owner submits the
+  // hosted form; if we gate at 'pending', every per-workspace API call
+  // throws no_stripe_connection and the owner's Stripe page looks dead
+  // even though the acct exists. The Stripe API itself returns the
+  // right error (e.g. "Your account cannot currently make live
+  // charges") when an actual charge fails — that error surfaces
+  // cleanly to the owner and is more useful than a synthetic
+  // "not connected" message.
+  if (row?.stripe_connect_user_id) {
     const platformKey = platformStripeSecret();
     if (!platformKey) {
       const e = new Error('Platform STRIPE_SECRET_KEY is not configured');
@@ -43,12 +53,13 @@ export async function loadStripeCreds(workspaceId) {
       throw e;
     }
     return {
-      secretKey:      platformKey,
-      stripeAccount:  row.stripe_connect_user_id,
-      label:          row.stripe_account_label || null,
-      connectAccount: row.stripe_connect_user_id,
-      currency:       (row.currency || 'USD').toUpperCase(),
-      hasWebhook:     !!row.stripe_webhook_secret_encrypted,
+      secretKey:        platformKey,
+      stripeAccount:    row.stripe_connect_user_id,
+      label:            row.stripe_account_label || null,
+      connectAccount:   row.stripe_connect_user_id,
+      onboardingStatus: row.stripe_onboarding_status || 'complete',
+      currency:         (row.currency || 'USD').toUpperCase(),
+      hasWebhook:       !!row.stripe_webhook_secret_encrypted,
     };
   }
 

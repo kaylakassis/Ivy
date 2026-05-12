@@ -62,16 +62,16 @@ export default function CommandPalette() {
       api.get('/search?q=' + encodeURIComponent(trimmed))
         .then((r) => {
           setGroups([
-            ...localNavGroup(trimmed),
+            ...localNavGroup(trimmed, !!user?.isSuperAdmin),
             ...(r.groups || []),
           ]);
           setActive(0);
         })
-        .catch(() => setGroups(localNavGroup(trimmed)))
+        .catch(() => setGroups(localNavGroup(trimmed, !!user?.isSuperAdmin)))
         .finally(() => setLoading(false));
     }, 120);
     return () => clearTimeout(id);
-  }, [q, open]);
+  }, [q, open, user?.isSuperAdmin]);
 
   // Flatten groups for keyboard navigation.
   const flat = useMemo(
@@ -244,10 +244,11 @@ const kbd = {
 // "Jump to" pages always show even with no query (or as a header group)
 // when q is non-empty so the user can navigate without typing the page
 // name perfectly. Filters by case-insensitive match.
-function localNavGroup(q) {
+function localNavGroup(q, isSuperAdmin) {
   const lc = q.toLowerCase();
   const matches = NAV.filter((n) =>
-    n.label.toLowerCase().includes(lc) || n.to.toLowerCase().includes(lc),
+    (n.label.toLowerCase().includes(lc) || n.to.toLowerCase().includes(lc))
+      && (!n.superAdminOnly || isSuperAdmin),
   );
   if (matches.length === 0) return [];
   return [{

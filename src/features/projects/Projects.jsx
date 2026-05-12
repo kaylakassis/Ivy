@@ -6,7 +6,8 @@
 // Status tabs across the top (planning / active / on hold / completed),
 // list of project cards with linked-artifact counts, "+ New project"
 // button. Clicking a card opens ProjectDrawer.
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useProjects } from './state.js';
@@ -26,6 +27,7 @@ const TABS = [
   { id: 'active',    label: 'Active' },
   { id: 'on_hold',   label: 'On hold' },
   { id: 'completed', label: 'Completed' },
+  { id: 'cancelled', label: 'Cancelled' },
 ];
 
 export default function Projects() {
@@ -36,6 +38,24 @@ export default function Projects() {
   } = useProjects();
   const [openId, setOpenId] = useState(null);
   const [creating, setCreating] = useState(false);
+
+  // ?id=<projectId> deep-link consumed from ClientDrawer's project rows.
+  // Strip after consumption so a refresh doesn't re-open. We wait for
+  // projects to land first — opening the drawer before the list is
+  // loaded would show an empty drawer (openProject lookup would miss).
+  const location = useLocation();
+  const navigate = useNavigate();
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const pid = params.get('id');
+    if (!pid || !Array.isArray(projects) || projects.length === 0) return;
+    if (projects.some((p) => p.id === pid)) {
+      setOpenId(pid);
+    }
+    params.delete('id');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.search, projects]);
 
   const visible = useMemo(() => projects, [projects]);
   const openProject = projects.find((p) => p.id === openId) || null;

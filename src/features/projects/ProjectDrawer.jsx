@@ -38,6 +38,8 @@ export default function ProjectDrawer({ project, onClose, onUpdate, onDelete }) 
   useEffect(() => { setName(project.name); }, [project.name]);
   useEffect(() => { setDescr(project.description || ''); }, [project.description]);
   useEffect(() => { setAmount(project.amountQuoted == null ? '' : String(project.amountQuoted)); }, [project.amountQuoted]);
+  useEffect(() => { setStarts(project.startsAt ? project.startsAt.toString().slice(0, 10) : ''); }, [project.startsAt]);
+  useEffect(() => { setEnds(project.endsAt ? project.endsAt.toString().slice(0, 10) : ''); }, [project.endsAt]);
 
   const safeUpdate = async (patch) => {
     setSaveStatus({ kind: 'pending', text: 'Saving…' });

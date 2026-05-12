@@ -1052,27 +1052,32 @@ function ClientProjectsBlock({ client }) {
         )
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-          {projects.map((p) => (
-            <a key={p.id} href={`/projects`} onClick={(e) => { /* let the link route normally */ }}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 8,
-                padding: '8px 10px', borderRadius: 8, textDecoration: 'none',
-                background: 'var(--surface-2)', border: '1px solid var(--border)',
-                color: 'var(--fg)',
-              }}>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 550 }}>{p.name}</div>
-                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
-                  {p.status}{p.counts && (
-                    ' · ' + Object.entries(p.counts)
-                      .filter(([, v]) => v > 0)
-                      .map(([k, v]) => `${v} ${k}`)
-                      .join(' · ')
-                  )}
+          {projects.map((p) => {
+            // Build the counts subtitle once so we can skip the
+            // orphan " · " separator when every count is zero.
+            const countParts = p.counts
+              ? Object.entries(p.counts)
+                  .filter(([, v]) => v > 0)
+                  .map(([k, v]) => `${v} ${k}`)
+              : [];
+            return (
+              <button key={p.id}
+                onClick={() => navigate(`/projects?id=${encodeURIComponent(p.id)}`)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '8px 10px', borderRadius: 8,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  color: 'var(--fg)', textAlign: 'left', cursor: 'pointer',
+                }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13, fontWeight: 550 }}>{p.name}</div>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    {[p.status, ...countParts].filter(Boolean).join(' · ')}
+                  </div>
                 </div>
-              </div>
-            </a>
-          ))}
+              </button>
+            );
+          })}
         </div>
       )}
     </div>

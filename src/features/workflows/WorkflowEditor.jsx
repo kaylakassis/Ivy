@@ -131,7 +131,22 @@ export default function WorkflowEditor({ workflow, onClose, onSave, busy }) {
 
           <Field label="Trigger" hint="What kicks this off?">
             <select className="input" value={triggerType}
-              onChange={(e) => { setTriggerType(e.target.value); setTriggerConfig({}); }}
+              onChange={(e) => {
+                const next = e.target.value;
+                setTriggerType(next);
+                // Preserve sensible defaults rather than clearing — if
+                // we set `{}` the displayed default (?? 60 / ?? 1)
+                // never lands in state and Save 400s with "Trigger
+                // needs a daysInactive in [1, 3650]".
+                const spec = TRIGGERS.find((t) => t.id === next);
+                if (spec?.config === 'daysInactive') {
+                  setTriggerConfig({ daysInactive: 60 });
+                } else if (spec?.config === 'daysAfter') {
+                  setTriggerConfig({ daysAfter: 1 });
+                } else {
+                  setTriggerConfig({});
+                }
+              }}
               style={inputStyle}>
               {TRIGGERS.map((t) => <option key={t.id} value={t.id}>{t.label}</option>)}
             </select>
@@ -141,7 +156,12 @@ export default function WorkflowEditor({ workflow, onClose, onSave, busy }) {
                 <span style={{ fontSize: 13 }}>Inactive for</span>
                 <input className="input" type="number" min={1} max={3650}
                   value={triggerConfig.daysInactive ?? 60}
-                  onChange={(e) => setTriggerConfig({ daysInactive: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    // Blank/non-numeric keeps the last good value
+                    // instead of writing NaN that fails validation.
+                    setTriggerConfig({ daysInactive: Number.isFinite(n) && n >= 1 ? n : (triggerConfig.daysInactive ?? 60) });
+                  }}
                   style={{ ...inputStyle, width: 90 }}/>
                 <span style={{ fontSize: 13 }}>days</span>
               </div>
@@ -151,7 +171,10 @@ export default function WorkflowEditor({ workflow, onClose, onSave, busy }) {
                 <span style={{ fontSize: 13 }}>Fire</span>
                 <input className="input" type="number" min={1} max={365}
                   value={triggerConfig.daysAfter ?? 1}
-                  onChange={(e) => setTriggerConfig({ daysAfter: Number(e.target.value) })}
+                  onChange={(e) => {
+                    const n = Number(e.target.value);
+                    setTriggerConfig({ daysAfter: Number.isFinite(n) && n >= 1 ? n : (triggerConfig.daysAfter ?? 1) });
+                  }}
                   style={{ ...inputStyle, width: 80 }}/>
                 <span style={{ fontSize: 13 }}>days after the booking</span>
               </div>

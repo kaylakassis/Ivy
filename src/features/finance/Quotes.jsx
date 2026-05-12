@@ -47,11 +47,12 @@ export default function Quotes() {
     const quoteId = params.get('quote');
     if (!quoteId || !Array.isArray(quotes)) return;
     const found = quotes.find((q) => q.id === quoteId);
-    if (found) {
-      setEditing(found);
-      params.delete('quote');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-    }
+    if (found) setEditing(found);
+    // Strip the param regardless — missing-quote case is a no-op,
+    // but leaving the URL param would re-fire the effect on every
+    // quotes refresh.
+    params.delete('quote');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, quotes]);
 
