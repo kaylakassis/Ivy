@@ -8,6 +8,7 @@
 export const NAV = [
   { id: 'dashboard', to: '/dashboard',  label: 'Dashboard',      icon: 'Home' },
   { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users' },
+  { id: 'projects',  to: '/projects',   label: 'Projects',       icon: 'Doc' },
   { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar' },
   { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar' },
   { id: 'goals',     to: '/goals',      label: 'Goals & Tasks',  icon: 'Check' },
@@ -22,6 +23,7 @@ export const NAV = [
 export const TITLES = {
   dashboard: { title: 'Dashboard',     subtitle: 'Home' },
   clients:   { title: 'Clients',       subtitle: 'Your people' },
+  projects:  { title: 'Projects',      subtitle: 'Engagements' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },
   finance:   { title: 'Finance',       subtitle: 'Money in, money out' },
   goals:     { title: 'Goals & Tasks', subtitle: 'Stay on track' },

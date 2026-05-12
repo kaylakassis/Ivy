@@ -20,6 +20,7 @@ import { ErrorBoundary } from './lib/monitoring.js';
 // ── Lazy: business app pages ──
 const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
 const Clients     = lazy(() => import('./features/clients/Clients.jsx'));
+const Projects    = lazy(() => import('./features/projects/Projects.jsx'));
 const Calendar    = lazy(() => import('./features/calendar/Calendar.jsx'));
 const Finance     = lazy(() => import('./features/finance/Finance.jsx'));
 const Goals       = lazy(() => import('./features/goals/Goals.jsx'));
@@ -160,6 +161,7 @@ export default function App() {
         <Route element={<RequireAuth><RoleRouter><AppShell /></RoleRouter></RequireAuth>}>
           <Route path="/dashboard"  element={<Dashboard />} />
           <Route path="/clients"    element={<Clients />} />
+          <Route path="/projects"   element={<Projects />} />
           <Route path="/calendar"   element={<Calendar />} />
           <Route path="/finance"    element={<Finance />} />
           <Route path="/goals"      element={<Goals />} />

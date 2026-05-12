@@ -1369,4 +1369,42 @@ CREATE TABLE IF NOT EXISTS app_settings (
   CONSTRAINT app_settings_singleton CHECK (id = 1)
 );
 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+-- Project / engagement layer. Groups bookings + invoices + quotes +
+-- documents under a named engagement so project-based service providers
+-- (photographers, designers, consultants) can see "Smith wedding" as
+-- a single unit rather than three loose artifacts against the Smith
+-- client row. Session-based providers (trainers, stylists) can ignore
+-- this surface — every artifact remains workable without a project.
+CREATE TABLE IF NOT EXISTS projects (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  name TEXT NOT NULL,
+  description TEXT,
+  status TEXT NOT NULL DEFAULT 'active'
+    CHECK (status IN ('planning', 'active', 'on_hold', 'completed', 'cancelled')),
+  color TEXT,
+  starts_at DATE,
+  ends_at DATE,
+  amount_quoted NUMERIC(12,2),
+  notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_projects_workspace_client
+  ON projects(workspace_id, client_id);
+CREATE INDEX IF NOT EXISTS idx_projects_workspace_status_updated
+  ON projects(workspace_id, status, updated_at DESC);
+
+-- Optional artifact → project link. ON DELETE SET NULL so deleting a
+-- project doesn't cascade-delete invoices/bookings/docs underneath.
+ALTER TABLE bookings  ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+ALTER TABLE invoices  ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+ALTER TABLE quotes    ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+ALTER TABLE documents ADD COLUMN IF NOT EXISTS project_id UUID REFERENCES projects(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_bookings_project  ON bookings(project_id)  WHERE project_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_invoices_project  ON invoices(project_id)  WHERE project_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_quotes_project    ON quotes(project_id)    WHERE project_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id) WHERE project_id IS NOT NULL;
 `;

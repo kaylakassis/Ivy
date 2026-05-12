@@ -183,6 +183,12 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
           {/* Packages */}
           <ClientPackages client={client}/>
 
+          {/* Projects tied to this client — read-only summary list with
+              a "+ New project" shortcut. Full management lives at the
+              /projects tab; this section gives the client-centric view
+              for owners who think client-first. */}
+          <ClientProjectsBlock client={client}/>
+
           {/* Per-client analytics — fetched fresh from
               /api/clients/analytics so show rate / cadence / signed-doc
               count reflect the current state every time the drawer
@@ -966,6 +972,107 @@ function ClientAnalyticsBlock({ client, windowDays }) {
               </div>
             ))}
           </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Projects tied to this client ──────────────────────────────────
+// Lightweight summary that lists every project bound to this client_id
+// and a button to create a new one inline. Full project editor lives
+// at /projects — clicking a row jumps there with the row pre-opened
+// via the same ?id= deep-link pattern the rest of the app uses.
+function ClientProjectsBlock({ client }) {
+  const [projects, setProjects] = useState(null);
+  const [adding, setAdding]     = useState(false);
+  const [name, setName]         = useState('');
+  const [busy, setBusy]         = useState(false);
+
+  const load = () => {
+    api.get('/projects?clientId=' + encodeURIComponent(client.id))
+      .then((r) => setProjects(r.projects || []))
+      .catch(() => setProjects([]));
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [client.id]);
+
+  const createInline = async () => {
+    if (!name.trim() || busy) return;
+    setBusy(true);
+    try {
+      await api.post('/projects', { name: name.trim(), clientId: client.id });
+      setName(''); setAdding(false);
+      load();
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
+        <Section label="Projects"/>
+        {!adding && (
+          <button onClick={() => setAdding(true)} className="btn btn-ghost"
+            style={{ padding: '4px 8px', fontSize: 11.5, color: 'var(--muted)' }}>
+            + New
+          </button>
+        )}
+      </div>
+
+      {adding && (
+        <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
+          <input value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Project name (e.g. Smith wedding)"
+            autoFocus disabled={busy}
+            onKeyDown={(e) => { if (e.key === 'Enter') createInline(); if (e.key === 'Escape') { setAdding(false); setName(''); } }}
+            style={{
+              flex: 1, padding: '7px 10px', fontSize: 13,
+              border: '1px solid var(--border)', borderRadius: 8,
+              background: 'var(--surface-2)', outline: 'none',
+            }}/>
+          <button onClick={createInline} disabled={busy || !name.trim()} className="btn btn-primary"
+            style={{ padding: '6px 10px', fontSize: 12 }}>
+            {busy ? 'Saving…' : 'Create'}
+          </button>
+          <button onClick={() => { setAdding(false); setName(''); }} className="btn btn-ghost"
+            style={{ padding: '6px 8px', fontSize: 12 }}>
+            ×
+          </button>
+        </div>
+      )}
+
+      {projects === null ? (
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', padding: '4px 2px' }}>Loading…</div>
+      ) : projects.length === 0 ? (
+        !adding && (
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', padding: '4px 2px' }}>
+            No projects yet for this client.
+          </div>
+        )
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          {projects.map((p) => (
+            <a key={p.id} href={`/projects`} onClick={(e) => { /* let the link route normally */ }}
+              style={{
+                display: 'flex', alignItems: 'center', gap: 8,
+                padding: '8px 10px', borderRadius: 8, textDecoration: 'none',
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                color: 'var(--fg)',
+              }}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 550 }}>{p.name}</div>
+                <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                  {p.status}{p.counts && (
+                    ' · ' + Object.entries(p.counts)
+                      .filter(([, v]) => v > 0)
+                      .map(([k, v]) => `${v} ${k}`)
+                      .join(' · ')
+                  )}
+                </div>
+              </div>
+            </a>
+          ))}
         </div>
       )}
     </div>

@@ -74,6 +74,25 @@ export const TUTORIALS = {
     ],
   },
 
+  projects: {
+    title: 'Projects',
+    intro: "An engagement view for service work that spans more than a single session. Group every booking, invoice, quote, and signed document under a named project — perfect for photographers, designers, consultants, or anyone running multi-touchpoint work.",
+    steps: [
+      {
+        title: 'Group work under one roof',
+        body: "Create a project for each engagement (e.g. 'Smith wedding shoot' or 'Q1 retainer'). Every artifact you create afterward can be tied to it, so a year from now you can pull up the full picture in one tap.",
+      },
+      {
+        title: 'Track status at a glance',
+        body: "Planning → Active → On hold → Completed → Cancelled. Filter the list to just the active set when you're focusing on what's live this week.",
+      },
+      {
+        title: 'Linked everything stays linked',
+        body: "Bookings, invoices, quotes, and signed documents tied to a project show up in its drawer — one tap from any of them to open the source.",
+      },
+    ],
+  },
+
   calendar: {
     title: 'Calendar',
     intro: 'Bookings, services, hours, blocks — everything time-related lives here. The public booking link generated from this tab is how new clients book themselves into your schedule.',
