@@ -16,7 +16,12 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
 
   const cfg = SECTION_TYPES[section.type];
   const update = (patch) => onChange({ data: { ...section.data, ...patch } });
+  // Layout variant + per-section style overrides live OUTSIDE data so
+  // they don't pollute the form-data shape each renderer consumes.
+  const updateVariant = (variant) => onChange({ variant });
+  const updateStyle   = (patch)   => onChange({ style: { ...(section.style || {}), ...patch } });
   const Editor = EDITORS[section.type] || FallbackEditor;
+  const variants = cfg?.variants || [];
 
   return (
     <Shell title={cfg?.label || section.type} mobile={mobile}>
@@ -33,10 +38,118 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
       </div>
       <div className="divider" />
       <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }} className="scroll">
+        {variants.length > 0 && (
+          <FieldBlock label="Layout variant">
+            <select value={section.variant || variants[0].id}
+              onChange={(e) => updateVariant(e.target.value)}
+              style={inputS}>
+              {variants.map((v) => (
+                <option key={v.id} value={v.id}>{v.label}</option>
+              ))}
+            </select>
+          </FieldBlock>
+        )}
         <Editor data={section.data} update={update} />
+        <Divider/>
+        <StyleControls style={section.style || {}} updateStyle={updateStyle}/>
       </div>
     </Shell>
   );
+}
+
+// Per-section style overrides — background color/gradient, padding
+// density, text alignment. Kept inline so they're always available
+// regardless of section type.
+function StyleControls({ style, updateStyle }) {
+  return (
+    <>
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        Section style
+      </div>
+      <FieldBlock label="Background (color or CSS gradient — leaves the template default if empty)">
+        <input type="text" className="input" value={style.background || ''}
+          onChange={(e) => updateStyle({ background: e.target.value || undefined })}
+          placeholder="#FFFFFF or linear-gradient(…)"
+          style={inputS}/>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+          {['', '#FFFFFF', '#0D0E0C', '#F5F1EA', '#5B7C5F',
+            'linear-gradient(135deg,#E5572B,#F2D2BC)',
+            'linear-gradient(180deg,#15201A,#1F2B23)'].map((bg) => (
+            <button key={bg || 'none'} type="button"
+              onClick={() => updateStyle({ background: bg || undefined })}
+              title={bg || 'Reset to template'}
+              style={{
+                width: 28, height: 28, borderRadius: 6,
+                background: bg || 'transparent',
+                border: '1px solid var(--border)',
+                cursor: 'pointer',
+                ...(bg ? {} : {
+                  backgroundImage: 'linear-gradient(45deg, var(--border) 25%, transparent 25%, transparent 75%, var(--border) 75%, var(--border)), linear-gradient(45deg, var(--border) 25%, transparent 25%, transparent 75%, var(--border) 75%, var(--border))',
+                  backgroundSize: '8px 8px',
+                  backgroundPosition: '0 0, 4px 4px',
+                }),
+              }}/>
+          ))}
+        </div>
+      </FieldBlock>
+      <FieldBlock label="Vertical padding">
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[
+            ['compact',  'Compact'],
+            ['normal',   'Normal'],
+            ['spacious', 'Spacious'],
+          ].map(([id, label]) => (
+            <button key={id} type="button"
+              onClick={() => updateStyle({ padding: id === 'normal' ? undefined : id })}
+              style={{
+                flex: 1, padding: '6px 8px', fontSize: 11.5,
+                border: '1px solid var(--border)',
+                background: (style.padding || 'normal') === id ? 'var(--accent)' : 'var(--surface)',
+                color: (style.padding || 'normal') === id ? 'var(--accent-ink)' : 'var(--fg)',
+                borderRadius: 6, cursor: 'pointer',
+              }}>{label}</button>
+          ))}
+        </div>
+      </FieldBlock>
+      <FieldBlock label="Text alignment">
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[
+            ['',       'Default'],
+            ['left',   'Left'],
+            ['center', 'Center'],
+            ['right',  'Right'],
+          ].map(([id, label]) => (
+            <button key={id || 'default'} type="button"
+              onClick={() => updateStyle({ textAlign: id || undefined })}
+              style={{
+                flex: 1, padding: '6px 8px', fontSize: 11.5,
+                border: '1px solid var(--border)',
+                background: (style.textAlign || '') === id ? 'var(--accent)' : 'var(--surface)',
+                color: (style.textAlign || '') === id ? 'var(--accent-ink)' : 'var(--fg)',
+                borderRadius: 6, cursor: 'pointer',
+              }}>{label}</button>
+          ))}
+        </div>
+      </FieldBlock>
+    </>
+  );
+}
+
+function FieldBlock({ label, children }) {
+  return (
+    <div>
+      <label style={{
+        display: 'block', fontSize: 11, fontWeight: 600,
+        color: 'var(--muted)', letterSpacing: '0.04em',
+        textTransform: 'uppercase', marginBottom: 6,
+      }}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+function Divider() {
+  return <div style={{ borderTop: '1px solid var(--border)', margin: '4px 0' }}/>;
 }
 
 function Shell({ title, children, mobile = false }) {
