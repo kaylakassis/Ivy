@@ -80,6 +80,7 @@ export default function MobileDrawer({ direction, onClose }) {
             return (
               <NavLink key={item.id}
                 to={item.to} end={item.to === '/'}
+                data-tour={`nav-${item.id}`}
                 className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
               >
                 {({ isActive }) => (

@@ -18,10 +18,15 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
 
   const home = appUrl();
+  // When the Connect flow was initiated from the onboarding wizard
+  // (`?from=onboarding` propagated all the way through to here),
+  // bounce the user back to /onboarding instead of /finance so they
+  // don't lose their place mid-wizard.
+  const returnTo = req.query.from === 'onboarding' ? '/onboarding' : '/finance';
   const safeRedirect = (params) => {
     const qs = new URLSearchParams(params).toString();
     res.statusCode = 302;
-    res.setHeader('Location', `${home}/finance?${qs}`);
+    res.setHeader('Location', `${home}${returnTo}?${qs}`);
     res.end();
   };
 

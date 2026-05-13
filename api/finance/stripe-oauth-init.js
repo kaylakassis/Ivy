@@ -57,11 +57,13 @@ export default async function handler(req, res) {
     step = 'platform-key';
     const platformKey = platformStripeSecret();
     if (!platformKey) {
-      // Top-level navigation lands here — bounce back to /finance with
-      // an error code in the query string so the React app can render
-      // a proper banner instead of a raw API page.
-      const dest = '/finance?stripeError=' + encodeURIComponent('no_key');
-      res.writeHead(302, { Location: dest });
+      // Top-level navigation lands here — bounce back to /finance (or
+      // /onboarding if they came from the wizard) with an error code
+      // in the query string so the React app can render a proper
+      // banner instead of a raw API page.
+      const base = req.query.from === 'onboarding' ? '/onboarding' : '/finance';
+      const sep = req.query.from === 'onboarding' ? '?' : '?';
+      res.writeHead(302, { Location: `${base}${sep}stripeError=no_key` });
       res.end();
       return;
     }
@@ -103,12 +105,18 @@ export default async function handler(req, res) {
     // the link expires; return_url is where Stripe sends them when the
     // form is submitted (whether or not it's actually complete — we
     // re-check status server-side in the callback).
+    //
+    // `?from=onboarding` is propagated through both URLs so the
+    // callback can route a wizard user back to /onboarding instead of
+    // /finance — preventing the "I clicked Connect Stripe mid-wizard
+    // and got dumped onto the dashboard" UX trap.
     const base = appUrl();
+    const fromParam = req.query.from === 'onboarding' ? '?from=onboarding' : '';
     const link = await createAccountLink({
       secretKey:  platformKey,
       accountId,
-      refreshUrl: `${base}/api/finance/stripe-oauth-init`,
-      returnUrl:  `${base}/api/finance/stripe-oauth-callback`,
+      refreshUrl: `${base}/api/finance/stripe-oauth-init${fromParam}`,
+      returnUrl:  `${base}/api/finance/stripe-oauth-callback${fromParam}`,
       type:       'account_onboarding',
     });
 
@@ -134,7 +142,9 @@ export default async function handler(req, res) {
       code = 'unsupported_country';
     }
 
-    const dest = '/finance?stripeError=' + encodeURIComponent(code)
+    const basePath = req.query.from === 'onboarding' ? '/onboarding' : '/finance';
+    const dest = basePath
+      + '?stripeError=' + encodeURIComponent(code)
       + '&stripeStep=' + encodeURIComponent(step)
       + '&stripeMsg=' + encodeURIComponent((err.message || String(err)).slice(0, 240));
     res.writeHead(302, { Location: dest });

@@ -23,7 +23,7 @@
 // "Save & exit" exits without marking the wizard complete; the next
 // sign-in resumes here.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
@@ -75,6 +75,7 @@ export default function OnboardingPage() {
   const [tweaks] = useTweaks();
   const { user } = useAuth();
   const nav = useNavigate();
+  const location = useLocation();
 
   // Navigational state — synced to /api/onboarding/state. completedSteps
   // grows as the owner advances; skippedSteps tracks explicit "do this
@@ -383,6 +384,7 @@ export default function OnboardingPage() {
 
   return (
     <Shell tweaks={tweaks}>
+      <StripeBounceBanner search={location.search} nav={nav}/>
       <ProgressRow steps={STEPS} currentStep={currentStep} completed={completedSteps} skipped={skippedSteps}
         onJump={(id) => {
           // Allow jumping to any step that's already been visited
@@ -869,7 +871,7 @@ function PaymentsStep({ stripeStatus }) {
             <div style={{ fontSize: 14 }}>
               Stripe handles the cards. Connect once — funds settle to your own bank account.
             </div>
-            <a href="/api/finance/stripe-oauth-init" className="btn btn-primary"
+            <a href="/api/finance/stripe-oauth-init?from=onboarding" className="btn btn-primary"
               style={{ alignSelf: 'flex-start' }}>
               <Icons.Spark size={13} sw={1.8}/> Connect Stripe
             </a>
@@ -1123,6 +1125,64 @@ function Shell({ tweaks, children }) {
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>
       <div style={{ width: '100%', maxWidth: 680 }}>{children}</div>
+    </div>
+  );
+}
+
+// Banner shown at the top of the wizard when a Stripe Connect attempt
+// bounces back here with a status / error param. Success cases are
+// short-and-positive ("You're connected — keep going"); failures point
+// at the env var or Connect activation flow.
+const STRIPE_BOUNCE_MSGS = {
+  connected:  { tone: 'ok',   title: 'Stripe is connected.',         body: 'You\'re ready to take cards. You can keep going with onboarding.' },
+  pending:    { tone: 'warn', title: 'Stripe is verifying your account', body: 'You can continue setting up THRYVE. Charges work as soon as Stripe finishes verification.' },
+  incomplete: { tone: 'warn', title: 'Stripe form not finished',     body: 'You left the Stripe form before submitting. Click Connect Stripe again to resume — your account is saved.' },
+  no_key:     { tone: 'err',  title: 'Stripe isn\'t configured yet', body: 'Your STRIPE_SECRET_KEY env var is missing. Skip this step for now — you can connect Stripe later from Finance.' },
+  bad_key:    { tone: 'err',  title: 'Stripe rejected the API key',  body: 'The STRIPE_SECRET_KEY in Vercel isn\'t a valid Stripe secret key. Skip for now — you can connect later.' },
+  connect_not_enabled: { tone: 'err', title: 'Stripe Connect isn\'t enabled', body: 'Visit dashboard.stripe.com/connect/accounts/overview and click "Get started", then come back. Skip for now if you want.' },
+  wrong_mode: { tone: 'err',  title: 'Stripe mode mismatch',         body: 'A Stripe account from a different mode is saved. Open Finance after onboarding to disconnect + reconnect.' },
+  unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'THRYVE currently only supports US Stripe accounts. Email hello@getthryve.ai to enable your region.' },
+  error:      { tone: 'err',  title: 'Couldn\'t finish the Stripe step', body: 'Something went wrong. You can skip this and try again from Finance once you\'re in.' },
+};
+function StripeBounceBanner({ search, nav }) {
+  const params = new URLSearchParams(search);
+  const status  = params.get('stripe');         // connected | pending | incomplete | error
+  const errCode = params.get('stripeError');    // no_key | bad_key | …
+  const code = errCode || status;
+  if (!code) return null;
+  const info = STRIPE_BOUNCE_MSGS[code] || STRIPE_BOUNCE_MSGS.error;
+  const detail = params.get('detail') || params.get('stripeMsg') || '';
+  const dismiss = () => nav('/onboarding', { replace: true });
+  const palette = {
+    ok:   { bg: 'rgba(58,141,68,0.12)',  border: 'rgba(58,141,68,0.35)',  fg: 'var(--ok)' },
+    warn: { bg: 'rgba(214,158,46,0.12)', border: 'rgba(214,158,46,0.35)', fg: 'var(--warn)' },
+    err:  { bg: 'rgba(214,88,80,0.12)',  border: 'rgba(214,88,80,0.35)',  fg: 'var(--danger)' },
+  }[info.tone];
+  return (
+    <div style={{
+      padding: '12px 14px', borderRadius: 10, marginBottom: 14,
+      background: palette.bg, border: '1px solid ' + palette.border,
+      display: 'flex', alignItems: 'flex-start', gap: 10,
+    }}>
+      <div style={{ marginTop: 1, color: palette.fg, fontWeight: 700, fontSize: 14, minWidth: 16 }}>
+        {info.tone === 'ok' ? '✓' : info.tone === 'warn' ? '!' : '×'}
+      </div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 600, color: 'var(--fg)' }}>{info.title}</div>
+        <div style={{ marginTop: 2, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>{info.body}</div>
+        {detail && (
+          <details style={{ marginTop: 4, fontSize: 11.5, color: 'var(--muted)' }}>
+            <summary style={{ cursor: 'pointer' }}>Technical detail</summary>
+            <code style={{ display: 'block', marginTop: 4, padding: 6, background: 'var(--surface-2)', borderRadius: 6, wordBreak: 'break-word' }}>{detail}</code>
+          </details>
+        )}
+      </div>
+      <button onClick={dismiss} aria-label="Dismiss"
+        style={{
+          flexShrink: 0, padding: '4px 8px', fontSize: 11, cursor: 'pointer',
+          background: 'transparent', color: 'var(--muted)',
+          border: '1px solid var(--border)', borderRadius: 6,
+        }}>Dismiss</button>
     </div>
   );
 }

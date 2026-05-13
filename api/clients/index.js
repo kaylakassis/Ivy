@@ -70,17 +70,20 @@ export default async function handler(req, res) {
 
       if (!name) return badRequest(res, 'Name is required');
       if (name.length > 120) return badRequest(res, 'Name too long');
-      // Email is now required so the client can be invited to the
-      // portal, get booking confirmations, and receive invoices.
+      // Email is required so the client can be invited to the portal,
+      // get booking confirmations, and receive invoices.
       if (!email) return badRequest(res, 'Email is required');
 
-      // Phone now required + normalized to E.164. Bookings, SMS
-      // reminders, and 2FA flows all depend on it being present and
-      // dial-able.
-      if (!body.phone) return badRequest(res, 'Phone number is required');
-      const phone = normalizePhone(body.phone);
-      if (!phone) return badRequest(res, 'Phone number is not a valid format');
-      const smsConsentAt = body.smsConsent ? new Date().toISOString() : null;
+      // Phone is OPTIONAL. SMS reminders / 2FA flows naturally degrade
+      // to email-only when no phone is on file. A missing phone is
+      // fine; a present-but-malformed phone still 400s so we don't
+      // persist junk we can't dial.
+      let phone = null;
+      if (body.phone != null && String(body.phone).trim()) {
+        phone = normalizePhone(body.phone);
+        if (!phone) return badRequest(res, 'Phone number is not a valid format');
+      }
+      const smsConsentAt = body.smsConsent && phone ? new Date().toISOString() : null;
 
       const tags = source ? [source] : [];
       const { rows } = await sql`
