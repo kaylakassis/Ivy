@@ -27,6 +27,7 @@ export default async function handler(req, res) {
   const statements = splitStatements(SCHEMA_SQL);
 
   let applied = 0;
+  const failures = [];
   for (let i = 0; i < statements.length; i++) {
     const stmt = statements[i];
     try {
@@ -35,18 +36,25 @@ export default async function handler(req, res) {
       applied++;
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error(`[migrate] statement ${i + 1}/${statements.length} failed:`, err.message);
-      // Return enough context for the admin to fix the schema. The
-      // 200-char preview avoids dumping a 4kb DO block into the toast.
-      return res.status(500).json({
-        error:   'Migration failed',
+      console.error(`[migrate] stmt ${i + 1}/${statements.length} failed:`, err.message);
+      failures.push({
+        index: i + 1,
+        of:    statements.length,
         message: err.message,
+        // 200-char preview so the response stays small in the UI.
         statement: stmt.length > 240 ? stmt.slice(0, 240) + '…' : stmt,
-        index:   i + 1,
-        of:      statements.length,
-        applied,
       });
+      // Continue past failures — every statement is idempotent. Bailing
+      // on the first error means a single bad statement (e.g. a missing
+      // dependency that's added later in the file) blocks every later
+      // ADD COLUMN from landing, which is exactly the partial-schema
+      // condition behind the recent "Let's go" outage.
     }
   }
-  return ok(res, { applied, total: statements.length });
+  return ok(res, {
+    applied,
+    total: statements.length,
+    failureCount: failures.length,
+    failures, // full list so admin can fix offenders
+  });
 }

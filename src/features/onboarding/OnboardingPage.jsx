@@ -174,10 +174,12 @@ export default function OnboardingPage() {
   const stepIdx = STEPS.findIndex((s) => s.id === currentStep);
   const stepSpec = STEPS[stepIdx] || STEPS[0];
 
-  // Persists the nav state synchronously and ONLY advances the wizard
-  // when the server confirms. If the PATCH fails (cold-start migration
-  // failure, network blip, anything), the user sees a real error and
-  // can retry — not a silent "looked like it worked, didn't actually."
+  // Advance the wizard. We try to persist the navigational state to
+  // the server, but we DO NOT block progress on it — the nav state is
+  // metadata for the dashboard checklist; the user being able to move
+  // forward is essential. If the PATCH consistently fails (broken
+  // schema, etc.) the user still advances and we surface a soft
+  // warning so they know to reach out — but they're never trapped.
   const flushAndAdvance = async ({ markCompleted, markSkipped }) => {
     const nextCompleted = markCompleted
       ? Array.from(new Set([...completedSteps, currentStep]))
@@ -189,29 +191,32 @@ export default function OnboardingPage() {
     const nextStepId = next ? next.id : currentStep;
 
     setBusy(true); setErr(null);
+
+    // Advance the local UI immediately so the user is never trapped
+    // by a server-side issue. The save below is best-effort.
+    setCompletedSteps(nextCompleted);
+    setSkippedSteps(nextSkipped);
+    if (next) setCurrentStep(next.id);
+
+    // Fire-and-forget the nav-state save with one retry on transient
+    // failure. We log + surface a soft warning if both attempts fail
+    // but we do not roll back the UI.
+    const body = {
+      currentStep: nextStepId,
+      completedSteps: nextCompleted,
+      skippedSteps: nextSkipped,
+    };
     try {
-      // Retry once on transient failure. Cold-started serverless
-      // functions can blip while ensureSchemaApplied runs the full
-      // migration on the first hit; a second attempt usually lands
-      // post-bootstrap.
-      const body = {
-        currentStep: nextStepId,
-        completedSteps: nextCompleted,
-        skippedSteps: nextSkipped,
-      };
       try {
         await api.patch('/onboarding/state', body);
       } catch (firstErr) {
         await new Promise((r) => setTimeout(r, 600));
         await api.patch('/onboarding/state', body);
       }
-      setCompletedSteps(nextCompleted);
-      setSkippedSteps(nextSkipped);
-      if (next) setCurrentStep(next.id);
     } catch (e) {
       // eslint-disable-next-line no-console
-      console.error('[onboarding] flushAndAdvance failed:', e);
-      setErr("Couldn't save your progress — please try again, or refresh and continue.");
+      console.error('[onboarding] flushAndAdvance: save failed (advanced anyway):', e);
+      setErr("Heads up: your progress couldn't be saved server-side, but you can keep going. If this persists please email hello@getthryve.ai.");
     } finally {
       setBusy(false);
     }
@@ -224,36 +229,76 @@ export default function OnboardingPage() {
     if (prev) setCurrentStep(prev.id);
   };
 
-  // "Save & exit" — flushes state and bounces to dashboard WITHOUT
-  // marking onboarded_at. The next sign-in detects un-onboarded and
-  // routes back to /onboarding, picking up at currentStep.
+  // "Save & exit" — get them OUT of the wizard, no matter what.
+  //
+  // Old behavior PATCHed /onboarding/state and then nav'd to /dashboard,
+  // but if the user wasn't actually marked onboarded the RoleRouter
+  // would bounce them right back to /onboarding — making the button
+  // appear broken. And if /onboarding/state itself was 500ing (the
+  // exact bug a stuck owner is hitting), the nav still fired but they
+  // landed back here.
+  //
+  // New behavior:
+  //   1. Try /onboarding/state — best-effort progress save.
+  //   2. Try /onboarding/complete — marks workspaces.onboarded_at so
+  //      the dashboard gate lets them through. This endpoint has zero
+  //      dependency on onboarding_state, so it works even when the
+  //      other endpoint is broken.
+  //   3. Set a localStorage escape hatch so even a fully-broken API
+  //      lets the SPA reach the dashboard.
+  //   4. Always nav to /dashboard.
   const saveAndExit = async () => {
     setBusy(true);
+    setErr(null);
+    // Best-effort progress save — non-blocking.
+    api.patch('/onboarding/state', {
+      currentStep, completedSteps, skippedSteps,
+    }).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error('[onboarding] save-state on exit failed (non-blocking):', e);
+    });
+    // Mark workspace onboarded so the dashboard gate doesn't bounce.
+    // We tolerate failures here too — the localStorage flag below is
+    // a final fallback.
     try {
-      await api.patch('/onboarding/state', {
-        currentStep, completedSteps, skippedSteps,
-      });
-    } catch { /* still bounce — best effort */ }
-    finally {
-      setExitedAt(Date.now());
-      nav('/dashboard?onboarding=resume', { replace: true });
+      await api.post('/onboarding/complete');
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[onboarding] complete failed on Save & exit:', e);
     }
+    try {
+      // SPA-level escape hatch: RoleRouter checks this and lets the
+      // user through even if /me reports !onboardedAt. Valid for 24h
+      // to handle the case where the user is mid-flow.
+      localStorage.setItem('thryve_skip_onboarding_until', String(Date.now() + 24 * 3600_000));
+    } catch { /* localStorage may be disabled in private mode */ }
+    setExitedAt(Date.now());
+    setBusy(false);
+    nav('/dashboard?onboarding=resume', { replace: true });
   };
 
   // "Finish" — marks workspaces.onboarded_at + bounces. Final step CTA.
+  // Save the navigational state best-effort (it's just metadata for
+  // the dashboard checklist) but DO NOT block on it — the only thing
+  // that actually matters is /onboarding/complete flipping onboarded_at.
   const finish = async () => {
     setBusy(true); setErr(null);
+    api.patch('/onboarding/state', {
+      currentStep: 'done',
+      completedSteps: Array.from(new Set([...completedSteps, currentStep, 'done'])),
+      skippedSteps,
+    }).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error('[onboarding] state save on finish failed (non-blocking):', e);
+    });
     try {
-      // Capture final state first so the dashboard checklist knows
-      // exactly which steps were skipped.
-      await api.patch('/onboarding/state', {
-        currentStep: 'done',
-        completedSteps: Array.from(new Set([...completedSteps, currentStep, 'done'])),
-        skippedSteps,
-      });
       await api.post('/onboarding/complete');
+      try { localStorage.setItem('thryve_skip_onboarding_until', String(Date.now() + 24 * 3600_000)); } catch {}
       nav('/dashboard?walkthrough=1', { replace: true });
-    } catch (e) { setErr(prettifyError(e)); setBusy(false); }
+    } catch (e) {
+      setErr(prettifyError(e));
+      setBusy(false);
+    }
   };
 
   // ─── Per-step save helpers ──────────────────────────────────────────
