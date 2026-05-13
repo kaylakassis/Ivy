@@ -522,6 +522,32 @@ function renderJsonLd({ businessName, description, image, url, sections }) {
   return `<script type="application/ld+json">${JSON.stringify(ld)}</script>`;
 }
 
+// ----- Sticky CTA + exit-intent popup --------------------------
+
+function renderStickyCta(cfg) {
+  if (!cfg || !cfg.enabled || !cfg.text) return '';
+  const pos = cfg.position === 'top' ? 'top:0' : 'bottom:0';
+  return `<a href="${attr(cfg.link || '#')}" style="position:fixed;${pos};left:0;right:0;z-index:9000;padding:14px 24px;background:var(--site-accent);color:var(--site-accent-ink);text-align:center;font-weight:600;text-decoration:none;font-family:var(--site-font-body)">${esc(cfg.text)} →</a>`;
+}
+
+function renderExitIntent(cfg) {
+  if (!cfg || !cfg.enabled || !cfg.headline) return '';
+  // Hidden by default; the inline script attaches a single mouseleave
+  // handler to the document and reveals on first exit. Stored in
+  // sessionStorage so we don't re-pop on every internal nav.
+  return `
+    <div id="thryve-exit-intent" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:24px;font-family:var(--site-font-body)">
+      <div style="max-width:480px;background:var(--site-bg);color:var(--site-fg);padding:32px;border-radius:var(--site-radius);border:1px solid var(--site-border);position:relative">
+        <button onclick="document.getElementById('thryve-exit-intent').style.display='none'" style="position:absolute;top:10px;right:14px;background:transparent;border:0;font-size:20px;color:var(--site-muted);cursor:pointer">×</button>
+        <h3 style="margin:0;font-family:var(--site-font-display);font-size:24px">${esc(cfg.headline)}</h3>
+        ${cfg.sub ? `<p style="margin:10px 0 0;color:var(--site-fg-2);line-height:1.55">${esc(cfg.sub)}</p>` : ''}
+        ${cfg.cta ? `<p style="margin:20px 0 0"><a href="${attr(cfg.ctaLink || '#')}" style="display:inline-block;padding:12px 22px;background:var(--site-accent);color:var(--site-accent-ink);border-radius:var(--site-radius);text-decoration:none;font-weight:600">${esc(cfg.cta)} →</a></p>` : ''}
+      </div>
+    </div>
+    <script>(function(){try{var el=document.getElementById('thryve-exit-intent');if(!el)return;if(sessionStorage.getItem('thryve-exit-shown'))return;document.addEventListener('mouseleave',function(e){if(e.clientY<10){el.style.display='flex';sessionStorage.setItem('thryve-exit-shown','1')}})}catch(_){}})();</script>
+  `;
+}
+
 // ----- Main entry -------------------------------------------------
 
 // Render the full HTML page for a public site.
@@ -587,7 +613,15 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host }) {
 
   const navHtml = renderNav({ handle, nav, currentSlug, businessName: site.businessName });
   const sectionsHtml = visible.map((s) => renderSection(s, handle)).join('\n');
-  const bodyContent = `<div class="thryve-root">${navHtml}${sectionsHtml}</div>`;
+  // Pageview ping — fires once on initial paint. Crawlers don't run JS
+  // so we naturally exclude them; the UA classifier on the API side
+  // also tags bots so any that DO run JS get bucketed away.
+  const pvScript = `<script>(function(){try{navigator.sendBeacon&&navigator.sendBeacon('/site/${esc(handle)}/pv',new Blob([JSON.stringify({slug:${JSON.stringify(currentSlug || '')},referrer:document.referrer.slice(0,300)})],{type:'application/json'}))||fetch('/site/${esc(handle)}/pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:${JSON.stringify(currentSlug || '')},referrer:document.referrer.slice(0,300)}),keepalive:true})}catch(e){}})();</script>`;
+  // Exit-intent popup + sticky CTA injected once at the root level so
+  // they survive page transitions inside the SPA.
+  const popupHtml   = renderExitIntent(site.exitIntentPopup);
+  const stickyHtml  = renderStickyCta(site.stickyCta);
+  const bodyContent = `<div class="thryve-root">${navHtml}${sectionsHtml}${stickyHtml}${popupHtml}</div>${pvScript}`;
 
   // Splice into the SPA shell.
   let shell = loadShell();

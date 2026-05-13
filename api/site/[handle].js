@@ -22,6 +22,9 @@ export default async function handler(req, res) {
     const { handle } = req.query;
     const result = await loadPublicSite({ handle, slug: '' });
     if (result.kind !== 'ok') return notFound(res, handle);
+    // Honor owner-configured 301 redirects before rendering.
+    const hit = matchRedirect(result.site.redirects, '');
+    if (hit) return redirect(res, hit, handle);
 
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
     const html = renderSiteHtml({
@@ -59,4 +62,27 @@ function serverError(res, err) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+// Owner-configured redirects: array of { from, to }. Match the
+// requested slug against from; redirect to `to` if found. Slug-only
+// (no querystring matching) for v1.
+function matchRedirect(rules, currentSlug) {
+  if (!Array.isArray(rules)) return null;
+  const slug = String(currentSlug || '').toLowerCase();
+  for (const r of rules) {
+    if (!r || !r.from || !r.to) continue;
+    if (String(r.from).toLowerCase() === slug) return r.to;
+  }
+  return null;
+}
+
+function redirect(res, target, handle) {
+  // Targets starting with / route within the site; others are external.
+  const url = String(target).startsWith('/')
+    ? `/site/${handle}${target}`
+    : String(target);
+  res.statusCode = 301;
+  res.setHeader('Location', url);
+  return res.end();
 }

@@ -44,6 +44,7 @@ function serialize(row) {
     customCss:     row.custom_css || '',
     fontPair:      row.font_pair || null,
     customDomain:  row.custom_domain,
+    domainStatus:  row.domain_status || null,
     launched:      row.launched,
     visibility:    row.visibility || 'public',
     publishedAt:   row.published_at,
@@ -52,6 +53,12 @@ function serialize(row) {
     seoDescription:  row.seo_description || '',
     seoOgImage:      row.seo_og_image || '',
     faviconUrl:      row.favicon_url || '',
+    redirects:         Array.isArray(row.redirects) ? row.redirects : [],
+    formDestinations:  Array.isArray(row.form_destinations) ? row.form_destinations : [],
+    exitIntentPopup:   row.exit_intent_popup || null,
+    stickyCta:         row.sticky_cta || null,
+    scheduledPublishAt: row.scheduled_publish_at || null,
+    scheduledPages:     Array.isArray(row.scheduled_pages) ? row.scheduled_pages : null,
   };
 }
 
@@ -66,6 +73,27 @@ async function getOrCreate(workspaceId) {
 
 // Validate + sanitize a single page object. Rejects entries that don't
 // match the shape so we don't persist arbitrary JSON.
+function sanitizePopup(p) {
+  if (!p || typeof p !== 'object') return null;
+  return {
+    enabled:  !!p.enabled,
+    headline: p.headline ? String(p.headline).slice(0, 120) : '',
+    sub:      p.sub      ? String(p.sub).slice(0, 280) : '',
+    cta:      p.cta      ? String(p.cta).slice(0, 60) : '',
+    ctaLink:  p.ctaLink  ? String(p.ctaLink).slice(0, 500) : '',
+  };
+}
+
+function sanitizeStickyCta(p) {
+  if (!p || typeof p !== 'object') return null;
+  return {
+    enabled:  !!p.enabled,
+    text:     p.text ? String(p.text).slice(0, 120) : '',
+    link:     p.link ? String(p.link).slice(0, 500) : '',
+    position: p.position === 'top' ? 'top' : 'bottom',
+  };
+}
+
 function sanitizePage(p, idx) {
   if (!p || typeof p !== 'object') throw new Error(`Page ${idx + 1} is malformed`);
   const id = String(p.id || '').slice(0, 64) || `p_${Date.now().toString(36)}_${idx}`;
@@ -149,6 +177,36 @@ export default async function handler(req, res) {
       if ('seoDescription' in body) patch.seoDescription = body.seoDescription == null ? null : String(body.seoDescription).slice(0, 400);
       if ('seoOgImage' in body)     patch.seoOgImage     = body.seoOgImage     == null ? null : String(body.seoOgImage).slice(0, 1000);
       if ('faviconUrl' in body)     patch.faviconUrl     = body.faviconUrl     == null ? null : String(body.faviconUrl).slice(0, 1000);
+      // Block-D fields. Arrays are stored as JSONB; null/empty clears.
+      if ('redirects' in body) {
+        if (!Array.isArray(body.redirects)) return badRequest(res, 'redirects must be an array');
+        if (body.redirects.length > 100) return badRequest(res, 'Up to 100 redirects per site');
+        patch.redirects = body.redirects
+          .filter((r) => r && typeof r === 'object' && r.from && r.to)
+          .map((r) => ({ from: String(r.from).slice(0, 200), to: String(r.to).slice(0, 500) }));
+      }
+      if ('formDestinations' in body) {
+        if (!Array.isArray(body.formDestinations)) return badRequest(res, 'formDestinations must be an array');
+        if (body.formDestinations.length > 50) return badRequest(res, 'Up to 50 form destinations');
+        patch.formDestinations = body.formDestinations
+          .filter((d) => d && typeof d === 'object' && d.formId && d.type)
+          .map((d) => ({
+            formId: String(d.formId).slice(0, 64),
+            type:   ['email', 'webhook'].includes(d.type) ? d.type : 'email',
+            config: d.config && typeof d.config === 'object' ? d.config : {},
+          }));
+      }
+      if ('exitIntentPopup' in body) patch.exitIntentPopup = body.exitIntentPopup === null ? null : sanitizePopup(body.exitIntentPopup);
+      if ('stickyCta' in body)       patch.stickyCta       = body.stickyCta       === null ? null : sanitizeStickyCta(body.stickyCta);
+      if ('scheduledPublishAt' in body) {
+        const v = body.scheduledPublishAt;
+        patch.scheduledPublishAt = v ? new Date(v) : null;
+      }
+      if ('scheduledPages' in body) {
+        if (body.scheduledPages === null) patch.scheduledPages = null;
+        else if (!Array.isArray(body.scheduledPages)) return badRequest(res, 'scheduledPages must be an array');
+        else patch.scheduledPages = body.scheduledPages.map(sanitizePage);
+      }
       if ('visibility' in body) {
         if (!['public', 'private', 'only_me'].includes(body.visibility)) {
           return badRequest(res, 'visibility must be public / private / only_me');
@@ -169,21 +227,27 @@ export default async function handler(req, res) {
 
       const updated = await sql`
         UPDATE websites SET
-          handle           = COALESCE(${patch.handle ?? null},         handle),
-          business_name    = COALESCE(${patch.businessName ?? null},   business_name),
-          template         = COALESCE(${patch.template ?? null},       template),
-          font_pair        = COALESCE(${patch.fontPair ?? null},       font_pair),
-          custom_css       = COALESCE(${patch.customCss ?? null},      custom_css),
-          sections         = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
-          pages            = COALESCE(${JSON.stringify(patch.pages ?? null)}::jsonb,    pages),
-          custom_domain    = COALESCE(${patch.customDomain ?? null},   custom_domain),
-          launched         = COALESCE(${patch.launched ?? null},       launched),
-          visibility       = COALESCE(${patch.visibility ?? null},     visibility),
-          seo_title        = COALESCE(${patch.seoTitle ?? null},       seo_title),
-          seo_description  = COALESCE(${patch.seoDescription ?? null}, seo_description),
-          seo_og_image     = COALESCE(${patch.seoOgImage ?? null},     seo_og_image),
-          favicon_url      = COALESCE(${patch.faviconUrl ?? null},     favicon_url),
-          updated_at       = NOW()
+          handle             = COALESCE(${patch.handle ?? null},         handle),
+          business_name      = COALESCE(${patch.businessName ?? null},   business_name),
+          template           = COALESCE(${patch.template ?? null},       template),
+          font_pair          = COALESCE(${patch.fontPair ?? null},       font_pair),
+          custom_css         = COALESCE(${patch.customCss ?? null},      custom_css),
+          sections           = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
+          pages              = COALESCE(${JSON.stringify(patch.pages ?? null)}::jsonb,    pages),
+          custom_domain      = COALESCE(${patch.customDomain ?? null},   custom_domain),
+          launched           = COALESCE(${patch.launched ?? null},       launched),
+          visibility         = COALESCE(${patch.visibility ?? null},     visibility),
+          seo_title          = COALESCE(${patch.seoTitle ?? null},       seo_title),
+          seo_description    = COALESCE(${patch.seoDescription ?? null}, seo_description),
+          seo_og_image       = COALESCE(${patch.seoOgImage ?? null},     seo_og_image),
+          favicon_url        = COALESCE(${patch.faviconUrl ?? null},     favicon_url),
+          redirects          = COALESCE(${JSON.stringify(patch.redirects ?? null)}::jsonb, redirects),
+          form_destinations  = COALESCE(${JSON.stringify(patch.formDestinations ?? null)}::jsonb, form_destinations),
+          exit_intent_popup  = COALESCE(${JSON.stringify(patch.exitIntentPopup ?? null)}::jsonb, exit_intent_popup),
+          sticky_cta         = COALESCE(${JSON.stringify(patch.stickyCta ?? null)}::jsonb, sticky_cta),
+          scheduled_publish_at = COALESCE(${patch.scheduledPublishAt ?? null}, scheduled_publish_at),
+          scheduled_pages    = COALESCE(${JSON.stringify(patch.scheduledPages ?? null)}::jsonb, scheduled_pages),
+          updated_at         = NOW()
         WHERE workspace_id = ${workspaceId}
         RETURNING *
       `;

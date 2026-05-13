@@ -20,7 +20,8 @@ export async function loadPublicSite({ handle, slug }) {
   const { rows } = await sql`
     SELECT handle, business_name, template, sections, pages,
            custom_css, font_pair, published_at, visibility,
-           seo_title, seo_description, seo_og_image, favicon_url
+           seo_title, seo_description, seo_og_image, favicon_url,
+           redirects, exit_intent_popup, sticky_cta
     FROM websites
     WHERE handle = ${handle.toLowerCase()}
       AND published_at IS NOT NULL
@@ -69,6 +70,9 @@ export async function loadPublicSite({ handle, slug }) {
       seoDescription:  r.seo_description || null,
       seoOgImage:      r.seo_og_image || null,
       faviconUrl:      r.favicon_url || null,
+      redirects:       Array.isArray(r.redirects) ? r.redirects : [],
+      exitIntentPopup: r.exit_intent_popup || null,
+      stickyCta:       r.sticky_cta || null,
     },
     page: {
       slug: foundPage ? foundPage.slug : '',

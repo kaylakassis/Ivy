@@ -93,6 +93,62 @@ ALTER TABLE websites ADD COLUMN IF NOT EXISTS seo_description TEXT;
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS seo_og_image TEXT;
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS favicon_url TEXT;
 
+-- Custom-domain attach status. NULL when no custom domain is set;
+-- otherwise one of unverified / dns_pending / verified / failed.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS domain_status TEXT;
+-- 301 redirects — array of { from, to }. Renderer checks this map
+-- before doing the page-level resolution.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS redirects JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Form destinations — array of { formId, type: 'email'|'webhook',
+-- config: {...} }. The public form-submission endpoint routes inbound
+-- submissions through these.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS form_destinations JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Exit-intent popup + sticky CTA — single config objects each, applied
+-- site-wide. Empty = disabled.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS exit_intent_popup JSONB;
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS sticky_cta JSONB;
+-- Scheduled publish — when scheduled_publish_at <= NOW(), the cron
+-- copies scheduled_pages → pages + clears these fields.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS scheduled_publish_at TIMESTAMPTZ;
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS scheduled_pages JSONB;
+
+-- Version history: a snapshot row inserted on every Publish so owners
+-- can roll back a bad release.
+CREATE TABLE IF NOT EXISTS website_versions (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  website_id  UUID NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
+  snapshot    JSONB NOT NULL,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  created_by  UUID REFERENCES users(id) ON DELETE SET NULL
+);
+CREATE INDEX IF NOT EXISTS idx_website_versions_site_time ON website_versions(website_id, created_at DESC);
+
+-- Pageview analytics — one row per visit. UA classified into broad
+-- buckets (mobile / desktop / bot) instead of stored verbatim to avoid
+-- accidental PII. Referrer is truncated.
+CREATE TABLE IF NOT EXISTS website_pageviews (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  website_id  UUID NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
+  page_slug   TEXT NOT NULL DEFAULT '',
+  referrer    TEXT,
+  ua_class    TEXT NOT NULL DEFAULT 'unknown',
+  viewed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_website_pageviews_site_time ON website_pageviews(website_id, viewed_at DESC);
+
+-- Form submissions — stored alongside the routed delivery so owners can
+-- see what came in even when the destination fails.
+CREATE TABLE IF NOT EXISTS website_form_submissions (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  website_id  UUID NOT NULL REFERENCES websites(id) ON DELETE CASCADE,
+  form_id     TEXT NOT NULL,
+  payload     JSONB NOT NULL,
+  delivered   BOOLEAN NOT NULL DEFAULT FALSE,
+  delivery_err TEXT,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_website_form_submissions_site_time ON website_form_submissions(website_id, submitted_at DESC);
+
 CREATE TABLE IF NOT EXISTS rate_limits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   key TEXT NOT NULL,

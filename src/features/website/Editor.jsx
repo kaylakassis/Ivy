@@ -12,6 +12,7 @@ import { Icons } from '../../components/Icons.jsx';
 import SectionLibrary from './SectionLibrary.jsx';
 import Canvas from './Canvas.jsx';
 import Inspector, { ImageInput } from './Inspector.jsx';
+import AdvancedPanel from './AdvancedPanel.jsx';
 import { mkSection, FONT_PAIRS } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { publicOrigin } from '../../lib/publicUrl.js';
@@ -63,6 +64,7 @@ export default function Editor({
   const [device, setDevice] = useState('desktop');
   const [previewMode, setPreviewMode] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [siteQrOpen, setSiteQrOpen] = useState(false);
   const [publishErr, setPublishErr] = useState(null);
@@ -221,6 +223,12 @@ export default function Editor({
         {/* Site-style affordances — font pair + custom CSS. Both apply
             site-wide (every page, every section). */}
         <SiteStyleButton site={site} set={set}/>
+
+        {/* Advanced — domain / forms / redirects / popups / history / traffic */}
+        <button className="btn btn-outline" onClick={() => setShowAdvanced(true)}
+          title="Domain, forms, redirects, history, traffic">
+          <Icons.Settings size={13}/> Advanced
+        </button>
 
         {/* Device toggle — hide on phones; the user is already on a phone
             and doesn't need a "preview at desktop width" toggle squeezed
@@ -414,6 +422,9 @@ export default function Editor({
           />
         )}
       </div>
+      {showAdvanced && (
+        <AdvancedPanel site={site} set={set} onClose={() => setShowAdvanced(false)}/>
+      )}
     </div>
   );
 }

@@ -30,15 +30,19 @@ export const DEFAULT_SITE = {
   fontPair: null,
   customCss: '',
   customDomain: '',
+  domainStatus: null,
   publishedAt: null,
   sections: [],
   pages: [],
-  // Site-level SEO defaults. Per-page overrides live on each page
-  // object as metaTitle / metaDescription / ogImage.
   seoTitle: '',
   seoDescription: '',
   seoOgImage: '',
   faviconUrl: '',
+  redirects: [],
+  formDestinations: [],
+  exitIntentPopup: null,
+  stickyCta: null,
+  scheduledPublishAt: null,
 };
 
 function normalize(w) {
@@ -59,6 +63,7 @@ function normalize(w) {
     fontPair:     w.fontPair || null,
     customCss:    w.customCss || '',
     customDomain: w.customDomain || '',
+    domainStatus: w.domainStatus || null,
     publishedAt:  w.publishedAt || null,
     pages,
     sections:     pages.find((p) => p.slug === '')?.sections || pages[0]?.sections || [],
@@ -66,6 +71,11 @@ function normalize(w) {
     seoDescription:  w.seoDescription || '',
     seoOgImage:      w.seoOgImage || '',
     faviconUrl:      w.faviconUrl || '',
+    redirects:         Array.isArray(w.redirects) ? w.redirects : [],
+    formDestinations:  Array.isArray(w.formDestinations) ? w.formDestinations : [],
+    exitIntentPopup:   w.exitIntentPopup || null,
+    stickyCta:         w.stickyCta || null,
+    scheduledPublishAt: w.scheduledPublishAt || null,
   };
 }
 
@@ -160,6 +170,11 @@ export function useWebsite() {
       seoDescription:  next.seoDescription,
       seoOgImage:      next.seoOgImage,
       faviconUrl:      next.faviconUrl,
+      redirects:         next.redirects,
+      formDestinations:  next.formDestinations,
+      exitIntentPopup:   next.exitIntentPopup,
+      stickyCta:         next.stickyCta,
+      scheduledPublishAt: next.scheduledPublishAt,
     });
   }, [schedule]);
 

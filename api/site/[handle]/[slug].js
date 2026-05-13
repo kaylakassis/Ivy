@@ -25,6 +25,9 @@ export default async function handler(req, res) {
 
     const result = await loadPublicSite({ handle, slug });
     if (result.kind !== 'ok') return notFound(res, handle, slug);
+    // 301 redirect if the owner has a rule for this slug.
+    const hit = matchRedirect(result.site.redirects, slug || '');
+    if (hit) return redirect(res, hit, handle);
 
     const host = req.headers['x-forwarded-host'] || req.headers.host || '';
     const html = renderSiteHtml({
@@ -61,4 +64,23 @@ function serverError(res, err) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function matchRedirect(rules, currentSlug) {
+  if (!Array.isArray(rules)) return null;
+  const slug = String(currentSlug || '').toLowerCase();
+  for (const r of rules) {
+    if (!r || !r.from || !r.to) continue;
+    if (String(r.from).toLowerCase() === slug) return r.to;
+  }
+  return null;
+}
+
+function redirect(res, target, handle) {
+  const url = String(target).startsWith('/')
+    ? `/site/${handle}${target}`
+    : String(target);
+  res.statusCode = 301;
+  res.setHeader('Location', url);
+  return res.end();
 }
