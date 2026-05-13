@@ -26,6 +26,7 @@ export const Icons = {
   Settings: (p) => <Icon {...p}><circle cx="12" cy="12" r="2.8"/><path d="M19.5 12l1.8-1.3-1-2.7-2.2.4-1.5-1.5.4-2.2-2.7-1L13 6.5h-2L9.7 4.7l-2.7 1 .4 2.2-1.5 1.5-2.2-.4-1 2.7L4.5 13v2l-1.8 1.3 1 2.7 2.2-.4 1.5 1.5-.4 2.2 2.7 1L11 21.5h2l1.3-1.8 2.7 1 1.5-1.5-.4-2.2 2.2.4 1-2.7-1.8-1.3v-2z"/></Icon>,
   Plus:     (p) => <Icon {...p}><path d="M12 5v14M5 12h14"/></Icon>,
   Arrow:    (p) => <Icon {...p}><path d="M5 12h14M13 6l6 6-6 6"/></Icon>,
+  ArrowLeft:(p) => <Icon {...p}><path d="M19 12H5M11 6l-6 6 6 6"/></Icon>,
   ArrowUp:  (p) => <Icon {...p}><path d="M12 19V5M6 11l6-6 6 6"/></Icon>,
   ArrowDown:(p) => <Icon {...p}><path d="M12 5v14M6 13l6 6 6-6"/></Icon>,
   Check:    (p) => <Icon {...p}><path d="M4 12l5 5L20 6"/></Icon>,
