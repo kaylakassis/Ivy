@@ -190,11 +190,21 @@ export default function OnboardingPage() {
 
     setBusy(true); setErr(null);
     try {
-      await api.patch('/onboarding/state', {
+      // Retry once on transient failure. Cold-started serverless
+      // functions can blip while ensureSchemaApplied runs the full
+      // migration on the first hit; a second attempt usually lands
+      // post-bootstrap.
+      const body = {
         currentStep: nextStepId,
         completedSteps: nextCompleted,
         skippedSteps: nextSkipped,
-      });
+      };
+      try {
+        await api.patch('/onboarding/state', body);
+      } catch (firstErr) {
+        await new Promise((r) => setTimeout(r, 600));
+        await api.patch('/onboarding/state', body);
+      }
       setCompletedSteps(nextCompleted);
       setSkippedSteps(nextSkipped);
       if (next) setCurrentStep(next.id);

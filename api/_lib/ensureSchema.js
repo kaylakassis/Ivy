@@ -27,6 +27,14 @@ const PROBE_QUERY = "SELECT domain_status FROM websites LIMIT 1";
 
 let applied = false;
 let inFlight = null;
+// When runFull fails, we throw so the caller treats schema as not-yet-
+// applied. But repeating the full migration on EVERY request (which
+// touches ~80 statements + the network) is expensive when a statement
+// is permanently broken. So we cool down — at most one runFull every
+// COOLDOWN_MS. The probe still runs in between; if it starts passing
+// we're back to fast-path.
+const COOLDOWN_MS = 30_000;
+let lastFullRunAt = 0;
 
 // Splits a multi-statement SQL string on `;` boundaries. Strips line
 // comments (--) BEFORE splitting so a `;` inside a comment can't shred
@@ -134,6 +142,14 @@ async function runFull() {
   if (failures.length > 0) {
     // eslint-disable-next-line no-console
     console.error(`[bootstrap] migration completed with ${failures.length} failures out of ${statements.length}`);
+    // Throw so the caller resets `applied=false` and retries on the
+    // next request. Otherwise we'd silently mark schema as current
+    // while critical columns (e.g. users.onboarding_state) may have
+    // missed — which is exactly how the "Let's go" silent-failure
+    // chain started.
+    const err = new Error(`schema bootstrap completed with ${failures.length} failure(s); see preceding [bootstrap] logs`);
+    err.failures = failures;
+    throw err;
   }
 }
 
@@ -150,6 +166,18 @@ export async function ensureSchemaApplied() {
       // eslint-disable-next-line no-console
       console.warn('[bootstrap] probe failed, running full migration:', probeErr.message);
     }
+    // Cooldown: if we just ran a full migration in the last 30s and it
+    // failed, don't immediately re-run. The probe will keep being
+    // checked on each request, so when the broken statement is fixed
+    // we'll catch up on the next probe success — but in the meantime
+    // we avoid pegging the DB.
+    const sinceLast = Date.now() - lastFullRunAt;
+    if (sinceLast < COOLDOWN_MS && lastFullRunAt > 0) {
+      // eslint-disable-next-line no-console
+      console.warn(`[bootstrap] skipping full migration (cooldown ${COOLDOWN_MS - sinceLast}ms remaining)`);
+      return;
+    }
+    lastFullRunAt = Date.now();
     await runFull();
     applied = true;
   })();
@@ -158,8 +186,10 @@ export async function ensureSchemaApplied() {
     await inFlight;
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('[bootstrap] schema bootstrap failed; will retry on next request:', err.message);
-    // Leave applied=false so the next request retries.
+    console.error('[bootstrap] schema bootstrap failed; will retry after cooldown:', err.message);
+    // Leave applied=false so subsequent requests retry once the cooldown
+    // elapses. Endpoints with critical columns (e.g. onboarding_state)
+    // also self-heal at the statement level — see api/onboarding/state.js.
   } finally {
     inFlight = null;
   }
