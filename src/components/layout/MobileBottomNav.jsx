@@ -23,7 +23,7 @@ export default function MobileBottomNav() {
   return (
     <nav className="mobile-nav" aria-label="Primary">
       {items.map((item) => {
-        const Icon = Icons[item.icon];
+        const Icon = Icons[item.icon] || Icons.Home;
         return (
           <NavLink key={item.to}
             to={item.to} end={item.to === '/'}

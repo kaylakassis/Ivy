@@ -1542,8 +1542,11 @@ CREATE INDEX IF NOT EXISTS idx_workflow_runs_workspace
 -- Dedupe: prevent firing the same workflow twice for the same client on
 -- the same calendar day (saves an email storm if a row gets touched
 -- multiple times). Soft constraint — the executor checks before insert.
+-- Anchored to UTC so the date cast is IMMUTABLE (a bare ::date cast
+-- depends on session timezone and Postgres rejects it in index
+-- expressions).
 CREATE INDEX IF NOT EXISTS idx_workflow_runs_dedupe
-  ON workflow_runs(workflow_id, client_id, ((triggered_at)::date))
+  ON workflow_runs(workflow_id, client_id, ((triggered_at AT TIME ZONE 'UTC')::date))
   WHERE client_id IS NOT NULL;
 -- Update the status CHECK constraint on existing workflow_runs rows so
 -- previously-deployed databases accept the new 'waiting' + 'stopped'

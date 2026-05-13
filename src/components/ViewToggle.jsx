@@ -85,7 +85,7 @@ export default function ViewToggle() {
 }
 
 function ToggleButton({ active, onClick, icon, label, sub }) {
-  const Icon = Icons[icon];
+  const Icon = Icons[icon] || Icons.More;
   return (
     <button type="button" onClick={onClick} aria-pressed={active} style={{
       display: 'inline-flex', alignItems: 'center', gap: 7,

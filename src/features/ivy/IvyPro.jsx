@@ -234,7 +234,7 @@ function MobileTabBar({ value, onChange }) {
       borderRadius: 10,
     }}>
       {tabs.map((t) => {
-        const Icon = Icons[t.icon];
+        const Icon = Icons[t.icon] || Icons.More;
         const on = value === t.id;
         return (
           <button key={t.id} onClick={() => onChange(t.id)} style={{

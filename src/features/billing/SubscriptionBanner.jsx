@@ -81,7 +81,7 @@ export default function SubscriptionBanner() {
 }
 
 function Banner({ tone, icon, body, action }) {
-  const Icon = Icons[icon];
+  const Icon = Icons[icon] || Icons.Bell;
   const bg     = tone === 'warn' ? 'rgba(214, 158, 46, 0.10)' : 'var(--accent-soft)';
   const border = tone === 'warn' ? 'rgba(214, 158, 46, 0.30)' : 'var(--accent-tint)';
   const fg     = tone === 'warn' ? 'var(--warn)' : 'var(--accent)';

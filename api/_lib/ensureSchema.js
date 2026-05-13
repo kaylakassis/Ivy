@@ -120,35 +120,54 @@ async function runProbe() {
   await sql.query(PROBE_QUERY);
 }
 
+// Multi-pass migration. The schema has forward references — e.g. an
+// `ALTER TABLE bookings ADD COLUMN review_request_token_hash` lives ABOVE
+// the CREATE TABLE bookings, because the historical authoring order
+// mixed columns + tables. Rather than rewrite 1500 lines of SQL, we
+// just run multiple passes: failed statements re-run after the rest
+// have created their dependencies. Convergence usually takes 2 passes;
+// MAX_PASSES caps to avoid infinite loops on a permanently-broken stmt.
+const MAX_PASSES = 4;
 async function runFull() {
-  const statements = splitStatements(SCHEMA_SQL);
-  // Continue past individual statement failures rather than aborting
-  // the whole migration. Every statement is idempotent (IF NOT EXISTS,
-  // ON CONFLICT, etc.) so a single broken one shouldn't gate everything
-  // else from getting applied. Errors are surfaced in the logs so we
-  // can fix the offender; the caller still gets a working schema for
-  // every statement that DID succeed.
-  const failures = [];
-  for (let i = 0; i < statements.length; i++) {
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      await sql.query(statements[i]);
-    } catch (err) {
-      failures.push({ index: i, message: err.message, preview: statements[i].slice(0, 120) });
-      // eslint-disable-next-line no-console
-      console.error(`[bootstrap] stmt ${i + 1}/${statements.length} failed:`, err.message, '|', statements[i].slice(0, 120));
+  const allStatements = splitStatements(SCHEMA_SQL);
+  let pending = allStatements.map((stmt, i) => ({ stmt, origIndex: i }));
+  let pass = 0;
+  let lastFailures = [];
+
+  while (pending.length > 0 && pass < MAX_PASSES) {
+    pass++;
+    const failures = [];
+    for (const { stmt, origIndex } of pending) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await sql.query(stmt);
+      } catch (err) {
+        failures.push({
+          stmt, origIndex,
+          message: err.message,
+          preview: stmt.slice(0, 120),
+        });
+      }
     }
-  }
-  if (failures.length > 0) {
     // eslint-disable-next-line no-console
-    console.error(`[bootstrap] migration completed with ${failures.length} failures out of ${statements.length}`);
-    // Throw so the caller resets `applied=false` and retries on the
-    // next request. Otherwise we'd silently mark schema as current
-    // while critical columns (e.g. users.onboarding_state) may have
-    // missed — which is exactly how the "Let's go" silent-failure
-    // chain started.
-    const err = new Error(`schema bootstrap completed with ${failures.length} failure(s); see preceding [bootstrap] logs`);
-    err.failures = failures;
+    console.log(`[bootstrap] pass ${pass}: ${pending.length - failures.length}/${pending.length} succeeded, ${failures.length} pending`);
+    if (failures.length === pending.length) {
+      // Zero progress on this pass — the remaining statements are
+      // permanently broken, not just out of order. Stop and report.
+      break;
+    }
+    pending = failures.map((f) => ({ stmt: f.stmt, origIndex: f.origIndex }));
+    lastFailures = failures;
+  }
+
+  if (pending.length > 0) {
+    // Log the permanently-broken statements so we see them in Vercel logs.
+    for (const f of lastFailures) {
+      // eslint-disable-next-line no-console
+      console.error(`[bootstrap] stmt #${f.origIndex + 1} failed permanently: ${f.message} | ${f.preview}`);
+    }
+    const err = new Error(`schema bootstrap left ${pending.length} permanently-failed statement(s) after ${pass} passes`);
+    err.failures = lastFailures;
     throw err;
   }
 }

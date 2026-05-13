@@ -24,37 +24,48 @@ export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   if (!(await requireSuperAdmin(req, res))) return;
 
-  const statements = splitStatements(SCHEMA_SQL);
+  const allStatements = splitStatements(SCHEMA_SQL);
+  const total = allStatements.length;
+  let pending = allStatements.map((stmt, i) => ({ stmt, origIndex: i }));
+  let totalApplied = 0;
+  let pass = 0;
+  let lastFailures = [];
+  const MAX_PASSES = 4;
 
-  let applied = 0;
-  const failures = [];
-  for (let i = 0; i < statements.length; i++) {
-    const stmt = statements[i];
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      await sql.query(stmt);
-      applied++;
-    } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error(`[migrate] stmt ${i + 1}/${statements.length} failed:`, err.message);
-      failures.push({
-        index: i + 1,
-        of:    statements.length,
-        message: err.message,
-        // 200-char preview so the response stays small in the UI.
-        statement: stmt.length > 240 ? stmt.slice(0, 240) + '…' : stmt,
-      });
-      // Continue past failures — every statement is idempotent. Bailing
-      // on the first error means a single bad statement (e.g. a missing
-      // dependency that's added later in the file) blocks every later
-      // ADD COLUMN from landing, which is exactly the partial-schema
-      // condition behind the recent "Let's go" outage.
+  while (pending.length > 0 && pass < MAX_PASSES) {
+    pass++;
+    const failures = [];
+    for (const { stmt, origIndex } of pending) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await sql.query(stmt);
+        totalApplied++;
+      } catch (err) {
+        failures.push({
+          stmt, origIndex,
+          message: err.message,
+        });
+      }
     }
+    // eslint-disable-next-line no-console
+    console.error(`[migrate] pass ${pass}: applied ${pending.length - failures.length}/${pending.length}; ${failures.length} pending`);
+    if (failures.length === pending.length) break; // no progress
+    pending = failures.map((f) => ({ stmt: f.stmt, origIndex: f.origIndex }));
+    lastFailures = failures;
   }
+
+  const failures = lastFailures.map((f) => ({
+    index: f.origIndex + 1,
+    of: total,
+    message: f.message,
+    statement: f.stmt.length > 240 ? f.stmt.slice(0, 240) + '…' : f.stmt,
+  }));
+
   return ok(res, {
-    applied,
-    total: statements.length,
-    failureCount: failures.length,
-    failures, // full list so admin can fix offenders
+    applied: totalApplied,
+    total,
+    passes: pass,
+    failureCount: pending.length,
+    failures,
   });
 }

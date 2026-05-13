@@ -104,7 +104,7 @@ function ClientSidebar({ variant, data, direction }) {
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: compact ? 4 : 2 }}>
         {NAV.map((item) => {
-          const Icon = Icons[item.icon];
+          const Icon = Icons[item.icon] || Icons.Home;
           return (
             <NavLink key={item.to} to={item.to} end={item.end} title={item.label}
               className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}

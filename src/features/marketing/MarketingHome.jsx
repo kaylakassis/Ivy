@@ -724,7 +724,7 @@ function Features() {
       </div>
       <div className="grid-auto">
         {FEATURES.map((f) => {
-          const Icon = Icons[f.icon];
+          const Icon = Icons[f.icon] || Icons.Spark;
           return (
             <div key={f.title} className="card" style={{
               padding: 22, display: 'flex', flexDirection: 'column', gap: 10,

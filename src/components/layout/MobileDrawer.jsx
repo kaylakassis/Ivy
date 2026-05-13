@@ -163,7 +163,7 @@ export default function MobileDrawer({ direction, onClose }) {
 }
 
 function DrawerViewBtn({ active, onClick, icon, label, sub }) {
-  const Icon = Icons[icon];
+  const Icon = Icons[icon] || Icons.More;
   return (
     <button type="button" onClick={onClick}
       style={{
