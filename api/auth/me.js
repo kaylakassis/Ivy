@@ -1,7 +1,7 @@
 // GET /api/auth/me — returns the current user or 401.
 import { sql } from '../_lib/db.js';
 import { requireUser, readSession } from '../_lib/auth.js';
-import { emailIsSuperAdmin } from '../_lib/admin.js';
+import { emailIsSuperAdmin, ensureSuperAdminPromotion } from '../_lib/admin.js';
 import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '../_lib/legal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -10,6 +10,11 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return; // requireUser already responded
+
+    // Auto-promote known super-admin emails to user_type='super_admin'
+    // in the DB so subsequent requireSuperAdmin checks can rely on the
+    // column even if env-var routing drifts. Idempotent + best-effort.
+    await ensureSuperAdminPromotion(user);
 
     // Surface impersonation state to the frontend so it can show a
     // "you're viewing as X — stop" banner and post to the stop endpoint.
@@ -30,7 +35,9 @@ export default async function handler(req, res) {
     const needsTermsAcceptance = !hasAcceptedCurrentTerms(user);
 
     return ok(res, {
-      user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) },
+      // Surface isSuperAdmin from either path so the frontend knows
+      // whether to render the Admin tab. Email-match OR db-column.
+      user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) || user.user_type === 'super_admin' },
       impersonating,
       terms: {
         currentVersion: CURRENT_TERMS_VERSION,
