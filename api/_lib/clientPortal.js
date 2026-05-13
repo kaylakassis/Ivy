@@ -23,33 +23,44 @@ import { sql } from './db.js';
 // happens to use that email — a cross-tenant data exfiltration path. The
 // verification step proves the user actually controls the inbox before we
 // link any pre-existing records to their account.
+//
+// Tolerates a partial schema. If `clients`/`calendar_settings` haven't been
+// created yet on a cold install we return an empty memberships list rather
+// than letting the error 500 the whole /api/me response (which would leave
+// new signups stuck on a crashed router with no way to reach the dashboard).
 export async function myClientIds(user) {
-  if (user.email && user.email_verified_at) {
-    await sql`
-      UPDATE clients
-      SET user_id = ${user.id}
-      WHERE email = ${user.email.toLowerCase()}
-        AND (user_id IS NULL OR user_id <> ${user.id})
-    `;
-  }
+  try {
+    if (user.email && user.email_verified_at) {
+      await sql`
+        UPDATE clients
+        SET user_id = ${user.id}
+        WHERE email = ${user.email.toLowerCase()}
+          AND (user_id IS NULL OR user_id <> ${user.id})
+      `;
+    }
 
-  const { rows } = await sql`
-    SELECT c.id, c.workspace_id, c.name, c.email,
-           w.name AS workspace_name,
-           cs.biz_name
-    FROM clients c
-    JOIN workspaces w ON w.id = c.workspace_id
-    LEFT JOIN calendar_settings cs ON cs.workspace_id = c.workspace_id
-    WHERE c.user_id = ${user.id}
-    ORDER BY COALESCE(cs.biz_name, w.name) ASC
-  `;
-  return rows.map((r) => ({
-    clientId:     r.id,
-    workspaceId:  r.workspace_id,
-    clientName:   r.name,
-    clientEmail:  r.email,
-    businessName: r.biz_name || r.workspace_name || 'Business',
-  }));
+    const { rows } = await sql`
+      SELECT c.id, c.workspace_id, c.name, c.email,
+             w.name AS workspace_name,
+             cs.biz_name
+      FROM clients c
+      JOIN workspaces w ON w.id = c.workspace_id
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = c.workspace_id
+      WHERE c.user_id = ${user.id}
+      ORDER BY COALESCE(cs.biz_name, w.name) ASC
+    `;
+    return rows.map((r) => ({
+      clientId:     r.id,
+      workspaceId:  r.workspace_id,
+      clientName:   r.name,
+      clientEmail:  r.email,
+      businessName: r.biz_name || r.workspace_name || 'Business',
+    }));
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[clientPortal] myClientIds failed (returning empty):', err.message);
+    return [];
+  }
 }
 
 // Convenience: just the IDs for SQL `WHERE c.id IN (...)` checks.
@@ -61,24 +72,50 @@ export function ids(memberships) {
 // bizName, slug } or null. The biz_name + slug come from calendar_settings
 // so the sidebar workspace badge can show "Maple Massage" instead of
 // "Untitled" once the owner finishes onboarding.
+//
+// Tolerates partial schema: if calendar_settings or one of the subscription
+// columns hasn't been added yet (cold install / partial migration), we fall
+// back to a minimal lookup so /api/me still returns a usable context. The
+// user can then onboard normally — the alternative is a 500 that leaves
+// them stuck on the sign-in screen with no recovery.
 export async function ownsWorkspace(userId) {
-  const { rows } = await sql`
-    SELECT w.id, w.onboarded_at,
-           w.subscription_status, w.trial_ends_at, w.subscription_period_end,
-           cs.biz_name, cs.slug
-    FROM workspaces w
-    LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
-    WHERE w.owner_id = ${userId} LIMIT 1
-  `;
-  if (!rows.length) return null;
-  const r = rows[0];
-  return {
-    id: r.id,
-    onboardedAt: r.onboarded_at,
-    bizName: r.biz_name || null,
-    slug:    r.slug || null,
-    subscription: deriveSubscription(r),
-  };
+  try {
+    const { rows } = await sql`
+      SELECT w.id, w.onboarded_at,
+             w.subscription_status, w.trial_ends_at, w.subscription_period_end,
+             cs.biz_name, cs.slug
+      FROM workspaces w
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
+      WHERE w.owner_id = ${userId} LIMIT 1
+    `;
+    if (!rows.length) return null;
+    const r = rows[0];
+    return {
+      id: r.id,
+      onboardedAt: r.onboarded_at,
+      bizName: r.biz_name || null,
+      slug:    r.slug || null,
+      subscription: deriveSubscription(r),
+    };
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[clientPortal] ownsWorkspace full query failed; falling back:', err.message);
+    try {
+      const { rows } = await sql`SELECT id, onboarded_at FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
+      if (!rows.length) return null;
+      return {
+        id: rows[0].id,
+        onboardedAt: rows[0].onboarded_at,
+        bizName: null,
+        slug: null,
+        subscription: { status: 'inactive', isActive: false, inTrial: false, trialEndsAt: null, periodEndsAt: null, daysRemaining: null },
+      };
+    } catch (err2) {
+      // eslint-disable-next-line no-console
+      console.error('[clientPortal] ownsWorkspace fallback also failed:', err2.message);
+      return null;
+    }
+  }
 }
 
 // Turn the raw workspace row into the shape the frontend wants. `isActive`

@@ -89,29 +89,66 @@ function RouteFallback() {
   );
 }
 
-// Page-scoped failure card. The root ErrorBoundary in main.jsx still
-// catches anything that escapes this one — but for "a single route
-// crashed," landing here keeps the rest of the shell (sidebar, topbar,
-// nav, ViewToggle) interactive so the user can navigate away instead
-// of being stuck on the full FatalFallback screen.
-function RouteCrash({ resetError }) {
+// Page-scoped failure card. Surface enough info that a user can
+// recover OR get unstuck:
+//   • Show the actual error message (it's their session; safe to show).
+//   • "Try again" — resets the boundary.
+//   • "Go home"  — hard navigate to /, clears the route, clears any
+//     localStorage onboarding gate so a fresh load isn't trapped.
+//   • "Sign out" — clears auth cookie and bounces.
+//   • Email link with the error pre-filled.
+function RouteCrash({ resetError, error }) {
+  const msg = (error && (error.message || String(error))) || 'unknown';
+  const goHome = () => {
+    try {
+      // If the user has a stale onboarding-skip flag from a prior session
+      // it could be sending them through a broken redirect chain. Clear
+      // it on hard recovery.
+      localStorage.removeItem('thryve_skip_onboarding_until');
+    } catch { /* private mode */ }
+    window.location.href = '/';
+  };
+  const signOut = async () => {
+    try { await fetch('/api/auth/logout', { method: 'POST' }); } catch {}
+    try { localStorage.clear(); } catch {}
+    window.location.href = '/';
+  };
+  const mail = `mailto:hello@getthryve.ai?subject=${encodeURIComponent('Error on THRYVE')}&body=${encodeURIComponent(`I hit an error: ${msg}\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\n\n`)}`;
   return (
     <div style={{
       minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
       padding: 24,
     }}>
       <div className="card" style={{
-        maxWidth: 460, padding: 28, textAlign: 'center',
+        maxWidth: 480, padding: 28, textAlign: 'center',
       }}>
         <div style={{
-          fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500,
-          letterSpacing: '-0.02em', marginBottom: 8,
-        }}>This page hit a snag.</div>
-        <div style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.55, marginBottom: 18 }}>
-          We've logged the error. You can retry, or pick another tab from the menu.
+          fontFamily: 'var(--font-display)', fontSize: 22, fontWeight: 500,
+          letterSpacing: '-0.02em', marginBottom: 10,
+        }}>Something went wrong.</div>
+        <div style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.55, marginBottom: 14 }}>
+          We've logged it on our side. While we look into it, you can try a
+          few things below to get back to work.
         </div>
-        <button onClick={resetError} className="btn btn-primary"
-          style={{ padding: '8px 18px' }}>Try again</button>
+        <div style={{
+          fontSize: 11.5, color: 'var(--muted-2)', background: 'var(--surface-2)',
+          border: '1px solid var(--border)', borderRadius: 8,
+          padding: '8px 10px', marginBottom: 18, fontFamily: 'ui-monospace, monospace',
+          wordBreak: 'break-word', textAlign: 'left',
+        }}>
+          {msg.slice(0, 280)}
+        </div>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+          <button onClick={resetError} className="btn btn-primary"
+            style={{ padding: '8px 16px' }}>Try again</button>
+          <button onClick={goHome} className="btn btn-outline"
+            style={{ padding: '8px 16px' }}>Go home</button>
+          <button onClick={signOut} className="btn btn-outline"
+            style={{ padding: '8px 16px' }}>Sign out</button>
+        </div>
+        <div style={{ marginTop: 14, fontSize: 12.5 }}>
+          <a href={mail} style={{ color: 'var(--accent)' }}>Email us for help</a>
+        </div>
       </div>
     </div>
   );
@@ -121,7 +158,7 @@ export default function App() {
   return (
     <>
     <Suspense fallback={<RouteFallback/>}>
-      <ErrorBoundary fallback={({ resetError }) => <RouteCrash resetError={resetError}/>}>
+      <ErrorBoundary fallback={({ resetError, error }) => <RouteCrash resetError={resetError} error={error}/>}>
       <Routes>
         {/* Public marketing landing — also handles "I'm logged in, where to?"
             redirect for authenticated users. */}

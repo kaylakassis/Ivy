@@ -34,24 +34,38 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
 
-    const ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+    let ws;
+    try {
+      ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+    } catch (e) {
+      // workspaces table missing entirely (very-cold install) — pretend
+      // we're done so the dashboard doesn't crash. The wizard will create
+      // it on first onboarding action.
+      // eslint-disable-next-line no-console
+      console.error('[setup-status] workspaces lookup failed:', e.message);
+      return ok(res, { complete: true, fullyComplete: true, items: [] });
+    }
     if (ws.rows.length === 0) {
       // Not an owner — checklist doesn't apply.
       return ok(res, { complete: true, fullyComplete: true, items: [] });
     }
     const workspaceId = ws.rows[0].id;
 
-    // One round-trip per row, parallelized. Keeps the dashboard load fast
-    // even when the user has thousands of clients/bookings.
+    // Per-row try/catch. Any single missing table or column degrades to
+    // "not done yet" instead of poisoning the whole Promise.all and
+    // bricking the dashboard.
+    const safe = async (p, fallback) => { try { return await p; } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[setup-status] sub-query failed:', e.message);
+      return fallback;
+    } };
     const [cs, sv, fs, ws2, cl, bk] = await Promise.all([
-      sql`SELECT biz_name, slug, availability, tagline
-            FROM calendar_settings WHERE workspace_id = ${workspaceId}`,
-      sql`SELECT COUNT(*)::int AS n FROM services WHERE workspace_id = ${workspaceId}`,
-      sql`SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status
-            FROM finance_settings WHERE workspace_id = ${workspaceId}`,
-      sql`SELECT launched, published_at FROM websites WHERE workspace_id = ${workspaceId}`,
-      sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${workspaceId}`,
-      sql`SELECT COUNT(*)::int AS n FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL`,
+      safe(sql`SELECT biz_name, slug, availability, tagline FROM calendar_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
+      safe(sql`SELECT COUNT(*)::int AS n FROM services WHERE workspace_id = ${workspaceId}`, { rows: [{ n: 0 }] }),
+      safe(sql`SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status FROM finance_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
+      safe(sql`SELECT launched, published_at FROM websites WHERE workspace_id = ${workspaceId}`, { rows: [] }),
+      safe(sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${workspaceId}`, { rows: [{ n: 0 }] }),
+      safe(sql`SELECT COUNT(*)::int AS n FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL`, { rows: [{ n: 0 }] }),
     ]);
     const settings = cs.rows[0] || {};
     const serviceCount = sv.rows[0]?.n || 0;

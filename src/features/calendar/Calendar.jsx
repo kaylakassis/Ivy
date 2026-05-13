@@ -178,10 +178,10 @@ export default function Calendar() {
 
   const openEvent = (ev) => { setSelectedEvent(ev); setDrawer('event'); };
 
-  const upcoming = (cal.bookings || [])
-    .filter((b) => b.date >= todayISO)
-    .sort((a, b) => (a.date + String(a.startMin).padStart(4, '0'))
-      .localeCompare(b.date + String(b.startMin).padStart(4, '0')));
+  const upcoming = (cal?.bookings || [])
+    .filter((b) => b && b.date && b.date >= todayISO)
+    .sort((a, b) => ((a.date || '') + String(a.startMin || 0).padStart(4, '0'))
+      .localeCompare((b.date || '') + String(b.startMin || 0).padStart(4, '0')));
 
   const ViewToggle = () => (
     <div style={{
@@ -391,7 +391,7 @@ export default function Calendar() {
         ) : (
           <div className="card" style={{ overflow: 'hidden' }}>
             {upcoming.map((b, i) => {
-              const svc = cal.services.find((s) => s.id === b.serviceId);
+              const svc = (cal?.services || []).find((s) => s.id === b.serviceId);
               const d = parseISO(b.date);
               return (
                 <div key={b.id} style={{
@@ -579,7 +579,7 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
               {(cal.bookings || []).filter((b) => b.date === dateISO).map((b) => {
                 const top = ((b.startMin - hours[0] * 60) / 60) * rowH;
                 const h   = ((b.endMin - b.startMin) / 60) * rowH;
-                const svc = cal.services.find((s) => s.id === b.serviceId);
+                const svc = (cal?.services || []).find((s) => s.id === b.serviceId);
                 return (
                   <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }} style={{
                     position: 'absolute', top, height: h, left: 4, right: 4,

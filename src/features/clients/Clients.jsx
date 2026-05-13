@@ -248,7 +248,7 @@ export default function Clients() {
 }
 
 function ClientRow({ client, first, onOpen, onStage, onDelete }) {
-  const initials = client.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+  const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const since    = timeAgo(client.joinedAt);
   const lastSeen = timeAgo(client.lastSeenAt);
 
@@ -296,7 +296,7 @@ function ClientRow({ client, first, onOpen, onStage, onDelete }) {
 // (avatar+name+email, stage chip + last seen + lifetime) so the phone
 // shows enough to triage clients without horizontal scroll.
 function ClientCardMobile({ client, first, onOpen, onStage, onDelete }) {
-  const initials = client.name.split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
+  const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
   return (
     <div
