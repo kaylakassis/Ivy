@@ -633,6 +633,22 @@ function ServicesStep({ services, setServices, draft, setDraft, category }) {
   );
 }
 
+// 30-min slot options across a working day (6 AM – 11 PM). Stored as
+// minutes-since-midnight so the existing API shape is unchanged.
+const TIME_SLOTS = (() => {
+  const out = [];
+  for (let m = 6 * 60; m <= 23 * 60; m += 30) out.push(m);
+  return out;
+})();
+
+function fmtTime(m) {
+  const h24 = Math.floor(m / 60);
+  const mm = m % 60;
+  const period = h24 >= 12 ? 'PM' : 'AM';
+  const h12 = h24 === 0 ? 12 : (h24 > 12 ? h24 - 12 : h24);
+  return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
+}
+
 function AvailabilityStep({ availability, setAvailability }) {
   const toggleDay = (idx) => {
     setAvailability((prev) => {
@@ -646,53 +662,178 @@ function AvailabilityStep({ availability, setAvailability }) {
   const updateWindow = (idx, field, val) => {
     setAvailability((prev) => {
       const cur = prev[idx]?.[0] || { start: 540, end: 1020 };
-      return { ...prev, [idx]: [{ ...cur, [field]: val }] };
+      let { start, end } = cur;
+      if (field === 'start') start = val;
+      if (field === 'end') end = val;
+      // Auto-fix invalid ranges so a bad pick can't get persisted —
+      // if the user picks a start after the end, push end forward an hour;
+      // if end before start, pull start back.
+      if (start >= end) {
+        if (field === 'start') end = Math.min(start + 60, 23 * 60 + 30);
+        else                   start = Math.max(end - 60, 6 * 60);
+      }
+      return { ...prev, [idx]: [{ start, end }] };
     });
   };
-  const fmt = (m) => {
-    const h = Math.floor(m / 60), mm = m % 60;
-    return `${String(h).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+
+  // Quick-set presets — one tap to fill weekdays / every day / weekends.
+  const applyPreset = (kind) => {
+    const win = { start: 540, end: 1020 }; // 9–5
+    if (kind === 'weekdays') {
+      setAvailability({ 1: [win], 2: [win], 3: [win], 4: [win], 5: [win] });
+    } else if (kind === 'all') {
+      setAvailability({ 0: [win], 1: [win], 2: [win], 3: [win], 4: [win], 5: [win], 6: [win] });
+    } else if (kind === 'weekends') {
+      setAvailability({ 0: [win], 6: [win] });
+    } else if (kind === 'clear') {
+      setAvailability({});
+    }
   };
-  const parse = (s) => {
-    const [h, m] = String(s || '').split(':').map((x) => parseInt(x, 10));
-    return (Number.isFinite(h) ? h : 0) * 60 + (Number.isFinite(m) ? m : 0);
+
+  // Spread the currently-shown windows to other enabled days. Saves the
+  // user from setting "10am to 6pm" five times if they want the same hours.
+  const copyToAllEnabled = (sourceIdx) => {
+    setAvailability((prev) => {
+      const src = prev[sourceIdx]?.[0];
+      if (!src) return prev;
+      const next = { ...prev };
+      for (const k of Object.keys(next)) {
+        if (Number(k) !== sourceIdx) next[k] = [{ ...src }];
+      }
+      return next;
+    });
   };
+
+  const anyEnabled = WEEKDAYS.some((d) => (availability[d.idx] || []).length > 0);
+  const enabledCount = WEEKDAYS.filter((d) => (availability[d.idx] || []).length > 0).length;
 
   return (
     <>
       <StepHeader title="When are you available?"
-        subtitle="Pick the weekdays you take bookings + your working window. Override per-day later from Calendar → Availability."/>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {WEEKDAYS.map((d) => {
+        subtitle="Pick the days you take bookings and your working window. You can override individual days from Calendar → Availability later."/>
+
+      {/* Quick-set presets */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+        padding: '12px 14px', borderRadius: 10,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        marginBottom: 12,
+      }}>
+        <span style={{ fontSize: 12.5, color: 'var(--muted)', fontWeight: 500, marginRight: 4 }}>
+          Quick set
+        </span>
+        <PresetChip label="Weekdays 9–5"  onClick={() => applyPreset('weekdays')}/>
+        <PresetChip label="Every day 9–5" onClick={() => applyPreset('all')}/>
+        <PresetChip label="Weekends only" onClick={() => applyPreset('weekends')}/>
+        {anyEnabled && (
+          <PresetChip label="Clear" onClick={() => applyPreset('clear')} tone="ghost"/>
+        )}
+      </div>
+
+      {/* Per-day rows */}
+      <div style={{
+        display: 'flex', flexDirection: 'column', gap: 4,
+        border: '1px solid var(--border)', borderRadius: 12, overflow: 'hidden',
+      }}>
+        {WEEKDAYS.map((d, idx) => {
           const win = availability[d.idx]?.[0];
           const on = !!win;
+          const last = idx === WEEKDAYS.length - 1;
           return (
             <div key={d.idx} style={{
-              display: 'flex', alignItems: 'center', gap: 14,
-              padding: '8px 12px', borderRadius: 8,
-              background: on ? 'var(--surface-2)' : 'transparent',
-              border: '1px solid ' + (on ? 'var(--border)' : 'transparent'),
+              display: 'flex', alignItems: 'center',
+              gap: 12, padding: '12px 14px', minHeight: 56,
+              background: on ? 'var(--surface)' : 'var(--surface-2)',
+              borderBottom: last ? 'none' : '1px solid var(--border)',
+              transition: 'background 120ms ease',
             }}>
-              <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, fontSize: 13, minWidth: 90 }}>
-                <input type="checkbox" checked={on} onChange={() => toggleDay(d.idx)}/>
+              <label style={{
+                display: 'inline-flex', alignItems: 'center', gap: 10,
+                fontSize: 14, fontWeight: on ? 600 : 500,
+                color: on ? 'var(--fg)' : 'var(--fg-2)',
+                minWidth: 130, cursor: 'pointer',
+              }}>
+                <input type="checkbox" checked={on} onChange={() => toggleDay(d.idx)}
+                  style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}/>
                 {d.long}
               </label>
-              {on && (
+              {on ? (
                 <>
-                  <input type="time" value={fmt(win.start)}
-                    onChange={(e) => updateWindow(d.idx, 'start', parse(e.target.value))}
-                    style={{ ...inputStyle, padding: '6px 8px', width: 110 }}/>
-                  <span style={{ color: 'var(--muted)' }}>→</span>
-                  <input type="time" value={fmt(win.end)}
-                    onChange={(e) => updateWindow(d.idx, 'end', parse(e.target.value))}
-                    style={{ ...inputStyle, padding: '6px 8px', width: 110 }}/>
+                  <TimeSelect value={win.start} onChange={(v) => updateWindow(d.idx, 'start', v)}/>
+                  <span style={{ color: 'var(--muted)', fontSize: 13 }}>to</span>
+                  <TimeSelect value={win.end} onChange={(v) => updateWindow(d.idx, 'end', v)} min={win.start}/>
+                  {enabledCount > 1 && (
+                    <button onClick={() => copyToAllEnabled(d.idx)}
+                      title={`Copy ${d.long}'s hours to every selected day`}
+                      style={{
+                        marginLeft: 'auto', padding: '4px 10px', borderRadius: 6,
+                        background: 'transparent', color: 'var(--muted)',
+                        border: '1px solid var(--border)', fontSize: 11.5, cursor: 'pointer',
+                      }}>
+                      Copy to all
+                    </button>
+                  )}
                 </>
+              ) : (
+                <span style={{ fontSize: 13, color: 'var(--muted-2)', fontStyle: 'italic' }}>Closed</span>
               )}
             </div>
           );
         })}
       </div>
+
+      {/* Helpful footer summary so the user knows what'll be saved. */}
+      <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--muted)' }}>
+        {enabledCount === 0
+          ? "You haven't picked any days yet. Pick at least one before continuing."
+          : `${enabledCount} day${enabledCount === 1 ? '' : 's'} a week. You can override individual days from Calendar → Availability anytime.`}
+      </div>
     </>
+  );
+}
+
+// Compact pill-shaped quick-set button.
+function PresetChip({ label, onClick, tone = 'normal' }) {
+  return (
+    <button onClick={onClick} type="button" style={{
+      padding: '6px 12px', borderRadius: 99, fontSize: 12.5, fontWeight: 500,
+      cursor: 'pointer',
+      background: tone === 'ghost' ? 'transparent' : 'var(--surface)',
+      color: tone === 'ghost' ? 'var(--muted)' : 'var(--fg)',
+      border: '1px solid var(--border)',
+    }}>{label}</button>
+  );
+}
+
+// Custom dark-themed time picker built on <select>. Avoids the native
+// <input type="time"> control which renders white in dark mode, sizes
+// inconsistently across browsers, and clips the AM/PM suffix at
+// narrow widths.
+function TimeSelect({ value, onChange, min = -Infinity }) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(Number(e.target.value))}
+      style={{
+        padding: '8px 28px 8px 12px',
+        background: 'var(--surface-2)',
+        color: 'var(--fg)',
+        border: '1px solid var(--border)',
+        borderRadius: 8,
+        fontSize: 13, fontVariantNumeric: 'tabular-nums',
+        appearance: 'none',
+        // Inline chevron so the dropdown indicator matches our theme
+        backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=\'http://www.w3.org/2000/svg\' viewBox=\'0 0 24 24\' fill=\'none\' stroke=\'%2385827B\' stroke-width=\'1.8\'><path d=\'M6 9l6 6 6-6\'/></svg>")',
+        backgroundRepeat: 'no-repeat',
+        backgroundPosition: 'right 8px center',
+        backgroundSize: '14px',
+        cursor: 'pointer',
+        minWidth: 108,
+      }}>
+      {TIME_SLOTS.map((m) => (
+        <option key={m} value={m} disabled={m <= min}>{fmtTime(m)}</option>
+      ))}
+    </select>
   );
 }
 
