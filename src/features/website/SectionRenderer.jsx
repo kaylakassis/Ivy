@@ -13,7 +13,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
 
-export default function SectionRenderer({ section, handle }) {
+export default function SectionRenderer({ section, handle, editable = false, onUpdate = null }) {
   const Comp = RENDERERS[section.type] || Fallback;
   const style = section.style || {};
   const wrapperStyle = {};
@@ -22,12 +22,83 @@ export default function SectionRenderer({ section, handle }) {
     wrapperStyle.padding = PADDING_DENSITIES[style.padding];
   }
   if (style.textAlign) wrapperStyle.textAlign = style.textAlign;
-  const hasOverride = Object.keys(wrapperStyle).length > 0;
+  // Mobile / desktop hide rules. We emit a tiny scoped <style> targeting
+  // this section's id rather than wrapping in a styled div — keeps the
+  // wrapper from breaking layouts that already span 100vw.
+  const hideMobile  = !!style.hideOnMobile;
+  const hideDesktop = !!style.hideOnDesktop;
+  const hasOverride = Object.keys(wrapperStyle).length > 0 || hideMobile || hideDesktop;
   const rendered = (
-    <Comp data={section.data} handle={handle} variant={section.variant}/>
+    <Comp data={section.data} handle={handle} variant={section.variant} editable={editable} onUpdate={onUpdate}/>
   );
-  const inner = hasOverride ? <div style={wrapperStyle}>{rendered}</div> : rendered;
+  const hideCss = (hideMobile || hideDesktop) && section.id ? (
+    <style>{`
+      ${hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${section.id}"] { display: none !important; } }` : ''}
+      ${hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${section.id}"] { display: none !important; } }` : ''}
+    `}</style>
+  ) : null;
+  const inner = hasOverride
+    ? <div data-section-id={section.id} style={wrapperStyle}>{hideCss}{rendered}</div>
+    : rendered;
   return section.animate ? <AnimateOnView animate={section.animate}>{inner}</AnimateOnView> : inner;
+}
+
+// Inline-editable text. When `editable` is true the rendered span is
+// contentEditable; on blur we commit the new value via `onCommit`. We
+// intentionally use `dangerouslySetInnerHTML` ONLY to seed the initial
+// text — subsequent renders are skipped (suppressContentEditableWarning)
+// to avoid React fighting the cursor on each keystroke.
+export function EditableText({ value, onCommit, editable, as = 'span', style }) {
+  const ref = React.useRef(null);
+  // Keep the DOM text synced when `value` changes externally (e.g. undo)
+  // but only when we're NOT actively editing — otherwise we'd clobber
+  // the user's typing.
+  React.useEffect(() => {
+    if (!editable) return;
+    const el = ref.current;
+    if (!el) return;
+    if (document.activeElement !== el && el.innerText !== (value || '')) {
+      el.innerText = value || '';
+    }
+  }, [value, editable]);
+  if (!editable) {
+    return React.createElement(as, { style }, value);
+  }
+  const commit = () => {
+    const el = ref.current;
+    if (!el || !onCommit) return;
+    const next = el.innerText;
+    if (next !== value) onCommit(next);
+  };
+  return React.createElement(as, {
+    ref,
+    contentEditable: true,
+    suppressContentEditableWarning: true,
+    spellCheck: true,
+    onClick: (e) => e.stopPropagation(),
+    onMouseDown: (e) => e.stopPropagation(),
+    onBlur: commit,
+    onKeyDown: (e) => {
+      // Enter exits editing for single-line fields (commit + blur).
+      // Shift+Enter still inserts a newline.
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        e.currentTarget.blur();
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.currentTarget.blur();
+      }
+    },
+    style: {
+      ...(style || {}),
+      outline: 'none',
+      cursor: 'text',
+      // A faint highlight so users see this is editable. Doesn't
+      // interfere with the rendered design.
+      boxShadow: 'inset 0 -1px 0 rgba(0,0,0,0.06)',
+    },
+  }, value);
 }
 
 // Wraps a section in a div that fades / slides in when scrolled into
@@ -37,7 +108,15 @@ export default function SectionRenderer({ section, handle }) {
 function AnimateOnView({ animate, children }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
+  // Respect the OS-level reduced-motion preference. Users who've asked
+  // for less motion get the content rendered in its final position
+  // immediately, no fade/slide. Avoids motion sickness + meets WCAG.
+  const prefersReducedMotion = typeof window !== 'undefined'
+    && window.matchMedia
+    && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   useEffect(() => {
+    if (prefersReducedMotion) { setVisible(true); return; }
     const el = ref.current;
     if (!el || typeof IntersectionObserver === 'undefined') {
       setVisible(true);
@@ -54,11 +133,11 @@ function AnimateOnView({ animate, children }) {
     }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
     io.observe(el);
     return () => io.disconnect();
-  }, []);
+  }, [prefersReducedMotion]);
 
   const off = ANIMATION_OFFSCREEN[animate] || ANIMATION_OFFSCREEN.fade;
   const styleNow = visible
-    ? { opacity: 1, transform: 'none', transition: 'opacity 0.7s ease, transform 0.7s ease' }
+    ? { opacity: 1, transform: 'none', transition: prefersReducedMotion ? 'none' : 'opacity 0.7s ease, transform 0.7s ease' }
     : { ...off, transition: 'opacity 0.7s ease, transform 0.7s ease' };
   return <div ref={ref} style={styleNow}>{children}</div>;
 }
@@ -78,25 +157,31 @@ const container = {
 };
 
 // ---------- Hero ----------
-function Hero({ data, variant }) {
+function Hero({ data, variant, editable, onUpdate }) {
   const v = variant || 'center';
-  const ctaBtn = data.cta && (
-    <a href={data.ctaLink || '#book'} style={ctaStyle}>
-      {data.cta} <span style={{ fontSize: 18, lineHeight: 1 }}>→</span>
+  const commit = (key) => (val) => onUpdate && onUpdate({ data: { [key]: val } });
+  const ctaBtn = (data.cta || editable) && (
+    <a href={editable ? undefined : (data.ctaLink || '#book')}
+       style={ctaStyle}
+       onClick={editable ? (e) => e.preventDefault() : undefined}>
+      <EditableText as="span" value={data.cta || ''} editable={editable} onCommit={commit('cta')}/>
+      <span style={{ fontSize: 18, lineHeight: 1 }}>→</span>
     </a>
   );
   const headline = (
-    <h1 style={{
-      margin: 0, fontFamily: 'var(--site-font-display)',
-      fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: 500,
-      letterSpacing: '-0.03em', lineHeight: 1.05,
-    }}>{data.headline}</h1>
+    <EditableText as="h1" value={data.headline} editable={editable} onCommit={commit('headline')}
+      style={{
+        margin: 0, fontFamily: 'var(--site-font-display)',
+        fontSize: 'clamp(40px, 5vw, 64px)', fontWeight: 500,
+        letterSpacing: '-0.03em', lineHeight: 1.05,
+      }}/>
   );
-  const sub = data.sub && (
-    <p style={{
-      margin: '20px 0 0', fontSize: 'clamp(16px, 1.2vw, 20px)',
-      color: 'var(--site-fg-2)', lineHeight: 1.55, maxWidth: 560,
-    }}>{data.sub}</p>
+  const sub = (data.sub || editable) && (
+    <EditableText as="p" value={data.sub || ''} editable={editable} onCommit={commit('sub')}
+      style={{
+        margin: '20px 0 0', fontSize: 'clamp(16px, 1.2vw, 20px)',
+        color: 'var(--site-fg-2)', lineHeight: 1.55, maxWidth: 560,
+      }}/>
   );
 
   // Split-image: text on left half, image on right (stacks on mobile).
@@ -292,15 +377,15 @@ function Services({ data, variant }) {
 }
 
 // ---------- About ----------
-function About({ data }) {
+function About({ data, editable, onUpdate }) {
+  const commit = (key) => (val) => onUpdate && onUpdate({ data: { [key]: val } });
   return (
     <section style={{ background: 'var(--site-surface)', color: 'var(--site-fg)' }}>
       <div style={{ ...container, display: 'grid', gridTemplateColumns: data.imgUrl ? '1fr 1fr' : '1fr', gap: 48, alignItems: 'center' }}>
         <div>
-          <Heading text={data.headline} align="left" />
-          <p style={{ margin: '20px 0 0', fontSize: 16, lineHeight: 1.7, color: 'var(--site-fg-2)', whiteSpace: 'pre-wrap' }}>
-            {data.body}
-          </p>
+          <Heading text={data.headline} align="left" editable={editable} onCommit={commit('headline')}/>
+          <EditableText as="p" value={data.body} editable={editable} onCommit={commit('body')}
+            style={{ margin: '20px 0 0', fontSize: 16, lineHeight: 1.7, color: 'var(--site-fg-2)', whiteSpace: 'pre-wrap' }}/>
         </div>
         {data.imgUrl && (
           <div style={{
@@ -519,21 +604,21 @@ function Footer({ data }) {
 }
 
 // ---------- Shared ----------
-function Heading({ text, sub, align = 'center' }) {
+function Heading({ text, sub, align = 'center', editable = false, onCommit = null, onCommitSub = null }) {
   return (
     <div style={{ textAlign: align }}>
-      <h2 style={{
-        margin: 0,
-        fontFamily: 'var(--site-font-display)',
-        fontSize: 'clamp(28px, 3.4vw, 40px)',
-        fontWeight: 500,
-        letterSpacing: '-0.025em',
-        lineHeight: 1.1,
-      }}>{text}</h2>
-      {sub && (
-        <p style={{ margin: '12px auto 0', maxWidth: 560, color: 'var(--site-fg-2)', fontSize: 15, lineHeight: 1.55 }}>
-          {sub}
-        </p>
+      <EditableText as="h2" value={text} editable={editable} onCommit={onCommit}
+        style={{
+          margin: 0,
+          fontFamily: 'var(--site-font-display)',
+          fontSize: 'clamp(28px, 3.4vw, 40px)',
+          fontWeight: 500,
+          letterSpacing: '-0.025em',
+          lineHeight: 1.1,
+        }}/>
+      {(sub || (editable && onCommitSub)) && (
+        <EditableText as="p" value={sub || ''} editable={editable && !!onCommitSub} onCommit={onCommitSub}
+          style={{ margin: '12px auto 0', maxWidth: 560, color: 'var(--site-fg-2)', fontSize: 15, lineHeight: 1.55 }}/>
       )}
     </div>
   );
@@ -559,12 +644,13 @@ const siteInput = {
 };
 
 // ---------- Stats ----------
-function Stats({ data }) {
+function Stats({ data, editable, onUpdate }) {
   const items = data.items || [];
+  const commit = (key) => (val) => onUpdate && onUpdate({ data: { [key]: val } });
   return (
     <section style={{ background: 'var(--site-surface)', color: 'var(--site-fg)' }}>
       <div style={container}>
-        {data.headline && <Heading text={data.headline} sub={data.sub}/>}
+        {(data.headline || editable) && <Heading text={data.headline || ''} sub={data.sub} editable={editable} onCommit={commit('headline')} onCommitSub={commit('sub')}/>}
         <div style={{
           display: 'grid',
           gridTemplateColumns: `repeat(${Math.min(4, Math.max(1, items.length || 1))}, 1fr)`,
@@ -590,7 +676,8 @@ function Stats({ data }) {
 }
 
 // ---------- CTA banner ----------
-function CtaBanner({ data }) {
+function CtaBanner({ data, editable, onUpdate }) {
+  const commit = (key) => (val) => onUpdate && onUpdate({ data: { [key]: val } });
   return (
     <section style={{
       background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
@@ -598,25 +685,28 @@ function CtaBanner({ data }) {
       <div style={{
         maxWidth: 900, margin: '0 auto', padding: '80px 64px', textAlign: 'center',
       }}>
-        <h2 style={{
-          margin: 0, fontFamily: 'var(--site-font-display)',
-          fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 500,
-          letterSpacing: '-0.02em', lineHeight: 1.1,
-        }}>{data.headline}</h2>
-        {data.sub && (
-          <p style={{ margin: '20px auto 0', fontSize: 18, lineHeight: 1.55, maxWidth: 560, opacity: 0.92 }}>
-            {data.sub}
-          </p>
+        <EditableText as="h2" value={data.headline} editable={editable} onCommit={commit('headline')}
+          style={{
+            margin: 0, fontFamily: 'var(--site-font-display)',
+            fontSize: 'clamp(32px, 4vw, 48px)', fontWeight: 500,
+            letterSpacing: '-0.02em', lineHeight: 1.1,
+          }}/>
+        {(data.sub || editable) && (
+          <EditableText as="p" value={data.sub || ''} editable={editable} onCommit={commit('sub')}
+            style={{ margin: '20px auto 0', fontSize: 18, lineHeight: 1.55, maxWidth: 560, opacity: 0.92 }}/>
         )}
-        {data.cta && (
+        {(data.cta || editable) && (
           <div style={{ marginTop: 32 }}>
-            <a href={data.ctaLink || '#book'} style={{
-              display: 'inline-flex', alignItems: 'center', gap: 8,
-              padding: '14px 26px', fontSize: 15, fontWeight: 600,
-              background: 'var(--site-accent-ink)', color: 'var(--site-accent)',
-              borderRadius: 'var(--site-radius)', textDecoration: 'none',
-            }}>
-              {data.cta} <span style={{ fontSize: 18, lineHeight: 1 }}>→</span>
+            <a href={editable ? undefined : (data.ctaLink || '#book')}
+              onClick={editable ? (e) => e.preventDefault() : undefined}
+              style={{
+                display: 'inline-flex', alignItems: 'center', gap: 8,
+                padding: '14px 26px', fontSize: 15, fontWeight: 600,
+                background: 'var(--site-accent-ink)', color: 'var(--site-accent)',
+                borderRadius: 'var(--site-radius)', textDecoration: 'none',
+              }}>
+              <EditableText as="span" value={data.cta || ''} editable={editable} onCommit={commit('cta')}/>
+              <span style={{ fontSize: 18, lineHeight: 1 }}>→</span>
             </a>
           </div>
         )}

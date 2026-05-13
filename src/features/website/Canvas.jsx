@@ -7,7 +7,7 @@ import { FONT_PAIRS } from './sections.js';
 
 const DEVICE_WIDTHS = { desktop: 1200, tablet: 768, mobile: 390 };
 
-export default function Canvas({ site, sections, selectedId, onSelect, device = 'desktop', previewMode = false }) {
+export default function Canvas({ site, sections, selectedId, onSelect, onSectionUpdate, device = 'desktop', previewMode = false }) {
   const tpl = TEMPLATES[site.template] || TEMPLATES.clean;
   const width = DEVICE_WIDTHS[device] || DEVICE_WIDTHS.desktop;
   // Editor passes the current-page's sections in; fall back to legacy
@@ -100,6 +100,7 @@ export default function Canvas({ site, sections, selectedId, onSelect, device = 
                   onSelect={previewMode ? null : onSelect}
                   previewMode={previewMode}
                   handle={site.handle}
+                  onSectionUpdate={onSectionUpdate}
                 />
               ))
             )}
@@ -114,12 +115,16 @@ export default function Canvas({ site, sections, selectedId, onSelect, device = 
   );
 }
 
-function SectionFrame({ section, selected, onSelect, previewMode, handle }) {
+function SectionFrame({ section, selected, onSelect, previewMode, handle, onSectionUpdate }) {
   const handleClick = (e) => {
     if (!onSelect) return;
     e.stopPropagation();
     onSelect(section.id);
   };
+  // Selected + not preview = headlines + body copy are inline-editable.
+  // Renderers that support it (Hero, About, CtaBanner, Stats) gate the
+  // contentEditable handling on this `editable` flag.
+  const editable = selected && !previewMode && !!onSectionUpdate;
   return (
     <div
       onClick={handleClick}
@@ -140,7 +145,12 @@ function SectionFrame({ section, selected, onSelect, previewMode, handle }) {
           {section.type}
         </div>
       )}
-      <SectionRenderer section={section} handle={handle} />
+      <SectionRenderer
+        section={section}
+        handle={handle}
+        editable={editable}
+        onUpdate={editable ? (patch) => onSectionUpdate(section.id, patch) : null}
+      />
     </div>
   );
 }

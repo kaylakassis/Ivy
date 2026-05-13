@@ -1,11 +1,24 @@
 // Section catalog — the library of blocks users can add to their site.
 // Each section has a `type`, default data, and a human-friendly label/description.
 
+// Category pills that show above the catalog in the section library.
+// Sections opt into one of these via the `category` field; "all" is
+// implied (no filter applied).
+export const SECTION_CATEGORIES = {
+  header:       { label: 'Header & hero' },
+  social_proof: { label: 'Social proof' },
+  content:      { label: 'Content' },
+  cta:          { label: 'Calls to action' },
+  commerce:     { label: 'Pricing & commerce' },
+  embed:        { label: 'Embeds & media' },
+};
+
 export const SECTION_TYPES = {
   hero: {
     label: 'Hero',
     icon: 'Home',
     desc: 'Big headline + call to action',
+    category: 'header',
     variants: [
       { id: 'center',      label: 'Centered' },
       { id: 'left',        label: 'Left aligned' },
@@ -25,6 +38,7 @@ export const SECTION_TYPES = {
     label: 'Services',
     icon: 'Dollar',
     desc: 'What you offer + pricing',
+    category: 'commerce',
     variants: [
       { id: 'grid', label: 'Grid (3-up)' },
       { id: 'list', label: 'List (stacked)' },
@@ -44,6 +58,7 @@ export const SECTION_TYPES = {
     label: 'About',
     icon: 'Users',
     desc: 'Your story + photo',
+    category: 'content',
     default: () => ({
       headline: 'About Me',
       body: 'Write your story here. Share what makes you unique, what drives you, and what clients can expect when they work with you.',
@@ -54,6 +69,7 @@ export const SECTION_TYPES = {
     label: 'Booking',
     icon: 'Calendar',
     desc: 'Live booking widget from your calendar',
+    category: 'cta',
     default: () => ({
       headline: 'Book a Session',
       sub: 'Choose a time that works for you.',
@@ -64,6 +80,7 @@ export const SECTION_TYPES = {
     label: 'Reviews',
     icon: 'Heart',
     desc: 'Client testimonials',
+    category: 'social_proof',
     default: () => ({
       headline: 'What Clients Say',
       items: [
@@ -76,6 +93,7 @@ export const SECTION_TYPES = {
     label: 'FAQ',
     icon: 'Chat',
     desc: 'Frequently asked questions',
+    category: 'content',
     default: () => ({
       headline: 'Frequently Asked Questions',
       items: [
@@ -88,6 +106,7 @@ export const SECTION_TYPES = {
     label: 'Gallery',
     icon: 'Image',
     desc: 'Photo grid',
+    category: 'embed',
     default: () => ({
       headline: 'Gallery',
       photos: [],
@@ -97,6 +116,7 @@ export const SECTION_TYPES = {
     label: 'Contact',
     icon: 'Mail',
     desc: 'Contact form + info',
+    category: 'cta',
     default: () => ({
       headline: 'Get in Touch',
       sub: "I'd love to hear from you.",
@@ -109,6 +129,7 @@ export const SECTION_TYPES = {
     label: 'Footer',
     icon: 'Globe',
     desc: 'Copyright + links',
+    category: 'content',
     default: (biz) => ({
       businessName: biz || 'My Business',
       tagline: '',
@@ -119,6 +140,7 @@ export const SECTION_TYPES = {
     label: 'Stats',
     icon: 'Trending',
     desc: 'Counters — clients served, years in business, etc.',
+    category: 'social_proof',
     default: () => ({
       headline: '',
       sub: '',
@@ -133,6 +155,7 @@ export const SECTION_TYPES = {
     label: 'CTA banner',
     icon: 'Spark',
     desc: 'Full-width pull quote with a button',
+    category: 'cta',
     default: () => ({
       headline: 'Ready to start?',
       sub: "Book a 20-minute intro call — no commitment.",
@@ -144,6 +167,7 @@ export const SECTION_TYPES = {
     label: 'Team',
     icon: 'Users',
     desc: 'Bios + photos for multi-person practices',
+    category: 'content',
     default: () => ({
       headline: 'Meet the team',
       members: [
@@ -156,6 +180,7 @@ export const SECTION_TYPES = {
     label: 'Pricing tiers',
     icon: 'Dollar',
     desc: 'Side-by-side package comparison',
+    category: 'commerce',
     default: () => ({
       headline: 'Pricing',
       sub: 'Pick what fits.',
@@ -170,6 +195,7 @@ export const SECTION_TYPES = {
     label: 'Newsletter',
     icon: 'Mail',
     desc: 'Email-capture form',
+    category: 'cta',
     default: () => ({
       headline: 'Stay in touch',
       sub: 'Occasional emails about what I am working on — no spam.',
@@ -181,6 +207,7 @@ export const SECTION_TYPES = {
     label: 'Video',
     icon: 'Image',
     desc: 'Embedded video (YouTube/Vimeo URL)',
+    category: 'embed',
     default: () => ({
       headline: '',
       sub: '',
@@ -191,6 +218,7 @@ export const SECTION_TYPES = {
     label: 'Featured in',
     icon: 'Globe',
     desc: 'Logos / press strip — "as seen in"',
+    category: 'social_proof',
     default: () => ({
       headline: 'Featured in',
       logos: [
@@ -205,6 +233,7 @@ export const SECTION_TYPES = {
     label: 'Pricing comparison',
     icon: 'Dollar',
     desc: 'Feature-by-feature table comparing tiers (long-form vs short cards)',
+    category: 'commerce',
     default: () => ({
       headline: 'Compare plans',
       sub: '',
@@ -222,6 +251,7 @@ export const SECTION_TYPES = {
     label: 'Blog / posts',
     icon: 'Doc',
     desc: 'Recent posts strip — title + excerpt + link',
+    category: 'content',
     default: () => ({
       headline: 'Latest writing',
       sub: '',
@@ -236,6 +266,7 @@ export const SECTION_TYPES = {
     label: 'Instagram',
     icon: 'Image',
     desc: 'Instagram embed (single post or profile)',
+    category: 'embed',
     default: () => ({
       headline: 'Follow along',
       sub: '',
@@ -246,6 +277,7 @@ export const SECTION_TYPES = {
     label: 'Code / pre-formatted',
     icon: 'Doc',
     desc: 'Monospace code block (e.g. API examples, recipes, configs)',
+    category: 'embed',
     default: () => ({
       headline: '',
       language: 'plain',

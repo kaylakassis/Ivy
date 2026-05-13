@@ -19,11 +19,12 @@ import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 
 export default function Editor({
-  site, set, setSection, addSection, removeSection, moveSection,
+  site, set, setSection, addSection, removeSection, moveSection, moveSectionTo,
   duplicateSection,
   currentPage, currentPageId, setCurrentPageId,
   addPage, removePage, renamePage, movePage,
   reset, publish, saving, saveErr,
+  undo, redo, canUndo, canRedo,
 }) {
   // Sections we're rendering / editing come from the CURRENT page,
   // not the legacy top-level site.sections. Multi-page sites have
@@ -38,6 +39,27 @@ export default function Editor({
     setSelectedId(activeSections[0]?.id || null);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentPageId]);
+
+  // Global Cmd/Ctrl+Z + Shift+Cmd/Ctrl+Z for undo/redo. Skipped when
+  // the user is typing into an input/textarea/contentEditable so the
+  // browser's native undo still works inside text fields (we don't
+  // want to yank a section while someone is editing a headline).
+  useEffect(() => {
+    if (!undo || !redo) return;
+    const onKey = (e) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (!meta) return;
+      const k = e.key.toLowerCase();
+      if (k !== 'z') return;
+      const target = e.target;
+      const tag = (target && target.tagName) || '';
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (target && target.isContentEditable)) return;
+      e.preventDefault();
+      if (e.shiftKey) redo(); else undo();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
   const [device, setDevice] = useState('desktop');
   const [previewMode, setPreviewMode] = useState(false);
   const [showTemplateMenu, setShowTemplateMenu] = useState(false);
@@ -180,6 +202,20 @@ export default function Editor({
               ))}
             </div>
           )}
+        </div>
+
+        {/* Undo / redo — sits next to the template menu so it stays
+            on-screen on every viewport. Wired to global Cmd/Ctrl+Z and
+            Cmd/Ctrl+Shift+Z below via a keyboard listener on document. */}
+        <div style={{ display: 'flex', gap: 4 }}>
+          <button className="btn btn-outline" disabled={!canUndo} onClick={undo}
+            title="Undo (Cmd/Ctrl+Z)" style={{ padding: '6px 8px', opacity: canUndo ? 1 : 0.45 }}>
+            <Icons.ArrowUp size={13} style={{ transform: 'rotate(-90deg)' }}/>
+          </button>
+          <button className="btn btn-outline" disabled={!canRedo} onClick={redo}
+            title="Redo (Cmd/Ctrl+Shift+Z)" style={{ padding: '6px 8px', opacity: canRedo ? 1 : 0.45 }}>
+            <Icons.ArrowUp size={13} style={{ transform: 'rotate(90deg)' }}/>
+          </button>
         </div>
 
         {/* Site-style affordances — font pair + custom CSS. Both apply
@@ -336,6 +372,7 @@ export default function Editor({
             }}
             onAdd={handleAdd}
             onMove={moveSection}
+            onMoveTo={moveSectionTo}
             mobile={isMobile}
           />
         )}
@@ -350,6 +387,7 @@ export default function Editor({
               setSelectedId(id);
               if (isMobile && id) setMobileTab('inspector');
             }}
+            onSectionUpdate={setSection}
             device={device}
             previewMode={previewMode}
           />

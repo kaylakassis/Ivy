@@ -330,7 +330,18 @@ function renderSection(section, handle) {
   if (!section || !section.visible) return '';
   const fn = RENDERERS[section.type];
   if (!fn) return '';
-  return fn(section, handle);
+  const inner = fn(section, handle);
+  const style = section.style || {};
+  const hideMobile  = !!style.hideOnMobile;
+  const hideDesktop = !!style.hideOnDesktop;
+  if (!hideMobile && !hideDesktop) return inner;
+  // Wrap with the same data-section-id hook the client uses so the
+  // media-query rules apply identically on the SSR'd HTML.
+  const css = [
+    hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
+    hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
+  ].filter(Boolean).join(' ');
+  return `<style>${css}</style><div data-section-id="${esc(section.id)}">${inner}</div>`;
 }
 
 // ----- Inline styles for the static (pre-hydration) markup --------

@@ -259,6 +259,28 @@ function StyleControls({ style, updateStyle }) {
           ))}
         </div>
       </FieldBlock>
+      <FieldBlock label="Show on">
+        <div style={{ display: 'flex', gap: 4 }}>
+          {[
+            { id: 'desktop', label: 'Desktop', styleKey: 'hideOnDesktop' },
+            { id: 'mobile',  label: 'Mobile',  styleKey: 'hideOnMobile'  },
+          ].map((d) => {
+            const on = !style[d.styleKey];
+            return (
+              <button key={d.id} type="button"
+                onClick={() => updateStyle({ [d.styleKey]: on ? true : undefined })}
+                title={on ? `Hide on ${d.label.toLowerCase()}` : `Show on ${d.label.toLowerCase()}`}
+                style={{
+                  flex: 1, padding: '6px 8px', fontSize: 11.5,
+                  border: '1px solid var(--border)',
+                  background: on ? 'var(--accent)' : 'var(--surface)',
+                  color: on ? 'var(--accent-ink)' : 'var(--fg)',
+                  borderRadius: 6, cursor: 'pointer',
+                }}>{d.label}</button>
+            );
+          })}
+        </div>
+      </FieldBlock>
     </>
   );
 }
