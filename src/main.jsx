@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './lib/auth.jsx';
 import { initMonitoring, ErrorBoundary } from './lib/monitoring.js';
+import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import App from './App.jsx';
 import './styles/tokens.css';
 import './styles/global.css';
@@ -12,21 +13,33 @@ initMonitoring();
 // Global capture for everything that escapes a React error boundary:
 //   • Promise rejections that no .catch() handled
 //   • Synchronous errors thrown outside React (timers, listeners)
-// Both go to the console so users + we can see them in browser logs and
-// they get reported via initMonitoring's Sentry hookup. Without these,
-// a thrown async error in a click handler vanishes into the void.
+//   • Vite's preloadError event for failed dynamic imports
 if (typeof window !== 'undefined') {
+  window.addEventListener('vite:preloadError', (e) => {
+    // eslint-disable-next-line no-console
+    console.warn('[vite:preloadError] stale chunk; reloading.', e?.payload || e);
+    tryStaleChunkRecovery({ message: 'Failed to fetch dynamically imported module' });
+  });
   window.addEventListener('unhandledrejection', (e) => {
+    if (tryStaleChunkRecovery(e?.reason)) return;
     // eslint-disable-next-line no-console
     console.error('[unhandledrejection]', e?.reason);
   });
   window.addEventListener('error', (e) => {
+    if (tryStaleChunkRecovery(e?.error || { message: e?.message })) return;
     // eslint-disable-next-line no-console
     console.error('[window error]', e?.error || e?.message || e);
   });
 }
 
-function FatalFallback({ resetError }) {
+
+function FatalFallback({ resetError, error }) {
+  // If the error is a stale-chunk failure (user has an old tab open
+  // after a Vercel redeploy), reload immediately instead of showing
+  // the snag screen. The reload picks up the fresh index.html and
+  // re-fetches the new asset hashes. Gated by sessionStorage cooldown
+  // so we don't loop on a genuinely-broken deploy.
+  if (tryStaleChunkRecovery(error)) return null;
   return (
     <div style={{
       minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -70,7 +83,7 @@ function FatalFallback({ resetError }) {
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ErrorBoundary fallback={({ resetError }) => <FatalFallback resetError={resetError}/>}>
+    <ErrorBoundary fallback={({ resetError, error }) => <FatalFallback resetError={resetError} error={error}/>}>
       <BrowserRouter>
         <AuthProvider>
           <App />

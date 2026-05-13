@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
 import { ErrorBoundary } from '../../lib/monitoring.js';
+import { tryStaleChunkRecovery } from '../../lib/staleChunk.js';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
 import VerifyEmailBanner from '../VerifyEmailBanner.jsx';
@@ -181,6 +182,11 @@ function AppShellInner() {
 // can navigate to a different tab. Includes the actual error message so
 // support can pinpoint the issue from a screenshot.
 function RouteCrashInline({ error, resetError }) {
+  // Auto-reload on stale-chunk error (deploy mid-session). Same as
+  // FatalFallback in main.jsx and RouteCrash in App.jsx — every error
+  // boundary path checks this so the user never lands on a snag
+  // screen because of a content-hashed asset rotation.
+  if (tryStaleChunkRecovery(error)) return null;
   const msg = (error && (error.message || String(error))) || 'unknown';
   return (
     <div style={{ padding: 32 }}>

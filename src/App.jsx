@@ -16,6 +16,7 @@ import RoleRouter from './features/auth/RoleRouter.jsx';
 import RootRouter from './features/marketing/RootRouter.jsx';
 import ClientShell from './features/client/ClientShell.jsx';
 import { ErrorBoundary } from './lib/monitoring.js';
+import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 
 // ── Lazy: business app pages ──
 const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
@@ -98,6 +99,10 @@ function RouteFallback() {
 //   • "Sign out" — clears auth cookie and bounces.
 //   • Email link with the error pre-filled.
 function RouteCrash({ resetError, error }) {
+  // First: if this is a stale-chunk error from a fresh Vercel deploy,
+  // hard-reload to fetch the new index.html. The user never sees this
+  // screen in that case.
+  if (tryStaleChunkRecovery(error)) return null;
   const msg = (error && (error.message || String(error))) || 'unknown';
   const goHome = () => {
     try {
