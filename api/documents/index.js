@@ -17,41 +17,49 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const status = req.query.status;
-      // ?templates=1 returns only is_template=TRUE rows; ?templates=0
-      // (or absent) returns instances. ServicesDrawer's intake picker
-      // calls with templates=1.
-      const templatesOnly = req.query.templates === '1';
-      let rows;
-      if (templatesOnly) {
-        const r = await sql`
-          SELECT * FROM documents
-          WHERE workspace_id = ${workspaceId} AND is_template = TRUE
-          ORDER BY name ASC
-        `;
-        rows = r.rows;
-      } else if (status && VALID_STATUS.has(status)) {
-        const r = await sql`
-          SELECT * FROM documents
-          WHERE workspace_id = ${workspaceId} AND status = ${status}
-            AND is_template = FALSE
-          ORDER BY updated_at DESC
-        `;
-        rows = r.rows;
-      } else {
-        const r = await sql`
-          SELECT * FROM documents
-          WHERE workspace_id = ${workspaceId} AND is_template = FALSE
-          ORDER BY updated_at DESC
-        `;
-        rows = r.rows;
+      try {
+        const status = req.query.status;
+        // ?templates=1 returns only is_template=TRUE rows; ?templates=0
+        // (or absent) returns instances. ServicesDrawer's intake picker
+        // calls with templates=1.
+        const templatesOnly = req.query.templates === '1';
+        let rows;
+        if (templatesOnly) {
+          const r = await sql`
+            SELECT * FROM documents
+            WHERE workspace_id = ${workspaceId} AND is_template = TRUE
+            ORDER BY name ASC
+          `;
+          rows = r.rows;
+        } else if (status && VALID_STATUS.has(status)) {
+          const r = await sql`
+            SELECT * FROM documents
+            WHERE workspace_id = ${workspaceId} AND status = ${status}
+              AND is_template = FALSE
+            ORDER BY updated_at DESC
+          `;
+          rows = r.rows;
+        } else {
+          const r = await sql`
+            SELECT * FROM documents
+            WHERE workspace_id = ${workspaceId} AND is_template = FALSE
+            ORDER BY updated_at DESC
+          `;
+          rows = r.rows;
+        }
+        // Bulk-fetch signers in one round trip so each row can show its
+        // multi-signer progress without N+1 queries.
+        let signersByDoc;
+        try { signersByDoc = await fetchSignersBulk(rows.map((r) => r.id)); }
+        catch { signersByDoc = new Map(); }
+        return ok(res, {
+          documents: rows.map((r) => serializeDoc(r, signersByDoc.get(r.id) || [])),
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[documents GET] failed (returning empty):', e.message);
+        return ok(res, { documents: [] });
       }
-      // Bulk-fetch signers in one round trip so each row can show its
-      // multi-signer progress without N+1 queries.
-      const signersByDoc = await fetchSignersBulk(rows.map((r) => r.id));
-      return ok(res, {
-        documents: rows.map((r) => serializeDoc(r, signersByDoc.get(r.id) || [])),
-      });
     }
 
     if (req.method === 'POST') {

@@ -20,18 +20,18 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const settings = await ensureRewardSettings(workspaceId);
-      const rules = await sql`
-        SELECT * FROM reward_rules WHERE workspace_id = ${workspaceId}
-        ORDER BY created_at DESC
-      `;
-      const redemptions = await sql`
-        SELECT * FROM reward_redemptions WHERE workspace_id = ${workspaceId}
-        ORDER BY redeemed_at DESC
-        LIMIT 200
-      `;
-      const kpis = await rewardKpis(workspaceId);
-      const pending = await pendingRewards(workspaceId);
+      // Per-query try/catch — any single missing table degrades to an
+      // empty fallback rather than 500ing the whole Rewards tab.
+      const safe = async (p, fallback) => { try { return await p; } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[rewards GET] sub-query failed:', e.message);
+        return fallback;
+      } };
+      const settings    = await safe(ensureRewardSettings(workspaceId), { launched_at: null });
+      const rules       = await safe(sql`SELECT * FROM reward_rules WHERE workspace_id = ${workspaceId} ORDER BY created_at DESC`, { rows: [] });
+      const redemptions = await safe(sql`SELECT * FROM reward_redemptions WHERE workspace_id = ${workspaceId} ORDER BY redeemed_at DESC LIMIT 200`, { rows: [] });
+      const kpis        = await safe(rewardKpis(workspaceId), { totalIssued: 0, redeemed: 0, outstanding: 0 });
+      const pending     = await safe(pendingRewards(workspaceId), []);
 
       return ok(res, {
         rewards: {

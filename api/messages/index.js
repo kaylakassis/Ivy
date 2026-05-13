@@ -17,14 +17,20 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const { rows } = await sql`
-        SELECT t.*, c.name AS client_name, c.email AS client_email
-        FROM message_threads t
-        JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
-        WHERE t.workspace_id = ${workspaceId}
-        ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
-      `;
-      return ok(res, { threads: rows.map(serializeThread) });
+      try {
+        const { rows } = await sql`
+          SELECT t.*, c.name AS client_name, c.email AS client_email
+          FROM message_threads t
+          JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
+          WHERE t.workspace_id = ${workspaceId}
+          ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
+        `;
+        return ok(res, { threads: rows.map(serializeThread) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[messages GET] failed (returning empty):', e.message);
+        return ok(res, { threads: [] });
+      }
     }
 
     if (req.method === 'POST') {

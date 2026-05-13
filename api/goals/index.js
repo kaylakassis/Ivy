@@ -19,10 +19,17 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const { rows } = await sql`
-        SELECT * FROM goals WHERE workspace_id = ${workspaceId}
-        ORDER BY deadline NULLS LAST, created_at
-      `;
+      let rows;
+      try {
+        ({ rows } = await sql`
+          SELECT * FROM goals WHERE workspace_id = ${workspaceId}
+          ORDER BY deadline NULLS LAST, created_at
+        `);
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[goals GET] failed (returning empty):', e.message);
+        return ok(res, { goals: [] });
+      }
       // Compute current values per goal type. Cache per-type within this
       // request so we don't run the same SUM/COUNT for every revenue goal.
       const cache = new Map();

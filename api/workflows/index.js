@@ -20,25 +20,29 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      // Join the most recent run summary via a lateral lookup — single
-      // round-trip, ordered correctly. We cap to the last 90 days of
-      // runs to keep the join cheap.
-      const { rows } = await sql`
-        SELECT w.*,
-               (SELECT jsonb_build_object(
-                  'status', r.status,
-                  'triggeredAt', r.triggered_at
-                ) FROM workflow_runs r
-                 WHERE r.workflow_id = w.id
-                 ORDER BY r.triggered_at DESC
-                 LIMIT 1) AS last_run_summary
-          FROM workflows w
-         WHERE w.workspace_id = ${workspaceId}
-         ORDER BY w.updated_at DESC
-      `;
-      return ok(res, {
-        workflows: rows.map((r) => serializeWorkflow(r, r.last_run_summary || null)),
-      });
+      // Partial-schema tolerant: empty list if any table is missing.
+      try {
+        const { rows } = await sql`
+          SELECT w.*,
+                 (SELECT jsonb_build_object(
+                    'status', r.status,
+                    'triggeredAt', r.triggered_at
+                  ) FROM workflow_runs r
+                   WHERE r.workflow_id = w.id
+                   ORDER BY r.triggered_at DESC
+                   LIMIT 1) AS last_run_summary
+            FROM workflows w
+           WHERE w.workspace_id = ${workspaceId}
+           ORDER BY w.updated_at DESC
+        `;
+        return ok(res, {
+          workflows: rows.map((r) => serializeWorkflow(r, r.last_run_summary || null)),
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[workflows GET] failed (returning empty):', e.message);
+        return ok(res, { workflows: [] });
+      }
     }
 
     if (req.method === 'POST') {
