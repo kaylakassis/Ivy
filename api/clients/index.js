@@ -20,37 +20,43 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
+      // Tolerate partial schema: a missing `clients` table or column
+      // returns an empty list instead of 500ing the whole Clients tab.
       // Email lookup is exact-match — used by AddBookingModal to find
       // the matching client without making the owner pick from a list.
-      // Returns at most one client (workspace_id + email is effectively
-      // unique given the public booking flow's upsert).
-      const email = (req.query.email || '').toString().trim().toLowerCase();
-      if (email) {
-        const r = await sql`
-          SELECT * FROM clients
-          WHERE workspace_id = ${workspaceId} AND email = ${email}
-          LIMIT 1
-        `;
-        return ok(res, { clients: r.rows.map(serializeClient) });
+      try {
+        const email = (req.query.email || '').toString().trim().toLowerCase();
+        if (email) {
+          const r = await sql`
+            SELECT * FROM clients
+            WHERE workspace_id = ${workspaceId} AND email = ${email}
+            LIMIT 1
+          `;
+          return ok(res, { clients: r.rows.map(serializeClient) });
+        }
+        const { stage } = req.query;
+        let rows;
+        if (stage && VALID_STAGES.has(stage)) {
+          const r = await sql`
+            SELECT * FROM clients
+            WHERE workspace_id = ${workspaceId} AND stage = ${stage}
+            ORDER BY COALESCE(last_seen_at, joined_at) DESC
+          `;
+          rows = r.rows;
+        } else {
+          const r = await sql`
+            SELECT * FROM clients
+            WHERE workspace_id = ${workspaceId}
+            ORDER BY COALESCE(last_seen_at, joined_at) DESC
+          `;
+          rows = r.rows;
+        }
+        return ok(res, { clients: rows.map(serializeClient) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[clients GET] query failed (returning empty list):', e.message);
+        return ok(res, { clients: [] });
       }
-      const { stage } = req.query;
-      let rows;
-      if (stage && VALID_STAGES.has(stage)) {
-        const r = await sql`
-          SELECT * FROM clients
-          WHERE workspace_id = ${workspaceId} AND stage = ${stage}
-          ORDER BY COALESCE(last_seen_at, joined_at) DESC
-        `;
-        rows = r.rows;
-      } else {
-        const r = await sql`
-          SELECT * FROM clients
-          WHERE workspace_id = ${workspaceId}
-          ORDER BY COALESCE(last_seen_at, joined_at) DESC
-        `;
-        rows = r.rows;
-      }
-      return ok(res, { clients: rows.map(serializeClient) });
     }
 
     if (req.method === 'POST') {

@@ -576,7 +576,7 @@ function UploadAnalyzer({ onAnalyze, busy }) {
 function normalizeMime(file) {
   const t = (file.type || '').toLowerCase();
   if (t) return t;
-  const ext = (file.name.split('.').pop() || '').toLowerCase();
+  const ext = ((file?.name || '').split('.').pop() || '').toLowerCase();
   return {
     csv: 'text/csv', tsv: 'text/tab-separated-values',
     txt: 'text/plain', md: 'text/markdown',

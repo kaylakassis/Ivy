@@ -17,6 +17,7 @@ import { sendEmail, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 
 const MIN_DAYS_AFTER = 2;
@@ -36,6 +37,7 @@ export default async function handler(req, res) {
   if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
+    await ensureSchemaApplied();
     const due = await sql`
       SELECT b.id, b.workspace_id, b.client_id, b.client_name, b.client_email,
              b.service_id, b.date, b.start_min,

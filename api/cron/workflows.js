@@ -22,6 +22,7 @@
 import { evaluateScheduledWorkflows, resumeWaitingWorkflows } from '../_lib/workflows.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 export default async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
@@ -32,6 +33,7 @@ export default async function handler(req, res) {
   if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
+    await ensureSchemaApplied();
     const scheduled = await evaluateScheduledWorkflows({ limit: 500 });
     const resumed   = await resumeWaitingWorkflows({ limit: 200 });
     return ok(res, { fired: scheduled.fired, resumed: resumed.resumed });

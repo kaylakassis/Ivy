@@ -8,6 +8,7 @@
 // subscription isn't active) can read /api/me from a single round-trip.
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation } from 'react-router-dom';
+import { ErrorBoundary } from '../../lib/monitoring.js';
 import Sidebar from './Sidebar.jsx';
 import Topbar from './Topbar.jsx';
 import VerifyEmailBanner from '../VerifyEmailBanner.jsx';
@@ -123,7 +124,18 @@ function AppShellInner() {
             flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0,
             paddingBottom: viewport.isMobile ? 0 : 80,
           }}>
-            <Outlet />
+            {/* Per-route error boundary keyed by URL so navigating away
+                from a crashed route auto-resets the boundary (the user
+                isn't stuck on the snag screen forever). Sidebar, topbar
+                and viewport switcher remain interactive so they can
+                pick a different tab without losing their session. */}
+            <ErrorBoundary
+              key={location.pathname}
+              fallback={({ resetError, error }) => (
+                <RouteCrashInline error={error} resetError={resetError}/>
+              )}>
+              <Outlet />
+            </ErrorBoundary>
           </div>
         </main>
       </div>
@@ -159,6 +171,39 @@ function AppShellInner() {
           renders nothing until a tab is opened (auto-trigger from Topbar
           on first visit, or manual via the (i) button). */}
       <TutorialOverlay/>
+    </div>
+  );
+}
+
+// Inline fallback rendered inside the AppShell when a single business
+// route (Dashboard, Clients, Calendar, Finance, etc.) crashes at render
+// time. Sidebar + Topbar + ViewToggle stay live around it so the user
+// can navigate to a different tab. Includes the actual error message so
+// support can pinpoint the issue from a screenshot.
+function RouteCrashInline({ error, resetError }) {
+  const msg = (error && (error.message || String(error))) || 'unknown';
+  return (
+    <div style={{ padding: 32 }}>
+      <div className="card" style={{ padding: 22, maxWidth: 580 }}>
+        <div style={{
+          fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500,
+          letterSpacing: '-0.02em', marginBottom: 8,
+        }}>This tab couldn't load.</div>
+        <div style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.55, marginBottom: 12 }}>
+          The rest of your workspace is still working — pick another tab
+          from the sidebar, or try this one again.
+        </div>
+        <div style={{
+          fontSize: 11.5, color: 'var(--muted-2)', background: 'var(--surface-2)',
+          border: '1px solid var(--border)', borderRadius: 8,
+          padding: '8px 10px', marginBottom: 14, fontFamily: 'ui-monospace, monospace',
+          wordBreak: 'break-word',
+        }}>
+          {msg.slice(0, 280)}
+        </div>
+        <button onClick={resetError} className="btn btn-primary"
+          style={{ padding: '8px 16px' }}>Try again</button>
+      </div>
     </div>
   );
 }

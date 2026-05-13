@@ -20,6 +20,7 @@ import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyClientSafe } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 // Per-run cap so a backlog (cron paused for a day, etc.) doesn't blow
 // past Resend's rate limit on resume. The next hour catches the rest.
@@ -41,6 +42,7 @@ export default async function handler(req, res) {
   if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
+    await ensureSchemaApplied();
     const now = Date.now();
 
     // Pull every active booking up to 8 days out + its service's reminder

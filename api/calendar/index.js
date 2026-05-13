@@ -20,19 +20,28 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const settings = await ensureCalendarSettings(workspaceId);
-      const services = await sql`
+      // Per-query try/catch so a single missing table/column degrades to
+      // an empty list instead of bricking the whole calendar tab. A
+      // freshly-deployed install whose schema hasn't fully applied
+      // would otherwise return 500 here.
+      const safe = async (p, fallback) => { try { return await p; } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[calendar GET] sub-query failed:', e.message);
+        return fallback;
+      } };
+      const settings = await safe(ensureCalendarSettings(workspaceId), {});
+      const services = await safe(sql`
         SELECT * FROM services WHERE workspace_id = ${workspaceId}
         ORDER BY display_order, created_at
-      `;
-      const blocks = await sql`
+      `, { rows: [] });
+      const blocks = await safe(sql`
         SELECT * FROM calendar_blocks WHERE workspace_id = ${workspaceId}
         ORDER BY date, start_min
-      `;
-      const bookings = await sql`
+      `, { rows: [] });
+      const bookings = await safe(sql`
         SELECT * FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
         ORDER BY date, start_min
-      `;
+      `, { rows: [] });
       return ok(res, {
         calendar: {
           settings: serializeSettings(settings),

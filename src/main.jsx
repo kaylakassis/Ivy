@@ -9,6 +9,23 @@ import './styles/global.css';
 
 initMonitoring();
 
+// Global capture for everything that escapes a React error boundary:
+//   • Promise rejections that no .catch() handled
+//   • Synchronous errors thrown outside React (timers, listeners)
+// Both go to the console so users + we can see them in browser logs and
+// they get reported via initMonitoring's Sentry hookup. Without these,
+// a thrown async error in a click handler vanishes into the void.
+if (typeof window !== 'undefined') {
+  window.addEventListener('unhandledrejection', (e) => {
+    // eslint-disable-next-line no-console
+    console.error('[unhandledrejection]', e?.reason);
+  });
+  window.addEventListener('error', (e) => {
+    // eslint-disable-next-line no-console
+    console.error('[window error]', e?.error || e?.message || e);
+  });
+}
+
 function FatalFallback({ resetError }) {
   return (
     <div style={{

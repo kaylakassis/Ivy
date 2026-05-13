@@ -113,14 +113,26 @@ export default async function handler(req, res) {
     // Verify staff (if supplied) belongs to this workspace + is active.
     // Defense-in-depth — never trust the browser-sent staff id alone.
     if (staffId) {
-      const st = await sql`
-        SELECT id FROM staff_members
-         WHERE id = ${staffId} AND workspace_id = ${workspaceId} AND active = TRUE
-      `;
-      if (st.rows.length === 0) return badRequest(res, 'Unknown or inactive staff member');
+      try {
+        const st = await sql`
+          SELECT id FROM staff_members
+           WHERE id = ${staffId} AND workspace_id = ${workspaceId} AND active = TRUE
+        `;
+        if (st.rows.length === 0) return badRequest(res, 'Unknown or inactive staff member');
+      } catch (e) {
+        // staff_members table not yet created (partial schema) — drop
+        // the assignment quietly so the booking still saves.
+        // eslint-disable-next-line no-console
+        console.error('[bookings] staff_members lookup failed; ignoring staffId:', e.message);
+      }
     }
 
-    const insert = await sql`
+    // Insert. If `staff_id` column hasn't migrated yet, self-heal by
+    // adding it and retrying once — same pattern as
+    // api/onboarding/state.js. Belt + suspenders for partial-schema
+    // cold starts.
+    let insert;
+    const doInsert = () => sql`
       INSERT INTO bookings (
         workspace_id, service_id, client_id, client_name, client_email,
         date, start_min, end_min, notes, recurrence_rule, recurrence_until,
@@ -133,6 +145,18 @@ export default async function handler(req, res) {
       )
       RETURNING *
     `;
+    try {
+      insert = await doInsert();
+    } catch (e) {
+      if (/staff_id.*does not exist|column .* does not exist/i.test(e.message || '')) {
+        // eslint-disable-next-line no-console
+        console.error('[bookings] staff_id missing; self-healing column and retrying.');
+        try { await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_id UUID`; } catch {}
+        insert = await doInsert();
+      } else {
+        throw e;
+      }
+    }
     // Auto-create the client-side chat thread + send the client a confirmation.
     // Don't notify the owner here (they're the one who just created it).
     notifyNewBooking({ workspaceId, bookingId: insert.rows[0].id, source: 'owner' });

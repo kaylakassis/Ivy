@@ -84,7 +84,20 @@ export default async function handler(req, res) {
         WHERE id = $${values.length - 1} AND workspace_id = $${values.length}
         RETURNING *
       `;
-      const { rows } = await sql.query(queryText, values);
+      let rows;
+      try {
+        ({ rows } = await sql.query(queryText, values));
+      } catch (e) {
+        if (/staff_id.*does not exist|column .* does not exist/i.test(e.message || '')) {
+          // Self-heal: a recently-added column (staff_id, or anything
+          // similar) hasn't landed in the user's DB yet. Add it and
+          // retry once before bubbling up.
+          // eslint-disable-next-line no-console
+          console.error('[bookings PATCH] column missing; self-healing and retrying:', e.message);
+          try { await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_id UUID`; } catch {}
+          ({ rows } = await sql.query(queryText, values));
+        } else { throw e; }
+      }
       syncOnBookingUpdated({ workspaceId, bookingId: id });
       return ok(res, { booking: serializeBooking(rows[0]) });
     }

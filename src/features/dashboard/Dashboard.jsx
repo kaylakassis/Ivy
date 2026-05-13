@@ -138,7 +138,7 @@ function SetupChecklist() {
           </div>
           <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
             {sub}
-            {nextItem && <> Up next — <strong>{nextItem.label.toLowerCase()}</strong>.</>}
+            {nextItem && <> Up next — <strong>{(nextItem.label || '').toLowerCase()}</strong>.</>}
           </p>
           {/* Progress bar */}
           <div style={{

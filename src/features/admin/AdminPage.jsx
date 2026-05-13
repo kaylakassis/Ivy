@@ -95,12 +95,20 @@ function useDateRange(defaultPreset = '30d') {
 
   const range = useMemo(() => {
     const now = new Date();
+    // Safe ISO conversion — `new Date(invalidString).toISOString()` throws
+    // RangeError. Fall back to the epoch if parsing fails, so a typo in
+    // the date picker doesn't crash the admin dashboard.
+    const safeIso = (raw, fallback) => {
+      if (!raw) return fallback;
+      const d = new Date(raw);
+      return Number.isNaN(d.getTime()) ? fallback : d.toISOString();
+    };
     if (presetId === 'all') {
       return { from: '1970-01-01T00:00:00Z', to: now.toISOString() };
     }
     if (presetId === 'custom') {
-      const from = customFrom ? new Date(customFrom).toISOString() : '1970-01-01T00:00:00Z';
-      const to   = customTo   ? new Date(customTo).toISOString()   : now.toISOString();
+      const from = safeIso(customFrom, '1970-01-01T00:00:00Z');
+      const to   = safeIso(customTo,   now.toISOString());
       return { from, to };
     }
     const p = PRESETS.find((x) => x.id === presetId);

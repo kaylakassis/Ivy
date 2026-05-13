@@ -11,6 +11,7 @@
 import { sql } from '../_lib/db.js';
 import { pullBusyTimes } from '../_lib/googleSync.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 export default async function handler(req, res) {
   // Vercel crons fire as GET. Allow POST too for manual triggers.
@@ -28,6 +29,7 @@ export default async function handler(req, res) {
   if (got !== expected) return res.status(401).json({ error: 'Unauthorized' });
 
   try {
+    await ensureSchemaApplied();
     const { rows } = await sql`
       SELECT workspace_id FROM calendar_settings
       WHERE google_refresh_token_encrypted IS NOT NULL

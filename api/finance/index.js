@@ -16,7 +16,12 @@ export default async function handler(req, res) {
     // Compute item totals per invoice in SQL (sum qty*rate over JSONB items),
     // then aggregate by status + windows. Coercing to numeric to avoid float
     // drift — Postgres handles JSONB->numeric cleanly.
-    const { rows } = await sql`
+    //
+    // Tolerate partial schema: if invoices table or its discount/tax_rate/
+    // items columns aren't there yet (cold install), return zeros instead
+    // of bricking the dashboard's finance tile.
+    let rows;
+    try { ({ rows } = await sql`
       WITH base AS (
         SELECT
           i.id,
@@ -47,7 +52,11 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE status = 'overdue')               AS count_overdue,
         COUNT(*) FILTER (WHERE status = 'voided')                AS count_voided
       FROM base
-    `;
+    `); } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[finance GET] summary query failed (returning zeros):', e.message);
+      rows = [];
+    }
     const r = rows[0] || {};
 
     return ok(res, {

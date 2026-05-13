@@ -21,6 +21,7 @@ import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 
 const MAX_PER_RUN = 200;
@@ -39,6 +40,7 @@ export default async function handler(req, res) {
   if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
+    await ensureSchemaApplied();
     const due = await sql`
       SELECT id FROM recurring_invoices
        WHERE status = 'active'

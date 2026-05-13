@@ -119,8 +119,17 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const row = await getOrCreate(workspaceId);
-      return ok(res, { website: serialize(row) });
+      try {
+        const row = await getOrCreate(workspaceId);
+        return ok(res, { website: serialize(row) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[website GET] failed (returning null):', e.message);
+        // Returning null (not 500) lets the editor render its empty state
+        // so the user can at least see the website tab instead of a
+        // crashed page.
+        return ok(res, { website: null });
+      }
     }
 
     if (req.method === 'PUT') {

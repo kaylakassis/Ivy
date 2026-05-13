@@ -20,6 +20,7 @@ import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 const SEND_AFTER_HOURS  = 24 * 3;   // first nag at 3 days
 const REPEAT_AFTER_HOURS = 24 * 7;  // then once a week
@@ -34,6 +35,7 @@ export default async function handler(req, res) {
   if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
+    await ensureSchemaApplied();
     const { rows } = await sql.query(
       `SELECT
          d.id, d.workspace_id, d.recipient_client_id, d.recipient_name,
