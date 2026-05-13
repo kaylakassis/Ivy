@@ -29,8 +29,17 @@ export async function createToken({ userId, kind, ttlMinutes }) {
   return raw;
 }
 
-// Looks up a token, returns the user_id if valid + unused + unexpired, else null.
-// Caller is responsible for marking it used (consumeToken).
+// Looks up a token. Returns:
+//   • { tokenId, userId } when the token is valid (unused + unexpired)
+//   • { tokenId, userId, alreadyUsed: true } when it exists but was
+//     consumed already (so callers can recognize a duplicate click /
+//     email-scanner prefetch as success instead of treating it as an
+//     attack). Includes the user_id so the caller can verify the user
+//     was actually verified — guards against returning 200 to someone
+//     replaying a stale token for an account that DIDN'T finish.
+//   • null when the token is unknown, expired, or malformed.
+//
+// Caller is responsible for marking it used (consumeToken) on success.
 export async function findValidToken({ kind, raw }) {
   if (typeof raw !== 'string' || raw.length < 16) return null;
   const tokenHash = hashToken(raw);
@@ -42,7 +51,9 @@ export async function findValidToken({ kind, raw }) {
   `;
   if (rows.length === 0) return null;
   const t = rows[0];
-  if (t.used_at) return null;
+  if (t.used_at) {
+    return { tokenId: t.id, userId: t.user_id, alreadyUsed: true };
+  }
   if (new Date(t.expires_at).getTime() < Date.now()) return null;
   return { tokenId: t.id, userId: t.user_id };
 }
