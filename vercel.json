@@ -11,8 +11,17 @@
     { "path": "/api/cron/review-requests",      "schedule": "0 17 * * *" },
     { "path": "/api/cron/workflows",            "schedule": "0 * * * *" }
   ],
+  "functions": {
+    "api/site/**/*.js": {
+      "includeFiles": "dist/**"
+    }
+  },
   "rewrites": [
-    { "source": "/((?!api/).*)", "destination": "/index.html" }
+    { "source": "/site/:handle/sitemap.xml", "destination": "/api/site/:handle/sitemap.xml" },
+    { "source": "/site/:handle/robots.txt",  "destination": "/api/site/:handle/robots.txt" },
+    { "source": "/site/:handle",             "destination": "/api/site/:handle" },
+    { "source": "/site/:handle/:slug",       "destination": "/api/site/:handle/:slug" },
+    { "source": "/((?!api/).*)",             "destination": "/index.html" }
   ],
   "headers": [
     {

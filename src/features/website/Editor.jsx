@@ -11,7 +11,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import SectionLibrary from './SectionLibrary.jsx';
 import Canvas from './Canvas.jsx';
-import Inspector from './Inspector.jsx';
+import Inspector, { ImageInput } from './Inspector.jsx';
 import { mkSection, FONT_PAIRS } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
 import { publicOrigin } from '../../lib/publicUrl.js';
@@ -371,6 +371,8 @@ export default function Editor({
             onDelete={handleDelete}
             onToggleVisible={handleToggleVisible}
             mobile={isMobile}
+            currentPage={currentPage}
+            onPageChange={(patch) => currentPage && renamePage(currentPage.id, patch)}
           />
         )}
       </div>
@@ -586,17 +588,20 @@ function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onR
 }
 
 // SiteStyleButton — toolbar dropdown that surfaces site-wide style
-// overrides decoupled from the template:
+// + SEO overrides decoupled from the template:
 //   • Font pair: 6 presets that override the template's font choice
 //   • Custom CSS: textarea injected as a <style> tag inside the site
 //     shell on both Canvas + PublicSite
+//   • Site SEO: default title / description / share image / favicon
+//     that every page inherits unless it sets its own overrides.
 function SiteStyleButton({ site, set }) {
   const [open, setOpen] = useState(false);
+  const [tab, setTab]   = useState('style');
   return (
     <div style={{ position: 'relative' }}>
       <button className="btn btn-outline" onClick={() => setOpen((v) => !v)}
-        title="Override fonts + drop custom CSS site-wide">
-        <Icons.Edit size={13}/> Style
+        title="Override fonts, drop custom CSS, set SEO defaults">
+        <Icons.Edit size={13}/> Style &amp; SEO
         <Icons.ArrowDown size={11}/>
       </button>
       {open && (
@@ -605,37 +610,91 @@ function SiteStyleButton({ site, set }) {
             style={{ position: 'fixed', inset: 0, zIndex: 60 }}/>
           <div style={{
             position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 70,
-            width: 360, padding: 16,
+            width: 380, maxHeight: '70vh', overflowY: 'auto', padding: 16,
             background: 'var(--surface)', border: '1px solid var(--border-strong)',
             borderRadius: 10, boxShadow: 'var(--shadow, 0 10px 30px rgba(0,0,0,0.16))',
             display: 'flex', flexDirection: 'column', gap: 14,
           }}>
-            <div>
-              <label style={fieldLabelSt}>Font pair</label>
-              <select value={site.fontPair || ''}
-                onChange={(e) => set({ fontPair: e.target.value || null })}
-                style={fieldInputSt}>
-                <option value="">Use template default</option>
-                {Object.entries(FONT_PAIRS).map(([id, fp]) => (
-                  <option key={id} value={id}>{fp.label}</option>
-                ))}
-              </select>
-              <div style={fieldHintSt}>
-                Overrides the template's display + body fonts site-wide.
-              </div>
+            <div style={{ display: 'flex', gap: 4 }}>
+              {[['style','Style'], ['seo','SEO']].map(([id, label]) => (
+                <button key={id} type="button" onClick={() => setTab(id)}
+                  style={{
+                    flex: 1, padding: '7px 8px', fontSize: 12.5, fontWeight: 600,
+                    border: '1px solid var(--border)',
+                    background: tab === id ? 'var(--accent)' : 'var(--surface-2)',
+                    color: tab === id ? 'var(--accent-ink)' : 'var(--fg)',
+                    borderRadius: 8, cursor: 'pointer',
+                  }}>{label}</button>
+              ))}
             </div>
-            <div>
-              <label style={fieldLabelSt}>Custom CSS</label>
-              <textarea value={site.customCss || ''}
-                onChange={(e) => set({ customCss: e.target.value })}
-                placeholder="/* Style anything in your site — written exactly as standard CSS. */"
-                rows={6}
-                style={{ ...fieldInputSt, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, resize: 'vertical', minHeight: 120 }}/>
-              <div style={fieldHintSt}>
-                Injected as a &lt;style&gt; tag inside the site shell. Use to tweak
-                spacing, colors, hover states, fonts, etc. without changing the template.
-              </div>
-            </div>
+
+            {tab === 'style' && (
+              <>
+                <div>
+                  <label style={fieldLabelSt}>Font pair</label>
+                  <select value={site.fontPair || ''}
+                    onChange={(e) => set({ fontPair: e.target.value || null })}
+                    style={fieldInputSt}>
+                    <option value="">Use template default</option>
+                    {Object.entries(FONT_PAIRS).map(([id, fp]) => (
+                      <option key={id} value={id}>{fp.label}</option>
+                    ))}
+                  </select>
+                  <div style={fieldHintSt}>
+                    Overrides the template's display + body fonts site-wide.
+                  </div>
+                </div>
+                <div>
+                  <label style={fieldLabelSt}>Custom CSS</label>
+                  <textarea value={site.customCss || ''}
+                    onChange={(e) => set({ customCss: e.target.value })}
+                    placeholder="/* Style anything in your site — written exactly as standard CSS. */"
+                    rows={6}
+                    style={{ ...fieldInputSt, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, resize: 'vertical', minHeight: 120 }}/>
+                  <div style={fieldHintSt}>
+                    Injected as a &lt;style&gt; tag inside the site shell. Use to tweak
+                    spacing, colors, hover states, fonts, etc. without changing the template.
+                  </div>
+                </div>
+              </>
+            )}
+
+            {tab === 'seo' && (
+              <>
+                <div style={{ ...fieldHintSt, marginTop: 0 }}>
+                  Defaults inherited by every page. Each page can override
+                  these from the right-rail inspector.
+                </div>
+                <div>
+                  <label style={fieldLabelSt}>Default site title</label>
+                  <input type="text" value={site.seoTitle || ''}
+                    onChange={(e) => set({ seoTitle: e.target.value })}
+                    placeholder={site.businessName || 'Your business'}
+                    maxLength={200}
+                    style={fieldInputSt}/>
+                </div>
+                <div>
+                  <label style={fieldLabelSt}>Default description</label>
+                  <textarea value={site.seoDescription || ''}
+                    onChange={(e) => set({ seoDescription: e.target.value })}
+                    placeholder="A short pitch — shown in Google results and link previews."
+                    rows={3}
+                    maxLength={400}
+                    style={{ ...fieldInputSt, resize: 'vertical', lineHeight: 1.5 }}/>
+                </div>
+                <div>
+                  <label style={fieldLabelSt}>Default share image (1200×630 ideal)</label>
+                  <ImageInput value={site.seoOgImage || ''}
+                    onChange={(url) => set({ seoOgImage: url })}/>
+                </div>
+                <div>
+                  <label style={fieldLabelSt}>Favicon (browser tab icon)</label>
+                  <ImageInput value={site.faviconUrl || ''}
+                    onChange={(url) => set({ faviconUrl: url })}
+                    placeholder="https://… or upload a 64×64 PNG"/>
+                </div>
+              </>
+            )}
           </div>
         </>
       )}

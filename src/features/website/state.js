@@ -33,6 +33,12 @@ export const DEFAULT_SITE = {
   publishedAt: null,
   sections: [],
   pages: [],
+  // Site-level SEO defaults. Per-page overrides live on each page
+  // object as metaTitle / metaDescription / ogImage.
+  seoTitle: '',
+  seoDescription: '',
+  seoOgImage: '',
+  faviconUrl: '',
 };
 
 function normalize(w) {
@@ -56,6 +62,10 @@ function normalize(w) {
     publishedAt:  w.publishedAt || null,
     pages,
     sections:     pages.find((p) => p.slug === '')?.sections || pages[0]?.sections || [],
+    seoTitle:        w.seoTitle || '',
+    seoDescription:  w.seoDescription || '',
+    seoOgImage:      w.seoOgImage || '',
+    faviconUrl:      w.faviconUrl || '',
   };
 }
 
@@ -128,6 +138,10 @@ export function useWebsite() {
       pages:         next.pages,
       customDomain:  next.customDomain,
       launched:      next.launched,
+      seoTitle:        next.seoTitle,
+      seoDescription:  next.seoDescription,
+      seoOgImage:      next.seoOgImage,
+      faviconUrl:      next.faviconUrl,
     });
   }, [schedule]);
 
@@ -240,6 +254,11 @@ export function useWebsite() {
       ...(patch.title != null ? { title: String(patch.title).slice(0, 120) } : {}),
       ...(patch.slug != null ? { slug: String(patch.slug).toLowerCase().slice(0, 40) } : {}),
       ...(patch.inNav != null ? { inNav: !!patch.inNav } : {}),
+      // Per-page SEO. Empty string clears the override; the renderer
+      // falls through to site-level seoTitle / seoDescription / seoOgImage.
+      ...(patch.metaTitle != null ? { metaTitle: String(patch.metaTitle).slice(0, 200) } : {}),
+      ...(patch.metaDescription != null ? { metaDescription: String(patch.metaDescription).slice(0, 400) } : {}),
+      ...(patch.ogImage != null ? { ogImage: String(patch.ogImage).slice(0, 1000) } : {}),
     }));
   }, [updatePage]);
 
@@ -262,6 +281,7 @@ export function useWebsite() {
         handle: null, businessName: null, template: 'clean',
         sections: [], pages: [], customCss: null, fontPair: null,
         customDomain: null, launched: false,
+        seoTitle: null, seoDescription: null, seoOgImage: null, faviconUrl: null,
       });
     }
     catch (e) { setLoadErr(e); }

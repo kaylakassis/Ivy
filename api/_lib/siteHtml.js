@@ -1,0 +1,493 @@
+// Server-side HTML renderer for published THRYVE sites.
+//
+// What this gets us:
+//   1. <title> + <meta name="description"> + OG tags appear in the
+//      initial response, so Facebook/Twitter/Slack/LinkedIn previews
+//      work (these crawlers do NOT execute JS).
+//   2. Google's crawler — which does run JS but prefers pre-rendered
+//      HTML — gets a fully populated <h1>, headings, body copy, and a
+//      JSON-LD LocalBusiness block on the first paint. Indexes faster
+//      and ranks better than the SPA-only equivalent.
+//   3. The Vite-built bundle still mounts on top, so once JS runs the
+//      site is fully interactive (booking widget, IG embeds, custom
+//      nav transitions, etc.). React's createRoot replaces the static
+//      content under #root with the live tree — no hydration mismatch
+//      because we're using render(), not hydrate().
+//
+// Strategy: read dist/index.html once at module load. That file already
+// has the right script/style/font tags with hashed paths from the Vite
+// build. We splice in our <head> additions and replace <div id="root">
+// with a div containing the static, crawler-friendly section markup.
+
+import fs from 'node:fs';
+import path from 'node:path';
+// Pulled from the same source the client renderer uses so the server
+// HTML's palette + font CSS variables match the client's once it hydrates.
+// Both modules are pure JS (no JSX/React imports), so they're safe to
+// pull into a Vercel function bundle.
+import { TEMPLATES } from '../../src/features/website/templates.js';
+import { FONT_PAIRS } from '../../src/features/website/sections.js';
+
+// ----- Shell loading ------------------------------------------------
+
+let cachedShell = null;
+function loadShell() {
+  if (cachedShell) return cachedShell;
+  // Vercel functions cwd is the project root. dist/ ships with the
+  // bundle via vercel.json `includeFiles`.
+  const candidates = [
+    path.join(process.cwd(), 'dist', 'index.html'),
+    path.join(process.cwd(), '..', 'dist', 'index.html'),
+  ];
+  for (const p of candidates) {
+    try {
+      cachedShell = fs.readFileSync(p, 'utf8');
+      return cachedShell;
+    } catch (_) {
+      // try next
+    }
+  }
+  // Fallback shell — minimal but valid. Hit when dist/ isn't bundled
+  // (e.g. local `vercel dev` without a build). Crawlers still get the
+  // SEO bits; JS-enabled users get a "Loading…" until they navigate.
+  cachedShell = `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/></head><body><div id="root"></div></body></html>`;
+  return cachedShell;
+}
+
+// ----- HTML safety --------------------------------------------------
+
+const htmlEscapes = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' };
+export function esc(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, (c) => htmlEscapes[c]);
+}
+// For attribute values (quotes matter).
+function attr(s) { return esc(s); }
+// For style values; strip newlines + angle brackets but keep `:`, `;`, etc.
+function styleVal(s) {
+  if (s == null) return '';
+  return String(s).replace(/[<>"']/g, '');
+}
+
+// ----- Section renderers -------------------------------------------
+//
+// Each returns an HTML string. We intentionally render a simpler
+// representation than the React component — we want semantic, crawler-
+// friendly markup (h1/h2/p/ul/li/img with alt text). Once React
+// hydrates, the visually richer version takes over.
+
+function renderHero(s) {
+  const d = s.data || {};
+  const cta = d.cta
+    ? `<p class="thryve-cta"><a href="${attr(d.ctaLink || '#book')}">${esc(d.cta)} →</a></p>`
+    : '';
+  const img = d.imgUrl
+    ? `<img src="${attr(d.imgUrl)}" alt="${attr(d.headline || '')}" loading="lazy"/>`
+    : '';
+  return `<section class="thryve-hero">
+    <h1>${esc(d.headline || '')}</h1>
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    ${cta}
+    ${img}
+  </section>`;
+}
+
+function renderServices(s) {
+  const d = s.data || {};
+  const items = (d.items || []).map((it) => `
+    <li>
+      <h3>${esc(it.name || '')}</h3>
+      ${it.desc ? `<p>${esc(it.desc)}</p>` : ''}
+      ${it.price ? `<p class="thryve-price">${esc(it.price)}${it.duration ? ` · ${esc(it.duration)}` : ''}</p>` : ''}
+    </li>`).join('');
+  return `<section class="thryve-services">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <ul>${items}</ul>
+  </section>`;
+}
+
+function renderAbout(s) {
+  const d = s.data || {};
+  return `<section class="thryve-about">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.body ? `<p>${esc(d.body)}</p>` : ''}
+    ${d.imgUrl ? `<img src="${attr(d.imgUrl)}" alt="${attr(d.headline || '')}" loading="lazy"/>` : ''}
+  </section>`;
+}
+
+function renderBooking(s, handle) {
+  const d = s.data || {};
+  return `<section class="thryve-booking">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <p><a href="/book/${attr(d.handle || handle || '')}">Open booking calendar</a></p>
+  </section>`;
+}
+
+function renderTestimonials(s) {
+  const d = s.data || {};
+  const items = (d.items || []).map((t) => `
+    <blockquote>
+      <p>${esc(t.text || '')}</p>
+      <footer>${esc(t.name || '')}${t.role ? ` — ${esc(t.role)}` : ''}</footer>
+    </blockquote>`).join('');
+  return `<section class="thryve-testimonials">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${items}
+  </section>`;
+}
+
+function renderFAQ(s) {
+  const d = s.data || {};
+  const items = (d.items || []).map((q) => `
+    <div class="thryve-faq-item">
+      <h3>${esc(q.q || '')}</h3>
+      <p>${esc(q.a || '')}</p>
+    </div>`).join('');
+  return `<section class="thryve-faq">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${items}
+  </section>`;
+}
+
+function renderGallery(s) {
+  const d = s.data || {};
+  const photos = (d.photos || []).map((p) => {
+    const url = typeof p === 'string' ? p : (p && p.url) || '';
+    if (!url) return '';
+    return `<img src="${attr(url)}" alt="${attr(d.headline || 'Gallery image')}" loading="lazy"/>`;
+  }).join('');
+  return `<section class="thryve-gallery">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${photos}
+  </section>`;
+}
+
+function renderContact(s) {
+  const d = s.data || {};
+  return `<section class="thryve-contact">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    ${d.email ? `<p>Email: <a href="mailto:${attr(d.email)}">${esc(d.email)}</a></p>` : ''}
+    ${d.phone ? `<p>Phone: <a href="tel:${attr(d.phone)}">${esc(d.phone)}</a></p>` : ''}
+  </section>`;
+}
+
+function renderFooter(s) {
+  const d = s.data || {};
+  return `<footer class="thryve-footer">
+    <p>© ${esc(d.year || new Date().getFullYear())} ${esc(d.businessName || '')}${d.tagline ? ` · ${esc(d.tagline)}` : ''}</p>
+  </footer>`;
+}
+
+function renderStats(s) {
+  const d = s.data || {};
+  const items = (d.items || []).map((it) => `
+    <li><strong>${esc(it.value || '')}</strong> <span>${esc(it.label || '')}</span></li>`).join('');
+  return `<section class="thryve-stats">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <ul>${items}</ul>
+  </section>`;
+}
+
+function renderCtaBanner(s) {
+  const d = s.data || {};
+  return `<section class="thryve-cta-banner">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    ${d.cta ? `<p><a href="${attr(d.ctaLink || '#')}">${esc(d.cta)} →</a></p>` : ''}
+  </section>`;
+}
+
+function renderTeam(s) {
+  const d = s.data || {};
+  const members = (d.members || []).map((m) => `
+    <li>
+      ${m.imgUrl ? `<img src="${attr(m.imgUrl)}" alt="${attr(m.name || '')}" loading="lazy"/>` : ''}
+      <h3>${esc(m.name || '')}</h3>
+      ${m.role ? `<p class="thryve-role">${esc(m.role)}</p>` : ''}
+      ${m.bio ? `<p>${esc(m.bio)}</p>` : ''}
+    </li>`).join('');
+  return `<section class="thryve-team">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    <ul>${members}</ul>
+  </section>`;
+}
+
+function renderPricing(s) {
+  const d = s.data || {};
+  const tiers = (d.tiers || []).map((t) => `
+    <li>
+      <h3>${esc(t.name || '')}</h3>
+      ${t.price ? `<p class="thryve-price">${esc(t.price)}</p>` : ''}
+      ${t.description ? `<p>${esc(t.description)}</p>` : ''}
+      <ul>${(t.features || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
+      ${t.ctaText ? `<p><a href="${attr(t.ctaLink || '#')}">${esc(t.ctaText)} →</a></p>` : ''}
+    </li>`).join('');
+  return `<section class="thryve-pricing">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <ul>${tiers}</ul>
+  </section>`;
+}
+
+function renderNewsletter(s) {
+  const d = s.data || {};
+  return `<section class="thryve-newsletter">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+  </section>`;
+}
+
+function renderVideo(s) {
+  const d = s.data || {};
+  return `<section class="thryve-video">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    ${d.videoUrl ? `<p><a href="${attr(d.videoUrl)}">Watch video</a></p>` : ''}
+  </section>`;
+}
+
+function renderLogos(s) {
+  const d = s.data || {};
+  const logos = (d.logos || []).map((l) => `<li>${esc(l.name || '')}</li>`).join('');
+  return `<section class="thryve-logos">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    <ul>${logos}</ul>
+  </section>`;
+}
+
+function renderPricingTable(s) {
+  const d = s.data || {};
+  const head = `<tr><th></th>${(d.tiers || []).map((t) => `<th>${esc(t)}</th>`).join('')}</tr>`;
+  const body = (d.rows || []).map((r) => `
+    <tr><th scope="row">${esc(r.label || '')}</th>${(r.values || []).map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('');
+  return `<section class="thryve-pricing-table">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <table><thead>${head}</thead><tbody>${body}</tbody></table>
+  </section>`;
+}
+
+function renderBlog(s) {
+  const d = s.data || {};
+  const posts = (d.posts || []).map((p) => `
+    <article>
+      <h3><a href="${attr(p.url || '#')}">${esc(p.title || '')}</a></h3>
+      ${p.excerpt ? `<p>${esc(p.excerpt)}</p>` : ''}
+      ${p.date ? `<p class="thryve-date">${esc(p.date)}</p>` : ''}
+    </article>`).join('');
+  return `<section class="thryve-blog">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    ${posts}
+  </section>`;
+}
+
+function renderInstagram(s) {
+  const d = s.data || {};
+  return `<section class="thryve-instagram">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    ${d.url ? `<p><a href="${attr(d.url)}">View on Instagram</a></p>` : ''}
+  </section>`;
+}
+
+function renderCode(s) {
+  const d = s.data || {};
+  return `<section class="thryve-code">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    <pre><code>${esc(d.code || '')}</code></pre>
+  </section>`;
+}
+
+const RENDERERS = {
+  hero:           renderHero,
+  services:       renderServices,
+  about:          renderAbout,
+  booking:        renderBooking,
+  testimonials:   renderTestimonials,
+  faq:            renderFAQ,
+  gallery:        renderGallery,
+  contact:        renderContact,
+  footer:         renderFooter,
+  stats:          renderStats,
+  cta_banner:     renderCtaBanner,
+  team:           renderTeam,
+  pricing:        renderPricing,
+  newsletter:     renderNewsletter,
+  video:          renderVideo,
+  logos:          renderLogos,
+  pricing_table:  renderPricingTable,
+  blog:           renderBlog,
+  instagram:      renderInstagram,
+  code_snippet:   renderCode,
+};
+
+function renderSection(section, handle) {
+  if (!section || !section.visible) return '';
+  const fn = RENDERERS[section.type];
+  if (!fn) return '';
+  return fn(section, handle);
+}
+
+// ----- Inline styles for the static (pre-hydration) markup --------
+//
+// React replaces this once mounted. The styles here just need to make
+// the crawler view (and the first paint before JS) presentable.
+
+function renderBaseCss(vars) {
+  const cssVars = Object.entries(vars)
+    .map(([k, v]) => `${k}:${styleVal(v)}`)
+    .join(';');
+  return `
+    .thryve-root { ${cssVars}; background: var(--site-bg); color: var(--site-fg); font-family: var(--site-font-body, system-ui, sans-serif); min-height: 100vh; }
+    .thryve-root section, .thryve-root footer { padding: 64px 32px; max-width: 1200px; margin: 0 auto; }
+    .thryve-root h1, .thryve-root h2, .thryve-root h3 { font-family: var(--site-font-display, serif); letter-spacing: -0.02em; }
+    .thryve-root h1 { font-size: clamp(36px, 5vw, 56px); margin: 0 0 16px; }
+    .thryve-root h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 12px; }
+    .thryve-root h3 { font-size: clamp(18px, 2vw, 22px); margin: 0 0 8px; }
+    .thryve-root p { color: var(--site-fg-2, inherit); line-height: 1.6; margin: 0 0 12px; }
+    .thryve-root a { color: var(--site-accent, inherit); text-decoration: none; }
+    .thryve-root ul { list-style: none; padding: 0; }
+    .thryve-cta a { display: inline-block; padding: 12px 22px; background: var(--site-accent); color: var(--site-accent-ink); border-radius: var(--site-radius, 10px); margin-top: 16px; font-weight: 550; }
+    .thryve-nav { padding: 14px 32px; display: flex; gap: 18px; align-items: center; border-bottom: 1px solid var(--site-border); }
+    .thryve-nav a { color: var(--site-fg-2); font-weight: 500; }
+    .thryve-nav a.active { color: var(--site-accent); }
+    .thryve-nav .thryve-brand { font-family: var(--site-font-display); font-size: 18px; color: var(--site-fg); font-weight: 600; flex: 1; }
+  `.replace(/\s+/g, ' ').trim();
+}
+
+// ----- Nav --------------------------------------------------------
+
+function renderNav({ handle, nav, currentSlug, businessName }) {
+  if (!nav || nav.length < 2) return '';
+  const links = nav.map((p) => {
+    const href = p.slug ? `/site/${handle}/${p.slug}` : `/site/${handle}`;
+    const active = (p.slug || '') === (currentSlug || '') ? ' active' : '';
+    return `<a class="${active.trim()}" href="${attr(href)}">${esc(p.title || (p.slug ? p.slug : 'Home'))}</a>`;
+  }).join('');
+  return `<nav class="thryve-nav">
+    <a class="thryve-brand" href="/site/${attr(handle)}">${esc(businessName || handle)}</a>
+    ${links}
+  </nav>`;
+}
+
+// ----- JSON-LD ----------------------------------------------------
+
+function renderJsonLd({ businessName, description, image, url, sections }) {
+  const ld = {
+    '@context': 'https://schema.org',
+    '@type': 'LocalBusiness',
+    name: businessName || undefined,
+    description: description || undefined,
+    image: image || undefined,
+    url: url || undefined,
+  };
+  // If a testimonials section has items, surface as aggregateRating.
+  const tSection = (sections || []).find((s) => s && s.type === 'testimonials' && s.visible);
+  if (tSection && Array.isArray(tSection.data?.items) && tSection.data.items.length > 0) {
+    const ratings = tSection.data.items.map((i) => Number(i.rating) || 5);
+    const avg = ratings.reduce((a, b) => a + b, 0) / ratings.length;
+    ld.aggregateRating = {
+      '@type': 'AggregateRating',
+      ratingValue: avg.toFixed(1),
+      reviewCount: ratings.length,
+    };
+  }
+  // Pull contact details out of the first contact section if present.
+  const cSection = (sections || []).find((s) => s && s.type === 'contact' && s.visible);
+  if (cSection) {
+    if (cSection.data?.email) ld.email = cSection.data.email;
+    if (cSection.data?.phone) ld.telephone = cSection.data.phone;
+  }
+  // Strip undefined entries for cleanliness.
+  for (const k of Object.keys(ld)) if (ld[k] === undefined) delete ld[k];
+  return `<script type="application/ld+json">${JSON.stringify(ld)}</script>`;
+}
+
+// ----- Main entry -------------------------------------------------
+
+// Render the full HTML page for a public site.
+// Inputs: { site, page, nav, handle, currentSlug, host }
+// Returns: HTML string ready to be sent with content-type: text/html.
+export function renderSiteHtml({ site, page, nav, handle, currentSlug, host }) {
+  const tpl = TEMPLATES[site.template] || TEMPLATES.clean;
+  const vars = { ...tpl.vars };
+  if (site.fontPair && FONT_PAIRS[site.fontPair]) {
+    vars['--site-font-display'] = FONT_PAIRS[site.fontPair].display;
+    vars['--site-font-body']    = FONT_PAIRS[site.fontPair].body;
+  }
+
+  const sections = page.sections || [];
+  const visible = sections.filter((s) => s.visible !== false);
+
+  // SEO resolution: page-level wins, site-level fallback, business name
+  // is the ultimate fallback.
+  const pageMetaTitle = page.metaTitle || null;
+  const baseTitle = site.seoTitle || site.businessName || handle;
+  const title = pageMetaTitle
+    || (page.title && page.title !== 'Home' ? `${page.title} · ${baseTitle}` : baseTitle);
+  // Description: page meta → site default → first hero/about copy → null.
+  let description = page.metaDescription || site.seoDescription;
+  if (!description) {
+    const heroSec = visible.find((s) => s.type === 'hero');
+    if (heroSec?.data?.sub) description = heroSec.data.sub;
+    else {
+      const aboutSec = visible.find((s) => s.type === 'about');
+      if (aboutSec?.data?.body) description = String(aboutSec.data.body).slice(0, 240);
+    }
+  }
+  const ogImage = page.ogImage || site.seoOgImage || null;
+  const canonical = host
+    ? `https://${host}/site/${handle}${currentSlug ? `/${currentSlug}` : ''}`
+    : null;
+  const favicon = site.faviconUrl || null;
+
+  const headExtras = [
+    `<title>${esc(title)}</title>`,
+    description ? `<meta name="description" content="${attr(description)}"/>` : '',
+    canonical ? `<link rel="canonical" href="${attr(canonical)}"/>` : '',
+    favicon ? `<link rel="icon" href="${attr(favicon)}"/>` : '',
+    `<meta property="og:type" content="website"/>`,
+    `<meta property="og:title" content="${attr(title)}"/>`,
+    description ? `<meta property="og:description" content="${attr(description)}"/>` : '',
+    ogImage ? `<meta property="og:image" content="${attr(ogImage)}"/>` : '',
+    canonical ? `<meta property="og:url" content="${attr(canonical)}"/>` : '',
+    `<meta name="twitter:card" content="${ogImage ? 'summary_large_image' : 'summary'}"/>`,
+    `<meta name="twitter:title" content="${attr(title)}"/>`,
+    description ? `<meta name="twitter:description" content="${attr(description)}"/>` : '',
+    ogImage ? `<meta name="twitter:image" content="${attr(ogImage)}"/>` : '',
+    `<style>${renderBaseCss(vars)}</style>`,
+    site.customCss ? `<style>${String(site.customCss).replace(/<\/style/gi, '<\\/style')}</style>` : '',
+    renderJsonLd({
+      businessName: site.businessName,
+      description,
+      image: ogImage,
+      url: canonical,
+      sections: visible,
+    }),
+  ].filter(Boolean).join('\n');
+
+  const navHtml = renderNav({ handle, nav, currentSlug, businessName: site.businessName });
+  const sectionsHtml = visible.map((s) => renderSection(s, handle)).join('\n');
+  const bodyContent = `<div class="thryve-root">${navHtml}${sectionsHtml}</div>`;
+
+  // Splice into the SPA shell.
+  let shell = loadShell();
+  // 1. Replace <title>...
+  shell = shell.replace(/<title>[\s\S]*?<\/title>/i, '');
+  // 2. Remove the existing app-level <meta name="description">.
+  shell = shell.replace(/<meta\s+name="description"[^>]*>/i, '');
+  // 3. Insert head extras before </head>.
+  shell = shell.replace(/<\/head>/i, `${headExtras}\n</head>`);
+  // 4. Inject body content into <div id="root">...</div>.
+  shell = shell.replace(
+    /<div\s+id="root"[^>]*>[\s\S]*?<\/div>/i,
+    `<div id="root">${bodyContent}</div>`,
+  );
+
+  return shell;
+}

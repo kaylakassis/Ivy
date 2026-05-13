@@ -84,6 +84,14 @@ ALTER TABLE websites ADD COLUMN IF NOT EXISTS custom_css TEXT;
 -- Optional font-pair override that takes precedence over the template's
 -- font choices. Stored as a preset id; renderer maps to actual fonts.
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS font_pair TEXT;
+-- Site-level SEO. Per-page meta lives inside the pages JSONB blob
+-- (metaTitle / metaDescription / ogImage on each page object). These
+-- columns are the defaults the SSR endpoint uses when the page-level
+-- override is empty.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS seo_title TEXT;
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS seo_description TEXT;
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS seo_og_image TEXT;
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS favicon_url TEXT;
 
 CREATE TABLE IF NOT EXISTS rate_limits (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

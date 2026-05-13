@@ -4,13 +4,21 @@ import { upload } from '@vercel/blob/client';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES, ANIMATIONS } from './sections.js';
 
-export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDuplicate, onDelete, onToggleVisible, mobile = false }) {
+export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDuplicate, onDelete, onToggleVisible, mobile = false, currentPage = null, onPageChange = null }) {
   if (!section) {
+    // No section selected — surface the page-level SEO editor instead
+    // of an empty placeholder. This is the spot owners reach for when
+    // they want their share previews + search-result snippets to look
+    // right.
     return (
-      <Shell title="Inspector" mobile={mobile}>
-        <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13, lineHeight: 1.55 }}>
-          Click a section in the canvas to edit it.
-        </div>
+      <Shell title={currentPage ? `Page · ${currentPage.title || 'Home'}` : 'Inspector'} mobile={mobile}>
+        {currentPage && onPageChange ? (
+          <PageSeoPanel page={currentPage} onChange={onPageChange}/>
+        ) : (
+          <div style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13, lineHeight: 1.55 }}>
+            Click a section in the canvas to edit it.
+          </div>
+        )}
       </Shell>
     );
   }
@@ -62,6 +70,43 @@ export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onD
         <AnimationPicker animate={section.animate || ''} onChange={(animate) => onChange({ animate: animate || null })}/>
       </div>
     </Shell>
+  );
+}
+
+// Per-page SEO. Lives in the Inspector when no section is selected.
+// Fields are all optional; the SSR layer falls back to site-level
+// defaults (and then to derived copy from the hero/about sections) so
+// every page gets a usable title + description even when this is left
+// blank.
+function PageSeoPanel({ page, onChange }) {
+  return (
+    <div style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 14, overflowY: 'auto', flex: 1 }} className="scroll">
+      <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+        Page SEO
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55, marginTop: -6 }}>
+        How this page looks in Google results + when shared on social.
+        Leave blank to inherit the site defaults.
+      </div>
+      <FieldBlock label="Title (shown in browser tabs + Google results — ~60 chars)">
+        <input type="text" value={page.metaTitle || ''}
+          onChange={(e) => onChange({ metaTitle: e.target.value })}
+          placeholder={page.title || 'e.g. Rivers Coaching — 1:1 Career Coaching'}
+          maxLength={200}
+          style={inputS}/>
+      </FieldBlock>
+      <FieldBlock label="Description (1–2 sentences — ~155 chars)">
+        <textarea rows={3} value={page.metaDescription || ''}
+          onChange={(e) => onChange({ metaDescription: e.target.value })}
+          placeholder="One sentence that tells visitors (and Google) what this page is about."
+          maxLength={400}
+          style={{ ...inputS, resize: 'vertical', lineHeight: 1.5 }}/>
+      </FieldBlock>
+      <FieldBlock label="Share image (1200×630 works best — shown on Facebook, Twitter, LinkedIn)">
+        <ImageInput value={page.ogImage || ''}
+          onChange={(url) => onChange({ ogImage: url })}/>
+      </FieldBlock>
+    </div>
   );
 }
 

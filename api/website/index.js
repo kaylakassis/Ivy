@@ -44,6 +44,10 @@ function serialize(row) {
     visibility:    row.visibility || 'public',
     publishedAt:   row.published_at,
     updatedAt:     row.updated_at,
+    seoTitle:        row.seo_title || '',
+    seoDescription:  row.seo_description || '',
+    seoOgImage:      row.seo_og_image || '',
+    faviconUrl:      row.favicon_url || '',
   };
 }
 
@@ -66,7 +70,13 @@ function sanitizePage(p, idx) {
   if (slug !== '' && !SLUG_RE.test(slug)) throw new Error(`Page ${idx + 1}: invalid slug`);
   const title = String(p.title || 'Untitled').slice(0, 120);
   const sections = Array.isArray(p.sections) ? p.sections : [];
-  return { id, slug, title, sections, inNav: p.inNav !== false };
+  const out = { id, slug, title, sections, inNav: p.inNav !== false };
+  // Per-page SEO overrides — all optional. We only persist the fields
+  // when they're set so the page JSON stays compact for older sites.
+  if (p.metaTitle)       out.metaTitle       = String(p.metaTitle).slice(0, 200);
+  if (p.metaDescription) out.metaDescription = String(p.metaDescription).slice(0, 400);
+  if (p.ogImage)         out.ogImage         = String(p.ogImage).slice(0, 1000);
+  return out;
 }
 
 export default async function handler(req, res) {
@@ -129,6 +139,12 @@ export default async function handler(req, res) {
       }
       if ('customDomain' in body) patch.customDomain = body.customDomain ? String(body.customDomain).slice(0, 255) : null;
       if ('launched' in body) patch.launched = !!body.launched;
+      // Site-level SEO defaults. Empty strings clear the override
+      // (the renderer falls back to derived values from the hero/about).
+      if ('seoTitle' in body)       patch.seoTitle       = body.seoTitle       == null ? null : String(body.seoTitle).slice(0, 200);
+      if ('seoDescription' in body) patch.seoDescription = body.seoDescription == null ? null : String(body.seoDescription).slice(0, 400);
+      if ('seoOgImage' in body)     patch.seoOgImage     = body.seoOgImage     == null ? null : String(body.seoOgImage).slice(0, 1000);
+      if ('faviconUrl' in body)     patch.faviconUrl     = body.faviconUrl     == null ? null : String(body.faviconUrl).slice(0, 1000);
       if ('visibility' in body) {
         if (!['public', 'private', 'only_me'].includes(body.visibility)) {
           return badRequest(res, 'visibility must be public / private / only_me');
@@ -149,17 +165,21 @@ export default async function handler(req, res) {
 
       const updated = await sql`
         UPDATE websites SET
-          handle         = COALESCE(${patch.handle ?? null},         handle),
-          business_name  = COALESCE(${patch.businessName ?? null},   business_name),
-          template       = COALESCE(${patch.template ?? null},       template),
-          font_pair      = COALESCE(${patch.fontPair ?? null},       font_pair),
-          custom_css     = COALESCE(${patch.customCss ?? null},      custom_css),
-          sections       = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
-          pages          = COALESCE(${JSON.stringify(patch.pages ?? null)}::jsonb,    pages),
-          custom_domain  = COALESCE(${patch.customDomain ?? null},   custom_domain),
-          launched       = COALESCE(${patch.launched ?? null},       launched),
-          visibility     = COALESCE(${patch.visibility ?? null},     visibility),
-          updated_at     = NOW()
+          handle           = COALESCE(${patch.handle ?? null},         handle),
+          business_name    = COALESCE(${patch.businessName ?? null},   business_name),
+          template         = COALESCE(${patch.template ?? null},       template),
+          font_pair        = COALESCE(${patch.fontPair ?? null},       font_pair),
+          custom_css       = COALESCE(${patch.customCss ?? null},      custom_css),
+          sections         = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
+          pages            = COALESCE(${JSON.stringify(patch.pages ?? null)}::jsonb,    pages),
+          custom_domain    = COALESCE(${patch.customDomain ?? null},   custom_domain),
+          launched         = COALESCE(${patch.launched ?? null},       launched),
+          visibility       = COALESCE(${patch.visibility ?? null},     visibility),
+          seo_title        = COALESCE(${patch.seoTitle ?? null},       seo_title),
+          seo_description  = COALESCE(${patch.seoDescription ?? null}, seo_description),
+          seo_og_image     = COALESCE(${patch.seoOgImage ?? null},     seo_og_image),
+          favicon_url      = COALESCE(${patch.faviconUrl ?? null},     favicon_url),
+          updated_at       = NOW()
         WHERE workspace_id = ${workspaceId}
         RETURNING *
       `;
