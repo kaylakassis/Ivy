@@ -19,24 +19,30 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const status = req.query.status;
-      let rows;
-      if (status && VALID_STATUS.has(status)) {
-        const r = await sql`
-          SELECT * FROM invoices
-          WHERE workspace_id = ${workspaceId} AND status = ${status}
-          ORDER BY issue_date DESC, created_at DESC
-        `;
-        rows = r.rows;
-      } else {
-        const r = await sql`
-          SELECT * FROM invoices
-          WHERE workspace_id = ${workspaceId}
-          ORDER BY issue_date DESC, created_at DESC
-        `;
-        rows = r.rows;
+      try {
+        const status = req.query.status;
+        let rows;
+        if (status && VALID_STATUS.has(status)) {
+          const r = await sql`
+            SELECT * FROM invoices
+            WHERE workspace_id = ${workspaceId} AND status = ${status}
+            ORDER BY issue_date DESC, created_at DESC
+          `;
+          rows = r.rows;
+        } else {
+          const r = await sql`
+            SELECT * FROM invoices
+            WHERE workspace_id = ${workspaceId}
+            ORDER BY issue_date DESC, created_at DESC
+          `;
+          rows = r.rows;
+        }
+        return ok(res, { invoices: rows.map(serializeInvoice) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[invoices GET] failed (returning empty):', e.message);
+        return ok(res, { invoices: [] });
       }
-      return ok(res, { invoices: rows.map(serializeInvoice) });
     }
 
     if (req.method === 'POST') {

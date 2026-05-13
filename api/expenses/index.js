@@ -23,24 +23,30 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const from = isoDate(req.query.from);
-      const to   = isoDate(req.query.to);
-      const cat  = (req.query.category || '').toString();
-      const conditions = ['workspace_id = $1'];
-      const values = [workspaceId];
-      if (from) { values.push(from); conditions.push(`date >= $${values.length}`); }
-      if (to)   { values.push(to);   conditions.push(`date <= $${values.length}`); }
-      if (cat && SCHEDULE_C_KEYS.has(cat)) {
-        values.push(cat); conditions.push(`category = $${values.length}`);
+      try {
+        const from = isoDate(req.query.from);
+        const to   = isoDate(req.query.to);
+        const cat  = (req.query.category || '').toString();
+        const conditions = ['workspace_id = $1'];
+        const values = [workspaceId];
+        if (from) { values.push(from); conditions.push(`date >= $${values.length}`); }
+        if (to)   { values.push(to);   conditions.push(`date <= $${values.length}`); }
+        if (cat && SCHEDULE_C_KEYS.has(cat)) {
+          values.push(cat); conditions.push(`category = $${values.length}`);
+        }
+        const queryText = `
+          SELECT * FROM expenses
+          WHERE ${conditions.join(' AND ')}
+          ORDER BY date DESC, created_at DESC
+          LIMIT 1000
+        `;
+        const { rows } = await sql.query(queryText, values);
+        return ok(res, { expenses: rows.map(serializeExpense) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[expenses GET] failed (returning empty):', e.message);
+        return ok(res, { expenses: [] });
       }
-      const queryText = `
-        SELECT * FROM expenses
-        WHERE ${conditions.join(' AND ')}
-        ORDER BY date DESC, created_at DESC
-        LIMIT 1000
-      `;
-      const { rows } = await sql.query(queryText, values);
-      return ok(res, { expenses: rows.map(serializeExpense) });
     }
 
     if (req.method === 'POST') {

@@ -38,20 +38,46 @@ export default async function handler(req, res) {
         where.push(`p.client_id = $${params.length}`);
       }
 
-      const { rows } = await sql.query(
-        `SELECT p.*,
-                c.name AS client_name,
-                (SELECT COUNT(*)::int FROM bookings  b WHERE b.project_id  = p.id) AS booking_count,
-                (SELECT COUNT(*)::int FROM invoices  i WHERE i.project_id  = p.id) AS invoice_count,
-                (SELECT COUNT(*)::int FROM quotes    q WHERE q.project_id  = p.id) AS quote_count,
-                (SELECT COUNT(*)::int FROM documents d WHERE d.project_id  = p.id) AS document_count
-           FROM projects p
-           LEFT JOIN clients c ON c.id = p.client_id AND c.workspace_id = p.workspace_id
-          WHERE ${where.join(' AND ')}
-          ORDER BY p.updated_at DESC
-          LIMIT 200`,
-        params,
-      );
+      // If any of the project_id subquery columns hasn't migrated yet,
+      // the subqueries 500 the whole list. Try the rich query first;
+      // on column-missing, retry with the simple version (no counts).
+      let rows;
+      try {
+        ({ rows } = await sql.query(
+          `SELECT p.*,
+                  c.name AS client_name,
+                  (SELECT COUNT(*)::int FROM bookings  b WHERE b.project_id  = p.id) AS booking_count,
+                  (SELECT COUNT(*)::int FROM invoices  i WHERE i.project_id  = p.id) AS invoice_count,
+                  (SELECT COUNT(*)::int FROM quotes    q WHERE q.project_id  = p.id) AS quote_count,
+                  (SELECT COUNT(*)::int FROM documents d WHERE d.project_id  = p.id) AS document_count
+             FROM projects p
+             LEFT JOIN clients c ON c.id = p.client_id AND c.workspace_id = p.workspace_id
+            WHERE ${where.join(' AND ')}
+            ORDER BY p.updated_at DESC
+            LIMIT 200`,
+          params,
+        ));
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[projects GET] rich query failed; falling back:', e.message);
+        try {
+          ({ rows } = await sql.query(
+            `SELECT p.*, c.name AS client_name,
+                    0 AS booking_count, 0 AS invoice_count,
+                    0 AS quote_count, 0 AS document_count
+               FROM projects p
+               LEFT JOIN clients c ON c.id = p.client_id AND c.workspace_id = p.workspace_id
+              WHERE ${where.join(' AND ')}
+              ORDER BY p.updated_at DESC
+              LIMIT 200`,
+            params,
+          ));
+        } catch (e2) {
+          // eslint-disable-next-line no-console
+          console.error('[projects GET] fallback also failed (returning empty):', e2.message);
+          return ok(res, { projects: [] });
+        }
+      }
 
       return ok(res, {
         projects: rows.map((r) => serializeProject(r, {

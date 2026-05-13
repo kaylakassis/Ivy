@@ -35,17 +35,22 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const sessions = await sql`
+      const safe = async (p, fallback) => { try { return await p; } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[ivy GET] sub-query failed:', e.message);
+        return fallback;
+      } };
+      const sessions = await safe(sql`
         SELECT * FROM ivy_sessions WHERE workspace_id = ${workspaceId}
         ORDER BY last_message_at DESC NULLS LAST, created_at DESC
         LIMIT 100
-      `;
-      const context = await workspaceContext(workspaceId);
+      `, { rows: [] });
+      const context = await safe(workspaceContext(workspaceId), {});
       // Cheap env-var probe so the UI can show a "mock mode" warning even
       // before the user has sent their first message. Doesn't actually
       // call Anthropic — that happens on POST.
       const hasKey = !!process.env.ANTHROPIC_API_KEY;
-      const usage = await getDailyUsage(workspaceId);
+      const usage = await safe(getDailyUsage(workspaceId), { used: 0, limit: 0 });
       return ok(res, {
         sessions: sessions.rows.map((r) => serializeSession(r)),
         context,

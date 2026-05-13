@@ -22,12 +22,18 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const r = await sql`
-        SELECT * FROM memberships
-         WHERE workspace_id = ${workspaceId}
-         ORDER BY active DESC, display_order ASC, created_at DESC
-      `;
-      return ok(res, { memberships: r.rows.map(serializeMembership) });
+      try {
+        const r = await sql`
+          SELECT * FROM memberships
+           WHERE workspace_id = ${workspaceId}
+           ORDER BY active DESC, display_order ASC, created_at DESC
+        `;
+        return ok(res, { memberships: r.rows.map(serializeMembership) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[memberships GET] failed (returning empty):', e.message);
+        return ok(res, { memberships: [] });
+      }
     }
 
     if (req.method === 'POST') {

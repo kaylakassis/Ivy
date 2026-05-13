@@ -22,12 +22,18 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const r = await sql`
-        SELECT * FROM recurring_invoices
-         WHERE workspace_id = ${workspaceId}
-         ORDER BY status ASC, next_run_at ASC, created_at DESC
-      `;
-      return ok(res, { schedules: r.rows.map(serializeRecurring) });
+      try {
+        const r = await sql`
+          SELECT * FROM recurring_invoices
+           WHERE workspace_id = ${workspaceId}
+           ORDER BY status ASC, next_run_at ASC, created_at DESC
+        `;
+        return ok(res, { schedules: r.rows.map(serializeRecurring) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[recurring-invoices GET] failed (returning empty):', e.message);
+        return ok(res, { schedules: [] });
+      }
     }
 
     if (req.method === 'POST') {

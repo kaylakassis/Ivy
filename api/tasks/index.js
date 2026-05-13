@@ -17,8 +17,14 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const rows = await listTasksWithProgress(workspaceId, req.query.done);
-      return ok(res, { tasks: rows.map(serializeTask) });
+      try {
+        const rows = await listTasksWithProgress(workspaceId, req.query.done);
+        return ok(res, { tasks: rows.map(serializeTask) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[tasks GET] failed (returning empty):', e.message);
+        return ok(res, { tasks: [] });
+      }
     }
 
     if (req.method === 'POST') {

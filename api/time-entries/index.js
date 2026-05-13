@@ -19,17 +19,24 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const status = (req.query.status || '').toString();
-      const clientId = (req.query.clientId || '').toString() || null;
-      const filtered = VALID_STATUS.has(status) ? status : null;
-      const entries = await listEntries({ workspaceId, status: filtered, clientId });
-      // Surface the workspace's default hourly rate so the timer UI
-      // can pre-fill it without an extra round trip.
-      const fs = await sql`
-        SELECT default_hourly_rate FROM finance_settings WHERE workspace_id = ${workspaceId}
-      `;
-      const defaultHourlyRate = Number(fs.rows[0]?.default_hourly_rate || 0);
-      return ok(res, { entries, defaultHourlyRate });
+      try {
+        const status = (req.query.status || '').toString();
+        const clientId = (req.query.clientId || '').toString() || null;
+        const filtered = VALID_STATUS.has(status) ? status : null;
+        const entries = await listEntries({ workspaceId, status: filtered, clientId });
+        // Surface the workspace's default hourly rate so the timer UI
+        // can pre-fill it without an extra round trip.
+        let defaultHourlyRate = 0;
+        try {
+          const fs = await sql`SELECT default_hourly_rate FROM finance_settings WHERE workspace_id = ${workspaceId}`;
+          defaultHourlyRate = Number(fs.rows[0]?.default_hourly_rate || 0);
+        } catch { /* finance_settings missing — fall back to 0 */ }
+        return ok(res, { entries, defaultHourlyRate });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[time-entries GET] failed (returning empty):', e.message);
+        return ok(res, { entries: [], defaultHourlyRate: 0 });
+      }
     }
 
     if (req.method === 'POST') {

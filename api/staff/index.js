@@ -19,19 +19,25 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
-      const includeInactive = req.query.includeInactive === '1';
-      const { rows } = includeInactive
-        ? await sql`
-            SELECT * FROM staff_members
-             WHERE workspace_id = ${workspaceId}
-             ORDER BY active DESC, created_at DESC
-          `
-        : await sql`
-            SELECT * FROM staff_members
-             WHERE workspace_id = ${workspaceId} AND active = TRUE
-             ORDER BY created_at DESC
-          `;
-      return ok(res, { staff: rows.map(serializeStaff) });
+      try {
+        const includeInactive = req.query.includeInactive === '1';
+        const { rows } = includeInactive
+          ? await sql`
+              SELECT * FROM staff_members
+               WHERE workspace_id = ${workspaceId}
+               ORDER BY active DESC, created_at DESC
+            `
+          : await sql`
+              SELECT * FROM staff_members
+               WHERE workspace_id = ${workspaceId} AND active = TRUE
+               ORDER BY created_at DESC
+            `;
+        return ok(res, { staff: rows.map(serializeStaff) });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.error('[staff GET] failed (returning empty):', e.message);
+        return ok(res, { staff: [] });
+      }
     }
 
     if (req.method === 'POST') {

@@ -436,7 +436,7 @@ export default function Calendar() {
       )}
       {drawer === 'availability' && (
         <AvailabilityDrawer
-          initial={cal.settings.availability}
+          initial={cal?.settings?.availability}
           onSave={saveAvailability}
           onClose={() => setDrawer(null)}
         />
