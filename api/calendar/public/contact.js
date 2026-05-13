@@ -24,6 +24,7 @@ import { notifyOwnerSafe } from '../../_lib/push.js';
 import { triggerWorkflow } from '../../_lib/workflows.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
+import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -32,6 +33,7 @@ function escapeHtml(s) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   try {
+    try { await ensureSchemaApplied(); } catch { /* tolerate */ }
     const slug = (req.query.slug || '').toString().toLowerCase();
     if (!slug) return badRequest(res, 'slug is required');
 

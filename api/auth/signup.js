@@ -17,6 +17,7 @@ import { renderWelcome } from '../_lib/welcome-content.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 // Vercel default function timeout is 10s, which is tight when we're
 // awaiting two Resend API calls in series after the DB work. Bump it
@@ -48,6 +49,13 @@ export default async function handler(req, res) {
   // has turned it on in /admin → Settings.
   if (!(await requireGate(req, res))) return;
   try {
+    // Critical: this endpoint has no requireUser() to trigger the
+    // schema bootstrap, but it INSERTs into 4 tables (users,
+    // legal_acceptances, workspaces, affiliate_uses). If the user is
+    // the very first request to a cold-started function instance and
+    // schema hasn't been applied yet, the SELECT users at line ~85
+    // would 500. Bootstrap explicitly here.
+    await ensureSchemaApplied();
     const { email, password, name, mode, ref, acceptedTermsVersion } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || password.length < 8) {

@@ -21,13 +21,20 @@ export default async function handler(req, res) {
 
     const byClient = new Map(memberships.map((m) => [m.clientId, m]));
 
-    const r = await sql.query(
-      `SELECT cm.* FROM client_memberships cm
-        WHERE cm.client_id = ANY($1)
-          AND cm.status IN ('active', 'past_due', 'incomplete')
-        ORDER BY cm.started_at DESC`,
-      [myIds],
-    );
+    let r;
+    try {
+      r = await sql.query(
+        `SELECT cm.* FROM client_memberships cm
+          WHERE cm.client_id = ANY($1)
+            AND cm.status IN ('active', 'past_due', 'incomplete')
+          ORDER BY cm.started_at DESC`,
+        [myIds],
+      );
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[me/memberships] failed (returning empty):', e.message);
+      return ok(res, { memberships: [] });
+    }
     const out = r.rows.map((row) => ({
       ...serializeClientMembership(row),
       businessName: byClient.get(row.client_id)?.businessName || 'Business',

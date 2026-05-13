@@ -19,10 +19,16 @@ export default async function handler(req, res) {
     if (!user) return;
 
     if (req.method === 'GET') {
-      const r = await sql`SELECT notification_prefs FROM users WHERE id = ${user.id}`;
-      const stored = r.rows[0]?.notification_prefs || {};
-      // Surface every known type with its resolved value so the UI
-      // doesn't have to know defaults.
+      let stored = {};
+      try {
+        const r = await sql`SELECT notification_prefs FROM users WHERE id = ${user.id}`;
+        stored = r.rows[0]?.notification_prefs || {};
+      } catch (e) {
+        // notification_prefs column missing — fall back to defaults so
+        // the account page can still render notification settings.
+        // eslint-disable-next-line no-console
+        console.error('[me/notifications GET] failed (using defaults):', e.message);
+      }
       const prefs = {};
       for (const t of NOTIFY_TYPES) prefs[t] = stored[t] !== false;
       return ok(res, { prefs, types: NOTIFY_TYPES });

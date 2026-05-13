@@ -23,7 +23,8 @@ export default async function handler(req, res) {
     // OR a signer in the multi-signer flow. The DISTINCT + UNION
     // handles the overlap (a multi-signer doc has the active recipient
     // in BOTH columns at any given moment).
-    const { rows } = await sql.query(
+    let rows;
+    try { ({ rows } = await sql.query(
       `SELECT DISTINCT ON (d.id)
               d.id, d.recipient_client_id, d.name, d.kind, d.status,
               d.sent_at, d.completed_at, d.updated_at, d.declined_at,
@@ -43,7 +44,11 @@ export default async function handler(req, res) {
         ORDER BY d.id, d.updated_at DESC
         LIMIT 500`,
       [myIds],
-    );
+    )); } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[me/documents] main query failed (returning empty):', e.message);
+      return ok(res, { documents: [] });
+    }
 
     // Pull every signer for the docs we just listed, scoped to the
     // user's own client_ids so we only show THEIR signing status —
@@ -52,25 +57,32 @@ export default async function handler(req, res) {
     const signerByDoc = new Map();
     let totalsByDoc = new Map();
     if (docIds.length > 0) {
-      const sr = await sql.query(
-        `SELECT document_id, client_id, status, signed_at, declined_at, order_index
-           FROM document_signers
-          WHERE document_id = ANY($1::uuid[])
-            AND client_id = ANY($2)`,
-        [docIds, myIds],
-      );
-      for (const row of sr.rows) {
-        signerByDoc.set(row.document_id, row);
+      try {
+        const sr = await sql.query(
+          `SELECT document_id, client_id, status, signed_at, declined_at, order_index
+             FROM document_signers
+            WHERE document_id = ANY($1::uuid[])
+              AND client_id = ANY($2)`,
+          [docIds, myIds],
+        );
+        for (const row of sr.rows) {
+          signerByDoc.set(row.document_id, row);
+        }
+        // Total signer count per doc, used for "You're signer X of Y" copy.
+        const tr = await sql.query(
+          `SELECT document_id, COUNT(*)::int AS total
+             FROM document_signers
+            WHERE document_id = ANY($1::uuid[])
+            GROUP BY document_id`,
+          [docIds],
+        );
+        totalsByDoc = new Map(tr.rows.map((r) => [r.document_id, r.total]));
+      } catch (e) {
+        // document_signers table missing — fall back to no per-signer
+        // detail, but still render the documents list.
+        // eslint-disable-next-line no-console
+        console.error('[me/documents] signers join failed (continuing):', e.message);
       }
-      // Total signer count per doc, used for "You're signer X of Y" copy.
-      const tr = await sql.query(
-        `SELECT document_id, COUNT(*)::int AS total
-           FROM document_signers
-          WHERE document_id = ANY($1::uuid[])
-          GROUP BY document_id`,
-        [docIds],
-      );
-      totalsByDoc = new Map(tr.rows.map((r) => [r.document_id, r.total]));
     }
 
     // Re-sort by updated_at since DISTINCT ON forces ordering by id first.

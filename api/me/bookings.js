@@ -19,7 +19,8 @@ export default async function handler(req, res) {
 
     const byClient = new Map(memberships.map((m) => [m.clientId, m]));
 
-    const { rows } = await sql.query(
+    let rows;
+    try { ({ rows } = await sql.query(
       `SELECT b.id, b.workspace_id, b.client_id, b.service_id,
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
               b.video_room_url, b.location_address, b.tip_amount,
@@ -34,7 +35,13 @@ export default async function handler(req, res) {
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 500`,
       [myIds],
-    );
+    )); } catch (e) {
+      // Partial schema or missing service column — degrade to empty
+      // groups rather than 500ing the whole portal.
+      // eslint-disable-next-line no-console
+      console.error('[me/bookings] query failed (returning empty):', e.message);
+      return ok(res, { upcoming: [], past: [], cancelled: [] });
+    }
 
     const today = new Date().toISOString().slice(0, 10);
     const upcoming = [];

@@ -13,6 +13,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { computeTotals, nextInvoiceNumber } from '../_lib/finance.js';
 import { serializeQuotePublic } from '../_lib/quotes.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 
 function hashToken(raw) {
@@ -33,6 +34,7 @@ async function resolve(token) {
 }
 
 export default async function handler(req, res) {
+  try { await ensureSchemaApplied(); } catch { /* tolerate */ }
   const ip = getClientIp(req);
   const blocked = await enforce(req, res, [
     { key: `quote-view:ip:${ip}`, max: 30, windowSeconds: 60 * 60 },

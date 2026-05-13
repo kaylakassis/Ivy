@@ -20,7 +20,8 @@ export default async function handler(req, res) {
 
     const byClient = new Map(memberships.map((m) => [m.clientId, m]));
 
-    const { rows } = await sql.query(
+    let rows;
+    try { ({ rows } = await sql.query(
       `SELECT i.id, i.client_id, i.number, i.status,
               i.issue_date, i.due_date, i.paid_at,
               GREATEST(
@@ -35,7 +36,11 @@ export default async function handler(req, res) {
        ORDER BY i.issue_date DESC, i.created_at DESC
        LIMIT 500`,
       [myIds],
-    );
+    )); } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[me/invoices] query failed (returning empty):', e.message);
+      return ok(res, { invoices: [] });
+    }
 
     const invoices = rows.map((r) => {
       const m = byClient.get(r.client_id);

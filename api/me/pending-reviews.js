@@ -24,7 +24,8 @@ export default async function handler(req, res) {
     if (myIds.length === 0) return ok(res, { bookings: [] });
     const byClient = new Map(memberships.map((m) => [m.clientId, m]));
 
-    const { rows } = await sql.query(
+    let rows;
+    try { ({ rows } = await sql.query(
       `SELECT b.id, b.workspace_id, b.client_id, b.service_id,
               b.date, b.start_min, b.end_min,
               s.name AS service_name
@@ -38,7 +39,11 @@ export default async function handler(req, res) {
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 50`,
       [myIds],
-    );
+    )); } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[me/pending-reviews] failed (returning empty):', e.message);
+      return ok(res, { bookings: [] });
+    }
 
     const bookings = rows.map((r) => {
       const m = byClient.get(r.client_id);

@@ -7,6 +7,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireGate } from '../_lib/earlyAccess.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -16,6 +17,10 @@ export default async function handler(req, res) {
   // password to /api/early-access/verify first (sets ea_pass cookie).
   if (!(await requireGate(req, res))) return;
   try {
+    // Cold-started function with no schema yet would 500 the SELECT
+    // below. Bootstrap explicitly — login is a public endpoint that
+    // doesn't call requireUser.
+    await ensureSchemaApplied();
     const { email, password } = await readBody(req);
     if (!validEmail(email) || typeof password !== 'string') {
       return badRequest(res, 'Invalid credentials');

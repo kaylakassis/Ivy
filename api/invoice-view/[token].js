@@ -10,6 +10,7 @@ import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { serializeInvoicePublic } from '../_lib/finance.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 
 function hashToken(raw) {
@@ -61,6 +62,7 @@ async function isStripeReady(workspaceId) {
 }
 
 export default async function handler(req, res) {
+  try { await ensureSchemaApplied(); } catch { /* tolerate */ }
   if (req.method === 'GET')  return getInvoice(req, res);
   if (req.method === 'POST') return submitMarkPaid(req, res);
   return methodNotAllowed(res, ['GET', 'POST']);

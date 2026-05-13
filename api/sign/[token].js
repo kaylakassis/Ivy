@@ -31,6 +31,7 @@ import { fetchBranding } from '../_lib/branding.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { stampCompletedPdf, uploadStampedPdf } from '../_lib/pdfStamp.js';
+import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 
 function hashToken(raw) {
@@ -38,6 +39,9 @@ function hashToken(raw) {
 }
 
 export default async function handler(req, res) {
+  // Public endpoint (no requireUser) — bootstrap schema explicitly so
+  // a cold-started function instance doesn't 500 on missing tables.
+  try { await ensureSchemaApplied(); } catch { /* tolerate */ }
   if (req.method === 'GET')    return getDoc(req, res);
   if (req.method === 'POST')   return signDoc(req, res);
   if (req.method === 'DELETE') return declineDoc(req, res);
