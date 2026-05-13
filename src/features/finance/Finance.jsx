@@ -140,6 +140,7 @@ export default function Finance() {
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      <StripeErrorBanner search={location.search} navigate={navigate}/>
       <div style={{
         display: 'flex', alignItems: 'flex-end', gap: 12, flexWrap: 'wrap',
       }}>
@@ -457,5 +458,85 @@ function ExportMenuItem({ label, hint, onClick }) {
       <div style={{ fontSize: 13, fontWeight: 550, color: 'var(--fg)' }}>{label}</div>
       {hint && <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1 }}>{hint}</div>}
     </button>
+  );
+}
+
+// Stripe-connect bounce-back banner. The /api/finance/stripe-oauth-init
+// endpoint redirects here with ?stripeError=<code> when the connect
+// flow fails (bad key, mode mismatch, Connect not enabled, etc.).
+// We render an actionable banner and strip the query params so a
+// refresh doesn't show the same banner forever.
+const STRIPE_ERRORS = {
+  no_key: {
+    title: 'Stripe isn\'t configured on this deploy yet',
+    body: 'Set STRIPE_SECRET_KEY in your Vercel project settings — a key starting with sk_live_ (or sk_test_ for testing) from https://dashboard.stripe.com/apikeys. Redeploy after saving.',
+  },
+  bad_key: {
+    title: 'Stripe rejected the API key',
+    body: 'STRIPE_SECRET_KEY in Vercel doesn\'t look like a valid Stripe secret key. It must start with sk_live_ or sk_test_. Get the right value from https://dashboard.stripe.com/apikeys and update the env var, then redeploy.',
+  },
+  connect_not_enabled: {
+    title: 'Your Stripe account hasn\'t enabled Connect yet',
+    body: 'Visit https://dashboard.stripe.com/connect/accounts/overview (or /test/connect/accounts/overview if you\'re using a test key) and click "Get started" — takes about 2 minutes. Then retry the Connect button.',
+  },
+  wrong_mode: {
+    title: 'Saved Stripe account is from the other mode',
+    body: 'A connected-account ID from the other mode (test vs. live) is saved on this workspace. Click Disconnect Stripe below, then reconnect — the new connection will match the current key.',
+  },
+  unsupported_country: {
+    title: 'Stripe rejected the account country',
+    body: 'THRYVE currently only supports US accounts. If you\'re outside the US, email hello@getthryve.ai and we\'ll enable your region.',
+  },
+  unknown: {
+    title: 'Couldn\'t start the Stripe connection',
+    body: null, // raw message from stripeMsg shown
+  },
+};
+function StripeErrorBanner({ search, navigate }) {
+  const params = new URLSearchParams(search);
+  const code = params.get('stripeError');
+  if (!code) return null;
+  const info = STRIPE_ERRORS[code] || STRIPE_ERRORS.unknown;
+  const raw = params.get('stripeMsg') || '';
+  const dismiss = () => navigate('/finance', { replace: true });
+  return (
+    <div style={{
+      padding: '14px 18px', borderRadius: 12,
+      background: 'rgba(214, 88, 80, 0.10)',
+      border: '1px solid rgba(214, 88, 80, 0.35)',
+      color: 'var(--fg)',
+      display: 'flex', alignItems: 'flex-start', gap: 14,
+    }}>
+      <div style={{
+        flexShrink: 0, marginTop: 2,
+        width: 22, height: 22, borderRadius: 99,
+        background: 'rgba(214, 88, 80, 0.25)', color: 'var(--danger)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontWeight: 700, fontSize: 13,
+      }}>!</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontSize: 14, fontWeight: 600 }}>{info.title}</div>
+        {info.body && (
+          <div style={{ marginTop: 4, fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+            {info.body}
+          </div>
+        )}
+        {raw && (
+          <details style={{ marginTop: 6, fontSize: 12, color: 'var(--muted)' }}>
+            <summary style={{ cursor: 'pointer' }}>Technical detail</summary>
+            <code style={{ display: 'block', marginTop: 4, padding: 8, background: 'var(--surface-2)', borderRadius: 6, wordBreak: 'break-word' }}>
+              {raw}
+            </code>
+          </details>
+        )}
+      </div>
+      <button onClick={dismiss}
+        aria-label="Dismiss"
+        style={{
+          flexShrink: 0, padding: '4px 10px', fontSize: 12, cursor: 'pointer',
+          background: 'transparent', color: 'var(--muted)',
+          border: '1px solid var(--border)', borderRadius: 6,
+        }}>Dismiss</button>
+    </div>
   );
 }

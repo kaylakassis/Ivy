@@ -57,7 +57,13 @@ export default async function handler(req, res) {
     step = 'platform-key';
     const platformKey = platformStripeSecret();
     if (!platformKey) {
-      return badRequest(res, 'Stripe is not configured on this deploy yet — set STRIPE_SECRET_KEY in Vercel.');
+      // Top-level navigation lands here — bounce back to /finance with
+      // an error code in the query string so the React app can render
+      // a proper banner instead of a raw API page.
+      const dest = '/finance?stripeError=' + encodeURIComponent('no_key');
+      res.writeHead(302, { Location: dest });
+      res.end();
+      return;
     }
 
     step = 'select-existing';
@@ -112,37 +118,26 @@ export default async function handler(req, res) {
     // eslint-disable-next-line no-console
     console.error(`[stripe-oauth-init] step=${step} failed:`, err);
 
-    // Translate known Stripe gotchas into plain-English guidance.
-    // The catch-all still surfaces the raw Stripe message so anything
-    // we haven't anticipated is still debuggable.
+    // Translate known Stripe gotchas into a short error code that the
+    // /finance page can map to a proper UI banner. Top-level navigation
+    // lands HERE on failure, so a raw JSON response is the wrong UX —
+    // bounce back to /finance with the code in the query string instead.
     const raw = (err.message || String(err)).toLowerCase();
-    let hint = null;
+    let code = 'unknown';
     if (raw.includes('signed up for connect') || raw.includes('apply for connect')) {
-      hint = 'Your Stripe platform account hasn\'t enabled Connect yet. '
-        + 'Visit https://dashboard.stripe.com/connect/accounts/overview '
-        + '(or /test/connect/accounts/overview if your STRIPE_SECRET_KEY is a test key) '
-        + 'and click "Get started" to activate Connect. Takes ~2 minutes. '
-        + 'Then retry the Connect Stripe button.';
+      code = 'connect_not_enabled';
     } else if (raw.includes('no such account')) {
-      hint = 'A connected account ID from the OTHER mode is saved on this workspace. '
-        + 'Disconnect Stripe in /finance and reconnect — the new connection will use the current mode.';
+      code = 'wrong_mode';
     } else if (raw.includes('invalid api key') || raw.includes('no api key')) {
-      hint = 'STRIPE_SECRET_KEY in Vercel is missing or wrong. '
-        + 'Set it to a valid sk_live_… or sk_test_… key from https://dashboard.stripe.com/apikeys.';
+      code = 'bad_key';
     } else if (raw.includes('country')) {
-      hint = 'Stripe rejected the connected-account country. THRYVE currently only supports US — '
-        + 'if you\'re outside the US, contact support to enable your region.';
+      code = 'unsupported_country';
     }
 
-    res.statusCode = 500;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({
-      error: 'Stripe init failed',
-      step,
-      message: err.message || String(err),
-      hint,
-      stripeCode: err.stripeCode || null,
-      stripeStatus: err.status || null,
-    }));
+    const dest = '/finance?stripeError=' + encodeURIComponent(code)
+      + '&stripeStep=' + encodeURIComponent(step)
+      + '&stripeMsg=' + encodeURIComponent((err.message || String(err)).slice(0, 240));
+    res.writeHead(302, { Location: dest });
+    res.end();
   }
 }
