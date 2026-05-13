@@ -192,6 +192,10 @@ export function SimpleNav() {
           }}>thryve</span>
         </Link>
         <div style={{ flex: 1 }}/>
+        <Link to="/pricing" className="btn btn-ghost marketing-nav-secondary"
+          style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Pricing</Link>
+        <Link to="/blog" className="btn btn-ghost marketing-nav-secondary"
+          style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Blog</Link>
         <Link to="/changelog" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Changelog</Link>
         <Link to="/about" className="btn btn-ghost marketing-nav-secondary"
@@ -220,6 +224,12 @@ export function SimpleFooter() {
         </Link>
         <div style={{ flex: 1 }}/>
         <div style={{ display: 'flex', gap: 18, fontSize: 12.5, color: 'var(--muted)', flexWrap: 'wrap' }}>
+          <Link to="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Pricing</Link>
+          <Link to="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Blog</Link>
+          <Link to="/security" style={{ color: 'inherit', textDecoration: 'none' }}>Security</Link>
+          <Link to="/integrations" style={{ color: 'inherit', textDecoration: 'none' }}>Integrations</Link>
+          <Link to="/mobile" style={{ color: 'inherit', textDecoration: 'none' }}>Mobile</Link>
+          <Link to="/roadmap" style={{ color: 'inherit', textDecoration: 'none' }}>Roadmap</Link>
           <Link to="/changelog" style={{ color: 'inherit', textDecoration: 'none' }}>Changelog</Link>
           <Link to="/about" style={{ color: 'inherit', textDecoration: 'none' }}>About</Link>
           <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>

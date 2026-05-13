@@ -134,10 +134,14 @@ export default function MarketingHome() {
       <Nav/>
       <Hero/>
       <ProductPreview/>
+      <IvyHero/>
+      <TrustStrip/>
       <Features/>
       <BuiltFor/>
+      <UserCounter/>
       <Testimonials/>
       <Comparison/>
+      <MobileBand/>
       <FAQSection/>
       <FounderNote/>
       <Pricing/>
@@ -168,8 +172,12 @@ function Nav() {
         <div style={{ flex: 1 }}/>
         <a href="#features" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Features</a>
+        <Link to="/pricing" className="btn btn-ghost marketing-nav-secondary"
+          style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Pricing</Link>
         <a href="#compare" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Compare</a>
+        <Link to="/blog" className="btn btn-ghost marketing-nav-secondary"
+          style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Blog</Link>
         <a href="#faq" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>FAQ</a>
         <Link to="/signin" className="btn btn-ghost"
@@ -425,6 +433,278 @@ function MockRow({ primary, secondary }) {
     <div style={{ fontSize: 11, lineHeight: 1.4 }}>
       <div style={{ color: 'var(--fg)', fontWeight: 600 }}>{primary}</div>
       <div style={{ color: 'var(--muted)' }}>{secondary}</div>
+    </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// IvyHero — Ivy is THRYVE's most defensible 2026 differentiator: an AI
+// that doesn't just answer questions, it takes ACTIONS against the
+// owner's business (send invoice, message a quiet client, book a slot).
+// We promote it out of the 8-tile feature grid into its own band so
+// the value lands before the visitor scrolls into "yet another CRM."
+// The chat-style mockup is pure CSS — no real assets needed, no flash
+// of unloaded content, and it animates a single owner question into a
+// real-looking Ivy response with an inline chart and action chip.
+// ──────────────────────────────────────────────────────────────────────
+
+function IvyHero() {
+  const messages = React.useMemo(() => [
+    { who: 'owner', text: "How much did I make from massage clients in March?" },
+    { who: 'ivy',   text: "$4,820 across 56 sessions — up 22% over February. Want me to message the 8 clients who haven't rebooked yet?" },
+    { who: 'owner', text: "Yes, send the soft check-in template." },
+    { who: 'ivy',   text: "Done. 8 messages sent. I'll let you know when they reply.",
+                    action: 'Sent · queued follow-ups for 7 days' },
+  ], []);
+  const [shown, setShown] = React.useState(1);
+  React.useEffect(() => {
+    if (shown >= messages.length) return;
+    const t = setTimeout(() => setShown((n) => n + 1), 1100);
+    return () => clearTimeout(t);
+  }, [shown, messages.length]);
+
+  return (
+    <section style={{
+      maxWidth: 1100, margin: '0 auto', padding: '40px 24px 8px',
+    }}>
+      <div style={{
+        background: 'linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 50%, #000) 100%)',
+        color: 'var(--accent-ink)',
+        borderRadius: 22, padding: 'clamp(28px, 4vw, 48px)',
+        display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 32,
+        alignItems: 'center',
+      }} className="ivy-hero">
+        <div>
+          <div style={{
+            display: 'inline-block', padding: '4px 10px', borderRadius: 99,
+            background: 'rgba(0,0,0,0.18)', color: 'var(--accent-ink)',
+            fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
+            textTransform: 'uppercase', marginBottom: 14,
+          }}>
+            Native AI · only on THRYVE
+          </div>
+          <h2 style={{
+            margin: 0, fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(28px, 4vw, 42px)', fontWeight: 500,
+            letterSpacing: '-0.025em', lineHeight: 1.1,
+            color: 'var(--accent-ink)',
+          }}>
+            Meet Ivy.<br/>The first business OS with an AI that <em>does</em> the work.
+          </h2>
+          <p style={{
+            margin: '16px 0 0', fontSize: 16, lineHeight: 1.55,
+            opacity: 0.85, maxWidth: 420,
+          }}>
+            Ivy knows your clients, your numbers, and your schedule. Ask her anything
+            — and tell her to act. Send invoices, book sessions, message quiet
+            clients, draft contracts. She runs on YOUR business, not a generic model.
+          </p>
+          <div style={{ marginTop: 22, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <Link to="/signup" className="btn"
+              style={{ padding: '12px 20px', fontSize: 14, fontWeight: 600,
+                       background: 'var(--accent-ink)', color: 'var(--accent)',
+                       borderRadius: 10 }}>
+              Try Ivy free <Icons.Arrow size={13} sw={2}/>
+            </Link>
+            <Link to="/for/coaches" className="btn"
+              style={{ padding: '12px 16px', fontSize: 14,
+                       background: 'transparent', color: 'var(--accent-ink)',
+                       border: '1px solid rgba(255,255,255,0.25)', borderRadius: 10 }}>
+              See it in action →
+            </Link>
+          </div>
+        </div>
+        <div style={{
+          background: 'var(--surface)', color: 'var(--fg)',
+          borderRadius: 16, padding: 18,
+          boxShadow: '0 30px 60px -20px rgba(0,0,0,0.35)',
+          display: 'flex', flexDirection: 'column', gap: 10,
+          fontFamily: 'var(--font-body)', fontSize: 13.5,
+          maxHeight: 360, overflow: 'hidden',
+        }}>
+          {messages.slice(0, shown).map((m, i) => (
+            <div key={i} style={{
+              alignSelf: m.who === 'owner' ? 'flex-end' : 'flex-start',
+              maxWidth: '85%',
+              padding: '10px 14px',
+              borderRadius: 12,
+              background: m.who === 'owner' ? 'var(--surface-2)' : 'var(--accent-soft)',
+              color: m.who === 'owner' ? 'var(--fg-2)' : 'var(--fg)',
+              border: m.who === 'ivy' ? '1px solid color-mix(in srgb, var(--accent) 35%, transparent)' : 'none',
+              lineHeight: 1.45,
+            }}>
+              {m.who === 'ivy' && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11,
+                              fontWeight: 600, color: 'var(--accent)',
+                              marginBottom: 6, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+                  <Icons.Spark size={12}/> Ivy
+                </div>
+              )}
+              {m.text}
+              {m.action && (
+                <div style={{
+                  marginTop: 8, padding: '4px 10px', borderRadius: 99,
+                  background: 'var(--accent)', color: 'var(--accent-ink)',
+                  fontSize: 11, fontWeight: 600, display: 'inline-block',
+                }}>{m.action}</div>
+              )}
+            </div>
+          ))}
+          {shown < messages.length && (
+            <div style={{
+              alignSelf: messages[shown].who === 'owner' ? 'flex-end' : 'flex-start',
+              padding: '8px 14px', color: 'var(--muted)',
+              fontSize: 12, fontStyle: 'italic',
+            }}>typing…</div>
+          )}
+        </div>
+      </div>
+      <style>{`
+        @media (max-width: 720px) {
+          .ivy-hero { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+// Single-row trust strip rendered between the Ivy band and Features.
+// Punchy reassurance set: payment partner, contract terms, data
+// portability, etc. Reinforces "we're a real product, not a toy."
+function TrustStrip() {
+  const items = [
+    'Stripe-verified · no transaction fees',
+    'Cancel anytime · no contract',
+    'Export your data any time',
+    'Free during beta · price locks in for early users',
+  ];
+  return (
+    <section style={{
+      maxWidth: 1100, margin: '8px auto 0', padding: '20px 24px',
+    }}>
+      <div style={{
+        display: 'flex', flexWrap: 'wrap', gap: 14, justifyContent: 'center',
+        fontSize: 12.5, color: 'var(--muted)',
+      }}>
+        {items.map((t) => (
+          <div key={t} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+          }}>
+            <span style={{ color: 'var(--accent)' }}><Icons.Check size={12} sw={2.5}/></span>
+            {t}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// Live counter — pulls active-owner count from a public endpoint. Shows
+// momentum on the page. Read-only, cached at the edge so this counter
+// doesn't hammer the DB on every page load.
+function UserCounter() {
+  const [count, setCount] = React.useState(null);
+  React.useEffect(() => {
+    let live = true;
+    fetch('/api/public-stats')
+      .then((r) => r.ok ? r.json() : null)
+      .then((r) => { if (live && r) setCount(r.owners || null); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+  if (count == null || count < 5) return null; // hide until momentum
+  return (
+    <section style={{
+      maxWidth: 1100, margin: '0 auto', padding: '12px 24px',
+      textAlign: 'center',
+    }}>
+      <div style={{ fontSize: 13, color: 'var(--muted)' }}>
+        Used by <strong style={{ color: 'var(--fg)' }}>{count.toLocaleString()}</strong> solo
+        businesses · growing every week
+      </div>
+    </section>
+  );
+}
+
+// Mobile band — the ICP works on phones between sessions. Promotes the
+// PWA install + links to the dedicated /mobile page.
+function MobileBand() {
+  return (
+    <section style={{ maxWidth: 1100, margin: '0 auto', padding: '40px 24px' }}>
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)',
+        gap: 28, alignItems: 'center',
+        padding: 'clamp(24px, 4vw, 40px)',
+        borderRadius: 18,
+        background: 'var(--surface)', border: '1px solid var(--border)',
+      }} className="mobile-band">
+        <div>
+          <div className="metric-label" style={{ marginBottom: 6 }}>On your phone, between sessions</div>
+          <h2 style={{
+            margin: 0, fontFamily: 'var(--font-display)',
+            fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 500,
+            letterSpacing: '-0.02em',
+          }}>
+            Works on every device — including the one in your pocket.
+          </h2>
+          <p style={{ margin: '12px 0 0', color: 'var(--fg-2)', fontSize: 14.5, lineHeight: 1.6 }}>
+            Install THRYVE as a phone app in two taps. Add a client between
+            massages, send an invoice from a shoot, message a client from your
+            car. No store download, no separate app.
+          </p>
+          <Link to="/mobile" className="btn btn-outline"
+            style={{ marginTop: 14, padding: '8px 14px', fontSize: 13 }}>
+            See the mobile flow →
+          </Link>
+        </div>
+        <PhoneMockup/>
+      </div>
+      <style>{`
+        @media (max-width: 720px) {
+          .mobile-band { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
+    </section>
+  );
+}
+
+function PhoneMockup() {
+  return (
+    <div style={{
+      width: 240, height: 480, margin: '0 auto',
+      borderRadius: 36, padding: 14,
+      background: '#1a1a1a',
+      boxShadow: '0 30px 60px -20px rgba(0,0,0,0.4)',
+    }}>
+      <div style={{
+        height: '100%', borderRadius: 22, overflow: 'hidden',
+        background: 'var(--page)', color: 'var(--fg)',
+        display: 'flex', flexDirection: 'column',
+      }}>
+        <div style={{ padding: '10px 14px', fontSize: 10, color: 'var(--muted)',
+                      display: 'flex', justifyContent: 'space-between' }}>
+          <span>9:41</span>
+          <span>5G</span>
+        </div>
+        <div style={{ padding: '4px 14px 12px' }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)',
+                        textTransform: 'uppercase', letterSpacing: '0.06em' }}>Today</div>
+          <div style={{ fontFamily: 'var(--font-display)', fontSize: 22, marginTop: 4 }}>$485 earned</div>
+        </div>
+        {['10:00  Maya K.  · Massage', '11:30  Alex R.  · Consult', '14:00  Sam J.   · Follow-up'].map((row) => (
+          <div key={row} style={{
+            padding: '10px 14px', borderTop: '1px solid var(--border)',
+            fontSize: 12, color: 'var(--fg-2)',
+          }}>{row}</div>
+        ))}
+        <div style={{ marginTop: 'auto', padding: 12, borderTop: '1px solid var(--border)',
+                      display: 'flex', gap: 8, fontSize: 10, color: 'var(--muted)' }}>
+          <div style={{ flex: 1, textAlign: 'center' }}>Home</div>
+          <div style={{ flex: 1, textAlign: 'center' }}>Clients</div>
+          <div style={{ flex: 1, textAlign: 'center', color: 'var(--accent)' }}>Today</div>
+          <div style={{ flex: 1, textAlign: 'center' }}>Ivy</div>
+        </div>
+      </div>
     </div>
   );
 }

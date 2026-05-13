@@ -18,6 +18,7 @@
     }
   },
   "rewrites": [
+    { "source": "/marketing-sitemap.xml",    "destination": "/api/marketing-sitemap.xml" },
     { "source": "/site/:handle/sitemap.xml", "destination": "/api/site/:handle/sitemap.xml" },
     { "source": "/site/:handle/robots.txt",  "destination": "/api/site/:handle/robots.txt" },
     { "source": "/site/:handle",             "destination": "/api/site/:handle" },

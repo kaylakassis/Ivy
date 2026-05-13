@@ -150,9 +150,12 @@ export default function OnboardingPage() {
     setSlug(slugify(bizName));
   }, [bizName, slugTouched]);
 
-  // Persist navigational state. Debounced so each input doesn't hammer
-  // the API. Triggers on currentStep/completedSteps/skippedSteps change
-  // after the initial load.
+  // Backstop debounced save for incidental state changes. The PRIMARY
+  // persistence path is the explicit flush inside goNext / skipStep
+  // below — that's the path a click on "Let's go" goes through. This
+  // effect catches anything else (e.g. a step change that bypassed
+  // those helpers). We log errors so they're not invisible: silent
+  // failure here was the original "Let's go" bug.
   const saveStateTimer = useRef(null);
   useEffect(() => {
     if (!stateLoaded) return;
@@ -160,7 +163,10 @@ export default function OnboardingPage() {
     saveStateTimer.current = setTimeout(() => {
       api.patch('/onboarding/state', {
         currentStep, completedSteps, skippedSteps,
-      }).catch(() => { /* swallow — auto-save is best-effort */ });
+      }).catch((e) => {
+        // eslint-disable-next-line no-console
+        console.error('[onboarding] auto-save failed (non-blocking):', e);
+      });
     }, 400);
     return () => { if (saveStateTimer.current) clearTimeout(saveStateTimer.current); };
   }, [currentStep, completedSteps, skippedSteps, stateLoaded]);
@@ -168,21 +174,44 @@ export default function OnboardingPage() {
   const stepIdx = STEPS.findIndex((s) => s.id === currentStep);
   const stepSpec = STEPS[stepIdx] || STEPS[0];
 
-  const goNext = () => {
-    setCompletedSteps((p) => p.includes(currentStep) ? p : [...p, currentStep]);
-    setSkippedSteps((p) => p.filter((s) => s !== currentStep));
+  // Persists the nav state synchronously and ONLY advances the wizard
+  // when the server confirms. If the PATCH fails (cold-start migration
+  // failure, network blip, anything), the user sees a real error and
+  // can retry — not a silent "looked like it worked, didn't actually."
+  const flushAndAdvance = async ({ markCompleted, markSkipped }) => {
+    const nextCompleted = markCompleted
+      ? Array.from(new Set([...completedSteps, currentStep]))
+      : completedSteps.filter((s) => s !== currentStep);
+    const nextSkipped = markSkipped
+      ? Array.from(new Set([...skippedSteps, currentStep]))
+      : skippedSteps.filter((s) => s !== currentStep);
     const next = STEPS[stepIdx + 1];
-    if (next) setCurrentStep(next.id);
+    const nextStepId = next ? next.id : currentStep;
+
+    setBusy(true); setErr(null);
+    try {
+      await api.patch('/onboarding/state', {
+        currentStep: nextStepId,
+        completedSteps: nextCompleted,
+        skippedSteps: nextSkipped,
+      });
+      setCompletedSteps(nextCompleted);
+      setSkippedSteps(nextSkipped);
+      if (next) setCurrentStep(next.id);
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('[onboarding] flushAndAdvance failed:', e);
+      setErr("Couldn't save your progress — please try again, or refresh and continue.");
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const goNext = () => flushAndAdvance({ markCompleted: true,  markSkipped: false });
+  const skipStep = () => flushAndAdvance({ markCompleted: false, markSkipped: true });
   const goBack = () => {
     const prev = STEPS[stepIdx - 1];
     if (prev) setCurrentStep(prev.id);
-  };
-  const skipStep = () => {
-    setSkippedSteps((p) => p.includes(currentStep) ? p : [...p, currentStep]);
-    setCompletedSteps((p) => p.filter((s) => s !== currentStep));
-    const next = STEPS[stepIdx + 1];
-    if (next) setCurrentStep(next.id);
   };
 
   // "Save & exit" — flushes state and bounces to dashboard WITHOUT
@@ -233,7 +262,7 @@ export default function OnboardingPage() {
       else if (tagline === '') patch.tagline = null;
       if (category) patch.category = category;
       if (Object.keys(patch).length > 0) await api.patch('/calendar', patch);
-      goNext();
+      await goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };
@@ -242,7 +271,7 @@ export default function OnboardingPage() {
     setBusy(true); setErr(null);
     try {
       await api.put('/calendar/services', { services });
-      goNext();
+      await goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };
@@ -251,7 +280,7 @@ export default function OnboardingPage() {
     setBusy(true); setErr(null);
     try {
       await api.patch('/calendar', { availability });
-      goNext();
+      await goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };
@@ -263,7 +292,7 @@ export default function OnboardingPage() {
       if (branding.logoUrl !== undefined) patch.brandLogoUrl = branding.logoUrl || null;
       if (branding.accent !== undefined)  patch.brandAccentColor = branding.accent || null;
       if (Object.keys(patch).length > 0) await api.patch('/calendar', patch);
-      goNext();
+      await goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };
@@ -280,7 +309,7 @@ export default function OnboardingPage() {
       await api.post('/clients', { name, email, phone: clientDraft.phone || null, stage: 'active' });
       setClientsCount((n) => n + 1);
       setClientDraft({ name: '', email: '', phone: '' });
-      goNext();
+      await goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
   };

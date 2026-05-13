@@ -61,6 +61,14 @@ const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
 const ChangelogPage = lazy(() => import('./features/marketing/ChangelogPage.jsx'));
 const AboutPage     = lazy(() => import('./features/marketing/AboutPage.jsx'));
 const VerticalPage  = lazy(() => import('./features/marketing/VerticalPage.jsx'));
+const PricingPage     = lazy(() => import('./features/marketing/PricingPage.jsx'));
+const ComparePage     = lazy(() => import('./features/marketing/ComparePage.jsx'));
+const BlogIndex       = lazy(() => import('./features/marketing/BlogIndex.jsx'));
+const BlogPostPage    = lazy(() => import('./features/marketing/BlogPostPage.jsx'));
+const SecurityPage    = lazy(() => import('./features/marketing/SecurityPage.jsx'));
+const MobilePage      = lazy(() => import('./features/marketing/MobilePage.jsx'));
+const IntegrationsPage = lazy(() => import('./features/marketing/IntegrationsPage.jsx'));
+const RoadmapPage     = lazy(() => import('./features/marketing/RoadmapPage.jsx'));
 
 // Centered, low-key spinner. Avoids blank-flash but doesn't fight the
 // destination page's own loader for visual real estate. Lives inside
@@ -150,6 +158,14 @@ export default function App() {
         <Route path="/changelog"   element={<ChangelogPage />} />
         <Route path="/about"       element={<AboutPage />} />
         <Route path="/for/:slug"   element={<VerticalPage />} />
+        <Route path="/pricing"     element={<PricingPage />} />
+        <Route path="/vs/:slug"    element={<ComparePage />} />
+        <Route path="/blog"        element={<BlogIndex />} />
+        <Route path="/blog/:slug"  element={<BlogPostPage />} />
+        <Route path="/security"    element={<SecurityPage />} />
+        <Route path="/mobile"      element={<MobilePage />} />
+        <Route path="/integrations" element={<IntegrationsPage />} />
+        <Route path="/roadmap"     element={<RoadmapPage />} />
 
         {/* First-run wizard for new owners. Auth-gated but no AppShell so it
             can't get caught in RoleRouter's "redirect un-onboarded users to
