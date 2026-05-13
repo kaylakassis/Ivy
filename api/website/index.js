@@ -20,10 +20,14 @@ import { requireSameOrigin } from "../_lib/security.js";
 const ALLOWED_TEMPLATES = new Set([
   'clean', 'warm', 'bold',
   'studio', 'wellness', 'editorial', 'mono', 'sunset', 'forest',
+  'brutalist', 'retro', 'art_deco', 'japanese_minimal', 'dark_premium',
 ]);
 const ALLOWED_FONT_PAIRS = new Set([
   'fraunces_inter', 'space_inter', 'fraunces_fraunces',
   'inter_inter', 'playfair_lato', 'dm_serif_dm_sans',
+  'bodoni_montserrat', 'cormorant_open', 'archivo_archivo',
+  'abril_lato', 'ibm_ibm', 'oswald_lora', 'spectral_jost',
+  'marcellus_nunito', 'bebas_inter',
 ]);
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 const SLUG_RE   = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;

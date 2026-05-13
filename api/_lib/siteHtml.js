@@ -303,6 +303,100 @@ function renderCode(s) {
   </section>`;
 }
 
+function renderCountdown(s) {
+  const d = s.data || {};
+  // We don't run a JS clock server-side; emit the target date as text +
+  // a data attribute so the SPA's countdown can hydrate over it.
+  const end = d.endDate ? new Date(d.endDate).toUTCString() : '';
+  return `<section class="thryve-countdown" data-end="${attr(end)}">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <p>${end ? `Ends ${esc(end)}` : ''}</p>
+    ${d.cta ? `<p><a href="${attr(d.ctaLink || '#')}">${esc(d.cta)} →</a></p>` : ''}
+  </section>`;
+}
+
+function renderHours(s) {
+  const d = s.data || {};
+  const rows = (d.days || []).map((r) => `<tr><th scope="row">${esc(r.label || '')}</th><td>${esc(r.hours || '')}</td></tr>`).join('');
+  return `<section class="thryve-hours">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.timezone ? `<p>${esc(d.timezone)}</p>` : ''}
+    <table><tbody>${rows}</tbody></table>
+  </section>`;
+}
+
+function renderMap(s) {
+  const d = s.data || {};
+  return `<section class="thryve-map">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.address ? `<p>${esc(d.address)}</p>` : ''}
+  </section>`;
+}
+
+function renderAccordion(s) {
+  const d = s.data || {};
+  const items = (d.items || []).map((q) => `
+    <details>
+      <summary>${esc(q.q || '')}</summary>
+      <p>${esc(q.a || '')}</p>
+    </details>`).join('');
+  return `<section class="thryve-accordion">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${items}
+  </section>`;
+}
+
+function renderProcess(s) {
+  const d = s.data || {};
+  const steps = (d.steps || []).map((st) => `
+    <li>
+      <strong>${esc(st.number || '')}</strong>
+      <h3>${esc(st.title || '')}</h3>
+      ${st.desc ? `<p>${esc(st.desc)}</p>` : ''}
+    </li>`).join('');
+  return `<section class="thryve-process">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <ol>${steps}</ol>
+  </section>`;
+}
+
+function renderBeforeAfter(s) {
+  const d = s.data || {};
+  return `<section class="thryve-before-after">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    <figure>
+      ${d.beforeUrl ? `<img src="${attr(d.beforeUrl)}" alt="${attr(d.beforeLabel || 'Before')}" loading="lazy"/>` : ''}
+      <figcaption>${esc(d.beforeLabel || 'Before')}</figcaption>
+    </figure>
+    <figure>
+      ${d.afterUrl ? `<img src="${attr(d.afterUrl)}" alt="${attr(d.afterLabel || 'After')}" loading="lazy"/>` : ''}
+      <figcaption>${esc(d.afterLabel || 'After')}</figcaption>
+    </figure>
+  </section>`;
+}
+
+function renderSocialFeed(s) {
+  const d = s.data || {};
+  return `<section class="thryve-social-feed">
+    ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
+    ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
+    ${d.url ? `<p><a href="${attr(d.url)}">View on ${esc(d.platform || 'social')}</a></p>` : ''}
+  </section>`;
+}
+
+function renderCustomHtml(s) {
+  const d = s.data || {};
+  // Sandboxed iframe via srcdoc — crawlers see the iframe element but
+  // can't follow into its content. Owner-supplied HTML is escaped into
+  // an attribute so the sandbox=""'s rules apply.
+  const safe = String(d.html || '').replace(/"/g, '&quot;');
+  const height = Math.max(80, Math.min(2000, Number(d.height) || 280));
+  return `<section class="thryve-custom-html"><iframe srcdoc="<!doctype html><html><body style='margin:0'>${safe}</body></html>" sandbox="" style="width:100%;height:${height}px;border:0;display:block" title="Custom embed"></iframe></section>`;
+}
+
 const RENDERERS = {
   hero:           renderHero,
   services:       renderServices,
@@ -324,6 +418,14 @@ const RENDERERS = {
   blog:           renderBlog,
   instagram:      renderInstagram,
   code_snippet:   renderCode,
+  countdown:      renderCountdown,
+  hours:          renderHours,
+  map:            renderMap,
+  accordion:      renderAccordion,
+  process:        renderProcess,
+  before_after:   renderBeforeAfter,
+  social_feed:    renderSocialFeed,
+  custom_html:    renderCustomHtml,
 };
 
 function renderSection(section, handle) {
@@ -334,14 +436,15 @@ function renderSection(section, handle) {
   const style = section.style || {};
   const hideMobile  = !!style.hideOnMobile;
   const hideDesktop = !!style.hideOnDesktop;
-  if (!hideMobile && !hideDesktop) return inner;
-  // Wrap with the same data-section-id hook the client uses so the
-  // media-query rules apply identically on the SSR'd HTML.
+  const grad        = style.headlineGradient ? styleVal(style.headlineGradient) : '';
+  if (!hideMobile && !hideDesktop && !grad) return inner;
+  const sid = section.id;
   const css = [
-    hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
-    hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
+    hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${sid}"] { display: none !important; } }` : '',
+    hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${sid}"] { display: none !important; } }` : '',
+    grad ? `[data-section-id="${sid}"] h1, [data-section-id="${sid}"] h2 { background: ${grad}; -webkit-background-clip: text; background-clip: text; color: transparent; }` : '',
   ].filter(Boolean).join(' ');
-  return `<style>${css}</style><div data-section-id="${esc(section.id)}">${inner}</div>`;
+  return `<style>${css}</style><div data-section-id="${esc(sid)}">${inner}</div>`;
 }
 
 // ----- Inline styles for the static (pre-hydration) markup --------

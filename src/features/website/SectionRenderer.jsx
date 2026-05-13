@@ -22,25 +22,35 @@ export default function SectionRenderer({ section, handle, editable = false, onU
     wrapperStyle.padding = PADDING_DENSITIES[style.padding];
   }
   if (style.textAlign) wrapperStyle.textAlign = style.textAlign;
-  // Mobile / desktop hide rules. We emit a tiny scoped <style> targeting
-  // this section's id rather than wrapping in a styled div — keeps the
-  // wrapper from breaking layouts that already span 100vw.
   const hideMobile  = !!style.hideOnMobile;
   const hideDesktop = !!style.hideOnDesktop;
-  const hasOverride = Object.keys(wrapperStyle).length > 0 || hideMobile || hideDesktop;
+  const hasOverride = Object.keys(wrapperStyle).length > 0 || hideMobile || hideDesktop || style.headlineGradient || style.parallax;
   const rendered = (
     <Comp data={section.data} handle={handle} variant={section.variant} editable={editable} onUpdate={onUpdate}/>
   );
-  const hideCss = (hideMobile || hideDesktop) && section.id ? (
-    <style>{`
-      ${hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${section.id}"] { display: none !important; } }` : ''}
-      ${hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${section.id}"] { display: none !important; } }` : ''}
-    `}</style>
-  ) : null;
+  // Per-section CSS overlays: hide-on-breakpoint + gradient-text on the
+  // first h1/h2 of this section + parallax on the first background-image
+  // section. All scoped via [data-section-id="..."] so they can't leak.
+  const scopedCss = section.id ? [
+    hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
+    hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${section.id}"] { display: none !important; } }` : '',
+    style.headlineGradient
+      ? `[data-section-id="${section.id}"] h1, [data-section-id="${section.id}"] h2 { background: ${style.headlineGradient}; -webkit-background-clip: text; background-clip: text; color: transparent; }`
+      : '',
+    style.parallax
+      ? `[data-section-id="${section.id}"] section { background-attachment: fixed !important; }`
+      : '',
+  ].filter(Boolean).join(' ') : '';
   const inner = hasOverride
-    ? <div data-section-id={section.id} style={wrapperStyle}>{hideCss}{rendered}</div>
+    ? <div data-section-id={section.id} style={wrapperStyle}>{scopedCss && <style>{scopedCss}</style>}{rendered}</div>
     : rendered;
-  return section.animate ? <AnimateOnView animate={section.animate}>{inner}</AnimateOnView> : inner;
+  // Animation key can be a plain string ('fade') OR an object
+  // ({ type, delayMs, durationMs }) for fine-grained control.
+  if (!section.animate) return inner;
+  const animCfg = typeof section.animate === 'string'
+    ? { type: section.animate }
+    : section.animate;
+  return <AnimateOnView animate={animCfg.type} delayMs={animCfg.delayMs} durationMs={animCfg.durationMs}>{inner}</AnimateOnView>;
 }
 
 // Inline-editable text. When `editable` is true the rendered span is
@@ -105,12 +115,9 @@ export function EditableText({ value, onCommit, editable, as = 'span', style }) 
 // view. Uses IntersectionObserver once per mount; the section stays
 // in its visible state after the first reveal so scroll-up doesn't
 // re-trigger the animation.
-function AnimateOnView({ animate, children }) {
+function AnimateOnView({ animate, children, delayMs = 0, durationMs = 700 }) {
   const ref = useRef(null);
   const [visible, setVisible] = useState(false);
-  // Respect the OS-level reduced-motion preference. Users who've asked
-  // for less motion get the content rendered in its final position
-  // immediately, no fade/slide. Avoids motion sickness + meets WCAG.
   const prefersReducedMotion = typeof window !== 'undefined'
     && window.matchMedia
     && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -136,9 +143,14 @@ function AnimateOnView({ animate, children }) {
   }, [prefersReducedMotion]);
 
   const off = ANIMATION_OFFSCREEN[animate] || ANIMATION_OFFSCREEN.fade;
+  const dur = Math.max(50, Math.min(3000, Number(durationMs) || 700));
+  const del = Math.max(0, Math.min(3000, Number(delayMs) || 0));
+  const transition = prefersReducedMotion
+    ? 'none'
+    : `opacity ${dur}ms ease ${del}ms, transform ${dur}ms ease ${del}ms`;
   const styleNow = visible
-    ? { opacity: 1, transform: 'none', transition: prefersReducedMotion ? 'none' : 'opacity 0.7s ease, transform 0.7s ease' }
-    : { ...off, transition: 'opacity 0.7s ease, transform 0.7s ease' };
+    ? { opacity: 1, transform: 'none', transition }
+    : { ...off, transition };
   return <div ref={ref} style={styleNow}>{children}</div>;
 }
 
@@ -1115,6 +1127,222 @@ function CodeSnippet({ data }) {
   );
 }
 
+// ---------- Countdown ----------
+function Countdown({ data }) {
+  const target = useMemo(() => new Date(data.endDate || Date.now()).getTime(), [data.endDate]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+  const diff = Math.max(0, target - now);
+  const d = Math.floor(diff / 86_400_000);
+  const h = Math.floor((diff % 86_400_000) / 3_600_000);
+  const m = Math.floor((diff % 3_600_000) / 60_000);
+  const s = Math.floor((diff % 60_000) / 1000);
+  const parts = [['d', d], ['h', h], ['m', m], ['s', s]];
+  return (
+    <section style={{ background: 'var(--site-surface)', color: 'var(--site-fg)' }}>
+      <div style={{ ...container, textAlign: 'center' }}>
+        {(data.headline || data.sub) && <Heading text={data.headline} sub={data.sub}/>}
+        <div style={{
+          marginTop: data.headline ? 36 : 0,
+          display: 'flex', justifyContent: 'center', gap: 12, flexWrap: 'wrap',
+        }}>
+          {parts.map(([lbl, n]) => (
+            <div key={lbl} style={{
+              minWidth: 88, padding: '18px 14px',
+              background: 'var(--site-bg)',
+              border: '1px solid var(--site-border)',
+              borderRadius: 'var(--site-radius)',
+            }}>
+              <div style={{ fontSize: 'clamp(28px,4vw,42px)', fontFamily: 'var(--site-font-display)', fontWeight: 500, lineHeight: 1 }}>{String(n).padStart(2, '0')}</div>
+              <div style={{ marginTop: 6, fontSize: 11, color: 'var(--site-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{lbl}</div>
+            </div>
+          ))}
+        </div>
+        {data.cta && (
+          <div style={{ marginTop: 32 }}>
+            <a href={data.ctaLink || '#'} style={ctaStyle}>
+              {data.cta} <span style={{ fontSize: 18, lineHeight: 1 }}>→</span>
+            </a>
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+// ---------- Hours ----------
+function Hours({ data }) {
+  const rows = data.days || [];
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={{ ...container, maxWidth: 560 }}>
+        {data.headline && <Heading text={data.headline}/>}
+        {data.timezone && (
+          <div style={{ textAlign: 'center', marginTop: 8, fontSize: 12, color: 'var(--site-muted)', letterSpacing: '0.08em', textTransform: 'uppercase' }}>{data.timezone}</div>
+        )}
+        <table style={{ width: '100%', marginTop: 28, borderCollapse: 'collapse', fontSize: 15 }}>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={r.id} style={{ borderBottom: '1px solid var(--site-border)' }}>
+                <td style={{ padding: '14px 4px', fontWeight: 600, color: 'var(--site-fg)' }}>{r.label}</td>
+                <td style={{ padding: '14px 4px', color: 'var(--site-fg-2)', textAlign: 'right' }}>{r.hours}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Map (OpenStreetMap iframe — no API key required) ----------
+function Map({ data }) {
+  const zoom = Number(data.zoom) || 14;
+  const lat  = Number(data.lat) || 0;
+  const lng  = Number(data.lng) || 0;
+  const span = 0.01 / Math.max(0.5, zoom / 14);
+  // OSM expects bbox=lonMin,latMin,lonMax,latMax.
+  const bbox = [lng - span, lat - span, lng + span, lat + span].join(',');
+  const src = `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${lat},${lng}`;
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={container}>
+        {data.headline && <Heading text={data.headline} sub={data.address}/>}
+        <div style={{ marginTop: data.headline ? 32 : 0, borderRadius: 'var(--site-radius)', overflow: 'hidden', border: '1px solid var(--site-border)' }}>
+          <iframe title="Map" src={src} style={{ width: '100%', height: 360, border: 0 }} loading="lazy"/>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Accordion (collapsible FAQ) ----------
+function Accordion({ data }) {
+  const items = data.items || [];
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={{ ...container, maxWidth: 760 }}>
+        {data.headline && <Heading text={data.headline}/>}
+        <div style={{ marginTop: data.headline ? 32 : 0 }}>
+          {items.map((it) => (
+            <details key={it.id} style={{
+              padding: '16px 18px',
+              borderBottom: '1px solid var(--site-border)',
+            }}>
+              <summary style={{ cursor: 'pointer', fontWeight: 550, fontSize: 16, fontFamily: 'var(--site-font-display)', listStyle: 'none' }}>
+                {it.q}
+              </summary>
+              <p style={{ margin: '12px 0 0', color: 'var(--site-fg-2)', lineHeight: 1.6, fontSize: 15 }}>{it.a}</p>
+            </details>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Process / How it works ----------
+function Process({ data }) {
+  const steps = data.steps || [];
+  return (
+    <section style={{ background: 'var(--site-surface)', color: 'var(--site-fg)' }}>
+      <div style={container}>
+        {(data.headline || data.sub) && <Heading text={data.headline} sub={data.sub}/>}
+        <div style={{
+          marginTop: data.headline ? 40 : 0,
+          display: 'grid',
+          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, steps.length || 1))}, 1fr)`,
+          gap: 28,
+        }}>
+          {steps.map((s) => (
+            <div key={s.id} style={{ padding: '24px 20px', background: 'var(--site-bg)', border: '1px solid var(--site-border)', borderRadius: 'var(--site-radius)' }}>
+              <div style={{ fontFamily: 'var(--site-font-display)', fontSize: 28, color: 'var(--site-accent)', fontWeight: 500, lineHeight: 1 }}>{s.number}</div>
+              <div style={{ marginTop: 14, fontSize: 18, fontWeight: 550, color: 'var(--site-fg)' }}>{s.title}</div>
+              <p style={{ margin: '8px 0 0', color: 'var(--site-fg-2)', fontSize: 14, lineHeight: 1.6 }}>{s.desc}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Before / after ----------
+function BeforeAfter({ data }) {
+  const card = (url, label) => (
+    <div style={{
+      position: 'relative', aspectRatio: '4/5',
+      borderRadius: 'var(--site-radius)', overflow: 'hidden',
+      background: url ? `center/cover no-repeat url("${url}")` : 'var(--site-surface)',
+      border: '1px solid var(--site-border)',
+    }}>
+      <div style={{
+        position: 'absolute', top: 12, left: 12,
+        padding: '4px 10px', borderRadius: 99,
+        background: 'rgba(0,0,0,0.7)', color: '#fff', fontSize: 11,
+        letterSpacing: '0.06em', textTransform: 'uppercase', fontWeight: 600,
+      }}>{label}</div>
+    </div>
+  );
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={container}>
+        {(data.headline || data.sub) && <Heading text={data.headline} sub={data.sub}/>}
+        <div style={{ marginTop: data.headline ? 32 : 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+          {card(data.beforeUrl, data.beforeLabel || 'Before')}
+          {card(data.afterUrl,  data.afterLabel  || 'After')}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Social feed (generic embed) ----------
+function SocialFeed({ data }) {
+  return (
+    <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
+      <div style={{ ...container, maxWidth: 720, textAlign: 'center' }}>
+        {(data.headline || data.sub) && <Heading text={data.headline} sub={data.sub}/>}
+        <div style={{ marginTop: data.headline ? 28 : 0 }}>
+          {data.url ? (
+            <a href={data.url} target="_blank" rel="noreferrer" style={{
+              display: 'inline-flex', alignItems: 'center', gap: 10,
+              padding: '14px 24px',
+              background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
+              borderRadius: 'var(--site-radius)', textDecoration: 'none', fontWeight: 600,
+            }}>
+              View on {data.platform || 'social'} →
+            </a>
+          ) : (
+            <div style={{ fontSize: 13, color: 'var(--site-muted)' }}>
+              Paste a {data.platform || 'social'} URL in the Inspector.
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+// ---------- Custom HTML (sandboxed iframe) ----------
+function CustomHtml({ data }) {
+  const html = String(data.html || '');
+  const height = Math.max(80, Math.min(2000, Number(data.height) || 280));
+  return (
+    <section style={{ background: 'var(--site-bg)' }}>
+      <iframe
+        title="Custom embed"
+        srcDoc={`<!doctype html><html><body style="margin:0">${html}</body></html>`}
+        sandbox=""
+        style={{ width: '100%', height, border: 0, display: 'block' }}
+      />
+    </section>
+  );
+}
+
 const RENDERERS = {
   hero: Hero,
   services: Services,
@@ -1136,4 +1364,12 @@ const RENDERERS = {
   blog: Blog,
   instagram: Instagram,
   code_snippet: CodeSnippet,
+  countdown:    Countdown,
+  hours:        Hours,
+  map:          Map,
+  accordion:    Accordion,
+  process:      Process,
+  before_after: BeforeAfter,
+  social_feed:  SocialFeed,
+  custom_html:  CustomHtml,
 };

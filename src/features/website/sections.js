@@ -24,6 +24,8 @@ export const SECTION_TYPES = {
       { id: 'left',        label: 'Left aligned' },
       { id: 'split_image', label: 'Split with image' },
       { id: 'image_bg',    label: 'Image background' },
+      { id: 'video_bg',    label: 'Video background' },
+      { id: 'centered_image_below', label: 'Centered with image below' },
     ],
     default: (biz) => ({
       headline: biz ? `Welcome to ${biz}` : 'Your headline here',
@@ -31,7 +33,8 @@ export const SECTION_TYPES = {
       cta: 'Book a session',
       ctaLink: '',
       align: 'center',
-      imgUrl: '',  // used by split_image + image_bg variants
+      imgUrl: '',     // split_image, image_bg, centered_image_below
+      videoUrl: '',   // video_bg variant — looping muted MP4 background
     }),
   },
   services: {
@@ -43,6 +46,7 @@ export const SECTION_TYPES = {
       { id: 'grid', label: 'Grid (3-up)' },
       { id: 'list', label: 'List (stacked)' },
       { id: 'cards_image', label: 'Cards with image' },
+      { id: 'featured_one', label: 'Featured (1 large + 2 small)' },
     ],
     default: () => ({
       headline: 'What I Offer',
@@ -81,6 +85,11 @@ export const SECTION_TYPES = {
     icon: 'Heart',
     desc: 'Client testimonials',
     category: 'social_proof',
+    variants: [
+      { id: 'grid',         label: 'Grid (2–3 cards)' },
+      { id: 'single_large', label: 'Single large quote' },
+      { id: 'wall',         label: 'Wall (4+)' },
+    ],
     default: () => ({
       headline: 'What Clients Say',
       items: [
@@ -107,6 +116,11 @@ export const SECTION_TYPES = {
     icon: 'Image',
     desc: 'Photo grid',
     category: 'embed',
+    variants: [
+      { id: 'grid',     label: 'Grid (uniform)' },
+      { id: 'masonry',  label: 'Masonry (variable heights)' },
+      { id: 'carousel', label: 'Carousel (swipe)' },
+    ],
     default: () => ({
       headline: 'Gallery',
       photos: [],
@@ -284,6 +298,116 @@ export const SECTION_TYPES = {
       code: '// paste code here',
     }),
   },
+  countdown: {
+    label: 'Countdown',
+    icon: 'Calendar',
+    desc: 'Live counter to a launch / event / deadline',
+    category: 'cta',
+    default: () => ({
+      headline: 'Launching soon',
+      sub: '',
+      // Default: 14 days out from now. Owner overrides in the inspector.
+      endDate: new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(),
+      cta: 'Get notified',
+      ctaLink: '',
+    }),
+  },
+  hours: {
+    label: 'Hours of operation',
+    icon: 'Calendar',
+    desc: 'Brick-and-mortar opening hours table',
+    category: 'content',
+    default: () => ({
+      headline: 'Hours',
+      timezone: '',
+      days: [
+        { id: 'd1', label: 'Mon', hours: '9 – 5' },
+        { id: 'd2', label: 'Tue', hours: '9 – 5' },
+        { id: 'd3', label: 'Wed', hours: '9 – 5' },
+        { id: 'd4', label: 'Thu', hours: '9 – 5' },
+        { id: 'd5', label: 'Fri', hours: '9 – 5' },
+        { id: 'd6', label: 'Sat', hours: 'Closed' },
+        { id: 'd7', label: 'Sun', hours: 'Closed' },
+      ],
+    }),
+  },
+  map: {
+    label: 'Map',
+    icon: 'Globe',
+    desc: 'Embedded OpenStreetMap of your location (no API key needed)',
+    category: 'content',
+    default: () => ({
+      headline: 'Find us',
+      address: '',
+      // Default to NYC; owner sets lat/lng + zoom via the inspector.
+      lat: 40.7128, lng: -74.006, zoom: 14,
+    }),
+  },
+  accordion: {
+    label: 'Accordion',
+    icon: 'Chat',
+    desc: 'Collapsible Q&A — the FAQ variant for long lists',
+    category: 'content',
+    default: () => ({
+      headline: 'Frequently asked',
+      items: [
+        { id: 'a1', q: 'How long is a typical engagement?', a: '8–12 weeks. We start with a 1-week scoping sprint then settle into a weekly cadence.' },
+        { id: 'a2', q: 'Do you offer payment plans?',       a: 'Yes — split into two or three payments at no extra cost.' },
+        { id: 'a3', q: 'What if I need to pause?',          a: 'You can pause anytime with 1 week notice; we hold your slot for up to 60 days.' },
+      ],
+    }),
+  },
+  process: {
+    label: 'Process / How it works',
+    icon: 'Trending',
+    desc: 'Numbered steps explaining how you work',
+    category: 'content',
+    default: () => ({
+      headline: 'How it works',
+      sub: '',
+      steps: [
+        { id: 'p1', number: '01', title: 'Discovery call', desc: 'A free 20-minute call to see if we are a good fit.' },
+        { id: 'p2', number: '02', title: 'Plan + proposal', desc: 'I send a written plan with timeline + pricing.' },
+        { id: 'p3', number: '03', title: 'We work together', desc: 'Weekly sessions + async support over Slack or email.' },
+      ],
+    }),
+  },
+  before_after: {
+    label: 'Before / after',
+    icon: 'Image',
+    desc: 'Side-by-side comparison images',
+    category: 'social_proof',
+    default: () => ({
+      headline: 'Before & after',
+      sub: '',
+      beforeUrl: '',
+      afterUrl: '',
+      beforeLabel: 'Before',
+      afterLabel: 'After',
+    }),
+  },
+  social_feed: {
+    label: 'Social feed',
+    icon: 'Globe',
+    desc: 'Generic embed: TikTok, Twitter, LinkedIn, YouTube',
+    category: 'embed',
+    default: () => ({
+      headline: 'Latest',
+      sub: '',
+      platform: 'tiktok',
+      url: '',
+    }),
+  },
+  custom_html: {
+    label: 'Custom HTML',
+    icon: 'Doc',
+    desc: 'Power-user escape hatch — embeds owner-supplied HTML (sandboxed)',
+    category: 'embed',
+    default: () => ({
+      html: '<div style="padding:48px;text-align:center;font-family:sans-serif">Paste any HTML here. Renders inside a sandboxed iframe.</div>',
+      height: 280,
+    }),
+  },
 };
 
 export const SECTION_LIST = Object.entries(SECTION_TYPES).map(([type, cfg]) => ({ type, ...cfg }));
@@ -321,6 +445,8 @@ export const ANIMATIONS = {
 // Font-pair presets — owners can override the template's defaults.
 // Each preset names the display + body fonts; the renderer maps them
 // into the --site-font-display / --site-font-body CSS variables.
+// All presets pull from Google Fonts; the public renderer injects the
+// CSS @import for the chosen pair (added via siteHtml.js).
 export const FONT_PAIRS = {
   fraunces_inter:     { label: 'Fraunces + Inter (classic serif + clean sans)',  display: "'Fraunces', Georgia, serif",        body: "'Inter', -apple-system, sans-serif" },
   space_inter:        { label: 'Space Grotesk + Inter (modern editorial)',       display: "'Space Grotesk', 'Inter', sans-serif", body: "'Inter', sans-serif" },
@@ -328,6 +454,15 @@ export const FONT_PAIRS = {
   inter_inter:        { label: 'Inter only (utilitarian)',                       display: "'Inter', sans-serif",               body: "'Inter', sans-serif" },
   playfair_lato:      { label: 'Playfair Display + Lato (luxury feel)',          display: "'Playfair Display', Georgia, serif", body: "'Lato', -apple-system, sans-serif" },
   dm_serif_dm_sans:   { label: 'DM Serif + DM Sans (matched display + sans)',    display: "'DM Serif Display', Georgia, serif", body: "'DM Sans', -apple-system, sans-serif" },
+  bodoni_montserrat:  { label: 'Bodoni Moda + Montserrat (high-fashion)',        display: "'Bodoni Moda', Georgia, serif",      body: "'Montserrat', -apple-system, sans-serif" },
+  cormorant_open:     { label: 'Cormorant Garamond + Open Sans (refined)',       display: "'Cormorant Garamond', Georgia, serif", body: "'Open Sans', -apple-system, sans-serif" },
+  archivo_archivo:    { label: 'Archivo Black + Archivo (modern brutalist)',     display: "'Archivo Black', Helvetica, sans-serif", body: "'Archivo', -apple-system, sans-serif" },
+  abril_lato:         { label: 'Abril Fatface + Lato (editorial display)',       display: "'Abril Fatface', Georgia, serif",    body: "'Lato', -apple-system, sans-serif" },
+  ibm_ibm:            { label: 'IBM Plex Mono + IBM Plex Sans (technical)',      display: "'IBM Plex Mono', ui-monospace, monospace", body: "'IBM Plex Sans', -apple-system, sans-serif" },
+  oswald_lora:        { label: 'Oswald + Lora (bold poster + warm read)',        display: "'Oswald', Impact, sans-serif",       body: "'Lora', Georgia, serif" },
+  spectral_jost:      { label: 'Spectral + Jost (modern editorial v2)',          display: "'Spectral', Georgia, serif",         body: "'Jost', -apple-system, sans-serif" },
+  marcellus_nunito:   { label: 'Marcellus + Nunito (boutique gallery)',          display: "'Marcellus', Georgia, serif",        body: "'Nunito', -apple-system, sans-serif" },
+  bebas_inter:        { label: 'Bebas Neue + Inter (sportswear poster)',         display: "'Bebas Neue', Impact, sans-serif",   body: "'Inter', -apple-system, sans-serif" },
 };
 
 // Style densities for the per-section padding control. Editor exposes

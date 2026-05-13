@@ -111,16 +111,51 @@ function PageSeoPanel({ page, onChange }) {
 }
 
 function AnimationPicker({ animate, onChange }) {
+  // `animate` is either null/'' or a string for the legacy shape, or
+  // { type, delayMs, durationMs } for the new fine-grained form. We
+  // normalize to the object form for the editor UI.
+  const cur = typeof animate === 'object' && animate
+    ? animate
+    : { type: animate || '', delayMs: 0, durationMs: 700 };
+  const commit = (patch) => {
+    const next = { ...cur, ...patch };
+    if (!next.type) { onChange(null); return; }
+    // Keep simple strings simple — only upgrade to the object shape if
+    // delay/duration are non-default. Saves bytes on the wire.
+    if ((!next.delayMs || next.delayMs === 0) && (!next.durationMs || next.durationMs === 700)) {
+      onChange(next.type);
+    } else {
+      onChange({ type: next.type, delayMs: Number(next.delayMs) || 0, durationMs: Number(next.durationMs) || 700 });
+    }
+  };
   return (
-    <FieldBlock label="Entry animation (when this section scrolls into view)">
-      <select value={animate || ''} onChange={(e) => onChange(e.target.value)}
-        style={inputS}>
-        <option value="">None</option>
-        {Object.entries(ANIMATIONS).map(([id, cfg]) => (
-          <option key={id} value={id}>{cfg.label}</option>
-        ))}
-      </select>
-    </FieldBlock>
+    <>
+      <FieldBlock label="Entry animation (when this section scrolls into view)">
+        <select value={cur.type || ''} onChange={(e) => commit({ type: e.target.value })}
+          style={inputS}>
+          <option value="">None</option>
+          {Object.entries(ANIMATIONS).map(([id, cfg]) => (
+            <option key={id} value={id}>{cfg.label}</option>
+          ))}
+        </select>
+      </FieldBlock>
+      {cur.type && (
+        <>
+          <FieldBlock label={`Delay (ms) — ${cur.delayMs || 0}`}>
+            <input type="range" min={0} max={2000} step={50}
+              value={cur.delayMs || 0}
+              onChange={(e) => commit({ delayMs: Number(e.target.value) })}
+              style={{ width: '100%' }}/>
+          </FieldBlock>
+          <FieldBlock label={`Duration (ms) — ${cur.durationMs || 700}`}>
+            <input type="range" min={150} max={2000} step={50}
+              value={cur.durationMs || 700}
+              onChange={(e) => commit({ durationMs: Number(e.target.value) })}
+              style={{ width: '100%' }}/>
+          </FieldBlock>
+        </>
+      )}
+    </>
   );
 }
 
@@ -280,6 +315,41 @@ function StyleControls({ style, updateStyle }) {
             );
           })}
         </div>
+      </FieldBlock>
+      <FieldBlock label="Gradient headline (applied to h1/h2)">
+        <input type="text" value={style.headlineGradient || ''}
+          onChange={(e) => updateStyle({ headlineGradient: e.target.value || undefined })}
+          placeholder="linear-gradient(90deg,#F472B6,#A78BFA)"
+          style={inputS}/>
+        <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+          {['',
+            'linear-gradient(90deg,#F472B6,#A78BFA)',
+            'linear-gradient(90deg,#FB923C,#F43F5E)',
+            'linear-gradient(90deg,#2DD4BF,#3B82F6)',
+            'linear-gradient(90deg,#FACC15,#EAB308)',
+          ].map((g) => (
+            <button key={g || 'none'} type="button"
+              onClick={() => updateStyle({ headlineGradient: g || undefined })}
+              title={g || 'Reset'}
+              style={{
+                width: 36, height: 18, borderRadius: 4,
+                background: g || 'transparent',
+                border: '1px solid var(--border)',
+                cursor: 'pointer',
+              }}/>
+          ))}
+        </div>
+      </FieldBlock>
+      <FieldBlock label="Parallax background (only matters when a background image is set)">
+        <button type="button"
+          onClick={() => updateStyle({ parallax: !style.parallax ? true : undefined })}
+          style={{
+            width: '100%', padding: '7px 10px', fontSize: 12.5, fontWeight: 600,
+            border: '1px solid var(--border)',
+            background: style.parallax ? 'var(--accent)' : 'var(--surface)',
+            color: style.parallax ? 'var(--accent-ink)' : 'var(--fg)',
+            borderRadius: 8, cursor: 'pointer',
+          }}>{style.parallax ? 'Parallax on' : 'Parallax off'}</button>
       </FieldBlock>
     </>
   );
