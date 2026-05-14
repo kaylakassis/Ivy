@@ -203,6 +203,11 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
             <ClientGallery client={client} onSave={safeUpdate}/>
           )}
 
+          {/* Service log — every completion entry across this client's
+              bookings, newest first. Powered by /api/clients/:id/completions
+              which unpacks the per-occurrence JSONB on bookings.completion_log. */}
+          <ServiceLog clientId={client.id}/>
+
           {/* Documents — files attached directly to this client. Per-row
               shape: { url, type, name, uploadedAt }. Trainers stash
               before/after photos here; intake-form scans, consent
@@ -870,6 +875,117 @@ function ClientAttachments({ client, onSave }) {
         )}
       </div>
     </div>
+  );
+}
+
+// ─── Service log ───────────────────────────────────────────────────
+//
+// Lists every completion entry across this client's bookings. Each
+// entry is one completed occurrence; recurring weekly bookings produce
+// one row per completed week. Read-only — edits happen from the
+// calendar's EventDrawer where the booking lives.
+function ServiceLog({ clientId }) {
+  const [entries, setEntries] = useState(null);
+  const [err, setErr] = useState(null);
+  const [expanded, setExpanded] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    api.get('/clients/' + clientId + '/completions')
+      .then((r) => { if (live) setEntries(r.entries || []); })
+      .catch((e) => { if (live) setErr(e.message || 'Failed to load'); });
+    return () => { live = false; };
+  }, [clientId]);
+
+  if (entries === null && !err) return null;
+  const list = entries || [];
+  const visible = expanded ? list : list.slice(0, 5);
+
+  return (
+    <div style={{ marginTop: 22 }}>
+      <Section label={`Service log${list.length ? ` · ${list.length}` : ''}`}/>
+      <div style={{
+        marginTop: 8, padding: 12, borderRadius: 12,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+      }}>
+        {err && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{err}</div>}
+        {!err && list.length === 0 && (
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+            No completed sessions logged yet. Mark a past booking complete in the calendar to start.
+          </div>
+        )}
+        {!err && list.length > 0 && (
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {visible.map((e) => <ServiceLogEntry key={e.bookingId + '-' + e.occurrenceDate} entry={e}/>)}
+          </ul>
+        )}
+        {!err && list.length > 5 && (
+          <button className="btn btn-ghost" style={{ marginTop: 10, fontSize: 12 }}
+            onClick={() => setExpanded((x) => !x)}>
+            {expanded ? 'Show less' : `Show all (${list.length})`}
+          </button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ServiceLogEntry({ entry }) {
+  const date = entry.completedAt ? new Date(entry.completedAt) : null;
+  const occDate = entry.occurrenceDate
+    ? new Date(entry.occurrenceDate + 'T00:00:00').toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+  return (
+    <li style={{
+      padding: '10px 12px', borderRadius: 10,
+      background: 'var(--surface)', border: '1px solid var(--border)',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 6 }}>
+        <div style={{ fontSize: 12.5, fontWeight: 600, color: 'var(--fg)' }}>
+          {entry.serviceName || 'Session'}
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--muted)' }}>{occDate}</div>
+        {entry.staffName && (
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 'auto' }}>by {entry.staffName}</div>
+        )}
+      </div>
+      {entry.notes && (
+        <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 6 }}>
+          {entry.notes}
+        </div>
+      )}
+      {Array.isArray(entry.attachments) && entry.attachments.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {entry.attachments.map((a, i) => {
+            const isImage = (a.mimeType || '').startsWith('image/');
+            return (
+              <a key={a.url + i} href={a.url} target="_blank" rel="noopener noreferrer"
+                style={{ textDecoration: 'none' }}>
+                {isImage ? (
+                  <img src={a.url} alt={a.filename || ''}
+                    style={{ width: 48, height: 48, borderRadius: 6, objectFit: 'cover',
+                      border: '1px solid var(--border)' }}/>
+                ) : (
+                  <div style={{
+                    width: 48, height: 48, borderRadius: 6,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    background: 'var(--surface-2)', border: '1px solid var(--border)',
+                    color: 'var(--muted)',
+                  }}>
+                    <Icons.FileIcon size={16} sw={1.6}/>
+                  </div>
+                )}
+              </a>
+            );
+          })}
+        </div>
+      )}
+      {!entry.visibleToClient && (
+        <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
+          Hidden from client portal.
+        </div>
+      )}
+    </li>
   );
 }
 

@@ -1,13 +1,16 @@
 // Event drawer — for both blocks (editable) and bookings (view + cancel options).
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import { upload } from '@vercel/blob/client';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
-import { minToHM, parseISO, RECURRENCE_OPTIONS } from './utils.js';
+import { minToHM, parseISO, RECURRENCE_OPTIONS, isOccurrencePast } from './utils.js';
 import { api } from '../../lib/api.js';
+import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from '../finance/CollectInPersonModal.jsx';
 
 export default function EventDrawer({
   event, services,
   onSaveBlock, onUpdateBooking, onCancelOccurrence,
+  onCompleteBooking, onEditCompletion, onClearCompletion,
   onDelete, onClose,
 }) {
   if (event.kind === 'booking') {
@@ -17,6 +20,9 @@ export default function EventDrawer({
         services={services}
         onUpdateBooking={onUpdateBooking}
         onCancelOccurrence={onCancelOccurrence}
+        onCompleteBooking={onCompleteBooking}
+        onEditCompletion={onEditCompletion}
+        onClearCompletion={onClearCompletion}
         onCancelSeries={onDelete}
         onClose={onClose}
       />
@@ -25,7 +31,7 @@ export default function EventDrawer({
   return <BlockEdit event={event} onSave={onSaveBlock} onDelete={onDelete} onClose={onClose}/>;
 }
 
-function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onCancelSeries, onClose }) {
+function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onCompleteBooking, onEditCompletion, onClearCompletion, onCancelSeries, onClose }) {
   const svc = services.find((s) => s.id === event.serviceId);
   const isRecurring = !!event.recurrenceRule;
   const masterId = event.recurrenceMasterId || event.id;
@@ -167,6 +173,17 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
 
       {!event.cancelledAt && !event.noShowAt && (
         <BookingExtraActions event={event}/>
+      )}
+
+      {!event.cancelledAt && !event.noShowAt && (
+        <CompletionSection
+          event={event}
+          occurrenceISO={occurrenceISO}
+          masterId={masterId}
+          onComplete={onCompleteBooking}
+          onEdit={onEditCompletion}
+          onClear={onClearCompletion}
+        />
       )}
 
       {/* Cancel actions */}
@@ -406,6 +423,286 @@ function BookingExtraActions({ event }) {
           )}
         </div>
       )}
+    </div>
+  );
+}
+
+// Service-completion log for a single occurrence. Renders one of:
+//   - an auto-prompt banner (booking is past + not yet completed)
+//   - the "Mark complete" button row (always available pre-completion)
+//   - the editable form when the owner clicks in
+//   - a green completion read-card when this occurrence has been logged
+//
+// State storage is per-occurrence — looked up on the booking's
+// `completionLog` map keyed by occurrence ISO date.
+function CompletionSection({ event, occurrenceISO, masterId, onComplete, onEdit, onClear }) {
+  const log = event.completionLog || {};
+  const entry = log[occurrenceISO] || null;
+  const isPast = isOccurrencePast(occurrenceISO, event.endMin);
+  const [mode, setMode] = useState(null); // null | 'form'
+  const [dismissed, setDismissed] = useState(false);
+
+  if (entry) {
+    return <CompletionReadView entry={entry} masterId={masterId} occurrenceISO={occurrenceISO}
+      onEdit={onEdit} onClear={onClear} onOpenForm={() => setMode('form')}
+      editing={mode === 'form'} onCloseForm={() => setMode(null)}/>;
+  }
+
+  if (mode === 'form') {
+    return <CompletionForm masterId={masterId} occurrenceISO={occurrenceISO} initial={null}
+      onSubmit={async (body) => { await onComplete(masterId, occurrenceISO, body); setMode(null); }}
+      onCancel={() => setMode(null)}/>;
+  }
+
+  return (
+    <div style={{ marginTop: 18 }}>
+      {isPast && !dismissed && (
+        <div style={{
+          marginBottom: 10, padding: '10px 12px', borderRadius: 10,
+          background: 'color-mix(in srgb, #d4a017 14%, var(--surface))',
+          border: '1px solid color-mix(in srgb, #d4a017 45%, var(--border))',
+          display: 'flex', alignItems: 'center', gap: 10,
+        }}>
+          <div style={{ flex: 1, fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.45 }}>
+            <b>Did this happen?</b> Log details for your records.
+          </div>
+          <button className="btn btn-ghost" style={{ fontSize: 12, padding: '4px 8px' }}
+            onClick={() => setDismissed(true)}>Dismiss</button>
+        </div>
+      )}
+      <button className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}
+        onClick={() => setMode('form')}>
+        <Icons.Check size={14} sw={2}/> Mark complete
+      </button>
+    </div>
+  );
+}
+
+function CompletionReadView({ entry, masterId, occurrenceISO, onEdit, onClear, onOpenForm, editing, onCloseForm }) {
+  const [busy, setBusy] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
+
+  if (editing) {
+    return <CompletionForm masterId={masterId} occurrenceISO={occurrenceISO} initial={entry}
+      onSubmit={async (body) => { await onEdit(masterId, occurrenceISO, body); onCloseForm(); }}
+      onCancel={onCloseForm}/>;
+  }
+
+  const clear = async () => {
+    setBusy(true);
+    try { await onClear(masterId, occurrenceISO); } finally { setBusy(false); }
+  };
+
+  const visible = entry.visibleToClient !== false;
+  return (
+    <div style={{
+      marginTop: 18, padding: 12, borderRadius: 12,
+      background: 'color-mix(in srgb, var(--ok, #2c8a4a) 9%, var(--surface))',
+      border: '1px solid color-mix(in srgb, var(--ok, #2c8a4a) 38%, var(--border))',
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 8 }}>
+        <div style={{ flex: 1, fontSize: 12, color: 'var(--ok, #2c8a4a)', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          <Icons.Check size={12} sw={2.4}/> Completed
+          <span style={{ fontWeight: 400, color: 'var(--muted)', textTransform: 'none', letterSpacing: 0, marginLeft: 8 }}>
+            {entry.completedAt ? new Date(entry.completedAt).toLocaleString() : ''}
+          </span>
+        </div>
+        <button className="btn btn-ghost" style={{ padding: 4 }} onClick={onOpenForm}
+          title="Edit completion" aria-label="Edit completion">
+          <Icons.Edit size={14}/>
+        </button>
+      </div>
+      {entry.notes && (
+        <div style={{ fontSize: 13, color: 'var(--fg)', lineHeight: 1.55, whiteSpace: 'pre-wrap', marginBottom: 8 }}>
+          {entry.notes}
+        </div>
+      )}
+      {Array.isArray(entry.attachments) && entry.attachments.length > 0 && (
+        <AttachmentGrid attachments={entry.attachments}/>
+      )}
+      {!visible && (
+        <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--muted)' }}>
+          Hidden from client portal.
+        </div>
+      )}
+      <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+        {confirmClear ? (
+          <>
+            <button className="btn btn-ghost" disabled={busy} style={{ flex: 1, justifyContent: 'center' }}
+              onClick={() => setConfirmClear(false)}>Keep it</button>
+            <button className="btn btn-outline" disabled={busy} style={{ flex: 1, justifyContent: 'center', color: 'var(--danger)' }}
+              onClick={clear}>{busy ? 'Clearing…' : 'Yes, un-mark'}</button>
+          </>
+        ) : (
+          <button className="btn btn-ghost" style={{ fontSize: 12, color: 'var(--muted)' }}
+            onClick={() => setConfirmClear(true)}>Un-mark complete</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function CompletionForm({ masterId, occurrenceISO, initial, onSubmit, onCancel }) {
+  const fileRef = useRef(null);
+  const [notes, setNotes] = useState(initial?.notes || '');
+  const [attachments, setAttachments] = useState(Array.isArray(initial?.attachments) ? initial.attachments : []);
+  const [visibleToClient, setVisibleToClient] = useState(initial?.visibleToClient !== false);
+  const [uploading, setUploading] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const addFile = async (file) => {
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setErr('Each file must be under 10 MB'); return; }
+    if (attachments.length >= 20) { setErr('Maximum 20 attachments per completion'); return; }
+    setErr(null); setUploading(true);
+    try {
+      const ext = (file.name.split('.').pop() || 'bin').toLowerCase().slice(0, 5);
+      const blob = await upload(`bookings/${masterId}/completion-${Date.now()}.${ext}`, file, {
+        access: 'public',
+        handleUploadUrl: '/api/calendar/bookings/upload-token',
+        contentType: file.type || 'application/octet-stream',
+      });
+      setAttachments((prev) => [
+        ...prev,
+        {
+          url: blob.url,
+          blobPathname: blob.pathname,
+          mimeType: file.type || 'application/octet-stream',
+          filename: file.name,
+          uploadedAt: new Date().toISOString(),
+        },
+      ]);
+    } catch (e) {
+      setErr(e.message || 'Upload failed');
+    } finally { setUploading(false); }
+  };
+
+  const removeAt = (i) => setAttachments((prev) => prev.filter((_, idx) => idx !== i));
+
+  const submit = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await onSubmit({
+        completionNotes: notes,
+        completionAttachments: attachments,
+        completionVisibleToClient: visibleToClient,
+      });
+    } catch (e) {
+      setErr(e.message || 'Save failed');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <div style={{
+      marginTop: 18, padding: 14, borderRadius: 12,
+      background: 'var(--surface-2)', border: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', gap: 12,
+    }}>
+      <div className="metric-label">Session notes</div>
+      <textarea
+        value={notes}
+        onChange={(e) => setNotes(e.target.value.slice(0, 8000))}
+        placeholder="What you did, what the client reported, follow-up notes…"
+        rows={5}
+        style={{ ...inputSty, resize: 'vertical', minHeight: 110, fontFamily: 'inherit' }}/>
+      <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'right', marginTop: -8 }}>
+        {notes.length} / 8000
+      </div>
+
+      <div>
+        <div className="metric-label" style={{ marginBottom: 6 }}>Photos & files</div>
+        <input ref={fileRef} type="file"
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"
+          onChange={(e) => { addFile(e.target.files?.[0]); e.target.value = ''; }}
+          style={{ display: 'none' }}/>
+        {attachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 8 }}>
+            {attachments.map((a, i) => {
+              const isImage = (a.mimeType || '').startsWith('image/');
+              return (
+                <div key={a.url + i} style={{
+                  position: 'relative', width: 64, height: 64, borderRadius: 8,
+                  background: 'var(--surface)', border: '1px solid var(--border)',
+                  overflow: 'hidden',
+                }}>
+                  {isImage ? (
+                    <img src={a.url} alt={a.filename || ''}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }}/>
+                  ) : (
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      width: '100%', height: '100%', color: 'var(--muted)' }}>
+                      <Icons.FileIcon size={20} sw={1.6}/>
+                    </div>
+                  )}
+                  <button type="button" onClick={() => removeAt(i)}
+                    title="Remove" aria-label="Remove"
+                    style={{
+                      position: 'absolute', top: 2, right: 2,
+                      width: 20, height: 20, borderRadius: '50%', border: 'none',
+                      background: 'rgba(0,0,0,0.6)', color: '#fff', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 0,
+                    }}>
+                    <Icons.X size={11} sw={2.2}/>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        <button type="button" className="btn btn-outline"
+          onClick={() => fileRef.current?.click()} disabled={uploading || attachments.length >= 20}>
+          <Icons.Paperclip size={13}/> {uploading ? 'Uploading…' : 'Add photo or file'}
+        </button>
+      </div>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fg-2)' }}>
+        <input type="checkbox" checked={visibleToClient}
+          onChange={(e) => setVisibleToClient(e.target.checked)}/>
+        Share this entry with the client in their portal
+      </label>
+
+      {err && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{err}</div>}
+
+      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+        <button className="btn btn-ghost" onClick={onCancel} disabled={busy}>Cancel</button>
+        <button className="btn btn-primary" onClick={submit} disabled={busy || uploading}>
+          {busy ? 'Saving…' : (initial ? 'Save changes' : 'Mark complete')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AttachmentGrid({ attachments }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+      {attachments.map((a, i) => {
+        const isImage = (a.mimeType || '').startsWith('image/');
+        return (
+          <a key={a.url + i} href={a.url} target="_blank" rel="noopener noreferrer"
+            style={{ textDecoration: 'none' }}>
+            {isImage ? (
+              <img src={a.url} alt={a.filename || ''}
+                style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover',
+                  border: '1px solid var(--border)' }}/>
+            ) : (
+              <div style={{
+                width: 64, height: 64, borderRadius: 8,
+                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                gap: 4, padding: 4,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                color: 'var(--muted)', fontSize: 9, textAlign: 'center',
+              }}>
+                <Icons.FileIcon size={18} sw={1.6}/>
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 56 }}>
+                  {a.filename || ''}
+                </span>
+              </div>
+            )}
+          </a>
+        );
+      })}
     </div>
   );
 }

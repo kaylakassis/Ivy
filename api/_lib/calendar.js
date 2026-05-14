@@ -148,6 +148,7 @@ export function serializeBooking(row, opts = {}) {
     feeChargedAt:        row.fee_charged_at || null,
     tipAmount:           Number(row.tip_amount || 0),
     tipChargedAt:        row.tip_charged_at || null,
+    completionLog:       redactClient ? {} : (row.completion_log || {}),
   };
 }
 

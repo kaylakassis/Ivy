@@ -176,10 +176,15 @@ export default function ClientBookings() {
 
 function BookingRow({ booking, first, cancellable, reschedulable, reviewable, onCancel, onReschedule, onReview }) {
   const d = new Date(booking.date + 'T00:00:00');
+  const [showCompletion, setShowCompletion] = useState(false);
+  const hasCompletion = !!booking.completionNotes
+    || (Array.isArray(booking.completionAttachments) && booking.completionAttachments.length > 0);
   return (
     <div style={{
-      padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16,
       borderTop: first ? 'none' : '1px solid var(--border)',
+    }}>
+    <div style={{
+      padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16,
     }}>
       <div style={{
         width: 48, height: 52, borderRadius: 10,
@@ -243,6 +248,69 @@ function BookingRow({ booking, first, cancellable, reschedulable, reviewable, on
           Cancel
         </button>
       )}
+      {hasCompletion && (
+        <button onClick={() => setShowCompletion((x) => !x)} className="btn btn-outline"
+          style={{ fontSize: 12, padding: '6px 12px' }}
+          title="View session notes from your provider">
+          <Icons.Doc size={12} sw={1.8}/> {showCompletion ? 'Hide notes' : 'Session notes'}
+        </button>
+      )}
+    </div>
+    {hasCompletion && showCompletion && (
+      <div style={{
+        margin: '0 18px 14px 76px', padding: 12, borderRadius: 10,
+        background: 'color-mix(in srgb, var(--accent-soft) 35%, var(--surface-2))',
+        border: '1px solid var(--border)',
+      }}>
+        <div style={{ fontSize: 11, color: 'var(--accent)', fontWeight: 600,
+          letterSpacing: '0.06em', textTransform: 'uppercase', marginBottom: 8 }}>
+          Notes from your session
+          {booking.completedAt && (
+            <span style={{ marginLeft: 8, color: 'var(--muted)', fontWeight: 400,
+              letterSpacing: 0, textTransform: 'none' }}>
+              · {new Date(booking.completedAt).toLocaleDateString()}
+            </span>
+          )}
+        </div>
+        {booking.completionNotes && (
+          <div style={{ fontSize: 13, color: 'var(--fg)', lineHeight: 1.55,
+            whiteSpace: 'pre-wrap', marginBottom: 8 }}>
+            {booking.completionNotes}
+          </div>
+        )}
+        {Array.isArray(booking.completionAttachments) && booking.completionAttachments.length > 0 && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+            {booking.completionAttachments.map((a, i) => {
+              const isImage = (a.mimeType || '').startsWith('image/');
+              return (
+                <a key={a.url + i} href={a.url} target="_blank" rel="noopener noreferrer"
+                  style={{ textDecoration: 'none' }}>
+                  {isImage ? (
+                    <img src={a.url} alt={a.filename || ''}
+                      style={{ width: 64, height: 64, borderRadius: 8, objectFit: 'cover',
+                        border: '1px solid var(--border)' }}/>
+                  ) : (
+                    <div style={{
+                      width: 64, height: 64, borderRadius: 8,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+                      gap: 4, padding: 4,
+                      background: 'var(--surface)', border: '1px solid var(--border)',
+                      color: 'var(--muted)', fontSize: 9, textAlign: 'center',
+                    }}>
+                      <Icons.FileIcon size={18} sw={1.6}/>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap', maxWidth: 56 }}>
+                        {a.filename || ''}
+                      </span>
+                    </div>
+                  )}
+                </a>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    )}
     </div>
   );
 }

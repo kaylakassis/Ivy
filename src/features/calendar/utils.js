@@ -26,6 +26,15 @@ export function parseISO(s) {
   return new Date(y, m - 1, d);
 }
 
+// True when `<occurrenceISO> + endMin` has already passed. Used to
+// auto-prompt the completion log once a session is over.
+export function isOccurrencePast(occurrenceISO, endMin) {
+  if (!occurrenceISO) return false;
+  const end = parseISO(occurrenceISO);
+  end.setMinutes(end.getMinutes() + Number(endMin || 0));
+  return end.getTime() < Date.now();
+}
+
 export function startOfWeek(d) {
   const r = new Date(d);
   r.setHours(0, 0, 0, 0);

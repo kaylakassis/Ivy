@@ -844,7 +844,39 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS add_on_ids JSONB NOT NULL DEFAULT 
 -- what was actually agreed without re-deriving from possibly-edited
 -- service prices later.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS booking_total NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+-- Per-occurrence service completion log. Owner marks a booking complete
+-- after the session and stashes a freeform note + photos/files. The
+-- entry is visible to the specific client in their portal by default
+-- (per-record toggle via visibleToClient inside each entry).
+--
+-- Keyed by ISO date (YYYY-MM-DD) of the occurrence. For non-recurring
+-- bookings there's one entry under the booking's date column. For
+-- recurring series, each occurrence the owner marks complete adds its
+-- own entry. Mirrors the existing cancelled_occurrences DATE[] pattern
+-- that already handles per-occurrence cancellations on the same row.
+--
+-- Shape per entry:
+--   {
+--     completedAt:        ISO timestamp,
+--     completedByUserId:  UUID,           // who clicked (users.id)
+--     completedByStaffId: UUID | null,    // for display attribution
+--     notes:              string ≤ 8000,
+--     attachments:        [{ url, blobPathname, mimeType, filename, uploadedAt }],
+--     visibleToClient:    boolean
+--   }
+--
+-- NOTE: completion_notes may contain PHI for healthcare verticals;
+-- treat as sensitive in any future export / log redaction pass.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS completion_log JSONB NOT NULL DEFAULT '{}'::jsonb;
+
 CREATE INDEX IF NOT EXISTS idx_bookings_workspace_date ON bookings(workspace_id, date);
+-- Service-history view ("show me every completion for this client")
+-- runs against this partial GIN index; non-completed bookings are
+-- excluded so the index stays tight.
+CREATE INDEX IF NOT EXISTS idx_bookings_completion_log
+  ON bookings USING gin (completion_log)
+  WHERE completion_log <> '{}'::jsonb;
 
 -- Messaging: one thread per (workspace, client). Mode controls whether the
 -- client can reply (two-way) or only receive announcements (one-way / broadcast).

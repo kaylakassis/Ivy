@@ -28,6 +28,7 @@ export default function Calendar() {
     patchSettings, saveAvailability, saveServices,
     addBlock, updateBlock, removeBlock,
     createBooking, updateBooking, cancelBooking, cancelOccurrence,
+    completeBooking, editCompletion, clearCompletion,
   } = useCalendar();
 
   const { isMobile, isTablet } = useViewport();
@@ -467,6 +468,9 @@ export default function Calendar() {
           }}
           onUpdateBooking={updateBooking}
           onCancelOccurrence={cancelOccurrence}
+          onCompleteBooking={completeBooking}
+          onEditCompletion={editCompletion}
+          onClearCompletion={clearCompletion}
           onDelete={async (e) => {
             if (e.kind === 'booking') await cancelBooking(e.recurrenceMasterId || e.id);
             else if (e.id) await removeBlock(e.id);

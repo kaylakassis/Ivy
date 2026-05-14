@@ -24,6 +24,7 @@ export default async function handler(req, res) {
       `SELECT b.id, b.workspace_id, b.client_id, b.service_id,
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
               b.video_room_url, b.location_address, b.tip_amount,
+              b.completion_log,
               s.name AS service_name,
               s.duration_minutes, s.price, s.capacity AS service_capacity,
               s.location_type AS service_location_type,
@@ -50,6 +51,12 @@ export default async function handler(req, res) {
     for (const r of rows) {
       const dateISO = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date;
       const m = byClient.get(r.client_id);
+      // Server-side redaction: only surface the completion entry for
+      // THIS occurrence, and only when visibleToClient is true. Never
+      // trust the client to honor the flag.
+      const completionEntry = (r.completion_log && typeof r.completion_log === 'object')
+        ? r.completion_log[dateISO] : null;
+      const visible = completionEntry && completionEntry.visibleToClient !== false;
       const item = {
         id: r.id,
         date: dateISO,
@@ -73,6 +80,9 @@ export default async function handler(req, res) {
         // — but the slug is already public.
         bizSlug: r.biz_slug || null,
         clientId: r.client_id,
+        completedAt: visible ? completionEntry.completedAt : null,
+        completionNotes: visible ? (completionEntry.notes || '') : null,
+        completionAttachments: visible ? (completionEntry.attachments || []) : [],
       };
       if (r.cancelled_at) cancelled.push(item);
       else if (dateISO >= today) upcoming.push(item);
