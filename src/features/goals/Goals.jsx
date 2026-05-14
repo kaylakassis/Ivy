@@ -194,11 +194,20 @@ function TaskRow({ task, onToggle, onUpdate, onRemove }) {
             onBlur={save} onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); if (e.key === 'Escape') { setDraft(task.title); setEditing(false); } }}
             style={{ ...inputS, flex: 1 }}/>
         ) : (
-          <div onClick={() => !task.done && setEditing(true)}
+          <div
+            onClick={() => !task.done && setEditing(true)}
+            onKeyDown={(e) => {
+              if (task.done) return;
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditing(true); }
+            }}
+            role={task.done ? undefined : 'button'}
+            tabIndex={task.done ? undefined : 0}
+            aria-label={task.done ? undefined : 'Edit task'}
             style={{
               flex: 1, fontSize: 13.5, cursor: task.done ? 'default' : 'text',
               textDecoration: task.done ? 'line-through' : 'none',
               color: task.done ? 'var(--muted)' : 'var(--fg)',
+              outline: 'none',
             }}>
             {task.title}
             {task.completedAuto && <span style={chipS} title="Auto-completed by app activity">auto</span>}
@@ -389,6 +398,13 @@ function GoalCard({ goal, onUpdate, onRemove }) {
         ) : (
           <span className="metric-value"
             onClick={() => isCustom && setEditingProgress(true)}
+            onKeyDown={(e) => {
+              if (!isCustom) return;
+              if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setEditingProgress(true); }
+            }}
+            role={isCustom ? 'button' : undefined}
+            tabIndex={isCustom ? 0 : undefined}
+            aria-label={isCustom ? 'Update progress' : undefined}
             style={{ fontSize: 22, cursor: isCustom ? 'pointer' : 'default' }}
             title={isCustom ? 'Click to update' : ''}>
             {fmt(goal.current)}

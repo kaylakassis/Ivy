@@ -166,6 +166,12 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
             </div>
           </div>
 
+          {/* Portal claim status + resend-invite affordance. Only shows
+              when the client has an email AND hasn't claimed yet. */}
+          {client.email && !client.hasClaimedPortal && (
+            <PortalInviteRow client={client}/>
+          )}
+
           {/* KPIs — lifetime value editable, others read-only */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
             <EditableMoneyStat
@@ -176,6 +182,9 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
             <MiniStat label="Since"     value={client.joinedAt ? new Date(client.joinedAt).toLocaleDateString([], { month: 'short', year: '2-digit' }) : '—'}/>
             <MiniStat label="Last seen" value={client.lastSeenAt ? Math.round((Date.now() - new Date(client.lastSeenAt).getTime()) / 86400e3) + 'd ago' : '—'}/>
           </div>
+
+          {/* Live health metrics — sessions left, due date, monthly $, 30d revenue */}
+          <ClientHealthMetrics clientId={client.id}/>
 
           {/* Tags */}
           <Tags client={client} onSave={safeUpdate}/>
@@ -995,6 +1004,156 @@ function ServiceLogEntry({ entry }) {
 // 4-cell stats grid (show rate, total bookings, no-shows, avg cadence)
 // + a list of every signed document tied to this client. Skipped for
 // fresh leads who have no bookings to roll up.
+// Portal-claim status + resend-invite button. Visible only on the
+// owner-side ClientDrawer when the client has an email but hasn't
+// finished claiming their THRYVE portal account. One-click resend
+// hits /api/clients/:id/resend-invite which bypasses the
+// idempotency guard on the normal invite path.
+function PortalInviteRow({ client }) {
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const lastSent = client.inviteSentAt
+    ? new Date(client.inviteSentAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
+    : null;
+
+  const resend = async () => {
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api.post('/clients/' + client.id + '/resend-invite');
+      setMsg(r.sent
+        ? 'Invite sent.'
+        : (r.reason === 'muted'
+            ? 'Client has opted out of these emails — they won\'t receive it.'
+            : 'Could not send the invite.'));
+    } catch (e) {
+      setMsg(e.message || 'Could not send the invite');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div style={{
+      padding: '10px 12px', borderRadius: 10,
+      background: 'var(--surface-2)', border: '1px solid var(--border)',
+      display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap',
+    }}>
+      <div style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+        <strong style={{ color: 'var(--fg)' }}>Portal not claimed yet.</strong>{' '}
+        {lastSent ? `Last invited ${lastSent}.` : 'No invite sent.'}
+      </div>
+      <button
+        type="button"
+        className="btn btn-outline"
+        onClick={resend}
+        disabled={busy}
+        style={{ fontSize: 12, padding: '6px 10px' }}>
+        <Icons.Mail size={12}/> {busy ? 'Sending…' : 'Resend invite'}
+      </button>
+      {msg && (
+        <div style={{ width: '100%', fontSize: 11.5, color: 'var(--muted)' }}>{msg}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── Live health metrics block ─────────────────────────────────────
+//
+// Surfaces the four data points the owner needs to make decisions
+// about the client right now: sessions left, monthly payment they're
+// on the hook for, next payment due date, and trailing-30-day revenue.
+// Loaded async on drawer-open so opening a drawer never blocks on
+// these queries.
+function ClientHealthMetrics({ clientId }) {
+  const [metrics, setMetrics] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    let live = true;
+    api.get('/clients/metrics?id=' + clientId)
+      .then((r) => { if (live) setMetrics(r.metrics || {}); })
+      .catch((e) => { if (live) setErr(e.message || 'Failed to load'); });
+    return () => { live = false; };
+  }, [clientId]);
+
+  if (err) return null;
+  if (!metrics) return null;
+  const hasAny = metrics.sessionsLeft > 0 || metrics.packagesExhausted > 0
+    || metrics.monthlyPaymentCents > 0 || metrics.dueDate || metrics.revenue30dCents > 0;
+  if (!hasAny) return null;
+
+  const dueDate = metrics.dueDate ? new Date(metrics.dueDate) : null;
+  const dueDays = dueDate ? Math.ceil((dueDate - Date.now()) / 86400e3) : null;
+  const dueTone = dueDays == null ? 'default' : dueDays < 0 ? 'danger' : dueDays <= 3 ? 'warn' : 'default';
+
+  return (
+    <div style={{ marginTop: 14 }}>
+      <Section label="Health"/>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10, marginTop: 6 }}>
+        {(metrics.sessionsLeft > 0 || metrics.packagesExhausted > 0) && (
+          <HealthStat
+            label="Sessions left"
+            value={metrics.sessionsLeft > 0 ? String(metrics.sessionsLeft) : '0'}
+            tone={metrics.sessionsLeft === 0 ? 'danger' : metrics.sessionsLeft <= 1 ? 'warn' : 'default'}
+            hint={metrics.sessionsLeft === 0
+              ? 'Active package exhausted — time to offer a renewal'
+              : metrics.sessionsLeft <= 1 ? 'Almost out — good moment to upsell' : null}
+          />
+        )}
+        {metrics.monthlyPaymentCents > 0 && (
+          <HealthStat
+            label="Monthly"
+            value={'$' + (metrics.monthlyPaymentCents / 100).toFixed(2)}
+            tone="default"
+            hint="From active memberships"
+          />
+        )}
+        {dueDate && (
+          <HealthStat
+            label="Next due"
+            value={dueDate.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+            tone={dueTone}
+            hint={metrics.dueDateKind === 'invoice'
+              ? (dueDays < 0 ? `Invoice ${Math.abs(dueDays)} day${Math.abs(dueDays) === 1 ? '' : 's'} overdue` : 'Earliest unpaid invoice')
+              : 'Next subscription charge'}
+          />
+        )}
+        {metrics.revenue30dCents > 0 && (
+          <HealthStat
+            label="Last 30 days"
+            value={'$' + (metrics.revenue30dCents / 100).toFixed(2)}
+            tone="default"
+            hint="Revenue from this client"
+          />
+        )}
+      </div>
+    </div>
+  );
+}
+
+function HealthStat({ label, value, tone, hint }) {
+  const tones = {
+    default: { bg: 'var(--surface-2)', border: 'var(--border)',         fg: 'var(--fg)' },
+    warn:    { bg: 'rgba(220,180,50,0.08)', border: 'rgba(220,180,50,0.4)', fg: '#a78a1f' },
+    danger:  { bg: 'rgba(155,44,44,0.08)',  border: 'rgba(155,44,44,0.4)',  fg: 'var(--danger)' },
+  };
+  const t = tones[tone] || tones.default;
+  return (
+    <div style={{
+      padding: '10px 12px', borderRadius: 10,
+      background: t.bg, border: '1px solid ' + t.border,
+    }}>
+      <div style={{ fontSize: 10.5, color: 'var(--muted)', letterSpacing: '0.06em',
+        textTransform: 'uppercase', fontWeight: 600 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 600, marginTop: 4, color: t.fg, fontFamily: 'var(--font-display)' }}>
+        {value}
+      </div>
+      {hint && (
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, lineHeight: 1.4 }}>{hint}</div>
+      )}
+    </div>
+  );
+}
+
 function ClientAnalyticsBlock({ client, windowDays }) {
   const [data, setData] = useState(null);
   const [err, setErr] = useState(null);

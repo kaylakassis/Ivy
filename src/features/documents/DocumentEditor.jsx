@@ -22,7 +22,7 @@ const FIELD_TYPES = [
   { id: 'text',      label: 'Text response', icon: 'Doc'      },
 ];
 
-export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onUploadPdf }) {
+export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf }) {
   const { ctx } = useUserContext();
   const businessName = ctx?.bizName || null;
 
@@ -315,9 +315,21 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
                 </>
               )}
               {doc.status === 'sent' && (
-                <button className="btn btn-outline" onClick={onSend}>
-                  <Icons.Mail size={13}/> Resend / change recipient
-                </button>
+                <>
+                  {/* One-click resend to the current pending signer.
+                      No recipient picker — uses the already-stored
+                      target. The Resend endpoint mints a fresh sign
+                      link so older emails stop working. */}
+                  {onResend && (
+                    <button className="btn btn-primary" onClick={onResend}
+                      title="Re-email the current signer with a fresh link">
+                      <Icons.Mail size={13}/> Resend reminder
+                    </button>
+                  )}
+                  <button className="btn btn-outline" onClick={onSend}>
+                    <Icons.Mail size={13}/> Change recipient
+                  </button>
+                </>
               )}
             </>
           )}

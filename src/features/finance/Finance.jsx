@@ -27,7 +27,7 @@ const STATUS_META = {
 export default function Finance() {
   const {
     invoices, summary, loading, error,
-    create, update, remove, send, markPaid, void: voidInvoice, refund,
+    create, update, remove, send, resend, markPaid, void: voidInvoice, refund,
   } = useInvoices();
 
   const [tab, setTab]               = useState('all');
@@ -345,6 +345,7 @@ function InvoicesSection({
           onSave={(patch) => update(openInv.id, patch)}
           onDelete={async () => { await remove(openInv.id); setOpenId(null); }}
           onSend={() => setSending(openInv.id)}
+          onResend={async () => { await resend(openInv.id); }}
           onMarkPaid={(method) => markPaid(openInv.id, method)}
           onVoid={() => voidInvoice(openInv.id)}
           onRefund={(args) => refund(openInv.id, args)}

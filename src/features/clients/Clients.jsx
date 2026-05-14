@@ -9,6 +9,7 @@ import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
+import { api } from '../../lib/api.js';
 
 const DAY = 86400e3;
 
@@ -34,6 +35,18 @@ export default function Clients() {
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const { isMobile } = useViewport();
+
+  // Bulk metrics keyed by clientId: sessions left, due date, monthly $,
+  // 30-day revenue. One round-trip on mount + on `clients` length change
+  // (so newly-added clients pick up zero-state metrics immediately).
+  const [metricsById, setMetricsById] = useState({});
+  useEffect(() => {
+    let live = true;
+    api.get('/clients/metrics?all=1')
+      .then((r) => { if (live) setMetricsById(r.metrics || {}); })
+      .catch((e) => console.warn('[Clients] metrics fetch failed:', e.message));
+    return () => { live = false; };
+  }, [clients.length]);
 
   // Deep-link support so other pages can route here with a modal opened.
   // Used by Dashboard hero "Add client" and per-client quick actions.
@@ -191,12 +204,12 @@ export default function Clients() {
       <div className="card" style={{ overflow: 'hidden' }}>
         {!isMobile && (
           <div style={{
-            display: 'grid', gridTemplateColumns: '1.6fr 110px 120px 140px 140px 40px',
+            display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 130px 40px',
             padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
             fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
-            background: 'var(--surface-2)',
+            background: 'var(--surface-2)', gap: 8,
           }}>
-            <div>Client</div><div>Stage</div><div>Since</div><div>Last seen</div>
+            <div>Client</div><div>Stage</div><div>Health</div><div>Last seen</div>
             <div style={{ textAlign: 'right' }}>Lifetime</div><div/>
           </div>
         )}
@@ -215,11 +228,13 @@ export default function Clients() {
         ) : rows.map((c, i) => (
           isMobile ? (
             <ClientCardMobile key={c.id} client={c} first={i === 0}
+              metrics={metricsById[c.id]}
               onOpen={() => setOpenId(c.id)}
               onStage={(st) => setStage(c.id, st)}
               onDelete={() => remove(c.id)}/>
           ) : (
             <ClientRow key={c.id} client={c} first={i === 0}
+              metrics={metricsById[c.id]}
               onOpen={() => setOpenId(c.id)}
               onStage={(st) => setStage(c.id, st)}
               onDelete={() => remove(c.id)}/>
@@ -247,15 +262,14 @@ export default function Clients() {
   );
 }
 
-function ClientRow({ client, first, onOpen, onStage, onDelete }) {
+function ClientRow({ client, first, metrics, onOpen, onStage, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
-  const since    = timeAgo(client.joinedAt);
   const lastSeen = timeAgo(client.lastSeenAt);
 
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1.6fr 110px 120px 140px 140px 40px',
-      padding: '14px 20px', alignItems: 'center',
+      display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 130px 40px',
+      padding: '14px 20px', alignItems: 'center', gap: 8,
       borderTop: first ? 'none' : '1px solid var(--border)',
       cursor: 'pointer', transition: 'background .1s',
     }}
@@ -280,7 +294,7 @@ function ClientRow({ client, first, onOpen, onStage, onDelete }) {
         </div>
       </div>
       <div><StageChip stage={client.stage}/></div>
-      <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{since || '—'}</div>
+      <ClientMetricsChips metrics={metrics}/>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{lastSeen || '—'}</div>
       <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }} className="mono-num">
         {client.lifetimeValue > 0 ? '$' + client.lifetimeValue.toLocaleString() : '—'}
@@ -292,10 +306,88 @@ function ClientRow({ client, first, onOpen, onStage, onDelete }) {
   );
 }
 
+// Compact chip strip showing the most actionable health signals for a
+// client at a glance. Each chip only renders when the underlying value
+// is non-zero / present, so silent clients show a clean row.
+//
+// Order is deliberate:
+//   1. sessions left   — most actionable; owners decide who to upsell
+//   2. monthly payment — recurring revenue context
+//   3. due date        — what needs collecting / billing next
+//   4. 30d revenue     — momentum
+function ClientMetricsChips({ metrics }) {
+  if (!metrics) return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>—</div>;
+  const chips = [];
+  if (metrics.sessionsLeft > 0) {
+    chips.push({
+      key: 'sessions',
+      label: `${metrics.sessionsLeft} session${metrics.sessionsLeft === 1 ? '' : 's'} left`,
+      tone: metrics.sessionsLeft <= 1 ? 'warn' : 'default',
+      title: metrics.sessionsLeft <= 1 ? 'Running low — good time to offer a renewal' : null,
+    });
+  } else if (metrics.packagesExhausted > 0) {
+    chips.push({ key: 'sessions', label: 'Out of sessions', tone: 'warn',
+      title: 'Active package is exhausted — offer a renewal' });
+  }
+  if (metrics.monthlyPaymentCents > 0) {
+    chips.push({
+      key: 'monthly',
+      label: '$' + (metrics.monthlyPaymentCents / 100).toFixed(0) + '/mo',
+      tone: 'default',
+    });
+  }
+  if (metrics.dueDate) {
+    const d = new Date(metrics.dueDate);
+    const days = Math.ceil((d - Date.now()) / 86400e3);
+    const fmt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    let tone = 'default';
+    if (days < 0) tone = 'danger';
+    else if (days <= 3) tone = 'warn';
+    chips.push({
+      key: 'due',
+      label: `Due ${fmt}`,
+      tone,
+      title: metrics.dueDateKind === 'invoice'
+        ? `Unpaid invoice due ${fmt}` : `Next billing on ${fmt}`,
+    });
+  }
+  if (metrics.revenue30dCents > 0) {
+    chips.push({
+      key: 'rev30',
+      label: '$' + (metrics.revenue30dCents / 100).toFixed(0) + ' / 30d',
+      tone: 'default',
+    });
+  }
+  if (chips.length === 0) {
+    return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>—</div>;
+  }
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minWidth: 0 }}>
+      {chips.map((c) => <MetricChip key={c.key} {...c}/>)}
+    </div>
+  );
+}
+
+function MetricChip({ label, tone, title }) {
+  const tones = {
+    default: { bg: 'var(--surface-2)', fg: 'var(--fg-2)',   bd: 'var(--border)' },
+    warn:    { bg: 'rgba(220,180,50,0.10)', fg: '#a78a1f',   bd: 'rgba(220,180,50,0.45)' },
+    danger:  { bg: 'rgba(155,44,44,0.10)',  fg: 'var(--danger)', bd: 'rgba(155,44,44,0.45)' },
+  };
+  const t = tones[tone] || tones.default;
+  return (
+    <span title={title || undefined} style={{
+      fontSize: 11, fontWeight: 500, padding: '2px 7px', borderRadius: 99,
+      background: t.bg, color: t.fg, border: '1px solid ' + t.bd,
+      whiteSpace: 'nowrap',
+    }}>{label}</span>
+  );
+}
+
 // Mobile variant — same data, stacked vertically. Two visible lines
 // (avatar+name+email, stage chip + last seen + lifetime) so the phone
 // shows enough to triage clients without horizontal scroll.
-function ClientCardMobile({ client, first, onOpen, onStage, onDelete }) {
+function ClientCardMobile({ client, first, metrics, onOpen, onStage, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
   return (
@@ -334,6 +426,11 @@ function ClientCardMobile({ client, first, onOpen, onStage, onDelete }) {
           <StageChip stage={client.stage}/>
           {lastSeen && <span>· Last seen {lastSeen}</span>}
         </div>
+        {metrics && (
+          <div style={{ marginTop: 6 }}>
+            <ClientMetricsChips metrics={metrics}/>
+          </div>
+        )}
       </div>
       <div onClick={(e) => e.stopPropagation()} style={{ color: 'var(--muted)' }}>
         <RowMenu client={client} onStage={onStage} onOpen={onOpen} onDelete={onDelete}/>

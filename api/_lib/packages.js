@@ -55,10 +55,15 @@ export function packageCoversService(cp, serviceId) {
 
 import { sql } from './db.js';
 
-// Atomically decrement a credit. Returns true on success (caller can
-// proceed with the booking insert), false if the package isn't valid
-// for the consumption — caller should refuse the booking or fall back
-// to standard pay-per-session billing.
+// Atomically decrement a credit. Returns:
+//   { ok: true,  exhausted: bool, creditsRemaining: int }  on success
+//   { ok: false }                                          when the
+//     package isn't valid for the consumption — caller should refuse
+//     the booking or fall back to standard pay-per-session billing.
+//
+// `exhausted` is true when this decrement was the one that flipped the
+// status to 'exhausted'. Useful for triggering the "you're out of
+// sessions" notification at exactly the right moment.
 //
 // All gating conditions live in the WHERE clause so two concurrent
 // bookings can't double-spend the last credit. status flips to
@@ -76,9 +81,14 @@ export async function consumeCredit({ workspaceId, clientPackageId, clientId, se
       AND credits_remaining > 0
       AND (expires_at IS NULL OR expires_at > NOW())
       AND (cardinality(service_ids) = 0 OR ${serviceId}::uuid = ANY(service_ids))
-    RETURNING id
+    RETURNING id, credits_remaining, status
   `;
-  return rows.length > 0;
+  if (rows.length === 0) return { ok: false };
+  return {
+    ok: true,
+    exhausted: rows[0].status === 'exhausted',
+    creditsRemaining: rows[0].credits_remaining,
+  };
 }
 
 // Refund a credit when a booking that consumed one is cancelled. Best-

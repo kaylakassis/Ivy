@@ -53,6 +53,16 @@ export function useInvoices() {
     return r.invoice;
   }, [refreshSummary]);
 
+  // Resend an already-sent invoice. Uses the dedicated endpoint so the
+  // recipient sees a "Reminder: ..." subject line and the activity log
+  // records "Resent" rather than another "Sent".
+  const resend = useCallback(async (id) => {
+    const r = await api.post('/invoices/resend', { id });
+    setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
+    await refreshSummary();
+    return r.invoice;
+  }, [refreshSummary]);
+
   const markPaid = useCallback(async (id, method) => {
     const r = await api.post('/invoices/mark-paid', { id, method });
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
@@ -76,6 +86,6 @@ export function useInvoices() {
 
   return {
     invoices, summary, loading, error,
-    create, update, remove, send, markPaid, void: voidInvoice, refund,
+    create, update, remove, send, resend, markPaid, void: voidInvoice, refund,
   };
 }

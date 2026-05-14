@@ -61,6 +61,15 @@ export function useDocuments() {
     return r.document;
   }, []);
 
+  // Resend a pending document to its current awaiting signer. Mints a
+  // fresh sign link (older links stop working) so the recipient always
+  // clicks the most-recent email.
+  const resend = useCallback(async (id) => {
+    const r = await api.post('/documents/resend', { id });
+    setDocuments((ds) => ds.map((d) => d.id === id ? r.document : d));
+    return r.document;
+  }, []);
+
   const voidDoc = useCallback(async (id) => {
     const r = await api.post('/documents/void', { id });
     setDocuments((ds) => ds.map((d) => d.id === id ? r.document : d));
@@ -99,7 +108,7 @@ export function useDocuments() {
     return patched.document;
   }, []);
 
-  return { documents, loading, error, refresh, create, createFromTemplate, update, remove, send, void: voidDoc, uploadPdf };
+  return { documents, loading, error, refresh, create, createFromTemplate, update, remove, send, resend, void: voidDoc, uploadPdf };
 }
 
 // Local-only page counter so we can stamp page_count on the row at

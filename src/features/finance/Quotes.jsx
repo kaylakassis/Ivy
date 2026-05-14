@@ -206,7 +206,11 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
   const sendNow = async () => {
     if (!clientId) { setErr('Pick a client to send to.'); return; }
     await save(async (saved) => {
-      await api.post('/quotes/send', { id: saved.id });
+      // Already-sent quotes use the dedicated resend endpoint so the
+      // recipient sees "Reminder: ..." in the subject and the activity
+      // log records "Resent" rather than another "Sent".
+      const path = quote?.status === 'sent' ? '/quotes/resend' : '/quotes/send';
+      await api.post(path, { id: saved.id });
     });
   };
 

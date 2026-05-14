@@ -11,6 +11,7 @@ import {
   hasConflict, withinAvailability, serializeBooking, VALID_RECURRENCE,
 } from '../_lib/calendar.js';
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
+import { notifyPackageExhausted } from '../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../_lib/googleSync.js';
 import { consumeCredit } from '../_lib/packages.js';
 import { attachIntakeForms } from '../_lib/intake.js';
@@ -97,17 +98,25 @@ export default async function handler(req, res) {
     // fails — easier UX than silently falling back to "pay normally"
     // when the owner explicitly chose a package.
     const clientPackageId = body.clientPackageId ? String(body.clientPackageId) : null;
+    let packageExhaustionEvent = null;
     if (clientPackageId) {
       if (!resolvedClientId) {
         return badRequest(res, 'Package bookings require a client');
       }
-      const ok = await consumeCredit({
+      const consumeResult = await consumeCredit({
         workspaceId,
         clientPackageId,
         clientId: resolvedClientId,
         serviceId,
       });
-      if (!ok) return badRequest(res, 'Package has no credits left, is expired, or doesn\'t cover this service');
+      if (!consumeResult.ok) {
+        return badRequest(res, 'Package has no credits left, is expired, or doesn\'t cover this service');
+      }
+      // Stash the exhaustion signal — fired AFTER the booking row is
+      // inserted so the owner notification reflects the final state.
+      if (consumeResult.exhausted) {
+        packageExhaustionEvent = { clientPackageId, clientId: resolvedClientId };
+      }
     }
 
     // Verify staff (if supplied) belongs to this workspace + is active.
@@ -164,6 +173,11 @@ export default async function handler(req, res) {
     syncOnBookingCreated({ workspaceId, bookingId: insert.rows[0].id });
     // Auto-send any intake forms the service has attached.
     attachIntakeForms({ workspaceId, bookingId: insert.rows[0].id });
+    // Tell the owner the client just used their last session — actionable
+    // moment to offer a renewal. Fire-and-forget; the booking still succeeds.
+    if (packageExhaustionEvent) {
+      notifyPackageExhausted({ workspaceId, ...packageExhaustionEvent });
+    }
     return created(res, { booking: serializeBooking(insert.rows[0]) });
   } catch (err) {
     return serverError(res, err);

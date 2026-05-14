@@ -243,7 +243,7 @@ export default async function handler(req, res) {
         WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
       `;
       notifyOwnerSafe({
-        workspaceId, type: 'finance',
+        workspaceId, type: 'payments',
         payload: { title: 'Invoice paid', body: `${i.number} · $${Number(totals.total).toFixed(2)}`,
           url: `/finance?invoice=${invoiceId}`, tag: `inv-${invoiceId}` },
       });

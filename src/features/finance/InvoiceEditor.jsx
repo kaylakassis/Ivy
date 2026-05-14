@@ -4,7 +4,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from './CollectInPersonModal.jsx';
 
-export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMarkPaid, onVoid, onDelete, onRefund }) {
+export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund }) {
   const [collectOpen, setCollectOpen] = useState(false);
   const isLocked = invoice.status === 'paid' || invoice.status === 'voided' || invoice.status === 'refunded';
   const refundedAmount = Number(invoice.refundedAmount || 0);
@@ -352,7 +352,18 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onMark
                     </button>
                   )}
                   <button className="btn btn-primary" disabled={busy}
-                    onClick={async () => { await save(); onSend(); }}>
+                    onClick={async () => {
+                      await save();
+                      const alreadySent = invoice.status === 'sent' || invoice.status === 'overdue';
+                      // Resend bypasses the "pick a recipient" modal — recipient
+                      // is already locked in on the row. Use the dedicated
+                      // /resend endpoint when onResend is wired through.
+                      if (alreadySent && onResend) {
+                        await onResend();
+                      } else {
+                        onSend();
+                      }
+                    }}>
                     <Icons.Mail size={13}/>
                     {invoice.status === 'sent' || invoice.status === 'overdue' ? 'Resend' : 'Send invoice'}
                   </button>
