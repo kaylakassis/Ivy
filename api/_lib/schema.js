@@ -1104,6 +1104,11 @@ CREATE INDEX IF NOT EXISTS idx_expenses_workspace_date ON expenses(workspace_id,
 CREATE INDEX IF NOT EXISTS idx_expenses_workspace_category ON expenses(workspace_id, category, date DESC);
 -- Tracks the most recent Stripe checkout session per invoice. Webhook lookup
 -- uses this to find the invoice when checkout.session.completed fires.
+-- Snapshot of what was actually paid, captured at payment time.
+-- Distinct from computeTotals(items, tax, discount) which would re-derive
+-- against possibly-edited items later. The Stripe / manual / Square /
+-- PayPal "mark paid" paths all write this; reports + receipts read it.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS paid_amount NUMERIC(12,2);
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_invoices_stripe_session ON invoices(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
 -- Refunds. payment_intent gets captured on checkout.session.completed

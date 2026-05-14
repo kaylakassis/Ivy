@@ -44,6 +44,7 @@ export default async function handler(req, res) {
         status = 'paid',
         paid_at = NOW(),
         paid_method = ${method},
+        paid_amount = ${totals.total},
         view_token_hash = NULL,
         activity = ${JSON.stringify(newActivity)}::jsonb,
         updated_at = NOW()
