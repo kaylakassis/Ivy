@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     const id = body.id ? String(body.id) : null;
     if (!id) return badRequest(res, 'Missing invoice id');
 
-    const inv = await fetchOwnedInvoice(workspaceId, id);
+    const inv = await fetchOwnedInvoice({ id, workspaceId });
     if (!inv) return badRequest(res, 'Invoice not found');
     if (inv.status === 'paid')   return badRequest(res, 'Invoice already paid');
     if (inv.status === 'voided') return badRequest(res, 'Invoice voided — restore first');

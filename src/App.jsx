@@ -43,6 +43,7 @@ const ClientDocuments = lazy(() => import('./features/client/ClientDocuments.jsx
 const ClientBilling   = lazy(() => import('./features/client/ClientBilling.jsx'));
 const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
 const ClientNotifications = lazy(() => import('./features/client/ClientNotifications.jsx'));
+const NotFoundPage    = lazy(() => import('./features/marketing/NotFoundPage.jsx'));
 
 // ── Lazy: secondary auth flows + onboarding ──
 const ForgotPasswordPage = lazy(() => import('./features/auth/ForgotPasswordPage.jsx'));
@@ -248,6 +249,11 @@ export default function App() {
           <Route path="/me/discover"  element={<ClientDiscover />} />
           <Route path="/me/notifications" element={<ClientNotifications />} />
         </Route>
+
+        {/* 404 catch-all. Must be last so it only matches when nothing
+            else does. Without this, mistyped URLs render a blank
+            <Routes/> outlet. */}
+        <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </ErrorBoundary>
     </Suspense>

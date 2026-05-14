@@ -5,8 +5,8 @@
 //   • (Super-admin only) Admin panel: run migrations, test email, etc.
 //
 // Future tabs (billing, team, notifications) will mount alongside.
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
@@ -524,6 +524,18 @@ function NotificationsCard() {
   const [active, setActive] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState(null);
+  const cardRef = useRef(null);
+  const [searchParams] = useSearchParams();
+
+  // Honor /account?tab=notifications (used by email unsubscribe links)
+  // by scrolling the card into view on first paint.
+  useEffect(() => {
+    if (searchParams.get('tab') !== 'notifications') return;
+    const node = cardRef.current;
+    if (!node) return;
+    const t = setTimeout(() => node.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+    return () => clearTimeout(t);
+  }, [searchParams]);
 
   const refresh = async () => {
     if (!pushSupported()) { setSupported(false); return; }
@@ -563,7 +575,7 @@ function NotificationsCard() {
   };
 
   return (
-    <div className="card" style={{ padding: 22 }}>
+    <div ref={cardRef} id="notifications" className="card" style={{ padding: 22, scrollMarginTop: 80 }}>
       <div className="metric-label" style={{ marginBottom: 8 }}>Notifications</div>
       <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Push notifications</h3>
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>

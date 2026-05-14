@@ -197,9 +197,14 @@ function UserBlock({ data, compact }) {
           <NavLink to="/me/notifications" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
             <Icons.Bell size={13}/> Email preferences
           </NavLink>
-          <NavLink to="/account" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
-            <Icons.Settings size={13}/> Account settings
-          </NavLink>
+          {/* /account renders inside the AppShell + RoleRouter, which
+              redirects client-only users back to /me. Only show the
+              link when the user is actually an owner. */}
+          {data?.isOwner && (
+            <NavLink to="/account" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
+              <Icons.Settings size={13}/> Account settings
+            </NavLink>
+          )}
           <button onClick={doSignOut} style={menuBtn}>
             <Icons.Arrow size={13}/> Sign out
           </button>
@@ -352,9 +357,13 @@ function ClientMobileDrawer({ direction, data, onClose }) {
           <NavLink to="/me/notifications" className="nav-item" style={{ padding: '10px 12px' }}>
             <Icons.Bell size={16} sw={1.6}/> Email preferences
           </NavLink>
-          <NavLink to="/account" className="nav-item" style={{ padding: '10px 12px' }}>
-            <Icons.Settings size={16} sw={1.6}/> Account settings
-          </NavLink>
+          {/* /account redirects client-only users via RoleRouter — only
+              expose the link to owners. */}
+          {data?.isOwner && (
+            <NavLink to="/account" className="nav-item" style={{ padding: '10px 12px' }}>
+              <Icons.Settings size={16} sw={1.6}/> Account settings
+            </NavLink>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 10,
             paddingTop: 4, borderTop: '1px solid var(--border)' }}>
             <div style={{
