@@ -632,17 +632,27 @@ function NotificationsCard() {
 // pick which notification types you want to receive. Each toggle PATCHes
 // /api/me/notifications optimistically — server is authoritative on
 // the next page load.
-const PREF_LABELS = {
+const PUSH_LABELS = {
   messages:  { label: 'Messages',  hint: 'New chat messages from clients (or businesses, if you\'re a client).' },
   bookings:  { label: 'Bookings',  hint: 'New bookings on your calendar + reminders before sessions.' },
   documents: { label: 'Documents', hint: 'Documents to sign, signatures completed, overdue reminders.' },
   payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
   support:   { label: 'Support',   hint: 'When THRYVE Support replies to your conversation.' },
 };
+const EMAIL_LABELS = {
+  bookings:  { label: 'Bookings',  hint: 'Confirmations, reminders, cancellations, reschedules.' },
+  invoices:  { label: 'Invoices',  hint: 'Invoices and quotes you receive, plus paid-receipt emails.' },
+  documents: { label: 'Documents', hint: 'Signature requests + reminders when a document is waiting.' },
+  messages:  { label: 'Messages',  hint: 'When the other side of a chat thread replies.' },
+  marketing: { label: 'Reviews & announcements', hint: 'Review prompts after sessions, occasional product updates.' },
+  billing:   { label: 'Subscription billing', hint: 'Renewal reminders + cancellation confirmations. Payment failures always send.' },
+};
 
 function NotificationPrefs() {
-  const [prefs, setPrefs] = useState(null);
-  const [types, setTypes] = useState([]);
+  const [pushPrefs, setPushPrefs] = useState(null);
+  const [emailPrefs, setEmailPrefs] = useState(null);
+  const [pushTypes, setPushTypes] = useState([]);
+  const [emailTypes, setEmailTypes] = useState([]);
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
 
@@ -651,34 +661,45 @@ function NotificationPrefs() {
     api.get('/me/notifications')
       .then((r) => {
         if (cancelled) return;
-        setPrefs(r.prefs || {});
-        setTypes(r.types || []);
+        setPushPrefs(r.pushPrefs || r.prefs || {});
+        setEmailPrefs(r.emailPrefs || {});
+        setPushTypes(r.pushTypes || r.types || []);
+        setEmailTypes(r.emailTypes || []);
       })
       .catch((e) => { if (!cancelled) setErr(e.message); });
     return () => { cancelled = true; };
   }, []);
 
-  const toggle = async (type) => {
-    if (!prefs) return;
-    const next = !prefs[type];
-    // Optimistic
-    setPrefs((p) => ({ ...p, [type]: next }));
-    setBusy(type); setErr(null);
+  const togglePush = async (type) => {
+    if (!pushPrefs) return;
+    const next = !pushPrefs[type];
+    setPushPrefs((p) => ({ ...p, [type]: next }));
+    setBusy(`push-${type}`); setErr(null);
     try {
-      const r = await api.patch('/me/notifications', { prefs: { [type]: next } });
-      setPrefs(r.prefs);
+      const r = await api.patch('/me/notifications', { pushPrefs: { [type]: next } });
+      setPushPrefs(r.pushPrefs || r.prefs);
     } catch (e) {
-      // Revert on failure
-      setPrefs((p) => ({ ...p, [type]: !next }));
+      setPushPrefs((p) => ({ ...p, [type]: !next }));
       setErr(e.message || 'Could not update');
-    } finally {
-      setBusy(null);
-    }
+    } finally { setBusy(null); }
+  };
+
+  const toggleEmail = async (type) => {
+    if (!emailPrefs) return;
+    const next = !emailPrefs[type];
+    setEmailPrefs((p) => ({ ...p, [type]: next }));
+    setBusy(`email-${type}`); setErr(null);
+    try {
+      const r = await api.patch('/me/notifications', { emailPrefs: { [type]: next } });
+      setEmailPrefs(r.emailPrefs);
+    } catch (e) {
+      setEmailPrefs((p) => ({ ...p, [type]: !next }));
+      setErr(e.message || 'Could not update');
+    } finally { setBusy(null); }
   };
 
   return (
     <div style={{ borderTop: '1px solid var(--border)', paddingTop: 14 }}>
-      <div className="metric-label" style={{ marginBottom: 8 }}>What to notify me about</div>
       {err && (
         <div style={{
           padding: '6px 10px', borderRadius: 8, fontSize: 12,
@@ -686,32 +707,69 @@ function NotificationPrefs() {
           border: '1px solid rgba(155,44,44,0.25)', marginBottom: 10,
         }}>{err}</div>
       )}
-      {!prefs && (
+      {!pushPrefs && !emailPrefs && (
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading preferences…</div>
       )}
-      {prefs && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {types.map((t) => {
-            const meta = PREF_LABELS[t] || { label: t, hint: '' };
-            const on = prefs[t] !== false;
-            return (
-              <label key={t} style={{
-                display: 'flex', alignItems: 'flex-start', gap: 12,
-                padding: '10px 12px', borderRadius: 10,
-                background: 'var(--surface-2)', border: '1px solid var(--border)',
-                cursor: busy === t ? 'wait' : 'pointer',
-              }}>
-                <Switch checked={on} disabled={busy === t} onChange={() => toggle(t)}/>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 13, fontWeight: 600 }}>{meta.label}</div>
-                  <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
-                    {meta.hint}
+
+      {pushPrefs && (
+        <>
+          <div className="metric-label" style={{ marginBottom: 8 }}>Push notifications</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 18 }}>
+            {pushTypes.map((t) => {
+              const meta = PUSH_LABELS[t] || { label: t, hint: '' };
+              const on = pushPrefs[t] !== false;
+              const busyKey = `push-${t}`;
+              return (
+                <label key={t} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '10px 12px', borderRadius: 10,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  cursor: busy === busyKey ? 'wait' : 'pointer',
+                }}>
+                  <Switch checked={on} disabled={busy === busyKey} onChange={() => togglePush(t)}/>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{meta.label}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                      {meta.hint}
+                    </div>
                   </div>
-                </div>
-              </label>
-            );
-          })}
-        </div>
+                </label>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {emailPrefs && emailTypes.length > 0 && (
+        <>
+          <div className="metric-label" style={{ marginBottom: 8 }}>Email notifications</div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {emailTypes.map((t) => {
+              const meta = EMAIL_LABELS[t] || { label: t, hint: '' };
+              const on = emailPrefs[t] !== false;
+              const busyKey = `email-${t}`;
+              return (
+                <label key={t} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 12,
+                  padding: '10px 12px', borderRadius: 10,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  cursor: busy === busyKey ? 'wait' : 'pointer',
+                }}>
+                  <Switch checked={on} disabled={busy === busyKey} onChange={() => toggleEmail(t)}/>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600 }}>{meta.label}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+                      {meta.hint}
+                    </div>
+                  </div>
+                </label>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, lineHeight: 1.5 }}>
+            Account-critical emails (sign-up verification, password reset, payment failure, account deletion) always send.
+          </div>
+        </>
       )}
     </div>
   );

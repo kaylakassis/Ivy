@@ -8,7 +8,7 @@
 // after the bookings INSERT succeeds.
 import crypto from 'node:crypto';
 import { sql } from './db.js';
-import { sendEmail, emailShell } from './email.js';
+import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 
@@ -99,7 +99,8 @@ async function cloneAndSend({
 
   const link = `${appUrl()}/sign/${encodeURIComponent(rawToken)}`;
   const branding = await fetchBranding(workspaceId);
-  await sendEmail({
+  await sendEmailToClient({
+    clientId: recipientClientId, type: 'documents',
     to: recipientEmail,
     subject: `Before your appointment — please complete "${template.name}"`,
     replyTo: branding.replyTo,

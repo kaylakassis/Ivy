@@ -9,7 +9,7 @@ import { serializeBooking, VALID_RECURRENCE } from '../../_lib/calendar.js';
 import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
-import { notifyNewBooking } from '../../_lib/bookingNotify.js';
+import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 import { requireSameOrigin } from "../../_lib/security.js";
@@ -45,6 +45,12 @@ export default async function handler(req, res) {
           RETURNING *
         `;
         syncOnBookingUpdated({ workspaceId, bookingId: id });
+        // Fire-and-forget notification — owner is cancelling on behalf
+        // of the recurring series, so source='owner'.
+        notifyBookingCancellation({
+          workspaceId, bookingId: id,
+          occurrenceDate: body.cancelOccurrence, source: 'owner',
+        });
         return ok(res, { booking: serializeBooking(updated.rows[0]) });
       }
 
@@ -110,6 +116,8 @@ export default async function handler(req, res) {
       if (r.rowCount === 0) return notFound(res, 'Booking not found or already cancelled');
       const cancelled = found.rows[0];
       syncOnBookingDeleted({ workspaceId, googleEventId: cancelled.google_event_id });
+      // Fire-and-forget cancellation email/push (owner-initiated).
+      notifyBookingCancellation({ workspaceId, bookingId: id, source: 'owner' });
       // Refund the package credit if this booking consumed one.
       await restoreCredit({ workspaceId, clientPackageId: cancelled.client_package_id });
       // Promote next waitlist entry into a real booking. Best-effort —

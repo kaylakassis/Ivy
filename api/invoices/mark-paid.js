@@ -9,6 +9,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import {
   fetchOwnedInvoice, serializeInvoice, computeTotals, VALID_PAID_METHOD,
 } from '../_lib/finance.js';
+import { notifyInvoicePaid } from '../_lib/invoiceNotify.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
@@ -77,6 +78,11 @@ export default async function handler(req, res) {
       // eslint-disable-next-line no-console
       console.error('[invoices/mark-paid] thread message failed:', msgErr.message);
     }
+
+    // Fire-and-forget receipt email to the client.
+    notifyInvoicePaid({
+      workspaceId, invoiceId: id, totalAmount: totals.total, method,
+    });
 
     return ok(res, { invoice: serializeInvoice(updated.rows[0]) });
   } catch (err) {

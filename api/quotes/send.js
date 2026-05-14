@@ -10,7 +10,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedQuote, serializeQuote } from '../_lib/quotes.js';
 import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
@@ -75,7 +75,8 @@ export default async function handler(req, res) {
     const business = branding.businessName;
 
     try {
-      await sendEmail({
+      await sendEmailToClient({
+        clientId, type: 'invoices',
         to: recipientEmail,
         subject: `Estimate ${q.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
         replyTo: branding.replyTo,

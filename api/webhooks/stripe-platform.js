@@ -24,6 +24,7 @@ import {
 import { computeTotals } from '../_lib/finance.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
+import { notifyInvoicePaid } from '../_lib/invoiceNotify.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
@@ -245,6 +246,11 @@ export default async function handler(req, res) {
         workspaceId, type: 'finance',
         payload: { title: 'Invoice paid', body: `${i.number} · $${Number(totals.total).toFixed(2)}`,
           url: `/finance?invoice=${invoiceId}`, tag: `inv-${invoiceId}` },
+      });
+      // Receipt email to the client. Best-effort; never blocks the
+      // webhook ack so Stripe doesn't retry.
+      notifyInvoicePaid({
+        workspaceId, invoiceId, totalAmount: totals.total, method: 'card',
       });
       return ok(res, { received: true, applied: 'invoice-paid' });
     }

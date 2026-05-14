@@ -12,7 +12,7 @@
 // if the workspace's local timezone differs. We can layer
 // calendar_settings.timezone on top later.
 import { sql } from '../_lib/db.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { sendClientSms } from '../_lib/sms.js';
 import { appUrl } from '../_lib/tokens.js';
@@ -109,6 +109,7 @@ export default async function handler(req, res) {
             const branding = await fetchBranding(r.workspace_id);
             await sendReminder({
               to: r.client_email,
+              clientId: r.client_id,
               clientName: r.client_name,
               serviceName: r.service_name || 'Session',
               businessName: r.biz_name || 'Your business',
@@ -207,7 +208,7 @@ function describeWindow(mins) {
   return `in ${mins} minute${mins === 1 ? '' : 's'}`;
 }
 
-async function sendReminder({ to, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes, branding }) {
+async function sendReminder({ to, clientId, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes, branding }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const when = describeWindow(reminderMinutes);
   const html = emailShell({
@@ -229,7 +230,8 @@ async function sendReminder({ to, clientName, serviceName, businessName, dateISO
     footer: `Reminder sent automatically. If you weren't expecting this email, please reach out to ${escapeHtml(businessName)}.`,
     branding,
   });
-  await sendEmail({
+  return sendEmailToClient({
+    clientId, type: 'bookings',
     to,
     subject: `Reminder: ${serviceName} ${when} — ${fmtDay(dateISO)}`,
     html,

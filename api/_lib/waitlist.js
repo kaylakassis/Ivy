@@ -3,7 +3,7 @@
 //   • Cancellation paths — promote the oldest waiting entry into a real
 //     booking + notify the client they're in
 import { sql } from './db.js';
-import { sendEmail, emailShell } from './email.js';
+import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { appUrl } from './tokens.js';
@@ -140,7 +140,8 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
       ctaUrl: `${appUrl()}/me/bookings`,
       branding,
     });
-    await sendEmail({
+    await sendEmailToClient({
+      clientId: entry.client_id, type: 'bookings',
       to: entry.client_email,
       subject: `You're in — ${serviceName} on ${dateLabel}`,
       html,

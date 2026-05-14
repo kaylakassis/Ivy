@@ -427,6 +427,14 @@ ALTER TABLE clients ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT 
 -- transformation albums, contractors document job-site progress —
 -- the surface is the same across verticals.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS gallery_photos JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Per-(client, workspace) email notification preferences. Same JSONB shape
+-- as users.notification_prefs but keyed by the email-type ids in
+-- EMAIL_NOTIFY_TYPES (api/_lib/notificationPrefs.js). Missing key = enabled.
+-- Clients of multiple businesses naturally get one set of prefs per
+-- membership (the clients table is workspace-scoped). NULL/false explicitly
+-- disables that type for that client; transactional-critical sends
+-- (verification, password reset, account deletion) ignore this.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS notification_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS calendar_settings (
   workspace_id UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,

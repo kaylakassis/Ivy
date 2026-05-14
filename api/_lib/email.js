@@ -14,6 +14,7 @@
 //   3. Set EMAIL_REPLY_TO='support@your-domain.com'.
 //   4. Hit /account → Admin → "Check email-domain status" to confirm
 //      Resend reports the domain as verified.
+import { userAllowsEmail, clientAllowsEmail, clientAllowsEmailByAddress, CRITICAL_EMAIL_TYPES } from './notificationPrefs.js';
 
 const RESEND_URL = 'https://api.resend.com/emails';
 
@@ -328,3 +329,60 @@ function escapeText(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 function escapeAttr(s) { return escapeText(s); }
+
+// ─────────────────────────────────────────────────────────────────────
+// Prefs-aware send wrappers
+// ─────────────────────────────────────────────────────────────────────
+//
+// Most callers should use one of these instead of sendEmail() directly
+// so the recipient's per-type opt-out is honored.
+//
+// `type` must be an EMAIL_NOTIFY_TYPE (bookings, invoices, documents,
+// messages, marketing, billing) OR a CRITICAL_EMAIL_TYPE (verification,
+// password_reset, account_deletion). Critical types bypass prefs.
+//
+// Returns { ok: boolean, sent: boolean, reason?: string } so the caller
+// can tell "didn't fire because muted" apart from "Resend exploded".
+
+// Send a categorized email to a workspace owner (lookup by userId).
+export async function sendEmailToUser({ userId, type, to, subject, html, text, replyTo, headers, timeoutMs }) {
+  if (type && !(await userAllowsEmail(userId, type))) {
+    return { ok: true, sent: false, reason: 'muted' };
+  }
+  try {
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
+    return { ok: true, sent: true, result };
+  } catch (err) {
+    return { ok: false, sent: false, reason: err.message };
+  }
+}
+
+// Send a categorized email to a client (lookup by clients.id). The
+// workspace scoping is baked into clients.id (clients are workspace-
+// scoped), so prefs are naturally per-workspace.
+export async function sendEmailToClient({ clientId, type, to, subject, html, text, replyTo, headers, timeoutMs }) {
+  if (type && !(await clientAllowsEmail(clientId, type))) {
+    return { ok: true, sent: false, reason: 'muted' };
+  }
+  try {
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
+    return { ok: true, sent: true, result };
+  } catch (err) {
+    return { ok: false, sent: false, reason: err.message };
+  }
+}
+
+// Send a categorized email to a (workspace, email) pair when the
+// caller doesn't have a clients.id handy (e.g. public booking flow).
+// Looks up the client by email + workspace; if none exists, sends.
+export async function sendEmailToClientByAddress({ workspaceId, email, type, subject, html, text, replyTo, headers, timeoutMs }) {
+  if (type && !(await clientAllowsEmailByAddress({ email, workspaceId, type }))) {
+    return { ok: true, sent: false, reason: 'muted' };
+  }
+  try {
+    const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, timeoutMs });
+    return { ok: true, sent: true, result };
+  } catch (err) {
+    return { ok: false, sent: false, reason: err.message };
+  }
+}

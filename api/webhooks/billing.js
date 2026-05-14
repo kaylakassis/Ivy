@@ -14,6 +14,10 @@ import { readRawBody } from '../_lib/body.js';
 import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, platformWebhookSecret } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
+import {
+  notifySubscriptionStarted, notifyUpcomingRenewal,
+  notifyPaymentFailed, notifySubscriptionCancelled,
+} from '../_lib/subscriptionNotify.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 // Stripe statuses that count as "this user is paying us". Trialing is
@@ -51,7 +55,11 @@ export default async function handler(req, res) {
       case 'customer.subscription.created':
       case 'customer.subscription.updated':
       case 'customer.subscription.deleted':
-        await onSubscriptionChanged(event.data.object);
+        await onSubscriptionChanged(event.data.object, event.type);
+        break;
+
+      case 'invoice.upcoming':
+        await onInvoiceUpcoming(event.data.object);
         break;
 
       case 'invoice.payment_succeeded':
@@ -103,12 +111,20 @@ async function onCheckoutCompleted(session, secretKey) {
       valueCents: monthlyValueCents(sub),
     }).catch((e) => console.warn('[billing] attribute on checkout failed:', e.message));
   }
+
+  // Fire-and-forget welcome email to the owner.
+  notifySubscriptionStarted({
+    workspaceId,
+    periodEnd,
+    amountCents: sub?.items?.data?.[0]?.price?.unit_amount,
+    currency:    sub?.items?.data?.[0]?.price?.currency || 'usd',
+  });
 }
 
 // Mid-life updates: renewals, plan changes, cancellations. Match by
 // stripe_subscription_id since that's stable across the sub's lifetime.
 // Fall back to metadata.workspace_id when the row hasn't been linked yet.
-async function onSubscriptionChanged(sub) {
+async function onSubscriptionChanged(sub, eventType) {
   const workspaceId = sub.metadata?.workspace_id || null;
   const status = mapStripeStatus(sub.status);
   const periodEnd = sub.current_period_end
@@ -142,6 +158,37 @@ async function onSubscriptionChanged(sub) {
       valueCents: monthlyValueCents(sub),
     }).catch((e) => console.warn('[billing] attribute on sub change failed:', e.message));
   }
+
+  // Cancellation email — fires on customer.subscription.deleted, but
+  // Stripe will also send subscription.updated with status 'canceled'
+  // when cancel_at_period_end fires. Trigger on either signal.
+  if (resolvedWorkspaceId && (eventType === 'customer.subscription.deleted' || status === 'canceled')) {
+    notifySubscriptionCancelled({
+      workspaceId: resolvedWorkspaceId,
+      endsAt: periodEnd,
+    });
+  }
+}
+
+// Stripe fires `invoice.upcoming` ~3 days before the renewal lands.
+// Use it for a heads-up email rather than maintaining a separate cron.
+async function onInvoiceUpcoming(invoice) {
+  const subId = invoice.subscription;
+  if (!subId) return;
+  const { rows } = await sql`
+    SELECT id FROM workspaces WHERE stripe_subscription_id = ${subId} LIMIT 1
+  `;
+  const workspaceId = rows[0]?.id;
+  if (!workspaceId) return;
+  const periodEnd = invoice.next_payment_attempt
+    ? new Date(invoice.next_payment_attempt * 1000)
+    : (invoice.period_end ? new Date(invoice.period_end * 1000) : null);
+  notifyUpcomingRenewal({
+    workspaceId,
+    periodEnd,
+    amountCents: invoice.amount_due,
+    currency: invoice.currency || 'usd',
+  });
 }
 
 // Renewals: invoice.payment_succeeded refreshes period_end and forces
@@ -168,5 +215,15 @@ async function onInvoiceEvent(invoice, type, secretKey) {
       workspaceId: r.rows[0].id,
       valueCents: monthlyValueCents(sub),
     }).catch((e) => console.warn('[billing] attribute on invoice success failed:', e.message));
+  }
+
+  if (type === 'invoice.payment_failed' && r.rows[0]?.id) {
+    notifyPaymentFailed({
+      workspaceId: r.rows[0].id,
+      amountCents: invoice.amount_due,
+      currency: invoice.currency || 'usd',
+      nextAttemptAt: invoice.next_payment_attempt
+        ? new Date(invoice.next_payment_attempt * 1000) : null,
+    });
   }
 }

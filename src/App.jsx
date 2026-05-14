@@ -42,6 +42,7 @@ const ClientInvoices  = lazy(() => import('./features/client/ClientInvoices.jsx'
 const ClientDocuments = lazy(() => import('./features/client/ClientDocuments.jsx'));
 const ClientBilling   = lazy(() => import('./features/client/ClientBilling.jsx'));
 const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
+const ClientNotifications = lazy(() => import('./features/client/ClientNotifications.jsx'));
 
 // ── Lazy: secondary auth flows + onboarding ──
 const ForgotPasswordPage = lazy(() => import('./features/auth/ForgotPasswordPage.jsx'));
@@ -245,6 +246,7 @@ export default function App() {
           <Route path="/me/documents" element={<ClientDocuments />} />
           <Route path="/me/billing"   element={<ClientBilling />} />
           <Route path="/me/discover"  element={<ClientDiscover />} />
+          <Route path="/me/notifications" element={<ClientNotifications />} />
         </Route>
       </Routes>
       </ErrorBoundary>

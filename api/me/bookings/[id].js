@@ -17,7 +17,7 @@ import { serializeBooking, hasConflict, withinAvailability } from '../../_lib/ca
 import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
-import { notifyNewBooking } from '../../_lib/bookingNotify.js';
+import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { chargeOffSession } from '../../_lib/stripe.js';
@@ -92,6 +92,10 @@ export default async function handler(req, res) {
         booking,
       });
       syncOnBookingDeleted({ workspaceId: booking.workspace_id, googleEventId: booking.google_event_id });
+      // Fire-and-forget email/push notification to the owner.
+      notifyBookingCancellation({
+        workspaceId: booking.workspace_id, bookingId: booking.id, source: 'client',
+      });
       // Refund any consumed package credit.
       await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
       // Promote next waitlist entry. Best-effort.
@@ -201,6 +205,16 @@ export default async function handler(req, res) {
         });
         // Push the move into the owner's connected Google Calendar.
         syncOnBookingUpdated({ workspaceId: booking.workspace_id, bookingId: id });
+        // Fire-and-forget reschedule email/push to owner. Client kept
+        // the old slot's date/time before update; capture for the
+        // "Was: ..." line in the email.
+        notifyBookingRescheduled({
+          workspaceId: booking.workspace_id, bookingId: booking.id,
+          oldDateISO:   booking.date instanceof Date ? booking.date.toISOString().slice(0, 10) : booking.date,
+          oldStartMin:  booking.start_min,
+          oldEndMin:    booking.end_min,
+          source: 'client',
+        });
         return ok(res, { booking: serializeBooking(updated.rows[0]) });
       }
 

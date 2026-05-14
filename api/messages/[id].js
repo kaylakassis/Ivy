@@ -10,7 +10,7 @@ import { fetchOwnedThread, serializeThread, serializeMessage } from '../_lib/mes
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { notifyClientSafe } from '../_lib/push.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { appUrl } from '../_lib/tokens.js';
 
@@ -121,7 +121,8 @@ export default async function handler(req, res) {
           const portalUrl = thread.client_user_id
             ? `${appUrl()}/me/messages/${id}`
             : `${appUrl()}/signup?email=${encodeURIComponent(thread.client_email)}`;
-          await sendEmail({
+          await sendEmailToClient({
+            clientId: thread.client_id, type: 'messages',
             to: thread.client_email,
             subject: `New message from ${ownerName}`,
             // Reply-To routes the prospect's email-reply directly to

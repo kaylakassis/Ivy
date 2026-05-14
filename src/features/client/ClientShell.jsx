@@ -194,6 +194,9 @@ function UserBlock({ data, compact }) {
               <Icons.Trending size={13}/> Switch to business view
             </button>
           )}
+          <NavLink to="/me/notifications" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
+            <Icons.Bell size={13}/> Email preferences
+          </NavLink>
           <NavLink to="/account" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
             <Icons.Settings size={13}/> Account settings
           </NavLink>
@@ -346,6 +349,9 @@ function ClientMobileDrawer({ direction, data, onClose }) {
               <Icons.Trending size={16} sw={1.6}/> Switch to business view
             </NavLink>
           )}
+          <NavLink to="/me/notifications" className="nav-item" style={{ padding: '10px 12px' }}>
+            <Icons.Bell size={16} sw={1.6}/> Email preferences
+          </NavLink>
           <NavLink to="/account" className="nav-item" style={{ padding: '10px 12px' }}>
             <Icons.Settings size={16} sw={1.6}/> Account settings
           </NavLink>

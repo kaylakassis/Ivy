@@ -19,6 +19,10 @@ import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
+import { sendEmailToClient, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
+import { appUrl, generateRawToken } from '../_lib/tokens.js';
+import crypto from 'node:crypto';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
@@ -39,7 +43,7 @@ export default async function handler(req, res) {
     const { rows } = await sql.query(
       `SELECT
          d.id, d.workspace_id, d.recipient_client_id, d.recipient_name,
-         d.name, d.sent_at,
+         d.recipient_email, d.name, d.sent_at,
          EXTRACT(DAY FROM NOW() - d.sent_at)::int AS days_outstanding
        FROM documents d
        WHERE d.status = 'sent'
@@ -84,6 +88,38 @@ export default async function handler(req, res) {
           });
         }
 
+        // Email path. Mint a fresh sign link (invalidates any older
+        // link emailed previously; the most recent reminder always
+        // works). Best-effort — failures here don't stop the cron.
+        if (d.recipient_email) {
+          try {
+            const raw = generateRawToken(32);
+            const hash = crypto.createHash('sha256').update(raw).digest('hex');
+            await sql`UPDATE documents SET sign_token_hash = ${hash} WHERE id = ${d.id}`;
+            const branding = await fetchBranding(d.workspace_id);
+            const link = `${appUrl()}/sign/${encodeURIComponent(raw)}`;
+            await sendEmailToClient({
+              clientId: d.recipient_client_id,
+              type: 'documents',
+              to: d.recipient_email,
+              subject: `Reminder: please sign "${d.name}"`,
+              replyTo: branding.replyTo,
+              html: emailShell({
+                heading: 'Document still waiting on you',
+                body: `<p>Hi ${escapeHtml(d.recipient_name || 'there')},</p>
+                  <p>This is a gentle nudge — <strong>${escapeHtml(d.name)}</strong> is still waiting on your signature. It's been ${days} day${days === 1 ? '' : 's'}.</p>
+                  <p>If you've already signed, you can ignore this.</p>`,
+                ctaText: 'Open and sign',
+                ctaUrl: link,
+                footer: `If you weren't expecting this, you can safely ignore.`,
+                branding,
+              }),
+            });
+          } catch (mailErr) {
+            console.warn('[doc-reminders] email failed for doc', d.id, mailErr.message);
+          }
+        }
+
         await sql`
           UPDATE documents SET last_overdue_reminder_at = NOW()
           WHERE id = ${d.id}
@@ -101,4 +137,8 @@ export default async function handler(req, res) {
     reportError(err, { req });
     return serverError(res, err);
   }
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

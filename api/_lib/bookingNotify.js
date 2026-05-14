@@ -10,7 +10,7 @@
 // succeeds even if email or thread inserts fail — those errors get
 // reported to Sentry but don't surface to the caller.
 import { sql } from './db.js';
-import { sendEmail, emailShell } from './email.js';
+import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
@@ -43,6 +43,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         s.name AS service_name, s.location_type, s.location_label,
         cs.biz_name,
         cs.slug,
+        w.owner_id,
         u.email AS owner_email,
         u.name AS owner_name
       FROM bookings b
@@ -78,9 +79,12 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
       }));
     }
 
-    // 2. Confirmation email to client
+    // 2. Confirmation email to client. Prefs-gated by clients.id when we
+    //    have one (rare to send when no client row exists; walk-ins go
+    //    by the literal email and no clients row exists to check).
     if (ctx.client_email) {
       tasks.push(sendClientConfirm({
+        clientId: ctx.client_id,
         to: ctx.client_email,
         clientName: ctx.client_name,
         businessName,
@@ -104,6 +108,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     //    manually adding a booking already knows it happened).
     if (source === 'public' && ctx.owner_email) {
       tasks.push(sendOwnerNotify({
+        ownerId: ctx.owner_id,
         to: ctx.owner_email,
         ownerName: ctx.owner_name,
         clientName: ctx.client_name,
@@ -174,7 +179,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress }) {
+async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const opener = source === 'public'
     ? `Your booking with <strong>${escapeHtml(businessName)}</strong> is confirmed.`
@@ -203,10 +208,13 @@ async function sendClientConfirm({ to, clientName, businessName, serviceName, da
     footer: `If you didn't make this booking, please reach out to ${escapeHtml(businessName)} directly.`,
     branding,
   });
-  await sendEmail({ to, subject: `Booking confirmed — ${dateLabel}`, html, replyTo: branding?.replyTo });
+  await sendEmailToClient({
+    clientId, type: 'bookings',
+    to, subject: `Booking confirmed — ${dateLabel}`, html, replyTo: branding?.replyTo,
+  });
 }
 
-async function sendOwnerNotify({ to, ownerName, clientName, clientEmail, serviceName, dateLabel, timeLabel, notes, branding }) {
+async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail, serviceName, dateLabel, timeLabel, notes, branding }) {
   const greeting = ownerName ? `Hi ${escapeHtml(ownerName.split(/\s+/)[0])},` : 'Hi,';
   const html = emailShell({
     heading: 'New booking',
@@ -227,9 +235,300 @@ async function sendOwnerNotify({ to, ownerName, clientName, clientEmail, service
     ctaUrl: `${appUrl()}/calendar`,
     footer: `You're getting this because someone booked through your public THRYVE link. Manage notification preferences from Account.`,
   });
-  await sendEmail({ to, subject: `New booking — ${clientName || 'client'} · ${dateLabel}`, html });
+  await sendEmailToUser({
+    userId: ownerId, type: 'bookings',
+    to, subject: `New booking — ${clientName || 'client'} · ${dateLabel}`, html,
+  });
 }
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Cancellation notifications
+// ─────────────────────────────────────────────────────────────────────
+//
+// Fires when a booking (or single occurrence in a recurring series) is
+// cancelled. `source` controls the copy:
+//   • 'owner'  → owner-initiated cancel → email to client ("your appt was cancelled")
+//   • 'client' → client-initiated cancel via portal → email to owner
+//                ("X cancelled their appointment")
+// Both directions also get a thread system message + push.
+export async function notifyBookingCancellation({ workspaceId, bookingId, occurrenceDate = null, source = 'owner' }) {
+  try {
+    const { rows } = await sql`
+      SELECT
+        b.id, b.client_id, b.client_name, b.client_email,
+        b.date, b.start_min, b.end_min,
+        s.name AS service_name,
+        cs.biz_name,
+        w.owner_id,
+        u.email AS owner_email, u.name AS owner_name
+      FROM bookings b
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+      LEFT JOIN workspaces w ON w.id = b.workspace_id
+      LEFT JOIN users u ON u.id = w.owner_id
+      WHERE b.id = ${bookingId}
+    `;
+    const ctx = rows[0];
+    if (!ctx) return;
+
+    const dateISO = occurrenceDate
+      || (ctx.date instanceof Date ? ctx.date.toISOString().slice(0, 10) : ctx.date);
+    const businessName = ctx.biz_name || 'Your business';
+    const serviceName = ctx.service_name || 'Session';
+    const dateLabel = fmtDate(dateISO);
+    const timeLabel = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
+    const branding = await fetchBranding(workspaceId);
+
+    const tasks = [];
+
+    if (ctx.client_id) {
+      const text = source === 'owner'
+        ? `❌ Cancelled: ${serviceName} on ${dateLabel} at ${fmtTime(ctx.start_min)}.`
+        : `❌ Client cancelled: ${serviceName} on ${dateLabel} at ${fmtTime(ctx.start_min)}.`;
+      tasks.push(upsertThreadAndSystemMessage({
+        workspaceId, clientId: ctx.client_id,
+        text,
+        meta: { bookingId: ctx.id, source, occurrenceDate: dateISO, kind: 'cancellation' },
+      }));
+    }
+
+    // Client-facing email (when the owner cancelled)
+    if (source === 'owner' && ctx.client_email) {
+      tasks.push(sendCancellationToClient({
+        clientId: ctx.client_id,
+        to: ctx.client_email,
+        clientName: ctx.client_name,
+        businessName, serviceName, dateLabel, timeLabel, branding,
+      }));
+    }
+
+    // Owner-facing email (when the client cancelled via portal)
+    if (source === 'client' && ctx.owner_email) {
+      tasks.push(sendCancellationToOwner({
+        ownerId: ctx.owner_id,
+        to: ctx.owner_email,
+        ownerName: ctx.owner_name,
+        clientName: ctx.client_name,
+        clientEmail: ctx.client_email,
+        businessName, serviceName, dateLabel, timeLabel, branding,
+      }));
+    }
+
+    // Owner-side push regardless of direction (owner always wants to know).
+    if (ctx.owner_id || source === 'client') {
+      tasks.push(notifyOwnerSafe({
+        workspaceId,
+        type: 'bookings',
+        payload: {
+          title: source === 'client' ? 'Booking cancelled by client' : 'Booking cancelled',
+          body: `${ctx.client_name || 'Client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,
+          url: '/calendar',
+          tag: `booking-cancel-${ctx.id}-${dateISO}`,
+        },
+      }));
+    }
+
+    await Promise.allSettled(tasks).then((results) => {
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          console.error('[notifyBookingCancellation] subtask failed:', r.reason?.message || r.reason);
+          reportError(r.reason, { extra: { bookingId, workspaceId, source } });
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[notifyBookingCancellation] failed:', err.message);
+    reportError(err, { extra: { bookingId, workspaceId, source } });
+  }
+}
+
+async function sendCancellationToClient({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, branding }) {
+  const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
+  const html = emailShell({
+    heading: 'Your appointment was cancelled',
+    branding,
+    body: `<p>${greeting}</p>
+      <p>Your appointment with <strong>${escapeHtml(businessName)}</strong> was cancelled.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0"
+        style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(dateLabel)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(timeLabel)}</td></tr>
+      </table>
+      <p>If you'd like to rebook, you can pick a new time from your portal.</p>`,
+    ctaText: 'Rebook with ' + businessName,
+    ctaUrl: `${appUrl()}/me/bookings`,
+    footer: `Reach out to ${escapeHtml(businessName)} if this was unexpected.`,
+  });
+  await sendEmailToClient({
+    clientId, type: 'bookings',
+    to, subject: `Cancelled: ${serviceName} on ${dateLabel}`, html, replyTo: branding?.replyTo,
+  });
+}
+
+async function sendCancellationToOwner({ ownerId, to, ownerName, clientName, clientEmail, businessName, serviceName, dateLabel, timeLabel, branding }) {
+  const greeting = ownerName ? `Hi ${escapeHtml(ownerName.split(/\s+/)[0])},` : 'Hi,';
+  const html = emailShell({
+    heading: 'A client cancelled',
+    branding,
+    body: `<p>${greeting}</p>
+      <p><strong>${escapeHtml(clientName || 'A client')}</strong> cancelled their appointment.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0"
+        style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(dateLabel)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(timeLabel)}</td></tr>
+        ${clientEmail ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;">Email</td><td style="padding:6px 0;">${escapeHtml(clientEmail)}</td></tr>` : ''}
+      </table>
+      <p>The slot is now free again. If you have a waitlist for this service, the next person up may be auto-promoted.</p>`,
+    ctaText: 'Open the calendar',
+    ctaUrl: `${appUrl()}/calendar`,
+    footer: `You're getting this because your client cancelled through their portal. Manage notification preferences from Account.`,
+  });
+  await sendEmailToUser({
+    userId: ownerId, type: 'bookings',
+    to, subject: `Cancelled by ${clientName || 'client'} — ${dateLabel}`, html,
+  });
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Reschedule notifications
+// ─────────────────────────────────────────────────────────────────────
+//
+// Fires when a booking is moved to a new time. Both directions:
+//   • 'owner'  → owner moved a booking → email client with the new slot
+//   • 'client' → client rescheduled via portal → email owner with the change
+export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDateISO, oldStartMin, oldEndMin, source = 'owner' }) {
+  try {
+    const { rows } = await sql`
+      SELECT
+        b.id, b.client_id, b.client_name, b.client_email,
+        b.date, b.start_min, b.end_min,
+        s.name AS service_name,
+        cs.biz_name,
+        w.owner_id,
+        u.email AS owner_email, u.name AS owner_name
+      FROM bookings b
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+      LEFT JOIN workspaces w ON w.id = b.workspace_id
+      LEFT JOIN users u ON u.id = w.owner_id
+      WHERE b.id = ${bookingId}
+    `;
+    const ctx = rows[0];
+    if (!ctx) return;
+
+    const businessName = ctx.biz_name || 'Your business';
+    const serviceName  = ctx.service_name || 'Session';
+    const newDateISO   = ctx.date instanceof Date ? ctx.date.toISOString().slice(0, 10) : ctx.date;
+    const newDate      = fmtDate(newDateISO);
+    const newTime      = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
+    const oldDate      = oldDateISO ? fmtDate(oldDateISO) : null;
+    const oldTime      = (oldStartMin != null && oldEndMin != null) ? `${fmtTime(oldStartMin)} – ${fmtTime(oldEndMin)}` : null;
+    const branding = await fetchBranding(workspaceId);
+
+    const tasks = [];
+
+    if (ctx.client_id) {
+      tasks.push(upsertThreadAndSystemMessage({
+        workspaceId, clientId: ctx.client_id,
+        text: `🔁 Rescheduled: ${serviceName} → ${newDate} at ${fmtTime(ctx.start_min)}.`,
+        meta: { bookingId: ctx.id, source, kind: 'reschedule' },
+      }));
+    }
+
+    if (source === 'owner' && ctx.client_email) {
+      tasks.push(sendRescheduleToClient({
+        clientId: ctx.client_id,
+        to: ctx.client_email, clientName: ctx.client_name,
+        businessName, serviceName,
+        newDate, newTime, oldDate, oldTime, branding,
+      }));
+    }
+
+    if (source === 'client' && ctx.owner_email) {
+      tasks.push(sendRescheduleToOwner({
+        ownerId: ctx.owner_id,
+        to: ctx.owner_email, ownerName: ctx.owner_name,
+        clientName: ctx.client_name, clientEmail: ctx.client_email,
+        serviceName, newDate, newTime, oldDate, oldTime, branding,
+      }));
+    }
+
+    tasks.push(notifyOwnerSafe({
+      workspaceId,
+      type: 'bookings',
+      payload: {
+        title: source === 'client' ? 'Booking rescheduled by client' : 'Booking rescheduled',
+        body: `${ctx.client_name || 'Client'} · ${serviceName} · ${newDate} ${fmtTime(ctx.start_min)}`,
+        url: '/calendar',
+        tag: `booking-reschedule-${ctx.id}`,
+      },
+    }));
+
+    await Promise.allSettled(tasks).then((results) => {
+      for (const r of results) {
+        if (r.status === 'rejected') {
+          console.error('[notifyBookingRescheduled] subtask failed:', r.reason?.message || r.reason);
+          reportError(r.reason, { extra: { bookingId, workspaceId, source } });
+        }
+      }
+    });
+  } catch (err) {
+    console.error('[notifyBookingRescheduled] failed:', err.message);
+    reportError(err, { extra: { bookingId, workspaceId, source } });
+  }
+}
+
+async function sendRescheduleToClient({ clientId, to, clientName, businessName, serviceName, newDate, newTime, oldDate, oldTime, branding }) {
+  const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
+  const html = emailShell({
+    heading: 'Your appointment was rescheduled',
+    branding,
+    body: `<p>${greeting}</p>
+      <p>Your appointment with <strong>${escapeHtml(businessName)}</strong> has a new time:</p>
+      <table role="presentation" cellpadding="0" cellspacing="0"
+        style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">New date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(newDate)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">New time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(newTime)}</td></tr>
+        ${oldDate && oldTime ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;">Was</td><td style="padding:6px 0;color:#85827B;text-decoration:line-through;">${escapeHtml(oldDate)} · ${escapeHtml(oldTime)}</td></tr>` : ''}
+      </table>`,
+    ctaText: 'Open my portal',
+    ctaUrl: `${appUrl()}/me/bookings`,
+    footer: `Reach out to ${escapeHtml(businessName)} if this new time doesn't work.`,
+  });
+  await sendEmailToClient({
+    clientId, type: 'bookings',
+    to, subject: `Rescheduled: ${serviceName} → ${newDate}`, html, replyTo: branding?.replyTo,
+  });
+}
+
+async function sendRescheduleToOwner({ ownerId, to, ownerName, clientName, clientEmail, serviceName, newDate, newTime, oldDate, oldTime, branding }) {
+  const greeting = ownerName ? `Hi ${escapeHtml(ownerName.split(/\s+/)[0])},` : 'Hi,';
+  const html = emailShell({
+    heading: 'A client rescheduled',
+    branding,
+    body: `<p>${greeting}</p>
+      <p><strong>${escapeHtml(clientName || 'A client')}</strong> rescheduled their appointment.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0"
+        style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">New date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(newDate)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">New time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(newTime)}</td></tr>
+        ${oldDate && oldTime ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;">Was</td><td style="padding:6px 0;color:#85827B;text-decoration:line-through;">${escapeHtml(oldDate)} · ${escapeHtml(oldTime)}</td></tr>` : ''}
+        ${clientEmail ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;">Email</td><td style="padding:6px 0;">${escapeHtml(clientEmail)}</td></tr>` : ''}
+      </table>`,
+    ctaText: 'Open the calendar',
+    ctaUrl: `${appUrl()}/calendar`,
+    footer: `Your client rescheduled through their portal. Manage notification preferences from Account.`,
+  });
+  await sendEmailToUser({
+    userId: ownerId, type: 'bookings',
+    to, subject: `Rescheduled by ${clientName || 'client'} — ${newDate}`, html,
+  });
 }

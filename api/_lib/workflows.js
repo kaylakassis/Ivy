@@ -19,7 +19,7 @@
 // calendar day. Without this, a client created at 11:59pm and again
 // at 12:01am would receive duplicate emails.
 import { sql } from './db.js';
-import { sendEmail, emailShell } from './email.js';
+import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { appUrl } from './tokens.js';
@@ -291,7 +291,12 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
       footer: `Sent by ${escapeHtml(tokens.businessName)} via THRYVE.`,
       branding,
     });
-    await sendEmail({
+    // Workflow emails default to the `marketing` opt-out bucket since
+    // they're owner-defined automations. (Future: let workflows specify
+    // a per-action category in cfg.notifyType.)
+    await sendEmailToClient({
+      clientId: client.id,
+      type: 'marketing',
       to: client.email,
       subject,
       html,

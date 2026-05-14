@@ -13,7 +13,7 @@
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -75,7 +75,8 @@ export default async function handler(req, res) {
           `<a href="${link}?rating=${n}" style="text-decoration:none;font-size:28px;line-height:1;padding:0 4px;color:#E0B645;">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</a>`
         ).join('<br/>');
 
-        await sendEmail({
+        await sendEmailToClient({
+          clientId: r.client_id, type: 'marketing',
           to: r.client_email,
           subject: `How was your ${r.service_name || 'session'}?`,
           replyTo: branding.replyTo,

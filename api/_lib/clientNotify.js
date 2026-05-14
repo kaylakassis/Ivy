@@ -4,7 +4,7 @@
 // email, idempotent via clients.invite_sent_at so rapid edits / re-saves
 // don't spam.
 import { sql } from './db.js';
-import { sendEmail, emailShell } from './email.js';
+import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 
@@ -40,7 +40,12 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     const bookingHref = c.slug ? `${base}/book/${encodeURIComponent(c.slug)}` : null;
     const branding = await fetchBranding(workspaceId);
 
-    await sendEmail({
+    await sendEmailToClient({
+      clientId,
+      // Invitations are tied to the bookings vertical — opting out of
+      // booking emails also disables the invite reminder. Reasonable
+      // since the invite IS about future bookings.
+      type: 'bookings',
       to: c.email,
       subject: `${bizName} added you on THRYVE`,
       replyTo: branding.replyTo,

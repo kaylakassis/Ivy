@@ -19,7 +19,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedDoc, serializeDoc } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmail, sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -157,7 +157,9 @@ export default async function handler(req, res) {
       : '';
     const branding = await fetchBranding(workspaceId);
     try {
-      await sendEmail({
+      await sendEmailToClient({
+        clientId: first.clientId || null,
+        type: 'documents',
         to: first.email,
         subject: `Action needed: sign "${doc.name}"`,
         replyTo: branding.replyTo,

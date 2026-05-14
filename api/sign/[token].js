@@ -26,7 +26,7 @@ import {
   serializeDocPublic, cleanFields, VALID_FIELD_TYPES,
 } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
@@ -277,7 +277,9 @@ async function signDoc(req, res) {
         `;
         try {
           const branding = await fetchBranding(doc.workspace_id);
-          await sendEmail({
+          await sendEmailToClient({
+            clientId: n.client_id || null,
+            type: 'documents',
             to: n.email,
             subject: `Action needed: sign "${doc.name}"`,
             replyTo: branding.replyTo,
@@ -433,10 +435,12 @@ async function declineDoc(req, res) {
     });
     try {
       const branding = await fetchBranding(doc.workspace_id);
-      const owner = await sql`SELECT u.email FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE w.id = ${doc.workspace_id}`;
+      const owner = await sql`SELECT w.owner_id, u.email FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE w.id = ${doc.workspace_id}`;
       const ownerEmail = owner.rows[0]?.email;
+      const ownerId = owner.rows[0]?.owner_id;
       if (ownerEmail) {
-        await sendEmail({
+        await sendEmailToUser({
+          userId: ownerId, type: 'documents',
           to: ownerEmail,
           subject: `Document declined: ${doc.name}`,
           html: emailShell({

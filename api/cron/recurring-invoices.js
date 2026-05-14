@@ -18,7 +18,7 @@ import { isSuperAdminBySession } from '../_lib/admin.js';
 import { materializeOne } from '../_lib/recurring.js';
 import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -114,7 +114,8 @@ async function autoSendInvoice({ schedule, invoice }) {
   const link = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
   const branding = await fetchBranding(invoice.workspace_id);
   const business = branding.businessName;
-  await sendEmail({
+  await sendEmailToClient({
+    clientId: invoice.client_id, type: 'invoices',
     to: invoice.client_email,
     subject: `Invoice ${invoice.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
     replyTo: branding.replyTo,
