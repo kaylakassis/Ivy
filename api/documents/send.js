@@ -156,6 +156,13 @@ export default async function handler(req, res) {
       ? `<p style="font-size:13px;color:#85827B;">You're signer 1 of ${resolved.length}. The next signer will receive their link after you finish.</p>`
       : '';
     const branding = await fetchBranding(workspaceId);
+    // Track email failure so the owner sees a UI banner instead of a
+    // silent success — the document is already in 'sent' state and the
+    // token is minted, so the recovery action is the existing Resend
+    // button, not a hidden retry. Previously the failure was logged
+    // server-side and the API returned success regardless, so the
+    // signer never got a link and the owner had no way to know.
+    let emailWarning = null;
     try {
       await sendEmailToClient({
         clientId: first.clientId || null,
@@ -176,8 +183,8 @@ export default async function handler(req, res) {
         }),
       });
     } catch (mailErr) {
-      // eslint-disable-next-line no-console
       console.error('[documents/send] email failed:', mailErr.message);
+      emailWarning = `We saved the document but couldn't email ${first.name || first.email} — try Resend in a moment.`;
     }
 
     try {
@@ -218,7 +225,10 @@ export default async function handler(req, res) {
       },
     });
 
-    return ok(res, { document: serializeDoc(updated.rows[0]) });
+    return ok(res, {
+      document: serializeDoc(updated.rows[0]),
+      ...(emailWarning ? { warning: emailWarning } : {}),
+    });
   } catch (err) {
     return serverError(res, err);
   }

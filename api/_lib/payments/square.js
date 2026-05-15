@@ -179,9 +179,18 @@ export async function createCheckoutSession({
     throw new Error(`Square checkout link failed (${res.status}): ${text.slice(0, 240)}`);
   }
   const j = await res.json();
+  // sessionId is what gets stashed in invoices.stripe_session_id by
+  // /api/invoice-pay/[token].js. We deliberately use Square's
+  // ORDER id, not the payment_link id, because Square's webhook
+  // events arrive with `payment.order_id` — same value, so the
+  // webhook can look the invoice up by `stripe_session_id =
+  // payment.order_id` and mark it paid. Returning payment_link.id
+  // here (the previous behaviour) made the round-trip silently
+  // fail since metadata round-tripping isn't possible on Square's
+  // hosted checkout.
   return {
     url:        j.payment_link?.url,
-    sessionId:  j.payment_link?.id,
+    sessionId:  j.payment_link?.order_id || j.payment_link?.id,
     providerData: { orderId: j.payment_link?.order_id, paymentLinkId: j.payment_link?.id },
   };
 }

@@ -67,6 +67,7 @@ export default async function handler(req, res) {
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName;
 
+    let emailWarning = null;
     try {
       await sendEmailToClient({
         clientId: inv.client_id, type: 'invoices',
@@ -88,6 +89,7 @@ export default async function handler(req, res) {
       });
     } catch (mailErr) {
       console.error('[invoices/resend] email failed:', mailErr.message);
+      emailWarning = `We refreshed the link but the email didn't go through — try again in a moment.`;
     }
 
     try {
@@ -114,7 +116,10 @@ export default async function handler(req, res) {
       console.error('[invoices/resend] thread message failed:', msgErr.message);
     }
 
-    return ok(res, { invoice: serializeInvoice(updated.rows[0]) });
+    return ok(res, {
+      invoice: serializeInvoice(updated.rows[0]),
+      ...(emailWarning ? { warning: emailWarning } : {}),
+    });
   } catch (err) {
     return serverError(res, err);
   }

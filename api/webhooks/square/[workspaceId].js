@@ -50,11 +50,12 @@ export default async function handler(req, res) {
   }
 }
 
-// Best-effort: try to find the invoice by id encoded in the order
-// note. Square's note field is the only metadata we can echo on
-// hosted-checkout, so the parser doesn't always recover an
-// invoice_id. When it can't, we just log — the owner can mark it paid
-// manually via the Finance UI.
+// Square's hosted checkout doesn't round-trip metadata, so we can't
+// recover an invoice_id from the payment event. Instead, the order id
+// is the link: createCheckoutSession() stashes payment_link.order_id
+// into invoices.stripe_session_id, and the webhook's payment event
+// arrives with payment.order_id matching that value. Look the invoice
+// up by stripe_session_id.
 //
 // Idempotency: dedupe by Square payment_id stashed in
 // stripe_payment_intent (the column doubles as a generic provider
@@ -62,14 +63,20 @@ export default async function handler(req, res) {
 // Without this, a Square webhook retransmission would re-fire activity
 // log entries + nag the owner with duplicate "paid" notifications.
 async function applyPaymentToInvoice({ workspaceId, parsed }) {
-  const invoiceId = parsed.metadata?.invoice_id;
-  if (!invoiceId) return;
+  const orderId = parsed.sessionId; // Square parser: sessionId = p.order_id
+  if (!orderId) return;
 
   const { rows: invRows } = await sql`
-    SELECT * FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
+    SELECT * FROM invoices
+    WHERE workspace_id = ${workspaceId} AND stripe_session_id = ${orderId}
+    LIMIT 1
   `;
   const inv = invRows[0];
-  if (!inv) return;
+  if (!inv) {
+    console.warn('[webhooks/square] no invoice matches order', orderId, '— ignoring');
+    return;
+  }
+  const invoiceId = inv.id;
 
   // Already-paid + same payment id → silent no-op (webhook retry).
   if (inv.status === 'paid' && inv.stripe_payment_intent === parsed.paymentId) return;

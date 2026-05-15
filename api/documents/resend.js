@@ -98,6 +98,7 @@ export default async function handler(req, res) {
     const position = signers.length > 1
       ? `<p style="font-size:13px;color:#85827B;">You're signer ${target.order_index + 1} of ${signers.length}.</p>`
       : '';
+    let emailWarning = null;
     try {
       await sendEmailToClient({
         clientId: target.client_id || null,
@@ -118,10 +119,14 @@ export default async function handler(req, res) {
       });
     } catch (mailErr) {
       console.error('[documents/resend] email failed:', mailErr.message);
+      emailWarning = `We refreshed the link but the email to ${target.name || target.email} didn't go through — try again in a moment.`;
     }
 
     const reloaded = await fetchOwnedDoc({ id, workspaceId });
-    return ok(res, { document: serializeDoc(reloaded) });
+    return ok(res, {
+      document: serializeDoc(reloaded),
+      ...(emailWarning ? { warning: emailWarning } : {}),
+    });
   } catch (err) {
     return serverError(res, err);
   }

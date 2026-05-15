@@ -43,8 +43,15 @@ export default function AuthPage({ mode = 'signin' }) {
     setBusy(true);
     try {
       if (isSignUp) {
-        await signUp(email, password, name.trim(), role, refCode);
-        nav(role === 'client' ? '/me' : '/', { replace: true });
+        // The signup endpoint returns { user, emailErrors? }. If
+        // emailErrors is set, the welcome / verification email
+        // didn't go out — surface a query param so the destination
+        // page can show "we couldn't email you, check spam" instead
+        // of leaving the user wondering why nothing arrived.
+        const r = await signUp(email, password, name.trim(), role, refCode);
+        const base = role === 'client' ? '/me' : '/';
+        const suffix = r?.emailErrors ? '?emailIssue=1' : '';
+        nav(base + suffix, { replace: true });
       } else {
         await signIn(email, password);
         // For sign-in we let RoleRouter (in AppShell entry) figure out where
