@@ -14,8 +14,9 @@
     "test:prefs":   "node --import ./tests/bootstrap.mjs ./tests/email-prefs.test.mjs",
     "test:flows":   "node --import ./tests/bootstrap.mjs ./tests/email-flows.test.mjs",
     "test:metrics": "node --import ./tests/bootstrap.mjs ./tests/client-metrics.test.mjs",
+    "test:tpls":    "node --import ./tests/bootstrap.mjs ./tests/workflow-templates.test.mjs",
     "test:smoke":   "node --import ./tests/bootstrap.mjs ./tests/smoke-runner.mjs",
-    "test":         "npm run test:prefs && npm run test:flows && npm run test:metrics && npm run test:smoke"
+    "test":         "npm run test:prefs && npm run test:flows && npm run test:metrics && npm run test:tpls && npm run test:smoke"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",

@@ -39,8 +39,11 @@ const ACTIONS = [
   { id: 'if_lacks_tag',  label: 'Only continue if client LACKS tag' },
 ];
 
-export default function WorkflowEditor({ workflow, onClose, onSave, busy }) {
-  const isNew = !workflow;
+export default function WorkflowEditor({ workflow, isNew: isNewProp, onClose, onSave, busy }) {
+  // Template-driven create: caller passes a template object (no `id`
+  // from the DB) and isNew=true. We still pre-fill every field from it,
+  // but the header says "New workflow" and save() goes through create.
+  const isNew = isNewProp != null ? isNewProp : !workflow;
   const [name, setName]                 = useState(workflow?.name || '');
   const [description, setDescription]   = useState(workflow?.description || '');
   const [triggerType, setTriggerType]   = useState(workflow?.triggerType || 'lead_created');

@@ -13,6 +13,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useWorkflows } from './state.js';
 import WorkflowEditor from './WorkflowEditor.jsx';
+import WorkflowTemplatePicker from './WorkflowTemplatePicker.jsx';
 
 const TRIGGER_LABELS = {
   lead_created:      'When a lead fills out the contact form',
@@ -33,7 +34,13 @@ const ACTION_LABELS = {
 
 export default function Workflows() {
   const { workflows, loading, error, create, update, remove } = useWorkflows();
-  const [editing, setEditing] = useState(null); // null | 'new' | workflow
+  // Three states for the "create" flow:
+  //   pickerOpen        — template picker modal is up
+  //   editing === 'new' — blank editor (user clicked "Start from scratch")
+  //   editing is a tpl  — editor pre-filled from a template (still creates a new row)
+  //   editing is a wf   — editing an existing workflow
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [editing, setEditing] = useState(null);
   const [busy, setBusy]       = useState(false);
 
   if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading workflows…</div>;
@@ -47,13 +54,22 @@ export default function Workflows() {
     );
   }
 
+  // 'new' string OR a template object (from the picker) → CREATE.
+  // Existing workflow row (has an `id` AND a `triggerType` already in DB) → UPDATE.
+  // Templates carry a `triggerType` too, so distinguish by `id` presence
+  // against the live workflows list rather than a typeof check.
+  const isExistingWorkflow = editing
+    && typeof editing === 'object'
+    && editing.id
+    && workflows.some((w) => w.id === editing.id);
+
   const save = async (payload) => {
     setBusy(true);
     try {
-      if (editing === 'new') {
-        await create(payload);
-      } else {
+      if (isExistingWorkflow) {
         await update(editing.id, payload);
+      } else {
+        await create(payload);
       }
       setEditing(null);
     } finally {
@@ -70,15 +86,23 @@ export default function Workflows() {
             Automate the follow-ups you used to do by hand: birthday emails, win-back nudges, "welcome to the practice" sequences.
           </div>
         </div>
-        <button className="btn btn-primary" onClick={() => setEditing('new')}>
+        <button className="btn btn-primary" onClick={() => setPickerOpen(true)}>
           <Icons.Plus size={13} sw={2}/> New workflow
         </button>
       </div>
 
       {workflows.length === 0 ? (
-        <div className="card" style={{ padding: 48 }}>
+        <div className="card" style={{ padding: 48, textAlign: 'center' }}>
           <EmptyNote icon="Spark" title="No workflows yet"
-            hint="Create one to automate the follow-up cadence you keep meaning to set up."/>
+            hint="Start from a template — or build one from scratch."/>
+          <div style={{ marginTop: 18, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+            <button className="btn btn-primary" onClick={() => setPickerOpen(true)}>
+              Browse templates
+            </button>
+            <button className="btn btn-outline" onClick={() => setEditing('new')}>
+              Start from scratch
+            </button>
+          </div>
         </div>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
@@ -96,9 +120,21 @@ export default function Workflows() {
         </div>
       )}
 
+      {pickerOpen && (
+        <WorkflowTemplatePicker
+          onPick={(tpl) => { setPickerOpen(false); setEditing(tpl); }}
+          onBlank={() => { setPickerOpen(false); setEditing('new'); }}
+          onClose={() => setPickerOpen(false)}
+        />
+      )}
+
       {editing && (
         <WorkflowEditor
+          // 'new' or a template → no existing row → pass null/template
+          // to the editor so it knows to CREATE. An existing workflow
+          // (from the list) → pass the row through for UPDATE.
           workflow={editing === 'new' ? null : editing}
+          isNew={!isExistingWorkflow}
           onClose={() => setEditing(null)}
           onSave={save}
           busy={busy}
