@@ -58,8 +58,37 @@ export default function PaymentProviderCard() {
     }
   }, [refresh]);
 
-  if (!data) {
+  // While the first fetch is in flight, show a spinner. Once `err` is
+  // set, fall through to the main render so the error banner is
+  // visible — earlier versions of this file bailed on `!data` BEFORE
+  // the error display, leaving the card stuck on "Loading…" forever
+  // when /api/finance/payment-providers errored.
+  if (!data && !err) {
     return <div className="card" style={{ padding: 20, fontSize: 13, color: 'var(--muted)' }}>Loading payment providers…</div>;
+  }
+
+  // Error before we ever got data — render a recoverable error card
+  // instead of falling through to the (data-less) provider rows.
+  if (!data && err) {
+    return (
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 10 }}>
+          <Icons.Bank size={16} sw={1.7}/>
+          <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Payment processor</h3>
+        </div>
+        <div style={{
+          padding: '10px 12px', borderRadius: 8,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12.5, marginBottom: 10,
+        }}>
+          Could not load payment settings — {err}
+        </div>
+        <button className="btn btn-outline" onClick={() => { setErr(null); refresh(); }}
+          style={{ fontSize: 12, padding: '6px 12px' }}>
+          Try again
+        </button>
+      </div>
+    );
   }
 
   const switchTo = async (id) => {

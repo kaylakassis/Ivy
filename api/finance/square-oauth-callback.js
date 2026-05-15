@@ -31,6 +31,14 @@ export default async function handler(req, res) {
     const redirectUri = `${appUrl()}/api/finance/square-oauth-callback`;
     const oauthResult = await exchangeOAuthCode({ code, redirectUri });
     const location = await fetchFirstLocation({ accessToken: oauthResult.access_token });
+    // No location → /v2/locations call failed or the merchant has no
+    // active locations yet. Refuse to mark the workspace "connected"
+    // with a NULL location_id — every later checkout/refund call needs
+    // it, and silently connecting hides the real error until the owner
+    // tries to take a payment.
+    if (!location?.id) {
+      return back('error', 'Connected to Square but no active location was returned — add a location in your Square dashboard, then reconnect.');
+    }
     await persistConnection({
       workspaceId: payload.wid,
       oauthResult,
