@@ -1682,4 +1682,57 @@ CREATE INDEX IF NOT EXISTS idx_bookings_staff_date
 -- dashboard "Finish setting up" card doesn't keep nagging once an
 -- owner waves off a recommendation.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_state JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- ─── Performance indexes added 2026-05 after a query audit ───────────
+-- Each one targets a frequently-run query that was either doing a
+-- partial-index miss or a table scan. Single-column FK indexes also
+-- speed up cascades on workspace/client/user deletes.
+
+-- hasConflict() runs on every booking attempt. Without start_min/end_min
+-- in the index, it filtered by (workspace_id, date) then did an in-memory
+-- range scan on the rest. The partial index excludes cancelled bookings
+-- so it stays tight as the table grows. Includes service_id so the
+-- group-capacity check ("same slot, same service") is index-served too.
+CREATE INDEX IF NOT EXISTS idx_bookings_slot_lookup
+  ON bookings(workspace_id, date, start_min, end_min, service_id)
+  WHERE cancelled_at IS NULL;
+
+-- Client-side query "show me my bookings" + per-client metrics aggregation.
+CREATE INDEX IF NOT EXISTS idx_bookings_client
+  ON bookings(client_id) WHERE client_id IS NOT NULL;
+
+-- Service-cascade: ON DELETE SET NULL on services scans bookings without
+-- this. Also speeds up "all bookings for this service" reports.
+CREATE INDEX IF NOT EXISTS idx_bookings_service
+  ON bookings(service_id) WHERE service_id IS NOT NULL;
+
+-- doc-reminders cron filters (status='sent') AND (sent_at <= NOW() - 3 days).
+-- The existing (workspace_id, status) index helps per-workspace queries
+-- but the cron scans across workspaces; the time-range filter became a
+-- full scan over all 'sent' docs. Partial index keyed on sent_at sorts
+-- exactly what the cron asks for.
+CREATE INDEX IF NOT EXISTS idx_documents_sent_pending
+  ON documents(sent_at)
+  WHERE status = 'sent' AND sent_at IS NOT NULL;
+
+-- documents.recipient_client_id is used by /api/clients/analytics + the
+-- doc-reminders cron's per-client signer lookup. Partial because most
+-- legacy single-signer docs leave this NULL.
+CREATE INDEX IF NOT EXISTS idx_documents_recipient_client
+  ON documents(recipient_client_id) WHERE recipient_client_id IS NOT NULL;
+
+-- /api/finance dashboard rollups filter invoices by paid_at >= start-of-
+-- month / start-of-year. Without an index the rollup scans every paid
+-- invoice in the workspace. Partial because draft/sent rows always have
+-- NULL paid_at.
+CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
+  ON invoices(workspace_id, paid_at DESC)
+  WHERE paid_at IS NOT NULL;
+
+-- /api/clients lookups by email (used by AddBookingModal to resolve a
+-- name typed in by the owner, and by the public-booking flow to merge
+-- a recurring client). Email is normalized lowercase at write time so
+-- the index doesn't need a LOWER() expression.
+CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
+  ON clients(workspace_id, email) WHERE email IS NOT NULL;
 `;

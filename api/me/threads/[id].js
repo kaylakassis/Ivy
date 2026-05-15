@@ -42,13 +42,24 @@ export default async function handler(req, res) {
       // ownership is already verified by the SELECT above, but a future
       // regression there shouldn't open a path to read a stranger's
       // messages just because they know the thread_id.
+      //
+      // Pagination: hard cap at 500 most-recent messages. Long-running
+      // threads with thousands of messages used to load every one on
+      // every open — slow + memory-heavy on phones. Owners on the
+      // /messages/:id surface get the same cap via api/messages/[id].js.
+      // We return chronological order client-expected, so the LIMIT is
+      // applied via a sub-select on DESC then re-ORDER'd ASC.
       const msgs = await sql.query(
-        `SELECT m.*
-           FROM messages m
-           JOIN message_threads t ON t.id = m.thread_id
-          WHERE m.thread_id = $1
-            AND t.client_id = ANY($2)
-          ORDER BY m.created_at`,
+        `SELECT * FROM (
+           SELECT m.*
+             FROM messages m
+             JOIN message_threads t ON t.id = m.thread_id
+            WHERE m.thread_id = $1
+              AND t.client_id = ANY($2)
+            ORDER BY m.created_at DESC
+            LIMIT 500
+         ) sub
+         ORDER BY created_at ASC`,
         [id, myIds],
       );
       // Clear the client's unread badge once they've opened the thread.

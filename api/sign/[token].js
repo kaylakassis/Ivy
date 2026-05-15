@@ -318,6 +318,32 @@ async function signDoc(req, res) {
       const finalDoc = await finalizeCompletedDoc(doc.id);
       await maybeStampFinalPdf(finalDoc);
       await notifyOwnerOnCompletion(finalDoc);
+      // Tell every signer who participated that the doc is fully
+      // executed — especially important for long-running multi-signer
+      // flows where signer 1 might have signed days before signer N
+      // finally completes. Without this, earlier signers never learn
+      // the deal closed. Push-only (no email — too noisy for the
+      // common 2-signer case where both sign within minutes).
+      try {
+        const { rows: allSigners } = await sql`
+          SELECT client_id FROM document_signers
+          WHERE document_id = ${doc.id} AND client_id IS NOT NULL
+        `;
+        for (const s of allSigners) {
+          notifyClientSafe({
+            clientId: s.client_id,
+            type: 'documents',
+            payload: {
+              title: 'Document fully signed',
+              body: `"${doc.name}" is complete. You can view your copy any time.`,
+              url: '/me/documents',
+              tag: `doc-completed-${doc.id}`,
+            },
+          });
+        }
+      } catch (notifyErr) {
+        console.error('[sign] per-signer completion notify failed:', notifyErr.message);
+      }
       return ok(res, { document: serializeDocPublic(finalDoc), completed: true });
     }
 

@@ -37,12 +37,16 @@ export default async function handler(req, res) {
       // verified ownership, but if a future refactor accidentally drops
       // that guard the JOIN here keeps the leak path closed.
       const msgs = await sql`
-        SELECT m.*
-          FROM messages m
-          JOIN message_threads t ON t.id = m.thread_id
-         WHERE m.thread_id = ${id}
-           AND t.workspace_id = ${workspaceId}
-         ORDER BY m.created_at
+        SELECT * FROM (
+          SELECT m.*
+            FROM messages m
+            JOIN message_threads t ON t.id = m.thread_id
+           WHERE m.thread_id = ${id}
+             AND t.workspace_id = ${workspaceId}
+           ORDER BY m.created_at DESC
+           LIMIT 500
+        ) sub
+        ORDER BY created_at ASC
       `;
       // Mark thread read for the owner side. Re-scope to workspace_id for
       // defense-in-depth (matches the POST/PATCH paths below).
