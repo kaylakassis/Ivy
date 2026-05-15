@@ -55,12 +55,49 @@ export default async function handler(req, res) {
 // hosted-checkout, so the parser doesn't always recover an
 // invoice_id. When it can't, we just log — the owner can mark it paid
 // manually via the Finance UI.
+//
+// Idempotency: dedupe by Square payment_id stashed in
+// stripe_payment_intent (the column doubles as a generic provider
+// payment-id field — see api/invoices/refund.js which keys off it).
+// Without this, a Square webhook retransmission would re-fire activity
+// log entries + nag the owner with duplicate "paid" notifications.
 async function applyPaymentToInvoice({ workspaceId, parsed }) {
   const invoiceId = parsed.metadata?.invoice_id;
   if (!invoiceId) return;
+
+  const { rows: invRows } = await sql`
+    SELECT * FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
+  `;
+  const inv = invRows[0];
+  if (!inv) return;
+
+  // Already-paid + same payment id → silent no-op (webhook retry).
+  if (inv.status === 'paid' && inv.stripe_payment_intent === parsed.paymentId) return;
+  if (inv.status === 'paid') {
+    console.warn('[webhooks/square] invoice', invoiceId, 'already paid by a different payment id — ignoring');
+    return;
+  }
+
+  const paidAmountDollars = Math.round(Number(parsed.amountCents || 0)) / 100;
+  const newActivity = [
+    ...(inv.activity || []),
+    {
+      ts: new Date().toISOString(),
+      kind: 'paid',
+      text: `Paid by Square · $${paidAmountDollars.toFixed(2)}`,
+    },
+  ];
+
   await sql`
     UPDATE invoices SET
-      status = 'paid', paid_at = NOW(), paid_method = 'card', updated_at = NOW()
-    WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status != 'paid'
+      status                = 'paid',
+      paid_at               = NOW(),
+      paid_amount           = ${paidAmountDollars},
+      paid_method           = 'card',
+      stripe_payment_intent = ${parsed.paymentId || null},
+      view_token_hash       = NULL,
+      activity              = ${JSON.stringify(newActivity)}::jsonb,
+      updated_at            = NOW()
+    WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
   `;
 }

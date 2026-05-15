@@ -149,12 +149,20 @@ async function runWorkflow({ workflow, client, context = {}, startIndex = 0, isR
   // Dedupe: skip if this workflow already fired for this client today.
   // Resumed runs bypass dedupe — they're the SAME logical run, just
   // continuing across a wait boundary.
+  //
+  // Both casts MUST go through UTC so this query uses the
+  // idx_workflow_runs_dedupe partial index defined in schema.js — the
+  // index is built on `(triggered_at AT TIME ZONE 'UTC')::date`, so
+  // a session-tz `triggered_at::date` cast would (a) miss the index
+  // and (b) potentially disagree with the index on what "today"
+  // means around midnight UTC.
   if (client?.id && !isResume) {
     const dup = await sql`
       SELECT id FROM workflow_runs
        WHERE workflow_id = ${workflow.id}
          AND client_id = ${client.id}
-         AND triggered_at::date = CURRENT_DATE
+         AND (triggered_at AT TIME ZONE 'UTC')::date
+             = (NOW() AT TIME ZONE 'UTC')::date
        LIMIT 1
     `;
     if (dup.rows.length > 0) {

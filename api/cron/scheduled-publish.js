@@ -2,10 +2,17 @@
 // elapsed. Each one's `scheduled_pages` is copied into `pages`, the
 // schedule is cleared, and a version snapshot is added so the change
 // is roll-back-able.
+//
+// Auth: matches the other crons. Vercel cron sends
+//   Authorization: Bearer ${CRON_SECRET}
+// Admin trigger via header. Signed-in super-admin via session cookie.
+// Without any of those, refuse — without this check anyone on the
+// internet can force-publish every scheduled website in the system.
 
 import { sql } from '../_lib/db.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
-import { ok, serverError } from '../_lib/json.js';
+import { isSuperAdminBySession } from '../_lib/admin.js';
+import { ok, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   // Vercel cron jobs hit us as GET requests with a magic header. We
@@ -15,6 +22,14 @@ export default async function handler(req, res) {
     res.statusCode = 405;
     return res.end('Method Not Allowed');
   }
+
+  const cronAuth = !!process.env.CRON_SECRET
+    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+  const adminAuth = process.env.ADMIN_SECRET
+    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
+  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
+  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+
   try {
     await ensureSchemaApplied();
     const due = await sql`

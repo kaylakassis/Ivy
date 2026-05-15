@@ -88,25 +88,58 @@ export default async function handler(req, res) {
           });
         }
 
-        // Email path. Mint a fresh sign link (invalidates any older
-        // link emailed previously; the most recent reminder always
-        // works). Best-effort — failures here don't stop the cron.
-        if (d.recipient_email) {
+        // Email path. Mint a fresh sign link for the CURRENT pending
+        // signer — for multi-signer docs that's whoever has status =
+        // 'awaiting' in document_signers (not necessarily the original
+        // recipient_email/name). For legacy single-signer docs there's
+        // no document_signers row and we fall back to the documents
+        // row. Without this branch, multi-signer reminders mint the
+        // token in documents.sign_token_hash where no resolver looks
+        // for it, so the email link 404s.
+        let target = null;
+        try {
+          const sg = await sql`
+            SELECT id, client_id, name, email
+            FROM document_signers
+            WHERE document_id = ${d.id} AND status = 'awaiting'
+            ORDER BY order_index ASC
+            LIMIT 1
+          `;
+          if (sg.rows[0]) {
+            const r = sg.rows[0];
+            target = { kind: 'signer', id: r.id, clientId: r.client_id, name: r.name, email: r.email };
+          }
+        } catch (e) {
+          // document_signers absent on older deploys.
+        }
+        if (!target && d.recipient_email) {
+          target = { kind: 'legacy', clientId: d.recipient_client_id, name: d.recipient_name, email: d.recipient_email };
+        }
+        if (target?.email) {
           try {
             const raw = generateRawToken(32);
             const hash = crypto.createHash('sha256').update(raw).digest('hex');
-            await sql`UPDATE documents SET sign_token_hash = ${hash} WHERE id = ${d.id}`;
+            if (target.kind === 'signer') {
+              // Write the new token to the awaiting signer's row AND
+              // keep the documents.sign_token_hash in sync so the
+              // owner-side preview / legacy resolvers also see the
+              // latest token (mirrors documents/resend.js behaviour).
+              await sql`UPDATE document_signers SET sign_token_hash = ${hash}, updated_at = NOW() WHERE id = ${target.id}`;
+              await sql`UPDATE documents SET sign_token_hash = ${hash}, updated_at = NOW() WHERE id = ${d.id}`;
+            } else {
+              await sql`UPDATE documents SET sign_token_hash = ${hash}, updated_at = NOW() WHERE id = ${d.id}`;
+            }
             const branding = await fetchBranding(d.workspace_id);
             const link = `${appUrl()}/sign/${encodeURIComponent(raw)}`;
             await sendEmailToClient({
-              clientId: d.recipient_client_id,
+              clientId: target.clientId,
               type: 'documents',
-              to: d.recipient_email,
+              to: target.email,
               subject: `Reminder: please sign "${d.name}"`,
               replyTo: branding.replyTo,
               html: emailShell({
                 heading: 'Document still waiting on you',
-                body: `<p>Hi ${escapeHtml(d.recipient_name || 'there')},</p>
+                body: `<p>Hi ${escapeHtml(target.name || 'there')},</p>
                   <p>This is a gentle nudge — <strong>${escapeHtml(d.name)}</strong> is still waiting on your signature. It's been ${days} day${days === 1 ? '' : 's'}.</p>
                   <p>If you've already signed, you can ignore this.</p>`,
                 ctaText: 'Open and sign',

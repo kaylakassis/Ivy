@@ -43,7 +43,7 @@ function renderFooter(appUrl) {
                       <a href="${appUrl}/account?tab=notifications" style="color:#9ca3af;text-decoration:underline" target="_blank">Email preferences</a>
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:10px">
-                      [YOUR THRYVE ADDRESS]
+                      ${process.env.THRYVE_POSTAL_ADDRESS || 'THRYVE · 1209 Orange St, Wilmington, DE 19801, USA'}
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:6px">
                       © ${year} THRYVE. All rights reserved.

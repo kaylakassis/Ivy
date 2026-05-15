@@ -220,6 +220,17 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
     ? `Sent by <strong style="color:${C.fg2};">${escapeText(businessName)}</strong> via THRYVE`
     : `Made with care · <a href="https://getthryve.ai" style="color:${C.muted};text-decoration:none;">getthryve.ai</a>`;
 
+  // CAN-SPAM postal address. Only shown on unbranded sends (i.e.
+  // THRYVE itself as the sender — admin blasts, magic links, account
+  // emails). Per-workspace transactional emails (booking confirmations,
+  // invoices, etc.) carry the owner's branding and are exempt.
+  const postalAddress = !businessName
+    ? (process.env.THRYVE_POSTAL_ADDRESS || 'THRYVE · 1209 Orange St, Wilmington, DE 19801, USA')
+    : '';
+  const postalBlock = postalAddress
+    ? `<div style="margin-top:6px;font-size:10.5px;color:${C.muted2};letter-spacing:0.02em;">${escapeText(postalAddress)}</div>`
+    : '';
+
   return `<!doctype html>
 <html>
 <head>
@@ -283,6 +294,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
               <div style="font-size:11px;color:${C.muted2};letter-spacing:0.04em;">
                 ${footerByline}
               </div>
+              ${postalBlock}
             </td>
           </tr>
         </table>

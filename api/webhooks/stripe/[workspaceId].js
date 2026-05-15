@@ -445,6 +445,7 @@ export default async function handler(req, res) {
       UPDATE invoices SET
         status                 = 'paid',
         paid_at                = NOW(),
+        paid_amount            = ${totals.total},
         paid_method            = 'card',
         view_token_hash        = NULL,
         stripe_payment_intent  = ${paymentIntent},

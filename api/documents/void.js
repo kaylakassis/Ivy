@@ -30,6 +30,11 @@ export default async function handler(req, res) {
       { ts: new Date().toISOString(), kind: 'voided', text: 'Document voided' },
     ];
 
+    // Kill every outstanding sign link, not just the legacy single-
+    // signer one on the documents row. Multi-signer flows mint a
+    // separate token per signer in document_signers; without this
+    // second UPDATE, signers 2..N could still complete a voided doc
+    // (legal/compliance problem).
     const updated = await sql`
       UPDATE documents SET
         status = 'voided',
@@ -39,6 +44,20 @@ export default async function handler(req, res) {
       WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *
     `;
+    try {
+      // Nulling the token is enough — sign/[token] resolves by hash
+      // and will 404 with no token to match. Status stays 'awaiting'
+      // (the CHECK constraint doesn't allow 'voided' on this table).
+      await sql`
+        UPDATE document_signers SET
+          sign_token_hash = NULL,
+          updated_at = NOW()
+        WHERE document_id = ${id}
+      `;
+    } catch (e) {
+      // document_signers may not exist on older deploys — log + continue.
+      console.error('[documents/void] document_signers cleanup failed:', e.message);
+    }
     return ok(res, { document: serializeDoc(updated.rows[0]) });
   } catch (err) {
     return serverError(res, err);

@@ -73,7 +73,7 @@ export default async function handler(req, res) {
           viewUrl,
         });
         if (r.client_id) {
-          notifyClientSafe({
+          await notifyClientSafe({
             clientId: r.client_id,
             type: 'payments',
             payload: {
