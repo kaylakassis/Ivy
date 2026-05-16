@@ -43,6 +43,7 @@ const ClientDocuments = lazy(() => import('./features/client/ClientDocuments.jsx
 const ClientBilling   = lazy(() => import('./features/client/ClientBilling.jsx'));
 const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
 const ClientNotifications = lazy(() => import('./features/client/ClientNotifications.jsx'));
+const ClientProfile   = lazy(() => import('./features/client/ClientProfile.jsx'));
 const NotFoundPage    = lazy(() => import('./features/marketing/NotFoundPage.jsx'));
 
 // ── Lazy: secondary auth flows + onboarding ──
@@ -248,6 +249,7 @@ export default function App() {
           <Route path="/me/billing"   element={<ClientBilling />} />
           <Route path="/me/discover"  element={<ClientDiscover />} />
           <Route path="/me/notifications" element={<ClientNotifications />} />
+          <Route path="/me/profile"       element={<ClientProfile />} />
         </Route>
 
         {/* 404 catch-all. Must be last so it only matches when nothing
