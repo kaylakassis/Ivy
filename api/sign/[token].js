@@ -334,7 +334,13 @@ async function signDoc(req, res) {
         `;
         const branding = await fetchBranding(doc.workspace_id);
         const portalLink = `${appUrl()}/me/documents`;
-        for (const s of allSigners) {
+        // Parallelize the per-signer fanout: previously this was a
+        // sequential `for/await` loop, so a 10-signer doc held the
+        // response open for ~10s while Resend round-tripped each
+        // email. Promise.allSettled means one bad address can't
+        // crash the rest and the wall-clock cost is one Resend
+        // round-trip total.
+        await Promise.allSettled(allSigners.map(async (s) => {
           if (s.client_id) {
             notifyClientSafe({
               clientId: s.client_id,
@@ -370,7 +376,7 @@ async function signDoc(req, res) {
               console.error('[sign] completion email failed for', s.email, '::', mailErr.message);
             }
           }
-        }
+        }));
       } catch (notifyErr) {
         console.error('[sign] per-signer completion notify failed:', notifyErr.message);
       }

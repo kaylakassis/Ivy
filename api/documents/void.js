@@ -44,6 +44,12 @@ export default async function handler(req, res) {
       WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *
     `;
+    // Guard against a race where the doc was deleted between fetch
+    // and update — without this we'd hand the serializer `undefined`
+    // and respond `{ document: null }` masking the real failure.
+    if (updated.rows.length === 0) {
+      return badRequest(res, 'Document not found — was it deleted while you were voiding it?');
+    }
     try {
       // Nulling the token is enough — sign/[token] resolves by hash
       // and will 404 with no token to match. Status stays 'awaiting'

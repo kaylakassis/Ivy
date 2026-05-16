@@ -48,9 +48,15 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
   //
   // Time inputs use HH:MM 24-hour format (HTML input[type=time]).
   // toTimeInput() converts our internal minute-of-day to that format.
+  // Defensive null/NaN coercion — a malformed event row with missing
+  // startMin/endMin would otherwise render "NaN:NaN" which the time
+  // input rejects silently. Default to 09:00 / 10:00 so the editor is
+  // at least usable.
   const toTimeInput = (m) => {
-    const h = Math.floor(m / 60).toString().padStart(2, '0');
-    const mm = (m % 60).toString().padStart(2, '0');
+    const n = Number(m);
+    const safe = Number.isFinite(n) ? Math.max(0, Math.min(24 * 60 - 1, Math.floor(n))) : 0;
+    const h = Math.floor(safe / 60).toString().padStart(2, '0');
+    const mm = (safe % 60).toString().padStart(2, '0');
     return `${h}:${mm}`;
   };
   const [editingReschedule, setEditingReschedule] = useState(false);

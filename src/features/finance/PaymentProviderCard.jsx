@@ -160,7 +160,6 @@ export default function PaymentProviderCard() {
           onSwitch={() => switchTo('paypal')}
           onChanged={refresh}
           busy={busy}
-          comingSoon
         />
       </div>
 
@@ -168,11 +167,11 @@ export default function PaymentProviderCard() {
         marginTop: 14, padding: '8px 12px', borderRadius: 8,
         background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55,
       }}>
-        <strong style={{ color: 'var(--fg-2)' }}>v1 limitations:</strong> refunds, saved-card auto-charges
-        (no-show / late-cancel fees), and recurring invoices currently
-        only work for invoices paid via Stripe. Square + PayPal land
-        money in your account but use their own dashboards for refunds
-        in v1.
+        <strong style={{ color: 'var(--fg-2)' }}>Provider parity:</strong> all three providers accept
+        payments + refunds (including refunds you issue directly from
+        the Square/PayPal dashboard — THRYVE picks them up via webhook).
+        Saved-card auto-charges (no-show / late-cancel fees) and
+        recurring invoice subscriptions still only run through Stripe.
       </div>
     </div>
   );

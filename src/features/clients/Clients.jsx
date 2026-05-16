@@ -338,6 +338,11 @@ function ClientMetricsChips({ metrics }) {
   }
   if (metrics.dueDate) {
     const d = new Date(metrics.dueDate);
+    // Skip the chip rather than render "Invalid Date" if the API returned
+    // a malformed timestamp.
+    if (!Number.isFinite(d.getTime())) {
+      // fall through — no due chip
+    } else {
     const days = Math.ceil((d - Date.now()) / 86400e3);
     const fmt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
     let tone = 'default';
@@ -350,6 +355,7 @@ function ClientMetricsChips({ metrics }) {
       title: metrics.dueDateKind === 'invoice'
         ? `Unpaid invoice due ${fmt}` : `Next billing on ${fmt}`,
     });
+    }
   }
   if (metrics.revenue30dCents > 0) {
     chips.push({

@@ -1081,7 +1081,13 @@ function ClientHealthMetrics({ clientId }) {
     || metrics.monthlyPaymentCents > 0 || metrics.dueDate || metrics.revenue30dCents > 0;
   if (!hasAny) return null;
 
-  const dueDate = metrics.dueDate ? new Date(metrics.dueDate) : null;
+  // Reject Invalid Date so a corrupted timestamp from the API never
+  // reaches .toLocaleDateString() below (which throws on Invalid Date).
+  let dueDate = null;
+  if (metrics.dueDate) {
+    const d = new Date(metrics.dueDate);
+    if (Number.isFinite(d.getTime())) dueDate = d;
+  }
   const dueDays = dueDate ? Math.ceil((dueDate - Date.now()) / 86400e3) : null;
   const dueTone = dueDays == null ? 'default' : dueDays < 0 ? 'danger' : dueDays <= 3 ? 'warn' : 'default';
 
