@@ -319,27 +319,53 @@ async function signDoc(req, res) {
       await maybeStampFinalPdf(finalDoc);
       await notifyOwnerOnCompletion(finalDoc);
       // Tell every signer who participated that the doc is fully
-      // executed — especially important for long-running multi-signer
-      // flows where signer 1 might have signed days before signer N
-      // finally completes. Without this, earlier signers never learn
-      // the deal closed. Push-only (no email — too noisy for the
-      // common 2-signer case where both sign within minutes).
+      // executed — important for long-running multi-signer flows
+      // where signer 1 might have signed days before signer N
+      // finally completes. Sends both a push (immediate) and an
+      // email (durable record + link to their copy).
       try {
         const { rows: allSigners } = await sql`
-          SELECT client_id FROM document_signers
-          WHERE document_id = ${doc.id} AND client_id IS NOT NULL
+          SELECT client_id, name, email FROM document_signers
+          WHERE document_id = ${doc.id}
         `;
+        const branding = await fetchBranding(doc.workspace_id);
+        const portalLink = `${appUrl()}/me/documents`;
         for (const s of allSigners) {
-          notifyClientSafe({
-            clientId: s.client_id,
-            type: 'documents',
-            payload: {
-              title: 'Document fully signed',
-              body: `"${doc.name}" is complete. You can view your copy any time.`,
-              url: '/me/documents',
-              tag: `doc-completed-${doc.id}`,
-            },
-          });
+          if (s.client_id) {
+            notifyClientSafe({
+              clientId: s.client_id,
+              type: 'documents',
+              payload: {
+                title: 'Document fully signed',
+                body: `"${doc.name}" is complete. You can view your copy any time.`,
+                url: '/me/documents',
+                tag: `doc-completed-${doc.id}`,
+              },
+            });
+          }
+          if (s.email) {
+            try {
+              await sendEmailToClient({
+                clientId: s.client_id || null,
+                type: 'documents',
+                to: s.email,
+                subject: `Signed: "${doc.name}" is complete`,
+                replyTo: branding.replyTo,
+                html: emailShell({
+                  heading: 'Document fully signed',
+                  body: `<p>Hi ${escapeHtml(s.name || 'there')},</p>
+                    <p><strong>${escapeHtml(doc.name)}</strong> is now complete — every signer is in.</p>
+                    <p>You can view a copy of the signed document any time from your portal.</p>`,
+                  ctaText: 'View signed copy',
+                  ctaUrl: portalLink,
+                  footer: 'Keep this email for your records.',
+                  branding,
+                }),
+              });
+            } catch (mailErr) {
+              console.error('[sign] completion email failed for', s.email, '::', mailErr.message);
+            }
+          }
         }
       } catch (notifyErr) {
         console.error('[sign] per-signer completion notify failed:', notifyErr.message);

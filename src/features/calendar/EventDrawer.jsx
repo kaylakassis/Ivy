@@ -2,7 +2,7 @@
 import React, { useRef, useState } from 'react';
 import { upload } from '@vercel/blob/client';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
-import { minToHM, parseISO, RECURRENCE_OPTIONS, isOccurrencePast } from './utils.js';
+import { minToHM, hmToMin, parseISO, RECURRENCE_OPTIONS, isOccurrencePast } from './utils.js';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from '../finance/CollectInPersonModal.jsx';
@@ -42,6 +42,41 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
   const [editingRecurrence, setEditingRecurrence] = useState(false);
   const [draftRule, setDraftRule]   = useState(event.recurrenceRule || null);
   const [draftUntil, setDraftUntil] = useState(event.recurrenceUntil || '');
+  // Reschedule editor — only visible for single (non-recurring) bookings.
+  // Recurring bookings can't be rescheduled wholesale; owner must cancel
+  // the occurrence + book a new one (same constraint as the client portal).
+  //
+  // Time inputs use HH:MM 24-hour format (HTML input[type=time]).
+  // toTimeInput() converts our internal minute-of-day to that format.
+  const toTimeInput = (m) => {
+    const h = Math.floor(m / 60).toString().padStart(2, '0');
+    const mm = (m % 60).toString().padStart(2, '0');
+    return `${h}:${mm}`;
+  };
+  const [editingReschedule, setEditingReschedule] = useState(false);
+  const [rescheduleDate, setRescheduleDate]   = useState(typeof occurrenceISO === 'string' ? occurrenceISO.slice(0, 10) : '');
+  const [rescheduleStart, setRescheduleStart] = useState(toTimeInput(event.startMin));
+  const [rescheduleEnd, setRescheduleEnd]     = useState(toTimeInput(event.endMin));
+  const [rescheduleErr, setRescheduleErr]     = useState(null);
+
+  const saveReschedule = async () => {
+    setRescheduleErr(null);
+    const startMin = hmToMin(rescheduleStart);
+    const endMin = hmToMin(rescheduleEnd);
+    if (!Number.isInteger(startMin) || !Number.isInteger(endMin) || endMin <= startMin) {
+      setRescheduleErr('End time must be after start time.');
+      return;
+    }
+    setBusy(true);
+    try {
+      await onUpdateBooking(event.id, {
+        rescheduleTo: { date: rescheduleDate, startMin, endMin },
+      });
+      setEditingReschedule(false);
+    } catch (e) {
+      setRescheduleErr(e.message || 'Could not reschedule');
+    } finally { setBusy(false); }
+  };
 
   const cancelOccurrence = async () => {
     setBusy(true);
@@ -101,6 +136,85 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
           {Object.entries(event.customFieldValues).map(([k, v]) => (
             <InfoRow key={k} label={k} value={String(v)}/>
           ))}
+        </div>
+      )}
+
+      {/* Reschedule — single-occurrence bookings only. The API rejects
+          reschedules on recurring series (cancel-occurrence-then-book
+          is the documented path), so the UI hides it for those. */}
+      {!isRecurring && !event.cancelledAt && (
+        <div style={{ marginTop: 18 }}>
+          <div className="metric-label" style={{ marginBottom: 8 }}>Reschedule</div>
+          {!editingReschedule ? (
+            <div style={{
+              display: 'flex', alignItems: 'center', gap: 10,
+              padding: '10px 12px', borderRadius: 10,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+            }}>
+              <span style={{ fontSize: 13, color: 'var(--muted)', flex: 1 }}>
+                Move this booking to a different date or time.
+              </span>
+              <button
+                type="button"
+                className="btn btn-ghost"
+                style={{ fontSize: 12, padding: '4px 10px' }}
+                onClick={() => setEditingReschedule(true)}>
+                Reschedule
+              </button>
+            </div>
+          ) : (
+            <div style={{
+              padding: 12, borderRadius: 10,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+              display: 'flex', flexDirection: 'column', gap: 10,
+            }}>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <label style={{ flex: '1 1 130px', minWidth: 130 }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Date</div>
+                  <input
+                    type="date"
+                    value={rescheduleDate}
+                    onChange={(e) => setRescheduleDate(e.target.value)}
+                    style={inputSty}/>
+                </label>
+                <label style={{ flex: '1 1 100px', minWidth: 100 }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>Start</div>
+                  <input
+                    type="time"
+                    value={rescheduleStart}
+                    onChange={(e) => setRescheduleStart(e.target.value)}
+                    style={inputSty}/>
+                </label>
+                <label style={{ flex: '1 1 100px', minWidth: 100 }}>
+                  <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 4 }}>End</div>
+                  <input
+                    type="time"
+                    value={rescheduleEnd}
+                    onChange={(e) => setRescheduleEnd(e.target.value)}
+                    style={inputSty}/>
+                </label>
+              </div>
+              {rescheduleErr && (
+                <div style={{ fontSize: 12, color: 'var(--danger)' }}>{rescheduleErr}</div>
+              )}
+              <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button
+                  type="button"
+                  className="btn btn-ghost"
+                  onClick={() => { setEditingReschedule(false); setRescheduleErr(null); }}
+                  disabled={busy}>
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-primary"
+                  onClick={saveReschedule}
+                  disabled={busy}>
+                  {busy ? 'Saving…' : 'Save'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 

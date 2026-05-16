@@ -445,11 +445,29 @@ export async function resumeWaitingWorkflows({ limit = 200 } = {}) {
     } catch (err) {
       // eslint-disable-next-line no-console
       console.error(`[resumeWaitingWorkflows] pending=${row.id} failed:`, err.message);
-      // Leave the row in place; next cron pass retries. After 7 days
-      // of consistent failures we could prune, but for v1 a manual
-      // dashboard cleanup is fine.
+      // Leave the row in place; next cron pass retries. Auto-prune
+      // happens below at the end of every run.
     }
   }
+
+  // Auto-prune pending rows that have been stuck for >7 days. These
+  // are workflows that hit a permanent error (deleted action template,
+  // missing recipient, etc.) and would otherwise re-fail forever every
+  // cron tick. The owner can rebuild a fresh workflow if they care.
+  // Logs a count so a sudden spike is visible in operational logs.
+  try {
+    const pruned = await sql`
+      DELETE FROM workflow_pending_runs
+      WHERE resume_at <= NOW() - INTERVAL '7 days'
+      RETURNING id
+    `;
+    if (pruned.rows.length > 0) {
+      console.warn(`[resumeWaitingWorkflows] pruned ${pruned.rows.length} stale pending runs (>7d)`);
+    }
+  } catch (pruneErr) {
+    console.error('[resumeWaitingWorkflows] prune failed:', pruneErr.message);
+  }
+
   return { resumed };
 }
 

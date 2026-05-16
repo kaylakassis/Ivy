@@ -33,6 +33,11 @@ export default async function handler(req, res) {
 
     if (parsed.type === 'checkout.completed' && parsed.status === 'paid') {
       await applyPaymentToInvoice({ workspaceId, parsed });
+    } else if (parsed.type === 'refund.updated' && parsed.status === 'succeeded') {
+      // Dashboard-initiated refunds from Merchant Center + reversals
+      // from disputes. Both flip the invoice out of 'paid' so revenue
+      // reports reflect reality.
+      await applyRefundToInvoice({ workspaceId, parsed });
     }
     return ok(res, { handled: true });
   } catch (err) {
@@ -82,5 +87,57 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
       activity              = ${JSON.stringify(newActivity)}::jsonb,
       updated_at            = NOW()
     WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+  `;
+}
+
+// Mirror of the Square refund handler — see
+// api/webhooks/square/[workspaceId].js#applyRefundToInvoice for the
+// rationale. PayPal sends PAYMENT.CAPTURE.REFUNDED + .REVERSED; both
+// get normalized to type='refund.updated' with status='succeeded' in
+// the adapter's parseWebhookEvent.
+async function applyRefundToInvoice({ workspaceId, parsed }) {
+  if (!parsed.paymentId) return;
+  const { rows: invRows } = await sql`
+    SELECT * FROM invoices
+    WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${parsed.paymentId}
+    LIMIT 1
+  `;
+  const inv = invRows[0];
+  if (!inv) {
+    console.warn('[webhooks/paypal] no invoice matches capture', parsed.paymentId, '— ignoring refund');
+    return;
+  }
+  const refundAmount = Math.round(Number(parsed.amountCents || 0)) / 100;
+  if (refundAmount <= 0) return;
+
+  const activity = inv.activity || [];
+  if (parsed.refundId && activity.some((a) => a.kind === 'refund' && a.stripeRefundId === parsed.refundId)) {
+    return;
+  }
+
+  const alreadyRefunded = Number(inv.refunded_amount || 0);
+  const newRefunded = +(alreadyRefunded + refundAmount).toFixed(2);
+  const paidAmount = Number(inv.paid_amount || 0);
+  const fullyRefunded = paidAmount > 0 && newRefunded >= paidAmount - 0.005;
+  const newStatus = fullyRefunded ? 'refunded' : inv.status;
+
+  const newActivity = [
+    ...activity,
+    {
+      ts: new Date().toISOString(),
+      kind: 'refund',
+      text: `Refunded $${refundAmount.toFixed(2)} (PayPal${parsed.reason ? ` · ${parsed.reason}` : ''})`,
+      ...(parsed.refundId ? { stripeRefundId: parsed.refundId } : {}),
+    },
+  ];
+
+  await sql`
+    UPDATE invoices SET
+      status          = ${newStatus},
+      refunded_amount = ${newRefunded},
+      refunded_at     = NOW(),
+      activity        = ${JSON.stringify(newActivity)}::jsonb,
+      updated_at      = NOW()
+    WHERE id = ${inv.id} AND workspace_id = ${workspaceId}
   `;
 }

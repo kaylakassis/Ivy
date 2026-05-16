@@ -160,7 +160,10 @@ export default async function handler(req, res) {
           SELECT availability FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}
         `;
         const availability = cs.rows[0]?.availability || {};
-        const weekday = new Date(newDate + 'T00:00:00').getDay();
+        // getUTCDay() (not getDay()) — matches the other booking paths
+        // so a workspace in a non-UTC timezone doesn't see day-of-week
+        // drift around midnight UTC.
+        const weekday = new Date(newDate + 'T00:00:00Z').getUTCDay();
         if (!withinAvailability(availability, weekday, newStart, newEnd)) {
           return badRequest(res, "That time isn't in the business's available hours.");
         }

@@ -43,6 +43,10 @@ export default async function handler(req, res) {
       // payment row here so the next /api/billing/sync round-trip
       // (or the Finance UI refresh) sees the paid state.
       await applyPaymentToInvoice({ workspaceId, parsed });
+    } else if (parsed.type === 'refund.updated' && parsed.status === 'succeeded') {
+      // Dashboard-initiated refunds + completion-state for our own
+      // refund.create calls (Square refunds settle async).
+      await applyRefundToInvoice({ workspaceId, parsed });
     }
     return ok(res, { handled: true });
   } catch (err) {
@@ -106,5 +110,73 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
       activity              = ${JSON.stringify(newActivity)}::jsonb,
       updated_at            = NOW()
     WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+  `;
+}
+
+// Apply a Square refund event to the matching invoice. Triggers:
+//   - Owner clicks Refund in THRYVE → /api/invoices/refund calls Square →
+//     Square responds PENDING → eventual refund.updated webhook with
+//     COMPLETED arrives here. We bump refunded_amount + activity entry.
+//   - Owner refunds directly in Square dashboard → same webhook → same
+//     code path. Without this, the invoice stays 'paid' in THRYVE while
+//     the customer's money is back. Status flips to 'refunded' when the
+//     cumulative refund amount reaches the invoice total.
+//
+// Dedupes by event refund_id stored in the activity log (we already
+// stamp it from the invoices/refund.js path), AND by paid_amount
+// reconciliation — if cumulative refunds match what's already recorded,
+// skip the write.
+async function applyRefundToInvoice({ workspaceId, parsed }) {
+  // Find the invoice via the payment we stored when the original
+  // checkout completed. stripe_payment_intent doubles as the generic
+  // provider payment-id field — Square pays us by payment_id, refunds
+  // reference that same payment_id, so we match on it.
+  if (!parsed.paymentId) return;
+  const { rows: invRows } = await sql`
+    SELECT * FROM invoices
+    WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${parsed.paymentId}
+    LIMIT 1
+  `;
+  const inv = invRows[0];
+  if (!inv) {
+    console.warn('[webhooks/square] no invoice matches payment', parsed.paymentId, '— ignoring refund');
+    return;
+  }
+  const refundAmount = Math.round(Number(parsed.amountCents || 0)) / 100;
+  if (refundAmount <= 0) return;
+
+  // Idempotency: if this exact refund id has already been recorded in
+  // the activity log, skip. The invoices/refund.js path stamps
+  // stripeRefundId on the activity entry it appends, so dashboard
+  // refunds and our-initiated refunds dedupe through the same shape.
+  const activity = inv.activity || [];
+  if (parsed.refundId && activity.some((a) => a.kind === 'refund' && a.stripeRefundId === parsed.refundId)) {
+    return;
+  }
+
+  const alreadyRefunded = Number(inv.refunded_amount || 0);
+  const newRefunded = +(alreadyRefunded + refundAmount).toFixed(2);
+  const paidAmount = Number(inv.paid_amount || 0);
+  const fullyRefunded = paidAmount > 0 && newRefunded >= paidAmount - 0.005;
+  const newStatus = fullyRefunded ? 'refunded' : inv.status;
+
+  const newActivity = [
+    ...activity,
+    {
+      ts: new Date().toISOString(),
+      kind: 'refund',
+      text: `Refunded $${refundAmount.toFixed(2)} (Square${parsed.reason ? ` · ${parsed.reason}` : ''})`,
+      ...(parsed.refundId ? { stripeRefundId: parsed.refundId } : {}),
+    },
+  ];
+
+  await sql`
+    UPDATE invoices SET
+      status          = ${newStatus},
+      refunded_amount = ${newRefunded},
+      refunded_at     = NOW(),
+      activity        = ${JSON.stringify(newActivity)}::jsonb,
+      updated_at      = NOW()
+    WHERE id = ${inv.id} AND workspace_id = ${workspaceId}
   `;
 }

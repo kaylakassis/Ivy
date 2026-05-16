@@ -1,11 +1,12 @@
 // /api/calendar/bookings/:id
-//   PATCH  → edit fields (notes, recurrence rule, etc.) or cancel a single
-//            occurrence by passing { cancelOccurrence: 'YYYY-MM-DD' }
+//   PATCH  → edit fields (notes, recurrence rule, etc.), cancel a single
+//            occurrence by passing { cancelOccurrence: 'YYYY-MM-DD' }, OR
+//            reschedule by passing { rescheduleTo: { date, startMin, endMin } }
 //   DELETE → soft-cancel the entire booking (and its series if recurring)
 import { sql } from '../../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
-import { serializeBooking, VALID_RECURRENCE } from '../../_lib/calendar.js';
+import { serializeBooking, hasConflict, withinAvailability, VALID_RECURRENCE } from '../../_lib/calendar.js';
 import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
@@ -29,6 +30,108 @@ export default async function handler(req, res) {
 
     if (req.method === 'PATCH') {
       const body = await readBody(req);
+      const booking = found.rows[0];
+
+      // Reschedule path: { rescheduleTo: { date, startMin, endMin } }
+      // — owner moves a booking to a new slot. Mirrors the client-portal
+      // path at /api/me/bookings/[id].js so audit-trail (booking id),
+      // package credits, and Google Calendar sync are preserved.
+      // Recurring series can't be rescheduled — owner cancels the
+      // occurrence + books a new one, same as the client portal.
+      if (body.rescheduleTo && typeof body.rescheduleTo === 'object') {
+        if (booking.cancelled_at) return badRequest(res, "Can't reschedule a cancelled booking");
+        if (booking.recurrence_rule) {
+          return badRequest(res, "Recurring bookings can't be rescheduled — cancel this occurrence and book a new one.");
+        }
+        const r = body.rescheduleTo;
+        const newDate  = (r.date || '').toString();
+        const newStart = Number(r.startMin);
+        const newEnd   = Number(r.endMin);
+        const skipAvailability = !!r.skipAvailabilityCheck;
+        const skipConflict     = !!r.skipConflictCheck;
+
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return badRequest(res, 'rescheduleTo.date must be YYYY-MM-DD');
+        if (!Number.isInteger(newStart) || newStart < 0 || newStart >= 24 * 60) {
+          return badRequest(res, 'rescheduleTo.startMin out of range');
+        }
+        if (!Number.isInteger(newEnd) || newEnd <= newStart || newEnd > 24 * 60) {
+          return badRequest(res, 'rescheduleTo.endMin out of range');
+        }
+        // Owner can move into the past for legitimate cases (recording a
+        // walk-in after the fact). Block "obvious typo" past dates only
+        // when the owner doesn't pass the override flag.
+        const today = new Date().toISOString().slice(0, 10);
+        if (newDate < today && !r.allowPast) {
+          return badRequest(res, "That's in the past — pass allowPast: true to record a historical session.");
+        }
+
+        // Availability check — getUTCDay() to match other booking paths.
+        // Owner can override via skipAvailabilityCheck for off-hours
+        // bookings (e.g. a Sunday session when normal hours are
+        // Mon–Sat). Conflict check the same way.
+        if (!skipAvailability) {
+          const cs = await sql`
+            SELECT availability FROM calendar_settings WHERE workspace_id = ${workspaceId}
+          `;
+          const availability = cs.rows[0]?.availability || {};
+          const weekday = new Date(newDate + 'T00:00:00Z').getUTCDay();
+          if (!withinAvailability(availability, weekday, newStart, newEnd)) {
+            return badRequest(res, "That time isn't in your available hours — toggle Override to book anyway");
+          }
+        }
+
+        let capacity = 1;
+        if (booking.service_id) {
+          const sv = await sql`
+            SELECT capacity FROM services WHERE id = ${booking.service_id} AND workspace_id = ${workspaceId}
+          `;
+          if (sv.rows[0]?.capacity) capacity = Number(sv.rows[0].capacity);
+        }
+
+        if (!skipConflict) {
+          const conflict = await hasConflict({
+            workspaceId,
+            dateISO: newDate,
+            start: newStart,
+            end: newEnd,
+            serviceId: booking.service_id,
+            capacity,
+            excludeBookingId: booking.id,
+          });
+          if (conflict) {
+            return badRequest(res, capacity > 1
+              ? 'That class is full or the slot conflicts with another booking'
+              : 'That slot conflicts with an existing booking or block');
+          }
+        }
+
+        // Apply the move + reset reminders_sent / sms_sent so reminders
+        // fire correctly against the new datetime (same as the client
+        // path).
+        const updated = await sql`
+          UPDATE bookings SET
+            date            = ${newDate}::date,
+            start_min       = ${newStart},
+            end_min         = ${newEnd},
+            reminders_sent  = '{}'::jsonb,
+            sms_sent        = '{}'::jsonb,
+            updated_at      = NOW()
+          WHERE id = ${id} AND workspace_id = ${workspaceId}
+          RETURNING *
+        `;
+        syncOnBookingUpdated({ workspaceId, bookingId: id });
+        // Fire-and-forget client notification with old slot in the
+        // "Was: ..." line. source='owner' so the email greeting
+        // reflects who initiated the move.
+        notifyBookingRescheduled({
+          workspaceId, bookingId: booking.id,
+          oldDateISO:  booking.date instanceof Date ? booking.date.toISOString().slice(0, 10) : booking.date,
+          oldStartMin: booking.start_min,
+          oldEndMin:   booking.end_min,
+          source: 'owner',
+        });
+        return ok(res, { booking: serializeBooking(updated.rows[0]) });
+      }
 
       // Convenience: cancel a single occurrence in a recurring series.
       if (body.cancelOccurrence) {

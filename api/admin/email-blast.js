@@ -31,6 +31,10 @@ const SEGMENTS = new Set([
   'sponsored', 'affiliate', 'client-only',
 ]);
 const MAX_BLAST = 2000;
+// Cooldown between blasts to prevent fat-finger double-sends + protect
+// the shared Resend rate limit. Five minutes is enough to notice a
+// misfire ("oops, wrong segment") before a second send goes out.
+const BLAST_COOLDOWN_MS = 5 * 60 * 1000;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -48,6 +52,36 @@ export default async function handler(req, res) {
     if (!SEGMENTS.has(segment)) return badRequest(res, 'Unknown segment');
     if (!subject) return badRequest(res, 'Subject is required');
     if (!htmlIn)  return badRequest(res, 'Body is required');
+
+    // Cooldown: refuse a second blast from the same admin within
+    // BLAST_COOLDOWN_MS. Catches fat-finger double-sends + protects the
+    // shared Resend rate limit. The audit-events table already records
+    // every blast, so we just check the most recent one. dryRun
+    // is exempt so the admin can preview-then-send without waiting.
+    if (!dryRun) {
+      const actorPreview = await getAdminActor(req);
+      if (actorPreview?.id) {
+        try {
+          const recent = await sql`
+            SELECT created_at FROM audit_events
+            WHERE actor_user_id = ${actorPreview.id}
+              AND action = 'email_blast'
+              AND created_at >= NOW() - (${Math.ceil(BLAST_COOLDOWN_MS / 1000)} || ' seconds')::interval
+            ORDER BY created_at DESC
+            LIMIT 1
+          `;
+          if (recent.rows[0]) {
+            const sinceMs = Date.now() - new Date(recent.rows[0].created_at).getTime();
+            const waitS = Math.max(1, Math.ceil((BLAST_COOLDOWN_MS - sinceMs) / 1000));
+            return badRequest(res, `Cooldown — wait ${waitS}s before sending another blast (you sent one ${Math.floor(sinceMs / 1000)}s ago).`);
+          }
+        } catch (e) {
+          // audit_events absent on older deploys — skip the cooldown
+          // check rather than fail-closed. Logged for visibility.
+          console.warn('[email-blast] cooldown check skipped:', e.message);
+        }
+      }
+    }
 
     const recipients = await loadSegment(segment);
     if (recipients.length > MAX_BLAST) {

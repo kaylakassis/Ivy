@@ -270,9 +270,17 @@ export function verifyWebhook({ rawBody, headers, notificationUrl }) {
   return JSON.parse(typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8'));
 }
 
-// Maps Square's payment / order events to the abstraction's flat shape.
-// We only normalize payment.created and payment.updated for now; other
-// event types fall through and the handler no-ops.
+// Maps Square's payment / refund events to the abstraction's flat shape.
+//
+// Handled:
+//   payment.created  / payment.updated  → 'checkout.completed' (status='paid')
+//   refund.created   / refund.updated   → 'refund.updated' with status reflecting
+//                                          the refund's COMPLETED/PENDING/FAILED state
+//
+// Why include refund events: Square owners can issue refunds from the
+// Square dashboard, not just from THRYVE. Without normalizing those
+// events the per-workspace webhook would silently drop them and our
+// invoice rows would stay marked 'paid' even after the money came back.
 export function parseWebhookEvent(event) {
   if (!event) return null;
   const type = event.type;
@@ -287,6 +295,23 @@ export function parseWebhookEvent(event) {
       currency:    (p.amount_money?.currency || 'USD').toUpperCase(),
       metadata:    {},
       providerData: { orderId: p.order_id, customerEmail: p.buyer_email_address },
+    };
+  }
+  if (type === 'refund.created' || type === 'refund.updated') {
+    const r = event.data?.object?.refund || {};
+    return {
+      type:        'refund.updated',
+      refundId:    r.id,
+      paymentId:   r.payment_id,
+      sessionId:   r.order_id,
+      status:      r.status === 'COMPLETED' ? 'succeeded'
+                  : r.status === 'PENDING'  ? 'pending'
+                  : r.status === 'FAILED'   ? 'failed'
+                  : (r.status || 'unknown').toLowerCase(),
+      amountCents: r.amount_money?.amount || 0,
+      currency:    (r.amount_money?.currency || 'USD').toUpperCase(),
+      reason:      r.reason || null,
+      providerData: { orderId: r.order_id },
     };
   }
   return null;
