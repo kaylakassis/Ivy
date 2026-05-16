@@ -72,7 +72,10 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
       await onUpdateBooking(event.id, {
         rescheduleTo: { date: rescheduleDate, startMin, endMin },
       });
-      setEditingReschedule(false);
+      // Close the whole drawer on success — the booking has moved,
+      // there's nothing else to act on here. Matches the cancel /
+      // delete flow.
+      onClose();
     } catch (e) {
       setRescheduleErr(e.message || 'Could not reschedule');
     } finally { setBusy(false); }

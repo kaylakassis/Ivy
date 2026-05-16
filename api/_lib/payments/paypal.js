@@ -345,20 +345,28 @@ export function parseWebhookEvent(event) {
     const r = event.resource || {};
     // For REFUNDED events resource.id is the refund id; the original
     // capture lives in supplementary_data.related_ids.capture_id. For
-    // REVERSED the capture id is r.id itself.
+    // REVERSED the resource.id is the captureId itself — but PayPal's
+    // own event id is unique per delivery and stable across
+    // retransmits, so we use `event.id` as the dedupe key when there's
+    // no native refund id (e.g. reversals). Without this, a webhook
+    // retransmit of a REVERSED event would re-fire the refund and
+    // double-record it on the invoice.
     const captureId = r.supplementary_data?.related_ids?.capture_id || r.id;
     const orderId   = r.supplementary_data?.related_ids?.order_id || null;
     const amount    = r.amount?.value ? Math.round(Number(r.amount.value) * 100) : 0;
+    const dedupeId  = event.event_type === 'PAYMENT.CAPTURE.REFUNDED'
+                       ? r.id
+                       : (event.id ? `reversal-${event.id}` : null);
     return {
       type:        'refund.updated',
-      refundId:    event.event_type === 'PAYMENT.CAPTURE.REFUNDED' ? r.id : null,
+      refundId:    dedupeId,
       paymentId:   captureId,
       sessionId:   orderId,
       status:      'succeeded',
       amountCents: amount,
       currency:    (r.amount?.currency_code || 'USD').toUpperCase(),
       reason:      r.note_to_payer || r.status_details?.reason || null,
-      providerData: { captureId, orderId },
+      providerData: { captureId, orderId, eventType: event.event_type },
     };
   }
   return null;

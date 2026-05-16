@@ -58,11 +58,20 @@ export default async function handler(req, res) {
           return badRequest(res, 'rescheduleTo.endMin out of range');
         }
         // Owner can move into the past for legitimate cases (recording a
-        // walk-in after the fact). Block "obvious typo" past dates only
-        // when the owner doesn't pass the override flag.
-        const today = new Date().toISOString().slice(0, 10);
-        if (newDate < today && !r.allowPast) {
-          return badRequest(res, "That's in the past — pass allowPast: true to record a historical session.");
+        // walk-in after the fact). Block "obvious typo" past dates +
+        // past times-on-today unless the owner explicitly opts in. The
+        // today+past-time guard catches the realistic mistake of typing
+        // 9am when you meant 9pm and it's already noon.
+        const now = new Date();
+        const today = now.toISOString().slice(0, 10);
+        const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+        if (!r.allowPast) {
+          if (newDate < today) {
+            return badRequest(res, "That's in the past — pass allowPast: true to record a historical session.");
+          }
+          if (newDate === today && newEnd <= nowMins) {
+            return badRequest(res, "That time has already passed today — pass allowPast: true to record a historical session.");
+          }
         }
 
         // Availability check — getUTCDay() to match other booking paths.

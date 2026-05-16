@@ -324,9 +324,13 @@ async function signDoc(req, res) {
       // finally completes. Sends both a push (immediate) and an
       // email (durable record + link to their copy).
       try {
+        // Exclude declined signers — they walked away. Including them
+        // sends a "fully signed" email/push to someone who never agreed,
+        // which is misleading and a small compliance risk.
         const { rows: allSigners } = await sql`
           SELECT client_id, name, email FROM document_signers
           WHERE document_id = ${doc.id}
+            AND status <> 'declined'
         `;
         const branding = await fetchBranding(doc.workspace_id);
         const portalLink = `${appUrl()}/me/documents`;
