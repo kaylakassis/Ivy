@@ -203,13 +203,47 @@ async function onInvoiceEvent(invoice, type, secretKey) {
   const periodEnd = sub.current_period_end
     ? new Date(sub.current_period_end * 1000)
     : null;
-  const r = await sql`
-    UPDATE workspaces SET
-      subscription_status     = ${status},
-      subscription_period_end = ${periodEnd}
-    WHERE stripe_subscription_id = ${sub.id}
-    RETURNING id
-  `;
+
+  // Dunning bookkeeping. On payment_failed: stamp past_due_since on
+  // the FIRST failure (subsequent failures during the same outage
+  // keep the original timestamp so the grace clock doesn't reset),
+  // and bump failed_attempts. On payment_succeeded: clear past_due
+  // bookkeeping completely so a recovered subscription leaves no
+  // ghosts. The api/cron/subscription-dunning cron reads
+  // past_due_since to decide when to suspend.
+  let r;
+  if (type === 'invoice.payment_failed') {
+    r = await sql`
+      UPDATE workspaces SET
+        subscription_status     = ${status},
+        subscription_period_end = ${periodEnd},
+        subscription_past_due_since = COALESCE(subscription_past_due_since, NOW()),
+        subscription_failed_attempts = subscription_failed_attempts + 1
+      WHERE stripe_subscription_id = ${sub.id}
+      RETURNING id
+    `;
+  } else if (type === 'invoice.payment_succeeded') {
+    r = await sql`
+      UPDATE workspaces SET
+        subscription_status         = ${status},
+        subscription_period_end     = ${periodEnd},
+        subscription_past_due_since = NULL,
+        subscription_failed_attempts = 0,
+        subscription_suspended_at   = NULL,
+        subscription_last_dunning_at = NULL
+      WHERE stripe_subscription_id = ${sub.id}
+      RETURNING id
+    `;
+  } else {
+    r = await sql`
+      UPDATE workspaces SET
+        subscription_status     = ${status},
+        subscription_period_end = ${periodEnd}
+      WHERE stripe_subscription_id = ${sub.id}
+      RETURNING id
+    `;
+  }
+
   if (type === 'invoice.payment_succeeded' && r.rows[0]?.id) {
     await attributePayment({
       workspaceId: r.rows[0].id,

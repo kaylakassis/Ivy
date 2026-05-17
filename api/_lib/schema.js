@@ -46,6 +46,18 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at          TIMESTAMP
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_period_end TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
+
+-- Dunning state. subscription_past_due_since is stamped on the first
+-- invoice.payment_failed webhook; cleared on payment_succeeded. The
+-- subscription-dunning cron uses it to find workspaces past the
+-- grace period and flip them to 'suspended'. Suspension blocks
+-- write actions in the UI (gating layered in clientPortal.js +
+-- handler-level guards) but keeps the account/billing surface
+-- reachable so the owner can update their card.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_past_due_since TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_failed_attempts INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_suspended_at  TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_last_dunning_at TIMESTAMPTZ;
 -- Update the column default for any future workspace inserts that bypass
 -- the explicit value (e.g. raw SQL admin tooling).
 ALTER TABLE workspaces ALTER COLUMN trial_ends_at SET DEFAULT (NOW() + INTERVAL '28 days');
