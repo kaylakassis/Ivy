@@ -15,6 +15,8 @@
 //   4. Hit /account → Admin → "Check email-domain status" to confirm
 //      Resend reports the domain as verified.
 import { userAllowsEmail, clientAllowsEmail, clientAllowsEmailByAddress, CRITICAL_EMAIL_TYPES } from './notificationPrefs.js';
+import { tryConsumeQuota, DEFAULT_EMAIL_CAP_PER_DAY } from './usageCounters.js';
+import { sql } from './db.js';
 
 const RESEND_URL = 'https://api.resend.com/emails';
 
@@ -356,11 +358,49 @@ function escapeAttr(s) { return escapeText(s); }
 // Returns { ok: boolean, sent: boolean, reason?: string } so the caller
 // can tell "didn't fire because muted" apart from "Resend exploded".
 
+// Resolve "which workspace does this email count against?" for the
+// per-workspace daily quota (§2.8). Critical types (verification,
+// password_reset, account_deletion) bypass the cap — those MUST go
+// through or the user is locked out.
+async function gateByQuota(workspaceId, type) {
+  if (!workspaceId) return { ok: true };
+  if (type && CRITICAL_EMAIL_TYPES.has(type)) return { ok: true };
+  const q = await tryConsumeQuota(workspaceId, 'email', DEFAULT_EMAIL_CAP_PER_DAY);
+  if (!q.ok) {
+    // eslint-disable-next-line no-console
+    console.warn(`[email] workspace ${workspaceId} hit daily cap (${q.count}/${q.cap})`);
+  }
+  return q;
+}
+
+async function workspaceForUser(userId) {
+  if (!userId) return null;
+  try {
+    const { rows } = await sql`
+      SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1
+    `;
+    return rows[0]?.id || null;
+  } catch { return null; }
+}
+
+async function workspaceForClient(clientId) {
+  if (!clientId) return null;
+  try {
+    const { rows } = await sql`
+      SELECT workspace_id FROM clients WHERE id = ${clientId} LIMIT 1
+    `;
+    return rows[0]?.workspace_id || null;
+  } catch { return null; }
+}
+
 // Send a categorized email to a workspace owner (lookup by userId).
 export async function sendEmailToUser({ userId, type, to, subject, html, text, replyTo, headers, timeoutMs }) {
   if (type && !(await userAllowsEmail(userId, type))) {
     return { ok: true, sent: false, reason: 'muted' };
   }
+  const workspaceId = await workspaceForUser(userId);
+  const q = await gateByQuota(workspaceId, type);
+  if (!q.ok) return { ok: true, sent: false, reason: 'workspace-quota-exceeded' };
   try {
     const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
     return { ok: true, sent: true, result };
@@ -376,6 +416,9 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
   if (type && !(await clientAllowsEmail(clientId, type))) {
     return { ok: true, sent: false, reason: 'muted' };
   }
+  const workspaceId = await workspaceForClient(clientId);
+  const q = await gateByQuota(workspaceId, type);
+  if (!q.ok) return { ok: true, sent: false, reason: 'workspace-quota-exceeded' };
   try {
     const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
     return { ok: true, sent: true, result };
@@ -391,6 +434,8 @@ export async function sendEmailToClientByAddress({ workspaceId, email, type, sub
   if (type && !(await clientAllowsEmailByAddress({ email, workspaceId, type }))) {
     return { ok: true, sent: false, reason: 'muted' };
   }
+  const q = await gateByQuota(workspaceId, type);
+  if (!q.ok) return { ok: true, sent: false, reason: 'workspace-quota-exceeded' };
   try {
     const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, timeoutMs });
     return { ok: true, sent: true, result };

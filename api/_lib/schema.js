@@ -1837,4 +1837,23 @@ CREATE TABLE IF NOT EXISTS webhook_event_dedup (
 -- Retention sweep filters by processed_at < NOW() - 90 days.
 CREATE INDEX IF NOT EXISTS idx_webhook_event_dedup_processed
   ON webhook_event_dedup(processed_at);
+
+-- ─── Per-workspace daily usage counters (§2.8) ───────────────────────
+-- Caps the blast radius of an abusive / compromised workspace: one
+-- rogue owner cannot burn the shared Resend or Twilio sender
+-- reputation by spamming. Counter increments atomically via
+-- INSERT ... ON CONFLICT DO UPDATE so parallel sends from the same
+-- workspace race-safely on the row. Keyed by (workspace_id,
+-- counter_key, day) so historical counts stay around for the admin
+-- dashboard; a retention cron prunes rows older than 90 days.
+CREATE TABLE IF NOT EXISTS daily_usage_counters (
+  workspace_id UUID    NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  counter_key  TEXT    NOT NULL,
+  day          DATE    NOT NULL,
+  count        INTEGER NOT NULL DEFAULT 0,
+  PRIMARY KEY (workspace_id, counter_key, day)
+);
+-- Retention sweep filters by day < CURRENT_DATE - 90.
+CREATE INDEX IF NOT EXISTS idx_daily_usage_counters_day
+  ON daily_usage_counters(day);
 `;

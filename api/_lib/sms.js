@@ -11,6 +11,7 @@
 // a future option — keep the API of this module shaped so callers
 // only pass workspaceId + recipient details, no token plumbing.
 import { sendSms, isTwilioConfigured } from './twilio.js';
+import { tryConsumeQuota, DEFAULT_SMS_CAP_PER_DAY } from './usageCounters.js';
 
 // Normalize whatever the user typed to E.164. Strip non-digits, then:
 //   • starts with '+' → assume already E.164, keep digits + plus
@@ -44,15 +45,34 @@ export function withOptOutSuffix(body) {
 }
 
 // Send a message to a client, gated on (1) Twilio configured, (2) phone
-// non-empty + normalized, (3) consent timestamp present. Returns
-// { ok, reason?, sid? }.
-export async function sendClientSms({ phone, consentAt, body }) {
+// non-empty + normalized, (3) consent timestamp present, (4) workspace
+// daily SMS quota not exceeded (§2.8). Returns { ok, reason?, sid? }.
+//
+// workspaceId is optional for legacy callers; without it, the daily
+// cap is skipped. Every NEW caller should pass it so an abusive
+// workspace cannot burn through THRYVE-paid Twilio credits in a
+// single afternoon.
+export async function sendClientSms({ phone, consentAt, body, workspaceId }) {
   if (!isTwilioConfigured()) return { ok: false, reason: 'twilio not configured' };
   if (!phone) return { ok: false, reason: 'no phone' };
   if (!consentAt) return { ok: false, reason: 'no consent' };
 
   const to = normalizePhone(phone);
   if (!to) return { ok: false, reason: 'invalid phone' };
+
+  // Pre-charge the quota counter so two parallel sends can't both
+  // pass the check. The counter increments first; if we're over the
+  // cap, abort before contacting Twilio. (Slight downside: a Twilio
+  // failure still counts against the quota for today — acceptable
+  // for cost control.)
+  if (workspaceId) {
+    const q = await tryConsumeQuota(workspaceId, 'sms', DEFAULT_SMS_CAP_PER_DAY);
+    if (!q.ok) {
+      // eslint-disable-next-line no-console
+      console.warn(`[sms] workspace ${workspaceId} hit daily cap (${q.count}/${q.cap})`);
+      return { ok: false, reason: 'workspace-quota-exceeded' };
+    }
+  }
 
   try {
     const r = await sendSms({ to, body: withOptOutSuffix(body) });

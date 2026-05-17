@@ -319,6 +319,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
     const body = renderTokens(cfg.body, tokens);
     const out = await sendClientSms({
       phone: client.phone, consentAt: client.sms_consent_at, body,
+      workspaceId: workflow.workspace_id,
     });
     if (!out.ok) throw new Error(out.error || 'SMS send failed');
     return { to: client.phone };

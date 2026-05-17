@@ -163,9 +163,10 @@ export default async function handler(req, res) {
             reminderMinutes: minsNum,
           });
           const out = await sendClientSms({
-            phone:     r.client_phone,
-            consentAt: r.sms_consent_at,
+            phone:       r.client_phone,
+            consentAt:   r.sms_consent_at,
             body,
+            workspaceId: r.workspace_id, // gates the daily per-workspace SMS cap
           });
           if (out.ok) {
             await sql`

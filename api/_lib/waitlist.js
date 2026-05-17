@@ -153,9 +153,10 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
     // Lookup consent — same one-number-one-consent pattern as reminders.
     const c = await sql`SELECT sms_consent_at FROM clients WHERE phone = ${entry.client_phone} LIMIT 1`;
     await sendClientSms({
-      phone:     entry.client_phone,
-      consentAt: c.rows[0]?.sms_consent_at || null,
-      body: `${bizName}: a spot opened up — your ${serviceName} on ${dateLabel} at ${timeLabel} is confirmed.`,
+      phone:       entry.client_phone,
+      consentAt:   c.rows[0]?.sms_consent_at || null,
+      body:        `${bizName}: a spot opened up — your ${serviceName} on ${dateLabel} at ${timeLabel} is confirmed.`,
+      workspaceId: entry.workspace_id,
     });
   }
 }
