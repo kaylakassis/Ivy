@@ -102,6 +102,20 @@ export default function PublicInvoice() {
           <div className="metric-label" style={{ fontSize: 10 }}>From</div>
           <div style={{ fontSize: 14, fontWeight: 600 }}>{inv.business?.name || 'A THRYVE business'}</div>
         </div>
+        {/* Print / Save-as-PDF: triggers the browser's native print
+            dialog. On every modern browser "Save as PDF" is a
+            destination in that dialog — no client-side PDF library
+            needed. Hidden from the printed output itself via the
+            print-hide CSS class so the button doesn't appear on the
+            generated PDF. */}
+        <button
+          type="button"
+          onClick={() => window.print()}
+          className="btn btn-outline print-hide"
+          title="Print or save as PDF"
+          style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}>
+          <Icons.Doc size={12}/> Print / PDF
+        </button>
       </div>
 
       {/* Card */}

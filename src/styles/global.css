@@ -693,3 +693,29 @@ img, svg, video { max-width: 100%; height: auto; }
   .ivy-dock-fab { transition: none; }
   .ivy-dock-fab:hover { transform: none; box-shadow: 0 12px 32px rgba(46,49,104,.28); }
 }
+
+/* ─── Print styles ─────────────────────────────────────────────────
+   Used primarily by PublicInvoice.jsx's "Print / PDF" button. Force
+   light backgrounds so dark mode doesn't dump ink everywhere, hide
+   anything tagged .print-hide (the button itself, the Ivy dock if
+   open), and use standard margins so saved PDFs look right.
+*/
+@media print {
+  @page { margin: 16mm; }
+  html, body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+  .print-hide,
+  .ivy-dock-fab,
+  .ivy-dock,
+  nav, header[role="banner"] {
+    display: none !important;
+  }
+  .card {
+    box-shadow: none !important;
+    border: 1px solid #ccc !important;
+    background: #fff !important;
+  }
+  a { color: inherit !important; text-decoration: none !important; }
+}
