@@ -1736,6 +1736,50 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
   ON clients(workspace_id, email) WHERE email IS NOT NULL;
 
+-- ─── Materialized invoice total (Phase S1 §1.2) ─────────────────────
+-- The /api/finance dashboard used to expand jsonb_array_elements(items)
+-- for every invoice in the workspace, per page load. At 1K invoices the
+-- response was already in the seconds; at 10K it became unusable. New
+-- column total is kept in sync by a BEFORE-trigger, so every callsite
+-- that does an INSERT/UPDATE on items/tax_rate/discount stays unchanged.
+-- The dashboard query becomes a single SUM(total) FILTER (WHERE status=...).
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS total NUMERIC(12,2) NOT NULL DEFAULT 0;
+
+-- plpgsql is in the default extension set on Neon; no CREATE EXTENSION
+-- needed. CREATE OR REPLACE is idempotent across migrator passes.
+CREATE OR REPLACE FUNCTION invoices_compute_total() RETURNS trigger AS $$
+DECLARE
+  v_subtotal numeric;
+BEGIN
+  SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
+    INTO v_subtotal
+    FROM jsonb_array_elements(COALESCE(NEW.items, '[]'::jsonb)) it;
+  NEW.total := ROUND(
+    GREATEST(v_subtotal - COALESCE(NEW.discount, 0), 0)
+    * (1 + COALESCE(NEW.tax_rate, 0) / 100),
+    2
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- DROP-then-CREATE keeps the trigger definition fresh if we ever tweak
+-- the function signature; without the drop, ADD TRIGGER would silently
+-- be skipped on second run because Postgres has no IF NOT EXISTS for
+-- triggers (until v14, partial support since).
+DROP TRIGGER IF EXISTS invoices_total_trg ON invoices;
+CREATE TRIGGER invoices_total_trg
+  BEFORE INSERT OR UPDATE OF items, tax_rate, discount ON invoices
+  FOR EACH ROW EXECUTE FUNCTION invoices_compute_total();
+
+-- One-time backfill for rows written before the trigger existed. The
+-- 0-default guarantees the column is populated; this corrects any rows
+-- still at zero where items would compute non-zero. Bumping items =
+-- items triggers the recompute. Safe on re-runs: rows already correct
+-- get recomputed to the same value.
+UPDATE invoices SET items = items
+WHERE total = 0 AND items <> '[]'::jsonb;
+
 -- ─── Scaling-readiness composite indexes (Phase S2) ──────────────────
 -- These narrow hot-path scans that previously fell back to broader
 -- indexes + post-filter. Each one closes a specific bottleneck the

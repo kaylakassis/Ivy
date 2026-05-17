@@ -13,31 +13,19 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
 
-    // Compute item totals per invoice in SQL (sum qty*rate over JSONB items),
-    // then aggregate by status + windows. Coercing to numeric to avoid float
-    // drift — Postgres handles JSONB->numeric cleanly.
+    // Read precomputed invoice totals (kept in sync by the
+    // invoices_total_trg BEFORE-trigger in schema.js). Before this
+    // column existed, the dashboard expanded jsonb_array_elements
+    // over every invoice on every page load — sub-second at 100
+    // invoices, multi-second at 10K. Now it's a straight SUM over
+    // the indexed (workspace_id, status) and (workspace_id, paid_at)
+    // partial indexes.
     //
-    // Tolerate partial schema: if invoices table or its discount/tax_rate/
-    // items columns aren't there yet (cold install), return zeros instead
-    // of bricking the dashboard's finance tile.
+    // Tolerate partial schema: if the column or table isn't there
+    // yet (cold install before migrations apply), return zeros
+    // instead of bricking the Finance tile.
     let rows;
     try { ({ rows } = await sql`
-      WITH base AS (
-        SELECT
-          i.id,
-          i.status,
-          i.issue_date,
-          i.paid_at,
-          GREATEST(
-            (
-              SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
-              FROM jsonb_array_elements(i.items) AS it
-            ) - i.discount,
-            0
-          ) * (1 + i.tax_rate / 100) AS total
-        FROM invoices i
-        WHERE i.workspace_id = ${workspaceId}
-      )
       SELECT
         COALESCE(SUM(CASE WHEN status = 'paid'                   THEN total END), 0)::numeric AS total_paid,
         COALESCE(SUM(CASE WHEN status IN ('sent','overdue')      THEN total END), 0)::numeric AS total_outstanding,
@@ -51,7 +39,8 @@ export default async function handler(req, res) {
         COUNT(*) FILTER (WHERE status = 'paid')                  AS count_paid,
         COUNT(*) FILTER (WHERE status = 'overdue')               AS count_overdue,
         COUNT(*) FILTER (WHERE status = 'voided')                AS count_voided
-      FROM base
+      FROM invoices
+      WHERE workspace_id = ${workspaceId}
     `); } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[finance GET] summary query failed (returning zeros):', e.message);
