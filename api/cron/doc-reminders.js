@@ -25,12 +25,13 @@ import { appUrl, generateRawToken } from '../_lib/tokens.js';
 import crypto from 'node:crypto';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
 const SEND_AFTER_HOURS  = 24 * 3;   // first nag at 3 days
 const REPEAT_AFTER_HOURS = 24 * 7;  // then once a week
 const MAX_PER_RUN = 200;
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
     && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
@@ -175,3 +176,5 @@ export default async function handler(req, res) {
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
+
+export default trackCron('doc-reminders', handler);

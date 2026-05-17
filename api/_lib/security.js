@@ -5,6 +5,7 @@
 // hostile page while logged in, that page can't trigger destructive POST/PATCH/
 // DELETE calls against our API on their behalf (CSRF defense-in-depth on top
 // of the SameSite=lax session cookie).
+import { stampRequestId } from './monitoring.js';
 
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS']);
 
@@ -28,6 +29,11 @@ function originHost(headerValue) {
 // origin without origin header), we allow it — the SameSite cookie is still in
 // place to block hostile contexts.
 export function requireSameOrigin(req, res) {
+  // Every authenticated handler routes through here, so it's the right
+  // place to stamp the request ID + echo it on the response. Idempotent
+  // — repeated calls return the existing ID.
+  stampRequestId(req, res);
+
   if (SAFE_METHODS.has(req.method)) return true;
 
   const host = siteHost(req);

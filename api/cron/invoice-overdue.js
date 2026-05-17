@@ -17,11 +17,12 @@ import { notifyInvoiceOverdue } from '../_lib/invoiceNotify.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
 const REPEAT_AFTER_HOURS = 24 * 7;
 const MAX_PER_RUN = 200;
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
     && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
@@ -101,3 +102,5 @@ export default async function handler(req, res) {
     return serverError(res, err);
   }
 }
+
+export default trackCron('invoice-overdue', handler);

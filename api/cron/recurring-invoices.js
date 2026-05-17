@@ -23,6 +23,7 @@ import { fetchBranding } from '../_lib/branding.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
+import { trackCron } from '../_lib/cronMetrics.js';
 
 const MAX_PER_RUN = 200;
 
@@ -31,7 +32,7 @@ function escapeHtml(s) {
 }
 function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
     && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
@@ -188,3 +189,5 @@ async function autoSendInvoice({ schedule, invoice }) {
     console.error('[cron/recurring] thread message failed:', msgErr.message);
   }
 }
+
+export default trackCron('recurring-invoices', handler);

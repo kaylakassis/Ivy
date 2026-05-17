@@ -23,12 +23,13 @@ import { list, del } from '@vercel/blob';
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
 const ORPHAN_GRACE_HOURS = 24;     // skip blobs uploaded in the last day
 const MAX_DELETES_PER_RUN = 1000;  // cap per-tick work
 const MAX_LIST_PAGES = 50;         // cap total blob walk
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
@@ -148,3 +149,5 @@ async function collectReferencedPathnames() {
     return null;
   }
 }
+
+export default trackCron('blob-prune', handler);

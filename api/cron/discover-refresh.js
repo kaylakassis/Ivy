@@ -14,8 +14,9 @@
 // because services has (workspace_id, price) covered.
 import { sql } from '../_lib/db.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
@@ -86,3 +87,5 @@ export default async function handler(req, res) {
     return serverError(res, err);
   }
 }
+
+export default trackCron('discover-refresh', handler);

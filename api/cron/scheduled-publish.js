@@ -13,8 +13,9 @@ import { sql } from '../_lib/db.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // Vercel cron jobs hit us as GET requests with a magic header. We
   // accept either GET (cron) or POST (manual admin trigger).
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -78,3 +79,5 @@ export default async function handler(req, res) {
     return serverError(res, err);
   }
 }
+
+export default trackCron('scheduled-publish', handler);

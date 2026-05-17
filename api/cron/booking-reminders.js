@@ -21,6 +21,7 @@ import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyClientSafe } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
 // Per-run cap so a backlog (cron paused for a day, etc.) doesn't blow
 // past Resend's rate limit on resume. The next tick catches the rest.
@@ -35,7 +36,7 @@ const MAX_PER_RUN = 1000;
 const LOOKBACK_MIN  = 25;
 const LOOKAHEAD_MIN = 5;
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
     && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET
@@ -259,3 +260,5 @@ function composeReminderSms({ clientName, serviceName, businessName, dateISO, st
   const time  = fmtTime(startMin);
   return `${businessName}: hi ${first}, your ${serviceName} is ${when} (${day} at ${time}). See you then!`;
 }
+
+export default trackCron('booking-reminders', handler);

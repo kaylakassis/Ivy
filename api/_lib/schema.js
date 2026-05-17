@@ -1857,6 +1857,28 @@ CREATE TABLE IF NOT EXISTS daily_usage_counters (
 CREATE INDEX IF NOT EXISTS idx_daily_usage_counters_day
   ON daily_usage_counters(day);
 
+-- ─── Cron run history (observability) ────────────────────────────────
+-- Every cron stamps a row here on completion. The admin dashboard
+-- reads from this to chart per-cron runtime, success/failure rate,
+-- and "items processed" — without it, the only way to debug a
+-- slow/failing cron at scale is to grep Vercel function logs.
+-- Pruned by the db-prune cron at 30 days (crons fire daily; 30 runs
+-- per cron is enough for trend spotting without ballooning the table).
+CREATE TABLE IF NOT EXISTS cron_runs (
+  id            BIGSERIAL PRIMARY KEY,
+  name          TEXT        NOT NULL,
+  started_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  finished_at   TIMESTAMPTZ,
+  duration_ms   INTEGER,
+  ok            BOOLEAN,
+  metrics       JSONB       NOT NULL DEFAULT '{}'::jsonb,
+  error_message TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_cron_runs_name_finished
+  ON cron_runs(name, finished_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_cron_runs_finished
+  ON cron_runs(finished_at DESC NULLS LAST);
+
 -- ─── Discover page precomputed snapshot ──────────────────────────────
 -- /api/me/discover used to run ~8 subqueries per workspace in the
 -- result (service_count, min/max_price, cover_photo_url, site_handle,

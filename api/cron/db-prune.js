@@ -25,10 +25,11 @@
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
 const BATCH_LIMIT = 5000;
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
@@ -47,6 +48,9 @@ export default async function handler(req, res) {
 
     results.rateLimits = await prune('rate_limits',
       `attempted_at < NOW() - INTERVAL '7 days'`);
+
+    results.cronRuns = await prune('cron_runs',
+      `finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '30 days'`);
 
     return ok(res, { ok: true, results, durationMs: Date.now() - t0 });
   } catch (err) {
@@ -83,3 +87,5 @@ async function prune(tableName, whereClause) {
     return { error: err.message, table: tableName };
   }
 }
+
+export default trackCron('db-prune', handler);

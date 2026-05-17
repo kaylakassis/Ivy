@@ -12,8 +12,9 @@ import { sql } from '../_lib/db.js';
 import { pullBusyTimes } from '../_lib/googleSync.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   // Vercel crons fire as GET. Allow POST too for manual triggers.
   if (req.method !== 'GET' && req.method !== 'POST') {
     return methodNotAllowed(res, ['GET', 'POST']);
@@ -54,3 +55,5 @@ export default async function handler(req, res) {
     return serverError(res, err);
   }
 }
+
+export default trackCron('google-busy-sync', handler);

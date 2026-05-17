@@ -23,8 +23,9 @@ import { evaluateScheduledWorkflows, resumeWaitingWorkflows } from '../_lib/work
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
     && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = !!process.env.ADMIN_SECRET
@@ -41,3 +42,5 @@ export default async function handler(req, res) {
     return serverError(res, err);
   }
 }
+
+export default trackCron('workflows', handler);
