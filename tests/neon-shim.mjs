@@ -65,3 +65,8 @@ export function neon(connectionString, opts = {}) {
 // Some callers do `import { Pool } from '@neondatabase/serverless'` for
 // streaming queries — we don't, but stub it so re-exports don't break.
 export class Pool {}
+
+// db.js sets neonConfig.fetchConnectionCache + poolQueryViaFetch for
+// scaling. The flags are no-ops here (the shim is plain pg), but the
+// import has to resolve.
+export const neonConfig = {};

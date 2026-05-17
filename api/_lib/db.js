@@ -1,7 +1,28 @@
 // Database client — Neon serverless driver.
 // Vercel's Postgres → Neon migration: same connection string, similar API.
 // We pass `fullResults: true` so `sql\`...\`` returns `{ rows, rowCount, ... }`.
-import { neon } from '@neondatabase/serverless';
+//
+// Scaling notes (Phase S2 §2.4):
+//   • DATABASE_URL should point at Neon's POOLER endpoint (the URL
+//     with `-pooler` in the host) — transaction-mode pgBouncer in
+//     front of the DB. Each fetch from the serverless driver still
+//     opens a fresh HTTP request, but Neon's edge multiplexes them
+//     across a small pool of actual DB connections. Without pooling,
+//     a busy hour with 1K concurrent invocations exhausts the DB
+//     connection limit (Neon defaults around 100); with pooling,
+//     they share.
+//   • `fetchConnectionCache = true` reuses the HTTPS connection
+//     across calls inside the same function invocation — saves the
+//     TLS handshake per query.
+//   • `poolQueryViaFetch = true` routes every query through the
+//     HTTPS endpoint (the alternative is a WebSocket pool, which
+//     doesn't help on Vercel since functions don't keep state).
+import { neon, neonConfig } from '@neondatabase/serverless';
+
+// Set once at module load. Cheap; safe to set unconditionally even if
+// the driver version doesn't recognize the flag (it's just ignored).
+neonConfig.fetchConnectionCache = true;
+neonConfig.poolQueryViaFetch    = true;
 
 function connectionString() {
   // Vercel injects POSTGRES_URL when the legacy Vercel Postgres integration is in place.

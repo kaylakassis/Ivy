@@ -126,29 +126,48 @@ export async function sendPushToUser({ userId, payload, type }) {
   if (rows.length === 0) return { ok: true, sent: 0 };
 
   const body = JSON.stringify(payload);
-  let sent = 0;
-  let removed = 0;
-  for (const r of rows) {
-    try {
-      // eslint-disable-next-line no-await-in-loop
-      await webpush.sendNotification({
-        endpoint: r.endpoint,
-        keys: { p256dh: r.p256dh_key, auth: r.auth_key },
-      }, body, { TTL: 60 * 60 * 24 });
-      sent++;
-      // eslint-disable-next-line no-await-in-loop
-      await sql`UPDATE push_subscriptions SET last_used_at = NOW() WHERE id = ${r.id}`;
-    } catch (err) {
-      const status = err?.statusCode;
-      if (status === 404 || status === 410) {
-        // eslint-disable-next-line no-await-in-loop
-        await sql`DELETE FROM push_subscriptions WHERE id = ${r.id}`;
-        removed++;
-      } else {
-        // eslint-disable-next-line no-console
-        console.warn('[push] send failed:', status, err.message);
-      }
-    }
+
+  // Fan out to every subscription in parallel rather than serial-
+  // awaiting one at a time. A user with 5 devices used to wait for
+  // 5 sequential webpush round-trips (each ~150-400ms to the push
+  // service); now they go together. Web Push providers tolerate
+  // parallel requests fine — we're well under the 100/sec/origin
+  // soft limits at any plausible per-user fanout.
+  const results = await Promise.allSettled(rows.map((r) =>
+    webpush.sendNotification(
+      { endpoint: r.endpoint, keys: { p256dh: r.p256dh_key, auth: r.auth_key } },
+      body,
+      { TTL: 60 * 60 * 24 },
+    ).then(() => ({ kind: 'sent', id: r.id }))
+     .catch((err) => {
+       const status = err?.statusCode;
+       if (status === 404 || status === 410) return { kind: 'expired', id: r.id };
+       // eslint-disable-next-line no-console
+       console.warn('[push] send failed:', status, err.message);
+       return { kind: 'error', id: r.id };
+     }),
+  ));
+
+  // Collect IDs for two batched DB writes instead of N serial ones.
+  const sentIds    = [];
+  const expiredIds = [];
+  for (const r of results) {
+    if (r.status !== 'fulfilled') continue;
+    if (r.value.kind === 'sent')    sentIds.push(r.value.id);
+    if (r.value.kind === 'expired') expiredIds.push(r.value.id);
   }
-  return { ok: true, sent, removed };
+
+  if (sentIds.length > 0) {
+    await sql.query(
+      `UPDATE push_subscriptions SET last_used_at = NOW() WHERE id = ANY($1::uuid[])`,
+      [sentIds],
+    );
+  }
+  if (expiredIds.length > 0) {
+    await sql.query(
+      `DELETE FROM push_subscriptions WHERE id = ANY($1::uuid[])`,
+      [expiredIds],
+    );
+  }
+  return { ok: true, sent: sentIds.length, removed: expiredIds.length };
 }

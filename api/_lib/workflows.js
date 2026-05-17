@@ -508,16 +508,13 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
           AND MAX(b.date) <= CURRENT_DATE - (${days}::int || ' days')::interval
        LIMIT ${Math.max(1, Math.min(100, remaining))}
     `;
-    let fired = 0;
-    for (const c of clients) {
-      // eslint-disable-next-line no-await-in-loop
+    return runWithConcurrency(clients, 10, async (c) => {
       const out = await runWorkflow({
         workflow: wf, client: c,
         context: { lastBooking: c.last_booking, daysInactive: days },
       });
-      if (out.status !== 'skipped') fired++;
-    }
-    return fired;
+      return out.status !== 'skipped' ? 1 : 0;
+    });
   }
 
   if (wf.trigger_type === 'booking_completed') {
@@ -534,23 +531,48 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
          AND b.date = CURRENT_DATE - (${days}::int || ' days')::interval
        LIMIT ${Math.max(1, Math.min(100, remaining))}
     `;
-    let fired = 0;
-    for (const b of bookings) {
+    return runWithConcurrency(bookings, 10, async (b) => {
       const client = {
         id: b.c_id, name: b.c_name, email: b.c_email,
         phone: b.c_phone, sms_consent_at: b.c_sms_consent_at,
       };
-      // eslint-disable-next-line no-await-in-loop
       const out = await runWorkflow({
         workflow: wf, client,
         context: { bookingId: b.id, bookingDate: b.date, daysAfter: days },
       });
-      if (out.status !== 'skipped') fired++;
-    }
-    return fired;
+      return out.status !== 'skipped' ? 1 : 0;
+    });
   }
 
   return 0;
+}
+
+// Run `fn(item)` over `items` with at most `concurrency` in flight at
+// a time. Returns the total of all numeric resolves (used here to
+// count "fired" actions). Failures inside `fn` are swallowed and
+// counted as zero — workflows should not abort each other.
+//
+// Concurrency = 10 is a sweet spot for our load: it gives ~10x the
+// throughput of serial without hitting Resend's 2 req/sec free-tier
+// burst limit (most workflow actions are 1 email + 1 DB write per
+// client; the email send dominates and Resend itself queues bursts).
+async function runWithConcurrency(items, concurrency, fn) {
+  let cursor = 0;
+  let total = 0;
+  const workers = Array.from({ length: Math.min(concurrency, items.length) }, async () => {
+    while (true) {
+      const i = cursor++;
+      if (i >= items.length) return;
+      try {
+        total += (await fn(items[i])) || 0;
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        console.warn('[workflows] item failed:', err.message);
+      }
+    }
+  });
+  await Promise.all(workers);
+  return total;
 }
 
 export function serializeWorkflow(row, lastRunSummary) {

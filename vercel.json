@@ -3,6 +3,7 @@
   "buildCommand": "vite build",
   "outputDirectory": "dist",
   "framework": "vite",
+  "regions": ["iad1", "fra1", "syd1"],
   "crons": [
     { "path": "/api/cron/booking-reminders",    "schedule": "*/10 * * * *" },
     { "path": "/api/cron/google-busy-sync",     "schedule": "15 * * * *" },
