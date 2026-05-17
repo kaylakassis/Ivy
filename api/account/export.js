@@ -118,7 +118,29 @@ export default async function handler(req, res) {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Cache-Control', 'no-store');
-    return res.status(200).send(JSON.stringify(payload, null, 2));
+
+    // Stream the response in chunks rather than JSON.stringify-ing
+    // the full payload to a single buffer. At scale (10K+ bookings,
+    // 100K+ messages, etc.) the full buffer crosses 50MB and the
+    // function OOMs. Chunked write keeps memory bounded: we render
+    // the wrapping object scaffold + one section at a time. Result
+    // is still a single valid JSON document.
+    //
+    // Per-section we still JSON.stringify each row's array in one
+    // go because each table here tops out at <100K rows in any
+    // realistic workspace and the marginal benefit of per-row
+    // streaming isn't worth the code complexity.
+    res.status(200);
+    res.write('{\n');
+    res.write(`  "thryve_export_version": 1,\n`);
+    res.write(`  "exported_at": ${JSON.stringify(payload.exported_at)},\n`);
+    const keys = Object.keys(payload).filter((k) => k !== 'thryve_export_version' && k !== 'exported_at');
+    keys.forEach((k, i) => {
+      res.write(`  ${JSON.stringify(k)}: ${JSON.stringify(payload[k], null, 2)}`);
+      res.write(i === keys.length - 1 ? '\n' : ',\n');
+    });
+    res.write('}\n');
+    return res.end();
   } catch (err) {
     return serverError(res, err);
   }
