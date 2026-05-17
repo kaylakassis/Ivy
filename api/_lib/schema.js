@@ -1748,6 +1748,26 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
   ON clients(workspace_id, email) WHERE email IS NOT NULL;
 
+-- ─── Multi-currency invoicing ────────────────────────────────────────
+-- Until now every invoice was implicitly USD (the platform shipped
+-- US-first). Going global requires per-invoice currency stamped at
+-- creation time — owners might invoice some clients in USD, others
+-- in EUR. Default copied from workspace's finance_settings.currency
+-- so existing workflows don't change; explicit override per invoice.
+--
+-- Codes are ISO 4217 (USD, EUR, GBP, ...). 3-char check enforces
+-- shape; no list-membership check at the DB level — payment
+-- providers will reject anything they don't support.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_currency_format;
+ALTER TABLE invoices ADD CONSTRAINT invoices_currency_format
+  CHECK (currency ~ '^[A-Z]{3}$');
+
+-- Recurring templates and quotes too — same logic, copy from
+-- workspace default at creation.
+ALTER TABLE recurring_invoices ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
+ALTER TABLE quotes ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
+
 -- ─── Materialized invoice total (Phase S1 §1.2) ─────────────────────
 -- The /api/finance dashboard used to expand jsonb_array_elements(items)
 -- for every invoice in the workspace, per page load. At 1K invoices the

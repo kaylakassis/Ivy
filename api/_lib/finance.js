@@ -73,6 +73,9 @@ export function serializeInvoice(row) {
     items,
     taxRate,
     discount,
+    // Currency code (ISO 4217). Defaults to USD on legacy rows that
+    // were written before the column existed.
+    currency:     row.currency || 'USD',
     notes:        row.notes,
     status:       row.status,
     sentAt:       row.sent_at,

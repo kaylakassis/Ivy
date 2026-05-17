@@ -111,13 +111,26 @@ export default async function handler(req, res) {
         const num = await nextInvoiceNumber(workspaceId);
         const number = `INV-${num}`;
 
+        // Currency: use the explicit value if the client sent one
+        // (validated against ISO-4217 shape), otherwise fall back to
+        // the workspace's default from finance_settings.currency.
+        let currency = null;
+        if (body.currency) {
+          const c = String(body.currency).toUpperCase().trim();
+          if (!/^[A-Z]{3}$/.test(c)) return { status: 400, body: { error: 'currency must be a 3-letter ISO 4217 code' } };
+          currency = c;
+        } else {
+          const { rows: fs } = await sql`SELECT currency FROM finance_settings WHERE workspace_id = ${workspaceId}`;
+          currency = fs[0]?.currency || 'USD';
+        }
+
         const insert = await sql`
           INSERT INTO invoices (
             workspace_id, number, client_id, client_name, client_email,
-            issue_date, due_date, items, tax_rate, discount, notes, status
+            issue_date, due_date, items, tax_rate, discount, notes, status, currency
           ) VALUES (
             ${workspaceId}, ${number}, ${clientId}, ${clientName}, ${clientEmail},
-            ${issueDate}, ${dueDate}, ${JSON.stringify(items)}::jsonb, ${taxRate}, ${discount}, ${notes}, 'draft'
+            ${issueDate}, ${dueDate}, ${JSON.stringify(items)}::jsonb, ${taxRate}, ${discount}, ${notes}, 'draft', ${currency}
           )
           RETURNING *
         `;
