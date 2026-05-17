@@ -1,7 +1,12 @@
 // Top-of-app banner that warns owners about a subscription state needing
-// attention. Two triggers:
+// attention. Three triggers:
 //   • Trial with ≤ 5 days remaining → "Trial ends in N days" + Subscribe
 //   • past_due any time             → "Card declined" + Update card (portal)
+//   • suspended                     → "Account suspended" + Update card
+//                                     (the dunning cron flips here after
+//                                     14 days past_due — at that point
+//                                     write actions return 402; banner
+//                                     stays visible until card updated)
 //
 // Renders nothing otherwise (active sub with healthy headroom, cancelled
 // subs already get the full Paywall, and client-only users have no biz).
@@ -26,7 +31,8 @@ export default function SubscriptionBanner() {
   const inTrial    = sub.status === 'trialing';
   const trialEndingSoon = inTrial && sub.daysRemaining != null && sub.daysRemaining <= TRIAL_WARN_DAYS;
   const pastDue    = sub.status === 'past_due';
-  if (!trialEndingSoon && !pastDue) return null;
+  const suspended  = sub.status === 'suspended';
+  if (!trialEndingSoon && !pastDue && !suspended) return null;
 
   const subscribe = async () => {
     setBusy(true); setErr(null);
@@ -45,6 +51,22 @@ export default function SubscriptionBanner() {
       window.location.href = r.url;
     } catch (e) { setErr(e.message || 'Could not open billing portal'); setBusy(false); }
   };
+
+  if (suspended) {
+    // Hard stop. Write actions return 402 from requireActiveSubscription
+    // until the card is updated and Stripe retries successfully.
+    return (
+      <Banner tone="danger" icon="Lock"
+        body={<>
+          <strong>Account suspended.</strong>{' '}
+          <span style={{ color: 'var(--fg-2)' }}>
+            Your subscription is past due. Update your card to restore access — your data is safe.
+          </span>
+        </>}
+        action={<Action busy={busy} err={err} onClick={openPortal} label="Update card"/>}
+      />
+    );
+  }
 
   if (pastDue) {
     return (
@@ -82,9 +104,15 @@ export default function SubscriptionBanner() {
 
 function Banner({ tone, icon, body, action }) {
   const Icon = Icons[icon] || Icons.Bell;
-  const bg     = tone === 'warn' ? 'rgba(214, 158, 46, 0.10)' : 'var(--accent-soft)';
-  const border = tone === 'warn' ? 'rgba(214, 158, 46, 0.30)' : 'var(--accent-tint)';
-  const fg     = tone === 'warn' ? 'var(--warn)' : 'var(--accent)';
+  const bg     = tone === 'danger' ? 'rgba(155, 44, 44, 0.10)'
+              : tone === 'warn'   ? 'rgba(214, 158, 46, 0.10)'
+              : 'var(--accent-soft)';
+  const border = tone === 'danger' ? 'rgba(155, 44, 44, 0.30)'
+              : tone === 'warn'   ? 'rgba(214, 158, 46, 0.30)'
+              : 'var(--accent-tint)';
+  const fg     = tone === 'danger' ? 'var(--danger)'
+              : tone === 'warn'   ? 'var(--warn)'
+              : 'var(--accent)';
   return (
     <div style={{
       display: 'flex', alignItems: 'center', gap: 12,

@@ -17,6 +17,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { fetchOwnedDoc, serializeDoc } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, sendEmailToClient, emailShell } from '../_lib/email.js';
@@ -36,6 +37,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
+    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
 
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;

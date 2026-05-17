@@ -11,6 +11,7 @@ import {
 } from '../_lib/finance.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { withIdempotency } from '../_lib/idempotency.js';
+import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -67,6 +68,11 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      // Block writes when the workspace's subscription is suspended
+      // (set by api/cron/subscription-dunning after grace period
+      // elapses). Reads still work — owner can see what's there.
+      if (!(await requireActiveSubscription(workspaceId, req, res))) return;
+
       // Idempotent: client may supply Idempotency-Key. A network
       // retry with the same key replays the cached response instead
       // of creating a duplicate invoice. See api/_lib/idempotency.js.

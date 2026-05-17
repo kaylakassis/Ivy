@@ -9,6 +9,7 @@ import { readBody } from '../_lib/body.js';
 import { fetchOwnedThread, serializeThread, serializeMessage } from '../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { withIdempotency } from '../_lib/idempotency.js';
+import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { notifyClientSafe } from '../_lib/push.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
@@ -62,6 +63,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      if (!(await requireActiveSubscription(workspaceId, req, res))) return;
       // Bracket the entire send in idempotency. Mobile messaging is the
       // most retry-prone path: phone clients on flaky LTE re-send the
       // same message when the spinner hangs, creating duplicate rows +
