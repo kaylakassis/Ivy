@@ -9,7 +9,8 @@
 // Surface in /admin → Settings.
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireSuperAdmin } from '../_lib/admin.js';
+import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
+import { recordAudit } from '../_lib/audit.js';
 import {
   getGateSettings, setGatePassword, setGateEnabled,
 } from '../_lib/earlyAccess.js';
@@ -31,6 +32,18 @@ export default async function handler(req, res) {
 
     if (req.method === 'PATCH') {
       const body = await readBody(req);
+
+      // Audit: gate password / enabled state controls who can sign
+      // up. Recorded before the action so even a failed flip leaves
+      // a trail.
+      const actor = await getAdminActor(req);
+      await recordAudit(req, {
+        actor, action: 'admin.early_access.update',
+        meta: {
+          passwordChanged: 'password' in body,
+          enabled: 'enabled' in body ? !!body.enabled : undefined,
+        },
+      });
 
       // Apply password change first so the subsequent enable check
       // sees the new state. Empty/null clears the password and forces

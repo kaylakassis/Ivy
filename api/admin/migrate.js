@@ -16,13 +16,19 @@ import { sql } from '../_lib/db.js';
 import { SCHEMA_SQL } from '../_lib/schema.js';
 import { splitStatements } from '../_lib/ensureSchema.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireSuperAdmin } from '../_lib/admin.js';
+import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
+import { recordAudit } from '../_lib/audit.js';
 import { ok, methodNotAllowed } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   if (!(await requireSuperAdmin(req, res))) return;
+
+  // Audit: migrations are the highest-blast-radius admin action.
+  // Recorded BEFORE running so we can correlate failures to the actor.
+  const actor = await getAdminActor(req);
+  await recordAudit(req, { actor, action: 'admin.migrate', meta: {} });
 
   const allStatements = splitStatements(SCHEMA_SQL);
   const total = allStatements.length;

@@ -5,7 +5,8 @@
 // to save it. Bypass the json wrapper because we're writing raw CSV.
 import { sql } from '../_lib/db.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireSuperAdmin } from '../_lib/admin.js';
+import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
+import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 
 const KINDS = new Set(['users', 'affiliates']);
@@ -19,6 +20,11 @@ export default async function handler(req, res) {
   if (!KINDS.has(kind)) return badRequest(res, `Unknown kind: ${kind}`);
 
   try {
+    // Audit: exporting user data is the highest-PII-risk admin
+    // action. Captures who, when, which dataset.
+    const actor = await getAdminActor(req);
+    await recordAudit(req, { actor, action: 'admin.export', meta: { kind } });
+
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="thryve-${kind}-${stamp}.csv"`);

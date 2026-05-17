@@ -12,7 +12,8 @@
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireSuperAdmin } from '../_lib/admin.js';
+import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
+import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -26,6 +27,11 @@ export default async function handler(req, res) {
     if (!to || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to)) {
       return badRequest(res, 'Provide a valid `to` email address');
     }
+
+    // Audit: an admin sending a test email is a privileged action,
+    // even if low-impact. Want to spot abuse / accidental floods.
+    const actor = await getAdminActor(req);
+    await recordAudit(req, { actor, action: 'admin.email_test', meta: { to } });
 
     const html = emailShell({
       heading: 'Test email from THRYVE',

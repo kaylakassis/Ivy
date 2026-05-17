@@ -15,6 +15,7 @@
 //               SENTRY_TRACES_SAMPLE_RATE (defaults to '0' = perf off)
 //               SENTRY_MAX_PER_KEY_PER_HOUR (defaults to '20')
 import crypto from 'crypto';
+import { redact, redactObject } from './logRedact.js';
 
 let _client = null;
 let _initAttempted = false;
@@ -98,13 +99,15 @@ export function reportError(err, { req, extra, workspaceId, userId } = {}) {
   const reqId = requestId(req);
   // Always log to the function log so we have something even if Sentry
   // is wedged or DSN isn't set yet on this deploy.
+  // Logs feed third-party aggregators where any insider at that vendor
+  // can read them — redact emails / phones / tokens before write.
   // eslint-disable-next-line no-console
-  console.error('[monitoring]', err?.message || err, {
+  console.error('[monitoring]', redact(err?.message || String(err)), {
     requestId: reqId,
     method: req?.method,
-    url: req?.url,
+    url: redact(req?.url),
     workspaceId, userId,
-    ...(extra || {}),
+    ...redactObject(extra || {}),
   });
 
   if (!shouldSampleToSentry(err)) return null;

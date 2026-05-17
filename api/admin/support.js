@@ -11,7 +11,8 @@
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireSuperAdmin } from '../_lib/admin.js';
+import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
+import { recordAudit } from '../_lib/audit.js';
 import { sendPushToUser } from '../_lib/push.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -92,6 +93,15 @@ async function reply(req, res) {
 
   const tr = await sql`SELECT user_id FROM support_threads WHERE id = ${threadId}`;
   if (tr.rows.length === 0) return badRequest(res, 'Thread not found');
+
+  // Audit: admin replies to user support threads are the staffing
+  // surface; need a trail for reviewing how an issue was handled.
+  const actor = await getAdminActor(req);
+  await recordAudit(req, {
+    actor, targetUserId: tr.rows[0].user_id,
+    action: 'admin.support.reply',
+    meta: { threadId, length: t.length },
+  });
 
   const ins = await sql`
     INSERT INTO support_messages (thread_id, sender, text)

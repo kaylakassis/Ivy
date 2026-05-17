@@ -9,6 +9,7 @@
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { findValidToken, consumeToken, KIND_VERIFY } from '../_lib/tokens.js';
 import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 
@@ -16,6 +17,16 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   try {
+    // Heavy per-IP cap. Token guessing is the abuse vector — without
+    // a limit, a bot can iterate through token-space looking for
+    // bad-token oracle behavior. 30/hr/IP is generous for any
+    // real user (they typically click the link 1-3 times).
+    const ip = getClientIp(req);
+    const blocked = await enforce(req, res, [
+      { key: `verify-email:ip:${ip}`, max: 30, windowSeconds: 60 * 60 },
+    ]);
+    if (blocked) return;
+
     const { token } = await readBody(req);
     const valid = await findValidToken({ kind: KIND_VERIFY, raw: token });
     if (!valid) return unauthorized(res, 'This verification link is invalid or has expired');
