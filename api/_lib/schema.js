@@ -1856,4 +1856,31 @@ CREATE TABLE IF NOT EXISTS daily_usage_counters (
 -- Retention sweep filters by day < CURRENT_DATE - 90.
 CREATE INDEX IF NOT EXISTS idx_daily_usage_counters_day
   ON daily_usage_counters(day);
+
+-- ─── Discover page precomputed snapshot ──────────────────────────────
+-- /api/me/discover used to run ~8 subqueries per workspace in the
+-- result (service_count, min/max_price, cover_photo_url, site_handle,
+-- review_count, rating_avg, services aggregation). At 200 results
+-- that's 1600 subqueries per page load.
+--
+-- This table caches the static-derived fields, refreshed by the
+-- discover-refresh cron every 15 min. The discover endpoint now
+-- JOINs this instead of running the subqueries.
+--
+-- 15-min staleness window is acceptable for a directory page — when
+-- an owner adds a service, it appears in discover by the next
+-- refresh.
+CREATE TABLE IF NOT EXISTS discover_snapshots (
+  workspace_id   UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  service_count  INTEGER NOT NULL DEFAULT 0,
+  min_price      NUMERIC,
+  max_price      NUMERIC,
+  cover_photo_url TEXT,
+  site_handle    TEXT,
+  review_count   INTEGER NOT NULL DEFAULT 0,
+  rating_avg     NUMERIC,
+  refreshed_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_discover_snapshots_refreshed
+  ON discover_snapshots(refreshed_at);
 `;

@@ -156,20 +156,20 @@ export default async function handler(req, res) {
         cs.brand_logo_url,
         cs.brand_accent_color,
         ${distSelect} AS distance_km,
-        (SELECT COUNT(*)::int FROM services s WHERE s.workspace_id = cs.workspace_id AND s.visibility = 'public') AS service_count,
-        (SELECT MIN(price)::numeric FROM services s WHERE s.workspace_id = cs.workspace_id AND s.visibility = 'public') AS min_price,
-        (SELECT MAX(price)::numeric FROM services s WHERE s.workspace_id = cs.workspace_id AND s.visibility = 'public') AS max_price,
-        (
-          SELECT s_cover.photo_url
-          FROM services s_cover
-          WHERE s_cover.workspace_id = cs.workspace_id
-            AND s_cover.photo_url IS NOT NULL
-            AND s_cover.visibility = 'public'
-          ORDER BY s_cover.display_order ASC LIMIT 1
-        ) AS cover_photo_url,
-        (SELECT w.handle FROM websites w
-          WHERE w.workspace_id = cs.workspace_id AND w.launched = TRUE
-            AND w.visibility = 'public') AS site_handle,
+        -- Static derived fields read from discover_snapshots (refreshed
+        -- every 15min by api/cron/discover-refresh). Falls back to 0 /
+        -- NULL when a workspace has no snapshot yet (brand-new
+        -- workspaces that the cron hasn't seen).
+        COALESCE(ds.service_count, 0)  AS service_count,
+        ds.min_price                    AS min_price,
+        ds.max_price                    AS max_price,
+        ds.cover_photo_url              AS cover_photo_url,
+        ds.site_handle                  AS site_handle,
+        COALESCE(ds.review_count, 0)   AS review_count,
+        ds.rating_avg                   AS rating_avg,
+        -- matching_services stays as an inline subquery because the
+        -- filter depends on the request (qPattern/priceMin/priceMax)
+        -- and can't be precomputed.
         (
           SELECT json_agg(json_build_object(
             'id', s2.id, 'name', s2.name, 'price', s2.price,
@@ -179,10 +179,9 @@ export default async function handler(req, res) {
             ${qPattern ? `AND s2.name ILIKE ${push(qPattern)}` : ''}
             ${priceMin != null ? `AND s2.price >= ${push(priceMin)}` : ''}
             ${priceMax != null ? `AND s2.price <= ${push(priceMax)}` : ''}
-        ) AS matching_services,
-        (SELECT COUNT(*)::int FROM reviews r WHERE r.workspace_id = cs.workspace_id AND r.status = 'visible') AS review_count,
-        (SELECT AVG(rating)::numeric FROM reviews r WHERE r.workspace_id = cs.workspace_id AND r.status = 'visible') AS rating_avg
+        ) AS matching_services
       FROM calendar_settings cs
+      LEFT JOIN discover_snapshots ds ON ds.workspace_id = cs.workspace_id
       WHERE ${whereParts.join(' AND ')}
       ORDER BY ${dist1 !== 'NULL' ? 'distance_km ASC NULLS LAST,' : ''} cs.biz_name ASC
       LIMIT 200

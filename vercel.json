@@ -13,7 +13,9 @@
     { "path": "/api/cron/recurring-invoices",   "schedule": "0 8 * * *" },
     { "path": "/api/cron/invoice-overdue",      "schedule": "30 9 * * *" },
     { "path": "/api/cron/review-requests",      "schedule": "0 17 * * *" },
-    { "path": "/api/cron/db-prune",              "schedule": "0 4 * * *" }
+    { "path": "/api/cron/db-prune",              "schedule": "0 4 * * *" },
+    { "path": "/api/cron/blob-prune",            "schedule": "30 4 * * 0" },
+    { "path": "/api/cron/discover-refresh",      "schedule": "*/15 * * * *" }
   ],
   "functions": {
     "api/site/**/*.js": {
