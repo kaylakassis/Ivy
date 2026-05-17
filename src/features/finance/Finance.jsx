@@ -28,6 +28,7 @@ export default function Finance() {
   const {
     invoices, summary, loading, error,
     create, update, remove, send, resend, markPaid, void: voidInvoice, refund,
+    hasMore, loadMore, loadingMore,
   } = useInvoices();
 
   const [tab, setTab]               = useState('all');
@@ -335,6 +336,23 @@ function InvoicesSection({
           ) : rows.map((i, idx) => (
             <InvoiceRow key={i.id} invoice={i} first={idx === 0} onOpen={() => setOpenId(i.id)}/>
           ))}
+
+          {/* Load more — only when the server reports a page past
+              1000 invoices. On filtered tabs the user-facing rows
+              might already be a small set; we still surface the
+              loader so filters can find matches on later pages. */}
+          {hasMore && (
+            <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+              <button
+                type="button"
+                className="btn btn-outline"
+                disabled={loadingMore}
+                onClick={loadMore}
+                style={{ padding: '8px 18px', fontSize: 13 }}>
+                {loadingMore ? 'Loading…' : `Load more (${invoices.length} loaded)`}
+              </button>
+            </div>
+          )}
         </div>
       </div>
 

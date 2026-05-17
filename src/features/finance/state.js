@@ -7,6 +7,10 @@ export function useInvoices() {
   const [summary, setSummary]   = useState(null);
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState(null);
+  // Pagination state (default page = 1000, server-capped at 5000).
+  const [hasMore, setHasMore]   = useState(false);
+  const [nextOffset, setNextOffset] = useState(null);
+  const [loadingMore, setLoadingMore] = useState(false);
 
   const refreshSummary = useCallback(async () => {
     try {
@@ -18,13 +22,33 @@ export function useInvoices() {
   useEffect(() => {
     let live = true;
     Promise.all([
-      api.get('/invoices').then((r) => live && setInvoices(r.invoices || [])),
+      api.get('/invoices').then((r) => {
+        if (!live) return;
+        setInvoices(r.invoices || []);
+        setHasMore(!!r.hasMore);
+        setNextOffset(r.nextOffset ?? null);
+      }),
       api.get('/finance').then((r) => live && setSummary(r.summary)),
     ])
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
   }, []);
+
+  const loadMore = useCallback(async () => {
+    if (!hasMore || nextOffset == null || loadingMore) return;
+    setLoadingMore(true);
+    try {
+      const r = await api.get(`/invoices?offset=${nextOffset}`);
+      const existing = new Set(invoices.map((i) => i.id));
+      const fresh = (r.invoices || []).filter((i) => !existing.has(i.id));
+      setInvoices((prev) => [...prev, ...fresh]);
+      setHasMore(!!r.hasMore);
+      setNextOffset(r.nextOffset ?? null);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, nextOffset, loadingMore, invoices]);
 
   const create = useCallback(async (input) => {
     const r = await api.post('/invoices', input);
@@ -87,5 +111,6 @@ export function useInvoices() {
   return {
     invoices, summary, loading, error,
     create, update, remove, send, resend, markPaid, void: voidInvoice, refund,
+    hasMore, loadMore, loadingMore,
   };
 }

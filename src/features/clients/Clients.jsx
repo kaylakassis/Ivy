@@ -24,7 +24,8 @@ function timeAgo(iso) {
 }
 
 export default function Clients() {
-  const { clients, loading, create, update, remove, refresh } = useClients();
+  const { clients, loading, create, update, remove, refresh,
+          hasMore, loadMore, loadingMore } = useClients();
   const [tab, setTab] = useState('all');
   const [query, setQuery] = useState('');
   const [leadWindow, setLeadWindow] = useState(30);
@@ -240,6 +241,26 @@ export default function Clients() {
               onDelete={() => remove(c.id)}/>
           )
         ))}
+
+        {/* Load more — only renders when the server reports a page
+            past 1000 rows is available. Tab/search filters operate
+            on the loaded set; users with very large books may need
+            to load more pages before the filter has anything to
+            match against. Plain button (no infinite scroll) — most
+            workspaces never hit this, and keyboard accessibility +
+            visible state are simpler this way. */}
+        {hasMore && tab === 'all' && !query && (
+          <div style={{ padding: 16, textAlign: 'center', borderTop: '1px solid var(--border)' }}>
+            <button
+              type="button"
+              className="btn btn-outline"
+              disabled={loadingMore}
+              onClick={loadMore}
+              style={{ padding: '8px 18px', fontSize: 13 }}>
+              {loadingMore ? 'Loading…' : `Load more (${clients.length} loaded)`}
+            </button>
+          </div>
+        )}
       </div>
 
       {openClient && (
