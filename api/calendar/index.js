@@ -34,14 +34,42 @@ export default async function handler(req, res) {
         SELECT * FROM services WHERE workspace_id = ${workspaceId}
         ORDER BY display_order, created_at
       `, { rows: [] });
-      const blocks = await safe(sql`
-        SELECT * FROM calendar_blocks WHERE workspace_id = ${workspaceId}
-        ORDER BY date, start_min
-      `, { rows: [] });
-      const bookings = await safe(sql`
-        SELECT * FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
-        ORDER BY date, start_min
-      `, { rows: [] });
+
+      // Optional date-range filter. Without it (legacy callers) we
+      // return the whole table; with from/to we narrow to the
+      // requested window — backs the calendar view-mode loads so a
+      // long-tenured owner with 10K+ past bookings doesn't download
+      // their full history on every navigation. Validates ISO dates
+      // (YYYY-MM-DD); anything malformed falls back to no-filter
+      // rather than 400'ing (the page should still render).
+      const isIsoDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
+      const from = isIsoDate(req.query.from) ? req.query.from : null;
+      const to   = isIsoDate(req.query.to)   ? req.query.to   : null;
+
+      const blocks = from && to
+        ? await safe(sql`
+            SELECT * FROM calendar_blocks
+            WHERE workspace_id = ${workspaceId}
+              AND date >= ${from}::date AND date <= ${to}::date
+            ORDER BY date, start_min
+          `, { rows: [] })
+        : await safe(sql`
+            SELECT * FROM calendar_blocks WHERE workspace_id = ${workspaceId}
+            ORDER BY date, start_min
+          `, { rows: [] });
+
+      const bookings = from && to
+        ? await safe(sql`
+            SELECT * FROM bookings
+            WHERE workspace_id = ${workspaceId}
+              AND cancelled_at IS NULL
+              AND date >= ${from}::date AND date <= ${to}::date
+            ORDER BY date, start_min
+          `, { rows: [] })
+        : await safe(sql`
+            SELECT * FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
+            ORDER BY date, start_min
+          `, { rows: [] });
       return ok(res, {
         calendar: {
           settings: serializeSettings(settings),

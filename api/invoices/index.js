@@ -20,6 +20,18 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       try {
+        // Bounded pagination guardrail (see /api/clients for context).
+        // Default 1000, hard ceiling 5000, returns hasMore + nextOffset.
+        const requestedLimit = Number.parseInt(req.query.limit, 10);
+        const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+          ? Math.min(5000, requestedLimit)
+          : 1000;
+        const requestedOffset = Number.parseInt(req.query.offset, 10);
+        const offset = Number.isFinite(requestedOffset) && requestedOffset > 0
+          ? requestedOffset
+          : 0;
+        const probeLimit = limit + 1;
+
         const status = req.query.status;
         let rows;
         if (status && VALID_STATUS.has(status)) {
@@ -27,6 +39,7 @@ export default async function handler(req, res) {
             SELECT * FROM invoices
             WHERE workspace_id = ${workspaceId} AND status = ${status}
             ORDER BY issue_date DESC, created_at DESC
+            LIMIT ${probeLimit} OFFSET ${offset}
           `;
           rows = r.rows;
         } else {
@@ -34,14 +47,21 @@ export default async function handler(req, res) {
             SELECT * FROM invoices
             WHERE workspace_id = ${workspaceId}
             ORDER BY issue_date DESC, created_at DESC
+            LIMIT ${probeLimit} OFFSET ${offset}
           `;
           rows = r.rows;
         }
-        return ok(res, { invoices: rows.map(serializeInvoice) });
+        const hasMore = rows.length > limit;
+        const page = hasMore ? rows.slice(0, limit) : rows;
+        return ok(res, {
+          invoices: page.map(serializeInvoice),
+          hasMore,
+          nextOffset: hasMore ? offset + limit : null,
+        });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[invoices GET] failed (returning empty):', e.message);
-        return ok(res, { invoices: [] });
+        return ok(res, { invoices: [], hasMore: false, nextOffset: null });
       }
     }
 

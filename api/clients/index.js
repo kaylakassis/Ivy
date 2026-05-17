@@ -34,6 +34,28 @@ export default async function handler(req, res) {
           `;
           return ok(res, { clients: r.rows.map(serializeClient) });
         }
+
+        // Bounded pagination guardrail: previously this endpoint
+        // returned every client in the workspace (no LIMIT). A long-
+        // tenured owner with 1K+ clients downloaded multi-MB JSON on
+        // every Clients-tab visit. Now: default cap of 1000, hard
+        // ceiling of 5000, plus a `hasMore` flag so a future UI can
+        // wire pagination without a contract break. Existing callers
+        // (current Clients.jsx, AddBookingModal etc) keep working
+        // unchanged — they just see "your first 1000 clients" which
+        // is fine for every workspace until the UI catches up.
+        const requestedLimit = Number.parseInt(req.query.limit, 10);
+        const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+          ? Math.min(5000, requestedLimit)
+          : 1000;
+        const requestedOffset = Number.parseInt(req.query.offset, 10);
+        const offset = Number.isFinite(requestedOffset) && requestedOffset > 0
+          ? requestedOffset
+          : 0;
+        // Fetch limit+1 so we can tell the caller whether there's
+        // more without a second COUNT query.
+        const probeLimit = limit + 1;
+
         const { stage } = req.query;
         let rows;
         if (stage && VALID_STAGES.has(stage)) {
@@ -41,6 +63,7 @@ export default async function handler(req, res) {
             SELECT * FROM clients
             WHERE workspace_id = ${workspaceId} AND stage = ${stage}
             ORDER BY COALESCE(last_seen_at, joined_at) DESC
+            LIMIT ${probeLimit} OFFSET ${offset}
           `;
           rows = r.rows;
         } else {
@@ -48,14 +71,21 @@ export default async function handler(req, res) {
             SELECT * FROM clients
             WHERE workspace_id = ${workspaceId}
             ORDER BY COALESCE(last_seen_at, joined_at) DESC
+            LIMIT ${probeLimit} OFFSET ${offset}
           `;
           rows = r.rows;
         }
-        return ok(res, { clients: rows.map(serializeClient) });
+        const hasMore = rows.length > limit;
+        const page = hasMore ? rows.slice(0, limit) : rows;
+        return ok(res, {
+          clients: page.map(serializeClient),
+          hasMore,
+          nextOffset: hasMore ? offset + limit : null,
+        });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[clients GET] query failed (returning empty list):', e.message);
-        return ok(res, { clients: [] });
+        return ok(res, { clients: [], hasMore: false, nextOffset: null });
       }
     }
 
