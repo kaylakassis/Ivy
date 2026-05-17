@@ -23,13 +23,16 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 // Per-run cap so a backlog (cron paused for a day, etc.) doesn't blow
-// past Resend's rate limit on resume. The next hour catches the rest.
-const MAX_PER_RUN = 200;
+// past Resend's rate limit on resume. The next tick catches the rest.
+// Cron now fires every 10 min (see vercel.json), so 1000/tick = ~6K/hour
+// throughput, comfortably covering 10K owners worth of daily reminders.
+const MAX_PER_RUN = 1000;
 
-// Window constants (minutes). The lookback covers one full skipped run,
-// so an outage of up to 70 minutes self-heals. The lookahead absorbs cron
-// timing slop (Vercel doesn't fire exactly on the hour).
-const LOOKBACK_MIN  = 70;
+// Window constants (minutes). The lookback covers a couple of skipped
+// runs (an outage of up to ~20 minutes self-heals at the new 10-min
+// cadence). The lookahead absorbs cron timing slop (Vercel doesn't
+// fire exactly on schedule).
+const LOOKBACK_MIN  = 25;
 const LOOKAHEAD_MIN = 5;
 
 export default async function handler(req, res) {

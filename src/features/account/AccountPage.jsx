@@ -11,6 +11,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { api } from '../../lib/api.js';
+import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import {
   pushSupported, permissionState, getSubscription,
   subscribePush, unsubscribePush,
@@ -831,12 +832,12 @@ function SupportCard() {
     } catch (e) { setErr(e.message); }
   };
 
-  useEffect(() => {
-    if (!open) return;
-    load();
-    const id = setInterval(load, 15000);
-    return () => clearInterval(id);
-  }, [open]);
+  // Initial load when the panel opens. The recurring poll is wired
+  // through useIntervalWhenVisible below so a backgrounded tab stops
+  // hammering /support — at scale that's the difference between
+  // baseline RPS being "active users" and "every stale open tab."
+  useEffect(() => { if (open) load(); }, [open]);
+  useIntervalWhenVisible(load, 15000, open);
 
   const send = async () => {
     const t = text.trim();
