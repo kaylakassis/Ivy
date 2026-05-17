@@ -13,7 +13,7 @@ import {
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
 import { notifyPackageExhausted } from '../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../_lib/googleSync.js';
-import { consumeCredit } from '../_lib/packages.js';
+import { consumeCredit, restoreCredit } from '../_lib/packages.js';
 import { attachIntakeForms } from '../_lib/intake.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 
@@ -161,8 +161,24 @@ export default async function handler(req, res) {
         // eslint-disable-next-line no-console
         console.error('[bookings] staff_id missing; self-healing column and retrying.');
         try { await sql`ALTER TABLE bookings ADD COLUMN IF NOT EXISTS staff_id UUID`; } catch {}
-        insert = await doInsert();
+        try {
+          insert = await doInsert();
+        } catch (e2) {
+          // Compensating action: the package credit was already
+          // debited above. If the booking INSERT failed for any
+          // reason (slot conflict, schema issue, DB blip), put the
+          // credit back so the client isn't silently overcharged.
+          if (clientPackageId) {
+            try { await restoreCredit({ workspaceId, clientPackageId }); }
+            catch (rErr) { console.error('[bookings] restoreCredit failed:', rErr.message); }
+          }
+          throw e2;
+        }
       } else {
+        if (clientPackageId) {
+          try { await restoreCredit({ workspaceId, clientPackageId }); }
+          catch (rErr) { console.error('[bookings] restoreCredit failed:', rErr.message); }
+        }
         throw e;
       }
     }
