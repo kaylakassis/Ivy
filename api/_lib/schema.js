@@ -1735,4 +1735,62 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
 -- the index doesn't need a LOWER() expression.
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
   ON clients(workspace_id, email) WHERE email IS NOT NULL;
+
+-- ─── Scaling-readiness composite indexes (Phase S2) ──────────────────
+-- These narrow hot-path scans that previously fell back to broader
+-- indexes + post-filter. Each one closes a specific bottleneck the
+-- thousands-of-users audit surfaced (see plan, §2.6).
+
+-- booking-reminders cron + calendar window queries filter active
+-- bookings by date. Existing idx_bookings_workspace_date doesn't have
+-- the cancelled_at predicate, so at 1M+ rows the cron does extra index
+-- scans. Partial index excludes cancelled rows entirely.
+CREATE INDEX IF NOT EXISTS idx_bookings_ws_date_active
+  ON bookings(workspace_id, date)
+  WHERE cancelled_at IS NULL;
+
+-- invoice-overdue cron filters by (status='sent'|'overdue', due_date
+-- < today). Existing idx_invoices_workspace_status doesn't include
+-- due_date, so it scans every sent invoice to find the overdue subset.
+CREATE INDEX IF NOT EXISTS idx_invoices_ws_status_due
+  ON invoices(workspace_id, status, due_date)
+  WHERE status IN ('sent', 'overdue');
+
+-- /api/me pending-docs count and /api/me/documents both filter
+-- (recipient_client_id, status='sent'). Existing
+-- idx_documents_recipient_client doesn't include status.
+CREATE INDEX IF NOT EXISTS idx_documents_recipient_status
+  ON documents(recipient_client_id, status)
+  WHERE recipient_client_id IS NOT NULL;
+
+-- The pending-reviews count in /api/me runs a NOT EXISTS subquery
+-- against reviews keyed by booking_id. Without an index the planner
+-- does a nested loop scan, which becomes O(N×M) at scale.
+CREATE INDEX IF NOT EXISTS idx_reviews_booking
+  ON reviews(booking_id);
+
+-- workflows.js evaluator query: filter by trigger_type AND enabled.
+-- Existing idx_workflows_workspace_trigger doesn't filter by enabled,
+-- so disabled workflows still get scanned at every cron tick.
+CREATE INDEX IF NOT EXISTS idx_workflows_enabled_trigger
+  ON workflows(trigger_type)
+  WHERE enabled = TRUE;
+
+-- ─── Webhook event deduplication (§2.7) ──────────────────────────────
+-- Today each webhook handler checks application state ("is the invoice
+-- already paid?") to decide whether to skip a duplicate event. Fine at
+-- low volume; race-prone when the handler crashes mid-write and the
+-- provider retries. Now every handler INSERTs a row keyed by
+-- (provider, event_id) at the top of the request; ON CONFLICT DO
+-- NOTHING short-circuits the second attempt.
+CREATE TABLE IF NOT EXISTS webhook_event_dedup (
+  provider     TEXT        NOT NULL,
+  event_id     TEXT        NOT NULL,
+  workspace_id UUID,
+  processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (provider, event_id)
+);
+-- Retention sweep filters by processed_at < NOW() - 90 days.
+CREATE INDEX IF NOT EXISTS idx_webhook_event_dedup_processed
+  ON webhook_event_dedup(processed_at);
 `;

@@ -25,6 +25,7 @@ import { computeTotals } from '../_lib/finance.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { notifyInvoicePaid } from '../_lib/invoiceNotify.js';
+import { markProcessed } from '../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
@@ -47,6 +48,14 @@ export default async function handler(req, res) {
       });
     } catch (err) {
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
+    }
+
+    // Dedup BEFORE any processing. Use a distinct 'stripe-platform'
+    // provider tag so platform-level events don't collide with
+    // per-workspace Connect events of the same id (they shouldn't,
+    // but defense-in-depth is cheap here).
+    if (!await markProcessed('stripe-platform', event.id, null)) {
+      return ok(res, { received: true, deduped: true });
     }
 
     // event.account = the connected account id. Platform events

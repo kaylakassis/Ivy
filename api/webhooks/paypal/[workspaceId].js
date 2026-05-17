@@ -9,6 +9,7 @@ import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/paypal.js';
 import { fetchFinanceSettings } from '../../_lib/finance.js';
+import { markProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
@@ -26,6 +27,14 @@ export default async function handler(req, res) {
       event = await verifyWebhook({ rawBody, headers: req.headers });
     } catch (e) {
       return res.status(400).json({ error: e.message });
+    }
+
+    // Dedup BEFORE processing. PayPal retries for ~25h on non-2xx
+    // responses; without this a handler crash mid-write would
+    // re-process on every retry. event.id is part of PayPal's
+    // webhook envelope.
+    if (!await markProcessed('paypal', event?.id, workspaceId)) {
+      return ok(res, { handled: true, deduped: true });
     }
 
     const parsed = parseWebhookEvent(event);

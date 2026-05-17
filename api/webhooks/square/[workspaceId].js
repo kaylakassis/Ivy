@@ -10,6 +10,7 @@ import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js';
 import { fetchFinanceSettings } from '../../_lib/finance.js';
+import { markProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { appUrl } from '../../_lib/tokens.js';
 
@@ -32,6 +33,14 @@ export default async function handler(req, res) {
       });
     } catch (e) {
       return res.status(400).json({ error: e.message });
+    }
+
+    // Dedup BEFORE parsing/processing. Square retries for ~24h on
+    // non-2xx responses; without this a handler crash mid-write
+    // would re-process on every retry. event.event_id is part of
+    // Square's webhook envelope.
+    if (!await markProcessed('square', event?.event_id, workspaceId)) {
+      return ok(res, { handled: true, deduped: true });
     }
 
     const parsed = parseWebhookEvent(event);

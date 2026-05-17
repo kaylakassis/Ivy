@@ -142,10 +142,43 @@ export async function materializeOne(scheduleId) {
     return { skipped: true, reason: 'past-end' };
   }
 
+  // Race-safe claim: advance next_run_at FIRST via a conditional UPDATE
+  // gated on the old value. If two cron invocations overlap (Vercel
+  // cold-start retry), only one matches the WHERE — the loser gets
+  // zero rows back and bails without writing an invoice. Without this,
+  // both invocations passed the not-due check above and double-billed.
+  //
+  // Ordering note: schedule advances BEFORE invoice insert. If the
+  // INSERT below were to crash, the schedule is already advanced and
+  // we don't retry until the next cycle. That's the right trade — a
+  // missed billing is recoverable by the owner; a double billing is
+  // a refund + a credibility hit.
+  const oldNext = toDateString(s.next_run_at);
+  const newNext = advanceDate(oldNext, s.cadence);
+  const overEnd = s.end_date && toDateString(s.end_date) < newNext;
+  const claim = await sql`
+    UPDATE recurring_invoices SET
+      next_run_at      = ${newNext}::date,
+      last_run_at      = NOW(),
+      occurrences_run  = occurrences_run + 1,
+      status           = ${overEnd ? 'ended' : s.status},
+      updated_at       = NOW()
+    WHERE id = ${scheduleId}
+      AND next_run_at = ${oldNext}::date
+      AND status = 'active'
+    RETURNING id
+  `;
+  if (claim.rows.length === 0) {
+    // Lost the race to a concurrent cron invocation. Don't write
+    // an invoice — the winner already did (or already advanced
+    // past this tick).
+    return { skipped: true, reason: 'claim-lost' };
+  }
+
   const num = await nextInvoiceNumber(s.workspace_id);
   const number = `INV-${num}`;
 
-  const issueDate = toDateString(s.next_run_at);
+  const issueDate = oldNext;
   // Default due in 14 days from issue (matches the casual default
   // most service providers expect).
   const dueDate = addDays(issueDate, 14);
@@ -166,17 +199,12 @@ export async function materializeOne(scheduleId) {
   `;
   const newInvoice = ins.rows[0];
 
-  // Advance schedule.
-  const newNext = advanceDate(toDateString(s.next_run_at), s.cadence);
-  const overEnd = s.end_date && toDateString(s.end_date) < newNext;
+  // Stamp last_invoice_id now that we own the row (race already
+  // resolved above; this is unconditional).
   await sql`
     UPDATE recurring_invoices SET
-      next_run_at      = ${newNext}::date,
-      last_run_at      = NOW(),
-      last_invoice_id  = ${newInvoice.id},
-      occurrences_run  = occurrences_run + 1,
-      status           = ${overEnd ? 'ended' : s.status},
-      updated_at       = NOW()
+      last_invoice_id = ${newInvoice.id},
+      updated_at      = NOW()
     WHERE id = ${scheduleId}
   `;
 

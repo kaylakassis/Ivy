@@ -15,6 +15,7 @@ import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { applySubscriptionState } from '../../_lib/memberships.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
+import { markProcessed } from '../../_lib/webhookDedup.js';
 import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
@@ -69,6 +70,15 @@ export default async function handler(req, res) {
       });
     } catch (err) {
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
+    }
+
+    // Dedup BEFORE any business logic. Stripe retries for ~3 days on
+    // non-2xx responses (and on timeout); without this, a handler
+    // that crashed mid-write would re-process on every retry, with
+    // only the in-row "status='paid' already?" guard between us and
+    // duplicate work (or duplicate side effects like push, email).
+    if (!await markProcessed('stripe', event.id, workspaceId)) {
+      return ok(res, { received: true, deduped: true });
     }
 
     // Subscription lifecycle for memberships. We only act on the
