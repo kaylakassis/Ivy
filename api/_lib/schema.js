@@ -1857,6 +1857,27 @@ CREATE TABLE IF NOT EXISTS daily_usage_counters (
 CREATE INDEX IF NOT EXISTS idx_daily_usage_counters_day
   ON daily_usage_counters(day);
 
+-- ─── Client-side idempotency records ─────────────────────────────────
+-- Lets POST endpoints accept an Idempotency-Key header (matches
+-- Stripe's contract). First call: handler runs, response cached.
+-- Retries within TTL: cached response returned without re-running
+-- the handler. Prevents network-retry storms from creating
+-- duplicate bookings / invoices / messages.
+--
+-- Scoped by (user_id_or_anon, key) so two tenants can't collide
+-- on the same key. Pruned at 24h+grace by the db-prune cron.
+CREATE TABLE IF NOT EXISTS idempotency_records (
+  scope            TEXT        NOT NULL,
+  key              TEXT        NOT NULL,
+  request_hash     TEXT,
+  response_status  INTEGER,
+  response_body    JSONB,
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (scope, key)
+);
+CREATE INDEX IF NOT EXISTS idx_idempotency_records_created
+  ON idempotency_records(created_at);
+
 -- ─── Cron run history (observability) ────────────────────────────────
 -- Every cron stamps a row here on completion. The admin dashboard
 -- reads from this to chart per-cron runtime, success/failure rate,

@@ -8,6 +8,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { fetchOwnedThread, serializeThread, serializeMessage } from '../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { withIdempotency } from '../_lib/idempotency.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { notifyClientSafe } from '../_lib/push.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
@@ -61,6 +62,18 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      // Bracket the entire send in idempotency. Mobile messaging is the
+      // most retry-prone path: phone clients on flaky LTE re-send the
+      // same message when the spinner hangs, creating duplicate rows +
+      // duplicate push notifications. Idempotency-Key from the client
+      // collapses retries back to one logical send.
+      const idemp = await withIdempotency(req, user.id, async () => {
+        return await sendMessage();
+      });
+      if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+      return res.status(idemp.status).json(idemp.body);
+
+      async function sendMessage() {
       const body = await readBody(req);
       const text = (body.text || '').toString().trim();
       // Voice memos send an empty text (or a transcript) plus an audio
@@ -76,9 +89,9 @@ export default async function handler(req, res) {
         }))
         .filter((a) => a.url && a.type);
       if (!text && attachments.length === 0) {
-        return badRequest(res, 'Message text or attachment is required');
+        return { status: 400, body: { error: 'Message text or attachment is required' } };
       }
-      if (text.length > 4000) return badRequest(res, 'Message is too long');
+      if (text.length > 4000) return { status: 400, body: { error: 'Message is too long' } };
 
       const inserted = await sql`
         INSERT INTO messages (thread_id, sender, text, attachments)
@@ -151,7 +164,8 @@ export default async function handler(req, res) {
         }
       }
 
-      return created(res, { message: serializeMessage(inserted.rows[0]) });
+      return { status: 201, body: { message: serializeMessage(inserted.rows[0]) } };
+      } // end sendMessage
     }
 
     if (req.method === 'PATCH') {

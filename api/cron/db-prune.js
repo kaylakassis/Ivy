@@ -52,6 +52,11 @@ async function handler(req, res) {
     results.cronRuns = await prune('cron_runs',
       `finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '30 days'`);
 
+    // Idempotency records expire at 24h + grace. Pruning at 48h is
+    // safe — no real client retries arrive that late.
+    results.idempotencyRecords = await prune('idempotency_records',
+      `created_at < NOW() - INTERVAL '48 hours'`);
+
     return ok(res, { ok: true, results, durationMs: Date.now() - t0 });
   } catch (err) {
     return serverError(res, err);
