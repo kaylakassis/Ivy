@@ -4,10 +4,12 @@
 // orphan files in Blob.
 import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 const SOURCES = ['Referral', 'Instagram', 'Website', 'Email', 'Walk-in', 'Other'];
 
 export default function AddClientModal({ onClose, onAdd }) {
+  useEscapeKey(onClose);
   const [name, setName]     = useState('');
   const [email, setEmail]   = useState('');
   const [phone, setPhone]   = useState('');

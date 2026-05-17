@@ -2,8 +2,10 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function NewThreadModal({ existingClientIds, onPick, onClose }) {
+  useEscapeKey(onClose);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery]     = useState('');

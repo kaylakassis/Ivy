@@ -3,9 +3,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from './CollectInPersonModal.jsx';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund }) {
   const [collectOpen, setCollectOpen] = useState(false);
+  // Esc → close the editor, but only when no inner sub-modal owns the
+  // keypress (CollectInPersonModal has its own Esc handler).
+  useEscapeKey(onClose, !collectOpen);
   const isLocked = invoice.status === 'paid' || invoice.status === 'voided' || invoice.status === 'refunded';
   const refundedAmount = Number(invoice.refundedAmount || 0);
   const remaining = Math.max(0, Number(invoice.total || 0) - refundedAmount);

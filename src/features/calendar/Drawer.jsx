@@ -1,8 +1,10 @@
 // Shared right-side drawer used by the calendar views.
 import React from 'react';
 import { Icons } from '../../components/Icons.jsx';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function Drawer({ title, subtitle, onClose, children, width = 460 }) {
+  useEscapeKey(onClose);
   return (
     <>
       <div onClick={onClose} style={{

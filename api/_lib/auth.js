@@ -126,13 +126,28 @@ export async function requireUser(req, res) {
 }
 
 // Ensures a workspace exists for this user; returns its id.
+//
+// Race-safe: two concurrent first-load requests for the same brand-new
+// user (signup + first dashboard hit, or two browser tabs at once)
+// both pass the SELECT and race to INSERT. Without protection the
+// loser raises a unique-key error and the request 500s. We backstop
+// with a partial unique index on (owner_id) WHERE row_count=1 — but
+// that's expensive to maintain, so instead we just catch the
+// duplicate and re-read. Cheap, correct, no schema change.
 export async function ensureWorkspace(userId) {
   const existing = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
   if (existing.rows.length > 0) return existing.rows[0].id;
-  const created = await sql`
-    INSERT INTO workspaces (owner_id) VALUES (${userId}) RETURNING id
-  `;
-  return created.rows[0].id;
+  try {
+    const created = await sql`
+      INSERT INTO workspaces (owner_id) VALUES (${userId}) RETURNING id
+    `;
+    return created.rows[0].id;
+  } catch (err) {
+    // Concurrent request won the INSERT — re-read and return its row.
+    const retry = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
+    if (retry.rows.length > 0) return retry.rows[0].id;
+    throw err;
+  }
 }
 
 export function validEmail(e) {

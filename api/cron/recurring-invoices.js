@@ -102,6 +102,13 @@ async function autoSendInvoice({ schedule, invoice }) {
     ...(invoice.activity || []),
     { ts: new Date().toISOString(), kind: 'sent', text: `Auto-sent (recurring): ${schedule.name}` },
   ];
+  // Order matters: mark the invoice 'sent' (so the token in the
+  // email actually resolves at /invoice/:token), then send. If the
+  // email throws, REVERT to 'draft' + clear the token so the owner
+  // can re-send by hand from the Finance page. Without this, a
+  // Postmark hiccup leaves the schedule advanced and the invoice
+  // marked sent — but the client never received anything and the
+  // owner has no idea anything went wrong.
   await sql`
     UPDATE invoices SET
       view_token_hash = ${tokenHash},
@@ -114,7 +121,8 @@ async function autoSendInvoice({ schedule, invoice }) {
   const link = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
   const branding = await fetchBranding(invoice.workspace_id);
   const business = branding.businessName;
-  await sendEmailToClient({
+  try {
+    await sendEmailToClient({
     clientId: invoice.client_id, type: 'invoices',
     to: invoice.client_email,
     subject: `Invoice ${invoice.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
@@ -130,6 +138,27 @@ async function autoSendInvoice({ schedule, invoice }) {
       branding,
     }),
   });
+  } catch (emailErr) {
+    // Email send failed → revert the invoice to draft so the owner
+    // sees it back in their queue. Keep the activity entry as
+    // evidence the system tried (so the Finance audit trail isn't
+    // erased). Re-throw so the outer cron loop records this as an
+    // error and so the schedule's next_run isn't advanced past it.
+    const failActivity = [
+      ...newActivity,
+      { ts: new Date().toISOString(), kind: 'send-failed', text: `Auto-send failed: ${emailErr.message || 'email error'}` },
+    ];
+    await sql`
+      UPDATE invoices SET
+        view_token_hash = NULL,
+        status = 'draft',
+        sent_at = NULL,
+        activity = ${JSON.stringify(failActivity)}::jsonb,
+        updated_at = NOW()
+      WHERE id = ${invoice.id}
+    `;
+    throw emailErr;
+  }
   // Best-effort thread message.
   try {
     if (invoice.client_id) {

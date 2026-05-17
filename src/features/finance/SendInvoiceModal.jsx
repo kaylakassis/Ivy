@@ -2,8 +2,10 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function SendInvoiceModal({ invoice, onSend, onClose }) {
+  useEscapeKey(onClose);
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery]     = useState('');
