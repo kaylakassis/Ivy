@@ -178,59 +178,115 @@ function FirstVisitWelcome() {
   );
 }
 
-// Active packages across every business the user is a client of. Hidden
-// when there are none — most clients won't have any.
+// Packages a user has bought from any business they work with. Defaults
+// to active (credits remaining + not expired); a "Show history" toggle
+// loads exhausted/expired/cancelled rows too so clients can see "I've
+// used 3 packs from this business" — useful for taxes + loyalty proof.
+//
+// Hidden entirely when the user has zero packages of any kind.
 function PackagesCard() {
-  const [packages, setPackages] = useState(null);
+  const [active, setActive] = useState(null);
+  const [includeHistory, setIncludeHistory] = useState(false);
+  const [allPackages, setAllPackages] = useState(null); // lazy-loaded
+  const [loadingHistory, setLoadingHistory] = useState(false);
+
   useEffect(() => {
     api.get('/me/packages')
-      .then((r) => setPackages(r.packages || []))
-      .catch(() => setPackages([]));
+      .then((r) => setActive(r.packages || []))
+      .catch(() => setActive([]));
   }, []);
 
-  if (!packages || packages.length === 0) return null;
+  // Lazy-load history the first time the toggle is flipped on, then
+  // cache. Avoids the larger query for the common case (user just
+  // wants their current sessions-left).
+  useEffect(() => {
+    if (!includeHistory || allPackages != null) return;
+    setLoadingHistory(true);
+    api.get('/me/packages?all=1')
+      .then((r) => setAllPackages(r.packages || []))
+      .catch(() => setAllPackages([]))
+      .finally(() => setLoadingHistory(false));
+  }, [includeHistory, allPackages]);
+
+  if (!active) return null;
+  const showing = includeHistory && allPackages ? allPackages : active;
+  if (showing.length === 0 && !includeHistory) return null;
+
+  const historyCount = (allPackages?.length ?? 0) - active.length;
 
   return (
     <div className="card" style={{ padding: 18 }}>
-      <div className="metric-label" style={{ marginBottom: 12 }}>Your packages</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-        {packages.map((p) => {
-          const ratio = p.creditsTotal > 0 ? p.creditsRemaining / p.creditsTotal : 0;
-          return (
-            <div key={p.id} style={{
-              padding: 12, borderRadius: 10,
-              background: 'var(--surface-2)', border: '1px solid var(--border)',
-            }}>
-              <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1 }}>{p.name}</span>
-                <span style={{ fontSize: 12, color: 'var(--muted)' }}>{p.businessName}</span>
-              </div>
-              <div style={{
-                display: 'flex', alignItems: 'center', gap: 10, marginTop: 8,
-                fontSize: 12.5, color: 'var(--fg-2)',
-              }}>
-                <strong>{p.creditsRemaining}</strong>
-                <span>of {p.creditsTotal} sessions left</span>
-                {p.daysToExpiry != null && p.daysToExpiry <= 30 && (
-                  <span style={{ marginLeft: 'auto', color: 'var(--warn)', fontSize: 11.5 }}>
-                    {p.daysToExpiry > 0 ? `${p.daysToExpiry}d to use` : 'expired'}
-                  </span>
-                )}
-              </div>
-              <div style={{
-                marginTop: 8, height: 4, borderRadius: 99,
-                background: 'var(--border)', overflow: 'hidden',
-              }}>
-                <div style={{
-                  width: `${Math.round(ratio * 100)}%`, height: '100%',
-                  background: 'var(--accent)',
-                  transition: 'width 0.3s ease',
-                }}/>
-              </div>
-            </div>
-          );
-        })}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div className="metric-label" style={{ flex: 1 }}>Your packages</div>
+        <button
+          type="button"
+          onClick={() => setIncludeHistory((v) => !v)}
+          style={{
+            fontSize: 11.5, color: 'var(--muted)', padding: '2px 8px',
+            background: 'transparent', textDecoration: 'underline',
+            cursor: 'pointer',
+          }}>
+          {includeHistory
+            ? 'Hide history'
+            : (historyCount > 0 ? `Show history (${historyCount})` : 'Show history')}
+        </button>
       </div>
+      {loadingHistory && (
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 8 }}>Loading history…</div>
+      )}
+      {showing.length === 0 ? (
+        <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+          No packages yet.
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {showing.map((p) => {
+            const ratio = p.creditsTotal > 0 ? p.creditsRemaining / p.creditsTotal : 0;
+            const isInactive = p.status !== 'active' || p.creditsRemaining === 0;
+            return (
+              <div key={p.id} style={{
+                padding: 12, borderRadius: 10,
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                opacity: isInactive ? 0.7 : 1,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 600, flex: 1 }}>{p.name}</span>
+                  {isInactive && (
+                    <span style={{
+                      fontSize: 10, fontWeight: 600, padding: '1px 6px', borderRadius: 99,
+                      background: 'var(--surface)', color: 'var(--muted)',
+                      textTransform: 'uppercase', letterSpacing: '0.06em',
+                    }}>{p.status}</span>
+                  )}
+                  <span style={{ fontSize: 12, color: 'var(--muted)' }}>{p.businessName}</span>
+                </div>
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 10, marginTop: 8,
+                  fontSize: 12.5, color: 'var(--fg-2)',
+                }}>
+                  <strong>{p.creditsRemaining}</strong>
+                  <span>of {p.creditsTotal} sessions {isInactive ? 'used' : 'left'}</span>
+                  {!isInactive && p.daysToExpiry != null && p.daysToExpiry <= 30 && (
+                    <span style={{ marginLeft: 'auto', color: 'var(--warn)', fontSize: 11.5 }}>
+                      {p.daysToExpiry > 0 ? `${p.daysToExpiry}d to use` : 'expired'}
+                    </span>
+                  )}
+                </div>
+                <div style={{
+                  marginTop: 8, height: 4, borderRadius: 99,
+                  background: 'var(--border)', overflow: 'hidden',
+                }}>
+                  <div style={{
+                    width: `${Math.round(ratio * 100)}%`, height: '100%',
+                    background: isInactive ? 'var(--muted)' : 'var(--accent)',
+                    transition: 'width 0.3s ease',
+                  }}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
