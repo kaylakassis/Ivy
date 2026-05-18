@@ -23,17 +23,32 @@ import MonthView from './MonthView.jsx';
 const VIEW_KEY = 'thryve:calendar:view';
 
 export default function Calendar() {
+  const { isMobile, isTablet } = useViewport();
+  const [view, setView]     = useState(() => localStorage.getItem(VIEW_KEY) || 'week'); // 'day' | 'week' | 'month'
+  const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
+
+  // Compute the date window the current view actually renders, with
+  // a ±1 week buffer so navigating one click forward/back doesn't
+  // trigger a re-fetch. At scale (10K+ bookings per workspace) this
+  // keeps the calendar payload bounded: ~50 bookings per week
+  // visible vs the entire workspace history.
+  const dataWindow = useMemo(() => {
+    const days = view === 'day' ? 1 : view === 'week' ? 7 : 42; // month-grid is 6 weeks
+    const start = new Date(anchor);
+    start.setDate(start.getDate() - 7); // 1-week pre-buffer
+    const end = new Date(anchor);
+    end.setDate(end.getDate() + days + 7); // 1-week post-buffer
+    const iso = (d) => d.toISOString().slice(0, 10);
+    return { from: iso(start), to: iso(end) };
+  }, [view, anchor]);
+
   const {
     cal, loading, error, refresh,
     patchSettings, saveAvailability, saveServices,
     addBlock, updateBlock, removeBlock,
     createBooking, updateBooking, cancelBooking, cancelOccurrence,
     completeBooking, editCompletion, clearCompletion,
-  } = useCalendar();
-
-  const { isMobile, isTablet } = useViewport();
-  const [view, setView]     = useState(() => localStorage.getItem(VIEW_KEY) || 'week'); // 'day' | 'week' | 'month'
-  const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
+  } = useCalendar(dataWindow);
   const [drawer, setDrawer] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [addBookingOpen, setAddBookingOpen] = useState(false);

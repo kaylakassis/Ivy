@@ -22,25 +22,42 @@ export const EMPTY_CAL = {
   bookings: [],
 };
 
-export function useCalendar() {
+// useCalendar(window?) — `window` is { from, to } in YYYY-MM-DD.
+// Without it the hook loads everything (legacy behavior — matches
+// existing callers that don't yet pass a window). With it the hook
+// loads only bookings + blocks inside the window, which is the
+// scaling-safe default at workspace sizes that have thousands of
+// past bookings.
+//
+// Loaded set is replaced on window change — we don't accumulate
+// across windows because the calendar UI only renders the
+// currently-visible window. A user navigating month-to-month will
+// see one fetch per month change; a workspace with 1000+ bookings
+// per month sees ~1000 rows per fetch instead of 10K+.
+export function useCalendar(window) {
   const [cal, setCal] = useState(EMPTY_CAL);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  const queryString = window?.from && window?.to
+    ? `?from=${encodeURIComponent(window.from)}&to=${encodeURIComponent(window.to)}`
+    : '';
+
   const refresh = useCallback(async () => {
-    const r = await api.get('/calendar');
+    const r = await api.get('/calendar' + queryString);
     setCal(r.calendar);
     return r.calendar;
-  }, []);
+  }, [queryString]);
 
   useEffect(() => {
     let live = true;
-    api.get('/calendar')
+    setLoading(true);
+    api.get('/calendar' + queryString)
       .then((r) => live && setCal(r.calendar))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, []);
+  }, [queryString]);
 
   const patchSettings = useCallback(async (patch) => {
     const r = await api.patch('/calendar', patch);
