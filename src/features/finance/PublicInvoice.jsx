@@ -8,6 +8,7 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
+import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 
 export default function PublicInvoice() {
   const { token } = useParams();
@@ -85,6 +86,10 @@ export default function PublicInvoice() {
       </PageWrap>
     );
   }
+
+  // Currency-aware formatter scoped to this invoice. Falls back to
+  // USD on legacy rows that predate the invoices.currency column.
+  const fmtMoney = makeFmt(inv.currency);
 
   return (
     <PageWrap tweaks={tweaks}>
@@ -287,8 +292,11 @@ function Row({ label, value, bold }) {
   );
 }
 
-function fmtMoney(n) {
-  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Local wrapper that pulls the invoice's currency from the closure-
+// scoped `inv` object. fmtMoney calls deep inside render trees would
+// otherwise need to be re-plumbed to take currency explicitly.
+function makeFmt(currency) {
+  return (n) => fmtMoneyShared(n, currency || 'USD');
 }
 
 function PageWrap({ tweaks, children }) {

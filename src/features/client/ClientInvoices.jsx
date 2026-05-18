@@ -6,6 +6,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
+import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 
 const STATUS_META = {
   sent:     { label: 'Awaiting payment', color: 'var(--warn)' },
@@ -19,8 +20,12 @@ function fmtDate(iso) {
   if (!iso) return '—';
   return new Date(iso + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
-function fmtMoney(n) {
-  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+// Currency-aware wrapper. Client portal shows invoices from many
+// businesses — each invoice carries its own currency. Summary tiles
+// (monthly spend etc.) are aggregated across mixed currencies; we
+// show them in the most-recent invoice's currency, or USD if none.
+function fmtMoney(n, currency = 'USD') {
+  return fmtMoneyShared(n, currency);
 }
 
 export default function ClientInvoices() {
@@ -76,6 +81,20 @@ export default function ClientInvoices() {
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthLabel = now.toLocaleDateString([], { month: 'long' });
 
+  // Pick the dominant currency across the user's invoices for summary
+  // tiles. Cross-currency sums don't strictly make sense (you can't
+  // add $50 + €50), but most users have a single dominant currency
+  // and the alternative — N tiles per currency — clutters the UI for
+  // the 99% case. Show the dominant code; if the user has truly mixed
+  // currencies they'll see it on each row anyway.
+  const currencyCounts = invoices.reduce((m, i) => {
+    const c = (i.currency || 'USD').toUpperCase();
+    m[c] = (m[c] || 0) + 1;
+    return m;
+  }, {});
+  const summaryCurrency = Object.entries(currencyCounts)
+    .sort((a, b) => b[1] - a[1])[0]?.[0] || 'USD';
+
   const totalOwed = invoices
     .filter((i) => i.status === 'sent' || i.status === 'overdue')
     .reduce((s, i) => s + (i.total || 0), 0);
@@ -105,17 +124,17 @@ export default function ClientInvoices() {
       }}>
         <SummaryTile
           label={`Spent in ${monthLabel}`}
-          value={fmtMoney(monthPaid)}
+          value={fmtMoney(monthPaid, summaryCurrency)}
           tone="muted"
           hint={`${invoices.filter((i) => i.status === 'paid' && new Date(i.paidAt || i.issueDate) >= monthStart).length} paid this month`}/>
         <SummaryTile
           label="Lifetime spend"
-          value={fmtMoney(lifetimePaid)}
+          value={fmtMoney(lifetimePaid, summaryCurrency)}
           tone="muted"
           hint={`${invoices.filter((i) => i.status === 'paid').length} paid invoice${invoices.filter((i) => i.status === 'paid').length === 1 ? '' : 's'}`}/>
         <SummaryTile
           label="Outstanding"
-          value={fmtMoney(totalOwed)}
+          value={fmtMoney(totalOwed, summaryCurrency)}
           tone={totalOwed > 0 ? 'warn' : 'ok'}
           hint={totalOwed > 0
             ? `${invoices.filter((i) => i.status === 'sent' || i.status === 'overdue').length} unpaid`
@@ -156,7 +175,7 @@ export default function ClientInvoices() {
                   {meta.label}
                 </div>
                 <div className="mono-num" style={{ fontSize: 16, fontWeight: 600, minWidth: 90, textAlign: 'right' }}>
-                  {fmtMoney(inv.total)}
+                  {fmtMoney(inv.total, inv.currency)}
                 </div>
                 <button onClick={() => open(inv.id)} disabled={opening === inv.id}
                   className="btn btn-outline" style={{ padding: '6px 12px', fontSize: 12 }}>

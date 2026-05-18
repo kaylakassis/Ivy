@@ -4,12 +4,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from './CollectInPersonModal.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
+import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 
 export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund }) {
   const [collectOpen, setCollectOpen] = useState(false);
   // Esc → close the editor, but only when no inner sub-modal owns the
   // keypress (CollectInPersonModal has its own Esc handler).
   useEscapeKey(onClose, !collectOpen);
+  // Currency-aware formatter pinned to this invoice. Falls back to
+  // USD on legacy rows.
+  const fmtMoney = (n) => fmtMoneyShared(n, invoice.currency || 'USD');
   const isLocked = invoice.status === 'paid' || invoice.status === 'voided' || invoice.status === 'refunded';
   const refundedAmount = Number(invoice.refundedAmount || 0);
   const remaining = Math.max(0, Number(invoice.total || 0) - refundedAmount);
@@ -422,9 +426,9 @@ function Row({ label, value, bold }) {
   );
 }
 
-function fmtMoney(n) {
-  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
+// Bound to the invoice's currency at render time. The render-scope
+// fmtMoney is a local const that pulls invoice.currency from its
+// closure (see InvoiceEditor body).
 
 const inputS = {
   width: '100%', padding: '8px 12px', borderRadius: 8,

@@ -5,6 +5,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useInvoices } from './state.js';
+import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
@@ -415,7 +416,7 @@ function InvoiceRow({ invoice, first, onOpen }) {
         {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : '—'}
       </div>
       <div className="mono-num" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }}>
-        {fmtMoney(invoice.total)}
+        {fmtMoney(invoice.total, invoice.currency)}
       </div>
       <div style={{ textAlign: 'right' }}>
         <Icons.Arrow size={13} stroke="var(--muted)"/>
@@ -447,9 +448,15 @@ function SummaryCard({ label, value, sub, icon, tone = 'neutral' }) {
   );
 }
 
-function fmtMoney(n) {
+// Owner dashboard formatter. The dashboard summary rolls up multi-
+// currency invoices but the workspace usually has a dominant
+// currency, so for the summary tiles we default to USD (the column
+// default) — invoice rows themselves render with the per-row
+// currency via inv.currency. Cross-currency mixing is an
+// edge case until a workspace genuinely has dual-currency clients.
+function fmtMoney(n, currency = 'USD') {
   if (n == null) return '—';
-  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+  return fmtMoneyShared(n, currency);
 }
 
 // Tiny dropdown helpers for the Export menu. Inline styles only —
