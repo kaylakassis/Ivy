@@ -19,6 +19,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { upload } from '@vercel/blob/client';
+import { processImageForUpload } from '../../lib/imagePipeline.js';
 import { Icons } from '../../components/Icons.jsx';
 
 export default function ClientGallery({ client, onSave }) {
@@ -41,13 +42,18 @@ export default function ClientGallery({ client, onSave }) {
     setUploading(true);
     try {
       const additions = [];
-      for (const file of list) {
-        if (!file.type.startsWith('image/')) {
-          throw new Error(`${file.name || 'File'} is not an image`);
+      for (const rawFile of list) {
+        if (!rawFile.type.startsWith('image/')) {
+          throw new Error(`${rawFile.name || 'File'} is not an image`);
         }
-        if (file.size > 8 * 1024 * 1024) {
-          throw new Error(`${file.name || 'File'} is over 8 MB`);
+        if (rawFile.size > 16 * 1024 * 1024) {
+          // Raise the raw cap to 16 MB — modern phones routinely
+          // produce 8-12 MB photos. processImageForUpload below
+          // resizes + strips EXIF so the actual upload is far smaller.
+          throw new Error(`${rawFile.name || 'File'} is over 16 MB`);
         }
+        // eslint-disable-next-line no-await-in-loop
+        const file = await processImageForUpload(rawFile);
         const ext = (file.name?.split('.').pop() || 'jpg').toLowerCase().slice(0, 5);
         const path = `clients/gallery-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         // eslint-disable-next-line no-await-in-loop

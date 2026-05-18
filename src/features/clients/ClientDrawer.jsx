@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { upload } from '@vercel/blob/client';
+import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
 
 export default function ClientDrawer({ client, onClose, onUpdate, onDelete, analyticsWindowDays }) {
@@ -708,12 +709,16 @@ function ClientAvatar({ initials, photoUrl, onChange }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
-  const pick = async (file) => {
-    if (!file) return;
-    if (!file.type.startsWith("image/")) { setErr("Pick an image"); return; }
-    if (file.size > 10 * 1024 * 1024) { setErr("Under 10 MB"); return; }
+  const pick = async (raw) => {
+    if (!raw) return;
+    if (!raw.type.startsWith("image/")) { setErr("Pick an image"); return; }
+    if (raw.size > 16 * 1024 * 1024) { setErr("Under 16 MB"); return; }
     setErr(null); setBusy(true);
     try {
+      // Resize + strip EXIF (incl. GPS) in the browser before upload.
+      // See src/lib/imagePipeline.js — turns 8-MB phone photos into
+      // 200-KB web-friendly JPEGs without privacy leaks.
+      const file = await processImageForUpload(raw);
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
       const blob = await upload(`clients/photo-${Date.now()}.${ext}`, file, {
         access: "public",
