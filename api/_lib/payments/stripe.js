@@ -65,6 +65,11 @@ export async function createCheckoutSession({
   const session = await stripeCreateCheckout({
     secretKey, stripeAccount, invoice, currency, totalCents: amountCents,
     successUrl, cancelUrl, customerEmail,
+    // Pass through Stripe Tax flags from the workspace's
+    // finance_settings. Off by default; owners must explicitly
+    // enable + register tax jurisdictions in Stripe Dashboard.
+    automaticTax: !!fs.stripeTaxEnabled,
+    taxBehavior:  fs.stripeTaxBehavior || null,
   });
   return { url: session.url, sessionId: session.id };
 }

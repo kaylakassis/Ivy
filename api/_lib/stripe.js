@@ -203,6 +203,15 @@ export async function createLoginLink({ secretKey, accountId }) {
 export async function createCheckoutSession({
   secretKey, stripeAccount, invoice, currency, totalCents,
   successUrl, cancelUrl, customerEmail,
+  // Stripe Tax: opt-in per workspace. When true, Stripe computes
+  // VAT/sales tax from the buyer's address against the connected
+  // account's tax-registration matrix. taxBehavior optional
+  // ('exclusive' default, 'inclusive' for EU-style tax-included
+  // pricing). Stripe requires line-item tax_behavior when
+  // automatic_tax is enabled and tax_behavior is unset on the
+  // account's default — we set 'exclusive' as the safe default.
+  automaticTax = false,
+  taxBehavior = null,
 }) {
   const body = {
     mode: 'payment',
@@ -217,6 +226,15 @@ export async function createCheckoutSession({
     'metadata[workspace_id]': invoice.workspace_id,
     payment_intent_data: { metadata: { invoice_id: invoice.id, workspace_id: invoice.workspace_id } },
   };
+  if (automaticTax) {
+    body['automatic_tax[enabled]'] = 'true';
+    // tax_behavior must be set per-line when automatic_tax is on.
+    body['line_items[0][price_data][tax_behavior]'] = taxBehavior || 'exclusive';
+    // Collect buyer's address so Stripe can look up the right rate.
+    body['customer_update[address]'] = 'auto';
+    body['billing_address_collection'] = 'required';
+    body['tax_id_collection[enabled]'] = 'true';
+  }
   const session = await stripeFetch('/checkout/sessions', {
     method: 'POST', secretKey, stripeAccount, body,
   });

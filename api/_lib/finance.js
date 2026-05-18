@@ -26,6 +26,9 @@ export async function fetchFinanceSettings(workspaceId) {
     stripeConnectedAt:            row.stripe_connected_at || null,
     stripeSecretEncrypted:        row.stripe_secret_encrypted || null,
     stripeWebhookSecretEncrypted: row.stripe_webhook_secret_encrypted || null,
+    // Stripe Tax (opt-in, configured per workspace).
+    stripeTaxEnabled:             !!row.stripe_tax_enabled,
+    stripeTaxBehavior:            row.stripe_tax_behavior || null,
     // Square
     squareCredentialsEncrypted:   row.square_credentials_encrypted || null,
     squareMerchantId:             row.square_merchant_id || null,

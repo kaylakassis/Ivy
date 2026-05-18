@@ -1026,6 +1026,26 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_secret_encrypted TE
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_webhook_secret_encrypted TEXT;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_account_label TEXT;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connected_at TIMESTAMPTZ;
+
+-- ─── Stripe Tax integration ──────────────────────────────────────────
+-- Per-workspace toggle for automatic_tax. When TRUE, Stripe computes
+-- VAT / sales tax at checkout from the buyer's address against the
+-- connected account's tax-registration matrix (configured by the
+-- owner via Stripe Dashboard → Tax). Avoids the workspace having to
+-- compute jurisdictional tax themselves — Stripe Tax handles every
+-- US state, EU member, UK, Canada GST/HST/PST, etc.
+--
+-- Off by default — owners must explicitly enable + register tax
+-- jurisdictions in Stripe Dashboard before turning this on.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_tax_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+-- Optional tax behavior override: 'exclusive' (item amounts are pre-
+-- tax, Stripe adds tax on top — typical US) or 'inclusive' (item
+-- amounts ARE the tax-inclusive total — typical EU). Stripe defaults
+-- to exclusive when unset.
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_tax_behavior TEXT;
+ALTER TABLE finance_settings DROP CONSTRAINT IF EXISTS finance_settings_tax_behavior_check;
+ALTER TABLE finance_settings ADD CONSTRAINT finance_settings_tax_behavior_check
+  CHECK (stripe_tax_behavior IS NULL OR stripe_tax_behavior IN ('inclusive', 'exclusive'));
 -- Stripe Connect (OAuth) support. acct_xxx id from the connect/oauth/token
 -- exchange. When set, charges + customers are scoped to this connected
 -- account via Stripe-Account header — no need to store their secret key.
