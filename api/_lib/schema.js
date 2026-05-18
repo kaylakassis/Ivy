@@ -1952,6 +1952,31 @@ CREATE INDEX IF NOT EXISTS idx_cron_runs_name_finished
 CREATE INDEX IF NOT EXISTS idx_cron_runs_finished
   ON cron_runs(finished_at DESC NULLS LAST);
 
+-- ─── Schema migration history ────────────────────────────────────────
+-- The migrator (api/admin/migrate.js) applies every statement in this
+-- file on every run. To get observability without changing the
+-- idempotent-ALTER pattern, we record each statement's SHA + apply
+-- result here. Re-runs skip statements whose hash already shows
+-- applied=true; changed statements (the SHA changed because someone
+-- edited them) get retried. Failures stamp last_attempted_at + the
+-- error message so admin can see exactly which statement is stuck.
+--
+-- Bootstrap: this table itself is in the schema, so on a brand-new DB
+-- the migrator can't reference it until after its own statement
+-- applies. The migrator handles that — wraps the bookkeeping insert
+-- in try/catch and silently skips if the table doesn't exist yet.
+CREATE TABLE IF NOT EXISTS schema_migrations (
+  statement_hash   TEXT PRIMARY KEY,
+  first_applied_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_attempt_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  apply_count      INTEGER NOT NULL DEFAULT 1,
+  applied          BOOLEAN NOT NULL,
+  error_message    TEXT,
+  statement_preview TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_schema_migrations_applied
+  ON schema_migrations(applied, last_attempt_at DESC);
+
 -- ─── Discover page precomputed snapshot ──────────────────────────────
 -- /api/me/discover used to run ~8 subqueries per workspace in the
 -- result (service_count, min/max_price, cover_photo_url, site_handle,
