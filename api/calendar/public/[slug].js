@@ -58,8 +58,13 @@ async function getCalendar(req, res) {
         AND visibility != 'only_me'
       ORDER BY display_order, created_at
     `;
+    // Only fetch blocks that ACTUALLY gate bookings. Informational
+    // personal events (blocks_bookings = FALSE) are owner-private —
+    // they never appear on the public slot picker.
     const blocks = await sql`
-      SELECT * FROM calendar_blocks WHERE workspace_id = ${s.workspace_id}
+      SELECT * FROM calendar_blocks
+      WHERE workspace_id = ${s.workspace_id}
+        AND blocks_bookings = TRUE
       ORDER BY date, start_min
     `;
     const bookings = await sql`
@@ -76,7 +81,11 @@ async function getCalendar(req, res) {
       WHERE workspace_id = ${s.workspace_id} AND date >= CURRENT_DATE
       ORDER BY date, start_min
     `;
-    const blocksOut = blocks.rows.map(serializeBlock);
+    // publicView: redacts the owner-private fields (label/notes/color)
+    // and forces every block's display label to "Busy". Even if the
+    // owner accidentally named a block "Dentist 3pm", the public
+    // widget shows "Busy 3pm-4pm".
+    const blocksOut = blocks.rows.map((b) => serializeBlock(b, { publicView: true }));
     for (const b of external.rows) {
       blocksOut.push({
         id: 'ext_' + b.id,

@@ -83,22 +83,41 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
               }}>
                 {d.getDate()}
               </div>
-              {visible.map((ev, j) => (
-                <button key={j}
-                  onClick={(e) => { e.stopPropagation(); onOpenEvent(ev); }}
-                  style={{
-                    width: '100%', textAlign: 'left',
-                    padding: '3px 6px', borderRadius: 4, border: 0,
-                    fontSize: 10.5, fontWeight: 500,
-                    background: ev.kind === 'booking'
-                      ? 'var(--accent)'
-                      : 'repeating-linear-gradient(-45deg, var(--surface-2) 0 4px, var(--border-strong) 4px 8px)',
-                    color: ev.kind === 'booking' ? 'var(--accent-ink)' : 'var(--fg-2)',
-                    cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
-                  }}>
-                  {minToHM(ev.startMin)} {ev.kind === 'booking' ? (ev.clientName || 'Booking') : (ev.label || 'Block')}
-                </button>
-              ))}
+              {visible.map((ev, j) => {
+                // Resolve per-tile color: bookings use the service's
+                // color, blocks use their own color (or hatch pattern
+                // for hard blocks without a custom color).
+                let tileBg, tileColor;
+                if (ev.kind === 'booking') {
+                  const svc = (cal.services || []).find((s) => s.id === ev.serviceId);
+                  tileBg    = svc?.color || 'var(--accent)';
+                  tileColor = svc?.color ? '#fff' : 'var(--accent-ink)';
+                } else {
+                  const isBlocking = ev.blocksBookings !== false;
+                  const baseColor  = ev.color || (isBlocking ? null : 'var(--accent)');
+                  tileBg = isBlocking
+                    ? (baseColor
+                        ? `repeating-linear-gradient(-45deg, ${baseColor}22 0 4px, ${baseColor}66 4px 8px)`
+                        : 'repeating-linear-gradient(-45deg, var(--surface-2) 0 4px, var(--border-strong) 4px 8px)')
+                    : (baseColor ? `${baseColor}33` : 'var(--accent-soft)');
+                  tileColor = 'var(--fg-2)';
+                }
+                return (
+                  <button key={j}
+                    onClick={(e) => { e.stopPropagation(); onOpenEvent(ev); }}
+                    title={ev.kind === 'block' && ev.blocksBookings === false ? 'Reminder only — slot still bookable' : undefined}
+                    style={{
+                      width: '100%', textAlign: 'left',
+                      padding: '3px 6px', borderRadius: 4, border: 0,
+                      fontSize: 10.5, fontWeight: 500,
+                      background: tileBg,
+                      color: tileColor,
+                      cursor: 'pointer', overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis',
+                    }}>
+                    {minToHM(ev.startMin)} {ev.kind === 'booking' ? (ev.clientName || 'Booking') : (ev.label || (ev.blocksBookings === false ? 'Event' : 'Block'))}
+                  </button>
+                );
+              })}
               {overflow > 0 && (
                 <div style={{ fontSize: 10, color: 'var(--muted)', padding: '0 6px' }}>
                   +{overflow} more

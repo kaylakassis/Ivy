@@ -62,6 +62,9 @@ export function serializeService(row) {
     locationLabel:     row.location_label || '',
     visibility:        row.visibility || 'public',
     travelBufferMinutes: row.travel_buffer_minutes || 0,
+    // Per-service color the owner picked in ServicesDrawer for
+    // calendar legibility. Null → renderer falls back to accent.
+    color:             row.color || null,
     cancellationFeeAmount:  Number(row.cancellation_fee_amount || 0),
     cancellationWindowHours: Number.isInteger(row.cancellation_window_hours)
       ? row.cancellation_window_hours : 24,
@@ -97,14 +100,34 @@ export function depositFor(service, totalPrice) {
 // 10080 = 7 days, 2880 = 2 days, 1440 = 1 day, 120 = 2 hours.
 export const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
 
-export function serializeBlock(row) {
+// Two serializer modes:
+//   • owner   (default): full fidelity. Label, notes, color, the
+//                        whole event payload.
+//   • public  (opts.publicView=true): redacted. Date + window only.
+//             Label is always 'Busy', notes/color stripped. Used by
+//             the public booking slot picker so personal events
+//             never leak ("Doctor visit 2pm" → "Busy 2-3pm").
+export function serializeBlock(row, opts = {}) {
   if (!row) return null;
-  return {
+  const publicView = !!opts.publicView;
+  const base = {
     id:        row.id,
     date:      row.date instanceof Date ? row.date.toISOString().slice(0, 10) : row.date,
     startMin:  row.start_min,
     endMin:    row.end_min,
-    label:     row.label,
+  };
+  if (publicView) {
+    // Never echo the owner's chosen label, notes, color, or
+    // blocks_bookings flag. The public widget gets "Busy".
+    return { ...base, label: 'Busy' };
+  }
+  return {
+    ...base,
+    label:          row.label,
+    blocksBookings: row.blocks_bookings !== false,  // legacy rows: undefined → TRUE
+    color:          row.color || null,
+    notes:          row.notes || null,
+    allDay:         !!row.all_day,
   };
 }
 
@@ -194,9 +217,15 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
   const startBuf = Math.max(0, start - buf);
   const endBuf   = Math.min(24 * 60, end + buf);
 
+  // Only blocks with blocks_bookings = TRUE are real conflicts.
+  // Informational personal events (blocks_bookings = FALSE) live on
+  // the owner's calendar but don't gate bookings — clients can still
+  // pick that slot, and the owner is responsible for moving their
+  // own event if a booking lands there.
   const blocks = await sql`
     SELECT 1 FROM calendar_blocks
     WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
+      AND blocks_bookings = TRUE
       AND start_min < ${endBuf} AND end_min > ${startBuf}
     LIMIT 1
   `;

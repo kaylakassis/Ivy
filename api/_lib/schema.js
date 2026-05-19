@@ -772,6 +772,32 @@ CREATE TABLE IF NOT EXISTS calendar_blocks (
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_workspace_date ON calendar_blocks(workspace_id, date);
 
+-- Owners can use the calendar for personal events too — not just
+-- "I'm unavailable" blocks but also things like "Vet appointment 3pm"
+-- that they want to see on their own calendar without forcing clients
+-- around them. blocks_bookings = TRUE keeps the legacy hard-block
+-- behavior; FALSE means "show me this event but don't actually
+-- conflict with bookings."
+--
+-- color: hex code the owner picked from the calendar drawer. Default
+-- empty → use the muted "block" gray we ship today. Per-event color
+-- coding is the cheapest UX upgrade for owners who manage 20+
+-- events a week.
+--
+-- notes: owner-only private context (never exposed publicly). The
+-- existing label column is also owner-only; on the public slot picker
+-- everything is redacted to "Busy" regardless of what's stored.
+ALTER TABLE calendar_blocks ADD COLUMN IF NOT EXISTS blocks_bookings BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE calendar_blocks ADD COLUMN IF NOT EXISTS color TEXT;
+ALTER TABLE calendar_blocks ADD COLUMN IF NOT EXISTS notes TEXT;
+ALTER TABLE calendar_blocks ADD COLUMN IF NOT EXISTS all_day BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- Per-service color so the owner can visually distinguish a yoga
+-- class from a massage at a glance. Default null → falls back to
+-- the workspace's accent in the renderer.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS color TEXT;
+
+
 CREATE TABLE IF NOT EXISTS bookings (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

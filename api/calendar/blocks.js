@@ -24,9 +24,25 @@ export default async function handler(req, res) {
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
     if (!Number.isInteger(end) || end <= start || end > 24 * 60) return badRequest(res, 'invalid endMin');
 
+    // Event fields layered on top of the original "block" shape.
+    // blocksBookings defaults to TRUE (legacy behavior); color is
+    // validated as #RGB or #RRGGBB to keep unrenderable junk out of
+    // inline styles; notes/allDay optional.
+    const blocksBookings = body.blocksBookings === undefined ? true : !!body.blocksBookings;
+    const color = body.color && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(body.color)
+      ? body.color : null;
+    const notes  = body.notes ? String(body.notes).slice(0, 2000) : null;
+    const allDay = !!body.allDay;
+
     const { rows } = await sql`
-      INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label)
-      VALUES (${workspaceId}, ${date}, ${start}, ${end}, ${label})
+      INSERT INTO calendar_blocks (
+        workspace_id, date, start_min, end_min, label,
+        blocks_bookings, color, notes, all_day
+      )
+      VALUES (
+        ${workspaceId}, ${date}, ${start}, ${end}, ${label},
+        ${blocksBookings}, ${color}, ${notes}, ${allDay}
+      )
       RETURNING *
     `;
     return created(res, { block: serializeBlock(rows[0]) });

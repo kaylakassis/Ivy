@@ -82,17 +82,32 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
           {(cal.blocks || []).filter((b) => b.date === dateISO).map((b) => {
             const top = ((b.startMin - HOURS_START * 60) / 60) * ROW_H;
             const h   = ((b.endMin - b.startMin) / 60) * ROW_H;
+            // Render style mirrors Calendar.jsx's day-column tiles
+            // exactly so views look consistent. See that file for the
+            // logic comments.
+            const isBlocking = b.blocksBookings !== false;
+            const baseColor  = b.color || (isBlocking ? null : 'var(--accent)');
+            const bg = isBlocking
+              ? (baseColor
+                  ? `repeating-linear-gradient(-45deg, ${baseColor}22 0 6px, ${baseColor}66 6px 12px)`
+                  : 'repeating-linear-gradient(-45deg, var(--surface-2) 0 6px, var(--border-strong) 6px 12px)')
+              : (baseColor ? `${baseColor}33` : 'var(--accent-soft)');
+            const border = baseColor || 'var(--border-strong)';
             return (
               <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'block', ...b }); }}
+                title={isBlocking ? 'Blocks bookings' : 'Reminder only (clients can still book)'}
                 style={{
                   position: 'absolute', top, height: h, left: 8, right: 8,
-                  background: 'repeating-linear-gradient(-45deg, var(--surface-2) 0 6px, var(--border-strong) 6px 12px)',
-                  border: '1px solid var(--border-strong)', borderRadius: 8,
+                  background: bg,
+                  border: `1px solid ${border}`, borderRadius: 8,
                   padding: '8px 12px', fontSize: 12, color: 'var(--fg-2)', cursor: 'pointer', overflow: 'hidden',
                 }}>
-                <div style={{ fontWeight: 600 }}>{b.label || 'Blocked'}</div>
+                <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                  {!isBlocking && <span style={{ fontSize: 10, opacity: 0.7 }}>◌</span>}
+                  <span>{b.label || (isBlocking ? 'Blocked' : 'Event')}</span>
+                </div>
                 <div style={{ color: 'var(--muted)', fontSize: 11, marginTop: 2 }}>
-                  {minToHM(b.startMin)} – {minToHM(b.endMin)}
+                  {b.allDay ? 'All day' : `${minToHM(b.startMin)} – ${minToHM(b.endMin)}`}
                 </div>
               </div>
             );
@@ -102,12 +117,14 @@ export default function DayView({ date, cal, onPickBlock, onOpenEvent }) {
             const top = ((b.startMin - HOURS_START * 60) / 60) * ROW_H;
             const h   = ((b.endMin - b.startMin) / 60) * ROW_H;
             const svc = cal.services.find((s) => s.id === b.serviceId);
+            const tile = svc?.color || 'var(--accent)';
+            const ink  = svc?.color ? '#fff' : 'var(--accent-ink)';
             return (
               <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }}
                 style={{
                   position: 'absolute', top, height: h, left: 8, right: 8,
-                  background: 'var(--accent)', color: 'var(--accent-ink)',
-                  border: '1px solid var(--accent)', borderRadius: 8,
+                  background: tile, color: ink,
+                  border: `1px solid ${tile}`, borderRadius: 8,
                   padding: '8px 12px', fontSize: 12, cursor: 'pointer', overflow: 'hidden',
                 }}>
                 <div style={{ fontWeight: 600 }}>{b.clientName || 'Client'}</div>

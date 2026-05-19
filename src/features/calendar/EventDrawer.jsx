@@ -848,12 +848,41 @@ function ConfirmRow({ text, onCancel, onConfirm, busy }) {
   );
 }
 
+// BlockEdit handles both "make this slot unavailable" and "this is a
+// personal event the owner wants on their calendar but doesn't block
+// bookings." The same data shape (calendar_blocks row) covers both;
+// the toggle in the UI maps to the blocks_bookings column.
+//
+// Color picker, private notes, and the blocks-vs-doesn't toggle are
+// all stamped onto the same record. Clients NEVER see this data —
+// the public booking endpoint serializes blocks with publicView:true
+// which redacts label/notes/color and forces the display label to
+// "Busy" (api/_lib/calendar.js).
+const EVENT_PALETTE = [
+  { name: 'Slate',     hex: '#64748b' },
+  { name: 'Blue',      hex: '#3b82f6' },
+  { name: 'Teal',      hex: '#0d9488' },
+  { name: 'Green',     hex: '#16a34a' },
+  { name: 'Amber',     hex: '#d97706' },
+  { name: 'Red',       hex: '#dc2626' },
+  { name: 'Pink',      hex: '#db2777' },
+  { name: 'Purple',    hex: '#7c3aed' },
+];
+
 function BlockEdit({ event, onSave, onDelete, onClose }) {
   const [draft, setDraft] = useState({
-    date: event.date,
-    startMin: event.startMin,
-    endMin: event.endMin,
-    label: event.label || '',
+    date:           event.date,
+    startMin:       event.startMin,
+    endMin:         event.endMin,
+    label:          event.label || '',
+    // blocksBookings defaults to TRUE for new events — most "create
+    // event" actions ARE to block off time. Existing rows preserve
+    // their stored value; legacy rows that predate the column
+    // serialize as `true` so editing one keeps the original behavior.
+    blocksBookings: event.blocksBookings !== false,
+    color:          event.color || '',
+    notes:          event.notes || '',
+    allDay:         !!event.allDay,
   });
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
@@ -862,7 +891,16 @@ function BlockEdit({ event, onSave, onDelete, onClose }) {
     setBusy(true);
     setErr(null);
     try {
-      await onSave({ ...event, ...draft });
+      // When all-day is checked, normalize start/end so the row
+      // still has valid minute values. Owners who flip it on don't
+      // care about the times; the renderer uses allDay to decide
+      // how to display.
+      const payload = { ...event, ...draft };
+      if (draft.allDay) {
+        payload.startMin = 0;
+        payload.endMin   = 24 * 60;
+      }
+      await onSave(payload);
       onClose();
     } catch (e) {
       setErr(e.message || 'Could not save');
@@ -877,30 +915,79 @@ function BlockEdit({ event, onSave, onDelete, onClose }) {
     try { await onDelete(event); onClose(); } finally { setBusy(false); }
   };
 
+  const titleText = event.id
+    ? (draft.blocksBookings ? 'Edit blocked time' : 'Edit event')
+    : 'Add event';
+  const subtitleText = draft.blocksBookings
+    ? "Clients can't book during this slot. They see only 'Busy', never the details."
+    : 'On your calendar only. Clients can still book this slot.';
+
   return (
     <Drawer
-      title={event.id ? 'Edit blocked time' : 'Block time'}
-      subtitle="Clients can't book during blocked periods."
+      title={titleText}
+      subtitle={subtitleText}
       onClose={onClose}
     >
-      <Field label="Reason (optional)">
+      <Field label="Title">
         <input value={draft.label} onChange={(e) => setDraft({ ...draft, label: e.target.value })}
-          placeholder="Lunch, vacation, personal…" style={inputSty}/>
+          placeholder="Lunch, doctor visit, gym…"
+          style={inputSty}/>
       </Field>
+
+      {/* The headline choice: does this gate bookings or just live on
+          the owner's calendar? Two big tappable buttons rather than a
+          tucked-away checkbox — this decides everything downstream. */}
+      <Field label="Booking impact">
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          <ToggleCard
+            active={draft.blocksBookings}
+            onClick={() => setDraft({ ...draft, blocksBookings: true })}
+            title="Block bookings"
+            sub="Clients can't book this slot."/>
+          <ToggleCard
+            active={!draft.blocksBookings}
+            onClick={() => setDraft({ ...draft, blocksBookings: false })}
+            title="Reminder only"
+            sub="Slot stays available for clients."/>
+        </div>
+      </Field>
+
       <Field label="Date">
         <input type="date" value={draft.date} onChange={(e) => setDraft({ ...draft, date: e.target.value })}
           style={inputSty}/>
       </Field>
-      <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Start</div>
-          <TimeInput minutes={draft.startMin} onChange={(v) => setDraft({ ...draft, startMin: v })}/>
+
+      <label style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12, cursor: 'pointer' }}>
+        <input type="checkbox"
+          checked={draft.allDay}
+          onChange={(e) => setDraft({ ...draft, allDay: e.target.checked })}/>
+        <span style={{ fontSize: 13 }}>All-day event</span>
+      </label>
+
+      {!draft.allDay && (
+        <div style={{ display: 'flex', gap: 10, marginBottom: 14 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>Start</div>
+            <TimeInput minutes={draft.startMin} onChange={(v) => setDraft({ ...draft, startMin: v })}/>
+          </div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>End</div>
+            <TimeInput minutes={draft.endMin} onChange={(v) => setDraft({ ...draft, endMin: v })}/>
+          </div>
         </div>
-        <div style={{ flex: 1 }}>
-          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>End</div>
-          <TimeInput minutes={draft.endMin} onChange={(v) => setDraft({ ...draft, endMin: v })}/>
-        </div>
-      </div>
+      )}
+
+      <Field label="Color">
+        <ColorPicker value={draft.color} onChange={(c) => setDraft({ ...draft, color: c })}/>
+      </Field>
+
+      <Field label="Private notes">
+        <textarea value={draft.notes}
+          onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+          placeholder="Owner-only context. Clients never see this."
+          rows={3}
+          style={{ ...inputSty, resize: 'vertical', minHeight: 64 }}/>
+      </Field>
 
       {err && (
         <div style={{
@@ -925,6 +1012,69 @@ function BlockEdit({ event, onSave, onDelete, onClose }) {
     </Drawer>
   );
 }
+
+// Two-card tappable selector used for the "Block bookings" vs
+// "Reminder only" choice. Clearer than a toggle switch — both options
+// labeled, the active one has a colored ring.
+function ToggleCard({ active, onClick, title, sub }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      style={{
+        padding: '10px 12px', textAlign: 'left',
+        borderRadius: 10,
+        border: active ? '2px solid var(--accent)' : '1px solid var(--border)',
+        background: active ? 'var(--accent-soft)' : 'var(--surface)',
+        cursor: 'pointer',
+      }}>
+      <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2 }}>{title}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{sub}</div>
+    </button>
+  );
+}
+
+// Compact swatch grid with a "no color" reset chip at the start.
+// Stores #RRGGBB on the row; null means "use the default" (renderer
+// falls back to the slate/red gray we currently ship). Shared by the
+// event editor + ServicesDrawer's per-service color.
+function ColorPicker({ value, onChange }) {
+  return (
+    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+      <button
+        type="button"
+        onClick={() => onChange('')}
+        title="No color (use default)"
+        style={{
+          width: 26, height: 26, borderRadius: '50%',
+          border: !value ? '2px solid var(--accent)' : '1px solid var(--border)',
+          background: 'transparent',
+          position: 'relative',
+        }}>
+        <span style={{
+          position: 'absolute', inset: '50% 0 auto 0', height: 1,
+          background: 'var(--muted)', transform: 'rotate(-45deg) translateY(-50%)',
+          transformOrigin: '50% 0',
+        }}/>
+      </button>
+      {EVENT_PALETTE.map((c) => (
+        <button
+          key={c.hex}
+          type="button"
+          onClick={() => onChange(c.hex)}
+          title={c.name}
+          style={{
+            width: 26, height: 26, borderRadius: '50%',
+            background: c.hex,
+            border: value === c.hex ? '2px solid var(--accent)' : '1px solid rgba(0,0,0,0.1)',
+            cursor: 'pointer',
+          }}/>
+      ))}
+    </div>
+  );
+}
+
+export { ColorPicker };
 
 function Field({ label, children }) {
   return (

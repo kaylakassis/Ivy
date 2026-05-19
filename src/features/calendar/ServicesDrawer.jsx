@@ -12,6 +12,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { inputSty } from './Drawer.jsx';
+import { ColorPicker } from './EventDrawer.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
@@ -337,6 +338,16 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
             value={service.visibility || 'public'}
             onChange={(visibility) => onChange({ visibility })}
           />
+        </Field>
+
+        {/* Calendar color — owner-only legibility helper. Doesn't
+            affect the client-facing booking page; just paints booking
+            tiles on the owner's calendar so a yoga class is visually
+            distinct from a massage at a glance. */}
+        <Field label="Calendar color" hint="Picks the booking tile color on your calendar. Clients never see this.">
+          <ColorPicker
+            value={service.color || ''}
+            onChange={(c) => onChange({ color: c })}/>
         </Field>
 
         <Field label="Photo" hint="Shown to clients on your booking page. JPG/PNG/WebP/HEIC, up to 5 MB.">

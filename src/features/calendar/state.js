@@ -77,8 +77,17 @@ export function useCalendar(window) {
     return r.settings;
   }, []);
 
-  const addBlock = useCallback(async ({ date, startMin, endMin, label }) => {
-    const r = await api.post('/calendar/blocks', { date, startMin, endMin, label });
+  // addBlock accepts the optional event fields (blocksBookings,
+  // color, notes, allDay) — defaults preserve legacy callers that
+  // just pass date/start/end/label.
+  const addBlock = useCallback(async ({
+    date, startMin, endMin, label,
+    blocksBookings, color, notes, allDay,
+  }) => {
+    const r = await api.post('/calendar/blocks', {
+      date, startMin, endMin, label,
+      blocksBookings, color, notes, allDay,
+    });
     setCal((c) => ({ ...c, blocks: [...c.blocks, r.block] }));
     return r.block;
   }, []);

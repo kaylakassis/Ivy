@@ -40,6 +40,17 @@ export default async function handler(req, res) {
         push('end_min', n);
       }
       if ('label' in body) push('label', body.label ? String(body.label).slice(0, 120) : null);
+      // Event fields. All optional + validated; unknown fields silently
+      // ignored per the existing PATCH convention.
+      if ('blocksBookings' in body) push('blocks_bookings', !!body.blocksBookings);
+      if ('color' in body) {
+        const c = body.color;
+        if (c === null || c === '') push('color', null);
+        else if (typeof c === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(c)) push('color', c);
+        else return badRequest(res, 'color must be #RGB or #RRGGBB');
+      }
+      if ('notes' in body) push('notes', body.notes ? String(body.notes).slice(0, 2000) : null);
+      if ('allDay' in body) push('all_day', !!body.allDay);
 
       if (sets.length === 0) return ok(res, { block: serializeBlock(found.rows[0]) });
 

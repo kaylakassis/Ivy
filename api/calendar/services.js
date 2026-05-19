@@ -205,6 +205,11 @@ export default async function handler(req, res) {
         noShowFeeAmount,
         addOns,
         customFields,
+        // Per-service color for the calendar grid. Validate as
+        // #RGB / #RRGGBB; anything else gets nulled so we don't
+        // stuff junk into an inline style attribute.
+        color: (typeof s?.color === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s.color))
+          ? s.color : null,
       });
     }
 
@@ -265,7 +270,8 @@ export default async function handler(req, res) {
             cancellation_window_hours = ${s.cancellationWindowHours},
             no_show_fee_amount = ${s.noShowFeeAmount},
             add_ons = ${JSON.stringify(s.addOns)}::jsonb,
-            custom_fields = ${JSON.stringify(s.customFields)}::jsonb
+            custom_fields = ${JSON.stringify(s.customFields)}::jsonb,
+            color = ${s.color || null}
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -279,7 +285,7 @@ export default async function handler(req, res) {
             intake_form_template_ids, deposit_type, deposit_amount,
             location_type, location_label, visibility, travel_buffer_minutes,
             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount,
-            add_ons, custom_fields
+            add_ons, custom_fields, color
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
@@ -287,7 +293,7 @@ export default async function handler(req, res) {
             ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount},
             ${s.locationType}, ${s.locationLabel}, ${s.visibility}, ${s.travelBufferMinutes},
             ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount},
-            ${JSON.stringify(s.addOns)}::jsonb, ${JSON.stringify(s.customFields)}::jsonb
+            ${JSON.stringify(s.addOns)}::jsonb, ${JSON.stringify(s.customFields)}::jsonb, ${s.color || null}
           )
           RETURNING *
         `;

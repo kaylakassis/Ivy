@@ -270,7 +270,7 @@ export default function Calendar() {
                 if (action === 'availability')  setDrawer('availability');
                 if (action === 'share')         setDrawer('share');
                 if (action === 'block') {
-                  setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '' });
+                  setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '', blocksBookings: true });
                   setDrawer('event');
                 }
               }}/>
@@ -312,10 +312,14 @@ export default function Calendar() {
             <Icons.Arrow size={14}/> {!isTablet && 'Sync'}
           </button>
           <button className="btn btn-outline" onClick={() => {
-            setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '' });
+            // The block editor doubles as a general event editor —
+            // owner picks "Block bookings" or "Reminder only" inside.
+            // Default values open it in block mode for backwards
+            // compatibility with the old "Block time" button.
+            setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '', blocksBookings: true });
             setDrawer('event');
           }}>
-            <Icons.Clock size={14}/> {!isTablet && 'Block time'}
+            <Icons.Clock size={14}/> {!isTablet && 'Add event'}
           </button>
           <button className="btn btn-primary" onClick={() => setAddBookingOpen(true)}
             data-tour="calendar-new-booking">
@@ -478,8 +482,15 @@ export default function Calendar() {
           event={selectedEvent}
           services={cal.services}
           onSaveBlock={async (e) => {
-            if (e.id) await updateBlock(e.id, { date: e.date, startMin: e.startMin, endMin: e.endMin, label: e.label });
-            else await addBlock({ date: e.date, startMin: e.startMin, endMin: e.endMin, label: e.label });
+            const payload = {
+              date: e.date, startMin: e.startMin, endMin: e.endMin, label: e.label,
+              blocksBookings: e.blocksBookings !== false,
+              color: e.color || '',
+              notes: e.notes || '',
+              allDay: !!e.allDay,
+            };
+            if (e.id) await updateBlock(e.id, payload);
+            else await addBlock(payload);
           }}
           onUpdateBooking={updateBooking}
           onCancelOccurrence={cancelOccurrence}
@@ -576,34 +587,64 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
                   }}/>
                 );
               })}
-              {/* blocks */}
+              {/* blocks (and personal events). Render style depends on
+                  blocksBookings: a hard block keeps the diagonal-stripe
+                  pattern that says "unavailable"; a reminder-only
+                  event renders solid in the chosen color with a small
+                  "no-block" indicator so the owner can tell at a
+                  glance that clients can still book this slot.
+                  When the owner picks a color it overrides the
+                  default in both modes. */}
               {(cal.blocks || []).filter((b) => b.date === dateISO).map((b) => {
                 const top = ((b.startMin - hours[0] * 60) / 60) * rowH;
                 const h   = ((b.endMin - b.startMin) / 60) * rowH;
+                const isBlocking = b.blocksBookings !== false;
+                const baseColor  = b.color || (isBlocking ? null : 'var(--accent)');
+                const bg = isBlocking
+                  ? (baseColor
+                      ? `repeating-linear-gradient(-45deg, ${baseColor}22 0 6px, ${baseColor}66 6px 12px)`
+                      : 'repeating-linear-gradient(-45deg, var(--surface-2) 0 6px, var(--border-strong) 6px 12px)')
+                  : (baseColor ? `${baseColor}33` : 'var(--accent-soft)');
+                const border = baseColor || 'var(--border-strong)';
                 return (
-                  <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'block', ...b }); }} style={{
-                    position: 'absolute', top, height: h, left: 4, right: 4,
-                    background: 'repeating-linear-gradient(-45deg, var(--surface-2) 0 6px, var(--border-strong) 6px 12px)',
-                    border: '1px solid var(--border-strong)', borderRadius: 6,
-                    padding: '4px 6px', fontSize: 11, color: 'var(--fg-2)', cursor: 'pointer', overflow: 'hidden',
-                  }}>
-                    <div style={{ fontWeight: 600 }}>{b.label || 'Blocked'}</div>
+                  <div key={b.id}
+                    onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'block', ...b }); }}
+                    title={isBlocking ? 'Blocks bookings' : 'Reminder only (clients can still book)'}
+                    style={{
+                      position: 'absolute', top, height: h, left: 4, right: 4,
+                      background: bg,
+                      border: `1px solid ${border}`, borderRadius: 6,
+                      padding: '4px 6px', fontSize: 11, color: 'var(--fg-2)',
+                      cursor: 'pointer', overflow: 'hidden',
+                    }}>
+                    <div style={{ fontWeight: 600, display: 'flex', alignItems: 'center', gap: 4 }}>
+                      {!isBlocking && (
+                        <span title="Doesn't block bookings"
+                          style={{ fontSize: 9, opacity: 0.7 }}>◌</span>
+                      )}
+                      <span>{b.label || (isBlocking ? 'Blocked' : 'Event')}</span>
+                    </div>
                     <div style={{ color: 'var(--muted)', fontSize: 10 }}>
-                      {minToHM(b.startMin)} – {minToHM(b.endMin)}
+                      {b.allDay ? 'All day' : `${minToHM(b.startMin)} – ${minToHM(b.endMin)}`}
                     </div>
                   </div>
                 );
               })}
-              {/* bookings */}
+              {/* bookings — use the service's color when set so the
+                  owner can tell apart different service types at a
+                  glance (yoga vs massage vs consultation). Falls back
+                  to the workspace accent for legacy services. */}
               {(cal.bookings || []).filter((b) => b.date === dateISO).map((b) => {
                 const top = ((b.startMin - hours[0] * 60) / 60) * rowH;
                 const h   = ((b.endMin - b.startMin) / 60) * rowH;
                 const svc = (cal?.services || []).find((s) => s.id === b.serviceId);
+                const tile = svc?.color || 'var(--accent)';
+                const ink  = svc?.color ? '#fff' : 'var(--accent-ink)';
                 return (
                   <div key={b.id} onClick={(e) => { e.stopPropagation(); onOpenEvent({ kind: 'booking', ...b }); }} style={{
                     position: 'absolute', top, height: h, left: 4, right: 4,
-                    background: 'var(--accent)', color: 'var(--accent-ink)',
-                    border: '1px solid var(--accent)', borderRadius: 6,
+                    background: tile, color: ink,
+                    border: `1px solid ${tile}`, borderRadius: 6,
                     padding: '4px 7px', fontSize: 11, cursor: 'pointer', overflow: 'hidden',
                   }}>
                     <div style={{ fontWeight: 600 }}>{b.clientName || 'Client'}</div>
@@ -630,7 +671,7 @@ function ActionSheet({ onClose, onPick }) {
     { id: 'availability', label: 'Availability', icon: 'Clock' },
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
     { id: 'sync',         label: 'Calendar sync', icon: 'Arrow' },
-    { id: 'block',        label: 'Block time',   icon: 'Clock' },
+    { id: 'block',        label: 'Add event',    icon: 'Clock' },
   ];
   return (
     <div onClick={onClose} style={{
