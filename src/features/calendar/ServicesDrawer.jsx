@@ -464,26 +464,31 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
         <Field label="Cancellation policy"
           hint={`Cancellations within ${service.cancellationWindowHours ?? 24}h ${Number(service.cancellationFeeAmount) > 0 ? `auto-charge $${Number(service.cancellationFeeAmount).toFixed(2)} to the saved card on file` : 'are flagged as late but no fee charges'}.`}>
           <div className="form-2col" style={{ gap: 8 }}>
-            <input type="number" min={0} step={1} max={720}
-              value={service.cancellationWindowHours ?? 24}
-              onChange={(e) => onChange({ cancellationWindowHours: Math.max(0, Math.min(720, Number(e.target.value) || 0)) })}
-              placeholder="Window (hours)"
-              style={inputSty}/>
-            <input type="number" min={0} step={0.01}
-              value={service.cancellationFeeAmount || 0}
-              onChange={(e) => onChange({ cancellationFeeAmount: Math.max(0, Number(e.target.value) || 0) })}
-              placeholder="Late-cancel fee ($)"
-              style={inputSty}/>
+            <LabeledNumberInput
+              label="Hours before"
+              value={service.cancellationWindowHours}
+              defaultDisplay={24}
+              min={0} max={720} step={1}
+              placeholder="24"
+              onChange={(v) => onChange({ cancellationWindowHours: clampInt(v, 0, 720, 24) })}/>
+            <LabeledNumberInput
+              label="Fee ($)"
+              value={service.cancellationFeeAmount}
+              min={0} step={0.01}
+              placeholder="0.00"
+              prefix="$"
+              onChange={(v) => onChange({ cancellationFeeAmount: clampNum(v, 0) })}/>
           </div>
         </Field>
 
         <Field label="No-show fee ($)"
           hint="Charged automatically when you mark a booking as a no-show, if the client has a card on file.">
-          <input type="number" min={0} step={0.01}
-            value={service.noShowFeeAmount || 0}
-            onChange={(e) => onChange({ noShowFeeAmount: Math.max(0, Number(e.target.value) || 0) })}
+          <LabeledNumberInput
+            value={service.noShowFeeAmount}
+            min={0} step={0.01}
             placeholder="0.00"
-            style={inputSty}/>
+            prefix="$"
+            onChange={(v) => onChange({ noShowFeeAmount: clampNum(v, 0) })}/>
         </Field>
 
         {/* Add-ons: optional extras the client picks at booking. Each
@@ -1031,7 +1036,7 @@ function AddOnEditor({ value, onChange }) {
   const add     = () => onChange([...items, { name: '', price: 0, durationMinutes: 0 }]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {items.length === 0 && (
         <div style={{
           padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)',
@@ -1041,28 +1046,43 @@ function AddOnEditor({ value, onChange }) {
         </div>
       )}
       {items.map((a, i) => (
+        // Each add-on is a small card with the name on its own row
+        // (so long names like "Post workout massage" don't truncate)
+        // and labeled price + duration inputs below. Mobile-friendly:
+        // no horizontal squeeze, every field's purpose visible.
         <div key={a.id || i} style={{
-          display: 'grid', gridTemplateColumns: '2fr 80px 90px 30px', gap: 6,
-          alignItems: 'center',
+          padding: 10, borderRadius: 8, background: 'var(--surface-2)',
+          border: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column', gap: 8,
         }}>
-          <input value={a.name || ''}
-            onChange={(e) => setItem(i, { name: e.target.value })}
-            placeholder="Hot stones"
-            style={{ ...inputSty, padding: '7px 10px' }}/>
-          <input type="number" min={0} step={0.01}
-            value={a.price || 0}
-            onChange={(e) => setItem(i, { price: Number(e.target.value) || 0 })}
-            placeholder="$"
-            style={{ ...inputSty, padding: '7px 10px', textAlign: 'right' }}/>
-          <input type="number" min={0} max={480} step={5}
-            value={a.durationMinutes || 0}
-            onChange={(e) => setItem(i, { durationMinutes: Number(e.target.value) || 0 })}
-            placeholder="+min"
-            style={{ ...inputSty, padding: '7px 10px', textAlign: 'right' }}/>
-          <button type="button" onClick={() => remove(i)}
-            className="btn btn-ghost" style={{ padding: 4, color: 'var(--danger)' }}>
-            <Icons.X size={13}/>
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <input value={a.name || ''}
+              onChange={(e) => setItem(i, { name: e.target.value })}
+              placeholder="Add-on name (e.g. Hot stones)"
+              style={{ ...inputSty, padding: '7px 10px', flex: 1 }}/>
+            <button type="button" onClick={() => remove(i)}
+              className="btn btn-ghost"
+              title="Remove add-on"
+              style={{ padding: 4, color: 'var(--danger)' }}>
+              <Icons.X size={13}/>
+            </button>
+          </div>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+            <LabeledNumberInput
+              label="Extra charge ($)"
+              value={a.price}
+              min={0} step={0.01}
+              placeholder="0.00"
+              prefix="$"
+              onChange={(v) => setItem(i, { price: clampNum(v, 0) })}/>
+            <LabeledNumberInput
+              label="Extra time (min)"
+              value={a.durationMinutes}
+              min={0} max={480} step={5}
+              placeholder="0"
+              suffix="min"
+              onChange={(v) => setItem(i, { durationMinutes: clampInt(v, 0, 480, 0) })}/>
+          </div>
         </div>
       ))}
       <button type="button" onClick={add} className="btn btn-ghost"
@@ -1071,6 +1091,133 @@ function AddOnEditor({ value, onChange }) {
       </button>
     </div>
   );
+}
+
+// LabeledNumberInput — replaces the stuck-"0" pattern from before.
+//
+// Bugs this fixes:
+//   • value={x || 0}: when the field was empty the input rendered
+//     literal '0' that some mobile keyboards (iOS Safari especially)
+//     wouldn't let the user erase. They'd end up typing on top,
+//     producing '048' instead of '48'.
+//   • No visible label: in tight grids users couldn't tell which
+//     box was hours vs fee, price vs duration. Placeholders disappear
+//     on focus, leaving the user guessing once they start typing.
+//
+// Fixes:
+//   • Empty when zero/missing → placeholder shows the hint, no
+//     stuck '0' to erase. On blur if the user left it empty, we
+//     report 0 to the parent so downstream math still works.
+//   • Optional `label` renders as a small caption above the input;
+//     reads cleanly in tight grids and stays visible during typing.
+//   • Optional `prefix` ($) / `suffix` (min) render adjacent to
+//     the input — explicit unit, no ambiguity.
+//
+// Stores the raw typed string locally during edit so the user can
+// fully clear the field; emits a parsed Number to the parent on
+// every change. Keeps the parent in number-land while the input
+// stays in string-land where browser keyboards are happy.
+function LabeledNumberInput({
+  label, value, onChange, defaultDisplay = '',
+  placeholder = '', prefix = '', suffix = '',
+  min, max, step = 1,
+}) {
+  // Render the parent's number as a string. Empty string when the
+  // value is null/undefined OR exactly zero (so the placeholder
+  // shows and the user can type fresh digits). The `defaultDisplay`
+  // override lets cancellation-window-hours show '24' when unset
+  // rather than empty — clearer for that specific field.
+  const display = React.useMemo(() => {
+    if (value == null || value === '') {
+      return defaultDisplay === '' ? '' : String(defaultDisplay);
+    }
+    const n = Number(value);
+    if (!Number.isFinite(n)) return '';
+    if (n === 0) return '';
+    return String(n);
+  }, [value, defaultDisplay]);
+
+  const [draft, setDraft] = React.useState(display);
+  // Re-sync from props when the parent's value changes externally
+  // (e.g. another field's change re-renders this row). Only override
+  // the draft when the input isn't currently focused — otherwise we'd
+  // yank the user's in-progress typing out from under them.
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (ref.current && document.activeElement === ref.current) return;
+    setDraft(display);
+  }, [display]);
+
+  const onBlur = () => {
+    if (draft === '') onChange(0);
+  };
+
+  return (
+    <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {label && (
+        <span style={{
+          fontSize: 10.5, fontWeight: 600, color: 'var(--muted)',
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>{label}</span>
+      )}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 0,
+        border: '1px solid var(--border)', borderRadius: 6,
+        background: 'var(--surface)',
+        overflow: 'hidden',
+      }}>
+        {prefix && (
+          <span style={{
+            padding: '7px 8px', fontSize: 13, color: 'var(--muted)',
+            background: 'var(--surface-2)', borderRight: '1px solid var(--border)',
+          }}>{prefix}</span>
+        )}
+        <input
+          ref={ref}
+          type="number"
+          inputMode="decimal"
+          min={min} max={max} step={step}
+          value={draft}
+          onChange={(e) => {
+            const v = e.target.value;
+            setDraft(v);
+            // Parent gets a number even if the user cleared the
+            // field; we treat empty as 0 for the underlying state
+            // but keep `draft` empty so the placeholder shows.
+            onChange(v === '' ? 0 : Number(v));
+          }}
+          onBlur={onBlur}
+          placeholder={placeholder}
+          style={{
+            flex: 1, padding: '7px 10px', fontSize: 14,
+            background: 'transparent', border: 'none', outline: 'none',
+            minWidth: 0, textAlign: prefix ? 'left' : 'left',
+          }}/>
+        {suffix && (
+          <span style={{
+            padding: '7px 8px', fontSize: 13, color: 'var(--muted)',
+            background: 'var(--surface-2)', borderLeft: '1px solid var(--border)',
+          }}>{suffix}</span>
+        )}
+      </div>
+    </label>
+  );
+}
+
+function clampNum(v, min, max) {
+  let n = Number(v);
+  if (!Number.isFinite(n)) n = 0;
+  if (min != null && n < min) n = min;
+  if (max != null && n > max) n = max;
+  return n;
+}
+
+function clampInt(v, min, max, fallback = 0) {
+  let n = parseInt(v, 10);
+  if (!Number.isFinite(n)) n = fallback;
+  if (min != null && n < min) n = min;
+  if (max != null && n > max) n = max;
+  return n;
 }
 
 // Inline editor for custom intake fields. Each row: label + type
