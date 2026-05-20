@@ -9,10 +9,10 @@
 // All visuals are CSS-only - no images bundled - so the page stays light
 // and the previews stay in lockstep with the app's own styling.
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
-import { MarketingMobileMenu } from './MarketingShell.jsx';
+import { MarketingMobileMenu, AudienceToggle } from './MarketingShell.jsx';
 import { api } from '../../lib/api.js';
 import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
 
@@ -95,6 +95,7 @@ const FAQ = [
 
 export default function MarketingHome() {
   const [tweaks] = useTweaks();
+  const [params] = useSearchParams();
 
   // SEO meta - proper Open Graph + Twitter Card tags so links shared in
   // iMessage / Slack / Discord / etc. render with a real preview.
@@ -130,25 +131,129 @@ export default function MarketingHome() {
     return () => cleanups.forEach((fn) => fn());
   }, []);
 
+  // Audience mode: the whole home flips between the owner story (default)
+  // and the client story via ?for=client. The AudienceToggle (in the nav
+  // bar + footer) drives this. Lets a visiting client see what THEY get
+  // without wading through owner-only features.
+  const audience = params.get('for') === 'client' ? 'client' : 'business';
+
   return (
     <div className={`app-root dir-${tweaks.direction}`} style={{ minHeight: '100vh', background: 'var(--page)' }}>
       <Nav/>
-      <Hero/>
-      <ProductPreview/>
-      <IvyHero/>
-      <TrustStrip/>
-      <Features/>
-      <BuiltFor/>
-      <UserCounter/>
-      <Testimonials/>
-      <Comparison/>
-      <MobileBand/>
-      <FAQSection/>
-      <FounderNote/>
-      <Pricing/>
-      <CTA/>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '18px 24px 0' }}>
+        <AudienceToggle/>
+      </div>
+      {audience === 'client' ? (
+        <ClientAudienceView/>
+      ) : (
+        <>
+          <Hero/>
+          <ProductPreview/>
+          <IvyHero/>
+          <TrustStrip/>
+          <Features/>
+          <BuiltFor/>
+          <UserCounter/>
+          <Testimonials/>
+          <Comparison/>
+          <MobileBand/>
+          <FAQSection/>
+          <FounderNote/>
+          <Pricing/>
+          <CTA/>
+        </>
+      )}
       <Footer/>
     </div>
+  );
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Client audience view — what THRYVE looks like for a client (the people
+// who book with / pay / message a business that runs on THRYVE). Always
+// free for them; one portal across every business they work with.
+// ──────────────────────────────────────────────────────────────────────
+
+const CLIENT_BENEFITS = [
+  { icon: 'Calendar', title: 'All your bookings in one place', body: "Every appointment with every business you work with on THRYVE, on one calendar. Reschedule or cancel in a tap." },
+  { icon: 'Dollar',   title: 'Pay + see every invoice',        body: 'Open invoices, paid receipts, and saved cards in one portal. No more digging through email for what you owe.' },
+  { icon: 'Doc',      title: 'Sign documents fast',            body: 'Intake forms, waivers, agreements — review and e-sign from your phone, no printer required.' },
+  { icon: 'Chat',     title: 'Message your providers',         body: 'A direct two-way thread with each business. Ask a question before you book, get reminders, keep the history.' },
+  { icon: 'Bell',     title: 'Reminders so you never miss',    body: 'Automatic appointment reminders by email or text, set up by the businesses you book with.' },
+  { icon: 'Heart',    title: 'Always free for you',            body: 'Clients never pay to use THRYVE. One login works across every business you visit — no per-business account.' },
+];
+
+function ClientAudienceView() {
+  return (
+    <>
+      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px 40px', textAlign: 'center' }}>
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 8,
+          padding: '5px 12px', borderRadius: 99,
+          background: 'var(--accent-soft)', color: 'var(--accent)',
+          fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
+          textTransform: 'uppercase', marginBottom: 24,
+        }}>
+          <Icons.Users size={12} sw={2}/> For clients · always free
+        </div>
+        <h1 className="page-title" style={{ margin: 0, fontSize: 'clamp(34px, 6vw, 56px)', lineHeight: 1.05, maxWidth: 760, marginInline: 'auto' }}>
+          One free portal for every business you book with.
+        </h1>
+        <p style={{ margin: '20px auto 0', maxWidth: 600, fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)' }}>
+          Bookings, payments, documents, and messages with all your providers in one
+          place. You sign up once and use the same portal everywhere - and you never
+          pay to use THRYVE.
+        </p>
+        <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
+          <Link to="/signup?role=client" className="btn btn-primary" style={{ padding: '14px 24px', fontSize: 15, gap: 10 }}>
+            Create your free portal <Icons.Arrow size={14} sw={2}/>
+          </Link>
+          <Link to="/signin" className="btn btn-outline" style={{ padding: '14px 24px', fontSize: 15 }}>
+            Sign in
+          </Link>
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14 }}>
+          Free forever for clients · no credit card
+        </div>
+      </section>
+
+      <section style={{ maxWidth: 1100, margin: '0 auto', padding: '12px 24px 56px' }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16 }}>
+          {CLIENT_BENEFITS.map((b) => {
+            const Icon = Icons[b.icon] || Icons.More;
+            return (
+              <div key={b.title} style={{
+                padding: 22, borderRadius: 14,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+              }}>
+                <Icon size={22} sw={1.7} style={{ color: 'var(--accent)' }}/>
+                <div style={{ marginTop: 10, fontWeight: 600, fontSize: 16 }}>{b.title}</div>
+                <div style={{ marginTop: 6, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.6 }}>{b.body}</div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
+
+      <section style={{ maxWidth: 760, margin: '0 auto', padding: '0 24px 64px', textAlign: 'center' }}>
+        <div className="card" style={{
+          padding: 32,
+          background: 'color-mix(in srgb, var(--accent-soft) 50%, var(--surface))',
+          border: '1px solid var(--accent)',
+        }}>
+          <h2 className="page-title" style={{ margin: '0 0 8px', fontSize: 26 }}>
+            Run a business too?
+          </h2>
+          <p style={{ margin: '0 0 18px', fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.6 }}>
+            THRYVE is also the all-in-one workspace for solo owners - booking,
+            invoicing, messaging, documents, and an AI coach in one place.
+          </p>
+          <Link to="/" className="btn btn-outline" style={{ padding: '12px 20px', fontSize: 14 }}>
+            See THRYVE for owners <Icons.Arrow size={13} sw={2}/>
+          </Link>
+        </div>
+      </section>
+    </>
   );
 }
 
@@ -1159,6 +1264,9 @@ function Footer() {
       padding: '32px 24px 40px',
       marginTop: 24,
     }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto 28px', display: 'flex', justifyContent: 'center' }}>
+        <AudienceToggle size="sm"/>
+      </div>
       <div style={{
         maxWidth: 1100, margin: '0 auto',
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))',

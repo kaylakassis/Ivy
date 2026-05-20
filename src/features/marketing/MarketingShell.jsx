@@ -11,7 +11,7 @@
 // ChangelogPage, which has been removed; every non-home marketing
 // page imports the chrome from this module now.
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 
@@ -119,6 +119,53 @@ const menuItem = {
   fontSize: 15, color: 'var(--fg)', textDecoration: 'none',
 };
 
+// Business / Client audience toggle for the marketing site. Lets a
+// visitor flip the home page between the owner story and the client
+// story (the home reads ?for=client). Navigates via URL so it works
+// identically from the home page AND from the footer of any sub-page
+// (which deep-links back to the home in the chosen mode). This replaces
+// the floating ViewToggle pill that used to overlap marketing content.
+export function AudienceToggle({ size = 'md' }) {
+  const [params] = useSearchParams();
+  const audience = params.get('for') === 'client' ? 'client' : 'business';
+  const pad = size === 'sm' ? '5px 12px' : '7px 14px';
+  const fs  = size === 'sm' ? 12 : 13;
+  return (
+    <div role="group" aria-label="Audience" style={{
+      display: 'inline-flex', gap: 4, padding: 4,
+      background: 'var(--surface)', border: '1px solid var(--border-strong)',
+      borderRadius: 999,
+    }}>
+      <AudienceBtn to="/" active={audience === 'business'} icon="Trending" label="For owners" pad={pad} fs={fs}/>
+      <AudienceBtn to="/?for=client" active={audience === 'client'} icon="Users" label="For clients" pad={pad} fs={fs} freeBadge/>
+    </div>
+  );
+}
+
+function AudienceBtn({ to, active, icon, label, pad, fs, freeBadge }) {
+  const Icon = Icons[icon] || Icons.More;
+  return (
+    <Link to={to} aria-pressed={active} style={{
+      display: 'inline-flex', alignItems: 'center', gap: 7,
+      padding: pad, borderRadius: 999, textDecoration: 'none',
+      background: active ? 'var(--fg)' : 'transparent',
+      color: active ? 'var(--page)' : 'var(--fg-2)',
+      fontWeight: 600, fontSize: fs,
+    }}>
+      <Icon size={fs} sw={active ? 2 : 1.7}/>
+      {label}
+      {freeBadge && (
+        <span style={{
+          padding: '1px 6px', borderRadius: 99, fontSize: 9.5, fontWeight: 700,
+          letterSpacing: '0.04em', textTransform: 'uppercase',
+          background: active ? 'rgba(255,255,255,0.18)' : 'var(--accent-soft)',
+          color: active ? 'inherit' : 'var(--accent)',
+        }}>free</span>
+      )}
+    </Link>
+  );
+}
+
 // Minimal nav + footer for non-home marketing pages. Same brand, fewer links.
 export function SimpleNav() {
   return (
@@ -171,6 +218,12 @@ export function SimpleFooter() {
       borderTop: '1px solid var(--border)',
       padding: '24px 24px 40px', marginTop: 24,
     }}>
+      <div style={{
+        maxWidth: 1100, margin: '0 auto 16px',
+        display: 'flex', justifyContent: 'center',
+      }}>
+        <AudienceToggle size="sm"/>
+      </div>
       <div style={{
         maxWidth: 1100, margin: '0 auto',
         display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
