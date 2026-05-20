@@ -71,7 +71,6 @@ const BlogPostPage    = lazy(() => import('./features/marketing/BlogPostPage.jsx
 const SecurityPage    = lazy(() => import('./features/marketing/SecurityPage.jsx'));
 const MobilePage      = lazy(() => import('./features/marketing/MobilePage.jsx'));
 const IntegrationsPage = lazy(() => import('./features/marketing/IntegrationsPage.jsx'));
-const RoadmapPage     = lazy(() => import('./features/marketing/RoadmapPage.jsx'));
 
 // Centered, low-key spinner. Avoids blank-flash but doesn't fight the
 // destination page's own loader for visual real estate. Lives inside
@@ -208,7 +207,6 @@ export default function App() {
         <Route path="/security"    element={<SecurityPage />} />
         <Route path="/mobile"      element={<MobilePage />} />
         <Route path="/integrations" element={<IntegrationsPage />} />
-        <Route path="/roadmap"     element={<RoadmapPage />} />
 
         {/* First-run wizard for new owners. Auth-gated but no AppShell so it
             can't get caught in RoleRouter's "redirect un-onboarded users to

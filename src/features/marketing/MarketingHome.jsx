@@ -1070,13 +1070,13 @@ function FounderNote() {
           fontFamily: 'var(--font-display)', fontWeight: 400,
           letterSpacing: '-0.015em',
         }}>
-          Most "all-in-one" tools are five mediocre ones bolted together with a
-          shared logo. THRYVE started because I watched friends running solo
-          businesses bleed hours a week to context-switching between booking,
-          invoicing, messaging, and follow-up - and pay for the privilege.
-          The goal is one well-made tool that respects your data and your
-          time. If something here annoys you, reply to any email or hit
-          Support inside the app - I read every message.
+          Most "all-in-one" tools are five mediocre ones bolted together.
+          THRYVE started because not only have I been through this myself, but
+          I watched friends running solo businesses bleed hours a week to
+          context-switching between booking, invoicing, messaging, and
+          follow-up - and pay for the privilege. Or even worse, they didn't
+          know what tools to use to grow. The goal is one well-made tool that
+          respects your data and your time. Your business, THRYVING.
         </p>
         <div style={{ marginTop: 18, fontSize: 13, color: 'var(--fg-2)' }}>
           - Kayla, founder of THRYVE

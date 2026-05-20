@@ -92,7 +92,6 @@ export function SimpleFooter() {
           <Link to="/security" style={{ color: 'inherit', textDecoration: 'none' }}>Security</Link>
           <Link to="/integrations" style={{ color: 'inherit', textDecoration: 'none' }}>Integrations</Link>
           <Link to="/mobile" style={{ color: 'inherit', textDecoration: 'none' }}>Mobile</Link>
-          <Link to="/roadmap" style={{ color: 'inherit', textDecoration: 'none' }}>Roadmap</Link>
           <Link to="/about" style={{ color: 'inherit', textDecoration: 'none' }}>About</Link>
           <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>
           <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</Link>
