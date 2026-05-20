@@ -16,6 +16,7 @@ import { sendEmail, emailShell } from '../_lib/email.js';
 import { renderWelcome } from '../_lib/welcome-content.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
+import { recordReferralSignup } from '../_lib/referrals.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
@@ -122,7 +123,14 @@ export default async function handler(req, res) {
       `;
     }
 
-    // Affiliate attribution. Best-effort — never fail signup over this.
+    // Attribution. Both run best-effort — never fail signup over them.
+    // The same ?ref= code is checked against TWO separate programs:
+    //   1. affiliates  — admin/invite-only paid partners (existing).
+    //   2. referrals   — the self-serve "refer one, get one" program
+    //      every paying owner can use (api/_lib/referrals.js).
+    // A given code resolves to at most one of them (setCode rejects
+    // codes that collide with affiliate codes), so there's no
+    // double-attribution in practice.
     if (refCode) {
       try {
         const aff = await sql`SELECT id FROM affiliates WHERE code = ${refCode} AND active = TRUE`;
@@ -136,6 +144,12 @@ export default async function handler(req, res) {
       } catch (refErr) {
         // eslint-disable-next-line no-console
         console.warn('[signup] affiliate attribution failed:', refErr.message);
+      }
+      try {
+        await recordReferralSignup({ referredUserId: user.id, rawCode: refCode });
+      } catch (refErr) {
+        // eslint-disable-next-line no-console
+        console.warn('[signup] referral attribution failed:', refErr.message);
       }
     }
 

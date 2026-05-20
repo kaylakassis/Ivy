@@ -331,6 +331,27 @@ export async function fetchSubscription({ secretKey, subscriptionId }) {
   return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, { secretKey });
 }
 
+// Apply a credit to a customer's Stripe balance. Stripe automatically
+// draws the balance down against the customer's next invoice(s), so a
+// one-month credit "waives the next billing cycle." amountCents is the
+// POSITIVE credit amount; Stripe stores credits as a NEGATIVE balance
+// transaction, so we send -amountCents. Used by the referral program
+// (api/_lib/referrals.js) to reward "refer one, get one" months.
+export async function applyCustomerCredit({ secretKey, customerId, amountCents, currency = 'usd', description }) {
+  if (!customerId) throw new Error('customerId is required');
+  const cents = Math.round(Number(amountCents));
+  if (!Number.isFinite(cents) || cents <= 0) throw new Error('amountCents must be a positive number');
+  return stripeFetch(`/customers/${encodeURIComponent(customerId)}/balance_transactions`, {
+    method: 'POST',
+    secretKey,
+    body: {
+      amount: -cents,            // negative = credit toward future invoices
+      currency,
+      description: description || 'THRYVE referral reward',
+    },
+  });
+}
+
 // ─── Per-workspace card-on-file flow ─────────────────────────────────
 // These run against the workspace's connected Stripe account
 // (stripe_secret_encrypted). They power the client-portal "save a card

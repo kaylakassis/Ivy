@@ -252,7 +252,46 @@ CREATE INDEX IF NOT EXISTS idx_affiliate_uses_paid
   ON affiliate_uses(affiliate_id, became_paid_at)
   WHERE became_paid_at IS NOT NULL;
 
--- Lightweight support inbox. Each user has at most one open thread; the
+-- ─── Self-serve referral program ("refer one, get one") ──────────────
+-- Distinct from the admin-managed affiliates program above. EVERY
+-- business owner gets a referral code they set themselves in Settings.
+-- When a new user signs up with that code AND becomes a paying owner,
+-- the referrer gets one month credited to their Stripe customer
+-- balance (next billing cycle effectively waived). Stacks: N
+-- conversions = N free months.
+--
+-- referral_codes: one self-set code per owner (user). Code is stored
+-- uppercased; uniqueness is global so a link ?ref=CODE resolves to
+-- exactly one owner.
+CREATE TABLE IF NOT EXISTS referral_codes (
+  user_id    UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+  code       TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_referral_codes_code ON referral_codes(UPPER(code));
+
+-- referrals: one row per referred signup. converted_at stamps when the
+-- referred user first becomes a paying owner; rewarded_at stamps when
+-- the referrer actually received their free month (only granted while
+-- the referrer is an active paying owner — see api/_lib/referrals.js).
+CREATE TABLE IF NOT EXISTS referrals (
+  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  referred_user_id  UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  code              TEXT NOT NULL,
+  signed_up_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  converted_at      TIMESTAMPTZ,
+  rewarded_at       TIMESTAMPTZ,
+  reward_cents      INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id, signed_up_at DESC);
+-- The sweep that grants pending rewards filters by (referrer, converted
+-- but not yet rewarded).
+CREATE INDEX IF NOT EXISTS idx_referrals_pending
+  ON referrals(referrer_user_id)
+  WHERE converted_at IS NOT NULL AND rewarded_at IS NULL;
+
 -- admin replies inline. Polling-based — realtime can come later. Mirrors
 -- the message_threads / messages pattern but a separate table so support
 -- traffic doesn't pollute the per-business chat table.

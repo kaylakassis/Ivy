@@ -14,6 +14,7 @@ import { readRawBody } from '../_lib/body.js';
 import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, platformWebhookSecret } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
+import { markReferralConverted, grantPendingReferralCredits } from '../_lib/referrals.js';
 import {
   notifySubscriptionStarted, notifyUpcomingRenewal,
   notifyPaymentFailed, notifySubscriptionCancelled,
@@ -249,6 +250,21 @@ async function onInvoiceEvent(invoice, type, secretKey) {
       workspaceId: r.rows[0].id,
       valueCents: monthlyValueCents(sub),
     }).catch((e) => console.warn('[billing] attribute on invoice success failed:', e.message));
+
+    // Referral program. The owner of this workspace just paid, so:
+    //   1. If THEY were referred, mark their referral converted (and
+    //      reward their referrer if that referrer is active).
+    //   2. Sweep any of THEIR OWN pending referral rewards — referrals
+    //      that converted while this owner wasn't yet active now get
+    //      their free-month credit applied.
+    const ownerId = sub.metadata?.user_id
+      || (await sql`SELECT owner_id FROM workspaces WHERE id = ${r.rows[0].id}`).rows[0]?.owner_id;
+    if (ownerId) {
+      await markReferralConverted(ownerId)
+        .catch((e) => console.warn('[billing] referral convert failed:', e.message));
+      await grantPendingReferralCredits(ownerId)
+        .catch((e) => console.warn('[billing] referral sweep failed:', e.message));
+    }
   }
 
   if (type === 'invoice.payment_failed' && r.rows[0]?.id) {

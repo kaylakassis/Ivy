@@ -71,6 +71,8 @@ export default function AccountPage() {
 
       <SubscriptionCard/>
 
+      <ReferralCard/>
+
       <NotificationsCard/>
 
       <SupportCard/>
@@ -391,6 +393,115 @@ function SendTestEmailRow() {
       {err && (
         <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>
       )}
+    </div>
+  );
+}
+
+// Referral panel — "refer one, get one." Owners set a custom code,
+// share their link, and earn a free month for every referred user who
+// becomes paying. Renders for owners only.
+function ReferralCard() {
+  const { ctx } = useUserContext();
+  const [data, setData]   = useState(null);
+  const [draft, setDraft] = useState('');
+  const [busy, setBusy]   = useState(false);
+  const [err, setErr]     = useState(null);
+  const [copied, setCopied] = useState(false);
+
+  useEffect(() => {
+    let live = true;
+    api.get('/referrals')
+      .then((r) => { if (live) { setData(r); setDraft(r.code || ''); } })
+      .catch(() => { if (live) setData({ code: null, stats: {}, rewardCents: 3900 }); });
+    return () => { live = false; };
+  }, []);
+
+  // Owner-only program.
+  if (!ctx?.isOwner) return null;
+
+  const save = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.put('/referrals', { code: draft });
+      setData(r);
+      setDraft(r.code);
+    } catch (e) {
+      setErr(e.message || 'Could not save code');
+    } finally { setBusy(false); }
+  };
+
+  const copyLink = async () => {
+    if (!data?.link) return;
+    try {
+      await navigator.clipboard.writeText(data.link);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch { /* clipboard blocked — ignore */ }
+  };
+
+  const months = data?.stats?.rewarded || 0;
+  const inputStyle = {
+    padding: '10px 12px', borderRadius: 10,
+    border: '1px solid var(--border-strong)',
+    background: 'var(--surface)', outline: 'none',
+    fontSize: 14, color: 'var(--fg)',
+  };
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Refer a business, get a free month</div>
+      <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Share your code with another business owner. When they subscribe, your
+        next billing cycle is on us - one free month for every business you
+        refer. It stacks.
+      </p>
+
+      {/* Stats */}
+      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginBottom: 18 }}>
+        <Stat label="Referred"  value={data?.stats?.referred ?? 0}/>
+        <Stat label="Subscribed" value={data?.stats?.converted ?? 0}/>
+        <Stat label="Free months earned" value={months}/>
+      </div>
+
+      <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
+        Your referral code
+      </label>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value.toUpperCase())}
+          placeholder="e.g. SARAH-HAIR"
+          maxLength={40}
+          style={{ ...inputStyle, flex: 1, minWidth: 160, textTransform: 'uppercase' }}/>
+        <button className="btn btn-primary" onClick={save}
+          disabled={busy || !draft.trim() || draft.trim() === (data?.code || '')}
+          style={{ padding: '9px 16px', fontSize: 13 }}>
+          {busy ? 'Saving…' : (data?.code ? 'Update' : 'Set code')}
+        </button>
+      </div>
+      {err && <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 10 }}>{err}</div>}
+
+      {data?.link && (
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+          <code style={{
+            flex: 1, minWidth: 200, padding: '9px 12px', borderRadius: 8,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            fontSize: 12.5, color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+          }}>{data.link}</code>
+          <button className="btn btn-outline" onClick={copyLink} style={{ padding: '9px 14px', fontSize: 13 }}>
+            {copied ? 'Copied' : 'Copy link'}
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{label}</div>
     </div>
   );
 }
