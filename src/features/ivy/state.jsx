@@ -54,7 +54,9 @@ function useIvyState() {
 
   useEffect(() => {
     let live = true;
-    api.get('/ivy')
+    // 20s timeout so a slow/hung Ivy context query surfaces as an
+    // error + retry instead of an infinite "Loading Ivy…" spinner.
+    api.get('/ivy', { timeoutMs: 20000 })
       .then((r) => {
         if (!live) return;
         setSessions(r.sessions || []);

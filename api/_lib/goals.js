@@ -111,14 +111,14 @@ export async function computeGoalCurrent(workspaceId, type) {
   if (type === 'custom') return null; // caller falls back to current_manual
 
   if (type === 'revenue') {
+    // Read the materialized invoices.total column — the SAME source the
+    // finance dashboard uses (api/finance/index.js, switched in cae9800).
+    // Previously this re-derived the total from the items JSONB, which
+    // rounded differently than the column and made the goal's "current"
+    // disagree with the dashboard by a few cents ("$0.04 off on another
+    // tab"). One source of truth keeps every surface consistent.
     const { rows } = await sql`
-      SELECT COALESCE(SUM(
-        GREATEST(
-          (SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
-            FROM jsonb_array_elements(items) AS it) - discount,
-          0
-        ) * (1 + tax_rate / 100)
-      ), 0)::numeric AS total
+      SELECT COALESCE(SUM(total), 0)::numeric AS total
       FROM invoices
       WHERE workspace_id = ${workspaceId}
         AND status = 'paid'

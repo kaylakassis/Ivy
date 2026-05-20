@@ -2,6 +2,7 @@
 // recurrence, optional package-credit consumption when the matching
 // client has an active bundle covering the chosen service.
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { TimeInput, inputSty } from './Drawer.jsx';
 import { RECURRENCE_OPTIONS, fmtDateISO } from './utils.js';
@@ -125,7 +126,12 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
     }
   };
 
-  return (
+  // Portal to <body> so a transformed/filtered ancestor (the app shell
+  // applies CSS transforms for its slide animations) can't capture the
+  // position:fixed overlay and strand it mid-page. Without this the
+  // modal rendered below the calendar content on some layouts and the
+  // owner didn't realize it had opened.
+  return createPortal((
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 130,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
@@ -259,7 +265,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
         )}
       </form>
     </div>
-  );
+  ), document.body);
 }
 
 function Field({ label, hint, children }) {

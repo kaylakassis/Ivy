@@ -275,6 +275,34 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
         )}
       </div>
 
+      {/* Persistent suggestion chips. Once the conversation starts the
+          full Welcome panel is replaced by the message list, but the
+          owner should still be able to fire other starters — the old
+          behavior unmounted ALL suggestions after the first pick, which
+          read as "I can't click the other options." Horizontal-scroll
+          chip row above the composer keeps them one tap away. */}
+      {!showSuggestions && !thinking && suggestions.length > 0 && (
+        <div style={{
+          flex: '0 0 auto',
+          display: 'flex', gap: 6, overflowX: 'auto',
+          padding: '8px 12px', borderTop: '1px solid var(--border)',
+          background: 'var(--surface)',
+        }}>
+          {suggestions.map((s) => (
+            <button key={s.id} type="button"
+              onClick={() => submit(s.prompt)}
+              style={{
+                flex: '0 0 auto', whiteSpace: 'nowrap',
+                fontSize: 12, padding: '5px 10px', borderRadius: 999,
+                border: '1px solid var(--border)', background: 'var(--surface-2)',
+                color: 'var(--fg-2)', cursor: 'pointer',
+              }}>
+              {s.title || s.prompt.slice(0, 32)}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Composer */}
       <div style={{
         flex: '0 0 auto',

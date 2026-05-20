@@ -20,17 +20,28 @@ async function req(method, path, body, opts = {}) {
 
   const doFetch = async () => {
     let res;
+    // Optional timeout so a hung serverless function can't leave the UI
+    // spinning forever (e.g. the Ivy load that "just keeps loading").
+    // AbortController fires after opts.timeoutMs; the abort surfaces as
+    // a status:0 error which the caller handles like any network error.
+    const ctrl = opts.timeoutMs ? new AbortController() : null;
+    const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeoutMs) : null;
     try {
       res = await fetch(`/api${path}`, {
         method,
         headers,
         credentials: 'include',
         body: body ? JSON.stringify(body) : undefined,
+        signal: ctrl ? ctrl.signal : undefined,
       });
     } catch (networkErr) {
-      throw Object.assign(new Error(networkErr.message || 'Network error'), {
-        status: 0,
-      });
+      const aborted = networkErr.name === 'AbortError';
+      throw Object.assign(
+        new Error(aborted ? 'Request timed out — please try again.' : (networkErr.message || 'Network error')),
+        { status: 0 },
+      );
+    } finally {
+      if (timer) clearTimeout(timer);
     }
 
     if (!res.ok) {
@@ -71,9 +82,9 @@ async function req(method, path, body, opts = {}) {
 }
 
 export const api = {
-  get:   (p)     => req('GET',    p),
-  post:  (p, b)  => req('POST',   p, b),
-  put:   (p, b)  => req('PUT',    p, b),
-  patch: (p, b)  => req('PATCH',  p, b),
-  del:   (p, b)  => req('DELETE', p, b),
+  get:   (p, opts)     => req('GET',    p, undefined, opts),
+  post:  (p, b, opts)  => req('POST',   p, b, opts),
+  put:   (p, b, opts)  => req('PUT',    p, b, opts),
+  patch: (p, b, opts)  => req('PATCH',  p, b, opts),
+  del:   (p, b, opts)  => req('DELETE', p, b, opts),
 };

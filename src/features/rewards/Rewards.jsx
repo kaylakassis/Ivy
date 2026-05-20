@@ -30,6 +30,17 @@ export default function Rewards() {
 
 // ---------- LANDING ----------
 function RewardsLanding({ onLaunch }) {
+  // Launch was a fire-and-forget onClick — if the PATCH failed (cold
+  // schema, network), the button did nothing and the owner saw
+  // "failed to save program" with no recovery. Now it awaits, shows
+  // a busy state, and surfaces the error inline.
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+  const launch = async () => {
+    setBusy(true); setErr(null);
+    try { await onLaunch(); }
+    catch (ex) { setErr(ex.message || 'Could not start the program. Try again.'); setBusy(false); }
+  };
   const stats = [
     { value: '67%',    body: 'Repeat customers spend 67% more than new customers.', src: 'Bain & Company',  tone: 'ok',     icon: <Icons.Trending size={18} sw={1.8}/> },
     { value: '60–70%', body: 'Probability of selling to an existing customer vs. 5–20% for new ones.', src: 'Invesp', tone: 'accent', icon: <Icons.Users    size={18} sw={1.8}/> },
@@ -90,10 +101,13 @@ function RewardsLanding({ onLaunch }) {
       </div>
 
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-        <button className="btn btn-primary" onClick={onLaunch} style={{ padding: '14px 26px', fontSize: 15, gap: 10 }}>
-          Set up my first reward program <Icons.Arrow size={15} sw={2}/>
+        <button className="btn btn-primary" onClick={launch} disabled={busy}
+          style={{ padding: '14px 26px', fontSize: 15, gap: 10, opacity: busy ? 0.6 : 1 }}>
+          {busy ? 'Setting up…' : <>Set up my first reward program <Icons.Arrow size={15} sw={2}/></>}
         </button>
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>Takes less than 2 minutes</div>
+        {err
+          ? <div style={{ fontSize: 12, color: 'var(--danger)' }}>{err}</div>
+          : <div style={{ fontSize: 12, color: 'var(--muted)' }}>Takes less than 2 minutes</div>}
       </div>
     </div>
   );

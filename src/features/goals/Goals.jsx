@@ -279,11 +279,17 @@ function GoalsPane({ goals, onCreate, onUpdate, onRemove }) {
         />
       )}
 
-      {goals.length === 0 ? (
+      {goals.length === 0 && !adding ? (
         <EmptyNote icon="Trending"
           title="No goals yet"
-          hint="Set a target — revenue, clients, sessions — and watch your data march toward it."/>
-      ) : (
+          hint="Set a target — revenue, clients, sessions — and watch your data march toward it."
+          action={(
+            <button className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 13 }}
+              onClick={() => setAdding(true)}>
+              <Icons.Plus size={13} sw={2}/> Create your first goal
+            </button>
+          )}/>
+      ) : goals.length === 0 ? null : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {goals.map((g) => (
             <GoalCard key={g.id} goal={g} onUpdate={onUpdate} onRemove={onRemove}/>
@@ -304,7 +310,11 @@ function NewGoalForm({ onCreate, onCancel }) {
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!title.trim() || !target) return;
+    // Inline validation instead of a silent no-op. The old code did
+    // `if (!title.trim() || !target) return;` which made the "Add goal"
+    // button feel dead when a field was blank.
+    if (!title.trim()) { setErr('Give your goal a title.'); return; }
+    if (!target || Number(target) <= 0) { setErr('Set a target greater than zero.'); return; }
     setBusy(true); setErr(null);
     try {
       await onCreate({

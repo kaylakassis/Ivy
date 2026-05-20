@@ -647,13 +647,13 @@ function NotificationsCard() {
 // the next page load.
 const PUSH_LABELS = {
   messages:  { label: 'Messages',  hint: 'New chat messages from clients (or businesses, if you\'re a client).' },
-  bookings:  { label: 'Bookings',  hint: 'New bookings on your calendar + reminders before sessions.' },
+  bookings:  { label: 'Booking alerts',  hint: 'Whether you GET notified about new bookings + session reminders. (How far ahead reminders fire is set per service in Calendar → Services.)' },
   documents: { label: 'Documents', hint: 'Documents to sign, signatures completed, overdue reminders.' },
   payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
   support:   { label: 'Support',   hint: 'When THRYVE Support replies to your conversation.' },
 };
 const EMAIL_LABELS = {
-  bookings:  { label: 'Bookings',  hint: 'Confirmations, reminders, cancellations, reschedules.' },
+  bookings:  { label: 'Booking alerts',  hint: 'Whether confirmation / reminder / cancellation emails are sent. (Reminder timing is per service in Calendar → Services.)' },
   invoices:  { label: 'Invoices',  hint: 'Invoices and quotes you receive, plus paid-receipt emails.' },
   documents: { label: 'Documents', hint: 'Signature requests + reminders when a document is waiting.' },
   messages:  { label: 'Messages',  hint: 'When the other side of a chat thread replies.' },

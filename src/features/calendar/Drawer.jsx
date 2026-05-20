@@ -1,11 +1,18 @@
 // Shared right-side drawer used by the calendar views.
 import React from 'react';
+import { createPortal } from 'react-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function Drawer({ title, subtitle, onClose, children, width = 460 }) {
   useEscapeKey(onClose);
-  return (
+  // Portal to <body>. A transformed/filtered/contain ancestor (the
+  // app shell + route-enter animations use transforms) would otherwise
+  // become the containing block for these position:fixed layers,
+  // stranding the drawer mid-page instead of pinned to the viewport
+  // edge — the "opens below the fold, didn't realize I clicked it"
+  // report. Portaling guarantees viewport-relative fixed positioning.
+  return createPortal((
     <>
       <div onClick={onClose} style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 95,
@@ -38,7 +45,7 @@ export default function Drawer({ title, subtitle, onClose, children, width = 460
         </div>
       </div>
     </>
-  );
+  ), document.body);
 }
 
 export function TimeInput({ minutes, onChange }) {
