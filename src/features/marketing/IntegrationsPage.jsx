@@ -1,18 +1,17 @@
-// /integrations — what THRYVE talks to. Keep the list honest: only
+// /integrations - what THRYVE talks to. Keep the list honest: only
 // list integrations that work today; "planned" ones live in a separate
 // section so we don't over-promise.
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
-import MarketingShell from './MarketingShell.jsx';
+import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 
 const LIVE = [
-  { name: 'Stripe',           icon: 'Dollar',   sub: 'Payments + Connect — your money, your account.' },
+  { name: 'Stripe',           icon: 'Dollar',   sub: 'Payments + Connect - your money, your account.' },
   { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in THRYVE.' },
   { name: 'Apple Calendar',   icon: 'Calendar', sub: 'CalDAV subscription. Read-only view of your THRYVE schedule.' },
-  { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Same as Google — two-way sync via iCal feed.' },
-  { name: 'Webhooks',         icon: 'Globe',    sub: 'POST events on booking, payment, message — wire it to anywhere.' },
+  { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Same as Google - two-way sync via iCal feed.' },
+  { name: 'Webhooks',         icon: 'Globe',    sub: 'POST events on booking, payment, message - wire it to anywhere.' },
   { name: 'Embeddable widget', icon: 'Doc',     sub: 'One-line script to embed booking on any external site.' },
   { name: 'Custom domain',    icon: 'Globe',    sub: 'Point your domain at THRYVE; DNS verification built-in.' },
   { name: 'CSV import',       icon: 'FileIcon', sub: 'Bring clients, bookings, invoices from any other tool.' },
@@ -30,7 +29,7 @@ const PLANNED = [
 
 export default function IntegrationsPage() {
   useEffect(() => {
-    document.title = 'Integrations — THRYVE';
+    document.title = 'Integrations - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content', 'THRYVE integrates with Stripe, Google Calendar, Twilio SMS, webhooks, and more. Plus a one-line embeddable booking widget for any external site.');
   }, []);
@@ -52,7 +51,7 @@ export default function IntegrationsPage() {
             margin: '14px auto 0', maxWidth: 580,
             fontSize: 16, lineHeight: 1.6, color: 'var(--fg-2)',
           }}>
-            We don't try to be every tool — we connect to the ones you'd otherwise
+            We don't try to be every tool - we connect to the ones you'd otherwise
             run alongside us. Payments, calendars, your domain, your email.
           </p>
         </header>
@@ -101,7 +100,7 @@ export default function IntegrationsPage() {
 
         <section style={{ textAlign: 'center' }}>
           <p style={{ fontSize: 14.5, color: 'var(--fg-2)' }}>
-            Need a specific integration? Email <a href="mailto:hello@getthryve.ai" style={{ color: 'var(--accent)' }}>hello@getthryve.ai</a> — we prioritize integrations that owners actually ask for.
+            Need a specific integration? Email <a href="mailto:hello@getthryve.ai" style={{ color: 'var(--accent)' }}>hello@getthryve.ai</a> - we prioritize integrations that owners actually ask for.
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ marginTop: 16, padding: '12px 22px', fontSize: 14, fontWeight: 600 }}>

@@ -1,4 +1,4 @@
-// /vs/:slug — switch-from-competitor landing page.
+// /vs/:slug - switch-from-competitor landing page.
 //
 // Same shell as the other marketing pages; data per-competitor comes
 // from compareData.js. Designed for high-intent search queries:
@@ -6,12 +6,11 @@
 import React, { useEffect } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
-import MarketingShell from './MarketingShell.jsx';
+import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { COMPETITORS, FEATURE_ROWS, COMPETITOR_LIST } from './compareData.js';
 import { THRYVE_PRICE } from './RoiCalculator.jsx';
 
-const SYMBOL = { y: '✓', n: '—', l: '~' };
+const SYMBOL = { y: '✓', n: '-', l: '~' };
 const SYMBOL_COLOR = { y: 'var(--accent)', n: 'var(--muted)', l: 'var(--fg-2)' };
 const SYMBOL_TITLE = { y: 'Included', n: 'Not available', l: 'Limited or paid add-on' };
 
@@ -21,7 +20,7 @@ export default function ComparePage() {
 
   useEffect(() => {
     if (!c) return;
-    document.title = `THRYVE vs ${c.name} — switching guide`;
+    document.title = `THRYVE vs ${c.name} - switching guide`;
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content', `Switching from ${c.name} to THRYVE? Side-by-side comparison, why solo owners switch, and a free data import. From $${THRYVE_PRICE}/mo, AI included.`);
   }, [c]);
@@ -153,7 +152,7 @@ export default function ComparePage() {
             fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em',
             color: 'var(--accent)',
           }}>
-            We'll move your data over — free.
+            We'll move your data over - free.
           </h2>
           <p style={{ margin: '10px 0 16px', color: 'var(--fg-2)', fontSize: 14.5, lineHeight: 1.6 }}>
             Export your client list, booking history, and invoices from {c.name} (or share read-only access),

@@ -1,17 +1,17 @@
-// Interactive ROI calculator for the pricing page. Three sliders compute:
-//   1. monthly savings vs the typical solo-business tool stack
-//   2. hours-of-admin saved per week
-//   3. extra billable revenue those hours unlock
+// Interactive ROI calculator for the pricing page. Two sliders
+// (clients/month + admin hours/week) drive four always-positive
+// outputs: fixed tool savings (stack price minus THRYVE), admin
+// hours reclaimed, no-shows prevented, and the total monthly upside.
 //
 // Pure client-side math, no API. The dollar figures for each tool are
-// editable here in one place — if a competitor changes their price,
+// editable here in one place - if a competitor changes their price,
 // update the TOOL_STACK constants and the savings number updates
 // everywhere the calculator is embedded.
 import React, { useMemo, useState } from 'react';
 
 // Typical replaceable monthly spend across the SaaS stack a solo
 // business otherwise has to assemble. Numbers are taken from publicly
-// listed entry-tier prices (May 2026) — kept conservative so the
+// listed entry-tier prices (May 2026) - kept conservative so the
 // calculator never over-promises.
 const TOOL_STACK = [
   { name: 'HoneyBook',  monthly: 39, replaces: 'clients + invoices + contracts' },
@@ -23,30 +23,45 @@ const TOOL_STACK = [
 ];
 const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
 
-const THRYVE_PRICE = 19;
+const THRYVE_PRICE = 39;
+
+// Tunable assumptions, all deliberately conservative + cited in the
+// footnote so the calculator never feels like fantasy math.
+const BILLABLE_RATE = 75;     // $/hr - average solo service rate
+const ADMIN_AUTOMATED = 0.6;  // share of admin time THRYVE automates
+const NO_SHOW_RATE = 0.08;    // typical no-show rate without reminders
 
 export default function RoiCalculator() {
-  const [clients,  setClients]  = useState(40);
-  const [hours,    setHours]    = useState(8);
-  const [spend,    setSpend]    = useState(STACK_TOTAL);
+  const [clients, setClients] = useState(40);
+  const [hours,   setHours]   = useState(8);
 
   const calc = useMemo(() => {
-    const savedDollars = Math.max(0, spend - THRYVE_PRICE);
-    // Conservative billable-rate proxy: average solo service rate ~$75/hr.
-    // 50% of saved admin hours converted to billable (the rest is
-    // breathing room).
-    const billableRate = 75;
-    const savedHoursMo = hours * 4.33;
-    const billableHoursMo = Math.round(savedHoursMo * 0.5);
-    const extraRevenue = billableHoursMo * billableRate;
+    // 1. Tool savings - a FIXED, always-positive number: THRYVE
+    //    replaces the whole stack ($122) for one price ($39). The old
+    //    calculator let you drag your current spend BELOW THRYVE's
+    //    price, which showed "$0 savings vs the $122 stack" - a
+    //    contradiction. This is the honest, appealing framing.
+    const toolSavings = Math.max(0, STACK_TOTAL - THRYVE_PRICE);
+
+    // 2. Admin hours reclaimed - the HOURS slider drives this.
+    const reclaimedHours = Math.round(hours * 4.33 * ADMIN_AUTOMATED);
+    const hoursRevenue = reclaimedHours * BILLABLE_RATE;
+
+    // 3. No-shows prevented - the CLIENTS slider drives this. Card-on-
+    //    file + automatic reminders recover most no-shows; each one is
+    //    a session you'd otherwise lose.
+    const noShowsPrevented = Math.round(clients * NO_SHOW_RATE);
+    const noShowRevenue = noShowsPrevented * BILLABLE_RATE;
+
+    const extraRevenue = hoursRevenue + noShowRevenue;
     return {
-      savedDollars,
-      savedHoursMo: Math.round(savedHoursMo),
-      billableHoursMo,
+      toolSavings,
+      reclaimedHours,
+      noShowsPrevented,
       extraRevenue,
-      totalUpside: savedDollars + extraRevenue,
+      totalUpside: toolSavings + extraRevenue,
     };
-  }, [hours, spend]);
+  }, [hours, clients]);
 
   return (
     <div style={{
@@ -61,16 +76,15 @@ export default function RoiCalculator() {
           ROI calculator
         </div>
         <div style={{ fontSize: 20, fontWeight: 600, marginTop: 6 }}>
-          See what THRYVE saves you every month
+          See what THRYVE puts back in your pocket
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-          Move the sliders. Numbers update live. No signup needed.
+          Move the two sliders. Numbers update live. No signup needed.
         </div>
       </div>
 
       <Slider label="Clients you serve per month" value={clients} min={5} max={200} step={5} suffix=" clients" onChange={setClients}/>
-      <Slider label="Hours/week you spend on admin (billing, scheduling, follow-ups)" value={hours} min={1} max={30} step={1} suffix=" hrs/wk" onChange={setHours}/>
-      <Slider label="What you currently pay for SaaS tools combined" value={spend} min={0} max={500} step={5} suffix=" /mo" prefix="$" onChange={setSpend}/>
+      <Slider label="Hours a week you spend on admin (billing, scheduling, follow-ups)" value={hours} min={1} max={30} step={1} suffix=" hrs/wk" onChange={setHours}/>
 
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 14,
@@ -79,16 +93,17 @@ export default function RoiCalculator() {
         border: '1px solid var(--border)',
         borderRadius: 12,
       }}>
-        <Stat label="SaaS savings" value={`$${calc.savedDollars}/mo`} sub={`vs the $${STACK_TOTAL} stack`}/>
-        <Stat label="Admin hours back" value={`${calc.savedHoursMo} hrs/mo`} sub="time you reclaim"/>
-        <Stat label="Extra billable revenue" value={`$${calc.extraRevenue}/mo`} sub={`${calc.billableHoursMo} more sessions`}/>
-        <Stat label="Total upside" value={`$${calc.totalUpside}/mo`} sub="savings + revenue" emphasis/>
+        <Stat label="Tool savings" value={`$${calc.toolSavings}/mo`} sub={`replaces $${STACK_TOTAL} of separate tools`}/>
+        <Stat label="Admin hours back" value={`${calc.reclaimedHours} hrs/mo`} sub="billing + reminders, automated"/>
+        <Stat label="No-shows prevented" value={`${calc.noShowsPrevented}/mo`} sub="card on file + auto reminders"/>
+        <Stat label="Total monthly upside" value={`$${calc.totalUpside.toLocaleString()}/mo`} sub="savings + recovered revenue" emphasis/>
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        THRYVE is <strong>${THRYVE_PRICE}/mo</strong> when out of beta — free during beta. Math uses a
-        conservative $75/hr billable rate and converts 50% of saved admin hours
-        into client time (the rest is breathing room).
+        THRYVE is <strong>${THRYVE_PRICE}/mo</strong> after beta, and free while we're in beta. The
+        math is deliberately conservative: a $75/hr billable rate, THRYVE automating
+        60% of your admin time, and an 8% no-show rate that reminders + card-on-file
+        recover. Your real numbers are usually higher.
       </div>
     </div>
   );

@@ -1,4 +1,4 @@
-// /roadmap — three columns: Now / Next / Later.
+// /roadmap - three columns: Now / Next / Later.
 //
 // Edit the ROADMAP constant to update. Keep promises modest in the
 // "Next" column and aspirational in "Later"; "Now" is what's being
@@ -6,8 +6,7 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
-import MarketingShell from './MarketingShell.jsx';
+import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 
 const ROADMAP = {
   now: [
@@ -24,9 +23,9 @@ const ROADMAP = {
   ],
   later: [
     { title: 'Multi-currency support',             note: 'Take payments in EUR, GBP, AUD, CAD. Stripe supports it; we need to surface it cleanly.' },
-    { title: 'Marketplace + featured listings',    note: 'Optional THRYVE directory — solos who want extra discoverability can opt in.' },
+    { title: 'Marketplace + featured listings',    note: 'Optional THRYVE directory - solos who want extra discoverability can opt in.' },
     { title: 'Group-class capacity management',    note: 'Class capacity already shipped for one trainer; multi-instructor capacity comes next.' },
-    { title: 'Ivy actions: full workflow drafting', note: 'Tell Ivy "create a workflow for new-client onboarding" — she drafts the whole sequence.' },
+    { title: 'Ivy actions: full workflow drafting', note: 'Tell Ivy "create a workflow for new-client onboarding" - she drafts the whole sequence.' },
     { title: 'Real-time team chat',                note: 'Studio tier: internal messaging across staff, not just client-facing threads.' },
   ],
 };
@@ -39,7 +38,7 @@ const COLUMN_META = {
 
 export default function RoadmapPage() {
   useEffect(() => {
-    document.title = 'Roadmap — THRYVE';
+    document.title = 'Roadmap - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content', 'What THRYVE is building next. Now / Next / Later columns updated as we ship.');
   }, []);
@@ -61,7 +60,7 @@ export default function RoadmapPage() {
             margin: '12px 0 0', maxWidth: 600,
             fontSize: 16, lineHeight: 1.6, color: 'var(--fg-2)',
           }}>
-            Updated as we ship. If something you want isn't here, email <a href="mailto:hello@getthryve.ai" style={{ color: 'var(--accent)' }}>hello@getthryve.ai</a> — owner requests are what moves things up the list.
+            Updated as we ship. If something you want isn't here, email <a href="mailto:hello@getthryve.ai" style={{ color: 'var(--accent)' }}>hello@getthryve.ai</a> - owner requests are what moves things up the list.
           </p>
         </header>
 

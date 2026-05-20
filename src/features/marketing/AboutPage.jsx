@@ -1,4 +1,4 @@
-// /about — long-form founder + mission page. The marketing home has a
+// /about - long-form founder + mission page. The marketing home has a
 // short FounderNote already; this is for visitors who want depth before
 // signing up.
 //
@@ -8,46 +8,46 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 
 const BLOCKS = [
   {
     kicker: 'The problem',
     heading: 'Solo owners pay for tools, not a system.',
     paragraphs: [
-      "Most one-person businesses run their operation on five or six tools — one for booking, one for invoicing, another for payments, another for email, a spreadsheet or note app for the CRM, plus an AI tool on top. Each one charges $15–$50 a month. Each one has its own login, its own UI, and its own gaps.",
-      "The friction isn't in any single tool — it's in the seams between them. The booking lands in one app. The invoice goes out from another. The follow-up message gets typed in your texts. None of them know about each other, so the owner glues them together with copy-paste and memory.",
+      "Most one-person businesses run their operation on five or six tools - one for booking, one for invoicing, another for payments, another for email, a spreadsheet or note app for the CRM, plus an AI tool on top. Each one charges $15-$50 a month. Each one has its own login, its own UI, and its own gaps.",
+      "The friction isn't in any single tool - it's in the seams between them. The booking lands in one app. The invoice goes out from another. The follow-up message gets typed in your texts. None of them know about each other, so the owner glues them together with copy-paste and memory.",
     ],
   },
   {
     kicker: 'The shape',
     heading: "What THRYVE actually is.",
     paragraphs: [
-      "One workspace where every part of the business lives. Bookings know about clients. Clients know about invoices. Invoices know about payments. Payments know about the AI coach. The coach knows about everything and can quietly nudge — \"Sarah hasn't booked in three weeks; want me to send a check-in?\"",
-      "Every workspace is fully isolated. Your numbers, your messages, your clients are yours. The AI coach can only see your data — never anyone else's. You can export everything as JSON any time and walk away if it isn't working.",
+      "One workspace where every part of the business lives. Bookings know about clients. Clients know about invoices. Invoices know about payments. Payments know about the AI coach. The coach knows about everything and can quietly nudge - \"Sarah hasn't booked in three weeks; want me to send a check-in?\"",
+      "Every workspace is fully isolated. Your numbers, your messages, your clients are yours. The AI coach can only see your data - never anyone else's. You can export everything as JSON any time and walk away if it isn't working.",
     ],
   },
   {
     kicker: 'The shape (cont.)',
     heading: 'Built so the client portal is free, forever.',
     paragraphs: [
-      "Your clients shouldn't have to pay to interact with you. The portal — where they see their bookings, invoices, signed forms, and messages — is free for them and always will be. They sign up once and use the same portal across every business they work with on THRYVE.",
-      "When THRYVE charges, it'll charge the business owner only. Beta users get a meaningful discount when paid plans land — no surprise bills, no rugpulls.",
+      "Your clients shouldn't have to pay to interact with you. The portal - where they see their bookings, invoices, signed forms, and messages - is free for them and always will be. They sign up once and use the same portal across every business they work with on THRYVE.",
+      "When THRYVE charges, it'll charge the business owner only. Beta users get a meaningful discount when paid plans land - no surprise bills, no rugpulls.",
     ],
   },
   {
     kicker: 'The bet',
     heading: 'AI is a coach, not a chatbot.',
     paragraphs: [
-      "Ivy is built into THRYVE because the coach matters more than the AI. She sees your real numbers — revenue this month, active clients, who's gone quiet, what's overdue — and answers in plain English with specific actions. Not \"consider engaging your top customers\" but \"send Sarah a check-in; she's 22 days quiet.\"",
-      "She has tools. Tell her to draft a thank-you to a client who just paid and send it through the portal — she'll do all of it. The chat box is a deliberately small surface area for what's actually a working assistant.",
+      "Ivy is built into THRYVE because the coach matters more than the AI. She sees your real numbers - revenue this month, active clients, who's gone quiet, what's overdue - and answers in plain English with specific actions. Not \"consider engaging your top customers\" but \"send Sarah a check-in; she's 22 days quiet.\"",
+      "She has tools. Tell her to draft a thank-you to a client who just paid and send it through the portal - she'll do all of it. The chat box is a deliberately small surface area for what's actually a working assistant.",
     ],
   },
   {
     kicker: 'The team',
     heading: "Small, on purpose.",
     paragraphs: [
-      "THRYVE is built by Kayla and friends. We answer support emails personally. We read every reply to every email we send. If you've used software where you couldn't reach a human and felt like your business was running someone else's roadmap — that's the opposite of what we want THRYVE to be.",
+      "THRYVE is built by a business owner, for business owners. We answer support emails personally. We read every reply to every email we send. If you've used software where you couldn't reach a human and felt like your business was running someone else's roadmap, that's the opposite of what we want THRYVE to be.",
       "Find us in /account → Help → Contact support. Or reply to any email we send you. Every message hits a real inbox.",
     ],
   },
@@ -57,7 +57,7 @@ export default function AboutPage() {
   const [tweaks] = useTweaks();
 
   useEffect(() => {
-    document.title = 'About THRYVE — the all-in-one business OS';
+    document.title = 'About THRYVE - the all-in-one business OS';
     const upsert = (attr, key, value) => {
       let el = document.querySelector(`meta[${attr}="${key}"]`);
       if (!el) {
@@ -125,9 +125,9 @@ export default function AboutPage() {
               style={{ padding: '12px 20px', fontSize: 14 }}>
               Start free <Icons.Arrow size={13} sw={2}/>
             </Link>
-            <Link to="/changelog" className="btn btn-outline"
+            <Link to="/pricing" className="btn btn-outline"
               style={{ padding: '12px 20px', fontSize: 14 }}>
-              See what just shipped
+              See pricing
             </Link>
           </div>
         </div>

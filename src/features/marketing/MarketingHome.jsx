@@ -6,7 +6,7 @@
 //   cards) · Testimonials · "Replace your stack" comparison ·
 //   FAQ · FounderNote · Pricing · CTA · Footer.
 //
-// All visuals are CSS-only — no images bundled — so the page stays light
+// All visuals are CSS-only - no images bundled - so the page stays light
 // and the previews stay in lockstep with the app's own styling.
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -18,12 +18,12 @@ import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
 const FEATURES = [
   { icon: 'Users',    title: 'Clients',         body: 'CRM with stages, notes, lifetime value, and a leads pipeline.' },
   { icon: 'Calendar', title: 'Calendar',        body: 'Day/week/month views, recurring sessions, public booking link, reminders. Set services as in-person, mobile (you travel), or online.' },
-  { icon: 'Dollar',   title: 'Invoicing',       body: 'Branded invoices, recurring billing, time tracking, expenses — all under one money tab.' },
+  { icon: 'Dollar',   title: 'Invoicing',       body: 'Branded invoices, recurring billing, time tracking, expenses - all under one money tab.' },
   { icon: 'Lock',     title: 'Card on file',    body: "Clients save a card once. Auto-charge late-cancel + no-show fees, accept tips, and never chase money again." },
   { icon: 'Heart',    title: 'Memberships',     body: 'Set up monthly tiers; clients subscribe straight from your booking page. Recurring revenue, no extra tools.' },
-  { icon: 'Doc',      title: 'Documents',       body: 'Multi-signer waivers, agreements, and intake forms — clients sign with one click. PDFs land flattened with a tamper-evident audit page.' },
+  { icon: 'Doc',      title: 'Documents',       body: 'Multi-signer waivers, agreements, and intake forms - clients sign with one click. PDFs land flattened with a tamper-evident audit page.' },
   { icon: 'Chat',     title: 'Messaging',       body: 'Two-way native chat between you and your clients. Prospects can ask questions before they book.' },
-  { icon: 'Spark',    title: 'Ivy — AI coach',  body: 'Built-in business coach grounded in your real numbers. Every workspace is private.' },
+  { icon: 'Spark',    title: 'Ivy - AI coach',  body: 'Built-in business coach grounded in your real numbers. Every workspace is private.' },
 ];
 
 // Derive the home's BuiltFor cards from the shared verticalsData so
@@ -41,7 +41,7 @@ function capitalize(s) {
 
 const TESTIMONIALS = [
   {
-    quote: 'I cut three subscriptions the same week. Bookings, invoices, and the AI coach all in one place — and the coach actually quotes my real numbers.',
+    quote: 'I cut three subscriptions the same week. Bookings, invoices, and the AI coach all in one place - and the coach actually quotes my real numbers.',
     role: 'Massage therapist',
     location: 'Portland, OR',
   },
@@ -60,19 +60,19 @@ const TESTIMONIALS = [
 const FAQ = [
   {
     q: 'Do you take a cut of my payments?',
-    a: "No. Stripe takes their standard processing fee, that's it. Money goes from your client straight to your Stripe account — we never touch it.",
+    a: "No. Stripe takes their standard processing fee, that's it. Money goes from your client straight to your Stripe account - we never touch it.",
   },
   {
     q: 'Can I bring my existing clients in?',
-    a: 'Yes — bulk import from a CSV, or just add their name + email. Each client gets a "claim your portal" invite automatically (totally optional for them).',
+    a: 'Yes - bulk import from a CSV, or just add their name + email. Each client gets a "claim your portal" invite automatically (totally optional for them).',
   },
   {
     q: "What's pricing going to look like?",
-    a: "Free during the beta. When paid plans land we'll give early users a meaningful discount that sticks for a long time. The client portal will always be free for clients — they never pay to use THRYVE.",
+    a: "Free during the beta. When paid plans land we'll give early users a meaningful discount that sticks for a long time. The client portal will always be free for clients - they never pay to use THRYVE.",
   },
   {
     q: 'Is there a mobile app?',
-    a: "Yes — THRYVE is a Progressive Web App. Open the site on your phone, tap “Add to Home Screen”, and it behaves like a native app, including push notifications.",
+    a: "Yes - THRYVE is a Progressive Web App. Open the site on your phone, tap “Add to Home Screen”, and it behaves like a native app, including push notifications.",
   },
   {
     q: 'Do you support SMS reminders?',
@@ -84,7 +84,7 @@ const FAQ = [
   },
   {
     q: 'Is my data private?',
-    a: "Each workspace is fully isolated. Ivy can only see your numbers — never anyone else's. Same for messages, documents, payments. Nothing is sold to advertisers.",
+    a: "Each workspace is fully isolated. Ivy can only see your numbers - never anyone else's. Same for messages, documents, payments. Nothing is sold to advertisers.",
   },
   {
     q: "Why one tool instead of best-of-breed?",
@@ -95,7 +95,7 @@ const FAQ = [
 export default function MarketingHome() {
   const [tweaks] = useTweaks();
 
-  // SEO meta — proper Open Graph + Twitter Card tags so links shared in
+  // SEO meta - proper Open Graph + Twitter Card tags so links shared in
   // iMessage / Slack / Discord / etc. render with a real preview.
   useEffect(() => {
     const cleanups = [];
@@ -114,17 +114,17 @@ export default function MarketingHome() {
         else if (prev != null) el.setAttribute('content', prev);
       });
     };
-    document.title = 'THRYVE — the all-in-one business OS for solo entrepreneurs';
-    const desc = "Clients, calendar, invoicing, messages, docs, goals, rewards, and an AI coach — all in one workspace. Built for massage therapists, stylists, trainers, coaches, and anyone running a small business solo.";
+    document.title = 'THRYVE - the all-in-one business OS for solo entrepreneurs';
+    const desc = "Clients, calendar, invoicing, messages, docs, goals, rewards, and an AI coach - all in one workspace. Built for massage therapists, stylists, trainers, coaches, and anyone running a small business solo.";
     const url  = typeof window !== 'undefined' ? window.location.origin : 'https://getthryve.ai';
     upsert('name', 'description',          desc);
-    upsert('property', 'og:title',         'THRYVE — the all-in-one business OS');
+    upsert('property', 'og:title',         'THRYVE - the all-in-one business OS');
     upsert('property', 'og:description',   desc);
     upsert('property', 'og:type',          'website');
     upsert('property', 'og:url',           url);
     upsert('property', 'og:site_name',     'THRYVE');
     upsert('name', 'twitter:card',         'summary_large_image');
-    upsert('name', 'twitter:title',        'THRYVE — business OS for solo entrepreneurs');
+    upsert('name', 'twitter:title',        'THRYVE - business OS for solo entrepreneurs');
     upsert('name', 'twitter:description',  desc);
     return () => cleanups.forEach((fn) => fn());
   }, []);
@@ -247,7 +247,7 @@ function Hero() {
         fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
       }}>
         Clients, calendar, invoicing, messages, docs, goals, rewards, and an AI coach
-        — all inside one workspace that stays yours. No bouncing between five apps,
+        - all inside one workspace that stays yours. No bouncing between five apps,
         no per-tool subscriptions.
       </p>
 
@@ -272,7 +272,7 @@ function Hero() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Product preview — CSS-only mockup framed in a fake browser chrome.
+// Product preview - CSS-only mockup framed in a fake browser chrome.
 // Stays in lockstep with the real app's styling so it never goes stale
 // the way bundled image screenshots would.
 // ──────────────────────────────────────────────────────────────────────
@@ -331,7 +331,7 @@ function ProductPreview() {
               </MockCard>
               <MockCard title="Ivy says…" accent>
                 <div style={{ fontSize: 11.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
-                  Sarah hasn't booked in 3 weeks — usually weekly. Want me to send a check-in?
+                  Sarah hasn't booked in 3 weeks - usually weekly. Want me to send a check-in?
                 </div>
               </MockCard>
             </div>
@@ -438,12 +438,12 @@ function MockRow({ primary, secondary }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// IvyHero — Ivy is THRYVE's most defensible 2026 differentiator: an AI
+// IvyHero - Ivy is THRYVE's most defensible 2026 differentiator: an AI
 // that doesn't just answer questions, it takes ACTIONS against the
 // owner's business (send invoice, message a quiet client, book a slot).
 // We promote it out of the 8-tile feature grid into its own band so
 // the value lands before the visitor scrolls into "yet another CRM."
-// The chat-style mockup is pure CSS — no real assets needed, no flash
+// The chat-style mockup is pure CSS - no real assets needed, no flash
 // of unloaded content, and it animates a single owner question into a
 // real-looking Ivy response with an inline chart and action chip.
 // ──────────────────────────────────────────────────────────────────────
@@ -451,7 +451,7 @@ function MockRow({ primary, secondary }) {
 function IvyHero() {
   const messages = React.useMemo(() => [
     { who: 'owner', text: "How much did I make from massage clients in March?" },
-    { who: 'ivy',   text: "$4,820 across 56 sessions — up 22% over February. Want me to message the 8 clients who haven't rebooked yet?" },
+    { who: 'ivy',   text: "$4,820 across 56 sessions - up 22% over February. Want me to message the 8 clients who haven't rebooked yet?" },
     { who: 'owner', text: "Yes, send the soft check-in template." },
     { who: 'ivy',   text: "Done. 8 messages sent. I'll let you know when they reply.",
                     action: 'Sent · queued follow-ups for 7 days' },
@@ -496,7 +496,7 @@ function IvyHero() {
             opacity: 0.85, maxWidth: 420,
           }}>
             Ivy knows your clients, your numbers, and your schedule. Ask her anything
-            — and tell her to act. Send invoices, book sessions, message quiet
+            - and tell her to act. Send invoices, book sessions, message quiet
             clients, draft contracts. She runs on YOUR business, not a generic model.
           </p>
           <div style={{ marginTop: 22, display: 'flex', gap: 14, flexWrap: 'wrap' }}>
@@ -599,7 +599,7 @@ function TrustStrip() {
   );
 }
 
-// Live counter — pulls active-owner count from a public endpoint. Shows
+// Live counter - pulls active-owner count from a public endpoint. Shows
 // momentum on the page. Read-only, cached at the edge so this counter
 // doesn't hammer the DB on every page load.
 function UserCounter() {
@@ -626,7 +626,7 @@ function UserCounter() {
   );
 }
 
-// Mobile band — the ICP works on phones between sessions. Promotes the
+// Mobile band - the ICP works on phones between sessions. Promotes the
 // PWA install + links to the dedicated /mobile page.
 function MobileBand() {
   return (
@@ -645,7 +645,7 @@ function MobileBand() {
             fontSize: 'clamp(24px, 3vw, 32px)', fontWeight: 500,
             letterSpacing: '-0.02em',
           }}>
-            Works on every device — including the one in your pocket.
+            Works on every device - including the one in your pocket.
           </h2>
           <p style={{ margin: '12px 0 0', color: 'var(--fg-2)', fontSize: 14.5, lineHeight: 1.6 }}>
             Install THRYVE as a phone app in two taps. Add a client between
@@ -749,12 +749,12 @@ function Features() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Built for [vertical] — vertical-specific value props. Critical for SEO
+// Built for [vertical] - vertical-specific value props. Critical for SEO
 // on long-tail queries like "booking software for massage therapists".
 // ──────────────────────────────────────────────────────────────────────
 
 // Wide list of service-business archetypes that THRYVE actually fits.
-// Don't trim aggressively — the whole point of this section is to
+// Don't trim aggressively - the whole point of this section is to
 // communicate "we are NOT limited to 5 verticals." Every entry is a
 // real type of solo service business that books, invoices, and
 // messages clients. Order is shuffled so the rotation feels random.
@@ -796,7 +796,7 @@ function BuiltFor() {
           margin: '20px auto 0', maxWidth: 560,
           fontSize: 15, lineHeight: 1.55, color: 'var(--fg-2)',
         }}>
-          If you take appointments, send invoices, or manage clients —
+          If you take appointments, send invoices, or manage clients -
           THRYVE fits. The same tool, every solo service business.
         </p>
       </div>
@@ -836,7 +836,7 @@ function BuiltFor() {
         marginTop: 14, textAlign: 'center',
         fontSize: 12, color: 'var(--muted)',
       }}>
-        Don't see your vertical? Doesn't matter — if it's a service
+        Don't see your vertical? Doesn't matter - if it's a service
         business, it works.
       </div>
     </section>
@@ -886,7 +886,7 @@ function RotatingVertical() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Testimonials. Quotes are representative of beta feedback — replace
+// Testimonials. Quotes are representative of beta feedback - replace
 // with real ones (with attribution + photo) once a few are in writing.
 // ──────────────────────────────────────────────────────────────────────
 
@@ -930,7 +930,7 @@ function Testimonials() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// What THRYVE replaces. Job-to-be-done framing — names a category of
+// What THRYVE replaces. Job-to-be-done framing - names a category of
 // tool ("your booking app", "your invoicing tool") rather than any
 // specific brand, so the page stays out of comparison-disparagement
 // territory and ages well as competitors come and go.
@@ -945,7 +945,7 @@ const COMPARE_ROWS = [
   { label: 'Direct messaging w/ clients',  replaces: 'Texts + email threads' },
   { label: 'Cards on file + auto-charge',  replaces: 'Manual payment chasing' },
   { label: 'Public booking site + reviews', replaces: 'Your DIY web page' },
-  { label: 'Client portal (always free)',  replaces: 'Nothing — most solos don\'t have one' },
+  { label: 'Client portal (always free)',  replaces: 'Nothing - most solos don\'t have one' },
   { label: 'AI business coach (Ivy)',      replaces: 'Generic AI tool subscription' },
 ];
 
@@ -958,12 +958,12 @@ function Comparison() {
           One subscription, not five.
         </h2>
         <p style={{ margin: '10px auto 0', maxWidth: 580, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Most solo owners pay $15–$50 a month each for half a dozen
+          Most solo owners pay $15-$50 a month each for half a dozen
           separate tools. THRYVE rolls every job into one system that
           actually talks to itself.
         </p>
       </div>
-      {/* Card-stack layout that works on every viewport — no horizontal
+      {/* Card-stack layout that works on every viewport - no horizontal
           scroll on mobile (the old 3-col table overflowed at < 720px,
           forcing users to swipe sideways to see the checkmark). Each row
           shows the capability, what it replaces, and a tick. */}
@@ -1073,13 +1073,13 @@ function FounderNote() {
           Most "all-in-one" tools are five mediocre ones bolted together with a
           shared logo. THRYVE started because I watched friends running solo
           businesses bleed hours a week to context-switching between booking,
-          invoicing, messaging, and follow-up — and pay for the privilege.
+          invoicing, messaging, and follow-up - and pay for the privilege.
           The goal is one well-made tool that respects your data and your
           time. If something here annoys you, reply to any email or hit
-          Support inside the app — I read every message.
+          Support inside the app - I read every message.
         </p>
         <div style={{ marginTop: 18, fontSize: 13, color: 'var(--fg-2)' }}>
-          — Kayla, founder of THRYVE
+          - Kayla, founder of THRYVE
         </div>
       </div>
     </section>
@@ -1105,7 +1105,7 @@ function Pricing() {
           </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
             Sign up today and use everything for free while we polish. We'll give early
-            users a meaningful discount when paid plans land — no surprise bills.
+            users a meaningful discount when paid plans land - no surprise bills.
             The client portal stays free forever for clients.
           </p>
         </div>
@@ -1140,7 +1140,7 @@ function CTA() {
       </p>
       <Link to="/signup" className="btn btn-primary"
         style={{ padding: '14px 26px', fontSize: 15 }}>
-        Get started — free
+        Get started - free
       </Link>
     </section>
   );
@@ -1173,7 +1173,7 @@ function Footer() {
             { label: 'Features',  href: '#features' },
             { label: 'Compare',   href: '#compare' },
             { label: 'FAQ',       href: '#faq' },
-            { label: 'Changelog', to: '/changelog' },
+            { label: 'Pricing',   to: '/pricing' },
           ]}/>
         </div>
         <div>

@@ -1,9 +1,9 @@
-// /pricing — the page that turns "interested visitor" into "signed-up
+// /pricing - the page that turns "interested visitor" into "signed-up
 // owner." Every competitor publishes prices; without one we lose people
 // to comparison-shop bounce. Three sections do the work:
-//   1. tier table — what's included at each price
-//   2. ROI calculator — show the savings live (RoiCalculator.jsx)
-//   3. comparison vs the stack — visual reinforcement
+//   1. tier table - what's included at each price
+//   2. ROI calculator - show the savings live (RoiCalculator.jsx)
+//   3. comparison vs the stack - visual reinforcement
 //   4. FAQ specific to pricing concerns
 //
 // Edit the TIERS array and the FAQ array to update copy. Everything
@@ -11,8 +11,7 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
-import MarketingShell from './MarketingShell.jsx';
+import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import RoiCalculator, { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from './RoiCalculator.jsx';
 
 const TIERS = [
@@ -46,9 +45,9 @@ const TIERS = [
   {
     id: 'studio',
     name: 'Studio',
-    sub: 'For 2–5 person teams sharing one workspace',
+    sub: 'For 2-5 person teams sharing one workspace',
     priceBeta: 'Free during beta',
-    priceGA: '$39 / month',
+    priceGA: '$79 / month',
     cta: 'Start free',
     ctaTo: '/signup',
     featured: true,
@@ -89,11 +88,11 @@ const TIERS = [
 const FAQ = [
   {
     q: 'What happens to my price after beta?',
-    a: `Early beta users get a meaningful discount locked in for life — we'll publish exact details before we leave beta, and you'll have time to opt in or out. Worst case: $${THRYVE_PRICE}/mo Solo or $39/mo Studio.`,
+    a: `Early beta users get a meaningful discount locked in for life. We'll publish exact details before we leave beta, and you'll have time to opt in or out. Worst case: $${THRYVE_PRICE}/mo Solo or $79/mo Studio.`,
   },
   {
     q: 'Do you take a cut of my payments?',
-    a: "No. Ever. Stripe is your processor (you connect your own account); we never touch your money. You pay Stripe's standard ~2.9%+30¢ — same as on Stripe directly. THRYVE adds zero markup.",
+    a: "No. Ever. Stripe is your processor (you connect your own account); we never touch your money. You pay Stripe's standard ~2.9%+30¢ - same as on Stripe directly. THRYVE adds zero markup.",
   },
   {
     q: 'Per-client or per-seat fees?',
@@ -101,15 +100,15 @@ const FAQ = [
   },
   {
     q: 'Can I cancel anytime?',
-    a: 'Yes. No contract, no notice period. Cancel from your account page — your data stays accessible for 60 days for export, then is deleted.',
+    a: 'Yes. No contract, no notice period. Cancel from your account page - your data stays accessible for 60 days for export, then is deleted.',
   },
   {
     q: 'Do you offer annual discounts?',
-    a: 'Yes — pay annually and get 2 months free (effectively a 16% discount). Available once we leave beta.',
+    a: 'Yes - pay annually and get 2 months free (effectively a 16% discount). Available once we leave beta.',
   },
   {
     q: 'Is there a free trial?',
-    a: 'During beta the whole product is free. After GA, Solo will have a 14-day full-feature trial — no card required.',
+    a: 'During beta the whole product is free. After GA, Solo will have a 14-day full-feature trial - no card required.',
   },
   {
     q: "What if I'm switching from another tool?",
@@ -117,15 +116,15 @@ const FAQ = [
   },
   {
     q: 'Do you store my client data securely?',
-    a: 'All data is encrypted at rest and in transit. Hosted on Vercel + Neon (US-based, SOC2 vendors). Stripe handles all payment info — we never see card numbers. Full data export available anytime from your account page.',
+    a: 'All data is encrypted at rest and in transit. Hosted on Vercel + Neon (US-based, SOC2 vendors). Stripe handles all payment info - we never see card numbers. Full data export available anytime from your account page.',
   },
 ];
 
 export default function PricingPage() {
   useEffect(() => {
-    document.title = 'Pricing — THRYVE';
+    document.title = 'Pricing - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. Free during beta — $${THRYVE_PRICE}/mo Solo, $39/mo Studio after.`);
+    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. Free during beta, then $${THRYVE_PRICE}/mo Solo or $79/mo Studio.`);
   }, []);
 
   return (
@@ -154,8 +153,8 @@ export default function PricingPage() {
             margin: '16px auto 0', maxWidth: 560,
             fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
           }}>
-            Replace your full stack — CRM, scheduler, invoicing, contracts, website,
-            email, AI — with one subscription. Free during beta; locked-in pricing
+            Replace your full stack - CRM, scheduler, invoicing, contracts, website,
+            email, AI - with one subscription. Free during beta; locked-in pricing
             after.
           </p>
         </section>
@@ -235,7 +234,7 @@ export default function PricingPage() {
           </h2>
           <p style={{ margin: '0 0 24px', color: 'var(--fg-2)', fontSize: 15 }}>
             The tools most solo businesses end up running in parallel. THRYVE
-            does each of these — and then makes them talk to each other so the
+            does each of these - and then makes them talk to each other so the
             booking → invoice → message → follow-up is one fluid motion.
           </p>
           <div style={{
@@ -279,7 +278,7 @@ export default function PricingPage() {
             gap: 18, textAlign: 'center',
           }}>
             {[
-              { icon: 'Check',  label: 'Stripe-verified partner', sub: 'Your money goes straight to your Stripe — we never touch it.' },
+              { icon: 'Check',  label: 'Stripe-verified partner', sub: 'Your money goes straight to your Stripe - we never touch it.' },
               { icon: 'X',      label: 'Cancel anytime',          sub: 'No contracts, no notice period. Cancel from account page.' },
               { icon: 'Doc',    label: 'Export your data',        sub: 'Download everything any time. Your data stays yours.' },
               { icon: 'Heart',  label: 'No transaction fees',     sub: "You only pay Stripe's standard processing rate." },

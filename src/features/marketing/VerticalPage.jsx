@@ -1,15 +1,15 @@
-// /for/:slug — vertical-specific landing pages. Same shell, different
+// /for/:slug - vertical-specific landing pages. Same shell, different
 // copy + use cases per vertical. Major SEO win for queries like
 // "booking software for massage therapists" or "CRM for personal trainers".
 //
 // Adding a vertical: drop a row in VERTICALS below. Slug is the URL.
-// keep the angle phrase tight ("for massage therapists") — it should
+// keep the angle phrase tight ("for massage therapists") - it should
 // drop into Google search verbatim.
 import React, { useEffect } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { VERTICALS } from './verticalsData.js';
 
 const VERTICAL_LIST = Object.entries(VERTICALS);
@@ -24,7 +24,7 @@ export default function VerticalPage() {
   useEffect(() => {
     if (!v) return;
     const dom = typeof window !== 'undefined' ? window.location.origin : '';
-    document.title = `THRYVE — ${capFirst(v.angle)} run their business in one place`;
+    document.title = `THRYVE - ${capFirst(v.angle)} run their business in one place`;
     const upsert = (attr, key, value) => {
       let el = document.querySelector(`meta[${attr}="${key}"]`);
       if (!el) {
@@ -103,7 +103,7 @@ export default function VerticalPage() {
         </div>
       </section>
 
-      {/* "How to set up" — concrete first-day instructions */}
+      {/* "How to set up" - concrete first-day instructions */}
       <section style={{ maxWidth: 720, margin: '0 auto', padding: '32px 24px' }}>
         <div className="card" style={{
           padding: 24,

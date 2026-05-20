@@ -4,8 +4,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
-import MarketingShell from './MarketingShell.jsx';
+import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 
 export default function NotFoundPage() {
   const loc = useLocation();
@@ -22,7 +21,7 @@ export default function NotFoundPage() {
             We can't find that page
           </h1>
           <p style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.55, marginBottom: 24 }}>
-            The page you were looking for doesn't exist — maybe a typo in the URL, or a link
+            The page you were looking for doesn't exist - maybe a typo in the URL, or a link
             that's gone stale. Try one of the links below.
           </p>
           <p style={{ fontSize: 11.5, color: 'var(--muted2, var(--muted))',

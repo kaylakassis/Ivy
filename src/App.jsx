@@ -62,7 +62,6 @@ const PublicQuote   = lazy(() => import('./features/finance/PublicQuote.jsx'));
 const ReviewPage    = lazy(() => import('./features/reviews/ReviewPage.jsx'));
 const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
 const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
-const ChangelogPage = lazy(() => import('./features/marketing/ChangelogPage.jsx'));
 const AboutPage     = lazy(() => import('./features/marketing/AboutPage.jsx'));
 const VerticalPage  = lazy(() => import('./features/marketing/VerticalPage.jsx'));
 const PricingPage     = lazy(() => import('./features/marketing/PricingPage.jsx'));
@@ -200,7 +199,6 @@ export default function App() {
         <Route path="/terms"   element={<TermsPage />} />
 
         {/* Marketing — extra public surfaces beyond the home page. */}
-        <Route path="/changelog"   element={<ChangelogPage />} />
         <Route path="/about"       element={<AboutPage />} />
         <Route path="/for/:slug"   element={<VerticalPage />} />
         <Route path="/pricing"     element={<PricingPage />} />

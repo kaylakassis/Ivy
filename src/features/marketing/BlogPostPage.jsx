@@ -1,8 +1,7 @@
-// /blog/:slug — single post. Reads from blogData.POST_MAP.
+// /blog/:slug - single post. Reads from blogData.POST_MAP.
 import React, { useEffect } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
-import MarketingShell from './MarketingShell.jsx';
+import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { POST_MAP, POSTS } from './blogData.js';
 import { Icons } from '../../components/Icons.jsx';
 
@@ -12,7 +11,7 @@ export default function BlogPostPage() {
 
   useEffect(() => {
     if (!post) return;
-    document.title = `${post.title} — THRYVE blog`;
+    document.title = `${post.title} - THRYVE blog`;
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content', post.excerpt);
   }, [post]);
@@ -78,7 +77,7 @@ export default function BlogPostPage() {
             Want THRYVE to handle this for you?
           </div>
           <p style={{ margin: '8px 0 14px', fontSize: 14, lineHeight: 1.55, color: 'var(--fg-2)' }}>
-            Pricing, intake, no-shows, invoicing — every problem in this post is one tab in THRYVE. Free during beta.
+            Pricing, intake, no-shows, invoicing - every problem in this post is one tab in THRYVE. Free during beta.
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600 }}>

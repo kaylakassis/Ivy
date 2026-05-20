@@ -1,16 +1,15 @@
-// /blog — index of every post. Sorted newest-first.
+// /blog - index of every post. Sorted newest-first.
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
-import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
-import MarketingShell from './MarketingShell.jsx';
+import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { POSTS } from './blogData.js';
 
 export default function BlogIndex() {
   useEffect(() => {
-    document.title = 'Blog — THRYVE';
+    document.title = 'Blog - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'Working notes for solo service businesses — pricing, intake forms, no-shows, payments, and the admin tax.');
+    if (desc) desc.setAttribute('content', 'Working notes for solo service businesses - pricing, intake forms, no-shows, payments, and the admin tax.');
   }, []);
   const sorted = [...POSTS].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return (
@@ -30,7 +29,7 @@ export default function BlogIndex() {
             margin: '12px 0 0', maxWidth: 600,
             fontSize: 15.5, color: 'var(--fg-2)', lineHeight: 1.6,
           }}>
-            Pricing, intake forms, no-shows, payment processors, the admin tax —
+            Pricing, intake forms, no-shows, payment processors, the admin tax -
             everything we wish someone had written down before we did it the hard way.
           </p>
         </header>
