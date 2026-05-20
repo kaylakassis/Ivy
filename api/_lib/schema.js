@@ -1833,6 +1833,31 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
   ON clients(workspace_id, email) WHERE email IS NOT NULL;
 
+-- ─── Global search (Cmd+K) trigram indexes ──────────────────────────
+-- /api/search runs leading-wildcard ILIKE '%q%' across clients,
+-- invoices, and bookings. Without trigram GIN indexes those are full
+-- sequential scans per keystroke per workspace — fine at hundreds of
+-- rows, multi-hundred-ms at thousands. pg_trgm is already enabled
+-- above (idx_services_name_trgm). gin_trgm_ops makes '%foo%' index-
+-- backed. We index the columns search actually filters on.
+CREATE INDEX IF NOT EXISTS idx_clients_name_trgm
+  ON clients USING gin (name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_clients_email_trgm
+  ON clients USING gin (email gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_invoices_clientname_trgm
+  ON invoices USING gin (client_name gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_invoices_number_trgm
+  ON invoices USING gin (number gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_bookings_clientname_trgm
+  ON bookings USING gin (client_name gin_trgm_ops);
+
+-- Dunning cron + admin scans filter workspaces by past-due state across
+-- ALL tenants. A partial index keeps that a small index scan instead of
+-- a full workspaces seq-scan as the tenant count grows.
+CREATE INDEX IF NOT EXISTS idx_workspaces_dunning
+  ON workspaces(subscription_past_due_since)
+  WHERE subscription_status = 'past_due' AND subscription_suspended_at IS NULL;
+
 -- ─── Multi-currency invoicing ────────────────────────────────────────
 -- Until now every invoice was implicitly USD (the platform shipped
 -- US-first). Going global requires per-invoice currency stamped at
@@ -1896,6 +1921,23 @@ CREATE TRIGGER invoices_total_trg
 -- get recomputed to the same value.
 UPDATE invoices SET items = items
 WHERE total = 0 AND items <> '[]'::jsonb;
+
+-- Money-sanity CHECKs. The app layer (finance.js / recurring.js)
+-- already enforces these, but a DB-level guard stops a buggy or direct
+-- write from storing negative money / an out-of-range tax rate.
+-- gift_cards / memberships already carry their own non-negative CHECKs;
+-- invoices did not. Added NOT VALID so a populated table with any
+-- legacy out-of-range row can't block the migration — the constraint
+-- still enforces on every INSERT/UPDATE from here on.
+ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_amounts_nonneg;
+ALTER TABLE invoices ADD CONSTRAINT invoices_amounts_nonneg
+  CHECK (
+    discount >= 0
+    AND COALESCE(paid_amount, 0) >= 0
+    AND refunded_amount >= 0
+    AND total >= 0
+    AND tax_rate >= 0 AND tax_rate <= 100
+  ) NOT VALID;
 
 -- ─── Scaling-readiness composite indexes (Phase S2) ──────────────────
 -- These narrow hot-path scans that previously fell back to broader

@@ -15,6 +15,7 @@ import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, platfo
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { markReferralConverted, grantPendingReferralCredits } from '../_lib/referrals.js';
+import { markProcessed } from '../_lib/webhookDedup.js';
 import {
   notifySubscriptionStarted, notifyUpcomingRenewal,
   notifyPaymentFailed, notifySubscriptionCancelled,
@@ -46,6 +47,15 @@ export default async function handler(req, res) {
       });
     } catch (err) {
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
+    }
+
+    // Idempotency. Stripe redelivers events on any non-2xx or timeout;
+    // without this, a redelivered invoice.payment_succeeded re-sends
+    // owner emails and re-runs referral/affiliate side effects. Dedup
+    // by event id BEFORE acting, exactly like every other provider
+    // webhook (stripe/[workspaceId], square, paypal, stripe-platform).
+    if (!(await markProcessed('billing', event.id, null))) {
+      return ok(res, { received: true, deduped: true });
     }
 
     switch (event.type) {

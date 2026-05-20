@@ -12,15 +12,24 @@ export default function AuthPage({ mode = 'signin' }) {
   // ?ref=CODE survives all the way to the signup POST so affiliate
   // attribution lands. Lowercased keys handled server-side; only
   // honored on the signup path.
-  const refCode   = new URLSearchParams(location.search).get('ref');
-  const [email,    setEmail]    = useState('');
+  // ?email= prefills the address (client-invite links carry it) and
+  // ?mode=client preselects the client role so an invited client claims
+  // their portal instead of creating a business workspace.
+  const params    = new URLSearchParams(location.search);
+  const refCode   = params.get('ref');
+  const [email,    setEmail]    = useState(params.get('email') || '');
   const [password, setPassword] = useState('');
   const [confirm,  setConfirm]  = useState('');
   const [name,     setName]     = useState('');
-  const [role,     setRole]     = useState('owner'); // 'owner' | 'client'
+  const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy]   = useState(false);
   const [err,  setErr]    = useState(null);
+  // When signup succeeds but the welcome / verification email failed to
+  // send, we hold the user on this screen with an explicit notice +
+  // continue button rather than redirecting silently (the old
+  // ?emailIssue param was never read anywhere).
+  const [emailWarn, setEmailWarn] = useState(null);
 
   const isSignUp = mode === 'signup';
   const mismatch = isSignUp && confirm.length > 0 && confirm !== password;
@@ -44,14 +53,16 @@ export default function AuthPage({ mode = 'signin' }) {
     try {
       if (isSignUp) {
         // The signup endpoint returns { user, emailErrors? }. If
-        // emailErrors is set, the welcome / verification email
-        // didn't go out — surface a query param so the destination
-        // page can show "we couldn't email you, check spam" instead
-        // of leaving the user wondering why nothing arrived.
+        // emailErrors is set, the welcome / verification email didn't
+        // go out — hold the user here with an explicit notice + a
+        // continue button so they know to resend from their account,
+        // instead of redirecting silently.
         const r = await signUp(email, password, name.trim(), role, refCode);
-        const base = role === 'client' ? '/me' : '/';
-        const suffix = r?.emailErrors ? '?emailIssue=1' : '';
-        nav(base + suffix, { replace: true });
+        if (r?.emailErrors) {
+          setEmailWarn(role === 'client' ? '/me' : '/');
+          return;
+        }
+        nav(role === 'client' ? '/me' : '/', { replace: true });
       } else {
         await signIn(email, password);
         // For sign-in we let RoleRouter (in AppShell entry) figure out where
@@ -180,11 +191,33 @@ export default function AuthPage({ mode = 'signin' }) {
           }}>{err}</div>
         )}
 
+        {emailWarn && (
+          <div style={{
+            padding: '12px 14px', borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+            fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55,
+            display: 'flex', flexDirection: 'column', gap: 10,
+          }}>
+            <span>
+              Your account is ready, but we couldn&apos;t send your confirmation
+              email just now. You can resend it anytime from your account page
+              (check your spam folder too).
+            </span>
+            <button type="button" className="btn btn-primary"
+              onClick={() => nav(emailWarn, { replace: true })}
+              style={{ justifyContent: 'center', padding: '10px 14px' }}>
+              Continue <Icons.Arrow size={13} sw={2}/>
+            </button>
+          </div>
+        )}
+
+        {!emailWarn && (
         <button className="btn btn-primary" type="submit" disabled={!canSubmit}
           style={{ justifyContent: 'center', padding: '12px 14px', opacity: !canSubmit ? 0.6 : 1 }}>
           {busy ? 'Working…' : (isSignUp ? 'Create account' : 'Sign in')}
           {!busy && <Icons.Arrow size={14} sw={2} />}
         </button>
+        )}
 
         <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
           {isSignUp ? (

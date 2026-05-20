@@ -38,7 +38,9 @@ export default async function handler(req, res) {
     const bizName = branding.businessName || 'Your business';
     const base = appUrl();
     const signinHref = `${base}/signin?email=${encodeURIComponent(client.email)}`;
-    const signupHref = `${base}/signup?email=${encodeURIComponent(client.email)}`;
+    // mode=client so the invitee lands on the client signup (claims
+    // their portal) rather than creating a business workspace.
+    const signupHref = `${base}/signup?mode=client&email=${encodeURIComponent(client.email)}`;
 
     const result = await sendEmailToClient({
       clientId, type: 'bookings',

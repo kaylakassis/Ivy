@@ -35,7 +35,10 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     // they already have a THRYVE account.
     const base = appUrl();
     const signinHref  = `${base}/signin?email=${encodeURIComponent(c.email)}`;
-    const signupHref  = `${base}/signup?email=${encodeURIComponent(c.email)}`;
+    // mode=client so the signup form preselects the client role and the
+    // invitee claims their portal instead of accidentally creating a
+    // business workspace.
+    const signupHref  = `${base}/signup?mode=client&email=${encodeURIComponent(c.email)}`;
     const bizName     = c.biz_name || 'Your business';
     const bookingHref = c.slug ? `${base}/book/${encodeURIComponent(c.slug)}` : null;
     const branding = await fetchBranding(workspaceId);

@@ -18,14 +18,35 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       try {
+        // Bounded like /api/clients + /api/invoices: one thread per
+        // client means a large workspace could otherwise download every
+        // thread on each Messages-tab visit. Default 1000, ceiling 5000,
+        // with a hasMore flag so the UI can paginate without a contract
+        // break.
+        const requestedLimit = Number.parseInt(req.query.limit, 10);
+        const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+          ? Math.min(5000, requestedLimit)
+          : 1000;
+        const requestedOffset = Number.parseInt(req.query.offset, 10);
+        const offset = Number.isFinite(requestedOffset) && requestedOffset > 0
+          ? requestedOffset
+          : 0;
+        const probeLimit = limit + 1;
         const { rows } = await sql`
           SELECT t.*, c.name AS client_name, c.email AS client_email
           FROM message_threads t
           JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
           WHERE t.workspace_id = ${workspaceId}
           ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
+          LIMIT ${probeLimit} OFFSET ${offset}
         `;
-        return ok(res, { threads: rows.map(serializeThread) });
+        const hasMore = rows.length > limit;
+        const page = hasMore ? rows.slice(0, limit) : rows;
+        return ok(res, {
+          threads: page.map(serializeThread),
+          hasMore,
+          nextOffset: hasMore ? offset + limit : null,
+        });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[messages GET] failed (returning empty):', e.message);

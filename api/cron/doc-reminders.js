@@ -20,7 +20,7 @@ import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
-import { fetchBranding } from '../_lib/branding.js';
+import { makeBrandingCache } from '../_lib/branding.js';
 import { appUrl, generateRawToken } from '../_lib/tokens.js';
 import crypto from 'node:crypto';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -60,6 +60,7 @@ async function handler(req, res) {
     );
 
     let pinged = 0;
+    const getBranding = makeBrandingCache();
     for (const d of rows) {
       try {
         const days = Math.max(1, d.days_outstanding || 1);
@@ -130,7 +131,7 @@ async function handler(req, res) {
             } else {
               await sql`UPDATE documents SET sign_token_hash = ${hash}, updated_at = NOW() WHERE id = ${d.id}`;
             }
-            const branding = await fetchBranding(d.workspace_id);
+            const branding = await getBranding(d.workspace_id);
             const link = `${appUrl()}/sign/${encodeURIComponent(raw)}`;
             await sendEmailToClient({
               clientId: target.clientId,

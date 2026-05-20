@@ -128,7 +128,78 @@ async function runProbe() {
 // have created their dependencies. Convergence usually takes 2 passes;
 // MAX_PASSES caps to avoid infinite loops on a permanently-broken stmt.
 const MAX_PASSES = 4;
+
+// Cross-instance migration mutex.
+//
+// Goal: across MANY concurrently cold-starting function instances (e.g.
+// right after a deploy that adds a column), only ONE runs the full
+// migration at a time. Without it, a thundering herd each fire ~80 DDL
+// statements that take ACCESS EXCLUSIVE / SHARE UPDATE EXCLUSIVE locks
+// and serialize/deadlock against each other and live traffic.
+//
+// We CANNOT use pg_advisory_lock here: the Neon HTTP driver opens a new
+// connection per query, so a session-level advisory lock is released the
+// instant its acquiring query returns — it wouldn't span the migration's
+// subsequent statements. Instead we use a single-row claim with a TTL,
+// which is atomic per-statement and therefore correct over independent
+// HTTP connections. The TTL means a crashed migrator can't wedge the
+// lock forever — after it lapses another instance reclaims.
+const LOCK_TTL_SECONDS = 120;
+
+async function tryAcquireMigrationLock() {
+  // Create the lock table itself idempotently. It must not depend on the
+  // migration it gates, so we create it inline. Concurrent CREATE TABLE
+  // IF NOT EXISTS may race; treat any error as "couldn't lock" and fall
+  // through to migrating unguarded (still correct, just unprotected).
+  await sql`
+    CREATE TABLE IF NOT EXISTS schema_migration_lock (
+      id           INT PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+      locked_until TIMESTAMPTZ
+    )
+  `;
+  await sql`INSERT INTO schema_migration_lock (id, locked_until) VALUES (1, NULL) ON CONFLICT (id) DO NOTHING`;
+  // Atomic claim: only succeeds if the lock is free or its TTL lapsed.
+  const { rows } = await sql.query(
+    `UPDATE schema_migration_lock
+        SET locked_until = NOW() + INTERVAL '${LOCK_TTL_SECONDS} seconds'
+      WHERE id = 1 AND (locked_until IS NULL OR locked_until < NOW())
+      RETURNING id`,
+  );
+  return rows.length > 0;
+}
+
+async function releaseMigrationLock() {
+  await sql`UPDATE schema_migration_lock SET locked_until = NULL WHERE id = 1`.catch(() => {});
+}
+
 async function runFull() {
+  let haveLock = false;
+  try {
+    haveLock = await tryAcquireMigrationLock();
+  } catch {
+    // Lock machinery itself failed — migrate anyway. Correctness is
+    // preserved (every statement is idempotent IF NOT EXISTS); we just
+    // lose stampede protection for this one run.
+    haveLock = true;
+    try { await runFullLocked(); return true; } finally { /* no lock held */ }
+  }
+  if (!haveLock) {
+    // Another instance holds the lock. Return false (not applied) so the
+    // caller leaves applied=false and the next request re-probes, picking
+    // up the winner's finished migration.
+    // eslint-disable-next-line no-console
+    console.warn('[bootstrap] migration already in progress on another instance; skipping');
+    return false;
+  }
+  try {
+    await runFullLocked();
+    return true;
+  } finally {
+    await releaseMigrationLock();
+  }
+}
+
+async function runFullLocked() {
   const allStatements = splitStatements(SCHEMA_SQL);
   let pending = allStatements.map((stmt, i) => ({ stmt, origIndex: i }));
   let pass = 0;
@@ -197,8 +268,9 @@ export async function ensureSchemaApplied() {
       return;
     }
     lastFullRunAt = Date.now();
-    await runFull();
-    applied = true;
+    // Only mark applied if we actually held the lock and migrated; if a
+    // peer instance was migrating, leave applied=false so we re-probe.
+    if (await runFull()) applied = true;
   })();
 
   try {

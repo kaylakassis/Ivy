@@ -336,6 +336,11 @@ export function parseWebhookEvent(event) {
       status:      'paid',
       amountCents: amount,
       currency:    (r.amount?.currency_code || 'USD').toUpperCase(),
+      // Who the funds were paid TO — used by the webhook handler to pin
+      // the event to the workspace's connected merchant so a (validly-
+      // signed) event for a different merchant can't be applied to this
+      // workspace's URL.
+      payeeMerchantId: r.payee?.merchant_id || null,
       metadata,
       providerData: { captureId: r.id, payerEmail: event.resource?.payer?.email_address },
     };

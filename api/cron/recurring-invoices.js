@@ -19,7 +19,7 @@ import { materializeOne } from '../_lib/recurring.js';
 import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
-import { fetchBranding } from '../_lib/branding.js';
+import { fetchBranding, makeBrandingCache } from '../_lib/branding.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
@@ -52,6 +52,7 @@ async function handler(req, res) {
     let materialized = 0;
     let sent = 0;
     let errors = 0;
+    const getBranding = makeBrandingCache();
 
     for (const r of due.rows) {
       try {
@@ -65,7 +66,7 @@ async function handler(req, res) {
         // 'draft' so the owner can review + send manually.
         if (!schedule.client_email) continue;
         try {
-          await autoSendInvoice({ schedule, invoice });
+          await autoSendInvoice({ schedule, invoice, getBranding });
           sent++;
         } catch (sendErr) {
           // eslint-disable-next-line no-console
@@ -94,7 +95,7 @@ async function handler(req, res) {
 // Mirror of /api/invoices/send.js but called server-side. Stamps a
 // view token on the invoice, emails the client, drops a thread
 // message — same flow the owner would trigger by hand.
-async function autoSendInvoice({ schedule, invoice }) {
+async function autoSendInvoice({ schedule, invoice, getBranding = fetchBranding }) {
   if (!invoice.client_email) return;
   const rawToken = generateRawToken(32);
   const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -120,7 +121,7 @@ async function autoSendInvoice({ schedule, invoice }) {
     WHERE id = ${invoice.id}
   `;
   const link = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
-  const branding = await fetchBranding(invoice.workspace_id);
+  const branding = await getBranding(invoice.workspace_id);
   const business = branding.businessName;
   try {
     await sendEmailToClient({

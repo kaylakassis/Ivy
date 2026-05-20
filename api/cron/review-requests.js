@@ -14,7 +14,7 @@ import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
-import { fetchBranding } from '../_lib/branding.js';
+import { makeBrandingCache } from '../_lib/branding.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -59,12 +59,13 @@ async function handler(req, res) {
 
     let sent = 0;
     let failed = 0;
+    const getBranding = makeBrandingCache();
 
     for (const r of due.rows) {
       try {
         const raw = generateRawToken(32);
         const hash = crypto.createHash('sha256').update(raw).digest('hex');
-        const branding = await fetchBranding(r.workspace_id);
+        const branding = await getBranding(r.workspace_id);
         const business = branding.businessName || r.biz_name || 'Your business';
         const dateLabel = (r.date instanceof Date ? r.date : new Date(r.date + 'T00:00:00Z'))
           .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });

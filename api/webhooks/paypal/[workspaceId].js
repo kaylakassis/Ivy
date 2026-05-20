@@ -40,6 +40,21 @@ export default async function handler(req, res) {
     const parsed = parseWebhookEvent(event);
     if (!parsed) return ok(res, { handled: false });
 
+    // Defense-in-depth: the PayPal webhook is verified against a single
+    // platform-level webhook id (not per-workspace), so pin the event to
+    // THIS workspace's connected merchant. The invoice writes are already
+    // workspace-scoped (so cross-tenant application can't happen), but
+    // rejecting a mismatched payee makes the intent explicit and avoids
+    // wasted work / confusing logs. Only enforced when the event carries
+    // a payee merchant id.
+    if (parsed.payeeMerchantId
+        && settings.paypalMerchantId
+        && parsed.payeeMerchantId !== settings.paypalMerchantId) {
+      console.warn('[webhooks/paypal] payee merchant', parsed.payeeMerchantId,
+        'does not match workspace merchant', settings.paypalMerchantId, '— ignoring');
+      return ok(res, { handled: false, reason: 'merchant-mismatch' });
+    }
+
     if (parsed.type === 'checkout.completed' && parsed.status === 'paid') {
       await applyPaymentToInvoice({ workspaceId, parsed });
     } else if (parsed.type === 'refund.updated' && parsed.status === 'succeeded') {

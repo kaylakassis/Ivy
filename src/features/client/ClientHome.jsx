@@ -56,7 +56,9 @@ export default function ClientHome() {
       {!isClient && (
         <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <EmptyNote icon="Users" title="No businesses yet"
-            hint={`Once a business owner adds you as a client (or you book through their THRYVE link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`}/>
+            hint={user?.email_verified_at
+              ? `Once a business owner adds you as a client (or you book through their THRYVE link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`
+              : `If a business already added you, verify your email (${user?.email}) to link your account — businesses are matched to you by your verified email address. Check your inbox for the confirmation link, then refresh.`}/>
           <Link to="/me/discover" className="btn btn-primary"
             style={{ alignSelf: 'flex-start' }}>
             <Icons.Globe size={13} sw={1.7}/> Browse businesses on THRYVE

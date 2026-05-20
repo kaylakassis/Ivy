@@ -13,7 +13,7 @@
 // calendar_settings.timezone on top later.
 import { sql } from '../_lib/db.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
-import { fetchBranding } from '../_lib/branding.js';
+import { makeBrandingCache } from '../_lib/branding.js';
 import { sendClientSms } from '../_lib/sms.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
@@ -80,6 +80,9 @@ async function handler(req, res) {
     let sent = 0;
     let scanned = 0;
     let failed = 0;
+    // Memoize branding per workspace for this run — many reminders share
+    // the same handful of workspaces.
+    const getBranding = makeBrandingCache();
     for (const r of rows) {
       if (sent >= MAX_PER_RUN) break;
       scanned++;
@@ -110,7 +113,7 @@ async function handler(req, res) {
         // re-fire the email on the next cron tick (and vice versa).
         if (emailEligible && !alreadyEmail[key]) {
           try {
-            const branding = await fetchBranding(r.workspace_id);
+            const branding = await getBranding(r.workspace_id);
             await sendReminder({
               to: r.client_email,
               clientId: r.client_id,

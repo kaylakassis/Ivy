@@ -170,10 +170,19 @@ export async function grantPendingReferralCredits(referrerUserId) {
       // Stripe credit failed AFTER we claimed the row — roll the claim
       // back so a later sweep retries it.
       // eslint-disable-next-line no-await-in-loop
-      await sql`UPDATE referrals SET rewarded_at = NULL, reward_cents = NULL WHERE id = ${row.id}`
-        .catch(() => {});
+      const rolledBack = await sql`UPDATE referrals SET rewarded_at = NULL, reward_cents = NULL WHERE id = ${row.id}`
+        .then(() => true)
+        .catch((rbErr) => {
+          // If BOTH the credit AND its rollback fail, the row is stuck
+          // marked-rewarded with no credit applied — a silently-lost
+          // free month. This must be loud so it can be reconciled by
+          // hand; do NOT swallow it.
+          // eslint-disable-next-line no-console
+          console.error(`[referrals] CRITICAL: rollback failed for referral ${row.id} — reward marked granted but no Stripe credit applied:`, rbErr.message);
+          return false;
+        });
       // eslint-disable-next-line no-console
-      console.error('[referrals] credit apply failed:', err.message);
+      console.error('[referrals] credit apply failed (rolled back:', rolledBack, '):', err.message);
     }
   }
   return { granted };

@@ -58,48 +58,52 @@ export function serializeMessage(row) {
 // Pulls the same numbers Ivy reasons over, so the right-hand "What Ivy sees"
 // panel stays in lockstep with the prompt context.
 export async function workspaceContext(workspaceId) {
-  const { rows: r1 } = await sql`
-    SELECT COALESCE(SUM(
-      GREATEST(
-        (SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
-          FROM jsonb_array_elements(items) AS it) - discount,
-        0
-      ) * (1 + tax_rate / 100)
-    ), 0)::numeric AS revenue
-    FROM invoices
-    WHERE workspace_id = ${workspaceId}
-      AND status = 'paid'
-      AND paid_at >= date_trunc('month', NOW())
-  `;
-  const { rows: r2 } = await sql`
-    SELECT
-      COUNT(*) FILTER (WHERE status IN ('sent','overdue'))::int AS open_invoices,
-      COUNT(*)::int AS total
-    FROM invoices WHERE workspace_id = ${workspaceId}
-  `;
-  const { rows: r3 } = await sql`
-    SELECT COUNT(*)::int AS active_clients FROM clients
-    WHERE workspace_id = ${workspaceId} AND stage = 'active'
-  `;
-  const { rows: r4 } = await sql`
-    SELECT COUNT(*)::int AS upcoming FROM bookings
-    WHERE workspace_id = ${workspaceId}
-      AND cancelled_at IS NULL
-      AND date >= CURRENT_DATE
-      AND date <  (CURRENT_DATE + INTERVAL '7 days')::date
-  `;
-  const { rows: r5 } = await sql`
-    SELECT COUNT(*)::int AS quiet FROM clients c
-    WHERE c.workspace_id = ${workspaceId}
-      AND c.stage = 'active'
-      AND NOT EXISTS (
-        SELECT 1 FROM message_threads mt
-        JOIN messages m ON m.thread_id = mt.id
-        WHERE mt.workspace_id = c.workspace_id
-          AND mt.client_id = c.id
-          AND m.created_at >= NOW() - INTERVAL '21 days'
-      )
-  `;
+  // These five reads are independent — run them in parallel so the panel
+  // pays max(latency) instead of the sum of five sequential HTTP round-
+  // trips. Revenue uses the materialized invoices.total column (kept in
+  // sync by a DB trigger) exactly like the /api/finance dashboard,
+  // instead of re-expanding jsonb_array_elements per invoice — same
+  // number everywhere, far cheaper at scale.
+  const [
+    { rows: r1 }, { rows: r2 }, { rows: r3 }, { rows: r4 }, { rows: r5 },
+  ] = await Promise.all([
+    sql`
+      SELECT COALESCE(SUM(total), 0)::numeric AS revenue
+      FROM invoices
+      WHERE workspace_id = ${workspaceId}
+        AND status = 'paid'
+        AND paid_at >= date_trunc('month', NOW())
+    `,
+    sql`
+      SELECT
+        COUNT(*) FILTER (WHERE status IN ('sent','overdue'))::int AS open_invoices,
+        COUNT(*)::int AS total
+      FROM invoices WHERE workspace_id = ${workspaceId}
+    `,
+    sql`
+      SELECT COUNT(*)::int AS active_clients FROM clients
+      WHERE workspace_id = ${workspaceId} AND stage = 'active'
+    `,
+    sql`
+      SELECT COUNT(*)::int AS upcoming FROM bookings
+      WHERE workspace_id = ${workspaceId}
+        AND cancelled_at IS NULL
+        AND date >= CURRENT_DATE
+        AND date <  (CURRENT_DATE + INTERVAL '7 days')::date
+    `,
+    sql`
+      SELECT COUNT(*)::int AS quiet FROM clients c
+      WHERE c.workspace_id = ${workspaceId}
+        AND c.stage = 'active'
+        AND NOT EXISTS (
+          SELECT 1 FROM message_threads mt
+          JOIN messages m ON m.thread_id = mt.id
+          WHERE mt.workspace_id = c.workspace_id
+            AND mt.client_id = c.id
+            AND m.created_at >= NOW() - INTERVAL '21 days'
+        )
+    `,
+  ]);
 
   return {
     revenueThisMonth: Number(r1[0].revenue || 0),

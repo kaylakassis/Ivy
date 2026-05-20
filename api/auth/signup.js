@@ -84,9 +84,14 @@ export default async function handler(req, res) {
       : null;
 
     const ip = getClientIp(req);
-    const blocked = await enforce(req, res, [
-      { key: `signup:ip:${ip}`, max: 5, windowSeconds: 10 * 60 },
-    ]);
+    // Owners: tight cap (5/10min) — a single person rarely makes many.
+    // Clients: a business's customers commonly sign up the same day from
+    // one shared office / clinic / carrier-grade-NAT IP, so a 5-cap
+    // locks out legitimate invitees. Use a separate, higher client key.
+    const rateRule = role === 'client'
+      ? { key: `signup:client:ip:${ip}`, max: 30, windowSeconds: 10 * 60 }
+      : { key: `signup:ip:${ip}`,        max: 5,  windowSeconds: 10 * 60 };
+    const blocked = await enforce(req, res, [rateRule]);
     if (blocked) return;
 
     const emailKey = email.toLowerCase();
@@ -101,26 +106,37 @@ export default async function handler(req, res) {
     `;
     const user = insertUser.rows[0];
 
-    // Append the immutable acceptance row in the same transaction as
-    // the user creation. legal_acceptances is append-only — we never
-    // delete; this row plus its IP + UA is the proof if it ever
-    // matters.
-    const ua = req.headers['user-agent']?.toString().slice(0, 500) || null;
-    await sql`
-      INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
-      VALUES (${user.id}, 'terms', ${CURRENT_TERMS_VERSION}, ${ip}, ${ua})
-    `;
-
-    if (role === 'owner') {
-      await sql`INSERT INTO workspaces (owner_id) VALUES (${user.id})`;
-    } else {
-      // Client signup: claim every existing `clients` row that already
-      // matches this email so they immediately see their data when they
-      // hit /me. Idempotent.
+    // The Neon HTTP driver isn't transactional across awaits, so the
+    // user / legal-acceptance / workspace writes can't share one BEGIN.
+    // Instead we compensate: if any follow-up write fails, delete the
+    // just-created user so we never strand an account WITHOUT its
+    // immutable Terms-acceptance proof or (for owners) its workspace.
+    // Deleting the user cascades, cleaning up anything partial, and frees
+    // the email for a clean retry.
+    try {
+      // Append the immutable acceptance row right after user creation.
+      // legal_acceptances is append-only — we never delete; this row
+      // plus its IP + UA is the proof if it ever matters.
+      const ua = req.headers['user-agent']?.toString().slice(0, 500) || null;
       await sql`
-        UPDATE clients SET user_id = ${user.id}
-        WHERE email = ${emailKey} AND user_id IS NULL
+        INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
+        VALUES (${user.id}, 'terms', ${CURRENT_TERMS_VERSION}, ${ip}, ${ua})
       `;
+
+      if (role === 'owner') {
+        await sql`INSERT INTO workspaces (owner_id) VALUES (${user.id})`;
+      } else {
+        // Client signup: claim every existing `clients` row that already
+        // matches this email so they immediately see their data when they
+        // hit /me. Idempotent.
+        await sql`
+          UPDATE clients SET user_id = ${user.id}
+          WHERE email = ${emailKey} AND user_id IS NULL
+        `;
+      }
+    } catch (setupErr) {
+      await sql`DELETE FROM users WHERE id = ${user.id}`.catch(() => {});
+      throw setupErr;
     }
 
     // Attribution. Both run best-effort — never fail signup over them.

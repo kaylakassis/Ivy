@@ -70,19 +70,15 @@ export async function requireSuperAdmin(req, res) {
   }
   if (user.user_type === 'super_admin') return true;
 
-  // Diagnostic: surface what we actually checked so the operator can
-  // see if email casing / whitespace / a different account is the
-  // issue. Safe to leak — this endpoint is admin-only by definition.
+  // Diagnostic goes to SERVER LOGS only — never the response body. The
+  // 403 used to echo the full super-admin allowlist + the caller's
+  // user_type to any authenticated non-admin who probed an admin route,
+  // disclosing operator emails. Keep that detail where only the operator
+  // can see it.
   // eslint-disable-next-line no-console
-  console.warn('[admin] super-admin check failed for', JSON.stringify(user.email), '— user_type =', user.user_type);
-  res.status(403).json({
-    error: 'Super-admin only',
-    debug: {
-      checkedEmail: user.email,
-      userType: user.user_type,
-      allowedEmails: Array.from(superAdminEmails()),
-    },
-  });
+  console.warn('[admin] super-admin check failed for', JSON.stringify(user.email),
+    '— user_type =', user.user_type, '— allowed =', Array.from(superAdminEmails()));
+  res.status(403).json({ error: 'Super-admin only' });
   return false;
 }
 

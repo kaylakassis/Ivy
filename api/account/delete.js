@@ -18,6 +18,7 @@ import { requireUser, clearSessionCookie } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { cancelSubscription, platformStripeSecret } from '../_lib/stripe.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -42,6 +43,34 @@ export default async function handler(req, res) {
     // cascade wipes the row.
     const userEmail = user.email;
     const userName = user.name || '';
+
+    // Cancel any active platform subscription BEFORE we drop the row.
+    // Otherwise Stripe keeps billing the customer for a workspace that no
+    // longer exists to receive (or act on) the webhooks. Immediate
+    // cancel since the account is gone. Best-effort: deletion must
+    // proceed even if Stripe is unreachable.
+    try {
+      const secretKey = platformStripeSecret();
+      if (secretKey) {
+        const subRows = await sql`
+          SELECT stripe_subscription_id
+          FROM workspaces
+          WHERE owner_id = ${user.id} AND stripe_subscription_id IS NOT NULL
+        `;
+        for (const w of subRows.rows) {
+          // eslint-disable-next-line no-await-in-loop
+          await cancelSubscription({
+            secretKey, subscriptionId: w.stripe_subscription_id, atPeriodEnd: false,
+          }).catch((e) => {
+            // eslint-disable-next-line no-console
+            console.error('[account/delete] subscription cancel failed:', w.stripe_subscription_id, e.message);
+          });
+        }
+      }
+    } catch (subErr) {
+      // eslint-disable-next-line no-console
+      console.error('[account/delete] subscription cleanup failed:', subErr.message);
+    }
 
     // Delete the user. Cascades to workspaces → all workspace-scoped tables,
     // and to auth_tokens. Returns the row count for sanity.
