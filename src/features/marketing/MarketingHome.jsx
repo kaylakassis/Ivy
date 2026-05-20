@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
+import { MarketingMobileMenu } from './MarketingShell.jsx';
 import { api } from '../../lib/api.js';
 import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
 
@@ -68,7 +69,7 @@ const FAQ = [
   },
   {
     q: "What's pricing going to look like?",
-    a: "Free during the beta. When paid plans land we'll give early users a meaningful discount that sticks for a long time. The client portal will always be free for clients - they never pay to use THRYVE.",
+    a: "Start with a free trial, then one simple subscription at $39/mo - no per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use THRYVE.",
   },
   {
     q: 'Is there a mobile app?',
@@ -180,14 +181,19 @@ function Nav() {
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Blog</Link>
         <a href="#faq" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>FAQ</a>
-        <Link to="/signin" className="btn btn-ghost"
+        <Link to="/signin" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 14px', fontSize: 13, color: 'var(--fg-2)' }}>
           Sign in
         </Link>
-        <Link to="/signup" className="btn btn-primary"
+        <Link to="/signup" className="btn btn-primary marketing-nav-secondary"
           style={{ padding: '8px 14px', fontSize: 13 }}>
           Get started
         </Link>
+        <MarketingMobileMenu extra={[
+          { label: 'Features', href: '#features' },
+          { label: 'Compare',  href: '#compare' },
+          { label: 'FAQ',      href: '#faq' },
+        ]}/>
       </div>
     </header>
   );
@@ -265,7 +271,7 @@ function Hero() {
         </Link>
       </div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14 }}>
-        No credit card required · Free during beta
+        No credit card required · Free trial
       </div>
     </section>
   );
@@ -576,7 +582,7 @@ function TrustStrip() {
     'Stripe-verified · no transaction fees',
     'Cancel anytime · no contract',
     'Export your data any time',
-    'Free during beta · price locks in for early users',
+    'Start with a free trial · simple $39/mo when you subscribe',
   ];
   return (
     <section style={{
@@ -1101,12 +1107,12 @@ function Pricing() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <div className="metric-label" style={{ color: 'var(--accent)' }}>Pricing</div>
           <h3 className="page-title" style={{ margin: '6px 0 8px', fontSize: 24 }}>
-            Free during beta.
+            Start with a free trial.
           </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            Sign up today and use everything for free while we polish. We'll give early
-            users a meaningful discount when paid plans land - no surprise bills.
-            The client portal stays free forever for clients.
+            Use everything free on a trial, then a simple $39/mo when you subscribe -
+            no per-seat math, no surprise bills. Early users get a discount locked in
+            for life. The client portal stays free forever for clients.
           </p>
         </div>
         <Link to="/signup" className="btn btn-primary"

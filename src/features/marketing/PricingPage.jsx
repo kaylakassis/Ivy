@@ -23,7 +23,7 @@ import RoiCalculator, { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from './RoiCalcu
 const PLAN = {
   name: 'THRYVE',
   sub: 'Everything to run your business, in one place.',
-  priceBeta: 'Free during beta',
+  priceBeta: 'Free trial',
   priceGA: `$${THRYVE_PRICE} / month`,
   cta: 'Start free',
   ctaTo: '/signup',
@@ -48,8 +48,8 @@ const PLAN = {
 
 const FAQ = [
   {
-    q: 'What happens to my price after beta?',
-    a: `It becomes one simple subscription: $${THRYVE_PRICE}/mo. Early beta users get a meaningful discount locked in for life. We'll publish exact details before we leave beta, and you'll have time to opt in or out.`,
+    q: 'How much does THRYVE cost?',
+    a: `One simple subscription: $${THRYVE_PRICE}/mo after your free trial. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
   },
   {
     q: 'Do you take a cut of my payments?',
@@ -65,11 +65,11 @@ const FAQ = [
   },
   {
     q: 'Do you offer annual discounts?',
-    a: 'Yes - pay annually and get 2 months free (effectively a 16% discount). Available once we leave beta.',
+    a: 'Yes - pay annually and get 2 months free (effectively a 16% discount).',
   },
   {
     q: 'Is there a free trial?',
-    a: 'During beta the whole product is free, no card required. After beta, you start on a free trial and only pay once you decide to keep THRYVING.',
+    a: 'Yes. You start on a free trial with the whole product unlocked, no card required. You only pay once you decide to keep THRYVING.',
   },
   {
     q: "What if I'm switching from another tool?",
@@ -85,7 +85,7 @@ export default function PricingPage() {
   useEffect(() => {
     document.title = 'Pricing - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. Free during beta, then $${THRYVE_PRICE}/mo.`);
+    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. Start with a free trial, then $${THRYVE_PRICE}/mo.`);
   }, []);
 
   return (
@@ -115,17 +115,17 @@ export default function PricingPage() {
             fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
           }}>
             Replace your full stack - CRM, scheduler, invoicing, contracts, website,
-            email, AI - with one subscription. Free during beta; locked-in pricing
-            after.
+            email, AI - with one subscription. Start with a free trial; simple
+            $39/mo when you're ready.
           </p>
         </section>
 
-        {/* Two states: free trial now, "THRYVING" (paid) after beta. */}
+        {/* Two states: free trial, then "THRYVING" (paid subscriber). */}
         <section style={{
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           gap: 12, marginBottom: 28, flexWrap: 'wrap',
         }}>
-          <StateChip label="Free trial" sub="while we're in beta" active/>
+          <StateChip label="Free trial" sub="the whole product, no card" active/>
           <Icons.Arrow size={16} sw={2} style={{ color: 'var(--muted)' }}/>
           <StateChip label="THRYVING" sub={`$${THRYVE_PRICE}/mo when subscribed`}/>
         </section>
@@ -285,7 +285,7 @@ export default function PricingPage() {
             Start free <Icons.Arrow size={14} sw={2}/>
           </Link>
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
-            No credit card required · Free during beta
+            No credit card required · Free trial
           </div>
         </section>
 

@@ -32,7 +32,7 @@ const BLOCKS = [
     heading: 'Built so the client portal is free, forever.',
     paragraphs: [
       "Your clients shouldn't have to pay to interact with you. The portal - where they see their bookings, invoices, signed forms, and messages - is free for them and always will be. They sign up once and use the same portal across every business they work with on THRYVE.",
-      "When THRYVE charges, it'll charge the business owner only. Beta users get a meaningful discount when paid plans land - no surprise bills, no rugpulls.",
+      "When THRYVE charges, it charges the business owner only - one simple subscription after a free trial. Early users get a meaningful discount locked in for life. No surprise bills, no rugpulls.",
     ],
   },
   {
@@ -117,7 +117,7 @@ export default function AboutPage() {
             Try it.
           </h3>
           <p style={{ margin: '0 0 18px', fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            Free during beta, three minutes to set up, no credit card.
+            Free trial, three minutes to set up, no credit card.
             Bring one client in. See if it feels different.
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

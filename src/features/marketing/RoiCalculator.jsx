@@ -100,7 +100,7 @@ export default function RoiCalculator() {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        THRYVE is <strong>${THRYVE_PRICE}/mo</strong> after beta, and free while we're in beta. The
+        THRYVE is <strong>${THRYVE_PRICE}/mo</strong>, and you start with a free trial. The
         math is deliberately conservative: a $75/hr billable rate, THRYVE automating
         60% of your admin time, and an 8% no-show rate that reminders + card-on-file
         recover. Your real numbers are usually higher.

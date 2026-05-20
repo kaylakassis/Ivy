@@ -185,11 +185,14 @@ html { -webkit-text-size-adjust: 100%; }
 body { overflow-x: hidden; }
 img, svg, video { max-width: 100%; height: auto; }
 
-/* Hide marketing-page secondary nav links (Features / Compare / FAQ) on
-   narrow viewports — at < 720px the row of 5+ buttons can't fit and
-   was overflowing the right edge. Sign in + Get started stay visible. */
+/* Marketing nav: inline links + auth buttons hide on narrow viewports
+   and collapse into the hamburger menu (MarketingMobileMenu). The
+   hamburger is desktop-hidden and only appears < 720px, so mobile
+   visitors can still reach Pricing / Blog / About / Sign in. */
+.marketing-hamburger { display: none; }
 @media (max-width: 720px) {
   .marketing-nav-secondary { display: none !important; }
+  .marketing-hamburger { display: inline-flex !important; }
 }
 
 /* Horizontal scroll-snap helper for tab pickers / chip rows on mobile.
