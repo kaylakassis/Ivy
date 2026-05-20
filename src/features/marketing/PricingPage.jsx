@@ -1,12 +1,14 @@
 // /pricing - the page that turns "interested visitor" into "signed-up
 // owner." Every competitor publishes prices; without one we lose people
-// to comparison-shop bounce. Three sections do the work:
-//   1. tier table - what's included at each price
+// to comparison-shop bounce. Sections:
+//   1. single plan card - one subscription, two states (free trial now,
+//      "THRYVING" once paid). We don't sell team/multi-location tiers
+//      yet because they aren't supported.
 //   2. ROI calculator - show the savings live (RoiCalculator.jsx)
 //   3. comparison vs the stack - visual reinforcement
 //   4. FAQ specific to pricing concerns
 //
-// Edit the TIERS array and the FAQ array to update copy. Everything
+// Edit the PLAN object and the FAQ array to update copy. Everything
 // else is layout.
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
@@ -14,81 +16,40 @@ import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import RoiCalculator, { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from './RoiCalculator.jsx';
 
-const TIERS = [
-  {
-    id: 'solo',
-    name: 'Solo',
-    sub: 'For one person running their own book',
-    priceBeta: 'Free during beta',
-    priceGA: `$${THRYVE_PRICE} / month`,
-    cta: 'Start free',
-    ctaTo: '/signup',
-    featured: false,
-    features: [
-      'Unlimited clients + pipeline',
-      'Online booking + calendar sync',
-      'Branded invoices + recurring billing',
-      'Card on file + auto-charges',
-      'Memberships + packages',
-      'Documents + e-signature',
-      'Two-way client messaging',
-      'Free client portal',
-      'Website builder + custom domain',
-      'Workflows + automated reminders',
-      'Goals + finance dashboard',
-      'Reviews + rewards',
-      'Ivy AI coach (chat + actions)',
-      'Stripe payments (no transaction fee)',
-      'Email support',
-    ],
-  },
-  {
-    id: 'studio',
-    name: 'Studio',
-    sub: 'For 2-5 person teams sharing one workspace',
-    priceBeta: 'Free during beta',
-    priceGA: '$79 / month',
-    cta: 'Start free',
-    ctaTo: '/signup',
-    featured: true,
-    features: [
-      'Everything in Solo, plus:',
-      'Multi-staff scheduling',
-      'Per-staff calendar + availability',
-      'Per-staff commissions + payouts',
-      'Shared client database',
-      'Role-based permissions',
-      'Branded emails (remove "powered by")',
-      'Priority support (live chat)',
-      'Unlimited custom domains',
-      'Up to 5 staff seats included',
-    ],
-  },
-  {
-    id: 'enterprise',
-    name: 'Multi-location',
-    sub: 'For owners running multiple locations',
-    priceBeta: 'Talk to us',
-    priceGA: 'Custom',
-    cta: 'Get in touch',
-    ctaTo: 'mailto:hello@getthryve.ai?subject=THRYVE%20Multi-location',
-    featured: false,
-    features: [
-      'Everything in Studio, plus:',
-      'Multi-location admin console',
-      'Cross-location reporting',
-      'White-label option',
-      'Dedicated onboarding manager',
-      'SLA + bespoke contracts',
-      'Custom integrations',
-    ],
-  },
-];
+// One plan, two states: a free trial while we're in beta, then a
+// single paid subscription ("THRYVING") at $39/mo. We deliberately
+// don't sell team / multi-location tiers yet because they aren't
+// supported — one honest plan beats three aspirational ones.
+const PLAN = {
+  name: 'THRYVE',
+  sub: 'Everything to run your business, in one place.',
+  priceBeta: 'Free during beta',
+  priceGA: `$${THRYVE_PRICE} / month`,
+  cta: 'Start free',
+  ctaTo: '/signup',
+  features: [
+    'Unlimited clients + pipeline',
+    'Online booking + calendar sync',
+    'Branded invoices + recurring billing',
+    'Card on file + auto-charges',
+    'Memberships + packages',
+    'Documents + e-signature',
+    'Two-way client messaging',
+    'Free client portal',
+    'Website builder + custom domain',
+    'Workflows + automated reminders',
+    'Goals + finance dashboard',
+    'Reviews + rewards',
+    'Ivy AI coach (chat + actions)',
+    'Stripe payments (no transaction fee)',
+    'Email support',
+  ],
+};
 
 const FAQ = [
   {
     q: 'What happens to my price after beta?',
-    a: `Early beta users get a meaningful discount locked in for life. We'll publish exact details before we leave beta, and you'll have time to opt in or out. Worst case: $${THRYVE_PRICE}/mo Solo or $79/mo Studio.`,
+    a: `It becomes one simple subscription: $${THRYVE_PRICE}/mo. Early beta users get a meaningful discount locked in for life. We'll publish exact details before we leave beta, and you'll have time to opt in or out.`,
   },
   {
     q: 'Do you take a cut of my payments?',
@@ -96,7 +57,7 @@ const FAQ = [
   },
   {
     q: 'Per-client or per-seat fees?',
-    a: 'No per-client fees, no per-booking fees, no per-invoice fees. Solo is one user. Studio includes 5 seats; additional seats are $9/mo each.',
+    a: 'No per-client fees, no per-booking fees, no per-invoice fees. One flat subscription covers your whole business.',
   },
   {
     q: 'Can I cancel anytime?',
@@ -108,7 +69,7 @@ const FAQ = [
   },
   {
     q: 'Is there a free trial?',
-    a: 'During beta the whole product is free. After GA, Solo will have a 14-day full-feature trial - no card required.',
+    a: 'During beta the whole product is free, no card required. After beta, you start on a free trial and only pay once you decide to keep THRYVING.',
   },
   {
     q: "What if I'm switching from another tool?",
@@ -124,7 +85,7 @@ export default function PricingPage() {
   useEffect(() => {
     document.title = 'Pricing - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. Free during beta, then $${THRYVE_PRICE}/mo Solo or $79/mo Studio.`);
+    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. Free during beta, then $${THRYVE_PRICE}/mo.`);
   }, []);
 
   return (
@@ -159,64 +120,60 @@ export default function PricingPage() {
           </p>
         </section>
 
-        {/* Tier table */}
+        {/* Two states: free trial now, "THRYVING" (paid) after beta. */}
         <section style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-          gap: 16,
-          marginBottom: 64,
+          display: 'flex', justifyContent: 'center', alignItems: 'center',
+          gap: 12, marginBottom: 28, flexWrap: 'wrap',
         }}>
-          {TIERS.map((t) => (
-            <div key={t.id} style={{
-              padding: '28px 24px',
-              borderRadius: 16,
-              background: t.featured ? 'var(--accent)' : 'var(--surface)',
-              color: t.featured ? 'var(--accent-ink)' : 'var(--fg)',
-              border: `2px solid ${t.featured ? 'var(--accent)' : 'var(--border)'}`,
-              boxShadow: t.featured ? '0 20px 40px -20px rgba(0,0,0,0.2)' : 'none',
-              transform: t.featured ? 'translateY(-4px)' : 'none',
-              display: 'flex', flexDirection: 'column', gap: 16,
-            }}>
-              {t.featured && (
-                <div style={{
-                  fontSize: 11, fontWeight: 700,
-                  letterSpacing: '0.08em', textTransform: 'uppercase',
-                  color: 'var(--accent-ink)', opacity: 0.7,
-                }}>Most popular</div>
-              )}
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 600 }}>{t.name}</div>
-                <div style={{ fontSize: 13, opacity: 0.75, marginTop: 4 }}>{t.sub}</div>
-              </div>
-              <div>
-                <div style={{ fontFamily: 'var(--font-display)', fontSize: 30, fontWeight: 600, lineHeight: 1 }}>
-                  {t.priceBeta}
-                </div>
-                <div style={{ fontSize: 12, opacity: 0.75, marginTop: 6 }}>
-                  {t.priceGA} when out of beta
-                </div>
-              </div>
-              <Link to={t.ctaTo} className="btn btn-primary"
-                style={{
-                  padding: '12px 16px',
-                  textAlign: 'center', fontWeight: 600,
-                  background: t.featured ? 'var(--accent-ink)' : 'var(--accent)',
-                  color:      t.featured ? 'var(--accent)' : 'var(--accent-ink)',
-                }}>
-                {t.cta} <Icons.Arrow size={14} sw={2}/>
-              </Link>
-              <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {t.features.map((f, i) => (
-                  <li key={i} style={{ display: 'flex', gap: 10, fontSize: 13.5, lineHeight: 1.45 }}>
-                    <span style={{ flexShrink: 0, marginTop: 3, opacity: 0.7 }}>
-                      <Icons.Check size={13} sw={2.5}/>
-                    </span>
-                    <span>{f}</span>
-                  </li>
-                ))}
-              </ul>
+          <StateChip label="Free trial" sub="while we're in beta" active/>
+          <Icons.Arrow size={16} sw={2} style={{ color: 'var(--muted)' }}/>
+          <StateChip label="THRYVING" sub={`$${THRYVE_PRICE}/mo when subscribed`}/>
+        </section>
+
+        {/* Single plan card */}
+        <section style={{
+          maxWidth: 460, margin: '0 auto 64px',
+        }}>
+          <div style={{
+            padding: '32px 28px',
+            borderRadius: 18,
+            background: 'var(--accent)',
+            color: 'var(--accent-ink)',
+            border: '2px solid var(--accent)',
+            boxShadow: '0 24px 48px -24px rgba(0,0,0,0.3)',
+            display: 'flex', flexDirection: 'column', gap: 18,
+          }}>
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, fontWeight: 600 }}>{PLAN.name}</div>
+              <div style={{ fontSize: 13.5, opacity: 0.75, marginTop: 4 }}>{PLAN.sub}</div>
             </div>
-          ))}
+            <div>
+              <div style={{ fontFamily: 'var(--font-display)', fontSize: 34, fontWeight: 600, lineHeight: 1 }}>
+                {PLAN.priceBeta}
+              </div>
+              <div style={{ fontSize: 12.5, opacity: 0.75, marginTop: 6 }}>
+                then {PLAN.priceGA} when you're THRYVING. No per-seat math, no transaction fees.
+              </div>
+            </div>
+            <Link to={PLAN.ctaTo} className="btn btn-primary"
+              style={{
+                padding: '13px 16px',
+                textAlign: 'center', fontWeight: 600,
+                background: 'var(--accent-ink)', color: 'var(--accent)',
+              }}>
+              {PLAN.cta} <Icons.Arrow size={14} sw={2}/>
+            </Link>
+            <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {PLAN.features.map((f, i) => (
+                <li key={i} style={{ display: 'flex', gap: 10, fontSize: 13.5, lineHeight: 1.45 }}>
+                  <span style={{ flexShrink: 0, marginTop: 3, opacity: 0.7 }}>
+                    <Icons.Check size={13} sw={2.5}/>
+                  </span>
+                  <span>{f}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </section>
 
         {/* ROI calculator */}
@@ -335,5 +292,21 @@ export default function PricingPage() {
       </main>
       <SimpleFooter/>
     </MarketingShell>
+  );
+}
+
+// Pill showing the two account states: a free trial during beta, then
+// "THRYVING" (a paid subscriber). The active one gets the accent fill.
+function StateChip({ label, sub, active }) {
+  return (
+    <div style={{
+      padding: '10px 18px', borderRadius: 999, textAlign: 'center',
+      background: active ? 'var(--accent)' : 'var(--surface)',
+      color: active ? 'var(--accent-ink)' : 'var(--fg)',
+      border: `1px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+    }}>
+      <div style={{ fontWeight: 700, fontSize: 14 }}>{label}</div>
+      <div style={{ fontSize: 11.5, opacity: 0.75, marginTop: 1 }}>{sub}</div>
+    </div>
   );
 }

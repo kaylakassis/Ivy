@@ -442,10 +442,13 @@ function SubscriptionCard() {
     }
   };
 
+  // Paid subscribers are "THRYVING" (the brand term for an active plan);
+  // everyone else gets the plain state label.
   const statusLabel = {
-    active:   'Active',
+    active:   'THRYVING',
     trialing: 'Free trial',
     past_due: 'Past due',
+    suspended:'Suspended',
     cancelled:'Cancelled',
     inactive: 'Inactive',
   }[sub.status] || sub.status;
@@ -453,6 +456,7 @@ function SubscriptionCard() {
     sub.status === 'active'    ? 'var(--ok)'
   : sub.status === 'trialing'  ? 'var(--accent)'
   : sub.status === 'past_due'  ? 'var(--warn)'
+  : sub.status === 'suspended' ? 'var(--danger)'
   : 'var(--muted)';
 
   return (
