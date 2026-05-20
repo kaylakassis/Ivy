@@ -7,6 +7,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 
 export default function MobilePage() {
   useEffect(() => {
@@ -15,7 +16,7 @@ export default function MobilePage() {
     if (desc) desc.setAttribute('content', 'THRYVE installs as a phone app in two taps. Add clients between sessions, send invoices on the go, message clients from anywhere.');
   }, []);
   return (
-    <div style={{ background: 'var(--page)', color: 'var(--fg)', minHeight: '100vh' }}>
+    <MarketingShell>
       <SimpleNav/>
       <main style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 24px 64px' }}>
 
@@ -95,7 +96,7 @@ export default function MobilePage() {
         </section>
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }
 

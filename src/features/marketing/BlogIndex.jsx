@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 import { POSTS } from './blogData.js';
 
 export default function BlogIndex() {
@@ -13,7 +14,7 @@ export default function BlogIndex() {
   }, []);
   const sorted = [...POSTS].sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   return (
-    <div style={{ background: 'var(--page)', color: 'var(--fg)', minHeight: '100vh' }}>
+    <MarketingShell>
       <SimpleNav/>
       <main style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px 64px' }}>
         <header style={{ marginBottom: 36 }}>
@@ -63,7 +64,7 @@ export default function BlogIndex() {
         </div>
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }
 

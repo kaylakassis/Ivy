@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 
 const LIVE = [
   { name: 'Stripe',           icon: 'Dollar',   sub: 'Payments + Connect — your money, your account.' },
@@ -34,7 +35,7 @@ export default function IntegrationsPage() {
     if (desc) desc.setAttribute('content', 'THRYVE integrates with Stripe, Google Calendar, Twilio SMS, webhooks, and more. Plus a one-line embeddable booking widget for any external site.');
   }, []);
   return (
-    <div style={{ background: 'var(--page)', color: 'var(--fg)', minHeight: '100vh' }}>
+    <MarketingShell>
       <SimpleNav/>
       <main style={{ maxWidth: 1000, margin: '0 auto', padding: '48px 24px 64px' }}>
 
@@ -109,6 +110,6 @@ export default function IntegrationsPage() {
         </section>
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }

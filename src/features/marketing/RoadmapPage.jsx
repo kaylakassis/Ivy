@@ -7,6 +7,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 
 const ROADMAP = {
   now: [
@@ -43,7 +44,7 @@ export default function RoadmapPage() {
     if (desc) desc.setAttribute('content', 'What THRYVE is building next. Now / Next / Later columns updated as we ship.');
   }, []);
   return (
-    <div style={{ background: 'var(--page)', color: 'var(--fg)', minHeight: '100vh' }}>
+    <MarketingShell>
       <SimpleNav/>
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px 64px' }}>
 
@@ -113,6 +114,6 @@ export default function RoadmapPage() {
         </section>
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }

@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 
 export default function SecurityPage() {
   useEffect(() => {
@@ -13,7 +14,7 @@ export default function SecurityPage() {
     if (desc) desc.setAttribute('content', 'How THRYVE protects your data: Stripe-handled payments, encryption at rest + in transit, exportable data, US-based SOC2 vendors.');
   }, []);
   return (
-    <div style={{ background: 'var(--page)', color: 'var(--fg)', minHeight: '100vh' }}>
+    <MarketingShell>
       <SimpleNav/>
       <main style={{ maxWidth: 820, margin: '0 auto', padding: '48px 24px 64px' }}>
         <header style={{ marginBottom: 36 }}>
@@ -89,7 +90,7 @@ export default function SecurityPage() {
         </div>
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }
 

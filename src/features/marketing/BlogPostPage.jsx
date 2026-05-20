@@ -2,6 +2,7 @@
 import React, { useEffect } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 import { POST_MAP, POSTS } from './blogData.js';
 import { Icons } from '../../components/Icons.jsx';
 
@@ -24,7 +25,7 @@ export default function BlogPostPage() {
   const next = idx < sorted.length - 1 ? sorted[idx + 1] : null;
 
   return (
-    <div style={{ background: 'var(--page)', color: 'var(--fg)', minHeight: '100vh' }}>
+    <MarketingShell>
       <SimpleNav/>
       <main style={{ maxWidth: 700, margin: '0 auto', padding: '48px 24px 64px' }}>
         <Link to="/blog" style={{
@@ -114,7 +115,7 @@ export default function BlogPostPage() {
         </nav>
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }
 

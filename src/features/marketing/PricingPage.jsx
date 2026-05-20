@@ -12,6 +12,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 import RoiCalculator, { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from './RoiCalculator.jsx';
 
 const TIERS = [
@@ -128,7 +129,7 @@ export default function PricingPage() {
   }, []);
 
   return (
-    <div style={{ background: 'var(--page)', color: 'var(--fg)', minHeight: '100vh' }}>
+    <MarketingShell>
       <SimpleNav/>
       <main style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px 64px' }}>
 
@@ -334,6 +335,6 @@ export default function PricingPage() {
 
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }

@@ -5,11 +5,12 @@ import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { SimpleNav, SimpleFooter } from './ChangelogPage.jsx';
+import MarketingShell from './MarketingShell.jsx';
 
 export default function NotFoundPage() {
   const loc = useLocation();
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column' }}>
+    <MarketingShell style={{ display: 'flex', flexDirection: 'column' }}>
       <SimpleNav/>
       <main style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
         padding: '64px 18px' }}>
@@ -42,6 +43,6 @@ export default function NotFoundPage() {
         </div>
       </main>
       <SimpleFooter/>
-    </div>
+    </MarketingShell>
   );
 }
