@@ -19,14 +19,6 @@ const LIVE = [
   { name: 'SMS (Twilio)',     icon: 'Phone',    sub: 'Booking reminders + two-way client SMS.' },
 ];
 
-const PLANNED = [
-  { name: 'Zapier',    sub: 'Triggered by booking, payment, document signed.' },
-  { name: 'Mailchimp', sub: 'Sync your client list to a Mailchimp audience.' },
-  { name: 'QuickBooks', sub: 'Push invoices + payments to your accounting.' },
-  { name: 'Slack',     sub: 'New-booking + paid-invoice notifications in your channel.' },
-  { name: 'Instagram', sub: 'Auto-post when a new client books.' },
-];
-
 export default function IntegrationsPage() {
   useEffect(() => {
     document.title = 'Integrations - THRYVE';
@@ -74,27 +66,6 @@ export default function IntegrationsPage() {
                 </div>
               );
             })}
-          </div>
-        </section>
-
-        <section style={{ marginBottom: 48 }}>
-          <div className="metric-label" style={{ marginBottom: 12 }}>On the roadmap</div>
-          <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 14,
-          }}>
-            {PLANNED.map((it) => (
-              <div key={it.name} style={{
-                padding: 18, borderRadius: 12,
-                background: 'var(--surface-2)', border: '1px dashed var(--border)',
-                opacity: 0.85,
-              }}>
-                <div style={{ fontWeight: 600, fontSize: 14.5 }}>{it.name}</div>
-                <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>{it.sub}</div>
-                <div style={{ marginTop: 8, fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--accent)' }}>
-                  Coming
-                </div>
-              </div>
-            ))}
           </div>
         </section>
 
