@@ -77,6 +77,9 @@ export default function PdfFieldEditor({
     if (disabled) return;
     e.stopPropagation();
     e.preventDefault();
+    // Capture the pointer so move/up keep tracking even if the finger
+    // drifts off the field — essential for touch dragging.
+    try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
     setSelectedId(field.id);
     const pageEl = e.currentTarget.closest('[data-page-idx]');
     if (!pageEl) return;
@@ -120,7 +123,7 @@ export default function PdfFieldEditor({
 
   return (
     <div ref={containerRef}
-      onMouseMove={onMouseMove} onMouseUp={onMouseUp} onMouseLeave={onMouseUp}
+      onPointerMove={onMouseMove} onPointerUp={onMouseUp} onPointerCancel={onMouseUp}
       style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       {/* Toolbar */}
       <div style={{
@@ -189,7 +192,7 @@ export default function PdfFieldEditor({
               const selected = selectedId === f.id;
               return (
                 <div key={f.id}
-                  onMouseDown={(e) => onMouseDownField(e, f, 'move')}
+                  onPointerDown={(e) => onMouseDownField(e, f, 'move')}
                   onClick={(e) => { e.stopPropagation(); setSelectedId(f.id); }}
                   data-field-handle="1"
                   style={{
@@ -201,6 +204,7 @@ export default function PdfFieldEditor({
                     cursor: 'move',
                     boxSizing: 'border-box',
                     userSelect: 'none',
+                    touchAction: 'none',
                   }}>
                   <div style={{
                     position: 'absolute', top: -18, left: 0,
@@ -214,32 +218,34 @@ export default function PdfFieldEditor({
                   </div>
                   {selected && !disabled && (
                     <button type="button"
-                      onMouseDown={(e) => e.stopPropagation()}
+                      onPointerDown={(e) => e.stopPropagation()}
                       onClick={(e) => { e.stopPropagation(); remove(f.id); }}
                       data-field-handle="1"
                       title="Remove"
                       style={{
-                        position: 'absolute', top: -10, right: -10,
-                        width: 18, height: 18, borderRadius: 99,
+                        position: 'absolute', top: -14, right: -14,
+                        width: 28, height: 28, borderRadius: 99,
                         border: 'none', cursor: 'pointer',
                         background: 'var(--danger)', color: '#fff',
                         display: 'flex', alignItems: 'center', justifyContent: 'center',
                         boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                        touchAction: 'none',
                       }}>
-                      <Icons.X size={11} sw={2.5}/>
+                      <Icons.X size={14} sw={2.5}/>
                     </button>
                   )}
                   {!disabled && (
                     <div
-                      onMouseDown={(e) => onMouseDownField(e, f, 'resize')}
+                      onPointerDown={(e) => onMouseDownField(e, f, 'resize')}
                       data-field-handle="1"
                       style={{
                         position: 'absolute',
-                        right: -4, bottom: -4,
-                        width: 10, height: 10,
+                        right: -7, bottom: -7,
+                        width: 18, height: 18,
                         background: color,
-                        borderRadius: 2,
+                        borderRadius: 3,
                         cursor: 'nwse-resize',
+                        touchAction: 'none',
                       }}/>
                   )}
                 </div>

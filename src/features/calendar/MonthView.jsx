@@ -36,6 +36,10 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
 
   return (
     <div className="card" style={{ overflow: 'hidden' }}>
+      {/* Horizontal scroll on small screens so the 7-column grid doesn't
+          crush to unreadable ~50px columns on a phone (matches WeekGrid). */}
+      <div className="table-scroll">
+        <div style={{ minWidth: 680 }}>
       {/* Header row — weekday labels */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
@@ -126,6 +130,8 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
             </div>
           );
         })}
+      </div>
+        </div>
       </div>
     </div>
   );
