@@ -83,7 +83,9 @@ export default async function handler(req, res) {
     if (!invoiceRow) {
       const num    = await nextInvoiceNumber(workspaceId);
       const number = `INV-${num}`;
-      const items  = [{ description, qty: 1, rate: balance }];
+      // computeTotals reads `quantity` (not `qty`); using qty here left
+      // quantity undefined → $0 total → an unpayable collect link.
+      const items  = [{ description, quantity: 1, rate: balance }];
       const inserted = await sql`
         INSERT INTO invoices (
           workspace_id, number, client_id, client_name, client_email,

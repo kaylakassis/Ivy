@@ -98,7 +98,11 @@ export default async function handler(req, res) {
 
     if (needsServiceFilter) {
       // Build the inner predicate piecewise so absent filters drop out.
-      const inner = ['s.workspace_id = cs.workspace_id'];
+      // Only public services may satisfy a Discover match — otherwise a
+      // private/only_me service leaks its existence + price band into
+      // search and renders a confusing empty card (matching_services
+      // already filters visibility='public').
+      const inner = ["s.workspace_id = cs.workspace_id", "s.visibility = 'public'"];
       if (qPattern) {
         const p = push(qPattern);
         inner.push(`s.name ILIKE ${p}`);

@@ -157,14 +157,26 @@ async function runWorkflow({ workflow, client, context = {}, startIndex = 0, isR
   // and (b) potentially disagree with the index on what "today"
   // means around midnight UTC.
   if (client?.id && !isResume) {
-    const dup = await sql`
-      SELECT id FROM workflow_runs
-       WHERE workflow_id = ${workflow.id}
-         AND client_id = ${client.id}
-         AND (triggered_at AT TIME ZONE 'UTC')::date
-             = (NOW() AT TIME ZONE 'UTC')::date
-       LIMIT 1
-    `;
+    // Booking-tied triggers dedupe per BOOKING (a given booking fires the
+    // workflow at most once, ever) — not per client-per-day. Otherwise a
+    // client with two bookings on the same day only gets one follow-up.
+    // Other triggers keep the per-client-per-UTC-day guard (which uses
+    // idx_workflow_runs_dedupe).
+    const dup = context?.bookingId
+      ? await sql`
+          SELECT id FROM workflow_runs
+           WHERE workflow_id = ${workflow.id}
+             AND context->>'bookingId' = ${String(context.bookingId)}
+           LIMIT 1
+        `
+      : await sql`
+          SELECT id FROM workflow_runs
+           WHERE workflow_id = ${workflow.id}
+             AND client_id = ${client.id}
+             AND (triggered_at AT TIME ZONE 'UTC')::date
+                 = (NOW() AT TIME ZONE 'UTC')::date
+           LIMIT 1
+        `;
     if (dup.rows.length > 0) {
       return { status: 'skipped' };
     }

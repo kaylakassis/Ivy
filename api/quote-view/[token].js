@@ -106,7 +106,7 @@ export default async function handler(req, res) {
         INSERT INTO invoices (
           workspace_id, number, client_id, client_name, client_email,
           issue_date, due_date, items, tax_rate, discount, notes,
-          status, activity
+          status, activity, currency
         ) VALUES (
           ${row.workspace_id}, ${invNumber},
           ${row.client_id}, ${row.client_name}, ${row.client_email},
@@ -114,7 +114,8 @@ export default async function handler(req, res) {
           ${JSON.stringify(row.items || [])}::jsonb,
           ${row.tax_rate}, ${row.discount}, ${row.notes},
           'draft',
-          ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Created from accepted estimate ${row.number}` }])}::jsonb
+          ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Created from accepted estimate ${row.number}` }])}::jsonb,
+          COALESCE((SELECT currency FROM finance_settings WHERE workspace_id = ${row.workspace_id}), 'USD')
         )
         RETURNING *
       `;
