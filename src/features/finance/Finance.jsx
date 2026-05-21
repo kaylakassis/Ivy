@@ -249,8 +249,9 @@ export default function Finance() {
           tab={tab} setTab={setTab}
           openInv={openInv} sendingInv={sendingInv}
           setOpenId={setOpenId} setSending={setSending}
-          update={update} remove={remove} send={send}
+          update={update} remove={remove} send={send} resend={resend}
           markPaid={markPaid} voidInvoice={voidInvoice} refund={refund}
+          hasMore={hasMore} loadMore={loadMore} loadingMore={loadingMore}
         />
       )}
     </div>
@@ -259,7 +260,8 @@ export default function Finance() {
 
 function InvoicesSection({
   invoices, summary, counts, rows, tab, setTab, openInv, sendingInv,
-  setOpenId, setSending, update, remove, send, markPaid, voidInvoice, refund,
+  setOpenId, setSending, update, remove, send, resend, markPaid, voidInvoice, refund,
+  hasMore, loadMore, loadingMore,
 }) {
   return (
     <>
