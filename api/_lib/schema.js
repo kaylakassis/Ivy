@@ -361,6 +361,29 @@ CREATE TABLE IF NOT EXISTS newsletter_subscribers (
 CREATE INDEX IF NOT EXISTS idx_newsletter_created
   ON newsletter_subscribers(created_at DESC);
 
+-- Owner email campaigns / newsletters. body is owner-authored text; we
+-- escape + wrap it in the branded email shell at send time. audience is
+-- 'all-clients' | 'tag:<tag>' | 'newsletter' (the owner's website
+-- newsletter sign-ups). Marketing-type sends honor each recipient's
+-- opt-out + carry a List-Unsubscribe header.
+CREATE TABLE IF NOT EXISTS email_campaigns (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  subject TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL DEFAULT '',
+  audience TEXT NOT NULL DEFAULT 'all-clients',
+  status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'sending', 'sent')),
+  recipient_count INT NOT NULL DEFAULT 0,
+  sent_count INT NOT NULL DEFAULT 0,
+  failed_count INT NOT NULL DEFAULT 0,
+  last_error TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  sent_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_email_campaigns_workspace
+  ON email_campaigns(workspace_id, created_at DESC);
+
 -- Legal acceptances. Append-only audit trail of every time a user
 -- accepted a versioned legal document (terms, privacy, AI disclaimer).
 -- IP + user_agent stored for legal evidentiary purposes; never deleted.

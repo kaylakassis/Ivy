@@ -28,6 +28,7 @@ const Goals       = lazy(() => import('./features/goals/Goals.jsx'));
 const Workflows   = lazy(() => import('./features/workflows/Workflows.jsx'));
 const Rewards     = lazy(() => import('./features/rewards/Rewards.jsx'));
 const Messages    = lazy(() => import('./features/messages/Messages.jsx'));
+const Campaigns   = lazy(() => import('./features/campaigns/Campaigns.jsx'));
 const Documents   = lazy(() => import('./features/documents/Documents.jsx'));
 const Website     = lazy(() => import('./features/website/Website.jsx'));
 const IvyPro      = lazy(() => import('./features/ivy/IvyPro.jsx'));
@@ -227,6 +228,7 @@ export default function App() {
           <Route path="/workflows"  element={<Workflows />} />
           <Route path="/rewards"    element={<Rewards />} />
           <Route path="/messages"   element={<Messages />} />
+          <Route path="/campaigns"  element={<Campaigns />} />
           <Route path="/documents"  element={<Documents />} />
           <Route path="/website"    element={<Website />} />
           <Route path="/ivy"        element={<IvyPro />} />
