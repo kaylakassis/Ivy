@@ -1,16 +1,26 @@
-// Lazy schema bootstrap. Two-stage so cold-started functions don't pay the
-// full ~80-statement migration cost every time:
+// Schema bootstrap.
+//
+// PRIMARY path is the deploy step: `scripts/migrate.mjs` (wired into
+// vercel.json's buildCommand) runs the full migration ONCE per deploy,
+// before the new functions go live. So in steady state the schema is
+// already current by the time any request lands.
+//
+// This module is now the SAFETY NET for the request path — two-stage so
+// cold-started functions don't pay the full ~80-statement migration cost:
 //
 //   1. PROBE — one cheap SELECT against a column we know got added in the
 //      most-recent migration. If it succeeds, schema is current and we
-//      mark the process as up-to-date. ~50ms.
-//   2. FULL — only when the probe fails (i.e. the deploy added new
-//      columns/tables). Runs every statement; idempotent (IF NOT EXISTS
-//      everywhere) so it's safe to retry.
+//      mark the process as up-to-date. ~50ms. After a successful deploy
+//      migration this ALWAYS passes, so the expensive full path below
+//      never runs on a request.
+//   2. FULL — only when the probe fails (e.g. the deploy migration was
+//      skipped, or a hotfix added a column without redeploying). Runs
+//      every statement; idempotent (IF NOT EXISTS everywhere) so it's
+//      safe to retry.
 //
-// Bump PROBE_QUERY whenever you ship a column that should be a "trigger
-// migration on next request" boundary — it doubles as the marker that
-// the latest schema landed.
+// Bump PROBE_QUERY whenever you ship a column that should be a "schema
+// landed" boundary — it doubles as the marker the deploy migration and
+// the request-path probe both check.
 //
 // Errors are swallowed and logged: requireUser still returns the user
 // even if migration fails, so the request can proceed against whatever
@@ -284,4 +294,49 @@ export async function ensureSchemaApplied() {
   } finally {
     inFlight = null;
   }
+}
+
+// One-shot migration for the DEPLOY step (scripts/migrate.mjs). Unlike
+// ensureSchemaApplied this is meant to run alone in the build, so it
+// bypasses the per-process `applied` cache and the request-path cooldown:
+// it always probes, and runs the full migration if the probe fails. It
+// THROWS on a permanently-failed statement so the build fails loudly
+// rather than shipping a deploy against a half-migrated DB.
+//
+// runFull() takes the cross-instance lock; if a peer holds it (a rare
+// overlap with a cold-start migrator on the still-live old deployment),
+// we poll the probe until that peer finishes instead of skipping.
+export async function runSchemaMigration() {
+  try {
+    await runProbe();
+    // eslint-disable-next-line no-console
+    console.log('[migrate] schema already current — nothing to do');
+    return;
+  } catch {
+    // eslint-disable-next-line no-console
+    console.log('[migrate] probe failed; applying full schema migration');
+  }
+
+  // runFull throws on a permanent statement failure (propagates → build
+  // fails). Returns false only if another instance currently holds the
+  // migration lock.
+  if (await runFull()) {
+    // eslint-disable-next-line no-console
+    console.log('[migrate] schema migration complete');
+    return;
+  }
+
+  // A peer is migrating — wait for it to finish by re-probing.
+  for (let i = 0; i < 30; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((r) => setTimeout(r, 2000));
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await runProbe();
+      // eslint-disable-next-line no-console
+      console.log('[migrate] schema migration completed by a peer instance');
+      return;
+    } catch { /* still in progress */ }
+  }
+  throw new Error('migration lock held by a peer and schema never converged after 60s');
 }

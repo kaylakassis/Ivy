@@ -10,6 +10,7 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "migrate": "node scripts/migrate.mjs",
     "lint": "eslint src",
     "test:prefs":   "node --import ./tests/bootstrap.mjs ./tests/email-prefs.test.mjs",
     "test:flows":   "node --import ./tests/bootstrap.mjs ./tests/email-flows.test.mjs",

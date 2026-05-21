@@ -1,6 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "buildCommand": "vite build",
+  "buildCommand": "node scripts/migrate.mjs && vite build",
   "outputDirectory": "dist",
   "framework": "vite",
   "regions": ["iad1", "fra1", "syd1"],
