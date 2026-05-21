@@ -15,6 +15,8 @@ import Time from './Time.jsx';
 import Memberships from './Memberships.jsx';
 import Quotes from './Quotes.jsx';
 import GiftCards from './GiftCards.jsx';
+import Products from './Products.jsx';
+import PointOfSale from './PointOfSale.jsx';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -214,6 +216,8 @@ export default function Finance() {
       <div className="tab-row">
         {[
           { id: 'invoices',    label: 'Invoices' },
+          { id: 'pos',         label: 'Sell' },
+          { id: 'products',    label: 'Products' },
           { id: 'quotes',      label: 'Estimates' },
           { id: 'recurring',   label: 'Recurring' },
           { id: 'memberships', label: 'Memberships' },
@@ -233,6 +237,10 @@ export default function Finance() {
 
       {section === 'expenses' ? (
         <Expenses/>
+      ) : section === 'pos' ? (
+        <PointOfSale/>
+      ) : section === 'products' ? (
+        <Products/>
       ) : section === 'quotes' ? (
         <Quotes/>
       ) : section === 'recurring' ? (

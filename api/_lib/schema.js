@@ -384,6 +384,25 @@ CREATE TABLE IF NOT EXISTS email_campaigns (
 CREATE INDEX IF NOT EXISTS idx_email_campaigns_workspace
   ON email_campaigns(workspace_id, created_at DESC);
 
+-- Retail products / inventory for the in-person quick-sale (POS) and as
+-- invoice line items. track_stock=false = unlimited (e.g. a service-like
+-- SKU); when true, stock_qty is decremented atomically on each sale.
+CREATE TABLE IF NOT EXISTS products (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  sku TEXT,
+  price NUMERIC(12,2) NOT NULL DEFAULT 0,
+  cost NUMERIC(12,2),
+  track_stock BOOLEAN NOT NULL DEFAULT TRUE,
+  stock_qty INT NOT NULL DEFAULT 0,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  category TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_products_workspace ON products(workspace_id, active);
+
 -- Legal acceptances. Append-only audit trail of every time a user
 -- accepted a versioned legal document (terms, privacy, AI disclaimer).
 -- IP + user_agent stored for legal evidentiary purposes; never deleted.
