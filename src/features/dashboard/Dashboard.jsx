@@ -6,13 +6,31 @@ import { api } from '../../lib/api.js';
 import OnboardingChecklist from './SetupChecklist.jsx';
 
 const METRICS = [
-  { k: 'mrr',     label: 'Monthly revenue' },
-  { k: 'clients', label: 'Active clients' },
-  { k: 'booked',  label: 'Booked this month' },
-  { k: 'hours',   label: 'Coaching hours' },
+  { k: 'mrr',     label: 'Revenue this month', kind: 'money' },
+  { k: 'clients', label: 'Active clients',     kind: 'int' },
+  { k: 'booked',  label: 'Booked this month',  kind: 'int' },
+  { k: 'hours',   label: 'Hours this month',   kind: 'hours' },
 ];
 
-function MetricCard({ label }) {
+function fmtMoney(n, currency = 'USD') {
+  try {
+    return new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(n || 0));
+  } catch { return `$${Math.round(Number(n || 0))}`; }
+}
+function fmtTime(min) {
+  const h = Math.floor(min / 60), m = min % 60;
+  const ampm = h < 12 ? 'AM' : 'PM';
+  const h12 = h % 12 === 0 ? 12 : h % 12;
+  return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
+}
+
+function MetricCard({ label, value, kind, currency, loading }) {
+  let display = '—';
+  if (!loading && value != null) {
+    if (kind === 'money') display = fmtMoney(value, currency);
+    else if (kind === 'hours') display = `${value}h`;
+    else display = String(value);
+  }
   return (
     <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 128 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -20,7 +38,9 @@ function MetricCard({ label }) {
         <Icons.More size={16} stroke="var(--muted)" sw={1.8} />
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-        <span className="metric-value" style={{ fontSize: 38, color: 'var(--muted-2)' }}>—</span>
+        <span className="metric-value" style={{ fontSize: 38, color: (!loading && value != null) ? 'var(--fg)' : 'var(--muted-2)' }}>
+          {display}
+        </span>
       </div>
       <div style={{ height: 32, borderTop: '1px dashed var(--border)' }} />
     </div>
@@ -286,40 +306,147 @@ function HeroBand() {
 }
 
 export default function Dashboard() {
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    api.get('/dashboard')
+      .then((r) => { if (!cancelled) setData(r); })
+      .catch(() => { /* leave panels in their empty state */ })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  const currency = data?.currency || 'USD';
+  const today    = data?.today || [];
+  const activity = data?.activity || [];
+  const tasks    = data?.tasks || [];
+  const rve      = data?.revenueVsExpenses;
+
   return (
     <div>
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        {/* Per-item dismissable checklist of skipped onboarding steps +
-            post-onboarding gaps. State persists via /api/onboarding/state
-            so dismissals carry across devices. */}
         <OnboardingChecklist/>
         <div className="grid-auto">
-          {METRICS.map(m => <MetricCard key={m.k} label={m.label} />)}
+          {METRICS.map((m) => (
+            <MetricCard key={m.k} label={m.label} kind={m.kind}
+              value={data?.metrics?.[m.k]} currency={currency} loading={loading}/>
+          ))}
         </div>
         <div className="split-2">
           <div className="card" style={{ padding: 24 }}>
-            <div className="metric-label" style={{ marginBottom: 14 }}>Revenue vs expenses</div>
-            <EmptyNote icon="Trending" title="No revenue recorded yet"
-              hint="Connect an invoice or payment source and your numbers will populate here." />
+            <div className="metric-label" style={{ marginBottom: 14 }}>Revenue vs expenses · this month</div>
+            {!rve || (rve.revenue === 0 && rve.expenses === 0) ? (
+              <EmptyNote icon="Trending" title="No revenue recorded yet"
+                hint="Send an invoice or log an expense and your numbers populate here." />
+            ) : (
+              <RevenueExpenses revenue={rve.revenue} expenses={rve.expenses} currency={currency}/>
+            )}
           </div>
           <div className="card" style={{ padding: 20 }}>
             <div className="metric-label" style={{ marginBottom: 10 }}>Today</div>
-            <EmptyNote icon="Calendar" title="No appointments" hint="Share a booking link or add one manually." />
+            {today.length === 0 ? (
+              <EmptyNote icon="Calendar" title="No appointments" hint="Share a booking link or add one manually." />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {today.map((b) => (
+                  <Link key={b.id} to="/calendar" style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                    borderRadius: 8, border: '1px solid var(--border)', textDecoration: 'none', color: 'inherit',
+                  }}>
+                    <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', minWidth: 64 }}>{fmtTime(b.startMin)}</span>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {b.clientName || 'Client'}{b.serviceName ? ` · ${b.serviceName}` : ''}
+                    </span>
+                    {b.noShow && <span style={{ fontSize: 10.5, color: 'var(--danger)' }}>no-show</span>}
+                    {b.completed && <Icons.Check size={13} sw={2.4} stroke="var(--ok)"/>}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
         <div className="split-2">
           <div className="card" style={{ padding: 20 }}>
             <div className="metric-label" style={{ marginBottom: 10 }}>Activity</div>
-            <EmptyNote icon="Clock" title="Nothing yet"
-              hint="Payments, messages, and bookings will appear here in real time." />
+            {activity.length === 0 ? (
+              <EmptyNote icon="Clock" title="Nothing yet"
+                hint="Payments and bookings will appear here." />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {activity.map((a, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+                    <Icons.More size={6} stroke="var(--accent)" sw={3}/>
+                    <span style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{a.text}</span>
+                    <span style={{ fontSize: 11, color: 'var(--muted)', flexShrink: 0 }}>{relTime(a.ts)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
           <div className="card" style={{ padding: 20 }}>
             <div className="metric-label" style={{ marginBottom: 10 }}>Your list</div>
-            <EmptyNote icon="Check" title="No tasks" hint="Add one, or ask Ivy to draft your week." />
+            {tasks.length === 0 ? (
+              <EmptyNote icon="Check" title="No tasks" hint="Add one, or ask Ivy to draft your week." />
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {tasks.map((t) => (
+                  <Link key={t.id} to="/goals" style={{
+                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
+                    borderRadius: 8, border: '1px solid var(--border)', textDecoration: 'none', color: 'inherit',
+                  }}>
+                    <span style={{
+                      width: 16, height: 16, borderRadius: 99, flexShrink: 0,
+                      border: '1px solid var(--border-strong)',
+                      background: t.progress === 100 ? 'var(--accent)' : 'transparent',
+                    }}/>
+                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
+                    {t.progress === 100 && <span style={{ fontSize: 10.5, color: 'var(--accent)' }}>ready</span>}
+                  </Link>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       </div>
     </div>
   );
+}
+
+function RevenueExpenses({ revenue, expenses, currency }) {
+  const max = Math.max(revenue, expenses, 1);
+  const Bar = ({ label, value, color }) => (
+    <div style={{ marginBottom: 14 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5, marginBottom: 5 }}>
+        <span style={{ color: 'var(--fg-2)' }}>{label}</span>
+        <strong>{fmtMoney(value, currency)}</strong>
+      </div>
+      <div style={{ height: 8, borderRadius: 99, background: 'var(--surface-2)', overflow: 'hidden' }}>
+        <div style={{ height: '100%', width: `${Math.round((value / max) * 100)}%`, background: color, transition: 'width .25s' }}/>
+      </div>
+    </div>
+  );
+  const net = revenue - expenses;
+  return (
+    <div>
+      <Bar label="Revenue" value={revenue} color="var(--ok)"/>
+      <Bar label="Expenses" value={expenses} color="var(--danger)"/>
+      <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+        <span style={{ color: 'var(--fg-2)' }}>Net</span>
+        <strong style={{ color: net >= 0 ? 'var(--ok)' : 'var(--danger)' }}>{fmtMoney(net, currency)}</strong>
+      </div>
+    </div>
+  );
+}
+
+function relTime(ts) {
+  const d = Date.now() - new Date(ts).getTime();
+  const mins = Math.round(d / 60000);
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.round(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  return `${Math.round(hrs / 24)}d`;
 }
