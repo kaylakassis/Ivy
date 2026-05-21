@@ -13,6 +13,9 @@ export function serializeThread(row) {
     unreadClient:   row.unread_client,
     lastMessageAt:  row.last_message_at,
     lastPreview:    row.last_message_preview || '',
+    // SMS channel availability for the composer (phone + consent on file).
+    clientPhone:    row.client_phone || null,
+    smsConsent:     !!row.client_sms_consent_at,
     createdAt:      row.created_at,
   };
 }
@@ -36,7 +39,8 @@ export async function fetchOwnedThread({ id, workspaceId }) {
   if (!id) return null;
   const { rows } = await sql`
     SELECT t.*, c.name AS client_name, c.email AS client_email,
-           c.user_id AS client_user_id
+           c.user_id AS client_user_id,
+           c.phone AS client_phone, c.sms_consent_at AS client_sms_consent_at
     FROM message_threads t
     JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
     WHERE t.id = ${id} AND t.workspace_id = ${workspaceId}

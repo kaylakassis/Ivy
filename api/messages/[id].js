@@ -13,6 +13,7 @@ import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { notifyClientSafe } from '../_lib/push.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
+import { sendClientSms } from '../_lib/sms.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { appUrl } from '../_lib/tokens.js';
 
@@ -94,10 +95,14 @@ export default async function handler(req, res) {
         return { status: 400, body: { error: 'Message text or attachment is required' } };
       }
       if (text.length > 4000) return { status: 400, body: { error: 'Message is too long' } };
+      // Channel: 'sms' also texts the client (needs phone + consent); the
+      // message still lands in the thread so the conversation is unified.
+      const channel = body.channel === 'sms' ? 'sms' : 'app';
 
       const inserted = await sql`
-        INSERT INTO messages (thread_id, sender, text, attachments)
-        VALUES (${id}, 'biz', ${text}, ${JSON.stringify(attachments)}::jsonb)
+        INSERT INTO messages (thread_id, sender, text, attachments, meta)
+        VALUES (${id}, 'biz', ${text}, ${JSON.stringify(attachments)}::jsonb,
+                ${JSON.stringify(channel === 'sms' ? { channel: 'sms' } : {})}::jsonb)
         RETURNING *
       `;
       const audioOnly = !text && attachments.some((a) => a.type.startsWith('audio/'));
@@ -166,7 +171,18 @@ export default async function handler(req, res) {
         }
       }
 
-      return { status: 201, body: { message: serializeMessage(inserted.rows[0]) } };
+      // SMS channel: also text the client. Kept in the same thread; we
+      // surface whether the text actually went out (consent/phone/quota).
+      let smsExtra = {};
+      if (channel === 'sms') {
+        const r = await sendClientSms({
+          phone: thread.client_phone, consentAt: thread.client_sms_consent_at,
+          body: text, workspaceId,
+        }).catch((e) => ({ ok: false, reason: e.message }));
+        smsExtra = { smsSent: !!r.ok, smsReason: r.ok ? null : r.reason };
+      }
+
+      return { status: 201, body: { message: serializeMessage(inserted.rows[0]), ...smsExtra } };
       } // end sendMessage
     }
 

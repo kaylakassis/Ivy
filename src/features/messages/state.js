@@ -130,19 +130,19 @@ export function useThread(threadId) {
   }, [threadId]);
   useIntervalWhenVisible(silentTick, 5000, !!threadId);
 
-  const send = useCallback(async (text, attachments) => {
+  const send = useCallback(async (text, attachments, channel) => {
     if (!threadId) return null;
     const trimmed = (text || '').trim();
     const atts = Array.isArray(attachments) ? attachments : [];
     if (!trimmed && atts.length === 0) return null;
-    const r = await api.post('/messages/' + threadId, { text: trimmed, attachments: atts });
+    const r = await api.post('/messages/' + threadId, { text: trimmed, attachments: atts, channel });
     setMessages((m) => [...m, r.message]);
     setThread((t) => t ? {
       ...t,
       lastMessageAt: r.message.createdAt,
       lastPreview: (trimmed || (atts.some((a) => (a.type || '').startsWith('audio/')) ? '🎙️ Voice message' : 'Attachment')).slice(0, 200),
     } : t);
-    return r.message;
+    return r; // { message, smsSent?, smsReason? }
   }, [threadId]);
 
   return { thread, messages, loading, error, refresh, send };

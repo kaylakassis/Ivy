@@ -184,6 +184,9 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [voiceErr, setVoiceErr] = useState(null);
+  const [smsMode, setSmsMode] = useState(false);
+  const [smsNote, setSmsNote] = useState(null);
+  const smsAvailable = !!(thread?.smsConsent && thread?.clientPhone);
   const scrollRef = useRef(null);
   const dictation = useDictation();
   const memo = useVoiceMemo();
@@ -230,8 +233,11 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
     if (!text || sending) return;
     setSending(true);
     try {
-      await send(text);
+      const r = await send(text, undefined, smsMode ? 'sms' : undefined);
       setInput('');
+      if (smsMode && r && r.smsSent === false) {
+        setSmsNote(`Saved to chat, but the text wasn't sent (${r.smsReason || 'no phone/consent'}).`);
+      } else { setSmsNote(null); }
     } finally {
       setSending(false);
     }
@@ -398,6 +404,14 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
             background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
           }}>{voiceErr}</div>
         )}
+        {smsMode && smsAvailable && (
+          <div style={{ fontSize: 11.5, color: 'var(--accent)', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 5 }}>
+            <Icons.Phone size={12}/> Replying by text to {thread.clientPhone}
+          </div>
+        )}
+        {smsNote && (
+          <div style={{ fontSize: 11, color: 'var(--warn)', marginBottom: 8 }}>{smsNote}</div>
+        )}
 
         {memo.recording ? (
           <RecordingBar
@@ -449,8 +463,21 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
                 <MicIcon/>
               </ComposerIconButton>
             )}
+            {/* Channel toggle: when the client has a phone + SMS consent,
+                the owner can send this reply as a text (it still lands in
+                the thread). */}
+            {smsAvailable && (
+              <ComposerIconButton
+                title={smsMode ? 'Sending as text — tap for in-app' : 'Send as text message'}
+                onClick={() => setSmsMode((v) => !v)}
+                tone={smsMode ? 'accent' : 'muted'}
+              >
+                <Icons.Phone size={16}/>
+              </ComposerIconButton>
+            )}
             <button className="btn btn-primary"
               type="submit" disabled={sending || !input.trim()}
+              title={smsMode ? 'Send as SMS' : 'Send'}
               style={{ padding: '8px 14px', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
               {sending ? '…' : <Icons.Arrow size={14} sw={2.2}/>}
             </button>
@@ -493,6 +520,11 @@ function Bubble({ message }) {
           opacity: audioAtt ? 0.92 : 1,
         }}>
           {message.text}
+        </div>
+      )}
+      {message.meta?.channel === 'sms' && (
+        <div style={{ marginTop: 4, fontSize: 10, opacity: 0.7, display: 'flex', alignItems: 'center', gap: 3 }}>
+          <Icons.Phone size={9}/> SMS
         </div>
       )}
     </div>
