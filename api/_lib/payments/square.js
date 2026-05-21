@@ -8,6 +8,11 @@
 //   SQUARE_APPLICATION_SECRET   — your Square app's secret (OAuth code exchange)
 //   SQUARE_ENVIRONMENT          — 'sandbox' | 'production' (defaults to sandbox)
 //   SQUARE_WEBHOOK_SIGNATURE_KEY (optional) — for verifying webhook events
+//   SQUARE_REDIRECT_URI         (optional) — the EXACT OAuth redirect URL
+//                                 registered in the Square dashboard. Pin
+//                                 this when APP_URL can't be relied on (it
+//                                 must match Square's "Redirect URL" field
+//                                 character-for-character or connect fails).
 //
 // Per-workspace credentials are stored in finance_settings.square_*:
 //   square_credentials_encrypted — JSON { access_token, refresh_token, expires_at }
@@ -18,6 +23,7 @@ import crypto from 'node:crypto';
 import { sql } from '../db.js';
 import { encrypt, decrypt } from '../secrets.js';
 import { fetchFinanceSettings } from '../finance.js';
+import { appUrl } from '../tokens.js';
 
 export function getProviderName() { return 'square'; }
 
@@ -45,6 +51,19 @@ const SQUARE_SCOPES = [
   'MERCHANT_PROFILE_READ',
   'CUSTOMERS_READ',
 ];
+
+// The OAuth redirect URL. Square requires this to EXACTLY match the
+// "Redirect URL" registered in the app dashboard (only one is allowed),
+// so it must be a single stable URL — never a per-deploy Vercel hostname.
+// Pin SQUARE_REDIRECT_URI when APP_URL isn't the canonical production host.
+// Used by BOTH the init and the callback so the value can't drift (OAuth
+// requires the authorize redirect_uri and the token-exchange redirect_uri
+// to be identical).
+export function squareRedirectUri() {
+  const explicit = process.env.SQUARE_REDIRECT_URI;
+  if (explicit) return explicit.replace(/\/$/, '');
+  return `${appUrl()}/api/finance/square-oauth-callback`;
+}
 
 export function buildAuthorizeUrl({ state, redirectUri }) {
   const env = squareEnv();

@@ -4,7 +4,7 @@
 // first location, encrypt + persist, and bounce the owner back to the
 // Finance page with a status flag.
 import jwt from 'jsonwebtoken';
-import { exchangeOAuthCode, fetchFirstLocation, persistConnection, squareEnv } from '../_lib/payments/square.js';
+import { exchangeOAuthCode, fetchFirstLocation, persistConnection, squareEnv, squareRedirectUri } from '../_lib/payments/square.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
 
@@ -28,7 +28,9 @@ export default async function handler(req, res) {
     catch { return back('error', 'State token invalid or expired'); }
     if (payload.kind !== 'square_oauth' || !payload.wid) return back('error', 'State payload mismatch');
 
-    const redirectUri = `${appUrl()}/api/finance/square-oauth-callback`;
+    // MUST be byte-identical to the redirect_uri the init sent to Square,
+    // or the token exchange 4xxs. Shared helper guarantees that.
+    const redirectUri = squareRedirectUri();
     const oauthResult = await exchangeOAuthCode({ code, redirectUri });
     const location = await fetchFirstLocation({ accessToken: oauthResult.access_token });
     // No location → /v2/locations call failed or the merchant has no
