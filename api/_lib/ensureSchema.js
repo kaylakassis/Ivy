@@ -33,7 +33,7 @@ import { SCHEMA_SQL } from './schema.js';
 // full migration once. We point at the most recently-added column rather
 // than a long-lived table so adding new columns reliably triggers a
 // re-migration without needing a manual /admin click.
-const PROBE_QUERY = "SELECT rewarded_at FROM referrals LIMIT 1";
+const PROBE_QUERY = "SELECT id FROM products LIMIT 1";
 
 let applied = false;
 let inFlight = null;
