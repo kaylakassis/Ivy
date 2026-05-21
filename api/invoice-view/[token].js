@@ -40,25 +40,33 @@ async function loadBusinessMeta(workspaceId) {
 // card payment from a public invoice viewer (secret + webhook secret both
 // stored). Without webhook signing, paid invoices wouldn't auto-mark, so
 // we hide the Pay button.
-async function isStripeReady(workspaceId) {
-  // Account-Links workspaces don't set a per-workspace webhook secret —
-  // their events flow through the platform-level webhook
-  // (/api/webhooks/stripe-platform) using a single STRIPE_WEBHOOK_SECRET.
-  // So the readiness check is:
-  //
-  //   • Account-Links acct exists  → ready (auto-mark via platform webhook)
-  //   • Legacy Standard secret + per-workspace webhook secret → ready
-  //   • Otherwise → not ready (hide the Pay button)
+export async function isPaymentReady(workspaceId) {
+  // Provider-aware: the public Pay button must show whenever the
+  // workspace's ACTIVE processor can both take a payment AND auto-mark the
+  // invoice paid via its webhook. Previously this only checked Stripe, so
+  // Square/PayPal workspaces could send invoices their clients couldn't
+  // pay online (even though /api/invoice-pay is fully provider-aware).
   const { rows } = await sql`
-    SELECT 1 FROM finance_settings
-    WHERE workspace_id = ${workspaceId}
-      AND (
-        stripe_connect_user_id IS NOT NULL
-        OR (stripe_secret_encrypted IS NOT NULL AND stripe_webhook_secret_encrypted IS NOT NULL)
-      )
-    LIMIT 1
+    SELECT payment_provider,
+           stripe_connect_user_id, stripe_secret_encrypted, stripe_webhook_secret_encrypted,
+           square_merchant_id, square_credentials_encrypted,
+           paypal_merchant_id
+      FROM finance_settings WHERE workspace_id = ${workspaceId} LIMIT 1
   `;
-  return rows.length > 0;
+  if (rows.length === 0) return false;
+  const fs = rows[0];
+  switch (fs.payment_provider || 'stripe') {
+    case 'square':
+      return !!(fs.square_merchant_id && fs.square_credentials_encrypted);
+    case 'paypal':
+      return !!fs.paypal_merchant_id;
+    case 'stripe':
+    default:
+      // Account-Links acct (auto-mark via platform webhook) OR legacy
+      // Standard secret + per-workspace webhook secret.
+      return !!(fs.stripe_connect_user_id
+        || (fs.stripe_secret_encrypted && fs.stripe_webhook_secret_encrypted));
+  }
 }
 
 export default async function handler(req, res) {
@@ -96,7 +104,7 @@ async function getInvoice(req, res) {
 
     const [business, paymentEnabled] = await Promise.all([
       loadBusinessMeta(inv.workspace_id),
-      isStripeReady(inv.workspace_id),
+      isPaymentReady(inv.workspace_id),
     ]);
     return ok(res, { invoice: serializeInvoicePublic(inv, { business, paymentEnabled }) });
   } catch (err) {

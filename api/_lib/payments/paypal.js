@@ -18,6 +18,7 @@
 import crypto from 'node:crypto';
 import { sql } from '../db.js';
 import { fetchFinanceSettings } from '../finance.js';
+import { appUrl } from '../tokens.js';
 
 export function getProviderName() { return 'paypal'; }
 
@@ -179,7 +180,14 @@ export async function createCheckoutSession({
       payee: { merchant_id: fs.paypalMerchantId },
     }],
     application_context: {
-      return_url: successUrl,
+      // CRITICAL: with the redirect (no-SDK) flow, approval only AUTHORIZES
+      // the order — money doesn't move until we POST .../capture. So we
+      // return through our own capture endpoint, which captures and then
+      // forwards to the real success page (`next`). Without this the buyer
+      // "pays" but nothing is charged and the invoice never marks paid.
+      return_url: `${appUrl()}/api/finance/paypal-return`
+        + `?ws=${encodeURIComponent(workspaceId || fs.workspaceId || '')}`
+        + `&next=${encodeURIComponent(successUrl)}`,
       cancel_url: cancelUrl,
       shipping_preference: 'NO_SHIPPING',
       user_action: 'PAY_NOW',
@@ -208,6 +216,40 @@ export async function createCheckoutSession({
     sessionId: j.id,
     providerData: { orderId: j.id },
   };
+}
+
+// Capture an approved PayPal order — this is what actually MOVES THE
+// MONEY in the redirect flow. Called from /api/finance/paypal-return when
+// the buyer comes back from PayPal's approval page. Idempotent: a repeat
+// capture of an already-captured order is treated as success (so a buyer
+// refresh / double-return doesn't error). The resulting
+// PAYMENT.CAPTURE.COMPLETED webhook marks the invoice/booking paid.
+export async function captureOrder({ orderId, workspaceId, settings }) {
+  if (!orderId) throw new Error('orderId is required');
+  const fs = settings || await fetchFinanceSettings(workspaceId);
+  if (!fs?.paypalMerchantId) throw new Error('PayPal is not connected for this workspace');
+  const token = await platformAccessToken();
+  const env = fs.paypalEnvironment || paypalEnv();
+  const res = await fetch(`${paypalApiBase(env)}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      'PayPal-Auth-Assertion': authAssertion({ merchantId: fs.paypalMerchantId }),
+      'PayPal-Partner-Attribution-Id': process.env.PAYPAL_PARTNER_ID || '',
+      // Safe to retry the same capture (e.g. a return-URL refresh).
+      'PayPal-Request-Id': `cap-${orderId}`,
+    },
+    body: '{}',
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const alreadyCaptured = (j?.details || []).some((d) => d.issue === 'ORDER_ALREADY_CAPTURED');
+    if (alreadyCaptured) return { status: 'COMPLETED', alreadyCaptured: true };
+    throw new Error(`PayPal capture failed (${res.status}): ${JSON.stringify(j).slice(0, 240)}`);
+  }
+  const capture = j.purchase_units?.[0]?.payments?.captures?.[0];
+  return { status: j.status, captureId: capture?.id || null, raw: j };
 }
 
 // Refund a PayPal capture. paymentIntent is the capture ID (PayPal's
