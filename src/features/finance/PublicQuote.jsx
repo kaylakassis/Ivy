@@ -23,6 +23,7 @@ export default function PublicQuote() {
   const [declineReason, setDeclineReason] = useState('');
   const [showDeclineForm, setShowDeclineForm] = useState(false);
   const [resultInvoice, setResultInvoice] = useState(null);
+  const [sel, setSel] = useState({}); // proposal option selections: { itemId: bool }
 
   useEffect(() => {
     let live = true;
@@ -40,14 +41,22 @@ export default function PublicQuote() {
     return () => { live = false; };
   }, [token]);
 
-  const submit = async (action, reason) => {
+  // Seed option selections from the quote's defaults once it loads.
+  useEffect(() => {
+    if (!quote?.items) return;
+    const init = {};
+    for (const it of quote.items) init[it.id] = (it.optional || it.packageGroup) ? !!it.selected : true;
+    setSel(init);
+  }, [quote]);
+
+  const submit = async (action, reason, selections) => {
     setSubmitting(true); setSubmitErr(null);
     try {
       const res = await fetch('/api/quote-view/' + encodeURIComponent(token), {
         method: 'POST',
         credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action, reason: reason || null }),
+        body: JSON.stringify({ action, reason: reason || null, selections: selections || undefined }),
       });
       const j = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
@@ -103,6 +112,24 @@ export default function PublicQuote() {
     );
   }
 
+  const items = quote.items || [];
+  const isProposal = quote.hasOptions;
+  const isInc = (it) => (!it.optional && !it.packageGroup) ? true : !!sel[it.id];
+  const r2 = (n) => Math.round(n * 100) / 100;
+  const liveSubtotal = items.filter(isInc).reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0);
+  const liveTaxable = Math.max(0, liveSubtotal - Number(quote.discount || 0));
+  const liveTax = liveTaxable * Number(quote.taxRate || 0) / 100;
+  const live = { subtotal: r2(liveSubtotal), tax: r2(liveTax), total: r2(liveTaxable + liveTax) };
+  const toggleOpt = (id) => setSel((s) => ({ ...s, [id]: !s[id] }));
+  const pickPkg = (group, id) => setSel((s) => {
+    const n = { ...s };
+    for (const it of items) if (it.packageGroup === group) n[it.id] = (it.id === id);
+    return n;
+  });
+  const buildSelections = () => items
+    .filter((it) => it.optional || it.packageGroup)
+    .map((it) => ({ id: it.id, selected: !!sel[it.id] }));
+
   return (
     <Wrap tweaks={tweaks} accent={quote.business?.accentColor}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 22 }}>
@@ -144,24 +171,51 @@ export default function PublicQuote() {
             </tr>
           </thead>
           <tbody>
-            {(quote.items || []).map((it) => (
-              <tr key={it.id} style={{ borderBottom: '1px solid var(--border)' }}>
-                <td style={{ padding: '10px 0', color: 'var(--fg)' }}>{it.description || '—'}</td>
-                <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--fg-2)' }}>{it.quantity}</td>
-                <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--fg-2)' }}>{fmtMoney(it.rate)}</td>
-                <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 600 }}>
-                  {fmtMoney((Number(it.quantity) || 0) * (Number(it.rate) || 0))}
-                </td>
-              </tr>
-            ))}
+            {items.map((it) => {
+              const inc = isInc(it);
+              const editable = quote.status === 'sent' && (it.optional || it.packageGroup);
+              const amount = inc ? (Number(it.quantity) || 0) * (Number(it.rate) || 0) : 0;
+              return (
+                <tr key={it.id} style={{ borderBottom: '1px solid var(--border)', opacity: inc ? 1 : 0.5 }}>
+                  <td style={{ padding: '10px 0', color: 'var(--fg)' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: editable ? 'pointer' : 'default' }}>
+                      {it.packageGroup ? (
+                        <input type="radio" name={`grp_${it.packageGroup}`} checked={!!sel[it.id]} disabled={!editable}
+                          onChange={() => pickPkg(it.packageGroup, it.id)} style={{ accentColor: accent }}/>
+                      ) : it.optional ? (
+                        <input type="checkbox" checked={!!sel[it.id]} disabled={!editable}
+                          onChange={() => toggleOpt(it.id)} style={{ accentColor: accent }}/>
+                      ) : null}
+                      <span>
+                        {it.description || '—'}
+                        {it.packageGroup
+                          ? <span style={{ color: 'var(--muted)', fontSize: 11 }}> · choose one</span>
+                          : it.optional
+                            ? <span style={{ color: 'var(--muted)', fontSize: 11 }}> · add-on</span>
+                            : null}
+                      </span>
+                    </label>
+                  </td>
+                  <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--fg-2)' }}>{it.quantity}</td>
+                  <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--fg-2)' }}>{fmtMoney(it.rate)}</td>
+                  <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 600 }}>{fmtMoney(amount)}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
 
+        {isProposal && quote.status === 'sent' && (
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
+            Tick the add-ons you want and pick one option per group — your total updates live.
+          </div>
+        )}
+
         <div style={{ marginTop: 14, paddingTop: 14, fontSize: 14 }}>
-          <Row label="Subtotal" value={fmtMoney(quote.subtotal)}/>
+          <Row label="Subtotal" value={fmtMoney(live.subtotal)}/>
           {Number(quote.discount) > 0 && <Row label="Discount" value={`− ${fmtMoney(quote.discount)}`}/>}
-          {Number(quote.taxRate) > 0 && <Row label={`Tax (${quote.taxRate}%)`} value={fmtMoney(quote.tax)}/>}
-          <Row label="Total" value={fmtMoney(quote.total)} bold/>
+          {Number(quote.taxRate) > 0 && <Row label={`Tax (${quote.taxRate}%)`} value={fmtMoney(live.tax)}/>}
+          <Row label="Total" value={fmtMoney(live.total)} bold/>
         </div>
 
         {quote.notes && (
@@ -189,7 +243,7 @@ export default function PublicQuote() {
                 className="btn btn-outline" style={{ flex: 1, justifyContent: 'center', minWidth: 140 }}>
                 Decline
               </button>
-              <button onClick={() => submit('accept')} disabled={submitting}
+              <button onClick={() => submit('accept', null, buildSelections())} disabled={submitting}
                 style={{
                   flex: 2, justifyContent: 'center', minWidth: 200,
                   padding: '12px 22px', borderRadius: 10,

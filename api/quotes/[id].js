@@ -9,7 +9,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeQuote, cleanItems, fetchOwnedQuote } from '../_lib/quotes.js';
+import { serializeQuote, cleanQuoteItems, fetchOwnedQuote } from '../_lib/quotes.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };
 
       if ('items' in body) {
-        const items = cleanItems(body.items);
+        const items = cleanQuoteItems(body.items);
         if (items === null) return badRequest(res, 'Invalid items');
         push('items', JSON.stringify(items));
       }

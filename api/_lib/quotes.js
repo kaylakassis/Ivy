@@ -6,12 +6,44 @@ import { computeTotals, cleanItems } from './finance.js';
 
 export const VALID_STATUS = new Set(['draft', 'sent', 'accepted', 'declined', 'expired', 'voided']);
 
+// Proposal items extend invoice items with client-selectable options:
+//   optional      — an add-on the client can include/exclude
+//   packageGroup  — a tier key; client picks exactly one item per group
+//   selected      — current/default selection (required items are always in)
+// isIncluded decides whether an item counts toward the total + is cloned
+// into the invoice on accept.
+export function isIncluded(it) {
+  if (!it) return false;
+  if (it.packageGroup) return it.selected === true;
+  if (it.optional) return it.selected !== false;
+  return true;
+}
+
+// Total over only the INCLUDED items (required + selected options).
+export function quoteTotals(items, taxRate, discount) {
+  return computeTotals((items || []).filter(isIncluded), taxRate, discount);
+}
+
+// Sanitize proposal line items: reuse cleanItems for the base shape, then
+// preserve the option fields. A packageGroup implies optional.
+export function cleanQuoteItems(input) {
+  const base = cleanItems(input);
+  if (base === null) return null;
+  return base.map((it, i) => {
+    const src = input[i] || {};
+    const packageGroup = src.packageGroup ? String(src.packageGroup).slice(0, 60) : null;
+    const optional = packageGroup ? true : !!src.optional;
+    const selected = optional ? !!src.selected : true;
+    return { ...it, optional, packageGroup, selected };
+  });
+}
+
 export function serializeQuote(row) {
   if (!row) return null;
   const items = row.items || [];
   const taxRate = Number(row.tax_rate || 0);
   const discount = Number(row.discount || 0);
-  const totals = computeTotals(items, taxRate, discount);
+  const totals = quoteTotals(items, taxRate, discount);
   return {
     id:           row.id,
     number:       row.number,
@@ -21,6 +53,7 @@ export function serializeQuote(row) {
     issueDate:    row.issue_date instanceof Date ? row.issue_date.toISOString().slice(0, 10) : row.issue_date,
     expiryDate:   row.expiry_date instanceof Date ? row.expiry_date.toISOString().slice(0, 10) : row.expiry_date,
     items,
+    hasOptions:   items.some((it) => it.optional || it.packageGroup),
     taxRate,
     discount,
     notes:        row.notes,

@@ -6,7 +6,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeQuote, cleanItems, nextQuoteNumber, VALID_STATUS } from '../_lib/quotes.js';
+import { serializeQuote, cleanQuoteItems, nextQuoteNumber, VALID_STATUS } from '../_lib/quotes.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       const body = await readBody(req);
-      const items = cleanItems(body.items ?? []);
+      const items = cleanQuoteItems(body.items ?? []);
       if (items === null) return badRequest(res, 'Invalid items');
 
       const taxRate  = Number(body.taxRate ?? 0);

@@ -10,8 +10,8 @@
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
-import { computeTotals, nextInvoiceNumber } from '../_lib/finance.js';
-import { serializeQuotePublic } from '../_lib/quotes.js';
+import { nextInvoiceNumber } from '../_lib/finance.js';
+import { serializeQuotePublic, isIncluded } from '../_lib/quotes.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
@@ -94,8 +94,28 @@ export default async function handler(req, res) {
         return ok(res, { ok: true, declined: true });
       }
 
-      // Accept: clone items into a fresh draft invoice and link it.
-      // The owner can review + send the invoice from their Finance tab.
+      // Accept. For a proposal, apply the client's option selections
+      // (body.selections = [{ id, selected }]) — honored only for
+      // optional/package items — enforce one-per-package-group, then
+      // clone ONLY the included items into the invoice. The chosen
+      // selection is saved back on the quote so the owner sees it.
+      let items = Array.isArray(row.items) ? row.items.map((x) => ({ ...x })) : [];
+      if (Array.isArray(body.selections)) {
+        const sel = new Map(body.selections.map((s) => [String(s.id), !!s.selected]));
+        items = items.map((it) =>
+          (it.optional || it.packageGroup) && sel.has(it.id) ? { ...it, selected: sel.get(it.id) } : it);
+        const seenGroup = new Set();
+        for (const it of items) {
+          if (it.packageGroup && it.selected) {
+            if (seenGroup.has(it.packageGroup)) it.selected = false;
+            else seenGroup.add(it.packageGroup);
+          }
+        }
+      }
+      const included = items.filter(isIncluded);
+      if (included.length === 0) return badRequest(res, 'Select at least one option before accepting.');
+      const invoiceItems = included.map(({ id, description, quantity, rate }) => ({ id, description, quantity, rate }));
+
       const num = await nextInvoiceNumber(row.workspace_id);
       const invNumber = `INV-${num}`;
       const issueDate = new Date().toISOString().slice(0, 10);
@@ -111,7 +131,7 @@ export default async function handler(req, res) {
           ${row.workspace_id}, ${invNumber},
           ${row.client_id}, ${row.client_name}, ${row.client_email},
           ${issueDate}, ${dueDate},
-          ${JSON.stringify(row.items || [])}::jsonb,
+          ${JSON.stringify(invoiceItems)}::jsonb,
           ${row.tax_rate}, ${row.discount}, ${row.notes},
           'draft',
           ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Created from accepted estimate ${row.number}` }])}::jsonb,
@@ -129,6 +149,7 @@ export default async function handler(req, res) {
         UPDATE quotes SET
           status               = 'accepted',
           accepted_at          = NOW(),
+          items                = ${JSON.stringify(items)}::jsonb,
           view_token_hash      = NULL,
           resulting_invoice_id = ${newInvoice.id},
           activity             = ${JSON.stringify(newActivity)}::jsonb,

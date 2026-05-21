@@ -173,7 +173,11 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
     api.get('/clients').then((r) => setClients(r.clients || [])).catch(() => {});
   }, []);
 
-  const subtotal = useMemo(() => items.reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0), [items]);
+  // Count only items included by default (required + default-selected
+  // options) so the owner's total preview matches the client's starting view.
+  const subtotal = useMemo(() => items
+    .filter((it) => (!it.optional && !it.packageGroup) ? true : !!it.selected)
+    .reduce((s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0), [items]);
   const taxable  = Math.max(0, subtotal - Number(discount || 0));
   const tax      = taxable * (Number(taxRate || 0) / 100);
   const total    = taxable + tax;
@@ -293,37 +297,68 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
                 </button>
               )}
             </div>
-            {items.map((it, i) => (
-              <div key={it.id || i} style={{
-                display: 'grid', gridTemplateColumns: '2fr 80px 90px 90px 30px', gap: 8,
-                padding: 10, marginBottom: 6, borderRadius: 10,
-                background: 'var(--surface-2)', border: '1px solid var(--border)',
-              }}>
-                <input value={it.description}
-                  onChange={(e) => updateItem(i, { description: e.target.value })}
-                  disabled={isLocked}
-                  placeholder="Service / item"
-                  style={{ ...inputS, padding: '7px 10px' }}/>
-                <input type="number" min="0" step="0.01"
-                  value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })}
-                  disabled={isLocked}
-                  style={{ ...inputS, padding: '7px 10px', textAlign: 'right' }}/>
-                <input type="number" min="0" step="0.01"
-                  value={it.rate} onChange={(e) => updateItem(i, { rate: e.target.value })}
-                  disabled={isLocked}
-                  style={{ ...inputS, padding: '7px 10px', textAlign: 'right' }}/>
-                <div className="mono-num" style={{ fontSize: 13, fontWeight: 600,
-                  textAlign: 'right', alignSelf: 'center' }}>
-                  {fmtMoney((Number(it.quantity) || 0) * (Number(it.rate) || 0))}
+            {items.map((it, i) => {
+              const type = it.packageGroup ? 'package' : it.optional ? 'optional' : 'required';
+              const setType = (t) => {
+                if (t === 'required') updateItem(i, { optional: false, packageGroup: null, selected: true });
+                else if (t === 'optional') updateItem(i, { optional: true, packageGroup: null, selected: it.selected ?? false });
+                else updateItem(i, { optional: true, packageGroup: it.packageGroup || 'Tier', selected: it.selected ?? false });
+              };
+              return (
+                <div key={it.id || i} style={{
+                  padding: 10, marginBottom: 6, borderRadius: 10,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: '2fr 80px 90px 90px 30px', gap: 8 }}>
+                    <input value={it.description}
+                      onChange={(e) => updateItem(i, { description: e.target.value })}
+                      disabled={isLocked}
+                      placeholder="Service / item"
+                      style={{ ...inputS, padding: '7px 10px' }}/>
+                    <input type="number" min="0" step="0.01"
+                      value={it.quantity} onChange={(e) => updateItem(i, { quantity: e.target.value })}
+                      disabled={isLocked}
+                      style={{ ...inputS, padding: '7px 10px', textAlign: 'right' }}/>
+                    <input type="number" min="0" step="0.01"
+                      value={it.rate} onChange={(e) => updateItem(i, { rate: e.target.value })}
+                      disabled={isLocked}
+                      style={{ ...inputS, padding: '7px 10px', textAlign: 'right' }}/>
+                    <div className="mono-num" style={{ fontSize: 13, fontWeight: 600,
+                      textAlign: 'right', alignSelf: 'center' }}>
+                      {fmtMoney((Number(it.quantity) || 0) * (Number(it.rate) || 0))}
+                    </div>
+                    {!isLocked && (
+                      <button className="btn btn-ghost" onClick={() => removeItem(i)}
+                        style={{ padding: 4, color: 'var(--danger)' }}>
+                        <Icons.X size={13}/>
+                      </button>
+                    )}
+                  </div>
+                  {/* Proposal options: make a line required, an optional add-on,
+                      or one choice in a package group the client picks from. */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                    <select value={type} onChange={(e) => setType(e.target.value)} disabled={isLocked}
+                      style={{ ...inputS, padding: '5px 8px', fontSize: 12, width: 'auto' }}>
+                      <option value="required">Required</option>
+                      <option value="optional">Optional add-on</option>
+                      <option value="package">Package option</option>
+                    </select>
+                    {type === 'package' && (
+                      <input value={it.packageGroup || ''} onChange={(e) => updateItem(i, { packageGroup: e.target.value })}
+                        disabled={isLocked} placeholder="Group (e.g. Tier)"
+                        style={{ ...inputS, padding: '5px 8px', fontSize: 12, width: 150 }}/>
+                    )}
+                    {type !== 'required' && (
+                      <label style={{ display: 'inline-flex', alignItems: 'center', gap: 5, fontSize: 12, color: 'var(--fg-2)' }}>
+                        <input type="checkbox" checked={!!it.selected}
+                          onChange={() => updateItem(i, { selected: !it.selected })} disabled={isLocked}/>
+                        Selected by default
+                      </label>
+                    )}
+                  </div>
                 </div>
-                {!isLocked && (
-                  <button className="btn btn-ghost" onClick={() => removeItem(i)}
-                    style={{ padding: 4, color: 'var(--danger)' }}>
-                    <Icons.X size={13}/>
-                  </button>
-                )}
-              </div>
-            ))}
+              );
+            })}
           </div>
 
           <div className="form-2col">
