@@ -46,9 +46,18 @@ export default function Calendar() {
     cal, loading, error, refresh,
     patchSettings, saveAvailability, saveServices,
     addBlock, updateBlock, removeBlock,
-    createBooking, updateBooking, cancelBooking, cancelOccurrence,
+    createBooking, updateBooking, applyBooking, cancelBooking, cancelOccurrence,
     completeBooking, editCompletion, clearCompletion,
   } = useCalendar(dataWindow);
+
+  // After a no-show / tip / fee charge (the drawer hits those endpoints
+  // directly), merge the returned booking into state AND patch the open
+  // drawer's event so its action buttons reflect the new state instead of
+  // staying stale until reload.
+  const onBookingChanged = (booking) => {
+    applyBooking(booking);
+    setSelectedEvent((ev) => (ev && ev.id === booking.id ? { ...ev, ...booking } : ev));
+  };
   const [drawer, setDrawer] = useState(null);
   const [selectedEvent, setSelectedEvent] = useState(null);
   const [addBookingOpen, setAddBookingOpen] = useState(false);
@@ -502,6 +511,7 @@ export default function Calendar() {
             else if (e.id) await removeBlock(e.id);
           }}
           onClose={() => { setDrawer(null); setSelectedEvent(null); }}
+          onBookingChanged={onBookingChanged}
         />
       )}
       {addBookingOpen && (

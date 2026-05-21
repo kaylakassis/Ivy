@@ -18,7 +18,7 @@ const STATUS_META = {
 };
 
 export default function Documents() {
-  const { documents, loading, error, create, createFromTemplate, update, remove, send, resend, uploadPdf } = useDocuments();
+  const { documents, loading, error, create, createFromTemplate, update, remove, send, resend, uploadPdf, void: voidDoc } = useDocuments();
   const [tab, setTab]               = useState('all');
   const [openId, setOpenId]         = useState(null);
   const [creatingOpen, setCreating] = useState(false);
@@ -177,6 +177,7 @@ export default function Documents() {
           onSend={() => setSending(openDoc.id)}
           onResend={async () => { await resend(openDoc.id); }}
           onUploadPdf={(file) => uploadPdf(openDoc.id, file)}
+          onVoid={async () => { await voidDoc(openDoc.id); }}
         />
       )}
       {sendingDoc && (

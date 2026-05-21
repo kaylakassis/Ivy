@@ -11,7 +11,7 @@ export default function EventDrawer({
   event, services,
   onSaveBlock, onUpdateBooking, onCancelOccurrence,
   onCompleteBooking, onEditCompletion, onClearCompletion,
-  onDelete, onClose,
+  onDelete, onClose, onBookingChanged,
 }) {
   if (event.kind === 'booking') {
     return (
@@ -25,13 +25,14 @@ export default function EventDrawer({
         onClearCompletion={onClearCompletion}
         onCancelSeries={onDelete}
         onClose={onClose}
+        onBookingChanged={onBookingChanged}
       />
     );
   }
   return <BlockEdit event={event} onSave={onSaveBlock} onDelete={onDelete} onClose={onClose}/>;
 }
 
-function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onCompleteBooking, onEditCompletion, onClearCompletion, onCancelSeries, onClose }) {
+function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onCompleteBooking, onEditCompletion, onClearCompletion, onCancelSeries, onClose, onBookingChanged }) {
   const svc = services.find((s) => s.id === event.serviceId);
   const isRecurring = !!event.recurrenceRule;
   const masterId = event.recurrenceMasterId || event.id;
@@ -295,7 +296,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
       )}
 
       {!event.cancelledAt && !event.noShowAt && (
-        <BookingExtraActions event={event}/>
+        <BookingExtraActions event={event} onBookingChanged={onBookingChanged}/>
       )}
 
       {!event.cancelledAt && !event.noShowAt && (
@@ -357,7 +358,7 @@ function ruleLabel(rule) {
 // off-session-charge against the client's saved card; if no card is
 // on file, the no-show endpoint still records the no-show but skips
 // the charge, and the tip / fee endpoints surface a clear error.
-function BookingExtraActions({ event }) {
+function BookingExtraActions({ event, onBookingChanged }) {
   const [openAction, setOpenAction] = useState(null); // 'no_show' | 'tip' | 'late_cancel'
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -402,6 +403,7 @@ function BookingExtraActions({ event }) {
     setBusy(true); setError(null);
     try {
       const r = await api.post('/calendar/bookings/no-show', { id: event.id, chargeFee });
+      if (r.booking) onBookingChanged?.(r.booking);
       setSuccess(r.charged
         ? `Marked no-show + charged $${r.chargeAmount.toFixed(2)}.`
         : (r.chargeError ? `Marked no-show — charge failed: ${r.chargeError}` : 'Marked no-show.'));
@@ -419,6 +421,7 @@ function BookingExtraActions({ event }) {
         ? { id: event.id, amount: Number(amount) }
         : { id: event.id, kind, amount: Number(amount) || undefined };
       const r = await api.post(path, body);
+      if (r.booking) onBookingChanged?.(r.booking);
       // r.chargeAmount comes back as a number; `amount` here is the raw
       // form-input string. Coerce so the success toast doesn't crash on
       // "0.toFixed is not a function" when the server omits chargeAmount.

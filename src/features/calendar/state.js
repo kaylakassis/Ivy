@@ -132,6 +132,14 @@ export function useCalendar(window) {
     return r.booking;
   }, []);
 
+  // Merge an already-mutated booking (e.g. from no-show/tip/fee endpoints
+  // that the drawer calls directly) into state so the grid + open drawer
+  // reflect it without a full refetch.
+  const applyBooking = useCallback((booking) => {
+    if (!booking?.id) return;
+    setCal((c) => ({ ...c, bookings: c.bookings.map((b) => b.id === booking.id ? booking : b) }));
+  }, []);
+
   const completeBooking = useCallback(async (id, occurrenceDate, body) => {
     const r = await api.post('/calendar/bookings/complete', { id, occurrenceDate, ...body });
     setCal((c) => ({ ...c, bookings: c.bookings.map((b) => b.id === id ? r.booking : b) }));
@@ -154,7 +162,7 @@ export function useCalendar(window) {
     cal, loading, error, refresh,
     patchSettings, saveServices, saveAvailability,
     addBlock, updateBlock, removeBlock,
-    createBooking, updateBooking, cancelBooking, cancelOccurrence,
+    createBooking, updateBooking, applyBooking, cancelBooking, cancelOccurrence,
     completeBooking, editCompletion, clearCompletion,
   };
 }

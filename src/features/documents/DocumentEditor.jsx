@@ -22,7 +22,7 @@ const FIELD_TYPES = [
   { id: 'text',      label: 'Text response', icon: 'Doc'      },
 ];
 
-export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf }) {
+export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf, onVoid }) {
   const { ctx } = useUserContext();
   const businessName = ctx?.bizName || null;
 
@@ -330,6 +330,16 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
                     <Icons.Mail size={13}/> Change recipient
                   </button>
                 </>
+              )}
+              {/* Void recovers a sent/declined doc: it reverts to an
+                  editable draft so the owner can fix + resend. Without
+                  this, declined/stuck documents were a dead-end. */}
+              {(doc.status === 'sent' || doc.status === 'declined') && onVoid && (
+                <button className="btn btn-ghost" style={{ color: 'var(--danger)' }} disabled={busy}
+                  title="Void this document so you can edit it and send a fresh draft"
+                  onClick={async () => { setBusy(true); try { await onVoid(); } finally { setBusy(false); } }}>
+                  Void {doc.status === 'declined' ? '& edit' : ''}
+                </button>
               )}
             </>
           )}
