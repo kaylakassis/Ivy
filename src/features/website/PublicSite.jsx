@@ -37,6 +37,20 @@ export default function PublicSite() {
     }
   }, [site, handle]);
 
+  // Pageview beacon — the production live site is server-rendered (each
+  // /site/:handle[/:slug] is its own SSR request that already beacons), so
+  // this only fires on the CSR fallback path; keyed on the page so a
+  // client-side sub-page nav is still counted. Best-effort.
+  useEffect(() => {
+    if (!site) return;
+    try {
+      const body = JSON.stringify({ slug: pageSlug, referrer: (document.referrer || '').slice(0, 300) });
+      const url = `/site/${encodeURIComponent(handle)}/pv`;
+      if (navigator.sendBeacon) navigator.sendBeacon(url, new Blob([body], { type: 'application/json' }));
+      else fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body, keepalive: true }).catch(() => {});
+    } catch { /* ignore */ }
+  }, [site, handle, pageSlug]);
+
   if (loading) {
     return (
       <div style={{ minHeight: '100vh', background: '#FFFFFF', color: '#85827B',
@@ -93,6 +107,69 @@ export default function PublicSite() {
       {visible.map((section) => (
         <SectionRenderer key={section.id} section={section} handle={site.handle} />
       ))}
+
+      {/* Parity with the SSR renderer (siteHtml.js) for the CSR fallback. */}
+      <StickyCta cfg={site.stickyCta} />
+      <ExitIntent cfg={site.exitIntentPopup} />
+    </div>
+  );
+}
+
+// Fixed promo bar — mirrors renderStickyCta in siteHtml.js.
+function StickyCta({ cfg }) {
+  if (!cfg || !cfg.enabled || !cfg.text) return null;
+  const pos = cfg.position === 'top' ? { top: 0 } : { bottom: 0 };
+  return (
+    <a href={cfg.link || '#'} style={{
+      position: 'fixed', left: 0, right: 0, ...pos, zIndex: 9000,
+      padding: '14px 24px', background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
+      textAlign: 'center', fontWeight: 600, textDecoration: 'none',
+    }}>{cfg.text} →</a>
+  );
+}
+
+// Exit-intent modal — mirrors renderExitIntent in siteHtml.js. Shows once
+// per session on first upward mouse-exit.
+function ExitIntent({ cfg }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!cfg || !cfg.enabled || !cfg.headline) return undefined;
+    try { if (sessionStorage.getItem('thryve-exit-shown')) return undefined; } catch { /* ignore */ }
+    const onLeave = (e) => {
+      if (e.clientY < 10) {
+        setShow(true);
+        try { sessionStorage.setItem('thryve-exit-shown', '1'); } catch { /* ignore */ }
+        document.removeEventListener('mouseleave', onLeave);
+      }
+    };
+    document.addEventListener('mouseleave', onLeave);
+    return () => document.removeEventListener('mouseleave', onLeave);
+  }, [cfg]);
+  if (!cfg || !cfg.enabled || !cfg.headline || !show) return null;
+  return (
+    <div onClick={() => setShow(false)} style={{
+      position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.55)',
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24,
+    }}>
+      <div onClick={(e) => e.stopPropagation()} style={{
+        maxWidth: 480, background: 'var(--site-bg)', color: 'var(--site-fg)',
+        padding: 32, borderRadius: 'var(--site-radius)', border: '1px solid var(--site-border)', position: 'relative',
+      }}>
+        <button onClick={() => setShow(false)} aria-label="Close" style={{
+          position: 'absolute', top: 10, right: 14, background: 'transparent',
+          border: 0, fontSize: 20, color: 'var(--site-muted)', cursor: 'pointer',
+        }}>×</button>
+        <h3 style={{ margin: 0, fontFamily: 'var(--site-font-display)', fontSize: 24 }}>{cfg.headline}</h3>
+        {cfg.sub && <p style={{ margin: '10px 0 0', color: 'var(--site-fg-2)', lineHeight: 1.55 }}>{cfg.sub}</p>}
+        {cfg.cta && (
+          <p style={{ margin: '20px 0 0' }}>
+            <a href={cfg.ctaLink || '#'} style={{
+              display: 'inline-block', padding: '12px 22px', background: 'var(--site-accent)',
+              color: 'var(--site-accent-ink)', borderRadius: 'var(--site-radius)', textDecoration: 'none', fontWeight: 600,
+            }}>{cfg.cta} →</a>
+          </p>
+        )}
+      </div>
     </div>
   );
 }
