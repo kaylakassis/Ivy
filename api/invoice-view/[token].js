@@ -1,7 +1,8 @@
 // /api/invoice-view/:token  (public, no auth)
 //   GET   → public invoice payload (only if status='sent' or 'overdue')
 //   POST  → optional "I've paid" confirmation. Doesn't actually settle the
-//           invoice (real Stripe lands in phase B); records an activity entry
+//           invoice; the live pay flow is /api/invoice-pay/[token] (Stripe/
+//           Square/PayPal). This POST records a soft "client says paid"
 //           the owner sees, so they can reconcile.
 //
 // Token is sha256-hashed before lookup.

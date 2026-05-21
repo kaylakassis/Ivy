@@ -54,11 +54,13 @@ export default async function handler(req, res) {
     if (!tier.active) return badRequest(res, 'This membership is no longer accepting new members.');
     if (!tier.stripe_price_id) return badRequest(res, "This business hasn't finished connecting payments yet.");
 
+    // Memberships are recurring subscriptions — Stripe-only by design
+    // (Square/PayPal hosted checkout here is one-time). Say so plainly.
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }
     catch (e) {
       return badRequest(res, e.code === 'no_stripe_connection'
-        ? "This business hasn't enabled card payments yet."
+        ? 'Memberships require Stripe. Connect Stripe in Finance to offer recurring plans.'
         : e.message);
     }
 

@@ -73,11 +73,14 @@ export default async function handler(req, res) {
     if (cs.rows.length === 0) return notFound(res, 'No business with that handle');
     const workspaceId = cs.rows[0].workspace_id;
 
+    // Gift-card sales are Stripe-only by design (hosted Checkout). Square/
+    // PayPal aren't wired for selling gift cards — surface that plainly
+    // rather than a generic "card payments" message.
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }
     catch (e) {
       return badRequest(res, e.code === 'no_stripe_connection'
-        ? "This business hasn't enabled card payments yet."
+        ? 'Gift cards require Stripe. Connect Stripe in Finance to sell them (Square/PayPal aren’t supported for gift cards yet).'
         : e.message);
     }
 

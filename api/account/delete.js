@@ -89,7 +89,7 @@ export default async function handler(req, res) {
           html: emailShell({
             heading: 'Your account is deleted',
             body: `<p>Hi ${userName ? userName.split(/\s+/)[0] : 'there'},</p>
-              <p>Per your request, we've fully deleted your THRYVE account and everything tied to it — your workspace, clients, bookings, invoices, documents, and messages. This action can't be reversed.</p>
+              <p>Per your request, we've deleted your THRYVE account and the workspace you owned — your clients, bookings, invoices, documents, and messages. This action can't be reversed. (Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>
               <p>If you didn't make this request, please email us right away — we still have backups for 30 days that we can restore from in case of unauthorized deletion.</p>`,
             footer: 'Thanks for trying THRYVE. We\'re sorry to see you go — if you have a moment, reply with what we could have done better.',
           }),

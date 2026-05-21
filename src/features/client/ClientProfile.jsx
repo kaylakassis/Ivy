@@ -105,7 +105,7 @@ export default function ClientProfile() {
             style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }}/>
         </Field>
 
-        <Field label="Phone" hint="For SMS reminders from businesses that send them. Leave blank to opt out.">
+        <Field label="Phone" hint="Saved with each business so they can reach you. SMS reminders also need consent — turn them on under Notifications.">
           <input
             type="tel"
             inputMode="tel"

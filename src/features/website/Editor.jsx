@@ -25,6 +25,7 @@ export default function Editor({
   currentPage, currentPageId, setCurrentPageId,
   addPage, removePage, renamePage, movePage,
   reset, publish, saving, saveErr, hasUnpublishedChanges,
+  schedulePublish, cancelSchedule,
   undo, redo, canUndo, canRedo,
 }) {
   // Sections we're rendering / editing come from the CURRENT page,
@@ -109,6 +110,26 @@ export default function Editor({
     } finally {
       setPublishing(false);
     }
+  };
+
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [scheduleAt, setScheduleAt] = useState('');
+  const [scheduling, setScheduling] = useState(false);
+  const doSchedule = async () => {
+    if (!scheduleAt) return;
+    setScheduling(true);
+    setPublishErr(null);
+    try {
+      await schedulePublish(new Date(scheduleAt).toISOString());
+      setScheduleOpen(false);
+    } catch (e) {
+      setPublishErr(e.message || 'Could not schedule');
+    } finally {
+      setScheduling(false);
+    }
+  };
+  const doCancelSchedule = async () => {
+    try { await cancelSchedule(); } catch (e) { setPublishErr(e.message || 'Could not cancel'); }
   };
   const publicUrl = site.handle ? `${publicOrigin()}/site/${site.handle}` : null;
 
@@ -286,6 +307,47 @@ export default function Editor({
             }}/>
           )}
         </button>
+
+        {/* Schedule publish. If already scheduled, show the time + a way to
+            cancel; otherwise a popover with a datetime-local picker. */}
+        {site.scheduledPublishAt ? (
+          <span style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 11.5,
+            padding: '4px 8px', borderRadius: 8,
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+          }}>
+            <Icons.Clock size={12}/> Goes live {new Date(site.scheduledPublishAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
+            <button className="btn btn-ghost" onClick={doCancelSchedule} title="Cancel scheduled publish"
+              style={{ padding: 2, color: 'var(--accent)' }}><Icons.X size={12}/></button>
+          </span>
+        ) : (
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-outline" onClick={() => setScheduleOpen((o) => !o)}
+              disabled={!site.handle} title={!site.handle ? 'Set a handle first' : 'Schedule publish for later'}
+              style={{ opacity: site.handle ? 1 : 0.6 }}>
+              <Icons.Clock size={13}/>{!isMobile && <span style={{ marginLeft: 6 }}>Schedule</span>}
+            </button>
+            {scheduleOpen && (
+              <div style={{
+                position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 60,
+                background: 'var(--surface)', border: '1px solid var(--border)',
+                borderRadius: 10, padding: 12, width: 250, boxShadow: 'var(--shadow-md)',
+              }}>
+                <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 8 }}>
+                  Publish the current draft at:
+                </div>
+                <input type="datetime-local" value={scheduleAt} onChange={(e) => setScheduleAt(e.target.value)}
+                  style={{ width: '100%', padding: '8px 10px', fontSize: 13, marginBottom: 8 }}/>
+                <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  <button className="btn btn-ghost" onClick={() => setScheduleOpen(false)} style={{ fontSize: 12 }}>Cancel</button>
+                  <button className="btn btn-primary" onClick={doSchedule} disabled={!scheduleAt || scheduling} style={{ fontSize: 12 }}>
+                    {scheduling ? 'Scheduling…' : 'Schedule'}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
 
         {(saving || saveErr || publishErr) && (
           <span style={{ fontSize: 11, color: saveErr || publishErr ? 'var(--danger)' : 'var(--muted)' }}>

@@ -408,9 +408,26 @@ export function useWebsite() {
     return r;
   }, [flush]);
 
+  // Schedule the CURRENT draft to go live at `whenISO`. We snapshot the
+  // current pages into scheduled_pages so later draft edits don't change
+  // what gets published at the scheduled time; the cron promotes it.
+  const schedulePublish = useCallback(async (whenISO) => {
+    await flush();
+    const r = await api.put('/website', { scheduledPublishAt: whenISO, scheduledPages: site.pages });
+    setSite((s) => ({ ...s, scheduledPublishAt: r.website?.scheduledPublishAt || whenISO }));
+    return r;
+  }, [flush, site.pages]);
+
+  const cancelSchedule = useCallback(async () => {
+    const r = await api.put('/website', { scheduledPublishAt: null, scheduledPages: null });
+    setSite((s) => ({ ...s, scheduledPublishAt: null }));
+    return r;
+  }, []);
+
   return {
     site, loading, loadErr, saving, saveErr,
     hasUnpublishedChanges: dirty,
+    schedulePublish, cancelSchedule,
     currentPage, currentPageId, setCurrentPageId,
     addPage, removePage, renamePage, movePage, movePageTo,
     set, setSection, addSection, removeSection, moveSection, moveSectionTo, duplicateSection,

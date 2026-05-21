@@ -266,8 +266,10 @@ export default async function handler(req, res) {
           form_destinations  = COALESCE(${JSON.stringify(patch.formDestinations ?? null)}::jsonb, form_destinations),
           exit_intent_popup  = COALESCE(${JSON.stringify(patch.exitIntentPopup ?? null)}::jsonb, exit_intent_popup),
           sticky_cta         = COALESCE(${JSON.stringify(patch.stickyCta ?? null)}::jsonb, sticky_cta),
-          scheduled_publish_at = COALESCE(${patch.scheduledPublishAt ?? null}, scheduled_publish_at),
-          scheduled_pages    = COALESCE(${JSON.stringify(patch.scheduledPages ?? null)}::jsonb, scheduled_pages),
+          scheduled_publish_at = CASE WHEN ${'scheduledPublishAt' in body}
+            THEN ${patch.scheduledPublishAt ?? null}::timestamptz ELSE scheduled_publish_at END,
+          scheduled_pages    = CASE WHEN ${'scheduledPages' in body}
+            THEN ${JSON.stringify(patch.scheduledPages ?? null)}::jsonb ELSE scheduled_pages END,
           updated_at         = NOW()
         WHERE workspace_id = ${workspaceId}
         RETURNING *

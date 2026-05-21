@@ -56,11 +56,18 @@ async function handler(req, res) {
             sticky_cta: cs.sticky_cta,
           })}::jsonb)
         `;
-        // Promote scheduled_pages → pages. Also clear the schedule and
-        // bump published_at so caches invalidate.
+        // Promote scheduled_pages into BOTH the draft (pages/sections) and
+        // the published snapshot (published_pages/published_sections) — the
+        // public site reads the published_* columns (publicSite.js), so
+        // without setting those the scheduled content would never go live.
+        const schedPages = Array.isArray(row.scheduled_pages) ? row.scheduled_pages : [];
+        const homeSections = (schedPages.find((p) => p.slug === '') || schedPages[0])?.sections || [];
         await sql`
           UPDATE websites SET
-            pages                = ${JSON.stringify(row.scheduled_pages)}::jsonb,
+            pages                = ${JSON.stringify(schedPages)}::jsonb,
+            sections             = ${JSON.stringify(homeSections)}::jsonb,
+            published_pages      = ${JSON.stringify(schedPages)}::jsonb,
+            published_sections   = ${JSON.stringify(homeSections)}::jsonb,
             scheduled_pages      = NULL,
             scheduled_publish_at = NULL,
             launched             = TRUE,
