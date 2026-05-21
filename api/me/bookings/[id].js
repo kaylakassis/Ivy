@@ -301,6 +301,9 @@ async function maybeChargeLateCancel({ booking, myIds }) {
       description: `Late-cancel fee — ${row.service_name || 'session'}`,
       metadata: { booking_id: booking.id, workspace_id: booking.workspace_id, kind: 'late_cancel' },
       statementDescriptor: 'LATE CANCEL FEE',
+      // Shares the `fee-<booking>` key so a late-cancel fee can't be
+      // double-charged on retry / crash-after-charge.
+      idempotencyKey: `fee-${booking.id}`,
     });
     return {
       charged: { amount: feeAmount, paymentIntent: pi.id },

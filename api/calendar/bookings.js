@@ -8,7 +8,7 @@ import { requireUser, ensureWorkspace, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
-  hasConflict, withinAvailability, serializeBooking, VALID_RECURRENCE,
+  hasConflict, losesBookingRace, withinAvailability, serializeBooking, VALID_RECURRENCE,
 } from '../_lib/calendar.js';
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
 import { notifyPackageExhausted } from '../_lib/packageNotify.js';
@@ -184,6 +184,38 @@ export default async function handler(req, res) {
         throw e;
       }
     }
+
+    // Optimistic double-booking resolution. The pre-insert hasConflict()
+    // can be passed by two concurrent requests for the same slot; now
+    // that our row is committed, check whether enough conflicting
+    // bookings rank before us to push us past capacity. If so we lost the
+    // race — undo this booking (and any package credit) and report the
+    // conflict, exactly as the pre-check would have. Owner overrides skip
+    // this just like the pre-check.
+    if (!skipConflictCheck) {
+      const lost = await losesBookingRace({
+        workspaceId, dateISO: date, start, end, serviceId,
+        capacity: serviceCapacity,
+        bookingId: insert.rows[0].id, createdAt: insert.rows[0].created_at,
+      }).catch((e) => {
+        // If the recheck itself errors, don't undo a real booking over a
+        // transient blip — log and keep it (pre-check already passed).
+        // eslint-disable-next-line no-console
+        console.error('[bookings] race recheck failed; keeping booking:', e.message);
+        return false;
+      });
+      if (lost) {
+        await sql`DELETE FROM bookings WHERE id = ${insert.rows[0].id}`.catch(() => {});
+        if (clientPackageId) {
+          try { await restoreCredit({ workspaceId, clientPackageId }); }
+          catch (rErr) { console.error('[bookings] restoreCredit failed:', rErr.message); }
+        }
+        return badRequest(res, serviceCapacity > 1
+          ? 'That class just filled up — please pick another slot'
+          : 'That slot was just booked — please pick another time');
+      }
+    }
+
     // Auto-create the client-side chat thread + send the client a confirmation.
     // Don't notify the owner here (they're the one who just created it).
     notifyNewBooking({ workspaceId, bookingId: insert.rows[0].id, source: 'owner' });

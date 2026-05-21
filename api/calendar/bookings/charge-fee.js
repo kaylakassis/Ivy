@@ -70,6 +70,10 @@ export default async function handler(req, res) {
       description: `${kind === 'late_cancel' ? 'Late-cancel' : 'No-show'} fee — ${b.service_name || 'session'}`,
       metadata: { booking_id: b.id, workspace_id: workspaceId, kind },
       statementDescriptor: kind === 'late_cancel' ? 'LATE CANCEL FEE' : 'NO-SHOW FEE',
+      // Stable per-booking key: a booking is fee-charged at most once, so
+      // a retry (or a crash after Stripe charged but before the UPDATE
+      // below) reuses Stripe's original charge instead of double-billing.
+      idempotencyKey: `fee-${b.id}`,
     });
 
     const upd = await sql`

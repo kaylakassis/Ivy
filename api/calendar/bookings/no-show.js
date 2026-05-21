@@ -67,6 +67,10 @@ export default async function handler(req, res) {
           description: `No-show fee — ${b.service_name || 'session'}`,
           metadata: { booking_id: b.id, workspace_id: workspaceId, kind: 'no_show' },
           statementDescriptor: 'NO-SHOW FEE',
+          // Shares the `fee-<booking>` key with charge-fee.js so a booking
+          // can be fee-charged at most once across both endpoints, even on
+          // retry / crash-after-charge.
+          idempotencyKey: `fee-${b.id}`,
         });
         paymentIntentId = pi.id;
       } catch (err) {

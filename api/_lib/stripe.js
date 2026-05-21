@@ -80,7 +80,7 @@ function formEncode(params, prefix = '') {
   return out.filter(Boolean).join('&');
 }
 
-async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, body }) {
+async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, body, idempotencyKey }) {
   if (!secretKey || typeof secretKey !== 'string') {
     throw new Error('Stripe secret key is required');
   }
@@ -92,6 +92,10 @@ async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, bod
   // using the platform secret key — the auth pattern Account Links
   // (Express) uses instead of OAuth-issued per-account secret keys.
   if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
+  // Stripe-native idempotency: if our function retries (or crashes after
+  // Stripe charged but before we recorded it), passing the same key makes
+  // Stripe return the ORIGINAL result instead of charging again.
+  if (idempotencyKey) headers['Idempotency-Key'] = String(idempotencyKey);
   let payload;
   if (body) {
     payload = formEncode(body);
@@ -453,7 +457,7 @@ export async function detachPaymentMethod({ secretKey, stripeAccount, paymentMet
 export async function chargeOffSession({
   secretKey, stripeAccount, customerId, paymentMethodId,
   amountCents, currency, description, metadata,
-  statementDescriptor,
+  statementDescriptor, idempotencyKey,
 }) {
   if (!customerId || !paymentMethodId) {
     throw new Error('customerId + paymentMethodId required');
@@ -482,7 +486,7 @@ export async function chargeOffSession({
     }
   }
   return stripeFetch('/payment_intents', {
-    method: 'POST', secretKey, stripeAccount, body,
+    method: 'POST', secretKey, stripeAccount, body, idempotencyKey,
   });
 }
 

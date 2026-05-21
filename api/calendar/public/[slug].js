@@ -11,7 +11,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
-  hasConflict, withinAvailability, depositFor, mintVideoRoomUrl,
+  hasConflict, losesBookingRace, withinAvailability, depositFor, mintVideoRoomUrl,
 } from '../../_lib/calendar.js';
 import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail } from '../../_lib/auth.js';
@@ -435,6 +435,27 @@ async function createBooking(req, res) {
       RETURNING *
     `;
     const newBookingRow = insert.rows[0];
+
+    // Optimistic double-booking resolution (see losesBookingRace). The
+    // public page is the hottest self-booking path, so two visitors can
+    // pass the pre-insert hasConflict() for the same slot at once. Now
+    // that our row is committed, yield if enough conflicting bookings
+    // rank before us. Done BEFORE the gift-card debit so a loser doesn't
+    // need to be refunded — just deleted.
+    if (await losesBookingRace({
+      workspaceId, dateISO: date, start, end, serviceId,
+      capacity: serviceCapacity, travelBufferMin: travelBuffer,
+      bookingId: newBookingRow.id, createdAt: newBookingRow.created_at,
+    }).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error('[public booking] race recheck failed; keeping booking:', e.message);
+      return false;
+    })) {
+      await sql`DELETE FROM bookings WHERE id = ${newBookingRow.id}`.catch(() => {});
+      return badRequest(res, serviceCapacity > 1
+        ? 'That class just filled up — please pick another time'
+        : 'That slot was just taken — please pick another time');
+    }
 
     // Atomically debit the gift card after the booking row exists. If
     // the redemption fails (race against another concurrent redemption),

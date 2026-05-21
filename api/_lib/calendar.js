@@ -275,6 +275,48 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
   return sameSlotSameService >= Math.max(1, Number(capacity) || 1);
 }
 
+// Race resolution for concurrent bookings of the same slot.
+//
+// hasConflict() is a SELECT-then-INSERT check, so two requests for the
+// same slot can BOTH pass it before either inserts (a check-then-act
+// race) — at scale this double-books. We can't prevent it with a UNIQUE
+// / EXCLUDE constraint (existing intentional overlaps via
+// skipConflictCheck would make the constraint fail to apply, and the
+// Neon HTTP driver can't hold a transaction to serialize), so instead we
+// resolve OPTIMISTICALLY: every racer inserts, then calls this to see if
+// it lost.
+//
+// A freshly-inserted booking "loses" iff at least `capacity` CONFLICTING
+// bookings rank before it by (created_at, id) — a total, deterministic
+// order, so exactly `capacity` winners survive and every later racer
+// rolls itself back. Because this runs as its own statement it sees the
+// other racers' committed rows. Mirrors hasConflict's overlap rules.
+export async function losesBookingRace({
+  workspaceId, dateISO, start, end, serviceId = null, capacity = 1,
+  bookingId, createdAt, travelBufferMin = 0,
+}) {
+  const buf = Math.max(0, Number(travelBufferMin) || 0);
+  const startBuf = Math.max(0, start - buf);
+  const endBuf   = Math.min(24 * 60, end + buf);
+  const earlier = await sql`
+    SELECT service_id, start_min, end_min FROM bookings
+    WHERE workspace_id = ${workspaceId} AND date = ${dateISO}
+      AND cancelled_at IS NULL
+      AND start_min < ${endBuf} AND end_min > ${startBuf}
+      AND id <> ${bookingId}
+      AND (created_at < ${createdAt} OR (created_at = ${createdAt} AND id < ${bookingId}))
+  `;
+  let sameSlotSameService = 0;
+  for (const r of earlier.rows) {
+    const isExactSlot = r.start_min === start && r.end_min === end;
+    const isSameService = serviceId && r.service_id === serviceId;
+    if (!isSameService || !isExactSlot) return true;
+    sameSlotSameService++;
+  }
+  return sameSlotSameService >= Math.max(1, Number(capacity) || 1);
+}
+
+
 export function isPositiveInt(x, max = 24 * 60) {
   return typeof x === 'number' && Number.isInteger(x) && x >= 0 && x <= max;
 }

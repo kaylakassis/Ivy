@@ -63,6 +63,9 @@ export default async function handler(req, res) {
       description: `Tip — ${b.service_name || 'session'}`,
       metadata: { booking_id: b.id, workspace_id: b.workspace_id, kind: 'tip', source: 'client_portal' },
       statementDescriptor: 'TIP',
+      // Shares the `tip-<booking>` key with the owner tip endpoint so a
+      // booking is tipped at most once, retry-safe.
+      idempotencyKey: `tip-${b.id}`,
     });
     await sql`
       UPDATE bookings SET

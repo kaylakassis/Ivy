@@ -57,6 +57,9 @@ export default async function handler(req, res) {
       description: `Tip — ${b.service_name || 'session'}`,
       metadata: { booking_id: b.id, workspace_id: workspaceId, kind: 'tip' },
       statementDescriptor: 'TIP',
+      // One tip per booking — stable key dedupes retries / crash-after-
+      // charge so the client isn't tipped twice.
+      idempotencyKey: `tip-${b.id}`,
     });
 
     const upd = await sql`
