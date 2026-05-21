@@ -18,7 +18,9 @@ export async function loadPublicSite({ handle, slug }) {
   const requestedSlug = typeof slug === 'string' ? slug.toLowerCase() : '';
 
   const { rows } = await sql`
-    SELECT handle, business_name, template, sections, pages,
+    SELECT handle, business_name, template,
+           COALESCE(published_sections, sections) AS sections,
+           COALESCE(published_pages, pages)       AS pages,
            custom_css, font_pair, published_at, visibility,
            seo_title, seo_description, seo_og_image, favicon_url,
            redirects, exit_intent_popup, sticky_cta

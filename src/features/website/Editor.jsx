@@ -24,7 +24,7 @@ export default function Editor({
   duplicateSection,
   currentPage, currentPageId, setCurrentPageId,
   addPage, removePage, renamePage, movePage,
-  reset, publish, saving, saveErr,
+  reset, publish, saving, saveErr, hasUnpublishedChanges,
   undo, redo, canUndo, canRedo,
 }) {
   // Sections we're rendering / editing come from the CURRENT page,
@@ -279,6 +279,12 @@ export default function Editor({
         >
           <Icons.Arrow size={13} sw={2} />
           {publishing ? 'Publishing…' : site.publishedAt ? 'Republish' : 'Publish'}
+          {hasUnpublishedChanges && site.publishedAt && !publishing && (
+            <span title="You have unpublished changes" style={{
+              width: 7, height: 7, borderRadius: 99, marginLeft: 4,
+              background: 'var(--warn)', display: 'inline-block',
+            }}/>
+          )}
         </button>
 
         {(saving || saveErr || publishErr) && (
@@ -319,6 +325,25 @@ export default function Editor({
           >
             <Icons.Image size={12} /> QR
           </button>
+        </div>
+      )}
+
+      {/* Unpublished-changes cue: edits are saved as a draft and do NOT
+          appear on the live site until the owner clicks Republish. Without
+          this, the new draft/publish behavior would look like "my edits
+          aren't showing." */}
+      {site.publishedAt && hasUnpublishedChanges && (
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 8,
+          padding: '8px 24px', fontSize: 12,
+          background: 'color-mix(in srgb, var(--warn) 12%, var(--surface))',
+          color: 'var(--warn)',
+          borderBottom: '1px solid color-mix(in srgb, var(--warn) 35%, transparent)',
+        }}>
+          <Icons.Edit size={13}/>
+          <span style={{ color: 'var(--fg-2)' }}>
+            You have unpublished edits — saved as a draft. Click <strong>Republish</strong> to push them live.
+          </span>
         </div>
       )}
       {siteQrOpen && publicUrl && (

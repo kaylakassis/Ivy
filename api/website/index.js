@@ -35,8 +35,18 @@ const SLUG_RE   = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 
 function serialize(row) {
   if (!row) return null;
+  // Unpublished-changes cue: only meaningful once the site is live. True
+  // when the draft (sections/pages) differs from the published snapshot.
+  // (published_* is copied from the draft on Publish, so they match until
+  // the next edit.) Stable key order — both come from the same source.
+  const stable = (v) => JSON.stringify(v ?? null);
+  const hasUnpublishedChanges = !!row.published_at && (
+    stable(row.sections) !== stable(row.published_sections ?? row.sections)
+    || stable(row.pages) !== stable(row.published_pages ?? row.pages)
+  );
   return {
     id:            row.id,
+    hasUnpublishedChanges,
     handle:        row.handle,
     businessName:  row.business_name,
     template:      row.template,

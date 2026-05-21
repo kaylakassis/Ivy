@@ -117,6 +117,9 @@ export function useWebsite() {
   const [loading, setLoading] = useState(true);
   const [loadErr, setLoadErr] = useState(null);
   const [currentPageId, setCurrentPageId] = useState(null);
+  // True when the live site is published but the draft has edits not yet
+  // pushed live (drives the "unpublished changes → Publish" cue).
+  const [dirty, setDirty] = useState(false);
   const loadedRef = useRef(false);
   const { schedule, flush, saving, error: saveErr } = useDebouncedPut();
 
@@ -145,6 +148,7 @@ export function useWebsite() {
         if (!live) return;
         const n = normalize(r.website);
         setSite(n);
+        setDirty(!!r.website?.hasUnpublishedChanges);
         const home = n.pages.find((p) => p.slug === '') || n.pages[0];
         if (home) setCurrentPageId(home.id);
         loadedRef.current = true;
@@ -155,6 +159,7 @@ export function useWebsite() {
   }, []);
 
   const scheduleWrite = useCallback((next) => {
+    setDirty(true); // any draft edit means there are unpublished changes
     const home = next.pages.find((p) => p.slug === '') || next.pages[0];
     schedule({
       handle:        next.handle,
@@ -399,11 +404,13 @@ export function useWebsite() {
     await flush();
     const r = await api.post('/website/publish');
     setSite((s) => ({ ...s, launched: true, publishedAt: r.published_at }));
+    setDirty(false); // draft is now the published snapshot
     return r;
   }, [flush]);
 
   return {
     site, loading, loadErr, saving, saveErr,
+    hasUnpublishedChanges: dirty,
     currentPage, currentPageId, setCurrentPageId,
     addPage, removePage, renamePage, movePage, movePageTo,
     set, setSection, addSection, removeSection, moveSection, moveSectionTo, duplicateSection,

@@ -89,6 +89,12 @@ CREATE INDEX IF NOT EXISTS idx_websites_handle ON websites(handle);
 -- New sites populate pages from day one with the home page having
 -- slug = empty string (i.e. the root URL).
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS pages JSONB NOT NULL DEFAULT '[]'::jsonb;
+-- Draft vs published separation. The editor auto-saves drafts into
+-- sections/pages; these hold the snapshot served to the public, written
+-- ONLY on Publish. Nullable so already-published sites fall back to the
+-- live columns (COALESCE in publicSite.js) until their next Publish.
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS published_sections JSONB;
+ALTER TABLE websites ADD COLUMN IF NOT EXISTS published_pages JSONB;
 -- Owner-supplied CSS injected into the rendered site. The public
 -- renderer wraps it in a style tag inside the var()-themed site shell
 -- so it scopes naturally to within the site wrapper.

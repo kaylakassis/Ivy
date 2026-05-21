@@ -56,9 +56,11 @@ export default async function handler(req, res) {
 
     const updated = await sql`
       UPDATE websites SET
-        launched     = TRUE,
-        published_at = NOW(),
-        updated_at   = NOW()
+        launched           = TRUE,
+        published_at       = NOW(),
+        published_sections = sections,
+        published_pages    = pages,
+        updated_at         = NOW()
       WHERE workspace_id = ${workspaceId}
       RETURNING handle, published_at
     `;
