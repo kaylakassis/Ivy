@@ -9,6 +9,7 @@ import React, { Suspense, lazy } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import AppShell from './components/layout/AppShell.jsx';
 import ViewToggle from './components/ViewToggle.jsx';
+import PWAPrompts from './components/PWAPrompts.jsx';
 import RequireAuth from './features/auth/RequireAuth.jsx';
 import AuthPage from './features/auth/AuthPage.jsx';
 import EarlyAccessGate from './features/auth/EarlyAccessGate.jsx';
@@ -258,6 +259,7 @@ export default function App() {
       </ErrorBoundary>
     </Suspense>
     <ViewToggle/>
+    <PWAPrompts/>
     </>
   );
 }

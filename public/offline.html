@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>THRYVE — Offline</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0D0E0C" />
+  <style>
+    :root { color-scheme: dark; }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body {
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px; background: #0D0E0C; color: #F6F5F1;
+      font-family: -apple-system, system-ui, "Inter", Segoe UI, Roboto, sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    .card {
+      max-width: 380px; width: 100%; text-align: center;
+      padding: 32px 28px; border-radius: 16px;
+      background: #16170F; border: 1px solid #2A2B22;
+    }
+    .mark {
+      width: 56px; height: 56px; border-radius: 14px; margin: 0 auto 18px;
+      background: #2E3168; display: flex; align-items: center; justify-content: center;
+      font-family: Fraunces, Georgia, serif; font-size: 34px; font-weight: 500; color: #F6F5F1;
+    }
+    h1 { margin: 0 0 8px; font-size: 20px; font-weight: 500; font-family: Fraunces, Georgia, serif; }
+    p { margin: 0 0 22px; font-size: 14px; line-height: 1.55; color: #A7A89C; }
+    button {
+      appearance: none; border: 0; cursor: pointer;
+      padding: 11px 22px; border-radius: 10px; font-size: 14px; font-weight: 600;
+      background: #2E3168; color: #F6F5F1;
+    }
+    button:active { transform: translateY(1px); }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="mark">t</div>
+    <h1>You're offline</h1>
+    <p>THRYVE can't reach the network right now. Pages you've already
+       opened still work — reconnect to load anything new.</p>
+    <button onclick="location.reload()">Try again</button>
+  </div>
+</body>
+</html>
