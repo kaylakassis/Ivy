@@ -7,6 +7,7 @@
 // save it as a file rather than rendering inline.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { myClientIds } from '../_lib/clientPortal.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, serverError } from '../_lib/json.js';
 
@@ -88,6 +89,34 @@ export default async function handler(req, res) {
     };
     const stripRows = (rows) => Array.isArray(rows) ? rows.map(stripSensitive) : rows;
 
+    // Client-side records: rows where THIS user is a CUSTOMER of other
+    // businesses (their portal data). Without this a client-only user —
+    // who never owns a real workspace — would download an export with
+    // none of their actual data (bookings/invoices/documents/messages
+    // they hold as a client elsewhere). Covers the portability promise.
+    const myClients = await myClientIds(user).catch(() => []);
+    const myIds = myClients.map((c) => c.clientId);
+    let clientPortal = null;
+    if (myIds.length) {
+      const [cpBookings, cpInvoices, cpDocs, cpThreads, cpMessages] = await Promise.all([
+        sql`SELECT * FROM bookings   WHERE client_id = ANY(${myIds})`,
+        sql`SELECT * FROM invoices   WHERE client_id = ANY(${myIds})`,
+        sql`SELECT * FROM documents  WHERE recipient_client_id = ANY(${myIds})`,
+        sql`SELECT * FROM message_threads WHERE client_id = ANY(${myIds})`,
+        sql`SELECT m.* FROM messages m
+              JOIN message_threads t ON t.id = m.thread_id
+             WHERE t.client_id = ANY(${myIds})`,
+      ]);
+      clientPortal = {
+        businesses:      myClients,
+        bookings:        stripRows(cpBookings.rows),
+        invoices:        stripRows(cpInvoices.rows),
+        documents:       stripRows(cpDocs.rows),
+        message_threads: stripRows(cpThreads.rows),
+        messages:        stripRows(cpMessages.rows),
+      };
+    }
+
     const payload = {
       thryve_export_version: 1,
       exported_at: new Date().toISOString(),
@@ -112,6 +141,7 @@ export default async function handler(req, res) {
       ivy_sessions:       stripRows(ivySessions.rows),
       ivy_messages:       stripRows(ivyMessages.rows),
       ivy_usage:          stripRows(ivyUsage.rows),
+      client_portal:      clientPortal,
     };
 
     const filename = `thryve-export-${new Date().toISOString().slice(0, 10)}.json`;

@@ -152,11 +152,12 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
 
       <button className="btn btn-outline" aria-label="Messages"
         onClick={() => navigate('/messages')}
+        title="Messages"
         style={{
           position: 'relative',
           padding: isMobile ? 8 : undefined,
         }}>
-        <Icons.Bell size={isMobile ? 16 : 15}/>
+        <Icons.Chat size={isMobile ? 16 : 15}/>
       </button>
 
       {children}

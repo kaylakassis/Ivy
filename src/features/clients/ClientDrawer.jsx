@@ -174,7 +174,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
           )}
 
           {/* KPIs — lifetime value editable, others read-only */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
             <EditableMoneyStat
               label="Lifetime"
               value={client.lifetimeValue || 0}
@@ -1202,7 +1202,7 @@ function ClientAnalyticsBlock({ client, windowDays }) {
     <div style={{ marginTop: 18 }}>
       <Section label="Activity"/>
       <div style={{
-        display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8,
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 8,
         marginTop: 6,
       }}>
         <MiniStat label="Show rate"   value={showRatePct}/>
