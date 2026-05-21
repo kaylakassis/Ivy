@@ -13,7 +13,7 @@ import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
-import { serializeBooking, hasConflict, withinAvailability } from '../../_lib/calendar.js';
+import { serializeBooking, hasConflict, losesBookingRace, withinAvailability } from '../../_lib/calendar.js';
 import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
@@ -200,6 +200,30 @@ export default async function handler(req, res) {
            RETURNING *`,
           [id, myIds, newDate, newStart, newEnd],
         );
+
+        // Optimistic double-booking resolution (see losesBookingRace).
+        // hasConflict above is check-then-act; on a lost race REVERT to
+        // the old slot rather than deleting the client's booking.
+        const lostRace = await losesBookingRace({
+          workspaceId: booking.workspace_id, dateISO: newDate,
+          start: newStart, end: newEnd, serviceId: booking.service_id,
+          capacity, bookingId: booking.id, createdAt: updated.rows[0].created_at,
+        }).catch((e) => {
+          // eslint-disable-next-line no-console
+          console.error('[me/bookings reschedule] race recheck failed; keeping move:', e.message);
+          return false;
+        });
+        if (lostRace) {
+          const oldDateISO = booking.date instanceof Date
+            ? booking.date.toISOString().slice(0, 10) : booking.date;
+          await sql.query(
+            `UPDATE bookings SET date = $3::date, start_min = $4, end_min = $5
+               WHERE id = $1 AND client_id = ANY($2)`,
+            [id, myIds, oldDateISO, booking.start_min, booking.end_min],
+          ).catch(() => {});
+          return badRequest(res, 'That slot is no longer available — pick another time.');
+        }
+
         await postRescheduleNote({
           workspaceId: booking.workspace_id,
           clientId: booking.client_id,

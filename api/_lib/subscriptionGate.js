@@ -27,20 +27,32 @@ export async function requireActiveSubscription(workspaceId, req, res) {
   }
   try {
     const { rows } = await sql`
-      SELECT subscription_status FROM workspaces WHERE id = ${workspaceId}
+      SELECT subscription_status, trial_ends_at FROM workspaces WHERE id = ${workspaceId}
     `;
     const status = rows[0]?.subscription_status;
-    if (!status || WRITE_ALLOWED.has(status)) return true;
+    if (!status) return true;
 
-    // Suspended or cancelled. Surface a clear payload so the UI
-    // can render a "your subscription needs attention" banner +
+    // Trial is only valid until it expires. The status column stays
+    // 'trialing' forever (no cron flips it), so we MUST check the clock
+    // here — otherwise a workspace that never paid keeps write access
+    // indefinitely. An expired trial is treated like 'cancelled'.
+    const trialExpired = status === 'trialing'
+      && rows[0].trial_ends_at
+      && new Date(rows[0].trial_ends_at).getTime() <= Date.now();
+
+    if (!trialExpired && WRITE_ALLOWED.has(status)) return true;
+
+    // Suspended, cancelled, or an expired trial. Surface a clear payload
+    // so the UI can render a "your subscription needs attention" banner +
     // route to /account/billing.
     res.status(402).json({
       error: 'subscription-required',
-      status,
+      status: trialExpired ? 'trial-expired' : status,
       message: status === 'suspended'
         ? 'Your subscription is suspended. Update your payment method to restore access.'
-        : 'Your subscription is no longer active.',
+        : trialExpired
+          ? 'Your free trial has ended. Subscribe to keep creating.'
+          : 'Your subscription is no longer active.',
     });
     return false;
   } catch (err) {

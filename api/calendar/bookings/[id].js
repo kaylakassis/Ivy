@@ -6,7 +6,7 @@
 import { sql } from '../../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
-import { serializeBooking, hasConflict, withinAvailability, VALID_RECURRENCE } from '../../_lib/calendar.js';
+import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, VALID_RECURRENCE } from '../../_lib/calendar.js';
 import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
@@ -128,6 +128,38 @@ export default async function handler(req, res) {
           WHERE id = ${id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
+
+        // Optimistic double-booking resolution. hasConflict above is a
+        // check-then-act, so two concurrent reschedules (or a reschedule
+        // racing a fresh booking) into the same slot can both pass it.
+        // Now that the move is committed, yield if enough conflicting
+        // bookings rank before us — and on loss REVERT to the old slot
+        // (unlike a create, the row must survive at its prior time).
+        if (!skipConflict) {
+          const lost = await losesBookingRace({
+            workspaceId, dateISO: newDate, start: newStart, end: newEnd,
+            serviceId: booking.service_id, capacity,
+            bookingId: booking.id, createdAt: updated.rows[0].created_at,
+          }).catch((e) => {
+            // eslint-disable-next-line no-console
+            console.error('[bookings reschedule] race recheck failed; keeping move:', e.message);
+            return false;
+          });
+          if (lost) {
+            const oldDateISO = booking.date instanceof Date
+              ? booking.date.toISOString().slice(0, 10) : booking.date;
+            await sql`
+              UPDATE bookings SET
+                date = ${oldDateISO}::date, start_min = ${booking.start_min},
+                end_min = ${booking.end_min}, updated_at = NOW()
+              WHERE id = ${id} AND workspace_id = ${workspaceId}
+            `.catch(() => {});
+            return badRequest(res, capacity > 1
+              ? 'That class is full or the slot conflicts with another booking'
+              : 'That slot was just taken — please pick another time');
+          }
+        }
+
         syncOnBookingUpdated({ workspaceId, bookingId: id });
         // Fire-and-forget client notification with old slot in the
         // "Was: ..." line. source='owner' so the email greeting

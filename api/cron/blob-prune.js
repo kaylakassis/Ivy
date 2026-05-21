@@ -22,7 +22,8 @@
 import { list, del } from '@vercel/blob';
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
-import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { isSuperAdminBySession } from '../_lib/admin.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 
 const ORPHAN_GRACE_HOURS = 24;     // skip blobs uploaded in the last day
@@ -33,6 +34,15 @@ async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
+  // Auth: Vercel Cron (Bearer CRON_SECRET), admin secret, or super-admin
+  // session. Deletes Blob objects + DB rows, so never run unauthenticated.
+  const cronAuth = !!process.env.CRON_SECRET
+    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
+  const adminAuth = process.env.ADMIN_SECRET
+    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
+  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
+  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+
   if (!process.env.BLOB_READ_WRITE_TOKEN) {
     return ok(res, { ok: true, skipped: true, reason: 'no BLOB_READ_WRITE_TOKEN' });
   }

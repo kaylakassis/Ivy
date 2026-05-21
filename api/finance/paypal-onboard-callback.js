@@ -2,7 +2,7 @@
 // PayPal redirects here when the owner finishes (or aborts) the
 // merchant onboarding flow. We confirm the merchant id, fetch their
 // seller status, and persist the connection.
-import { requireUser } from '../_lib/auth.js';
+import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { fetchSellerStatus, persistConnection, paypalEnv } from '../_lib/payments/paypal.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
@@ -24,26 +24,26 @@ export default async function handler(req, res) {
     // crafted ?wid=a&wid=b URL.
     const q = req.query || {};
     const first = (v) => Array.isArray(v) ? v[0] : v;
-    const wid                  = first(q.wid);
     const merchantIdInPayPal   = first(q.merchantIdInPayPal);
     const permissionsGranted   = first(q.permissionsGranted);
-    if (!wid) return back('error', 'Missing workspace context');
     if (!merchantIdInPayPal) return back('error', 'PayPal did not return a merchant id');
     if (permissionsGranted === 'false') return back('error', 'PayPal permissions were not granted');
 
-    // Owner must be logged in to land here — we don't trust the wid
-    // param alone since this endpoint is unauthenticated by URL design.
-    // requireUser would 401 anyone not signed in; we check the session
-    // matches the workspace via a quick DB hop.
+    // Owner must be logged in. CRITICAL: derive the workspace from the
+    // authenticated session — NEVER from a URL param. Trusting a `wid`
+    // query value would let anyone attach their own PayPal merchant to a
+    // victim's workspace (redirecting that victim's payouts), so the
+    // attacker-controllable param is ignored entirely.
     const user = await requireUser(req, res);
     if (!user) return;
+    const workspaceId = await ensureWorkspace(user.id);
 
     let sellerStatus = null;
     try { sellerStatus = await fetchSellerStatus({ merchantId: merchantIdInPayPal }); }
     catch { /* non-fatal — connection still records, payments_enabled stays false */ }
 
     await persistConnection({
-      workspaceId: wid,
+      workspaceId,
       merchantId: merchantIdInPayPal,
       environment: paypalEnv(),
       label: sellerStatus?.legal_name || 'PayPal',
