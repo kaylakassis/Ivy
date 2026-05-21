@@ -48,10 +48,15 @@ async function handler(req, res) {
         LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
         LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
        WHERE b.cancelled_at IS NULL
+         AND b.no_show_at IS NULL
          AND b.review_requested_at IS NULL
          AND b.client_email IS NOT NULL AND b.client_email <> ''
          AND b.date BETWEEN CURRENT_DATE - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
                         AND CURRENT_DATE - ${MIN_DAYS_AFTER} * INTERVAL '1 day'
+         -- Only request reviews for sessions that actually happened
+         -- (completion_log keyed by occurrence date) — not no-shows or
+         -- bookings that were never marked complete.
+         AND jsonb_exists(b.completion_log, b.date::text)
          AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = b.id)
        ORDER BY b.date DESC
        LIMIT ${MAX_PER_RUN}

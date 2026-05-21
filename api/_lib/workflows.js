@@ -541,7 +541,12 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
         LEFT JOIN clients c ON c.id = b.client_id
        WHERE b.workspace_id = ${wf.workspace_id}
          AND b.cancelled_at IS NULL
+         AND b.no_show_at IS NULL
          AND b.date = CURRENT_DATE - (${days}::int || ' days')::interval
+         -- Only ACTUALLY-completed occurrences (completion_log keyed by
+         -- occurrence date). Without this, "after a booking is completed"
+         -- automations fired on the scheduled date for no-shows too.
+         AND jsonb_exists(b.completion_log, b.date::text)
        LIMIT ${Math.max(1, Math.min(100, remaining))}
     `;
     return runWithConcurrency(bookings, 10, async (b) => {

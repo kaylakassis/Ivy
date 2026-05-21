@@ -159,3 +159,35 @@ export async function fetchOwnedGoal({ id, workspaceId }) {
   const { rows } = await sql`SELECT * FROM goals WHERE id = ${id} AND workspace_id = ${workspaceId}`;
   return rows[0] || null;
 }
+
+// Auto-complete "smart" tasks whose triggering activity has happened.
+// The UI shows these at progress=100 with an "auto" badge (see
+// TASK_SELECT_WITH_PROGRESS), but nothing ever actually marked them done —
+// so the badge was unreachable and owners still ticked every one by hand.
+// Run from the workflows cron. One set-based UPDATE across all workspaces;
+// mirrors the exact progress=100 conditions. Returns the count flipped.
+export async function autoCompleteSmartTasks() {
+  const { rowCount } = await sql`
+    UPDATE tasks t
+       SET done = TRUE, completed_auto = TRUE,
+           completed_at = NOW(), updated_at = NOW()
+     WHERE t.done = FALSE
+       AND t.client_id IS NOT NULL
+       AND (
+         (t.type = 'message-client' AND EXISTS (
+           SELECT 1 FROM message_threads mt
+             JOIN messages m ON m.thread_id = mt.id
+            WHERE mt.workspace_id = t.workspace_id AND mt.client_id = t.client_id
+              AND m.sender = 'biz' AND m.created_at >= t.created_at))
+         OR (t.type = 'send-invoice' AND EXISTS (
+           SELECT 1 FROM invoices i
+            WHERE i.workspace_id = t.workspace_id AND i.client_id = t.client_id
+              AND i.status <> 'draft' AND i.sent_at >= t.created_at))
+         OR (t.type = 'send-document' AND EXISTS (
+           SELECT 1 FROM documents d
+            WHERE d.workspace_id = t.workspace_id AND d.recipient_client_id = t.client_id
+              AND d.sent_at >= t.created_at))
+       )
+  `;
+  return rowCount || 0;
+}

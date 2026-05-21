@@ -20,6 +20,7 @@
 // $CRON_SECRET from Vercel cron, x-admin-secret for manual testing,
 // or a super-admin session for the "Run now" button in /admin.
 import { evaluateScheduledWorkflows, resumeWaitingWorkflows } from '../_lib/workflows.js';
+import { autoCompleteSmartTasks } from '../_lib/goals.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -37,7 +38,14 @@ async function handler(req, res) {
     await ensureSchemaApplied();
     const scheduled = await evaluateScheduledWorkflows({ limit: 500 });
     const resumed   = await resumeWaitingWorkflows({ limit: 200 });
-    return ok(res, { fired: scheduled.fired, resumed: resumed.resumed });
+    // Flip "smart" tasks whose triggering activity has occurred (message
+    // sent / invoice sent / document sent) to done. Best-effort.
+    const autoTasks = await autoCompleteSmartTasks().catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error('[cron/workflows] autoCompleteSmartTasks failed:', e.message);
+      return 0;
+    });
+    return ok(res, { fired: scheduled.fired, resumed: resumed.resumed, autoCompletedTasks: autoTasks });
   } catch (err) {
     return serverError(res, err);
   }
