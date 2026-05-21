@@ -7,7 +7,10 @@ import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 
 const LIVE = [
-  { name: 'Stripe',           icon: 'Dollar',   sub: 'Payments + Connect - your money, your account.' },
+  { name: 'Stripe',           icon: 'Dollar',   sub: 'The full toolkit: card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
+  { name: 'Square',           icon: 'Receipt',  sub: 'Connect via OAuth for hosted checkout + refunds, paid into your Square account.' },
+  { name: 'PayPal',           icon: 'Dollar',   sub: 'Hosted checkout (incl. Venmo) + refunds, paid into your PayPal account.' },
+  { name: 'Video meetings',   icon: 'Camera',   sub: 'Virtual bookings auto-mint a private video room - or drop in your own link.' },
   { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in THRYVE.' },
   { name: 'Apple Calendar',   icon: 'Calendar', sub: 'CalDAV subscription. Read-only view of your THRYVE schedule.' },
   { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Same as Google - two-way sync via iCal feed.' },
@@ -15,15 +18,15 @@ const LIVE = [
   { name: 'Embeddable widget', icon: 'Doc',     sub: 'One-line script to embed booking on any external site.' },
   { name: 'Custom domain',    icon: 'Globe',    sub: 'Point your domain at THRYVE; DNS verification built-in.' },
   { name: 'CSV import',       icon: 'FileIcon', sub: 'Bring clients, bookings, invoices from any other tool.' },
-  { name: 'Email (SMTP)',     icon: 'Mail',     sub: 'Transactional emails sent from your branded domain when configured.' },
-  { name: 'SMS (Twilio)',     icon: 'Phone',    sub: 'Booking reminders + two-way client SMS.' },
+  { name: 'Email (Resend)',   icon: 'Mail',     sub: 'Transactional + reminder email sent from your branded domain when configured.' },
+  { name: 'SMS (Twilio)',     icon: 'Phone',    sub: 'Booking reminders + automated SMS steps in your workflows.' },
 ];
 
 export default function IntegrationsPage() {
   useEffect(() => {
     document.title = 'Integrations - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'THRYVE integrates with Stripe, Google Calendar, Twilio SMS, webhooks, and more. Plus a one-line embeddable booking widget for any external site.');
+    if (desc) desc.setAttribute('content', 'THRYVE connects to Stripe, Square & PayPal payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.');
   }, []);
   return (
     <MarketingShell>

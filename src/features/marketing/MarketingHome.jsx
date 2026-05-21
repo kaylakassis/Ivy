@@ -16,15 +16,62 @@ import { MarketingMobileMenu, AudienceToggle } from './MarketingShell.jsx';
 import { api } from '../../lib/api.js';
 import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
 
-const FEATURES = [
-  { icon: 'Users',    title: 'Clients',         body: 'CRM with stages, notes, lifetime value, and a leads pipeline.' },
-  { icon: 'Calendar', title: 'Calendar',        body: 'Day/week/month views, recurring sessions, public booking link, reminders. Set services as in-person, mobile (you travel), or online.' },
-  { icon: 'Dollar',   title: 'Invoicing',       body: 'Branded invoices, recurring billing, time tracking, expenses - all under one money tab.' },
-  { icon: 'Lock',     title: 'Card on file',    body: "Clients save a card once. Auto-charge late-cancel + no-show fees, accept tips, and never chase money again." },
-  { icon: 'Heart',    title: 'Memberships',     body: 'Set up monthly tiers; clients subscribe straight from your booking page. Recurring revenue, no extra tools.' },
-  { icon: 'Doc',      title: 'Documents',       body: 'Multi-signer waivers, agreements, and intake forms - clients sign with one click. PDFs land flattened with a tamper-evident audit page.' },
-  { icon: 'Chat',     title: 'Messaging',       body: 'Two-way native chat between you and your clients. Prospects can ask questions before they book.' },
-  { icon: 'Spark',    title: 'Ivy - AI coach',  body: 'Built-in business coach grounded in your real numbers. Every workspace is private.' },
+// Feature showcase, grouped the way an owner actually thinks about the
+// day: get booked → get paid → keep clients → grow. Each band maps a
+// real, shipped capability — keep these honest against the app.
+const CATEGORIES = [
+  {
+    kicker: 'Get booked',
+    title: 'A booking page that fills itself.',
+    blurb: 'Share one link. Clients self-book around your real availability while you sleep — no back-and-forth, no double-bookings.',
+    items: [
+      { icon: 'Calendar', title: 'Online booking page', body: 'Your own link with services, durations, prices, add-ons, deposits, and custom intake questions.' },
+      { icon: 'Repeat',   title: 'Smart calendar + sync', body: 'Day/week/month, recurring sessions, buffers, and two-way Google Calendar sync. Apple & Outlook via feed.' },
+      { icon: 'Users',    title: 'Group classes & capacity', body: 'Sell 1:1s or set a class size and let a single slot book up to capacity.' },
+      { icon: 'Bell',     title: 'Email + SMS reminders', body: 'Automatic multi-step reminders over email and text, so no-shows quietly disappear.' },
+      { icon: 'Clock',    title: 'Waitlists', body: 'Slot full? Clients join a waitlist and get auto-promoted the moment someone cancels.' },
+      { icon: 'Camera',   title: 'In-person, mobile or virtual', body: 'Travel-time buffers for mobile work; virtual sessions auto-mint a private video room.' },
+    ],
+  },
+  {
+    kicker: 'Get paid',
+    title: 'Money in, money out — handled.',
+    blurb: 'Invoices, subscriptions, deposits, and tips in one place. Connect Stripe and stop chasing payments.',
+    items: [
+      { icon: 'Receipt', title: 'Invoices, quotes & recurring', body: 'Branded invoices and estimates that convert on accept, plus recurring billing on autopilot.' },
+      { icon: 'Lock',    title: 'Card on file & auto-charge', body: 'With Stripe, clients save a card once — auto-charge deposits, late-cancel & no-show fees, and tips.' },
+      { icon: 'Heart',   title: 'Memberships & packages', body: 'Sell monthly tiers and prepaid session packs; credits draw down automatically as clients book.' },
+      { icon: 'Gift',    title: 'Gift cards', body: 'Sell gift cards that redeem against bookings and invoices, with a full balance + redemption log.' },
+      { icon: 'Clock',   title: 'Time tracking & expenses', body: 'Run a timer, bill it straight into an invoice, and log Schedule-C expenses with receipts.' },
+      { icon: 'Bank',    title: 'Tax & accounting exports', body: 'One-click Schedule-C summary and QuickBooks / Xero CSV when it’s time to file.' },
+    ],
+  },
+  {
+    kicker: 'Keep clients close',
+    title: 'A relationship, not a transaction.',
+    blurb: 'Every client gets a free portal, a private thread, and a history that makes them feel known.',
+    items: [
+      { icon: 'Users',  title: 'CRM & pipeline', body: 'Stages, tags, notes, lifetime value, attachments, and before/after galleries on every client.' },
+      { icon: 'Home',   title: 'Free client portal', body: 'One login across every business they book with — appointments, invoices, documents, messages.' },
+      { icon: 'Chat',   title: 'Two-way messaging', body: 'A private thread with each client. Prospects ask before they book; you keep the whole history.' },
+      { icon: 'Doc',    title: 'Documents & e-sign', body: 'Waivers, agreements, and intake forms with multi-signer e-signatures and tamper-evident PDFs.' },
+      { icon: 'Trophy', title: 'Verified reviews', body: 'Booking-tied reviews requested automatically. Reply publicly and feed your directory rating.' },
+      { icon: 'Gift',   title: 'Rewards & referrals', body: 'Loyalty rules for visits, spend, and referrals — clients earn and redeem automatically.' },
+    ],
+  },
+  {
+    kicker: 'Grow on autopilot',
+    title: 'The parts that run while you work.',
+    blurb: 'A real website, automations that follow up for you, and an AI that acts on your business — not just chats.',
+    items: [
+      { icon: 'Globe',    title: 'Website builder', body: '35+ section types, 15 designs, custom domain, SEO, and version history — your booking site, no separate tool.' },
+      { icon: 'Repeat',   title: 'Workflows & automation', body: 'Welcome sequences, win-backs, birthdays — fire emails, texts, tasks, and docs from no-code rules.' },
+      { icon: 'Spark',    title: 'Ivy, your AI operator', body: 'Grounded in your real numbers, Ivy answers and acts — send an invoice, message a quiet client, book a slot.' },
+      { icon: 'Trending', title: 'Goals & dashboard', body: 'Track revenue, clients, and sessions against goals on a dashboard that surfaces what needs you.' },
+      { icon: 'FileIcon', title: 'Projects', body: 'Group bookings, invoices, quotes, and documents into one engagement for bigger pieces of work.' },
+      { icon: 'Users',    title: 'Team & staff', body: 'Add staff with their own colors, rates, and commissions; assign bookings and filter the calendar per person.' },
+    ],
+  },
 ];
 
 // Derive the home's BuiltFor cards from the shared verticalsData so
@@ -61,7 +108,7 @@ const TESTIMONIALS = [
 const FAQ = [
   {
     q: 'Do you take a cut of my payments?',
-    a: "No. Stripe takes their standard processing fee, that's it. Money goes from your client straight to your Stripe account - we never touch it.",
+    a: "No - we never touch your money. Payments go straight to your own processor account. Connect Stripe for the full toolkit (card on file, auto-charged deposits, late-cancel & no-show fees, and tips), or use Square or PayPal for checkout and refunds. You just pay your processor's standard fee; THRYVE adds zero markup.",
   },
   {
     q: 'Can I bring my existing clients in?',
@@ -117,7 +164,7 @@ export default function MarketingHome() {
       });
     };
     document.title = 'THRYVE - the all-in-one business OS for solo entrepreneurs';
-    const desc = "Clients, calendar, invoicing, messages, docs, goals, rewards, and an AI coach - all in one workspace. Built for massage therapists, stylists, trainers, coaches, and anyone running a small business solo.";
+    const desc = "Online booking, payments, a real website, client messaging, documents & e-sign, automations, reviews, and an AI that acts on your numbers - all in one workspace. Built for massage therapists, stylists, trainers, coaches, and anyone running a small business solo.";
     const url  = typeof window !== 'undefined' ? window.location.origin : 'https://getthryve.ai';
     upsert('name', 'description',          desc);
     upsert('property', 'og:title',         'THRYVE - the all-in-one business OS');
@@ -343,23 +390,23 @@ function Hero() {
         fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
         textTransform: 'uppercase', marginBottom: 24,
       }}>
-        <Icons.Spark size={12} sw={2}/> Now with native AI coaching
+        <Icons.Spark size={12} sw={2}/> Now with Ivy — AI that runs the busywork
       </div>
 
       <h1 className="page-title" style={{
         margin: 0, fontSize: 'clamp(34px, 6vw, 56px)',
-        lineHeight: 1.05, maxWidth: 720, marginInline: 'auto',
+        lineHeight: 1.05, maxWidth: 740, marginInline: 'auto',
       }}>
-        The all-in-one business OS<br/>for solo entrepreneurs.
+        Run your whole business<br/>from one place.
       </h1>
 
       <p style={{
-        margin: '20px auto 0', maxWidth: 580,
+        margin: '20px auto 0', maxWidth: 600,
         fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
       }}>
-        Clients, calendar, invoicing, messages, docs, goals, rewards, and an AI coach
-        - all inside one workspace that stays yours. No bouncing between five apps,
-        no per-tool subscriptions.
+        Booking, payments, a real website, client messaging, documents, automations,
+        and an AI that acts on your numbers — all in one workspace that stays yours.
+        No bouncing between five apps, no per-tool subscriptions.
       </p>
 
       <div style={{
@@ -454,7 +501,7 @@ function ProductPreview() {
 }
 
 function MockSidebar() {
-  const items = ['Dashboard', 'Clients', 'Calendar', 'Finance', 'Messages', 'Documents', 'Ivy Pro'];
+  const items = ['Dashboard', 'Clients', 'Projects', 'Calendar', 'Finance', 'Goals & Tasks', 'Workflows', 'Rewards', 'Messages', 'Documents', 'Website', 'Ivy Pro'];
   return (
     <div style={{
       background: 'var(--surface-2)', padding: 14,
@@ -826,35 +873,52 @@ function PhoneMockup() {
 
 function Features() {
   return (
-    <section id="features" style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px' }}>
-      <div style={{ textAlign: 'center', marginBottom: 36 }}>
+    <section id="features" style={{ maxWidth: 1100, margin: '0 auto', padding: '48px 24px 24px' }}>
+      <div style={{ textAlign: 'center', marginBottom: 8 }}>
         <div className="metric-label">Everything you need</div>
-        <h2 className="page-title" style={{ margin: '8px 0 0', fontSize: 32 }}>
-          One workspace. Every part of running your business.
+        <h2 className="page-title" style={{ margin: '8px auto 0', fontSize: 32, maxWidth: 640 }}>
+          One workspace for every part of running your business.
         </h2>
+        <p style={{ margin: '12px auto 0', maxWidth: 560, fontSize: 15, lineHeight: 1.55, color: 'var(--fg-2)' }}>
+          Not a feature checklist bolted together — one system where booking flows
+          into payment, payment into follow-up, and follow-up into your next booking.
+        </p>
       </div>
-      <div className="grid-auto">
-        {FEATURES.map((f) => {
-          const Icon = Icons[f.icon] || Icons.Spark;
-          return (
-            <div key={f.title} className="card" style={{
-              padding: 22, display: 'flex', flexDirection: 'column', gap: 10,
-            }}>
-              <div style={{
-                width: 38, height: 38, borderRadius: 10,
-                background: 'var(--accent-soft)', color: 'var(--accent)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}>
-                {Icon && <Icon size={18} sw={1.7}/>}
-              </div>
-              <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 600 }}>{f.title}</h3>
-              <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.55, color: 'var(--fg-2)' }}>
-                {f.body}
-              </p>
-            </div>
-          );
-        })}
-      </div>
+      {CATEGORIES.map((cat, ci) => (
+        <div key={cat.kicker} style={{ marginTop: ci === 0 ? 40 : 56 }}>
+          <div style={{ maxWidth: 640, marginBottom: 22 }}>
+            <div className="metric-label" style={{ color: 'var(--accent)' }}>{cat.kicker}</div>
+            <h3 className="page-title" style={{ margin: '6px 0 0', fontSize: 24, letterSpacing: '-0.02em' }}>
+              {cat.title}
+            </h3>
+            <p style={{ margin: '8px 0 0', fontSize: 14, lineHeight: 1.55, color: 'var(--fg-2)' }}>
+              {cat.blurb}
+            </p>
+          </div>
+          <div className="grid-auto">
+            {cat.items.map((f) => {
+              const Icon = Icons[f.icon] || Icons.Spark;
+              return (
+                <div key={f.title} className="card" style={{
+                  padding: 20, display: 'flex', flexDirection: 'column', gap: 9,
+                }}>
+                  <div style={{
+                    width: 36, height: 36, borderRadius: 10,
+                    background: 'var(--accent-soft)', color: 'var(--accent)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  }}>
+                    {Icon && <Icon size={18} sw={1.7}/>}
+                  </div>
+                  <h4 style={{ margin: '2px 0 0', fontSize: 15, fontWeight: 600 }}>{f.title}</h4>
+                  <p style={{ margin: 0, fontSize: 13, lineHeight: 1.55, color: 'var(--fg-2)' }}>
+                    {f.body}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
@@ -1048,16 +1112,17 @@ function Testimonials() {
 // ──────────────────────────────────────────────────────────────────────
 
 const COMPARE_ROWS = [
-  { label: 'Booking + calendar',           replaces: 'Your scheduling app' },
-  { label: 'Branded invoices + Stripe payments', replaces: 'Your invoicing tool' },
-  { label: 'Recurring invoicing + memberships',  replaces: 'Your subscription billing tool' },
+  { label: 'Booking, calendar + reminders',      replaces: 'Your scheduling app' },
+  { label: 'Invoices, quotes & recurring billing', replaces: 'Your invoicing tool' },
+  { label: 'Card on file + auto-charge + tips',  replaces: 'Manual payment chasing' },
+  { label: 'Memberships, packages & gift cards', replaces: 'Your subscription-billing add-ons' },
   { label: 'Client CRM with notes & history',    replaces: 'Your spreadsheet or CRM app' },
-  { label: 'E-signing + intake forms',     replaces: 'Your e-signature service' },
-  { label: 'Direct messaging w/ clients',  replaces: 'Texts + email threads' },
-  { label: 'Cards on file + auto-charge',  replaces: 'Manual payment chasing' },
-  { label: 'Public booking site + reviews', replaces: 'Your DIY web page' },
-  { label: 'Client portal (always free)',  replaces: 'Nothing - most solos don\'t have one' },
-  { label: 'AI business coach (Ivy)',      replaces: 'Generic AI tool subscription' },
+  { label: 'E-sign + intake forms',              replaces: 'Your e-signature service' },
+  { label: 'Website builder + custom domain',    replaces: 'Your website builder' },
+  { label: 'Automated follow-ups & workflows',   replaces: 'Your email-marketing tool' },
+  { label: 'Reviews, rewards & referrals',       replaces: 'Three more point tools' },
+  { label: 'Messaging + free client portal',     replaces: 'Texts + scattered email threads' },
+  { label: 'AI that acts on your business (Ivy)', replaces: 'Generic AI subscription' },
 ];
 
 function Comparison() {
@@ -1284,10 +1349,11 @@ function Footer() {
         <div>
           <div className="metric-label" style={{ marginBottom: 10 }}>Product</div>
           <FooterLinkList items={[
-            { label: 'Features',  href: '#features' },
-            { label: 'Compare',   href: '#compare' },
-            { label: 'FAQ',       href: '#faq' },
-            { label: 'Pricing',   to: '/pricing' },
+            { label: 'Features',     href: '#features' },
+            { label: 'Compare',      href: '#compare' },
+            { label: 'Integrations', to: '/integrations' },
+            { label: 'FAQ',          href: '#faq' },
+            { label: 'Pricing',      to: '/pricing' },
           ]}/>
         </div>
         <div>
