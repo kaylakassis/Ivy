@@ -885,7 +885,14 @@ function Features() {
         </p>
       </div>
       {CATEGORIES.map((cat, ci) => (
-        <div key={cat.kicker} style={{ marginTop: ci === 0 ? 40 : 56 }}>
+        <div key={cat.kicker} style={{
+          marginTop: ci === 0 ? 32 : 12,
+          // Zebra rhythm: tint every other band and bleed it to the
+          // section's content edges so the page reads as distinct chapters.
+          ...(ci % 2 === 1
+            ? { background: 'var(--surface-2)', borderRadius: 20, padding: '32px 24px', marginInline: -24 }
+            : { padding: '8px 0 24px' }),
+        }}>
           <div style={{ maxWidth: 640, marginBottom: 22 }}>
             <div className="metric-label" style={{ color: 'var(--accent)' }}>{cat.kicker}</div>
             <h3 className="page-title" style={{ margin: '6px 0 0', fontSize: 24, letterSpacing: '-0.02em' }}>
