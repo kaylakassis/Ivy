@@ -553,7 +553,32 @@ function Gallery({ data }) {
 }
 
 // ---------- Contact ----------
-function Contact({ data }) {
+// POST a public site form to the form-submission endpoint (email/webhook
+// routing + persistence live server-side). Same-origin plain fetch — the
+// endpoint is public (no auth). Returns true on success.
+async function postSiteForm({ handle, formId, payload, hp }) {
+  const res = await fetch('/api/website/form-submission', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ handle, formId, payload, hp }),
+  });
+  return res.ok;
+}
+
+function Contact({ data, handle, editable }) {
+  const [vals, setVals] = React.useState({ name: '', email: '', message: '' });
+  const [hp, setHp] = React.useState('');
+  const [state, setState] = React.useState('idle'); // idle | sending | sent | error
+  const set = (k) => (e) => setVals((v) => ({ ...v, [k]: e.target.value }));
+  const submit = async (e) => {
+    e.preventDefault();
+    // Inert in the editor preview (or with no live handle) — only the
+    // published site actually delivers submissions.
+    if (editable || !handle || state === 'sending' || state === 'sent') return;
+    setState('sending');
+    try { setState((await postSiteForm({ handle, formId: 'contact', payload: vals, hp })) ? 'sent' : 'error'); }
+    catch { setState('error'); }
+  };
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
       <div style={{ ...container, maxWidth: 680 }}>
@@ -571,19 +596,30 @@ function Contact({ data }) {
               {data.phone && <div><strong style={{ color: 'var(--site-muted)', fontSize: 12, letterSpacing: '0.08em', textTransform: 'uppercase' }}>Phone</strong><br />{data.phone}</div>}
             </div>
           )}
-          {data.showForm !== false && (
-            <form style={{ display: 'grid', gap: 12 }} onSubmit={(e) => e.preventDefault()}>
-              <input placeholder="Your name" style={siteInput} />
-              <input placeholder="Email" type="email" style={siteInput} />
-              <textarea placeholder="Message" rows={5} style={{ ...siteInput, resize: 'vertical' }} />
-              <button type="submit" style={{
+          {data.showForm !== false && (state === 'sent' ? (
+            <div style={{
+              padding: 20, borderRadius: 'var(--site-radius)',
+              background: 'var(--site-surface)', border: '1px solid var(--site-border)',
+              fontSize: 15, color: 'var(--site-fg)',
+            }}>{data.successMessage || "Thanks — we'll be in touch shortly."}</div>
+          ) : (
+            <form style={{ display: 'grid', gap: 12 }} onSubmit={submit}>
+              <input placeholder="Your name" style={siteInput} value={vals.name} onChange={set('name')} />
+              <input placeholder="Email" type="email" required style={siteInput} value={vals.email} onChange={set('email')} />
+              <textarea placeholder="Message" rows={5} style={{ ...siteInput, resize: 'vertical' }} value={vals.message} onChange={set('message')} />
+              {/* Honeypot — hidden from humans; bots that fill it are dropped server-side. */}
+              <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={hp} onChange={(e) => setHp(e.target.value)}
+                style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
+              {state === 'error' && <div style={{ fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t send — please try again.</div>}
+              <button type="submit" disabled={state === 'sending'} style={{
                 padding: '12px 22px',
                 background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
                 border: 0, borderRadius: 'var(--site-radius)',
                 fontWeight: 550, fontSize: 14, cursor: 'pointer', justifySelf: 'start',
-              }}>Send message</button>
+                opacity: state === 'sending' ? 0.7 : 1,
+              }}>{state === 'sending' ? 'Sending…' : 'Send message'}</button>
             </form>
-          )}
+          ))}
         </div>
       </div>
     </section>
@@ -824,7 +860,17 @@ function Pricing({ data }) {
 }
 
 // ---------- Newsletter ----------
-function Newsletter({ data }) {
+function Newsletter({ data, handle, editable }) {
+  const [email, setEmail] = React.useState('');
+  const [hp, setHp] = React.useState('');
+  const [state, setState] = React.useState('idle'); // idle | sending | sent | error
+  const submit = async (e) => {
+    e.preventDefault();
+    if (editable || !handle || state === 'sending' || state === 'sent') return;
+    setState('sending');
+    try { setState((await postSiteForm({ handle, formId: 'newsletter', payload: { email }, hp })) ? 'sent' : 'error'); }
+    catch { setState('error'); }
+  };
   return (
     <section style={{ background: 'var(--site-surface)', color: 'var(--site-fg)' }}>
       <div style={{ ...container, maxWidth: 640, textAlign: 'center' }}>
@@ -837,24 +883,35 @@ function Newsletter({ data }) {
             {data.sub}
           </p>
         )}
-        <form onSubmit={(e) => e.preventDefault()} style={{
-          marginTop: 28, display: 'flex', gap: 8,
-          maxWidth: 480, marginInline: 'auto',
-        }}>
-          <input type="email" placeholder={data.placeholder || 'you@example.com'}
-            style={{
-              flex: 1, padding: '12px 14px', fontSize: 15,
-              border: '1px solid var(--site-border)',
-              borderRadius: 'var(--site-radius)',
-              background: 'var(--site-bg)', color: 'var(--site-fg)',
-              outline: 'none',
-            }}/>
-          <button type="submit" style={{
-            padding: '12px 18px', fontSize: 14, fontWeight: 600,
-            background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
-            border: 0, borderRadius: 'var(--site-radius)', cursor: 'pointer',
-          }}>{data.buttonText || 'Subscribe'}</button>
-        </form>
+        {state === 'sent' ? (
+          <div style={{ marginTop: 24, fontSize: 15, color: 'var(--site-fg)' }}>
+            {data.successMessage || "You're subscribed — thanks!"}
+          </div>
+        ) : (
+          <form onSubmit={submit} style={{
+            marginTop: 28, display: 'flex', gap: 8,
+            maxWidth: 480, marginInline: 'auto',
+          }}>
+            <input type="email" required placeholder={data.placeholder || 'you@example.com'}
+              value={email} onChange={(e) => setEmail(e.target.value)}
+              style={{
+                flex: 1, padding: '12px 14px', fontSize: 15,
+                border: '1px solid var(--site-border)',
+                borderRadius: 'var(--site-radius)',
+                background: 'var(--site-bg)', color: 'var(--site-fg)',
+                outline: 'none',
+              }}/>
+            <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={hp} onChange={(e) => setHp(e.target.value)}
+              style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
+            <button type="submit" disabled={state === 'sending'} style={{
+              padding: '12px 18px', fontSize: 14, fontWeight: 600,
+              background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
+              border: 0, borderRadius: 'var(--site-radius)', cursor: 'pointer',
+              opacity: state === 'sending' ? 0.7 : 1,
+            }}>{state === 'sending' ? '…' : (data.buttonText || 'Subscribe')}</button>
+          </form>
+        )}
+        {state === 'error' && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t subscribe — please try again.</div>}
       </div>
     </section>
   );
