@@ -14,7 +14,7 @@ export function mapStripeStatus(stripeStatus) {
     case 'canceled':
     case 'unpaid':
     case 'incomplete_expired':    return 'cancelled';
-    case 'incomplete':            return 'inactive';
+    case 'incomplete':            return 'incomplete';
     default:                      return 'inactive';
   }
 }

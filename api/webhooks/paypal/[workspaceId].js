@@ -9,13 +9,14 @@ import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/paypal.js';
 import { fetchFinanceSettings } from '../../_lib/finance.js';
-import { markProcessed } from '../../_lib/webhookDedup.js';
+import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  let claimedEventId = null;
   try {
     const { workspaceId } = req.query;
     const settings = await fetchFinanceSettings(workspaceId);
@@ -36,6 +37,7 @@ export default async function handler(req, res) {
     if (!await markProcessed('paypal', event?.id, workspaceId)) {
       return ok(res, { handled: true, deduped: true });
     }
+    claimedEventId = event?.id;
 
     const parsed = parseWebhookEvent(event);
     if (!parsed) return ok(res, { handled: false });
@@ -65,6 +67,9 @@ export default async function handler(req, res) {
     }
     return ok(res, { handled: true });
   } catch (err) {
+    // Release the dedup claim so PayPal's retry re-processes (its natural
+    // guards keep the re-run from double-applying).
+    if (claimedEventId) await releaseProcessed('paypal', claimedEventId);
     return serverError(res, err);
   }
 }

@@ -6,6 +6,7 @@
 //            audit trail of "was paid by the cancelled bundle" survives.
 import { sql } from '../../../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../../../_lib/auth.js';
+import { requireActiveSubscription } from '../../../_lib/subscriptionGate.js';
 import { readBody } from '../../../_lib/body.js';
 import { requireSameOrigin } from '../../../_lib/security.js';
 import { fetchOwnedClient } from '../../../_lib/clients.js';
@@ -20,6 +21,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
     const { id: clientId, cpId } = req.query;
 
     const client = await fetchOwnedClient({ id: clientId, workspaceId });

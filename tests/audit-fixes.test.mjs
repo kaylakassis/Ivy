@@ -9,6 +9,8 @@
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
 import { requireActiveSubscription } from '../api/_lib/subscriptionGate.js';
+import { signSession } from '../api/_lib/auth.js';
+import { markProcessed, releaseProcessed } from '../api/_lib/webhookDedup.js';
 
 let pass = 0, fail = 0;
 function assert(cond, label) {
@@ -34,7 +36,7 @@ function mockRes() {
 }
 
 const createdUsers = [];
-async function mkWorkspace({ status, trialEndsAt }) {
+async function mkWorkspaceUser({ status, trialEndsAt }) {
   const u = await sql`
     INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
     VALUES (${`gate-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`}, 'x', '2026-05-05', NOW())
@@ -44,8 +46,9 @@ async function mkWorkspace({ status, trialEndsAt }) {
     INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
     VALUES (${u.rows[0].id}, ${status}, ${trialEndsAt})
     RETURNING id`;
-  return w.rows[0].id;
+  return { workspaceId: w.rows[0].id, ownerId: u.rows[0].id };
 }
+async function mkWorkspace(opts) { return (await mkWorkspaceUser(opts)).workspaceId; }
 
 async function run() {
   try {
@@ -82,6 +85,41 @@ async function run() {
     res = mockRes();
     assert((await requireActiveSubscription(wPastDue, {}, res)) === true, 'past_due is allowed (grace period)');
 
+    console.log('\n[1b] gate is actually WIRED into newly-gated endpoints (end-to-end)');
+    // Suspended owner hitting a gated write endpoint must get 402 — proves
+    // the one-liner is in place, not just the helper.
+    const suspended = await mkWorkspaceUser({ status: 'suspended', trialEndsAt: future });
+    for (const [name, mod] of [
+      ['clients/index', await import('../api/clients/index.js')],
+      ['quotes/index', await import('../api/quotes/index.js')],
+      ['expenses/index', await import('../api/expenses/index.js')],
+    ]) {
+      const r = mockRes();
+      const req = {
+        method: 'POST',
+        headers: { cookie: `thryve_session=${signSession(suspended.ownerId)}`, 'content-type': 'application/json' },
+        url: `/api/${name}`, query: {}, body: {},
+      };
+      r.req = req;
+      // eslint-disable-next-line no-await-in-loop
+      await mod.default(req, r);
+      assert(r.statusCode === 402, `POST ${name} blocked with 402 for a suspended workspace`);
+    }
+    // A within-trial owner is NOT blocked by the gate (may fail later for
+    // other reasons, but must not be 402).
+    const okOwner = await mkWorkspaceUser({ status: 'trialing', trialEndsAt: future });
+    {
+      const r = mockRes();
+      const req = {
+        method: 'POST',
+        headers: { cookie: `thryve_session=${signSession(okOwner.ownerId)}`, 'content-type': 'application/json' },
+        url: '/api/clients', query: {}, body: { name: 'Gate Test', email: `gt-${Date.now()}@example.com` },
+      };
+      r.req = req;
+      await (await import('../api/clients/index.js')).default(req, r);
+      assert(r.statusCode !== 402, 'within-trial owner is NOT blocked by the gate (got ' + r.statusCode + ')');
+    }
+
     console.log('\n[2] destructive crons reject unauthenticated requests');
     for (const name of ['db-prune', 'discover-refresh', 'blob-prune']) {
       // eslint-disable-next-line no-await-in-loop
@@ -94,6 +132,14 @@ async function run() {
       await handler(req, r);
       assert(r.statusCode === 401, `${name} returns 401 without auth`);
     }
+
+    console.log('\n[3] webhook dedup releases a claim on failure (no lost event)');
+    const evt = `evt-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    assert((await markProcessed('test', evt, null)) === true, 'first delivery claims the event');
+    assert((await markProcessed('test', evt, null)) === false, 'duplicate delivery is deduped');
+    await releaseProcessed('test', evt);
+    assert((await markProcessed('test', evt, null)) === true, 'after release, a retry can re-claim and re-process');
+    await sql`DELETE FROM webhook_event_dedup WHERE provider = 'test' AND event_id = ${evt}`.catch(() => {});
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;

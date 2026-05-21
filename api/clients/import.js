@@ -10,6 +10,7 @@
 // in the request body can override that.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace, validEmail } from '../_lib/auth.js';
+import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { VALID_STAGES, serializeClient } from '../_lib/clients.js';
@@ -27,6 +28,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
 
     const body = await readBody(req);
     if (!Array.isArray(body.rows)) return badRequest(res, 'rows[] is required');

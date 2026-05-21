@@ -1,6 +1,7 @@
 // GET /api/gift-cards — owner-side list of issued cards.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeGiftCard } from '../_lib/giftCards.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -12,6 +13,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
 
     const r = await sql`
       SELECT * FROM gift_cards

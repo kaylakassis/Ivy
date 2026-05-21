@@ -6,6 +6,7 @@
 import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedQuote, serializeQuote } from '../_lib/quotes.js';
@@ -29,6 +30,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
 
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;

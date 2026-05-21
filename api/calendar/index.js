@@ -4,6 +4,7 @@
 
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { readBody } from '../_lib/body.js';
 import {
   ensureCalendarSettings, serializeSettings, serializeService, serializeBlock,
@@ -18,6 +19,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
 
     if (req.method === 'GET') {
       // Per-query try/catch so a single missing table/column degrades to

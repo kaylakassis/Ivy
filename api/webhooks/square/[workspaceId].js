@@ -10,7 +10,7 @@ import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js';
 import { fetchFinanceSettings } from '../../_lib/finance.js';
-import { markProcessed } from '../../_lib/webhookDedup.js';
+import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { appUrl } from '../../_lib/tokens.js';
 
@@ -18,19 +18,27 @@ export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  let claimedEventId = null;
   try {
     const { workspaceId } = req.query;
     const settings = await fetchFinanceSettings(workspaceId);
     if (!settings?.squareMerchantId) return res.status(404).json({ error: 'Workspace not connected to Square' });
 
     const rawBody = await readRawBody(req);
+    // Square computes the HMAC over (notification_url + body), where
+    // notification_url is the EXACT URL registered in its dashboard. That
+    // URL is stable, so we must derive it from the canonical APP_URL —
+    // never from VERCEL_URL (changes every deploy → guaranteed signature
+    // mismatch → every Square payment webhook silently rejected).
+    const canonicalHost = process.env.APP_URL?.replace(/\/$/, '');
+    if (!canonicalHost) {
+      // eslint-disable-next-line no-console
+      console.error('[square webhook] APP_URL is not set — Square HMAC will not match the registered notification URL. Set APP_URL to your canonical host.');
+    }
+    const notificationUrl = `${canonicalHost || appUrl()}/api/webhooks/square/${workspaceId}`;
     let event;
     try {
-      event = verifyWebhook({
-        rawBody,
-        headers: req.headers,
-        notificationUrl: `${appUrl()}/api/webhooks/square/${workspaceId}`,
-      });
+      event = verifyWebhook({ rawBody, headers: req.headers, notificationUrl });
     } catch (e) {
       return res.status(400).json({ error: e.message });
     }
@@ -42,6 +50,7 @@ export default async function handler(req, res) {
     if (!await markProcessed('square', event?.event_id, workspaceId)) {
       return ok(res, { handled: true, deduped: true });
     }
+    claimedEventId = event?.event_id;
 
     const parsed = parseWebhookEvent(event);
     if (!parsed) return ok(res, { handled: false });
@@ -59,6 +68,9 @@ export default async function handler(req, res) {
     }
     return ok(res, { handled: true });
   } catch (err) {
+    // Release the dedup claim so Square's retry re-processes (its natural
+    // guards keep the re-run from double-applying).
+    if (claimedEventId) await releaseProcessed('square', claimedEventId);
     return serverError(res, err);
   }
 }

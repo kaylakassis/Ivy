@@ -20,6 +20,25 @@
 // for ~25 hours).
 import { sql } from './db.js';
 
+// Release a claim taken by markProcessed. Call this if processing THROWS
+// after the claim was inserted — otherwise the provider's retry would be
+// deduped (returns 200) and the event silently lost (the claim-before-
+// process failure mode). After release, the retry re-runs the handler;
+// the handlers' natural idempotency guards (invoice already paid,
+// gift-card PI already issued, etc.) keep the re-run from double-applying.
+export async function releaseProcessed(provider, eventId) {
+  if (!eventId) return;
+  try {
+    await sql`
+      DELETE FROM webhook_event_dedup
+       WHERE provider = ${provider} AND event_id = ${eventId}
+    `;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[webhookDedup] ${provider}/${eventId} release failed:`, err.message);
+  }
+}
+
 export async function markProcessed(provider, eventId, workspaceId = null) {
   if (!eventId) {
     // No event ID = legacy or test payload. Don't dedup; let it through.

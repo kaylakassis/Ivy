@@ -15,7 +15,7 @@ import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { applySubscriptionState } from '../../_lib/memberships.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
-import { markProcessed } from '../../_lib/webhookDedup.js';
+import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
@@ -33,6 +33,9 @@ function fmtMoney(n) {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  // Tracks a dedup claim so a mid-handler throw can release it (below),
+  // letting the provider's retry re-process instead of being deduped.
+  let claimedEventId = null;
   try {
     const workspaceId = (req.query.workspaceId || '').toString();
     if (!/^[0-9a-fA-F-]{36}$/.test(workspaceId)) {
@@ -80,6 +83,7 @@ export default async function handler(req, res) {
     if (!await markProcessed('stripe', event.id, workspaceId)) {
       return ok(res, { received: true, deduped: true });
     }
+    claimedEventId = event.id;
 
     // Subscription lifecycle for memberships. We only act on the
     // events that move client_memberships state; everything else is
@@ -483,6 +487,9 @@ export default async function handler(req, res) {
 
     return ok(res, { received: true, marked: 'paid' });
   } catch (err) {
+    // Processing threw after we claimed the event — release the claim so
+    // Stripe's retry re-runs the handler rather than getting deduped.
+    if (claimedEventId) await releaseProcessed('stripe', claimedEventId);
     return serverError(res, err);
   }
 }
