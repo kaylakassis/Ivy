@@ -5,11 +5,11 @@
 //
 // We don't body-parse; PayPal's verify endpoint takes the raw event
 // JSON as a property in the verify-call payload, so we need bytes.
-import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/paypal.js';
 import { fetchFinanceSettings } from '../../_lib/finance.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
+import { applyPaymentToInvoice, applyRefundToInvoice } from '../../_lib/paypalApply.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
@@ -72,101 +72,4 @@ export default async function handler(req, res) {
     if (claimedEventId) await releaseProcessed('paypal', claimedEventId);
     return serverError(res, err);
   }
-}
-
-// Same shape as the Square handler — see api/webhooks/square/[workspaceId].js
-// for the rationale. Captures paid_amount, the PayPal capture id (stored
-// in stripe_payment_intent — the column doubles as a generic provider
-// payment-id field so refund.js can find it), idempotency by capture id,
-// and an activity log entry.
-async function applyPaymentToInvoice({ workspaceId, parsed }) {
-  const invoiceId = parsed.metadata?.invoice_id;
-  if (!invoiceId) return;
-
-  const { rows: invRows } = await sql`
-    SELECT * FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
-  `;
-  const inv = invRows[0];
-  if (!inv) return;
-
-  if (inv.status === 'paid' && inv.stripe_payment_intent === parsed.paymentId) return;
-  if (inv.status === 'paid') {
-    console.warn('[webhooks/paypal] invoice', invoiceId, 'already paid by a different capture id — ignoring');
-    return;
-  }
-
-  const paidAmountDollars = Math.round(Number(parsed.amountCents || 0)) / 100;
-  const newActivity = [
-    ...(inv.activity || []),
-    {
-      ts: new Date().toISOString(),
-      kind: 'paid',
-      text: `Paid by PayPal · $${paidAmountDollars.toFixed(2)}`,
-    },
-  ];
-
-  await sql`
-    UPDATE invoices SET
-      status                = 'paid',
-      paid_at               = NOW(),
-      paid_amount           = ${paidAmountDollars},
-      paid_method           = 'card',
-      stripe_payment_intent = ${parsed.paymentId || null},
-      view_token_hash       = NULL,
-      activity              = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at            = NOW()
-    WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
-  `;
-}
-
-// Mirror of the Square refund handler — see
-// api/webhooks/square/[workspaceId].js#applyRefundToInvoice for the
-// rationale. PayPal sends PAYMENT.CAPTURE.REFUNDED + .REVERSED; both
-// get normalized to type='refund.updated' with status='succeeded' in
-// the adapter's parseWebhookEvent.
-async function applyRefundToInvoice({ workspaceId, parsed }) {
-  if (!parsed.paymentId) return;
-  const { rows: invRows } = await sql`
-    SELECT * FROM invoices
-    WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${parsed.paymentId}
-    LIMIT 1
-  `;
-  const inv = invRows[0];
-  if (!inv) {
-    console.warn('[webhooks/paypal] no invoice matches capture', parsed.paymentId, '— ignoring refund');
-    return;
-  }
-  const refundAmount = Math.round(Number(parsed.amountCents || 0)) / 100;
-  if (refundAmount <= 0) return;
-
-  const activity = inv.activity || [];
-  if (parsed.refundId && activity.some((a) => a.kind === 'refund' && a.stripeRefundId === parsed.refundId)) {
-    return;
-  }
-
-  const alreadyRefunded = Number(inv.refunded_amount || 0);
-  const newRefunded = +(alreadyRefunded + refundAmount).toFixed(2);
-  const paidAmount = Number(inv.paid_amount || 0);
-  const fullyRefunded = paidAmount > 0 && newRefunded >= paidAmount - 0.005;
-  const newStatus = fullyRefunded ? 'refunded' : inv.status;
-
-  const newActivity = [
-    ...activity,
-    {
-      ts: new Date().toISOString(),
-      kind: 'refund',
-      text: `Refunded $${refundAmount.toFixed(2)} (PayPal${parsed.reason ? ` · ${parsed.reason}` : ''})`,
-      ...(parsed.refundId ? { stripeRefundId: parsed.refundId } : {}),
-    },
-  ];
-
-  await sql`
-    UPDATE invoices SET
-      status          = ${newStatus},
-      refunded_amount = ${newRefunded},
-      refunded_at     = NOW(),
-      activity        = ${JSON.stringify(newActivity)}::jsonb,
-      updated_at      = NOW()
-    WHERE id = ${inv.id} AND workspace_id = ${workspaceId}
-  `;
 }
