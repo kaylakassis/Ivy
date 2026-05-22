@@ -119,6 +119,13 @@ export default async function handler(req, res) {
         if (!Number.isInteger(n) || n < 0 || n > 240) return badRequest(res, 'bufferMinutes must be 0–240');
         push('buffer_minutes', n);
       }
+      if ('minNoticeHours' in body) {
+        // Minimum advance notice before a client can book (0 = allow
+        // same-moment booking, still never the past). Cap at 30 days.
+        const n = Number(body.minNoticeHours);
+        if (!Number.isInteger(n) || n < 0 || n > 720) return badRequest(res, 'minNoticeHours must be 0–720');
+        push('min_notice_hours', n);
+      }
       if ('discoverable' in body) {
         push('discoverable', !!body.discoverable);
       }

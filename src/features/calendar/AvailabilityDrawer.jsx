@@ -4,8 +4,21 @@ import { Icons } from '../../components/Icons.jsx';
 import Drawer, { TimeInput } from './Drawer.jsx';
 import { WEEKDAYS_LONG, minToHM } from './utils.js';
 
-export default function AvailabilityDrawer({ initial, onSave, onClose }) {
+const NOTICE_OPTIONS = [
+  { v: 0,   label: 'No minimum — same-day OK' },
+  { v: 1,   label: '1 hour' },
+  { v: 2,   label: '2 hours' },
+  { v: 4,   label: '4 hours' },
+  { v: 12,  label: '12 hours' },
+  { v: 24,  label: '1 day' },
+  { v: 48,  label: '2 days' },
+  { v: 72,  label: '3 days' },
+  { v: 168, label: '1 week' },
+];
+
+export default function AvailabilityDrawer({ initial, noticeHours, onSave, onClose }) {
   const [avail, setAvail] = useState(initial || {});
+  const [notice, setNotice] = useState(noticeHours == null ? 24 : Number(noticeHours));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -15,7 +28,7 @@ export default function AvailabilityDrawer({ initial, onSave, onClose }) {
     setBusy(true);
     setErr(null);
     try {
-      await onSave(avail);
+      await onSave({ availability: avail, minNoticeHours: notice });
       onClose();
     } catch (e) {
       setErr(e.message || 'Could not save');
@@ -26,6 +39,26 @@ export default function AvailabilityDrawer({ initial, onSave, onClose }) {
 
   return (
     <Drawer title="Weekly availability" subtitle="Clients can only book inside these hours" onClose={onClose}>
+      <div style={{
+        padding: 14, borderRadius: 10, border: '1px solid var(--border)',
+        background: 'var(--surface)', marginBottom: 14,
+      }}>
+        <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="min-notice">
+          Minimum booking notice
+        </label>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 8px' }}>
+          How far ahead clients must book. Past times are always hidden.
+        </div>
+        <select id="min-notice" value={notice} onChange={(e) => setNotice(Number(e.target.value))}
+          style={{
+            width: '100%', padding: '9px 10px', borderRadius: 8,
+            border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+            color: 'var(--fg)', fontSize: 14,
+          }}>
+          {NOTICE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      </div>
+
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {[1, 2, 3, 4, 5, 6, 0].map((d) => (
           <DayRow key={d} dayIdx={d} windows={avail[d] || []} onChange={(w) => setDay(d, w)}/>

@@ -541,10 +541,15 @@ CREATE TABLE IF NOT EXISTS calendar_settings (
   slug TEXT UNIQUE,
   slot_minutes INT NOT NULL DEFAULT 30,
   buffer_minutes INT NOT NULL DEFAULT 0,
+  min_notice_hours INT NOT NULL DEFAULT 24,
   availability JSONB NOT NULL DEFAULT '{"0":[],"1":[{"start":540,"end":1020}],"2":[{"start":540,"end":1020}],"3":[{"start":540,"end":1020}],"4":[{"start":540,"end":1020}],"5":[{"start":540,"end":840}],"6":[]}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_slug ON calendar_settings(slug);
+-- Minimum advance notice (hours) before a client can book on the public
+-- page. Default 24h; owners lower it (incl. 0 for same-day) in settings.
+-- Past times are always excluded regardless of this value.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS min_notice_hours INT NOT NULL DEFAULT 24;
 -- Discover: opt-in directory listing on /me/discover. A business with
 -- discoverable=true and a slug is shown to all signed-in clients. Tagline
 -- is the one-line pitch shown under the business name on the listing.

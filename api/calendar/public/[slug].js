@@ -174,10 +174,11 @@ async function createBooking(req, res) {
 
     // Resolve workspace by slug.
     const settingsRows = await sql`
-      SELECT workspace_id, availability, slot_minutes FROM calendar_settings WHERE slug = ${slug}
+      SELECT workspace_id, availability, slot_minutes, min_notice_hours FROM calendar_settings WHERE slug = ${slug}
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];
+    const minNoticeHours = Math.max(0, Number(settingsRows.rows[0].min_notice_hours ?? 24));
 
     // Validate inputs.
     const date = (body.date || '').toString();
@@ -202,7 +203,12 @@ async function createBooking(req, res) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return badRequest(res, 'date must be YYYY-MM-DD');
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
     if (!Number.isInteger(end) || end <= start || end > 24 * 60) return badRequest(res, 'invalid endMin');
-    if ((end - start) % slotMinutes !== 0) return badRequest(res, `Slot must align to ${slotMinutes}-minute increments`);
+    // The START must sit on the booking grid. (The DURATION is validated
+    // separately against service + add-ons below — it does NOT have to be a
+    // multiple of the slot size, e.g. a 45-min consult on a 30-min grid.)
+    if (slotMinutes > 0 && start % slotMinutes !== 0) {
+      return badRequest(res, `Start time must align to ${slotMinutes}-minute increments`);
+    }
     if (!clientName) return badRequest(res, 'Your name is required');
     if (!validEmail(clientEmail)) return badRequest(res, 'A valid email is required');
     if (!serviceId) return badRequest(res, 'Pick a service');
@@ -314,12 +320,20 @@ async function createBooking(req, res) {
       if (!locationAddress) return badRequest(res, "Please share where we should come for this service.");
     }
 
-    // Don't allow booking in the past.
+    // Don't allow booking in the past, and honor the workspace's minimum
+    // advance-notice window (default 24h; 0 = same-day allowed). The past
+    // floor applies even when notice is 0.
     const now = new Date();
     const slotStart = new Date(date + 'T00:00:00Z');
     slotStart.setUTCMinutes(slotStart.getUTCMinutes() + start);
     if (slotStart.getTime() < now.getTime() - 60 * 1000) {
       return badRequest(res, 'That time has passed');
+    }
+    if (minNoticeHours > 0 && slotStart.getTime() < now.getTime() + minNoticeHours * 3600 * 1000) {
+      const noticeLabel = minNoticeHours % 24 === 0
+        ? `${minNoticeHours / 24} day${minNoticeHours === 24 ? '' : 's'}`
+        : `${minNoticeHours} hour${minNoticeHours === 1 ? '' : 's'}`;
+      return badRequest(res, `This business requires booking at least ${noticeLabel} in advance.`);
     }
 
     // Availability + conflict check.

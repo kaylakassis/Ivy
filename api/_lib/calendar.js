@@ -21,6 +21,7 @@ export function serializeSettings(row) {
     slug:           row.slug,
     slotMinutes:    row.slot_minutes,
     bufferMinutes:  row.buffer_minutes,
+    minNoticeHours: row.min_notice_hours == null ? 24 : Number(row.min_notice_hours),
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',

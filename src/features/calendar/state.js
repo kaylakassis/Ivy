@@ -71,8 +71,11 @@ export function useCalendar(window) {
     return r.services;
   }, []);
 
-  const saveAvailability = useCallback(async (availability) => {
-    const r = await api.patch('/calendar', { availability });
+  const saveAvailability = useCallback(async (input) => {
+    // Accepts a bare availability map (legacy) or { availability, minNoticeHours }.
+    const body = input && typeof input === 'object' && ('availability' in input || 'minNoticeHours' in input)
+      ? input : { availability: input };
+    const r = await api.patch('/calendar', body);
     setCal((c) => ({ ...c, settings: { ...c.settings, ...r.settings } }));
     return r.settings;
   }, []);

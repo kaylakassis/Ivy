@@ -69,6 +69,13 @@ export function slotsForDate(cal, date, serviceOrDur) {
   const dateISO = fmtDateISO(date);
   const windows = (cal.settings?.availability && cal.settings.availability[String(dayIdx)]) || [];
   const step = cal.settings?.slotMinutes || 30;
+  // Minimum advance notice: slots earlier than (now + notice) aren't
+  // bookable, and past times are always excluded. Default 24h; 0 = same-day
+  // allowed (but never the past). Client-facing only — public booking +
+  // portal reschedule both call this; the owner's calendar does not.
+  const minNoticeMin = Math.max(0, Number(cal.settings?.minNoticeHours ?? 24) * 60);
+  const cutoffMs = Date.now() + minNoticeMin * 60 * 1000;
+  const dayBaseMs = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0).getTime();
   const slots = [];
 
   for (const w of windows) {
@@ -99,6 +106,9 @@ export function slotsForDate(cal, date, serviceOrDur) {
           }
           seatsTaken++;
         }
+      }
+      if (!reason && (dayBaseMs + start * 60000) < cutoffMs) {
+        reason = minNoticeMin > 0 ? 'Too soon' : 'Past';
       }
       const available = !reason && seatsTaken < capacity;
       const seatsLeft = capacity > 1 ? Math.max(0, capacity - seatsTaken) : null;
