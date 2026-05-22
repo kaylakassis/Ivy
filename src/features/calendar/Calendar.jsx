@@ -279,12 +279,14 @@ export default function Calendar() {
             <ActionSheet onClose={() => setActionsOpen(false)}
               onPick={(action) => {
                 setActionsOpen(false);
-                if (action === 'services')      setDrawer('services');
-                if (action === 'availability')  setDrawer('availability');
-                if (action === 'share')         setDrawer('share');
                 if (action === 'block') {
                   setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '', blocksBookings: true });
                   setDrawer('event');
+                } else {
+                  // services / staff / packages / availability / share / sync —
+                  // the action id matches the drawer key. (Sync + Packages
+                  // used to be listed but unhandled → tapping did nothing.)
+                  setDrawer(action);
                 }
               }}/>
           )}
@@ -685,6 +687,7 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
 function ActionSheet({ onClose, onPick }) {
   const items = [
     { id: 'services',     label: 'Services',     icon: 'Dollar' },
+    { id: 'staff',        label: 'Staff',        icon: 'Users' },
     { id: 'packages',     label: 'Packages',     icon: 'Doc' },
     { id: 'availability', label: 'Availability', icon: 'Clock' },
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
