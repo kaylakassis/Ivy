@@ -4,6 +4,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { myClientIds, ids } from '../_lib/clientPortal.js';
+import { computeBookingPayment } from '../_lib/calendar.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -24,15 +25,17 @@ export default async function handler(req, res) {
       `SELECT b.id, b.workspace_id, b.client_id, b.service_id,
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
               b.video_room_url, b.location_address, b.tip_amount,
-              b.completion_log,
+              b.completion_log, b.booking_total, b.deposit_paid,
               s.name AS service_name,
               s.duration_minutes, s.price, s.capacity AS service_capacity,
               s.location_type AS service_location_type,
               s.cancellation_fee_amount, s.cancellation_window_hours,
-              cs.slug AS biz_slug
+              cs.slug AS biz_slug,
+              ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+       LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
        WHERE b.client_id = ANY($1)
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 500`,
@@ -89,6 +92,8 @@ export default async function handler(req, res) {
         completedAt: visible ? completionEntry.completedAt : null,
         completionNotes: visible ? (completionEntry.notes || '') : null,
         completionAttachments: visible ? (completionEntry.attachments || []) : [],
+        // Unified deposit + balance payment status for this appointment.
+        payment: computeBookingPayment(r),
       };
       if (r.cancelled_at) cancelled.push(item);
       else if (dateISO >= today) upcoming.push(item);

@@ -133,6 +133,30 @@ export function serializeBlock(row, opts = {}) {
   };
 }
 
+// Unified appointment payment summary: deposit + collected balance vs the
+// appointment total, so owner + client both see whether the whole service
+// has been paid. collect_invoice_* fields are only present when the query
+// LEFT JOINs the booking's balance invoice (owner calendar + client portal);
+// without them it degrades to deposit-only. Returns null for $0 / untotaled
+// bookings so callers can skip the line.
+export function computeBookingPayment(row) {
+  const total = Number(row.booking_total || 0);
+  if (total <= 0) return null;
+  const depositPaid = Number(row.deposit_paid || 0);
+  const balancePaid = row.collect_invoice_status === 'paid'
+    ? Number(row.collect_invoice_paid_amount ?? (total - depositPaid))
+    : 0;
+  const amountPaid = +(depositPaid + balancePaid).toFixed(2);
+  return {
+    total,
+    depositPaid,
+    balancePaid,
+    amountPaid,
+    balanceDue: Math.max(0, +(total - amountPaid).toFixed(2)),
+    fullyPaid: amountPaid >= total - 0.005,
+  };
+}
+
 export function serializeBooking(row, opts = {}) {
   if (!row) return null;
   const { redactClient = false } = opts;
@@ -174,6 +198,9 @@ export function serializeBooking(row, opts = {}) {
     tipAmount:           Number(row.tip_amount || 0),
     tipChargedAt:        row.tip_charged_at || null,
     completionLog:       redactClient ? {} : (row.completion_log || {}),
+    // Unified deposit + balance payment status. Omitted on the public
+    // (redacted) slot grid, which must never reveal revenue.
+    payment:             redactClient ? undefined : computeBookingPayment(row),
   };
 }
 

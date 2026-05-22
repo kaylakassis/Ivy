@@ -60,17 +60,24 @@ export default async function handler(req, res) {
             ORDER BY date, start_min
           `, { rows: [] });
 
+      // LEFT JOIN the booking's balance ("collect on the spot") invoice so
+      // serializeBooking can show a unified deposit + balance payment status.
       const bookings = from && to
         ? await safe(sql`
-            SELECT * FROM bookings
-            WHERE workspace_id = ${workspaceId}
-              AND cancelled_at IS NULL
-              AND date >= ${from}::date AND date <= ${to}::date
-            ORDER BY date, start_min
+            SELECT b.*, ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
+            FROM bookings b
+            LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
+            WHERE b.workspace_id = ${workspaceId}
+              AND b.cancelled_at IS NULL
+              AND b.date >= ${from}::date AND b.date <= ${to}::date
+            ORDER BY b.date, b.start_min
           `, { rows: [] })
         : await safe(sql`
-            SELECT * FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
-            ORDER BY date, start_min
+            SELECT b.*, ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
+            FROM bookings b
+            LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
+            WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL
+            ORDER BY b.date, b.start_min
           `, { rows: [] });
       return ok(res, {
         calendar: {

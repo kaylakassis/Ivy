@@ -230,6 +230,14 @@ function BookingRow({ booking, first, cancellable, reschedulable, reviewable, on
           {fmtDay(booking.date)} · {fmtTime(booking.startMin)} – {fmtTime(booking.endMin)}
           {booking.price != null && <> · ${Number(booking.price).toFixed(0)}</>}
         </div>
+        {booking.payment && !booking.cancelledAt && (
+          <div style={{ fontSize: 12, marginTop: 4, fontWeight: 600,
+            color: booking.payment.fullyPaid ? 'var(--ok)' : 'var(--accent)' }}>
+            {booking.payment.fullyPaid
+              ? `Paid in full · $${booking.payment.total.toFixed(2)}`
+              : `$${booking.payment.balanceDue.toFixed(2)} balance due · $${booking.payment.total.toFixed(2)} total${booking.payment.depositPaid > 0 ? ` (deposit $${booking.payment.depositPaid.toFixed(2)} paid)` : ''}`}
+          </div>
+        )}
         {booking.notes && (
           <div style={{ fontSize: 12, color: 'var(--fg-2)', marginTop: 4 }}>{booking.notes}</div>
         )}

@@ -373,9 +373,13 @@ function BookingExtraActions({ event, onBookingChanged }) {
   const [collectInvoice, setCollectInvoice] = useState(null);
   const [collectErr, setCollectErr] = useState(null);
 
-  const total       = Number(event.bookingTotal || 0);
-  const depositPaid = Number(event.depositPaid || 0);
-  const balance     = Math.max(0, total - depositPaid);
+  // Prefer the unified payment summary (knows whether the balance invoice
+  // was actually paid); fall back to deposit-only math for older payloads.
+  const pay         = event.payment || null;
+  const total       = pay ? pay.total : Number(event.bookingTotal || 0);
+  const depositPaid = pay ? pay.depositPaid : Number(event.depositPaid || 0);
+  const balance     = pay ? pay.balanceDue : Math.max(0, total - depositPaid);
+  const fullyPaid   = pay ? pay.fullyPaid : (total > 0 && balance <= 0.005);
   const canCollect  = balance > 0 && !event.cancelledAt;
 
   const startCollect = async () => {
@@ -435,6 +439,17 @@ function BookingExtraActions({ event, onBookingChanged }) {
 
   return (
     <div style={{ marginTop: 18 }}>
+      {total > 0 && (
+        <div style={{
+          marginBottom: 12, padding: '8px 12px', borderRadius: 8, fontSize: 12.5, fontWeight: 600,
+          background: fullyPaid ? 'color-mix(in srgb, var(--ok) 12%, transparent)' : 'var(--accent-soft)',
+          color: fullyPaid ? 'var(--ok)' : 'var(--accent-ink, var(--accent))',
+        }}>
+          {fullyPaid
+            ? `Paid in full · $${total.toFixed(2)}`
+            : `$${balance.toFixed(2)} balance due of $${total.toFixed(2)}${depositPaid > 0 ? ` · deposit $${depositPaid.toFixed(2)} paid` : ''}`}
+        </div>
+      )}
       <div className="metric-label" style={{ marginBottom: 8 }}>Quick actions</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 6 }}>
         {canCollect && (
