@@ -1561,6 +1561,20 @@ CREATE TABLE IF NOT EXISTS tasks (
 );
 CREATE INDEX IF NOT EXISTS idx_tasks_workspace_open ON tasks(workspace_id, done, due_date);
 
+-- One-time (idempotent) cleanup of duplicate OPEN tasks. Ivy used to create
+-- copy-paste duplicates that piled up in the dashboard "Your list" (now
+-- deduped at write time in create_task). Keep the earliest open task per
+-- (workspace, lowercased title, client); delete the later duplicates. After
+-- it runs once there are no dups, so re-running on later deploys is a no-op.
+DELETE FROM tasks t
+  USING tasks keep
+ WHERE t.done = FALSE AND keep.done = FALSE
+   AND t.workspace_id = keep.workspace_id
+   AND lower(t.title) = lower(keep.title)
+   AND t.client_id IS NOT DISTINCT FROM keep.client_id
+   AND (keep.created_at < t.created_at
+        OR (keep.created_at = t.created_at AND keep.id < t.id));
+
 CREATE TABLE IF NOT EXISTS goals (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

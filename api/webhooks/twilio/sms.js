@@ -1,12 +1,13 @@
 // POST /api/webhooks/twilio/sms — inbound SMS from Twilio.
 //
-// THRYVE uses a single platform Twilio number, so we route an incoming
-// text by the SENDER's phone: match it to a client (by the last 10
-// digits) and append the message to that client's thread. If the same
-// phone is a client of multiple businesses, we attach it to the most
-// recently active conversation (the one they're most likely replying to).
+// THE single inbound webhook to configure in Twilio ("A message comes in").
+// It does BOTH jobs that used to be split across two endpoints (so you no
+// longer have to choose between reply-threading and STOP compliance):
+//   1. Compliance keywords (STOP/UNSUBSCRIBE/… and START/YES/UNSTOP) flip
+//      the sender's SMS consent across every workspace that has them.
+//   2. Any other text is routed by the sender's phone (last 10 digits) into
+//      that client's message thread + notifies the owner.
 //
-// Owners point their Twilio number's "A message comes in" webhook here.
 // Configure THRYVE_TWILIO_AUTH_TOKEN so we can verify the signature.
 import crypto from 'node:crypto';
 import { sql } from '../../_lib/db.js';
@@ -17,6 +18,11 @@ import { notifyOwnerSafe } from '../../_lib/push.js';
 import { appUrl } from '../../_lib/tokens.js';
 
 export const config = { api: { bodyParser: false } };
+
+// Exact-keyword consent words (Twilio matches the same way). A reply like
+// "STOP doing that" is NOT an opt-out — only a bare keyword counts.
+const STOP_WORDS  = new Set(['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT']);
+const START_WORDS = new Set(['START', 'YES', 'UNSTOP']);
 
 function twiml(res, body = '') {
   res.statusCode = 200;
@@ -42,6 +48,25 @@ export default async function handler(req, res) {
     const normalized = normalizePhone(from) || from;
     const last10 = (normalized.match(/\d/g) || []).join('').slice(-10);
     if (!last10 || last10.length < 10) return twiml(res); // can't route — ack + drop
+
+    // ── Compliance keywords first (STOP / START) ──────────────────────
+    // Flip SMS consent for EVERY client row matching this number across
+    // every workspace (one number = one platform-level consent state).
+    // Twilio auto-replies to STOP/START, so we just record + ack.
+    const keyword = (params.Body || '').trim().toUpperCase();
+    if (STOP_WORDS.has(keyword)) {
+      await sql`UPDATE clients SET sms_consent_at = NULL
+                 WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10}`;
+      return twiml(res);
+    }
+    if (START_WORDS.has(keyword)) {
+      await sql`UPDATE clients SET sms_consent_at = NOW()
+                 WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10}`;
+      return twiml(res);
+    }
+    if (keyword === 'HELP' || keyword === 'INFO') {
+      return twiml(res); // no state change — carrier/Twilio sends the HELP reply
+    }
 
     // Find the matching client + their most recently active thread.
     const { rows } = await sql`
@@ -81,7 +106,7 @@ export default async function handler(req, res) {
 
     await notifyOwnerSafe({
       workspaceId: match.workspace_id, type: 'messages',
-      payload: { title: 'New text message', body: preview, url: `/messages?thread=${threadId}`, tag: `thread-${threadId}` },
+      payload: { title: 'New text message', body: preview, url: `/messages?threadId=${threadId}`, tag: `thread-${threadId}` },
     });
 
     return twiml(res);

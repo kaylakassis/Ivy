@@ -1,4 +1,10 @@
 // POST /api/sms/inbound — Twilio webhook for inbound SMS.
+//
+// SUPERSEDED: point Twilio at /api/webhooks/twilio/sms instead — that one
+// handles these same compliance keywords AND threads non-keyword replies
+// into the client conversation. This endpoint remains as a consent-only
+// fallback (it does NOT thread replies) for any number still configured here.
+//
 // Handles the compliance keywords (STOP, UNSUBSCRIBE, CANCEL, END, QUIT,
 // START, UNSTOP, YES, HELP) and reflects them across our clients table:
 //

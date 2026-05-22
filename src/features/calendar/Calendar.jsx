@@ -25,7 +25,11 @@ const VIEW_KEY = 'thryve:calendar:view';
 export default function Calendar() {
   const { isMobile, isTablet } = useViewport();
   const [view, setView]     = useState(() => localStorage.getItem(VIEW_KEY) || 'week'); // 'day' | 'week' | 'month'
-  const [anchor, setAnchor] = useState(() => startOfWeek(new Date()));
+  // Anchor on TODAY (not the week's Monday) so day view opens on today and
+  // week/month views still render the period containing today (both wrap
+  // startOfWeek where needed). Refreshing the page lands you on the current
+  // day, not the start of the week.
+  const [anchor, setAnchor] = useState(() => new Date());
 
   // Compute the date window the current view actually renders, with
   // a ±1 week buffer so navigating one click forward/back doesn't
