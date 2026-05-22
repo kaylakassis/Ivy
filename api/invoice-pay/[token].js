@@ -14,6 +14,7 @@ import { sql } from '../_lib/db.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { computeTotals } from '../_lib/finance.js';
 import { getProvider } from '../_lib/payments/index.js';
+import { reconcileStripeInvoice } from '../_lib/invoicePayments.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
@@ -36,6 +37,21 @@ export default async function handler(req, res) {
       return notFound(res, 'Invalid invoice link.');
     }
     const tokenHash = hashToken(rawToken);
+
+    // Confirm action: the buyer just returned from Checkout (?paid=1). Mark
+    // the invoice paid synchronously by reading the completed session —
+    // don't wait on the per-workspace webhook (which most owners never set
+    // up, so payments silently never landed in the finance tab). Idempotent.
+    if (req.query.action === 'confirm') {
+      const { rows } = await sql`SELECT * FROM invoices WHERE view_token_hash = ${tokenHash} LIMIT 1`;
+      const inv = rows[0];
+      // Token is cleared once an invoice is paid — a not-found here in the
+      // post-checkout return flow means it already settled.
+      if (!inv) return ok(res, { paid: true });
+      if (inv.status === 'paid' || inv.status === 'refunded') return ok(res, { paid: true });
+      const paid = await reconcileStripeInvoice(inv);
+      return ok(res, { paid });
+    }
 
     const { rows: invRows } = await sql`
       SELECT * FROM invoices

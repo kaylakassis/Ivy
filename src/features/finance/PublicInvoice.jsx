@@ -26,19 +26,37 @@ export default function PublicInvoice() {
 
   useEffect(() => {
     let live = true;
-    fetch('/api/invoice-view/' + encodeURIComponent(token), { credentials: 'omit' })
-      .then(async (res) => {
+    (async () => {
+      // Returning from a successful checkout: confirm the payment
+      // server-side so the invoice is marked paid (and shows up in the
+      // owner's finance tab) immediately — instead of waiting on a webhook
+      // that may never have been configured.
+      if (paidFlag) {
+        try {
+          await fetch('/api/invoice-pay/' + encodeURIComponent(token) + '?action=confirm', {
+            method: 'POST', credentials: 'omit',
+          });
+        } catch { /* best-effort — the success screen still renders */ }
+      }
+      try {
+        const res = await fetch('/api/invoice-view/' + encodeURIComponent(token), { credentials: 'omit' });
         if (!res.ok) {
           const j = await res.json().catch(() => ({}));
           throw Object.assign(new Error(j.error || `HTTP ${res.status}`), { status: res.status });
         }
-        return res.json();
-      })
-      .then((r) => live && setInv(r.invoice))
-      .catch((e) => live && setError(e))
-      .finally(() => live && setLoading(false));
+        const r = await res.json();
+        if (live) setInv(r.invoice);
+      } catch (e) {
+        // After a successful payment the invoice is marked paid and its link
+        // is consumed, so invoice-view 404s — that's expected; the paid
+        // success screen renders from paidFlag, not from the invoice.
+        if (live && !paidFlag) setError(e);
+      } finally {
+        if (live) setLoading(false);
+      }
+    })();
     return () => { live = false; };
-  }, [token]);
+  }, [token, paidFlag]);
 
   const markPaid = async () => {
     setSubmitting(true);
@@ -74,6 +92,24 @@ export default function PublicInvoice() {
 
   if (loading) {
     return <PageWrap tweaks={tweaks}><div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div></PageWrap>;
+  }
+  // Post-payment success — render even if the (now-paid) invoice link no
+  // longer loads. We confirmed the payment server-side above.
+  if (paidFlag) {
+    return (
+      <PageWrap tweaks={tweaks}>
+        <div className="card" style={{ padding: 36, textAlign: 'center' }}>
+          <div style={{
+            width: 48, height: 48, borderRadius: 99, background: 'var(--ok)', color: '#fff',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+          }}><Icons.Check size={24} sw={2.4}/></div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Payment received — thank you!</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
+            {inv?.business?.name || 'The business'} has been notified and your invoice is marked paid.
+          </div>
+        </div>
+      </PageWrap>
+    );
   }
   if (error || !inv) {
     return (

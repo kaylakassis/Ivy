@@ -325,9 +325,12 @@ export async function createBillingPortalSession({
   return { id: session.id, url: session.url };
 }
 
-export async function fetchCheckoutSession({ secretKey, sessionId }) {
+export async function fetchCheckoutSession({ secretKey, sessionId, stripeAccount }) {
   if (!sessionId) throw new Error('sessionId is required');
-  return stripeFetch(`/checkout/sessions/${encodeURIComponent(sessionId)}?expand[0]=subscription`, { secretKey });
+  // stripeAccount: required to read a session that lives on a CONNECTED
+  // account (the Account-Links/Express flow charges there). Omitted for the
+  // platform's own sessions (subscription billing) + legacy OAuth keys.
+  return stripeFetch(`/checkout/sessions/${encodeURIComponent(sessionId)}?expand[0]=subscription`, { secretKey, stripeAccount });
 }
 
 export async function fetchSubscription({ secretKey, subscriptionId }) {

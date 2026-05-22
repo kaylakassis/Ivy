@@ -10,6 +10,7 @@ import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { serializeInvoicePublic } from '../_lib/finance.js';
+import { reconcileStripeInvoice } from '../_lib/invoicePayments.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
@@ -88,6 +89,14 @@ async function getInvoice(req, res) {
     const token = (req.query.token || '').toString();
     const inv = await fetchByToken(token);
     if (!inv) return notFound(res, 'This invoice link is invalid, has expired, or was already paid.');
+
+    // Self-heal: if this still-unpaid invoice has a completed Stripe
+    // checkout session, mark it paid now rather than waiting on a webhook
+    // that may never have been configured. Bounded (only invoices carrying
+    // a cs_ session); no-op otherwise.
+    if (await reconcileStripeInvoice(inv)) {
+      return notFound(res, 'This invoice was already paid — thank you!');
+    }
 
     // Append a 'viewed' activity once per day (best-effort).
     const activity = inv.activity || [];
