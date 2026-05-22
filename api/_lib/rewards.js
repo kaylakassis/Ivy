@@ -302,6 +302,45 @@ export async function issueReward({
       UPDATE reward_redemptions SET notified_at = NOW() WHERE id = ${redemption.id}
     `;
     redemption.notified_at = new Date().toISOString();
+
+    // Out-of-band nudge (push + email) so a client who doesn't open the
+    // portal still learns they earned the reward — the in-app thread
+    // message alone went unseen. Best-effort; dynamically imported to
+    // avoid an import cycle (rewards.js is pulled in widely). Never block
+    // issuance on a notification failure.
+    try {
+      const { notifyClientSafe } = await import('./push.js');
+      await notifyClientSafe({
+        clientId, type: 'messages',
+        payload: { title: '🎉 You earned a reward', body: rewardText, url: '/me/messages', tag: `reward-${redemption.id}` },
+      });
+    } catch { /* ignore */ }
+    if (cl.rows[0].email) {
+      try {
+        const [{ sendEmailToClient, emailShell }, { fetchBranding }, { appUrl }] = await Promise.all([
+          import('./email.js'), import('./branding.js'), import('./tokens.js'),
+        ]);
+        const branding = await fetchBranding(workspaceId).catch(() => ({}));
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        await sendEmailToClient({
+          clientId, type: 'marketing',
+          to: cl.rows[0].email,
+          replyTo: branding.replyTo,
+          subject: `You've earned a reward${branding.businessName ? ` from ${branding.businessName}` : ''}`,
+          html: emailShell({
+            heading: "🎉 You've earned a reward!",
+            body: `<p>Hi ${esc((cl.rows[0].name || '').split(/\s+/)[0] || 'there')},</p>
+              <p>${esc(rewardText)}</p>
+              <p>Valid through ${esc(expiryLabel)}. Just mention it next time you book.</p>`,
+            ctaText: 'Open my portal', ctaUrl: `${appUrl()}/me`,
+            branding,
+          }),
+        });
+      } catch (e) {
+        // eslint-disable-next-line no-console
+        console.warn('[rewards] reward email failed:', e.message);
+      }
+    }
   }
 
   return { redemption, messageId };

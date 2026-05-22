@@ -15,6 +15,7 @@ import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { applySubscriptionState } from '../../_lib/memberships.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
+import { notifyInvoicePaid } from '../../_lib/invoiceNotify.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
@@ -483,6 +484,15 @@ export default async function handler(req, res) {
         url: `/ivy?prompt=${encodeURIComponent(ivyPrompt)}`,
         tag: `invoice-paid-${inv.id}`,
       },
+    });
+
+    // Client receipt. The platform webhook + manual mark-paid both send
+    // this; this per-workspace path used to omit it, so card payers on the
+    // legacy / Standard-OAuth flow got charged with no confirmation email.
+    // Best-effort — guarded above by the `status === 'paid'` early-return
+    // so a webhook retry can't double-send. Fire-and-forget.
+    notifyInvoicePaid({
+      workspaceId, invoiceId: inv.id, totalAmount: totals.total, method: 'card',
     });
 
     return ok(res, { received: true, marked: 'paid' });

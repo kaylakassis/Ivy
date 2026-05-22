@@ -39,6 +39,7 @@ export default function ClientBookings() {
   const [reviewing, setReviewing]   = useState(null); // booking pending review
 
   const [reloadKey, setReloadKey] = useState(0);
+  const [feeNotice, setFeeNotice] = useState(null); // late-cancel fee charge confirmation
 
   useEffect(() => {
     let live = true;
@@ -62,11 +63,17 @@ export default function ClientBookings() {
     setCancelBusy(true);
     setCancelErr(null);
     try {
-      await api.del('/me/bookings/' + confirming.id);
+      const r = await api.del('/me/bookings/' + confirming.id);
       // Refetch so upcoming/past/cancelled buckets are correct.
       const fresh = await api.get('/me/bookings');
       setData(fresh);
       setConfirming(null);
+      // Surface a late-cancel fee that was actually charged — the client
+      // must know money left their card. (The endpoint returns feeCharged
+      // for exactly this; it used to be silently discarded.)
+      if (r && Number(r.feeCharged) > 0) {
+        setFeeNotice(`Your booking was cancelled. A $${Number(r.feeCharged).toFixed(2)} late-cancellation fee was charged to your card on file.`);
+      }
     } catch (e) {
       setCancelErr(e.message || 'Could not cancel');
     } finally {
@@ -94,6 +101,19 @@ export default function ClientBookings() {
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
+      {feeNotice && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '12px 14px', borderRadius: 10, fontSize: 13, lineHeight: 1.5,
+          background: 'color-mix(in srgb, var(--warn) 12%, var(--surface))',
+          border: '1px solid color-mix(in srgb, var(--warn) 35%, var(--border))',
+        }}>
+          <Icons.Receipt size={15} sw={1.8} stroke="var(--warn)"/>
+          <span style={{ flex: 1 }}>{feeNotice}</span>
+          <button onClick={() => setFeeNotice(null)} className="btn btn-ghost"
+            style={{ padding: 2, color: 'var(--muted)' }} title="Dismiss"><Icons.X size={13}/></button>
+        </div>
+      )}
       <div className="tab-row">
         {TABS.map((t) => {
           const on = tab === t.id;
@@ -349,6 +369,24 @@ function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
             {fmtDay(booking.date)} · {fmtTime(booking.startMin)} – {fmtTime(booking.endMin)}
           </div>
         </div>
+        {(() => {
+          const fee = Number(booking.cancellationFeeAmount || 0);
+          const windowH = Number(booking.cancellationWindowHours || 0);
+          const startMs = Date.parse(`${booking.date}T00:00:00Z`) + (booking.startMin || 0) * 60000;
+          const insideWindow = fee > 0 && windowH > 0 && startMs < Date.now() + windowH * 3600 * 1000;
+          if (!insideWindow) return null;
+          return (
+            <div style={{
+              padding: '10px 12px', borderRadius: 8, fontSize: 12.5, lineHeight: 1.55,
+              background: 'color-mix(in srgb, var(--warn) 12%, transparent)',
+              border: '1px solid color-mix(in srgb, var(--warn) 35%, var(--border))',
+              color: 'var(--fg-2)',
+            }}>
+              <strong>Late-cancellation fee:</strong> this is within {windowH}h of your appointment, so a
+              ${fee.toFixed(2)} fee may be charged to your card on file.
+            </div>
+          );
+        })()}
         <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
           The business will be notified through your message thread. This can't be undone — you'd need
           to book again from scratch.

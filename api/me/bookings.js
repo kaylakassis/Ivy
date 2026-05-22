@@ -28,6 +28,7 @@ export default async function handler(req, res) {
               s.name AS service_name,
               s.duration_minutes, s.price, s.capacity AS service_capacity,
               s.location_type AS service_location_type,
+              s.cancellation_fee_amount, s.cancellation_window_hours,
               cs.slug AS biz_slug
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
@@ -70,6 +71,11 @@ export default async function handler(req, res) {
         durationMinutes: r.duration_minutes,
         price: r.price != null ? Number(r.price) : null,
         cancelledAt: r.cancelled_at,
+        // Cancellation policy — lets the portal warn the client BEFORE a
+        // late-cancel fee is auto-charged on their card.
+        cancellationFeeAmount: Number(r.cancellation_fee_amount || 0),
+        cancellationWindowHours: Number.isInteger(r.cancellation_window_hours)
+          ? r.cancellation_window_hours : 24,
         videoRoomUrl: r.video_room_url || null,
         locationAddress: r.location_address || null,
         tipAmount: Number(r.tip_amount || 0),
