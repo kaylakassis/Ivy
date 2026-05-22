@@ -35,6 +35,12 @@ export function isOccurrencePast(occurrenceISO, endMin) {
   return end.getTime() < Date.now();
 }
 
+export function startOfToday() {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
 export function startOfWeek(d) {
   const r = new Date(d);
   r.setHours(0, 0, 0, 0);
@@ -78,6 +84,12 @@ export function slotsForDate(cal, date, serviceOrDur) {
   // portal reschedule both call this; the owner's calendar does not.
   const minNoticeMin = Math.max(0, Number(cal.settings?.minNoticeHours ?? 24) * 60);
   const cutoffMs = Date.now() + minNoticeMin * 60 * 1000;
+  // Booking horizon: slots beyond (today + maxAdvanceDays) aren't bookable.
+  // 0 = no limit. Inclusive of the whole final day.
+  const maxAdvanceDays = Math.max(0, Number(cal.settings?.maxAdvanceDays ?? 60));
+  const horizonMs = maxAdvanceDays > 0
+    ? (() => { const h = new Date(); h.setHours(0, 0, 0, 0); h.setDate(h.getDate() + maxAdvanceDays); h.setHours(23, 59, 59, 999); return h.getTime(); })()
+    : Infinity;
   const dayBaseMs = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0).getTime();
   // Buffer between appointments: the workspace minimum gap + this service's
   // travel time. Widens the conflict window so a slot too close to an
@@ -120,6 +132,9 @@ export function slotsForDate(cal, date, serviceOrDur) {
       }
       if (!reason && (dayBaseMs + start * 60000) < cutoffMs) {
         reason = minNoticeMin > 0 ? 'Too soon' : 'Past';
+      }
+      if (!reason && (dayBaseMs + start * 60000) > horizonMs) {
+        reason = 'Too far';
       }
       const available = !reason && seatsTaken < capacity;
       const seatsLeft = capacity > 1 ? Math.max(0, capacity - seatsTaken) : null;

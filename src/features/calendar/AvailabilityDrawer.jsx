@@ -29,6 +29,18 @@ const START_OPTIONS = [
   { v: 'service', label: 'Back-to-back — fit each service’s length' },
 ];
 
+// How far ahead clients can book (booking horizon). 0 = no limit.
+const ADVANCE_OPTIONS = [
+  { v: 7,   label: '1 week' },
+  { v: 14,  label: '2 weeks' },
+  { v: 30,  label: '30 days' },
+  { v: 60,  label: '60 days' },
+  { v: 90,  label: '90 days' },
+  { v: 180, label: '6 months' },
+  { v: 365, label: '1 year' },
+  { v: 0,   label: 'No limit' },
+];
+
 // Minimum gap forced between appointments (e.g. clean-up / reset time).
 const BUFFER_OPTIONS = [
   { v: 0,  label: 'No buffer — back-to-back OK' },
@@ -51,9 +63,10 @@ const selectStyle = {
   color: 'var(--fg)', fontSize: 14,
 };
 
-export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, slotFitService, bufferMinutes, onSave, onClose }) {
+export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDays, slotMinutes, slotFitService, bufferMinutes, onSave, onClose }) {
   const [avail, setAvail] = useState(initial || {});
   const [notice, setNotice] = useState(noticeHours == null ? 24 : Number(noticeHours));
+  const [advance, setAdvance] = useState(maxAdvanceDays == null ? 60 : Number(maxAdvanceDays));
   const [startMode, setStartMode] = useState(slotFitService ? 'service' : String(slotMinutes || 30));
   const [buffer, setBuffer] = useState(bufferMinutes == null ? 0 : Number(bufferMinutes));
   const [busy, setBusy] = useState(false);
@@ -69,6 +82,7 @@ export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, 
       await onSave({
         availability: avail,
         minNoticeHours: notice,
+        maxAdvanceDays: advance,
         slotFitService: fit,
         bufferMinutes: buffer,
         ...(fit ? {} : { slotMinutes: Number(startMode) }),
@@ -106,6 +120,19 @@ export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, 
         </div>
         <select id="min-notice" value={notice} onChange={(e) => setNotice(Number(e.target.value))} style={selectStyle}>
           {NOTICE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div style={cardStyle}>
+        <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="max-advance">
+          How far ahead clients can book
+        </label>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 8px' }}>
+          The booking page only shows today through this far out. Past days
+          are never shown.
+        </div>
+        <select id="max-advance" value={advance} onChange={(e) => setAdvance(Number(e.target.value))} style={selectStyle}>
+          {ADVANCE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
         </select>
       </div>
 

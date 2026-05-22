@@ -23,6 +23,7 @@ export function serializeSettings(row) {
     slotFitService: !!row.slot_fit_service,
     bufferMinutes:  row.buffer_minutes,
     minNoticeHours: row.min_notice_hours == null ? 24 : Number(row.min_notice_hours),
+    maxAdvanceDays: row.max_advance_days == null ? 60 : Number(row.max_advance_days),
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',

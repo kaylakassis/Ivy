@@ -545,6 +545,9 @@ CREATE TABLE IF NOT EXISTS calendar_settings (
   slot_fit_service BOOLEAN NOT NULL DEFAULT FALSE,
   buffer_minutes INT NOT NULL DEFAULT 0,
   min_notice_hours INT NOT NULL DEFAULT 24,
+  -- How far in advance (days) a client may book on the public page.
+  -- 0 = no limit (any future date). Default 60 days.
+  max_advance_days INT NOT NULL DEFAULT 60,
   availability JSONB NOT NULL DEFAULT '{"0":[],"1":[{"start":540,"end":1020}],"2":[{"start":540,"end":1020}],"3":[{"start":540,"end":1020}],"4":[{"start":540,"end":1020}],"5":[{"start":540,"end":840}],"6":[]}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
@@ -557,6 +560,9 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS min_notice_hours INT NOT 
 -- hour). slot_fit_service=TRUE instead steps starts by each service's own
 -- length so appointments pack back-to-back.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS slot_fit_service BOOLEAN NOT NULL DEFAULT FALSE;
+-- Booking horizon: clients can book at most this many days ahead on the
+-- public page (0 = no limit). Past days/times are always excluded.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS max_advance_days INT NOT NULL DEFAULT 60;
 -- Discover: opt-in directory listing on /me/discover. A business with
 -- discoverable=true and a slug is shown to all signed-in clients. Tagline
 -- is the one-line pitch shown under the business name on the listing.

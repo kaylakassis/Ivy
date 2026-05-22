@@ -481,6 +481,7 @@ export default function Calendar() {
         <AvailabilityDrawer
           initial={cal?.settings?.availability}
           noticeHours={cal?.settings?.minNoticeHours}
+          maxAdvanceDays={cal?.settings?.maxAdvanceDays}
           slotMinutes={cal?.settings?.slotMinutes}
           slotFitService={cal?.settings?.slotFitService}
           bufferMinutes={cal?.settings?.bufferMinutes}

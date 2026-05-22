@@ -133,6 +133,13 @@ export default async function handler(req, res) {
         if (!Number.isInteger(n) || n < 0 || n > 720) return badRequest(res, 'minNoticeHours must be 0–720');
         push('min_notice_hours', n);
       }
+      if ('maxAdvanceDays' in body) {
+        // How far ahead clients can book on the public page (0 = no limit).
+        // Cap at 730 days (2 years).
+        const n = Number(body.maxAdvanceDays);
+        if (!Number.isInteger(n) || n < 0 || n > 730) return badRequest(res, 'maxAdvanceDays must be 0–730');
+        push('max_advance_days', n);
+      }
       if ('slotFitService' in body) {
         // TRUE → start times step by each service's own length (back-to-back);
         // FALSE → fixed slot_minutes grid.

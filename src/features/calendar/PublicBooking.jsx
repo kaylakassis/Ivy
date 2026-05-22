@@ -13,7 +13,7 @@ import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useEmbedResize } from '../../lib/embedResize.js';
 import {
-  addDays, fmtDateISO, minToHM, parseISO, slotsForDate, startOfWeek, WEEKDAYS_SHORT,
+  addDays, fmtDateISO, minToHM, parseISO, slotsForDate, startOfToday, WEEKDAYS_SHORT,
 } from './utils.js';
 
 export default function PublicBooking({ embedded = false }) {
@@ -27,7 +27,10 @@ export default function PublicBooking({ embedded = false }) {
   const [loading, setLoading] = useState(true);
 
   const [serviceId, setServiceId] = useState(null);
-  const [weekAnchor, setWeekAnchor] = useState(() => startOfWeek(new Date()));
+  // Anchor the day strip on TODAY (never a past day). Past days are
+  // omitted entirely; the strip rolls forward from today up to the
+  // owner's booking horizon.
+  const [weekAnchor, setWeekAnchor] = useState(() => startOfToday());
   const [slot, setSlot] = useState(null);
   const [step, setStep] = useState('pick');     // 'pick' | 'details' | 'confirmed' | 'waitlisted'
   // True when the user picked a fully-booked day card. Switches the
@@ -195,7 +198,20 @@ export default function PublicBooking({ embedded = false }) {
   }
 
   const svc = cal.services.find((s) => s.id === serviceId);
-  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(weekAnchor, i));
+  // Day strip: 7-day pages that start at TODAY and never include past days.
+  // The owner's booking horizon (maxAdvanceDays; 0 = no limit) caps how far
+  // forward a visitor can page, and trims the final page so no out-of-range
+  // day is offered.
+  const today = startOfToday();
+  const maxAdvanceDays = Math.max(0, Number(cal.settings?.maxAdvanceDays ?? 60));
+  const horizon = maxAdvanceDays > 0 ? addDays(today, maxAdvanceDays) : null;
+  const anchor = weekAnchor < today ? today : weekAnchor;
+  const weekDays = Array.from({ length: 7 }, (_, i) => addDays(anchor, i))
+    .filter((d) => d >= today && (!horizon || d <= horizon));
+  const canGoBack = anchor > today;
+  const canGoForward = horizon ? addDays(anchor, 7) <= horizon : true;
+  const firstShown = weekDays[0] || today;
+  const lastShown = weekDays[weekDays.length - 1] || today;
 
   const book = async (joinWaitlist = false) => {
     if (!slot || !svc) return;
@@ -702,13 +718,17 @@ export default function PublicBooking({ embedded = false }) {
 
           {/* Week navigation */}
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: 12, gap: 8 }}>
-            <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setWeekAnchor(addDays(weekAnchor, -7))}>
+            <button className="btn btn-ghost" style={{ padding: 6, opacity: canGoBack ? 1 : 0.3, cursor: canGoBack ? 'pointer' : 'default' }}
+              disabled={!canGoBack}
+              onClick={() => { if (!canGoBack) return; const prev = addDays(anchor, -7); setWeekAnchor(prev < today ? today : prev); }}>
               <Icons.Arrow size={14} style={{ transform: 'rotate(180deg)' }}/>
             </button>
             <div style={{ flex: 1, textAlign: 'center', fontWeight: 500, fontSize: 14, color: 'var(--fg-2)' }}>
-              {weekAnchor.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} – {addDays(weekAnchor, 6).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+              {firstShown.toLocaleDateString('en-US', { month: 'long', day: 'numeric' })} – {lastShown.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
             </div>
-            <button className="btn btn-ghost" style={{ padding: 6 }} onClick={() => setWeekAnchor(addDays(weekAnchor, 7))}>
+            <button className="btn btn-ghost" style={{ padding: 6, opacity: canGoForward ? 1 : 0.3, cursor: canGoForward ? 'pointer' : 'default' }}
+              disabled={!canGoForward}
+              onClick={() => { if (canGoForward) setWeekAnchor(addDays(anchor, 7)); }}>
               <Icons.Arrow size={14}/>
             </button>
           </div>
@@ -718,28 +738,26 @@ export default function PublicBooking({ embedded = false }) {
               each day stays readable instead of getting crushed to
               ~28px-wide. Desktop keeps the equal-width grid. */}
           <div className="public-booking-days" style={{
-            display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 10,
+            display: 'grid', gridTemplateColumns: `repeat(${Math.max(weekDays.length, 1)}, 1fr)`, gap: 10,
           }}>
             {weekDays.map((d, i) => {
               const allSlots = svc ? slotsForDate(cal, d, svc) : [];
               const slots = allSlots.filter((s) => s.available);
-              const today = new Date(); today.setHours(0, 0, 0, 0);
-              const isPast = d < today;
-              // Differentiate "closed that day" (no windows produced any
-              // slots) from "fully booked" (windows existed but every
-              // slot is taken). The latter gets a Join-waitlist CTA.
-              const isClosed     = !isPast && allSlots.length === 0;
-              const isFullyBooked = !isPast && allSlots.length > 0 && slots.length === 0;
+              // Past days are never rendered (the strip starts at today), so
+              // each visible day is either open, closed, or fully booked.
+              // "Closed" = no windows produced any slots; "fully booked" =
+              // windows existed but every slot is taken (gets a waitlist CTA).
+              const isClosed     = allSlots.length === 0;
+              const isFullyBooked = allSlots.length > 0 && slots.length === 0;
               return (
                 <div key={i} className="card" style={{
                   padding: 10, display: 'flex', flexDirection: 'column', gap: 6,
-                  opacity: isPast ? 0.4 : 1,
                 }}>
                   <div style={{ textAlign: 'center', paddingBottom: 6, borderBottom: '1px solid var(--border)' }}>
                     <div className="metric-label" style={{ fontSize: 10 }}>{WEEKDAYS_SHORT[d.getDay()]}</div>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500 }}>{d.getDate()}</div>
                   </div>
-                  {isPast ? null : isClosed ? (
+                  {isClosed ? (
                     <div style={{ fontSize: 10, color: 'var(--muted-2)', textAlign: 'center', padding: '8px 0' }}>Closed</div>
                   ) : isFullyBooked ? (
                     /* Hot day — every slot taken. Surface waitlist as

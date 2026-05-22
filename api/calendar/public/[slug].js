@@ -174,13 +174,14 @@ async function createBooking(req, res) {
 
     // Resolve workspace by slug.
     const settingsRows = await sql`
-      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service, buffer_minutes FROM calendar_settings WHERE slug = ${slug}
+      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service, buffer_minutes, max_advance_days FROM calendar_settings WHERE slug = ${slug}
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];
     const minNoticeHours = Math.max(0, Number(settingsRows.rows[0].min_notice_hours ?? 24));
     const slotFitService = !!settingsRows.rows[0].slot_fit_service;
     const bufferMinutes = Math.max(0, Number(settingsRows.rows[0].buffer_minutes || 0));
+    const maxAdvanceDays = Math.max(0, Number(settingsRows.rows[0].max_advance_days ?? 60));
 
     // Validate inputs.
     const date = (body.date || '').toString();
@@ -340,6 +341,15 @@ async function createBooking(req, res) {
         ? `${minNoticeHours / 24} day${minNoticeHours === 24 ? '' : 's'}`
         : `${minNoticeHours} hour${minNoticeHours === 1 ? '' : 's'}`;
       return badRequest(res, `This business requires booking at least ${noticeLabel} in advance.`);
+    }
+    // Booking horizon: clients can't book further out than the owner allows
+    // (0 = no limit). One extra day of grace absorbs viewer/server timezone
+    // skew so a slot the UI legitimately offered isn't rejected at the edge.
+    if (maxAdvanceDays > 0 && slotStart.getTime() > now.getTime() + (maxAdvanceDays + 1) * 86400 * 1000) {
+      const horizonLabel = maxAdvanceDays % 7 === 0
+        ? `${maxAdvanceDays / 7} week${maxAdvanceDays === 7 ? '' : 's'}`
+        : `${maxAdvanceDays} day${maxAdvanceDays === 1 ? '' : 's'}`;
+      return badRequest(res, `This business only takes bookings up to ${horizonLabel} in advance.`);
     }
 
     // Availability + conflict check.

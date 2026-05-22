@@ -128,6 +128,28 @@ async function run() {
   r = await post({ ...base, date: bufDate, startMin: 720, endMin: 765 }); // 12:00, 75 min gap
   assert([200,201].includes(r.statusCode), `server: a slot beyond the buffer books fine (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
 
+  console.log('\n[5] booking horizon — how far ahead clients can book');
+  // slotsForDate: days beyond the horizon are 'Too far'; within stays open;
+  // 0 = no limit.
+  const calAdv = (days) => ({ settings: { availability: fullWeek, slotMinutes: 30, minNoticeHours: 0, maxAdvanceDays: days }, blocks: [], bookings: [] });
+  const wayOut = new Date(Date.now() + 40 * 24 * 3600 * 1000); // 40 days out
+  const within = new Date(Date.now() + 10 * 24 * 3600 * 1000); // 10 days out
+  const farSlots = slotsForDate(calAdv(14), wayOut, svc);
+  assert(farSlots.length > 0 && farSlots.every((s) => !s.available && s.reason === 'Too far'), '14-day horizon: a 40-day-out day is all Too far');
+  assert(slotsForDate(calAdv(14), within, svc).some((s) => s.available), '14-day horizon: a 10-day-out day still bookable');
+  assert(slotsForDate(calAdv(0), wayOut, svc).some((s) => s.available), 'no-limit (0): a 40-day-out day is bookable');
+
+  // Server enforces the horizon on the public POST. Reset the rate limiter
+  // first — the earlier sections have already spent this IP's hourly quota.
+  await sql`TRUNCATE rate_limits`;
+  await sql`UPDATE calendar_settings SET min_notice_hours = 0, slot_minutes = 30, slot_fit_service = FALSE, buffer_minutes = 0, max_advance_days = 14 WHERE workspace_id = ${wid}`;
+  const farDate = iso(new Date(Date.now() + 30 * 24 * 3600 * 1000)); // 30 days > 14-day horizon
+  r = await post({ ...base, date: farDate, startMin: 600, endMin: 645 });
+  assert(r.statusCode === 400 && /up to/i.test(r.body?.error || ''), 'server: a booking beyond the 14-day horizon is rejected');
+  const nearDate = iso(new Date(Date.now() + 7 * 24 * 3600 * 1000)); // 7 days < 14-day horizon
+  r = await post({ ...base, date: nearDate, startMin: 660, endMin: 705 });
+  assert([200,201].includes(r.statusCode), `server: a booking within the horizon is allowed (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
+
   // Cleanup.
   await sql`DELETE FROM bookings WHERE workspace_id = ${wid}`;
   await sql`DELETE FROM clients WHERE workspace_id = ${wid}`;
