@@ -22,6 +22,12 @@ import MonthView from './MonthView.jsx';
 
 const VIEW_KEY = 'thryve:calendar:view';
 
+// Calendar sync (Google + iCal) is TABLED for now — we want owners using the
+// THRYVE calendar as the source of truth. The drawer, endpoints, and adapter
+// code are all kept intact; this flag just hides the entry points. Flip to
+// true to bring the feature back.
+const CALENDAR_SYNC_ENABLED = false;
+
 export default function Calendar() {
   const { isMobile, isTablet } = useViewport();
   const [view, setView]     = useState(() => localStorage.getItem(VIEW_KEY) || 'week'); // 'day' | 'week' | 'month'
@@ -323,9 +329,11 @@ export default function Calendar() {
             data-tour="calendar-share">
             <Icons.Globe size={14}/> {!isTablet && 'Share'}
           </button>
-          <button className="btn btn-outline" onClick={() => setDrawer('sync')}>
-            <Icons.Arrow size={14}/> {!isTablet && 'Sync'}
-          </button>
+          {CALENDAR_SYNC_ENABLED && (
+            <button className="btn btn-outline" onClick={() => setDrawer('sync')}>
+              <Icons.Arrow size={14}/> {!isTablet && 'Sync'}
+            </button>
+          )}
           <button className="btn btn-outline" onClick={() => {
             // The block editor doubles as a general event editor —
             // owner picks "Block bookings" or "Reminder only" inside.
@@ -693,7 +701,7 @@ function ActionSheet({ onClose, onPick }) {
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
     { id: 'sync',         label: 'Calendar sync', icon: 'Arrow' },
     { id: 'block',        label: 'Add event',    icon: 'Clock' },
-  ];
+  ].filter((it) => it.id !== 'sync' || CALENDAR_SYNC_ENABLED); // sync tabled for now
   return (
     <div onClick={onClose} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 80,

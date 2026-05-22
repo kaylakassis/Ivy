@@ -26,7 +26,7 @@ const CATEGORIES = [
     blurb: 'Share one link. Clients self-book around your real availability while you sleep — no back-and-forth, no double-bookings.',
     items: [
       { icon: 'Calendar', title: 'Online booking page', body: 'Your own link with services, durations, prices, add-ons, deposits, and custom intake questions.' },
-      { icon: 'Repeat',   title: 'Smart calendar + sync', body: 'Day/week/month, recurring sessions, buffers, and two-way Google Calendar sync. Apple & Outlook via feed.' },
+      { icon: 'Repeat',   title: 'Smart calendar', body: 'Day/week/month views, recurring sessions, configurable buffers, and a shareable booking link — all in one place.' },
       { icon: 'Users',    title: 'Group classes & capacity', body: 'Sell 1:1s or set a class size and let a single slot book up to capacity.' },
       { icon: 'Bell',     title: 'Email + SMS reminders', body: 'Automatic multi-step reminders over email and text, so no-shows quietly disappear.' },
       { icon: 'Clock',    title: 'Waitlists', body: 'Slot full? Clients join a waitlist and get auto-promoted the moment someone cancels.' },

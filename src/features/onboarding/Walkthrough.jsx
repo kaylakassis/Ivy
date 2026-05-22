@@ -42,7 +42,7 @@ const STEPS = [
   {
     id: 'calendar',
     title: 'Calendar',
-    body: "Define your services, set weekly availability, and share your booking link. Public bookings auto-create clients, send confirmations, and trigger SMS + Google Calendar sync.",
+    body: "Define your services, set weekly availability, and share your booking link. Public bookings auto-create clients, send confirmations, and trigger SMS reminders.",
     route: '/calendar',
     selector: '[data-tour="nav-calendar"]',
     placement: 'right',
