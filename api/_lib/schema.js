@@ -616,11 +616,19 @@ CREATE TABLE IF NOT EXISTS reviews (
   reviewer_name TEXT NOT NULL,
   rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
   text TEXT,
-  status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'hidden')),
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('visible', 'hidden', 'pending')),
   owner_response TEXT,
   owner_responded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Reviews are held for owner moderation ('pending') before they go public.
+-- Only 'visible' shows on the booking page / Discover / business profile;
+-- the owner publishes or hides each from the Reviews tab. (Existing rows
+-- were all 'visible' and stay so — only the allowed set + default change.)
+ALTER TABLE reviews ALTER COLUMN status SET DEFAULT 'pending';
+ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_status_check;
+ALTER TABLE reviews ADD CONSTRAINT reviews_status_check
+  CHECK (status IN ('visible', 'hidden', 'pending')) NOT VALID;
 CREATE INDEX IF NOT EXISTS idx_reviews_workspace_recent
   ON reviews(workspace_id, status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_booking

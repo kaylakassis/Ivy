@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
-import OnboardingChecklist from './SetupChecklist.jsx';
 
 const METRICS = [
   { k: 'mrr',     label: 'Revenue this month', kind: 'money' },
@@ -328,7 +327,7 @@ export default function Dashboard() {
     <div>
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-        <OnboardingChecklist/>
+        <SetupChecklist/>
         <div className="grid-auto">
           {METRICS.map((m) => (
             <MetricCard key={m.k} label={m.label} kind={m.kind}

@@ -157,16 +157,22 @@ async function runWorkflow({ workflow, client, context = {}, startIndex = 0, isR
   // and (b) potentially disagree with the index on what "today"
   // means around midnight UTC.
   if (client?.id && !isResume) {
-    // Booking-tied triggers dedupe per BOOKING (a given booking fires the
-    // workflow at most once, ever) — not per client-per-day. Otherwise a
-    // client with two bookings on the same day only gets one follow-up.
-    // Other triggers keep the per-client-per-UTC-day guard (which uses
-    // idx_workflow_runs_dedupe).
+    // Booking-tied triggers dedupe per BOOKING + OCCURRENCE: a recurring
+    // series fires the workflow once per completed occurrence (a given
+    // single booking still fires at most once). Other triggers keep the
+    // per-client-per-UTC-day guard (which uses idx_workflow_runs_dedupe).
+    //
+    // The `OR occurrenceDate IS NULL` clause treats a legacy run row
+    // (written before per-occurrence keying) as already-fired for that
+    // booking, so deploying this can't re-fire a booking that already ran.
+    const occ = context?.occurrenceDate != null ? String(context.occurrenceDate) : null;
     const dup = context?.bookingId
       ? await sql`
           SELECT id FROM workflow_runs
            WHERE workflow_id = ${workflow.id}
              AND context->>'bookingId' = ${String(context.bookingId)}
+             AND (context->>'occurrenceDate' = ${occ}
+                  OR context->>'occurrenceDate' IS NULL)
            LIMIT 1
         `
       : await sql`
@@ -531,22 +537,27 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
   }
 
   if (wf.trigger_type === 'booking_completed') {
-    // Bookings whose end time was N days ago and weren't cancelled or
-    // already processed. We dedupe via workflow_runs so re-running the
-    // cron doesn't fire duplicates.
+    // Bookings with an occurrence COMPLETED exactly N days ago. We key on
+    // the completion_log entry for the target date — NOT b.date — so a
+    // recurring series fires per completed occurrence. The old
+    // `b.date = target AND completion_log ? b.date` form only ever matched
+    // the series' first occurrence, so weekly clients never got their
+    // "after each session" follow-up. completion_log keys are validated
+    // YYYY-MM-DD on write, so ::text/::date casts are safe. Dedup is per
+    // (booking, occurrence) in runWorkflow.
     const { rows: bookings } = await sql`
       SELECT b.*, c.id AS c_id, c.name AS c_name, c.email AS c_email,
-             c.phone AS c_phone, c.sms_consent_at AS c_sms_consent_at
+             c.phone AS c_phone, c.sms_consent_at AS c_sms_consent_at,
+             (CURRENT_DATE - (${days}::int || ' days')::interval)::date::text AS occurrence_date
         FROM bookings b
         LEFT JOIN clients c ON c.id = b.client_id
        WHERE b.workspace_id = ${wf.workspace_id}
          AND b.cancelled_at IS NULL
          AND b.no_show_at IS NULL
-         AND b.date = CURRENT_DATE - (${days}::int || ' days')::interval
-         -- Only ACTUALLY-completed occurrences (completion_log keyed by
-         -- occurrence date). Without this, "after a booking is completed"
-         -- automations fired on the scheduled date for no-shows too.
-         AND jsonb_exists(b.completion_log, b.date::text)
+         AND jsonb_exists(
+               b.completion_log,
+               (CURRENT_DATE - (${days}::int || ' days')::interval)::date::text
+             )
        LIMIT ${Math.max(1, Math.min(100, remaining))}
     `;
     return runWithConcurrency(bookings, 10, async (b) => {
@@ -556,7 +567,12 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
       };
       const out = await runWorkflow({
         workflow: wf, client,
-        context: { bookingId: b.id, bookingDate: b.date, daysAfter: days },
+        context: {
+          bookingId: b.id,
+          bookingDate: b.occurrence_date,
+          occurrenceDate: b.occurrence_date,
+          daysAfter: days,
+        },
       });
       return out.status !== 'skipped' ? 1 : 0;
     });

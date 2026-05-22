@@ -119,6 +119,25 @@ export default async function handler(req, res) {
         throw err;
       }
 
+      // Cash sales settle immediately — stamp paid_amount + paid_method so
+      // they show up in revenue rollups AND client 30-day metrics (which
+      // sum paid_amount). total is set by the BEFORE-insert trigger, so we
+      // copy it across exactly rather than re-deriving. Best-effort: the
+      // sale already succeeded, so a backfill miss must not fail it.
+      if (cash) {
+        try {
+          const upd = await sql`
+            UPDATE invoices SET paid_amount = total, paid_method = 'cash'
+             WHERE id = ${invoice.id} AND workspace_id = ${workspaceId}
+             RETURNING *
+          `;
+          if (upd.rows[0]) invoice = upd.rows[0];
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.warn('[pos/sale] paid_amount backfill failed:', e.message);
+        }
+      }
+
       return {
         status: 200,
         body: {

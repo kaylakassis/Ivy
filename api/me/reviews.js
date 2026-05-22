@@ -51,13 +51,15 @@ export default async function handler(req, res) {
     const reviewerName = (membership?.clientName || user.name || 'A client').trim();
 
     try {
+      // Held as 'pending' for owner moderation (won't show publicly until
+      // the owner publishes it from the Reviews tab).
       const r = await sql`
         INSERT INTO reviews (
           workspace_id, client_id, booking_id, reviewer_user_id,
-          reviewer_name, rating, text
+          reviewer_name, rating, text, status
         ) VALUES (
           ${booking.workspace_id}, ${booking.client_id}, ${booking.id}, ${user.id},
-          ${reviewerName}, ${rating}, ${text || null}
+          ${reviewerName}, ${rating}, ${text || null}, 'pending'
         )
         RETURNING *
       `;

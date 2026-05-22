@@ -135,7 +135,7 @@ async function createReview(req, res) {
           rating, text, status
         ) VALUES (
           ${workspaceId}, ${clientIds[0]}, ${user.id}, ${reviewerName},
-          ${rating}, ${text || null}, 'visible'
+          ${rating}, ${text || null}, 'pending'
         )
         RETURNING *
       `;

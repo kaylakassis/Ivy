@@ -74,20 +74,10 @@ export default async function handler(req, res) {
             FROM users u
             WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
               AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`,
-      sql`SELECT COALESCE(SUM(
-            (SELECT COALESCE(SUM(((it->>'qty')::numeric * (it->>'price')::numeric)), 0)
-              FROM jsonb_array_elements(items) it)
-            * (1 + COALESCE(tax_rate, 0))
-            - COALESCE(discount, 0)
-          ), 0)::numeric AS total
+      sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
           FROM invoices WHERE status = 'paid'`,
       sql.query(
-        `SELECT COALESCE(SUM(
-            (SELECT COALESCE(SUM(((it->>'qty')::numeric * (it->>'price')::numeric)), 0)
-              FROM jsonb_array_elements(items) it)
-            * (1 + COALESCE(tax_rate, 0))
-            - COALESCE(discount, 0)
-          ), 0)::numeric AS total
+        `SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
           FROM invoices
           WHERE status = 'paid' AND paid_at >= $1 AND paid_at < $2`,
         [fromIso, toIso],

@@ -16,9 +16,10 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     const agg = await sql`
-      SELECT COUNT(*)::int AS visible_count,
+      SELECT COUNT(*) FILTER (WHERE status = 'visible')::int AS visible_count,
              AVG(rating) FILTER (WHERE status = 'visible')::numeric AS avg,
              COUNT(*) FILTER (WHERE status = 'hidden')::int AS hidden_count,
+             COUNT(*) FILTER (WHERE status = 'pending')::int AS pending_count,
              COUNT(*) FILTER (WHERE rating <= 2 AND status = 'visible')::int AS critical
       FROM reviews WHERE workspace_id = ${workspaceId}
     `;
@@ -31,6 +32,7 @@ export default async function handler(req, res) {
       summary: {
         visibleCount: agg.rows[0]?.visible_count || 0,
         hiddenCount:  agg.rows[0]?.hidden_count  || 0,
+        pendingCount: agg.rows[0]?.pending_count || 0,
         avg:          agg.rows[0]?.avg != null ? Number(agg.rows[0].avg) : null,
         critical:     agg.rows[0]?.critical || 0,
       },

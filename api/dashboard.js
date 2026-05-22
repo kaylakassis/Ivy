@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     const [rev, cli, booked, hours, exp, today, recentInv, recentBk, taskRows] = await Promise.all([
-      sql`SELECT COALESCE(SUM(total), 0)::numeric AS v FROM invoices
+      sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS v FROM invoices
            WHERE workspace_id = ${workspaceId} AND status = 'paid'
              AND paid_at >= date_trunc('month', NOW())`,
       sql`SELECT COUNT(*)::int AS v FROM clients

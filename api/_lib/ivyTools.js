@@ -492,10 +492,7 @@ async function list_overdue_invoices({ workspaceId, args }) {
   const limit = clampInt(args.limit, 20, 1, 100);
   const { rows } = await sql.query(
     `SELECT id, number, status, client_id, client_name, client_email,
-            issue_date, due_date,
-            (SELECT COALESCE(SUM(((it->>'qty')::numeric * (it->>'price')::numeric)), 0)
-              FROM jsonb_array_elements(items) it) * (1 + COALESCE(tax_rate, 0))
-              - COALESCE(discount, 0) AS total
+            issue_date, due_date, total
        FROM invoices
        WHERE workspace_id = $1
          AND status IN ('sent', 'overdue')

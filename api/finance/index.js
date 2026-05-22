@@ -27,13 +27,13 @@ export default async function handler(req, res) {
     let rows;
     try { ({ rows } = await sql`
       SELECT
-        COALESCE(SUM(CASE WHEN status = 'paid'                   THEN total END), 0)::numeric AS total_paid,
+        COALESCE(SUM(CASE WHEN status = 'paid'                   THEN total - COALESCE(refunded_amount, 0) END), 0)::numeric AS total_paid,
         COALESCE(SUM(CASE WHEN status IN ('sent','overdue')      THEN total END), 0)::numeric AS total_outstanding,
         COALESCE(SUM(CASE WHEN status = 'overdue'                THEN total END), 0)::numeric AS total_overdue,
         COALESCE(SUM(CASE WHEN status = 'paid'
-          AND paid_at >= date_trunc('month', NOW())              THEN total END), 0)::numeric AS month_paid,
+          AND paid_at >= date_trunc('month', NOW())              THEN total - COALESCE(refunded_amount, 0) END), 0)::numeric AS month_paid,
         COALESCE(SUM(CASE WHEN status = 'paid'
-          AND paid_at >= date_trunc('year', NOW())               THEN total END), 0)::numeric AS year_paid,
+          AND paid_at >= date_trunc('year', NOW())               THEN total - COALESCE(refunded_amount, 0) END), 0)::numeric AS year_paid,
         COUNT(*) FILTER (WHERE status = 'draft')                 AS count_draft,
         COUNT(*) FILTER (WHERE status = 'sent')                  AS count_sent,
         COUNT(*) FILTER (WHERE status = 'paid')                  AS count_paid,

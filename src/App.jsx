@@ -28,6 +28,7 @@ const Finance     = lazy(() => import('./features/finance/Finance.jsx'));
 const Goals       = lazy(() => import('./features/goals/Goals.jsx'));
 const Workflows   = lazy(() => import('./features/workflows/Workflows.jsx'));
 const Rewards     = lazy(() => import('./features/rewards/Rewards.jsx'));
+const Reviews     = lazy(() => import('./features/reviews/Reviews.jsx'));
 const Messages    = lazy(() => import('./features/messages/Messages.jsx'));
 const Campaigns   = lazy(() => import('./features/campaigns/Campaigns.jsx'));
 const Documents   = lazy(() => import('./features/documents/Documents.jsx'));
@@ -228,6 +229,7 @@ export default function App() {
           <Route path="/goals"      element={<Goals />} />
           <Route path="/workflows"  element={<Workflows />} />
           <Route path="/rewards"    element={<Rewards />} />
+          <Route path="/reviews"    element={<Reviews />} />
           <Route path="/messages"   element={<Messages />} />
           <Route path="/campaigns"  element={<Campaigns />} />
           <Route path="/documents"  element={<Documents />} />
