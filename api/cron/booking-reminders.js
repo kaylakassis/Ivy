@@ -36,6 +36,62 @@ const MAX_PER_RUN = 1000;
 const LOOKBACK_MIN  = 25;
 const LOOKAHEAD_MIN = 5;
 
+// Page size for the keyset scan.
+const SCAN_BATCH = 1000;
+// SQL pre-filter window (minutes). Deliberately WIDER than the JS
+// LOOKBACK/LOOKAHEAD so the pre-filter never excludes a booking the JS
+// per-beat check would have reminded — the JS check is the source of truth.
+const SQL_LOOKBACK_MIN  = 60;
+const SQL_LOOKAHEAD_MIN = 15;
+
+// One page of bookings that have at least one reminder beat whose target
+// time lands in a generous window around now. Keyset cursor over
+// (date, start_min, id) so paging is stable and complete. Replaces the old
+// single LIMIT 5000 scan that silently truncated busy installs.
+export async function fetchDueBookings(cursor) {
+  const params = [];
+  let cursorClause = '';
+  if (cursor) {
+    cursorClause = `AND (b.date, b.start_min, b.id) > ($1, $2, $3)`;
+    params.push(cursor.date, cursor.startMin, cursor.id);
+  }
+  // Booking start as a UTC instant — matches the JS math
+  // Date.parse(`${dateISO}T00:00:00Z`) + start_min*60000.
+  const startTs = `((b.date::timestamp + make_interval(mins => b.start_min)) AT TIME ZONE 'UTC')`;
+  const text = `
+    SELECT
+      b.id, b.workspace_id, b.client_id, b.client_email, b.client_name,
+      COALESCE(b.client_phone, c.phone) AS client_phone,
+      c.sms_consent_at,
+      b.date, b.start_min, b.end_min, b.notes,
+      b.reminders_sent, b.sms_sent,
+      s.name AS service_name,
+      COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
+      cs.biz_name
+    FROM bookings b
+    LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+    LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+    LEFT JOIN clients c ON c.id = b.client_id
+    WHERE b.cancelled_at IS NULL
+      AND (
+        (b.client_email IS NOT NULL AND b.client_email <> '')
+        OR (COALESCE(b.client_phone, c.phone) IS NOT NULL AND c.sms_consent_at IS NOT NULL)
+      )
+      AND b.date BETWEEN CURRENT_DATE - INTERVAL '1 day'
+                     AND CURRENT_DATE + INTERVAL '8 days'
+      AND EXISTS (
+        SELECT 1 FROM unnest(COALESCE(s.reminder_minutes, ARRAY[]::int[])) AS m
+        WHERE (${startTs} - make_interval(mins => m))
+              BETWEEN NOW() - make_interval(mins => ${SQL_LOOKBACK_MIN})
+                  AND NOW() + make_interval(mins => ${SQL_LOOKAHEAD_MIN})
+      )
+      ${cursorClause}
+    ORDER BY b.date, b.start_min, b.id
+    LIMIT ${SCAN_BATCH}
+  `;
+  return sql.query(text, params);
+}
+
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
     && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
@@ -49,41 +105,33 @@ async function handler(req, res) {
     await ensureSchemaApplied();
     const now = Date.now();
 
-    // Pull every active booking up to 8 days out + its service's reminder
-    // schedule + the business name. 8 days covers the longest default
-    // reminder beat (1 week) plus a buffer.
-    const { rows } = await sql`
-      SELECT
-        b.id, b.workspace_id, b.client_id, b.client_email, b.client_name,
-        COALESCE(b.client_phone, c.phone) AS client_phone,
-        c.sms_consent_at,
-        b.date, b.start_min, b.end_min, b.notes,
-        b.reminders_sent, b.sms_sent,
-        s.name AS service_name,
-        COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
-        cs.biz_name
-      FROM bookings b
-      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
-      LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
-      LEFT JOIN clients c ON c.id = b.client_id
-      WHERE b.cancelled_at IS NULL
-        AND (
-          (b.client_email IS NOT NULL AND b.client_email <> '')
-          OR (COALESCE(b.client_phone, c.phone) IS NOT NULL AND c.sms_consent_at IS NOT NULL)
-        )
-        AND b.date BETWEEN CURRENT_DATE - INTERVAL '1 day'
-                       AND CURRENT_DATE + INTERVAL '8 days'
-      ORDER BY b.date, b.start_min
-      LIMIT 5000
-    `;
-
     let sent = 0;
     let scanned = 0;
     let failed = 0;
     // Memoize branding per workspace for this run — many reminders share
     // the same handful of workspaces.
     const getBranding = makeBrandingCache();
-    for (const r of rows) {
+
+    // Keyset-paginate the candidate set instead of a single LIMIT 5000
+    // scan. The old hard cap silently dropped reminders for every booking
+    // past the first 5000 in the 8-day window once an install got busy —
+    // entire tenants never got reminded. We now page through ALL due
+    // bookings (bounded only by MAX_PER_RUN *sends*). fetchDueBookings
+    // pre-filters in SQL to bookings with a beat landing in a generous
+    // window around now, so each page stays small; the precise per-beat
+    // ±window check below still runs in JS, so the wide SQL pre-filter can
+    // never drop a booking we'd actually remind.
+    let cursor = null;
+    let more = true;
+    while (more && sent < MAX_PER_RUN) {
+      // eslint-disable-next-line no-await-in-loop
+      const { rows } = await fetchDueBookings(cursor);
+      if (rows.length === 0) break;
+      const last = rows[rows.length - 1];
+      cursor = { date: last.date, startMin: last.start_min, id: last.id };
+      more = rows.length === SCAN_BATCH;
+
+      for (const r of rows) {
       if (sent >= MAX_PER_RUN) break;
       scanned++;
       const dateISO = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date;
@@ -189,6 +237,7 @@ async function handler(req, res) {
             }
           }
         }
+      }
       }
     }
 

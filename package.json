@@ -12,12 +12,12 @@
     "preview": "vite preview",
     "migrate": "node scripts/migrate.mjs",
     "lint": "eslint src",
-    "test:prefs":   "node --import ./tests/bootstrap.mjs ./tests/email-prefs.test.mjs",
-    "test:flows":   "node --import ./tests/bootstrap.mjs ./tests/email-flows.test.mjs",
+    "test:prefs": "node --import ./tests/bootstrap.mjs ./tests/email-prefs.test.mjs",
+    "test:flows": "node --import ./tests/bootstrap.mjs ./tests/email-flows.test.mjs",
     "test:metrics": "node --import ./tests/bootstrap.mjs ./tests/client-metrics.test.mjs",
-    "test:tpls":    "node --import ./tests/bootstrap.mjs ./tests/workflow-templates.test.mjs",
-    "test:smoke":   "node --import ./tests/bootstrap.mjs ./tests/smoke-runner.mjs",
-    "test":         "npm run test:prefs && npm run test:flows && npm run test:metrics && npm run test:tpls && npm run test:smoke"
+    "test:tpls": "node --import ./tests/bootstrap.mjs ./tests/workflow-templates.test.mjs",
+    "test:smoke": "node --import ./tests/bootstrap.mjs ./tests/smoke-runner.mjs",
+    "test": "node tests/run-all.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
@@ -42,6 +42,7 @@
     "@vitejs/plugin-react": "^4.3.1",
     "eslint": "^9.8.0",
     "eslint-plugin-react": "^7.35.0",
+    "eslint-plugin-react-hooks": "^5.2.0",
     "pg": "^8.20.0",
     "vite": "^5.4.0"
   }

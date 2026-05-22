@@ -1,6 +1,7 @@
 // Small helpers for serverless handlers.
 import { safeErrorMessage } from './security.js';
 import { reportError } from './monitoring.js';
+import { redact } from './logRedact.js';
 
 export function ok(res, body = {}) {
   return res.status(200).json(body);
@@ -37,10 +38,12 @@ export function methodNotAllowed(res, allowed = []) {
   return res.status(405).json({ error: 'Method not allowed' });
 }
 export function serverError(res, err, req) {
-  // Log the full error server-side (Vercel captures console.error in logs)
-  // but never let raw internals reach the client in production.
+  // Log the error server-side (Vercel captures console.error in logs) but
+  // redact PII first — Postgres errors + stacks can carry query params
+  // (emails, phones, tokens) into third-party log aggregators. Sentry's
+  // own path redacts separately via monitoring.js.
   // eslint-disable-next-line no-console
-  console.error('[api] server error:', err);
+  console.error('[api] server error:', redact(err?.stack || err?.message || String(err)));
   // Best-effort report to Sentry — no-ops if SENTRY_DSN isn't set. We
   // don't await it (Sentry buffers + flushes async) and we don't surface
   // the event id to the client to avoid leaking infra detail.

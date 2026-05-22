@@ -8,32 +8,37 @@
 // This module is now the SAFETY NET for the request path — two-stage so
 // cold-started functions don't pay the full ~80-statement migration cost:
 //
-//   1. PROBE — one cheap SELECT against a column we know got added in the
-//      most-recent migration. If it succeeds, schema is current and we
-//      mark the process as up-to-date. ~50ms. After a successful deploy
-//      migration this ALWAYS passes, so the expensive full path below
-//      never runs on a request.
-//   2. FULL — only when the probe fails (e.g. the deploy migration was
-//      skipped, or a hotfix added a column without redeploying). Runs
-//      every statement; idempotent (IF NOT EXISTS everywhere) so it's
-//      safe to retry.
+//   1. PROBE — compares the set of statement hashes in the CURRENT
+//      SCHEMA_SQL against the hashes recorded applied in the
+//      `schema_migrations` table. If every current statement is already
+//      recorded applied, the schema is current and we mark the process
+//      up-to-date. After a successful deploy migration this ALWAYS
+//      passes, so the expensive full path below never runs on a request.
+//   2. FULL — only when the probe fails (a new/changed statement isn't
+//      recorded yet, e.g. the deploy migration was skipped or a hotfix
+//      added a column without redeploying). Runs every statement;
+//      idempotent (IF NOT EXISTS everywhere) so it's safe to retry, then
+//      records the applied hashes so the next probe fast-paths.
 //
-// Bump PROBE_QUERY whenever you ship a column that should be a "schema
-// landed" boundary — it doubles as the marker the deploy migration and
-// the request-path probe both check.
+// This is self-maintaining: there is NO hand-edited sentinel to bump.
+// Any change to SCHEMA_SQL (new table/column/constraint, or an edit to an
+// existing statement) changes that statement's hash, which isn't in
+// schema_migrations yet, so the next probe fails and the migration runs
+// exactly once. (Previously a single hard-coded PROBE_QUERY had to be
+// bumped by hand; forgetting to do so silently shipped un-migrated tables.)
 //
 // Errors are swallowed and logged: requireUser still returns the user
 // even if migration fails, so the request can proceed against whatever
 // schema the DB currently has.
+import crypto from 'node:crypto';
 import { sql } from './db.js';
 import { SCHEMA_SQL } from './schema.js';
 
-// One cheap SELECT to detect whether the latest schema is applied. Update
-// this when a new schema delta ships so the next cold start triggers the
-// full migration once. We point at the most recently-added column rather
-// than a long-lived table so adding new columns reliably triggers a
-// re-migration without needing a manual /admin click.
-const PROBE_QUERY = "SELECT id FROM products LIMIT 1";
+// Stable per-statement fingerprint. MUST match api/admin/migrate.js so the
+// deploy/request bootstrap and the admin endpoint share one ledger.
+export function hashStmt(s) {
+  return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
+}
 
 let applied = false;
 let inFlight = null;
@@ -127,7 +132,49 @@ export function splitStatements(sqlText) {
 }
 
 async function runProbe() {
-  await sql.query(PROBE_QUERY);
+  // Schema is current iff every statement hash in the CURRENT SCHEMA_SQL
+  // is recorded applied in schema_migrations. A missing table (brand-new
+  // DB) throws on the SELECT → caught upstream as "not current" → full
+  // migration runs and creates the table + records the hashes.
+  const expected = splitStatements(SCHEMA_SQL).map(hashStmt);
+  const { rows } = await sql`SELECT statement_hash FROM schema_migrations WHERE applied = TRUE`;
+  const have = new Set(rows.map((r) => r.statement_hash));
+  const missing = expected.filter((h) => !have.has(h));
+  if (missing.length > 0) {
+    throw new Error(`schema not current: ${missing.length}/${expected.length} statement(s) not yet applied`);
+  }
+}
+
+// Best-effort: record the statements we just applied so the next probe
+// fast-paths. Only called after a fully-successful pass (every statement
+// ran), so we mark them all applied=TRUE in one batch upsert. Mirrors the
+// ledger written by api/admin/migrate.js.
+async function recordApplied(statements) {
+  if (statements.length === 0) return;
+  try {
+    const valuesSql = statements
+      .map((_, i) => `($${i * 2 + 1}, TRUE, $${i * 2 + 2})`)
+      .join(', ');
+    const params = [];
+    for (const stmt of statements) {
+      params.push(hashStmt(stmt), stmt.slice(0, 200));
+    }
+    await sql.query(
+      `INSERT INTO schema_migrations (statement_hash, applied, statement_preview)
+       VALUES ${valuesSql}
+       ON CONFLICT (statement_hash) DO UPDATE SET
+         applied         = TRUE,
+         error_message   = NULL,
+         last_attempt_at = NOW(),
+         apply_count     = schema_migrations.apply_count + 1`,
+      params,
+    );
+  } catch (err) {
+    // Non-fatal: the migration itself succeeded. Worst case the next probe
+    // can't fast-path and re-runs the (idempotent) full migration once.
+    // eslint-disable-next-line no-console
+    console.warn('[bootstrap] could not record schema_migrations ledger:', err.message);
+  }
 }
 
 // Multi-pass migration. The schema has forward references — e.g. an
@@ -251,6 +298,10 @@ async function runFullLocked() {
     err.failures = lastFailures;
     throw err;
   }
+
+  // Full success: every statement ran. Record the ledger so the next
+  // probe fast-paths instead of re-running the whole migration.
+  await recordApplied(allStatements);
 }
 
 export async function ensureSchemaApplied() {

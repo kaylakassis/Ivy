@@ -17,6 +17,8 @@ async function req(method, path, body, opts = {}) {
   // on a bodiless DELETE/GET makes some serverless routing layers cranky.
   const headers = {};
   if (body !== undefined && body !== null) headers['Content-Type'] = 'application/json';
+  // Caller-supplied headers (e.g. Idempotency-Key on mutating POSTs).
+  if (opts.headers) Object.assign(headers, opts.headers);
 
   const doFetch = async () => {
     let res;

@@ -29,6 +29,12 @@ import { trackCron } from '../_lib/cronMetrics.js';
 const ORPHAN_GRACE_HOURS = 24;     // skip blobs uploaded in the last day
 const MAX_DELETES_PER_RUN = 1000;  // cap per-tick work
 const MAX_LIST_PAGES = 50;         // cap total blob walk
+const COLLECT_BATCH = 2000;        // rows per keyset page when building the ref set
+// Safety ceiling on ref-collection pages per source. If a source can't be
+// fully drained within this many pages we ABORT the prune (return null)
+// rather than diff against a partial reference set and risk deleting a
+// referenced blob. 5000 * 2000 = 10M rows/source headroom.
+const MAX_COLLECT_PAGES = 5000;
 
 async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
@@ -105,50 +111,117 @@ async function handler(req, res) {
   }
 }
 
+// Keyset-paginate a single ref source. queryFn(cursor) returns one page
+// ordered by `cursorField` (id/workspace_id); onRow extracts pathnames.
+// Returns true if the source fully drained, false if it hit the page cap
+// (an incomplete walk — caller must abort rather than risk false deletes).
+async function drainSource(queryFn, cursorField, onRow) {
+  let cursor = null;
+  for (let page = 0; page < MAX_COLLECT_PAGES; page++) {
+    // eslint-disable-next-line no-await-in-loop
+    const { rows } = await queryFn(cursor);
+    if (rows.length === 0) return true;
+    for (const r of rows) onRow(r);
+    cursor = rows[rows.length - 1][cursorField];
+    if (rows.length < COLLECT_BATCH) return true;
+  }
+  return false; // page cap hit — did NOT finish draining this source
+}
+
 // Walk every table/column that stores blob pathnames. Returns a Set
-// of pathname strings, OR null if any required source query failed
-// (caller short-circuits to avoid deletions in that case).
-async function collectReferencedPathnames() {
+// of pathname strings, OR null if any source query failed OR couldn't be
+// fully drained (caller short-circuits to avoid deletions in that case).
+//
+// Each source is keyset-paginated so we never load an entire table (or its
+// JSONB columns) into memory at once — peak memory is one COLLECT_BATCH
+// page. The accumulated Set holds only pathname strings (the real working
+// set), not full rows.
+export async function collectReferencedPathnames() {
   const refs = new Set();
   const add = (p) => { if (p && typeof p === 'string') refs.add(p); };
 
   try {
-    // Scalar columns first — single SELECT each.
-    const docs = await sql`
-      SELECT pdf_blob_pathname, final_pdf_blob_pathname FROM documents
-    `;
-    for (const r of docs.rows) {
-      add(r.pdf_blob_pathname);
-      add(r.final_pdf_blob_pathname);
-    }
+    const drained = [];
 
-    const branding = await sql`
-      SELECT brand_logo_blob_pathname FROM calendar_settings
-    `;
-    for (const r of branding.rows) add(r.brand_logo_blob_pathname);
+    // documents — scalar pathname columns.
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, pdf_blob_pathname, final_pdf_blob_pathname FROM documents
+          WHERE (pdf_blob_pathname IS NOT NULL OR final_pdf_blob_pathname IS NOT NULL)
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => { add(r.pdf_blob_pathname); add(r.final_pdf_blob_pathname); },
+    ));
 
-    // JSONB attachments — pull just the column and walk in JS.
-    // (jsonb_array_elements + jsonb_path_query could do this in SQL
-    // but the JS walk is simpler + the data is small per row.)
-    const clientAtt = await sql`SELECT attachments, gallery_photos FROM clients`;
-    for (const r of clientAtt.rows) {
-      for (const a of (r.attachments || [])) add(a?.blobPathname);
-      for (const p of (r.gallery_photos || [])) add(p?.blobPathname);
-    }
+    // calendar_settings — brand logo (keyed by workspace_id).
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT workspace_id, brand_logo_blob_pathname FROM calendar_settings
+          WHERE brand_logo_blob_pathname IS NOT NULL
+            ${cur ? 'AND workspace_id > $1' : ''}
+          ORDER BY workspace_id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'workspace_id',
+      (r) => add(r.brand_logo_blob_pathname),
+    ));
 
-    const msgAtt = await sql`SELECT attachments FROM messages WHERE attachments <> '[]'::jsonb`;
-    for (const r of msgAtt.rows) {
-      for (const a of (r.attachments || [])) add(a?.blobPathname);
-    }
+    // clients — JSONB attachments[] + gallery_photos[].
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, attachments, gallery_photos FROM clients
+          WHERE ((attachments IS NOT NULL AND attachments <> '[]'::jsonb)
+              OR (gallery_photos IS NOT NULL AND gallery_photos <> '[]'::jsonb))
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => {
+        for (const a of (r.attachments || [])) add(a?.blobPathname);
+        for (const p of (r.gallery_photos || [])) add(p?.blobPathname);
+      },
+    ));
 
-    // bookings.completion_log is a JSONB OBJECT keyed by date, where
-    // each value has .attachments[]. Walk the object.
-    const bookAtt = await sql`SELECT completion_log FROM bookings WHERE completion_log <> '{}'::jsonb`;
-    for (const r of bookAtt.rows) {
-      const log = r.completion_log || {};
-      for (const date of Object.keys(log)) {
-        for (const a of (log[date]?.attachments || [])) add(a?.blobPathname);
-      }
+    // messages — JSONB attachments[].
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, attachments FROM messages
+          WHERE attachments <> '[]'::jsonb
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => { for (const a of (r.attachments || [])) add(a?.blobPathname); },
+    ));
+
+    // bookings.completion_log — JSONB OBJECT keyed by date, each value has
+    // .attachments[].
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, completion_log FROM bookings
+          WHERE completion_log <> '{}'::jsonb
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => {
+        const log = r.completion_log || {};
+        for (const date of Object.keys(log)) {
+          for (const a of (log[date]?.attachments || [])) add(a?.blobPathname);
+        }
+      },
+    ));
+
+    if (drained.some((d) => d === false)) {
+      // eslint-disable-next-line no-console
+      console.error('[blob-prune] a ref source exceeded MAX_COLLECT_PAGES — aborting to avoid false deletes');
+      return null;
     }
 
     return refs;

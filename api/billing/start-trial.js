@@ -41,6 +41,23 @@ export default async function handler(req, res) {
       });
     }
 
+    // One trial per workspace. Every workspace is auto-trialed at creation
+    // (trial_ends_at column default), and the UI already hides the trial
+    // button once it's set (Paywall: everTrialed = !!sub.trialEndsAt). We
+    // enforce the SAME rule server-side: a non-null trial_ends_at means
+    // this workspace already had its trial, so refuse to re-grant a fresh
+    // one. Without this, a lapsed/cancelled owner could POST start-trial
+    // repeatedly and keep using THRYVE without ever paying.
+    if (r.trial_ends_at) {
+      return ok(res, {
+        ok: true,
+        alreadyTrialed: true,
+        status: r.subscription_status,
+        trialEndsAt: r.trial_ends_at,
+        periodEndsAt: r.subscription_period_end,
+      });
+    }
+
     const { rows } = await sql`
       UPDATE workspaces SET
         subscription_status = 'trialing',

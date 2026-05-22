@@ -322,7 +322,7 @@ function EmailHealthBanner() {
         <ol style={{ margin: '4px 0 0 18px', padding: 0 }}>
           <li>
             Add a domain at{' '}
-            <a href="https://resend.com/domains" target="_blank" rel="noopener"
+            <a href="https://resend.com/domains" target="_blank" rel="noopener noreferrer"
               style={{ color: 'var(--accent)', fontWeight: 600 }}>
               resend.com/domains
             </a>{' '}

@@ -40,7 +40,7 @@ const VALID_STAGES = new Set(['lead', 'active', 'paused']);
 // raw cell arrays so we can re-apply mapping when the user fixes a column.
 // Tolerates the quirks listed at the top of the file.
 function parseCSV(input) {
-  const text = String(input || '').replace(/^﻿/, '');  // strip BOM
+  const text = String(input || '').replace(/^\uFEFF/, '');  // strip BOM
   if (!text.trim()) return { headers: [], mapping: [], records: [] };
 
   const allRecords = [];

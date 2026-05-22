@@ -18,11 +18,23 @@ export async function rateLimit({ key, max, windowSeconds }) {
   return { allowed: true, count: n + 1 };
 }
 
-// Best-effort client IP from x-forwarded-for (Vercel sets this).
+// Trusted client IP. The leftmost x-forwarded-for entry is NOT safe to
+// trust: Vercel appends to a client-supplied XFF, so an attacker can
+// prepend a fake IP to dodge per-IP rate limits (login/signup/booking
+// spam). Prefer the headers Vercel sets at the edge — clients cannot
+// override the x-vercel-* prefix or x-real-ip — and only fall back to the
+// LAST x-forwarded-for hop (added by the closest trusted proxy) rather
+// than the spoofable first.
 export function getClientIp(req) {
-  const xff = req.headers['x-forwarded-for'];
-  if (xff) return String(xff).split(',')[0].trim();
-  if (req.headers['x-real-ip']) return String(req.headers['x-real-ip']);
+  const h = req.headers || {};
+  const first = (v) => String(v).split(',')[0].trim();
+  if (h['x-vercel-forwarded-for']) return first(h['x-vercel-forwarded-for']);
+  if (h['x-real-ip']) return first(h['x-real-ip']);
+  const xff = h['x-forwarded-for'];
+  if (xff) {
+    const parts = String(xff).split(',').map((s) => s.trim()).filter(Boolean);
+    if (parts.length) return parts[parts.length - 1];
+  }
   return req.socket?.remoteAddress || 'unknown';
 }
 

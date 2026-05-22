@@ -212,16 +212,25 @@ export default async function handler(req, res) {
         ? session.payment_intent : session.payment_intent?.id;
 
       // Booking deposit. Stash the payment intent against the booking row.
+      // Idempotency guard (defense-in-depth beyond markProcessed, which
+      // fails open on a dedup-table blip): only apply + notify if the
+      // deposit wasn't already recorded, so a duplicate event can't
+      // re-fire the owner push.
       if (invoiceId.startsWith('bookdep_')) {
         const bookingId = invoiceId.slice('bookdep_'.length);
-        await sql`
+        const dep = await sql`
           UPDATE bookings SET
             deposit_paid = deposit_required,
             deposit_paid_at = NOW(),
             deposit_payment_intent = ${paymentIntent},
             updated_at = NOW()
           WHERE id = ${bookingId} AND workspace_id = ${workspaceId}
+            AND deposit_paid_at IS NULL
+          RETURNING id
         `;
+        if (dep.rows.length === 0) {
+          return ok(res, { received: true, ignored: 'deposit already recorded' });
+        }
         notifyOwnerSafe({
           workspaceId, type: 'bookings',
           payload: { title: 'Deposit paid', body: `Booking deposit for ${bookingId.slice(0, 8)} just came in.`,
@@ -239,8 +248,15 @@ export default async function handler(req, res) {
         return ok(res, { received: true, ignored: 'invoice not found' });
       }
       const i = inv.rows[0];
+      // Idempotency guard matching the per-workspace handler: if already
+      // paid, don't re-stamp paid_at or re-fire the receipt email / owner
+      // push. markProcessed fails open on a dedup-table blip, so this is
+      // the real backstop against a duplicate/replayed event.
+      if (i.status === 'paid') {
+        return ok(res, { received: true, ignored: 'invoice already paid' });
+      }
       const totals = computeTotals(i.items, i.tax_rate, i.discount);
-      await sql`
+      const upd = await sql`
         UPDATE invoices SET
           status = 'paid',
           paid_at = NOW(),
@@ -250,7 +266,13 @@ export default async function handler(req, res) {
           stripe_session_id = ${sessionId},
           updated_at = NOW()
         WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
+          AND status <> 'paid'
+        RETURNING id
       `;
+      // Lost a race with a concurrent duplicate — it already marked paid.
+      if (upd.rows.length === 0) {
+        return ok(res, { received: true, ignored: 'invoice already paid' });
+      }
       notifyOwnerSafe({
         workspaceId, type: 'payments',
         payload: { title: 'Invoice paid', body: `${i.number} · $${Number(totals.total).toFixed(2)}`,

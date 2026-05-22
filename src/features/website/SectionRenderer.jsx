@@ -9,7 +9,7 @@
 //
 // The wrapper here applies the style overrides as a thin shell around
 // whatever the per-section renderer outputs — keeps the renderers focused.
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
 

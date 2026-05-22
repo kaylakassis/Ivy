@@ -1,7 +1,7 @@
 // In-person quick-sale (Finance → Sell). Tap products into a cart, add
 // ad-hoc items, take cash or issue a pay-link (QR) — inventory updates
 // on completion.
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
@@ -17,6 +17,11 @@ export default function PointOfSale() {
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null); // { paid } | { payUrl }
   const [err, setErr] = useState(null);
+  // Stable idempotency key for the in-flight sale. Generated once when a
+  // checkout begins and reused for any retry of the SAME cart (double-click
+  // or timeout-then-retry), so the server dedupes instead of charging /
+  // decrementing stock twice. Cleared after a successful sale.
+  const saleKeyRef = useRef(null);
   const sellable = products.filter((p) => p.active);
 
   const addProduct = (p) => setCart((c) => {
@@ -30,7 +35,10 @@ export default function PointOfSale() {
   const total = cart.reduce((s, x) => s + (Number(x.rate) || 0) * (Number(x.qty) || 0), 0);
 
   const checkout = async () => {
-    if (!cart.length) return;
+    if (!cart.length || busy) return; // re-entry guard for rapid double-clicks
+    // Reuse the existing key on a retry of the same cart; mint one otherwise.
+    if (!saleKeyRef.current) saleKeyRef.current = crypto.randomUUID();
+    const idempotencyKey = saleKeyRef.current;
     setBusy(true); setErr(null);
     try {
       const r = await recordSale({
@@ -39,11 +47,12 @@ export default function PointOfSale() {
           : { productId: x.productId, quantity: x.qty }),
         payment,
         clientName: clientName.trim() || 'Walk-in',
-      });
+      }, idempotencyKey);
       setResult(r.paid ? { paid: true } : { payUrl: r.payUrl });
       setCart([]); setClientName('');
+      saleKeyRef.current = null; // success — next sale gets a fresh key
     } catch (e) {
-      setErr(e.message || 'Sale failed');
+      setErr(e.message || 'Sale failed'); // keep the key so a retry dedupes
     } finally { setBusy(false); }
   };
 

@@ -12,18 +12,13 @@
 // admin caller — this endpoint is super-admin-only, so leaking
 // internals is fine and makes debugging schema drift tractable.
 
-import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
 import { SCHEMA_SQL } from '../_lib/schema.js';
-import { splitStatements } from '../_lib/ensureSchema.js';
+import { splitStatements, hashStmt } from '../_lib/ensureSchema.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
 import { recordAudit } from '../_lib/audit.js';
 import { ok, methodNotAllowed } from '../_lib/json.js';
-
-function hashStmt(s) {
-  return crypto.createHash('sha256').update(s).digest('hex').slice(0, 16);
-}
 
 async function loadAlreadyApplied() {
   try {

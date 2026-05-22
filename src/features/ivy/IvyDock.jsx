@@ -565,7 +565,7 @@ function buildSuggestions(ctx) {
       icon: 'Calendar',
       title: 'Prep for upcoming sessions',
       subtitle: `${upcoming} on the books — get a quick brief on each.`,
-      prompt: `What\'s on my calendar this week? Give me a one-line brief on each upcoming session — who, when, and anything I should know going in.`,
+      prompt: `What's on my calendar this week? Give me a one-line brief on each upcoming session — who, when, and anything I should know going in.`,
     });
   }
 

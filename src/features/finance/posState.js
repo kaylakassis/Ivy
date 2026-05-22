@@ -28,8 +28,9 @@ export function useProducts() {
     await api.del(`/products/${id}`);
     setProducts((p) => p.map((x) => (x.id === id ? { ...x, active: false } : x)));
   }, []);
-  const recordSale = useCallback(async (payload) => {
-    const r = await api.post('/pos/sale', payload);
+  const recordSale = useCallback(async (payload, idempotencyKey) => {
+    const opts = idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined;
+    const r = await api.post('/pos/sale', payload, opts);
     await refresh(); // stock changed
     return r;
   }, [refresh]);

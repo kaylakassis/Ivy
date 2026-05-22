@@ -1270,6 +1270,7 @@ function ClientAnalyticsBlock({ client, windowDays }) {
 // at /projects — clicking a row jumps there with the row pre-opened
 // via the same ?id= deep-link pattern the rest of the app uses.
 function ClientProjectsBlock({ client }) {
+  const navigate = useNavigate();
   const [projects, setProjects] = useState(null);
   const [adding, setAdding]     = useState(false);
   const [name, setName]         = useState('');
