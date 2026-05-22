@@ -540,6 +540,9 @@ CREATE TABLE IF NOT EXISTS calendar_settings (
   biz_name TEXT NOT NULL DEFAULT 'My business',
   slug TEXT UNIQUE,
   slot_minutes INT NOT NULL DEFAULT 30,
+  -- When TRUE, bookable start times step by each service's OWN length
+  -- (back-to-back) instead of the fixed slot_minutes grid.
+  slot_fit_service BOOLEAN NOT NULL DEFAULT FALSE,
   buffer_minutes INT NOT NULL DEFAULT 0,
   min_notice_hours INT NOT NULL DEFAULT 24,
   availability JSONB NOT NULL DEFAULT '{"0":[],"1":[{"start":540,"end":1020}],"2":[{"start":540,"end":1020}],"3":[{"start":540,"end":1020}],"4":[{"start":540,"end":1020}],"5":[{"start":540,"end":840}],"6":[]}'::jsonb,
@@ -550,6 +553,10 @@ CREATE INDEX IF NOT EXISTS idx_calendar_settings_slug ON calendar_settings(slug)
 -- page. Default 24h; owners lower it (incl. 0 for same-day) in settings.
 -- Past times are always excluded regardless of this value.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS min_notice_hours INT NOT NULL DEFAULT 24;
+-- Start-time spacing. slot_minutes is the fixed grid (e.g. 60 = top of the
+-- hour). slot_fit_service=TRUE instead steps starts by each service's own
+-- length so appointments pack back-to-back.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS slot_fit_service BOOLEAN NOT NULL DEFAULT FALSE;
 -- Discover: opt-in directory listing on /me/discover. A business with
 -- discoverable=true and a slug is shown to all signed-in clients. Tagline
 -- is the one-line pitch shown under the business name on the listing.

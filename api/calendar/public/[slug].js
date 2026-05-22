@@ -174,11 +174,12 @@ async function createBooking(req, res) {
 
     // Resolve workspace by slug.
     const settingsRows = await sql`
-      SELECT workspace_id, availability, slot_minutes, min_notice_hours FROM calendar_settings WHERE slug = ${slug}
+      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service FROM calendar_settings WHERE slug = ${slug}
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];
     const minNoticeHours = Math.max(0, Number(settingsRows.rows[0].min_notice_hours ?? 24));
+    const slotFitService = !!settingsRows.rows[0].slot_fit_service;
 
     // Validate inputs.
     const date = (body.date || '').toString();
@@ -206,8 +207,12 @@ async function createBooking(req, res) {
     // The START must sit on the booking grid. (The DURATION is validated
     // separately against service + add-ons below — it does NOT have to be a
     // multiple of the slot size, e.g. a 45-min consult on a 30-min grid.)
-    if (slotMinutes > 0 && start % slotMinutes !== 0) {
-      return badRequest(res, `Start time must align to ${slotMinutes}-minute increments`);
+    // In fixed-grid mode the start aligns to slot_minutes (so e.g. a
+    // top-of-the-hour rule is enforced); in fit-to-service mode starts are
+    // duration-stepped, so we only guard against off-grid garbage (5-min floor).
+    const alignTo = slotFitService ? 5 : slotMinutes;
+    if (alignTo > 0 && start % alignTo !== 0) {
+      return badRequest(res, `Start time must align to ${alignTo}-minute increments`);
     }
     if (!clientName) return badRequest(res, 'Your name is required');
     if (!validEmail(clientEmail)) return badRequest(res, 'A valid email is required');

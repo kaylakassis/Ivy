@@ -89,7 +89,19 @@ function SetupChecklist() {
       } catch { /* hide silently if we can't load */ }
     };
     load();
-    return () => { cancelled = true; };
+    // Keep it current in real time: re-check completion whenever the owner
+    // returns to the dashboard tab/window (e.g. after finishing a step on
+    // another page or tab). Navigating away and back already re-mounts +
+    // re-fetches; this covers staying on the page and switching tabs.
+    const onFocus = () => load();
+    const onVisible = () => { if (document.visibilityState === 'visible') load(); };
+    window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, []);
 
   if (!data || !data.items || data.items.length === 0) return null;

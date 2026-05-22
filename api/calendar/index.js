@@ -126,6 +126,11 @@ export default async function handler(req, res) {
         if (!Number.isInteger(n) || n < 0 || n > 720) return badRequest(res, 'minNoticeHours must be 0–720');
         push('min_notice_hours', n);
       }
+      if ('slotFitService' in body) {
+        // TRUE → start times step by each service's own length (back-to-back);
+        // FALSE → fixed slot_minutes grid.
+        push('slot_fit_service', !!body.slotFitService);
+      }
       if ('discoverable' in body) {
         push('discoverable', !!body.discoverable);
       }

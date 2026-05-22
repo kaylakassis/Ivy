@@ -68,7 +68,10 @@ export function slotsForDate(cal, date, serviceOrDur) {
   const dayIdx = date.getDay();
   const dateISO = fmtDateISO(date);
   const windows = (cal.settings?.availability && cal.settings.availability[String(dayIdx)]) || [];
-  const step = cal.settings?.slotMinutes || 30;
+  // Start-time spacing: a fixed grid (slotMinutes — e.g. 60 = top of the
+  // hour) or, when slotFitService is set, each service's own length so
+  // appointments pack back-to-back. Floored at 5 min to avoid a 0-step loop.
+  const step = Math.max(5, cal.settings?.slotFitService ? dur : (cal.settings?.slotMinutes || 30));
   // Minimum advance notice: slots earlier than (now + notice) aren't
   // bookable, and past times are always excluded. Default 24h; 0 = same-day
   // allowed (but never the past). Client-facing only — public booking +

@@ -16,9 +16,33 @@ const NOTICE_OPTIONS = [
   { v: 168, label: '1 week' },
 ];
 
-export default function AvailabilityDrawer({ initial, noticeHours, onSave, onClose }) {
+// Start-time spacing. A fixed grid (value = minutes) or 'service' to step
+// by each service's own length (back-to-back).
+const START_OPTIONS = [
+  { v: '60',      label: 'Top of the hour (1:00, 2:00, 3:00…)' },
+  { v: '45',      label: 'Every 45 minutes' },
+  { v: '30',      label: 'Every 30 minutes (on the hour & half hour)' },
+  { v: '20',      label: 'Every 20 minutes' },
+  { v: '15',      label: 'Every 15 minutes' },
+  { v: '10',      label: 'Every 10 minutes' },
+  { v: '5',       label: 'Every 5 minutes' },
+  { v: 'service', label: 'Back-to-back — fit each service’s length' },
+];
+
+const cardStyle = {
+  padding: 14, borderRadius: 10, border: '1px solid var(--border)',
+  background: 'var(--surface)', marginBottom: 14,
+};
+const selectStyle = {
+  width: '100%', padding: '9px 10px', borderRadius: 8,
+  border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+  color: 'var(--fg)', fontSize: 14,
+};
+
+export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, slotFitService, onSave, onClose }) {
   const [avail, setAvail] = useState(initial || {});
   const [notice, setNotice] = useState(noticeHours == null ? 24 : Number(noticeHours));
+  const [startMode, setStartMode] = useState(slotFitService ? 'service' : String(slotMinutes || 30));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -28,7 +52,13 @@ export default function AvailabilityDrawer({ initial, noticeHours, onSave, onClo
     setBusy(true);
     setErr(null);
     try {
-      await onSave({ availability: avail, minNoticeHours: notice });
+      const fit = startMode === 'service';
+      await onSave({
+        availability: avail,
+        minNoticeHours: notice,
+        slotFitService: fit,
+        ...(fit ? {} : { slotMinutes: Number(startMode) }),
+      });
       onClose();
     } catch (e) {
       setErr(e.message || 'Could not save');
@@ -39,22 +69,28 @@ export default function AvailabilityDrawer({ initial, noticeHours, onSave, onClo
 
   return (
     <Drawer title="Weekly availability" subtitle="Clients can only book inside these hours" onClose={onClose}>
-      <div style={{
-        padding: 14, borderRadius: 10, border: '1px solid var(--border)',
-        background: 'var(--surface)', marginBottom: 14,
-      }}>
+      <div style={cardStyle}>
+        <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="start-times">
+          Appointment start times
+        </label>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 8px' }}>
+          When new appointments can begin. “Top of the hour” means the next
+          client can only start at 2:00, 3:00, etc. “Back-to-back” starts the
+          next appointment right when each service’s length allows.
+        </div>
+        <select id="start-times" value={startMode} onChange={(e) => setStartMode(e.target.value)} style={selectStyle}>
+          {START_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div style={cardStyle}>
         <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="min-notice">
           Minimum booking notice
         </label>
         <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 8px' }}>
           How far ahead clients must book. Past times are always hidden.
         </div>
-        <select id="min-notice" value={notice} onChange={(e) => setNotice(Number(e.target.value))}
-          style={{
-            width: '100%', padding: '9px 10px', borderRadius: 8,
-            border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
-            color: 'var(--fg)', fontSize: 14,
-          }}>
+        <select id="min-notice" value={notice} onChange={(e) => setNotice(Number(e.target.value))} style={selectStyle}>
           {NOTICE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
         </select>
       </div>

@@ -88,6 +88,26 @@ async function run() {
   r = await post({ ...base, date: fdate, startMin: 600, endMin: 645 });
   assert([200,201].includes(r.statusCode), `beyond the notice window books fine (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
 
+  console.log('\n[3] start-time spacing — fixed grid vs fit-to-service');
+  const calX = (extra) => ({ settings: { availability: fullWeek, slotMinutes: 30, minNoticeHours: 0, ...extra }, blocks: [], bookings: [] });
+  const future2 = new Date(Date.now() + 10 * 24 * 3600 * 1000);
+  const topHour = slotsForDate(calX({ slotMinutes: 60 }), future2, svc);
+  assert(topHour.length > 0 && topHour.every((s) => s.start % 60 === 0), 'top-of-hour grid: every start is on the hour');
+  const fit = slotsForDate(calX({ slotFitService: true }), future2, svc); // 45-min service
+  assert(fit.length > 1 && (fit[1].start - fit[0].start) === 45, 'fit-to-service: starts step by the 45-min service length');
+
+  // Server enforces the owner's grid: top-of-the-hour rejects a 1:45 start.
+  await sql`UPDATE calendar_settings SET min_notice_hours = 0, slot_minutes = 60, slot_fit_service = FALSE WHERE workspace_id = ${wid}`;
+  r = await post({ ...base, date: future, startMin: 825, endMin: 870 }); // 1:45–2:30
+  assert(r.statusCode === 400 && /align/i.test(r.body?.error || ''), 'top-of-hour: a 1:45 start is rejected');
+  r = await post({ ...base, date: future, startMin: 900, endMin: 945 }); // 3:00–3:45
+  assert([200,201].includes(r.statusCode), `top-of-hour: a 3:00 start is allowed (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
+
+  // Fit-to-service: a duration-stepped 10:45 start (off the hour grid) is allowed.
+  await sql`UPDATE calendar_settings SET slot_fit_service = TRUE WHERE workspace_id = ${wid}`;
+  r = await post({ ...base, date: future, startMin: 645, endMin: 690 }); // 10:45–11:30 (back-to-back after the 10:00 booking)
+  assert([200,201].includes(r.statusCode), `fit-to-service: a duration-stepped 10:45 start is allowed (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
+
   // Cleanup.
   await sql`DELETE FROM bookings WHERE workspace_id = ${wid}`;
   await sql`DELETE FROM clients WHERE workspace_id = ${wid}`;

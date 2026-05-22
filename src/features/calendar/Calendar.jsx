@@ -467,6 +467,8 @@ export default function Calendar() {
         <AvailabilityDrawer
           initial={cal?.settings?.availability}
           noticeHours={cal?.settings?.minNoticeHours}
+          slotMinutes={cal?.settings?.slotMinutes}
+          slotFitService={cal?.settings?.slotFitService}
           onSave={saveAvailability}
           onClose={() => setDrawer(null)}
         />
