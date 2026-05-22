@@ -174,12 +174,13 @@ async function createBooking(req, res) {
 
     // Resolve workspace by slug.
     const settingsRows = await sql`
-      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service FROM calendar_settings WHERE slug = ${slug}
+      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service, buffer_minutes FROM calendar_settings WHERE slug = ${slug}
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];
     const minNoticeHours = Math.max(0, Number(settingsRows.rows[0].min_notice_hours ?? 24));
     const slotFitService = !!settingsRows.rows[0].slot_fit_service;
+    const bufferMinutes = Math.max(0, Number(settingsRows.rows[0].buffer_minutes || 0));
 
     // Validate inputs.
     const date = (body.date || '').toString();
@@ -381,7 +382,7 @@ async function createBooking(req, res) {
 
     if (await hasConflict({
       workspaceId, dateISO: date, start, end, serviceId,
-      capacity: serviceCapacity, travelBufferMin: travelBuffer,
+      capacity: serviceCapacity, travelBufferMin: travelBuffer, bufferMin: bufferMinutes,
     })) {
       return badRequest(res, serviceCapacity > 1
         ? 'That class just filled up — please pick another time'
@@ -463,7 +464,7 @@ async function createBooking(req, res) {
     // need to be refunded — just deleted.
     if (await losesBookingRace({
       workspaceId, dateISO: date, start, end, serviceId,
-      capacity: serviceCapacity, travelBufferMin: travelBuffer,
+      capacity: serviceCapacity, travelBufferMin: travelBuffer, bufferMin: bufferMinutes,
       bookingId: newBookingRow.id, createdAt: newBookingRow.created_at,
     }).catch((e) => {
       // eslint-disable-next-line no-console

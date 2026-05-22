@@ -1012,9 +1012,23 @@ async function create_task({ workspaceId, args }) {
     const cl = await sql`SELECT id FROM clients WHERE id = ${args.client_id} AND workspace_id = ${workspaceId}`;
     if (cl.rows.length === 0) throw new Error('Unknown client');
   }
+  const cleanTitle = title.slice(0, 200);
+  // Dedup: don't pile up identical OPEN tasks. Re-running "draft my week"
+  // used to create copy-paste duplicates that filled the dashboard "Your
+  // list". Return the existing open task instead so Ivy stays idempotent.
+  const dupe = await sql`
+    SELECT id, title, due_date FROM tasks
+     WHERE workspace_id = ${workspaceId}
+       AND done = FALSE
+       AND lower(title) = lower(${cleanTitle})
+       AND client_id IS NOT DISTINCT FROM ${args?.client_id || null}
+     LIMIT 1
+  `;
+  if (dupe.rows.length > 0) return { task: dupe.rows[0], deduped: true };
+
   const { rows } = await sql`
     INSERT INTO tasks (workspace_id, title, notes, due_date, client_id, source)
-    VALUES (${workspaceId}, ${title.slice(0, 200)},
+    VALUES (${workspaceId}, ${cleanTitle},
             ${args?.notes ? String(args.notes).slice(0, 4000) : null},
             ${dueDate}, ${args?.client_id || null}, 'ivy')
     RETURNING id, title, due_date

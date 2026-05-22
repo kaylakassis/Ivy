@@ -469,6 +469,7 @@ export default function Calendar() {
           noticeHours={cal?.settings?.minNoticeHours}
           slotMinutes={cal?.settings?.slotMinutes}
           slotFitService={cal?.settings?.slotFitService}
+          bufferMinutes={cal?.settings?.bufferMinutes}
           onSave={saveAvailability}
           onClose={() => setDrawer(null)}
         />

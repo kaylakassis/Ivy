@@ -29,6 +29,18 @@ const START_OPTIONS = [
   { v: 'service', label: 'Back-to-back — fit each service’s length' },
 ];
 
+// Minimum gap forced between appointments (e.g. clean-up / reset time).
+const BUFFER_OPTIONS = [
+  { v: 0,  label: 'No buffer — back-to-back OK' },
+  { v: 5,  label: '5 minutes' },
+  { v: 10, label: '10 minutes' },
+  { v: 15, label: '15 minutes' },
+  { v: 20, label: '20 minutes' },
+  { v: 30, label: '30 minutes' },
+  { v: 45, label: '45 minutes' },
+  { v: 60, label: '60 minutes' },
+];
+
 const cardStyle = {
   padding: 14, borderRadius: 10, border: '1px solid var(--border)',
   background: 'var(--surface)', marginBottom: 14,
@@ -39,10 +51,11 @@ const selectStyle = {
   color: 'var(--fg)', fontSize: 14,
 };
 
-export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, slotFitService, onSave, onClose }) {
+export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, slotFitService, bufferMinutes, onSave, onClose }) {
   const [avail, setAvail] = useState(initial || {});
   const [notice, setNotice] = useState(noticeHours == null ? 24 : Number(noticeHours));
   const [startMode, setStartMode] = useState(slotFitService ? 'service' : String(slotMinutes || 30));
+  const [buffer, setBuffer] = useState(bufferMinutes == null ? 0 : Number(bufferMinutes));
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -57,6 +70,7 @@ export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, 
         availability: avail,
         minNoticeHours: notice,
         slotFitService: fit,
+        bufferMinutes: buffer,
         ...(fit ? {} : { slotMinutes: Number(startMode) }),
       });
       onClose();
@@ -92,6 +106,19 @@ export default function AvailabilityDrawer({ initial, noticeHours, slotMinutes, 
         </div>
         <select id="min-notice" value={notice} onChange={(e) => setNotice(Number(e.target.value))} style={selectStyle}>
           {NOTICE_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
+        </select>
+      </div>
+
+      <div style={cardStyle}>
+        <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="buffer">
+          Buffer between appointments
+        </label>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 8px' }}>
+          A required gap around each appointment (clean-up, reset, travel).
+          Clients can’t book within this many minutes of another booking.
+        </div>
+        <select id="buffer" value={buffer} onChange={(e) => setBuffer(Number(e.target.value))} style={selectStyle}>
+          {BUFFER_OPTIONS.map((o) => <option key={o.v} value={o.v}>{o.label}</option>)}
         </select>
       </div>
 

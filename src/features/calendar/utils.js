@@ -79,6 +79,10 @@ export function slotsForDate(cal, date, serviceOrDur) {
   const minNoticeMin = Math.max(0, Number(cal.settings?.minNoticeHours ?? 24) * 60);
   const cutoffMs = Date.now() + minNoticeMin * 60 * 1000;
   const dayBaseMs = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0).getTime();
+  // Buffer between appointments: the workspace minimum gap + this service's
+  // travel time. Widens the conflict window so a slot too close to an
+  // existing booking/block is greyed out (matches the server's hasConflict).
+  const buf = Math.max(0, Number(cal.settings?.bufferMinutes || 0)) + Math.max(0, Number(service.travelBufferMinutes || 0));
   const slots = [];
 
   for (const w of windows) {
@@ -89,7 +93,7 @@ export function slotsForDate(cal, date, serviceOrDur) {
       let seatsTaken = 0;
 
       for (const b of (cal.blocks || [])) {
-        if (b.date === dateISO && !(end <= b.startMin || start >= b.endMin)) {
+        if (b.date === dateISO && !(end + buf <= b.startMin || start >= b.endMin + buf)) {
           reason = 'Blocked';
           break;
         }
@@ -97,7 +101,11 @@ export function slotsForDate(cal, date, serviceOrDur) {
       if (!reason) {
         for (const bk of (cal.bookings || [])) {
           if (bk.date !== dateISO) continue;
-          if (end <= bk.startMin || start >= bk.endMin) continue;
+          // Exact same slot is allowed up to capacity (no buffer applied to
+          // itself); any OTHER booking within the buffer window conflicts.
+          const sameSlotExact = bk.startMin === start && bk.endMin === end;
+          if (!sameSlotExact && (end + buf <= bk.startMin || start >= bk.endMin + buf)) continue;
+          if (sameSlotExact && (end <= bk.startMin || start >= bk.endMin)) continue;
           // Same-service + EXACT-slot bookings count toward capacity.
           // Anything else (different service or different time even
           // same service) is a hard conflict.

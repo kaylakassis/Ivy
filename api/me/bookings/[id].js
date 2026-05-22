@@ -157,9 +157,10 @@ export default async function handler(req, res) {
         // for conflict-checking. If the service was deleted (orphan
         // booking), default capacity to 1.
         const cs = await sql`
-          SELECT availability FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}
+          SELECT availability, buffer_minutes FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}
         `;
         const availability = cs.rows[0]?.availability || {};
+        const bufferMin = Math.max(0, Number(cs.rows[0]?.buffer_minutes || 0));
         // getUTCDay() (not getDay()) — matches the other booking paths
         // so a workspace in a non-UTC timezone doesn't see day-of-week
         // drift around midnight UTC.
@@ -182,6 +183,7 @@ export default async function handler(req, res) {
           serviceId: booking.service_id,
           capacity,
           excludeBookingId: booking.id,
+          bufferMin,
         });
         if (conflict) return badRequest(res, 'That slot is no longer available — pick another time.');
 
@@ -208,6 +210,7 @@ export default async function handler(req, res) {
           workspaceId: booking.workspace_id, dateISO: newDate,
           start: newStart, end: newEnd, serviceId: booking.service_id,
           capacity, bookingId: booking.id, createdAt: updated.rows[0].created_at,
+          bufferMin,
         }).catch((e) => {
           // eslint-disable-next-line no-console
           console.error('[me/bookings reschedule] race recheck failed; keeping move:', e.message);

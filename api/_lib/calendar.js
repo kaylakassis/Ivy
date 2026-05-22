@@ -210,12 +210,13 @@ export function withinAvailability(availability, weekday, start, end) {
 // the slot as effectively reserving 8:30–10:30 of the owner's day —
 // keeps mobile providers from accidentally accepting back-to-back
 // bookings across town.
-export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1, excludeBookingId = null, travelBufferMin = 0 }) {
-  // For mobile services with travel time, widen the proposed booking's
-  // window symmetrically so an existing back-to-back booking (or block)
-  // counts as a conflict if the gap is shorter than the travel time
-  // needed to reach the next address.
-  const buf = Math.max(0, Number(travelBufferMin) || 0);
+export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1, excludeBookingId = null, travelBufferMin = 0, bufferMin = 0 }) {
+  // Widen the proposed booking's window symmetrically by the total required
+  // gap: the workspace's minimum buffer between appointments (bufferMin) +
+  // any per-service travel time (travelBufferMin). An existing back-to-back
+  // booking/block then counts as a conflict when the gap is too small —
+  // this is what bars clients from booking too close to another appointment.
+  const buf = Math.max(0, Number(travelBufferMin) || 0) + Math.max(0, Number(bufferMin) || 0);
   const startBuf = Math.max(0, start - buf);
   const endBuf   = Math.min(24 * 60, end + buf);
 
@@ -295,9 +296,9 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
 // other racers' committed rows. Mirrors hasConflict's overlap rules.
 export async function losesBookingRace({
   workspaceId, dateISO, start, end, serviceId = null, capacity = 1,
-  bookingId, createdAt, travelBufferMin = 0,
+  bookingId, createdAt, travelBufferMin = 0, bufferMin = 0,
 }) {
-  const buf = Math.max(0, Number(travelBufferMin) || 0);
+  const buf = Math.max(0, Number(travelBufferMin) || 0) + Math.max(0, Number(bufferMin) || 0);
   const startBuf = Math.max(0, start - buf);
   const endBuf   = Math.min(24 * 60, end + buf);
   const earlier = await sql`

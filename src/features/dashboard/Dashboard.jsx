@@ -5,10 +5,10 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 
 const METRICS = [
-  { k: 'mrr',     label: 'Revenue this month', kind: 'money' },
-  { k: 'clients', label: 'Active clients',     kind: 'int' },
-  { k: 'booked',  label: 'Booked this month',  kind: 'int' },
-  { k: 'hours',   label: 'Hours this month',   kind: 'hours' },
+  { k: 'mrr',     label: 'Revenue this month', kind: 'money', to: '/finance' },
+  { k: 'clients', label: 'Active clients',     kind: 'int',   to: '/clients' },
+  { k: 'booked',  label: 'Booked this month',  kind: 'int',   to: '/calendar' },
+  { k: 'hours',   label: 'Hours this month',   kind: 'hours', to: '/calendar' },
 ];
 
 function fmtMoney(n, currency = 'USD') {
@@ -23,18 +23,22 @@ function fmtTime(min) {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-function MetricCard({ label, value, kind, currency, loading }) {
+function MetricCard({ label, value, kind, currency, loading, to }) {
   let display = '—';
   if (!loading && value != null) {
     if (kind === 'money') display = fmtMoney(value, currency);
     else if (kind === 'hours') display = `${value}h`;
     else display = String(value);
   }
+  // The whole card links to the relevant section. (The old top-right
+  // three-dots was a dead affordance — tapping it did nothing — so it's
+  // replaced by a real, tappable arrow that takes you to the detail page.)
   return (
-    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 128 }}>
+    <Link to={to || '/dashboard'} className="card"
+      style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 128, textDecoration: 'none', color: 'inherit' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span className="metric-label">{label}</span>
-        <Icons.More size={16} stroke="var(--muted)" sw={1.8} />
+        <Icons.Arrow size={14} stroke="var(--muted)" sw={1.8} />
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
         <span className="metric-value" style={{ fontSize: 38, color: (!loading && value != null) ? 'var(--fg)' : 'var(--muted-2)' }}>
@@ -42,7 +46,7 @@ function MetricCard({ label, value, kind, currency, loading }) {
         </span>
       </div>
       <div style={{ height: 32, borderTop: '1px dashed var(--border)' }} />
-    </div>
+    </Link>
   );
 }
 
@@ -342,7 +346,7 @@ export default function Dashboard() {
         <SetupChecklist/>
         <div className="grid-auto">
           {METRICS.map((m) => (
-            <MetricCard key={m.k} label={m.label} kind={m.kind}
+            <MetricCard key={m.k} label={m.label} kind={m.kind} to={m.to}
               value={data?.metrics?.[m.k]} currency={currency} loading={loading}/>
           ))}
         </div>

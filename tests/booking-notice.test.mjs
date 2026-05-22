@@ -108,6 +108,26 @@ async function run() {
   r = await post({ ...base, date: future, startMin: 645, endMin: 690 }); // 10:45–11:30 (back-to-back after the 10:00 booking)
   assert([200,201].includes(r.statusCode), `fit-to-service: a duration-stepped 10:45 start is allowed (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
 
+  console.log('\n[4] buffer between appointments bars booking too close');
+  // slotsForDate: a 30-min buffer greys a slot too near an existing booking.
+  const calBuf = (b) => ({ settings: { availability: fullWeek, slotMinutes: 30, minNoticeHours: 0, bufferMinutes: b }, blocks: [], bookings: [{ date: iso(future2), startMin: 600, endMin: 645, serviceId: 'other' }] });
+  const slot11 = (b) => slotsForDate(calBuf(b), future2, svc).find((s) => s.start === 660); // 11:00
+  assert(slot11(30) && slot11(30).available === false, '30-min buffer: 11:00 (15 min after a 10:45 end) is NOT bookable');
+  assert(slot11(0) && slot11(0).available === true, 'no buffer: that same 11:00 slot IS bookable');
+
+  // Server enforces the buffer on the public POST.
+  await sql`UPDATE calendar_settings SET slot_fit_service = FALSE, slot_minutes = 30, buffer_minutes = 30, min_notice_hours = 0 WHERE workspace_id = ${wid}`;
+  const bufDate = iso(new Date(Date.now() + 12 * 24 * 3600 * 1000));
+  await sql.query(
+    `INSERT INTO bookings (workspace_id, service_id, client_name, client_email, date, start_min, end_min)
+     VALUES ($1,$2,'Existing','e@example.com',$3,600,645)`,
+    [wid, sid, bufDate],
+  );
+  r = await post({ ...base, date: bufDate, startMin: 660, endMin: 705 }); // 11:00, only 15 min after the 10:45 end
+  assert(r.statusCode === 400 && /taken|filled/i.test(r.body?.error || ''), 'server: a slot within the 30-min buffer is rejected');
+  r = await post({ ...base, date: bufDate, startMin: 720, endMin: 765 }); // 12:00, 75 min gap
+  assert([200,201].includes(r.statusCode), `server: a slot beyond the buffer books fine (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
+
   // Cleanup.
   await sql`DELETE FROM bookings WHERE workspace_id = ${wid}`;
   await sql`DELETE FROM clients WHERE workspace_id = ${wid}`;
