@@ -139,3 +139,58 @@ export async function applyRefundToInvoice({ workspaceId, parsed }) {
   `;
   return fullyRefunded ? 'refunded' : 'partial-refund';
 }
+
+// Apply a normalized PayPal subscription event (from parseWebhookEvent's
+// 'subscription.updated' / 'subscription.renewed') to client_memberships.
+// Self-resolving: the first ACTIVATED carries { workspace_id, membership_id,
+// client_id } in custom_id metadata and creates the row; later events match
+// the existing row by paypal_subscription_id. Idempotent (unique
+// paypal_subscription_id). Mirrors applySubscriptionState for Stripe.
+export async function applyPaypalSubscriptionEvent({ parsed }) {
+  if (!parsed?.subscriptionId) return 'no-subscription';
+
+  const existing = (await sql`
+    SELECT * FROM client_memberships
+     WHERE paypal_subscription_id = ${parsed.subscriptionId} LIMIT 1
+  `).rows[0];
+
+  if (!existing) {
+    // We only create on a positive (active) signal — a cancel/past_due for a
+    // subscription we never recorded is a no-op (likely created out-of-band).
+    if (parsed.subStatus !== 'active') return 'unknown-subscription';
+    const md = parsed.metadata || {};
+    if (!md.workspace_id || !md.membership_id || !md.client_id) return 'missing-metadata';
+    const tier = (await sql`
+      SELECT id, name, price_cents, interval FROM memberships
+       WHERE id = ${md.membership_id} AND workspace_id = ${md.workspace_id} LIMIT 1
+    `).rows[0];
+    if (!tier) return 'tier-not-found';
+    const client = (await sql`
+      SELECT id FROM clients WHERE id = ${md.client_id} AND workspace_id = ${md.workspace_id} LIMIT 1
+    `).rows[0];
+    if (!client) return 'client-not-found';
+    await sql`
+      INSERT INTO client_memberships (
+        workspace_id, client_id, membership_id, membership_name, price_cents, interval,
+        paypal_subscription_id, provider, status, current_period_end
+      ) VALUES (
+        ${md.workspace_id}, ${md.client_id}, ${tier.id}, ${tier.name}, ${tier.price_cents}, ${tier.interval},
+        ${parsed.subscriptionId}, 'paypal', 'active', ${parsed.nextBillingTime || null}
+      )
+      ON CONFLICT (paypal_subscription_id) WHERE paypal_subscription_id IS NOT NULL DO NOTHING
+    `;
+    return 'created';
+  }
+
+  const status = parsed.subStatus || existing.status;
+  await sql`
+    UPDATE client_memberships SET
+      status              = ${status},
+      current_period_end  = COALESCE(${parsed.nextBillingTime || null}, current_period_end),
+      cancelled_at        = ${status === 'cancelled' ? new Date() : null},
+      updated_at          = NOW()
+    WHERE id = ${existing.id}
+  `;
+  if (status === 'cancelled') return 'cancelled';
+  return parsed.type === 'subscription.renewed' ? 'renewed' : 'updated';
+}

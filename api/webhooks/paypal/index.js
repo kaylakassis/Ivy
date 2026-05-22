@@ -13,7 +13,7 @@
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/paypal.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
-import { resolveWorkspaceForPaypalEvent, applyPaymentToInvoice, applyRefundToInvoice } from '../../_lib/paypalApply.js';
+import { resolveWorkspaceForPaypalEvent, applyPaymentToInvoice, applyRefundToInvoice, applyPaypalSubscriptionEvent } from '../../_lib/paypalApply.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 // PayPal's verify-webhook-signature call needs the exact raw bytes.
@@ -42,6 +42,14 @@ export default async function handler(req, res) {
 
     const parsed = parseWebhookEvent(event);
     if (!parsed) return ok(res, { handled: false });
+
+    // Subscription events self-resolve their workspace (from the
+    // subscription's custom_id metadata, or the existing client_memberships
+    // row), so they don't go through the payee-merchant lookup.
+    if (parsed.type === 'subscription.updated' || parsed.type === 'subscription.renewed') {
+      const result = await applyPaypalSubscriptionEvent({ parsed });
+      return ok(res, { handled: true, result });
+    }
 
     const workspaceId = await resolveWorkspaceForPaypalEvent(parsed);
     if (!workspaceId) {

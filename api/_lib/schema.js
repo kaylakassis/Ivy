@@ -1481,6 +1481,16 @@ CREATE INDEX IF NOT EXISTS idx_client_memberships_workspace
 CREATE INDEX IF NOT EXISTS idx_client_memberships_client
   ON client_memberships(client_id, status);
 
+-- PayPal subscription support (parallel to memberships.stripe_price_id /
+-- client_memberships.stripe_subscription_id). A tier can be provisioned on
+-- either processor; the provider column records which one a given client
+-- membership runs on so renewals/cancels route to the right adapter.
+ALTER TABLE memberships ADD COLUMN IF NOT EXISTS paypal_plan_id TEXT;
+ALTER TABLE client_memberships ADD COLUMN IF NOT EXISTS paypal_subscription_id TEXT;
+ALTER TABLE client_memberships ADD COLUMN IF NOT EXISTS provider TEXT NOT NULL DEFAULT 'stripe';
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_memberships_paypal_sub
+  ON client_memberships(paypal_subscription_id) WHERE paypal_subscription_id IS NOT NULL;
+
 -- Recurring invoices. Each row defines a template + schedule that
 -- the daily cron uses to mint a fresh invoices row at every interval.
 -- The template's items / tax / discount / notes get copied snapshot-

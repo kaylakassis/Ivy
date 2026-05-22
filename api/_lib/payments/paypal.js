@@ -416,6 +416,49 @@ export function parseWebhookEvent(event) {
       providerData: { captureId, orderId, eventType: event.event_type },
     };
   }
+
+  // ── Subscription lifecycle (memberships on PayPal) ──────────────────
+  // PayPal v2 Billing Subscriptions: status changes arrive as
+  // BILLING.SUBSCRIPTION.*; recurring charges as PAYMENT.SALE.COMPLETED
+  // carrying billing_agreement_id (the subscription id). The subscription's
+  // custom_id (set at creation) carries { workspace_id, membership_id,
+  // client_id } so the first ACTIVATED can create the client_memberships row
+  // without a prior lookup. NOTE: these event shapes are written to PayPal's
+  // docs and are exercised by unit tests, but need a PayPal sandbox to
+  // confirm end-to-end (no live creds in this environment).
+  const SUB_STATUS = {
+    'BILLING.SUBSCRIPTION.ACTIVATED':      'active',
+    'BILLING.SUBSCRIPTION.RE-ACTIVATED':   'active',
+    'BILLING.SUBSCRIPTION.UPDATED':        'active',
+    'BILLING.SUBSCRIPTION.CANCELLED':      'cancelled',
+    'BILLING.SUBSCRIPTION.EXPIRED':        'cancelled',
+    'BILLING.SUBSCRIPTION.SUSPENDED':      'past_due',
+    'BILLING.SUBSCRIPTION.PAYMENT.FAILED': 'past_due',
+  };
+  if (Object.prototype.hasOwnProperty.call(SUB_STATUS, event.event_type)) {
+    const r = event.resource || {};
+    let metadata = {};
+    try { if (r.custom_id) metadata = JSON.parse(r.custom_id); } catch { /* ignore */ }
+    return {
+      type:            'subscription.updated',
+      subscriptionId:  r.id || null,
+      subStatus:       SUB_STATUS[event.event_type],
+      nextBillingTime: r.billing_info?.next_billing_time || null,
+      metadata,
+      providerData:    { eventType: event.event_type, planId: r.plan_id || null },
+    };
+  }
+  if (event.event_type === 'PAYMENT.SALE.COMPLETED' && event.resource?.billing_agreement_id) {
+    const r = event.resource;
+    return {
+      type:           'subscription.renewed',
+      subscriptionId: r.billing_agreement_id,
+      subStatus:      'active',
+      amountCents:    r.amount?.total ? Math.round(Number(r.amount.total) * 100) : 0,
+      currency:       (r.amount?.currency || 'USD').toUpperCase(),
+      providerData:   { saleId: r.id },
+    };
+  }
   return null;
 }
 
