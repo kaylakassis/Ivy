@@ -438,7 +438,8 @@ async function createBooking(req, res) {
       clientId = newClient.rows[0].id;
       // First-time booker — email a "claim your account" invite alongside
       // the booking confirmation that notifyNewBooking sends.
-      sendClientInvite({ workspaceId, clientId });
+      sendClientInvite({ workspaceId, clientId })
+        .catch((e) => console.error('[booking] sendClientInvite failed:', e?.message));
     }
 
     // Mint a video room when the service is virtual. Per-booking
@@ -555,10 +556,15 @@ async function createBooking(req, res) {
       }
     }
     // Side effects (thread + emails). Don't await — the public booker
-    // should see "confirmed!" without waiting on Resend round-trips.
-    notifyNewBooking({ workspaceId, bookingId: b.id, source: 'public' });
-    syncOnBookingCreated({ workspaceId: b.workspace_id, bookingId: b.id });
-    attachIntakeForms({ workspaceId, bookingId: b.id });
+    // should see "confirmed!" without waiting on Resend round-trips. Each is
+    // .catch'd: an unhandled rejection here can crash the serverless function
+    // (the response is already sent) and take down concurrent requests.
+    notifyNewBooking({ workspaceId, bookingId: b.id, source: 'public' })
+      .catch((e) => console.error('[booking] notifyNewBooking failed:', e?.message));
+    syncOnBookingCreated({ workspaceId: b.workspace_id, bookingId: b.id })
+      .catch((e) => console.error('[booking] syncOnBookingCreated failed:', e?.message));
+    attachIntakeForms({ workspaceId, bookingId: b.id })
+      .catch((e) => console.error('[booking] attachIntakeForms failed:', e?.message));
     return created(res, {
       booking: {
         id: b.id,

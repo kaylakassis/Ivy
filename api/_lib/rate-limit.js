@@ -5,17 +5,52 @@ import { sql } from './db.js';
 
 export async function rateLimit({ key, max, windowSeconds }) {
   const since = new Date(Date.now() - windowSeconds * 1000).toISOString();
-  const { rows } = await sql`
-    SELECT COUNT(*)::int AS n
-    FROM rate_limits
-    WHERE key = ${key} AND attempted_at > ${since}
-  `;
-  const n = rows[0].n;
-  if (n >= max) {
-    return { allowed: false, count: n, retryAfterSeconds: windowSeconds };
+  try {
+    const { rows } = await sql`
+      SELECT COUNT(*)::int AS n
+      FROM rate_limits
+      WHERE key = ${key} AND attempted_at > ${since}
+    `;
+    const n = rows[0].n;
+    if (n >= max) {
+      return { allowed: false, count: n, retryAfterSeconds: windowSeconds };
+    }
+    await sql`INSERT INTO rate_limits (key, attempted_at) VALUES (${key}, NOW())`;
+    return { allowed: true, count: n + 1 };
+  } catch (err) {
+    // The DB-backed limiter must NEVER fail open: a DB blip during a traffic
+    // spike is exactly when brute-force / spam protection matters most. Fall
+    // back to a per-instance in-memory window so throttling degrades
+    // gracefully (best-effort across lambda instances) instead of vanishing.
+    // eslint-disable-next-line no-console
+    console.error('[rate-limit] DB unavailable, using in-memory fallback:', err.message);
+    return memRateLimit({ key, max, windowSeconds });
   }
-  await sql`INSERT INTO rate_limits (key, attempted_at) VALUES (${key}, NOW())`;
-  return { allowed: true, count: n + 1 };
+}
+
+// Per-process sliding-window fallback. Bounded so a DB outage can't grow it
+// without limit (oldest keys are evicted past MEM_MAX_KEYS).
+const memHits = new Map(); // key -> number[] (ms timestamps)
+const MEM_MAX_KEYS = 10000;
+
+export function memRateLimit({ key, max, windowSeconds }) {
+  const now = Date.now();
+  const cutoff = now - windowSeconds * 1000;
+  const recent = (memHits.get(key) || []).filter((t) => t > cutoff);
+  if (recent.length >= max) {
+    memHits.set(key, recent);
+    return { allowed: false, count: recent.length, retryAfterSeconds: windowSeconds };
+  }
+  recent.push(now);
+  memHits.set(key, recent);
+  if (memHits.size > MEM_MAX_KEYS) {
+    // Drop the oldest-inserted keys (Map preserves insertion order).
+    for (const k of memHits.keys()) {
+      memHits.delete(k);
+      if (memHits.size <= MEM_MAX_KEYS) break;
+    }
+  }
+  return { allowed: true, count: recent.length };
 }
 
 // Trusted client IP. The leftmost x-forwarded-for entry is NOT safe to

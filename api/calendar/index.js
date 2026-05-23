@@ -45,40 +45,34 @@ export default async function handler(req, res) {
       // (YYYY-MM-DD); anything malformed falls back to no-filter
       // rather than 400'ing (the page should still render).
       const isIsoDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
-      const from = isIsoDate(req.query.from) ? req.query.from : null;
-      const to   = isIsoDate(req.query.to)   ? req.query.to   : null;
+      // Always bound the query window. Without an explicit range, default to a
+      // generous window around today (90 days back, 540 forward) instead of
+      // returning a tenant's ENTIRE history — an unbounded fetch melts the
+      // calendar load for long-tenured / high-volume workspaces.
+      const isoDay = (d) => d.toISOString().slice(0, 10);
+      const dFrom = new Date(); dFrom.setUTCDate(dFrom.getUTCDate() - 90);
+      const dTo = new Date(); dTo.setUTCDate(dTo.getUTCDate() + 540);
+      const from = isIsoDate(req.query.from) ? req.query.from : isoDay(dFrom);
+      const to   = isIsoDate(req.query.to)   ? req.query.to   : isoDay(dTo);
 
-      const blocks = from && to
-        ? await safe(sql`
-            SELECT * FROM calendar_blocks
-            WHERE workspace_id = ${workspaceId}
-              AND date >= ${from}::date AND date <= ${to}::date
-            ORDER BY date, start_min
-          `, { rows: [] })
-        : await safe(sql`
-            SELECT * FROM calendar_blocks WHERE workspace_id = ${workspaceId}
-            ORDER BY date, start_min
-          `, { rows: [] });
+      const blocks = await safe(sql`
+        SELECT * FROM calendar_blocks
+        WHERE workspace_id = ${workspaceId}
+          AND date >= ${from}::date AND date <= ${to}::date
+        ORDER BY date, start_min
+      `, { rows: [] });
 
       // LEFT JOIN the booking's balance ("collect on the spot") invoice so
       // serializeBooking can show a unified deposit + balance payment status.
-      const bookings = from && to
-        ? await safe(sql`
-            SELECT b.*, ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
-            FROM bookings b
-            LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
-            WHERE b.workspace_id = ${workspaceId}
-              AND b.cancelled_at IS NULL
-              AND b.date >= ${from}::date AND b.date <= ${to}::date
-            ORDER BY b.date, b.start_min
-          `, { rows: [] })
-        : await safe(sql`
-            SELECT b.*, ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
-            FROM bookings b
-            LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
-            WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL
-            ORDER BY b.date, b.start_min
-          `, { rows: [] });
+      const bookings = await safe(sql`
+        SELECT b.*, ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
+        FROM bookings b
+        LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
+        WHERE b.workspace_id = ${workspaceId}
+          AND b.cancelled_at IS NULL
+          AND b.date >= ${from}::date AND b.date <= ${to}::date
+        ORDER BY b.date, b.start_min
+      `, { rows: [] });
       return ok(res, {
         calendar: {
           settings: serializeSettings(settings),

@@ -10,6 +10,7 @@
 // single Vercel-injected STRIPE_SECRET_KEY (from the Vercel Stripe
 // integration) covers every legacy variable name we used to read.
 import crypto from 'node:crypto';
+import { fetchWithTimeout } from './fetchTimeout.js';
 
 const STRIPE_BASE = 'https://api.stripe.com/v1';
 
@@ -101,7 +102,7 @@ async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, bod
     payload = formEncode(body);
     headers['Content-Type'] = 'application/x-www-form-urlencoded';
   }
-  const res = await fetch(`${STRIPE_BASE}${path}`, { method, headers, body: payload });
+  const res = await fetchWithTimeout(`${STRIPE_BASE}${path}`, { method, headers, body: payload }, 8000);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = json?.error?.message || `Stripe ${method} ${path} failed (${res.status})`;

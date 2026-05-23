@@ -6,6 +6,8 @@
 //   THRYVE_TWILIO_AUTH_TOKEN   <token>
 //   THRYVE_TWILIO_FROM_NUMBER  +15551234567   (Twilio-verified)
 
+import { fetchWithTimeout } from './fetchTimeout.js';
+
 const TWILIO_BASE = 'https://api.twilio.com/2010-04-01';
 
 export function isTwilioConfigured() {
@@ -29,7 +31,7 @@ export async function sendSms({ to, body }) {
   const auth = Buffer.from(`${sid}:${token}`).toString('base64');
   const form = new URLSearchParams({ From: from, To: to, Body: body });
 
-  const res = await fetch(`${TWILIO_BASE}/Accounts/${sid}/Messages.json`, {
+  const res = await fetchWithTimeout(`${TWILIO_BASE}/Accounts/${sid}/Messages.json`, {
     method: 'POST',
     headers: {
       Authorization: `Basic ${auth}`,
@@ -37,7 +39,7 @@ export async function sendSms({ to, body }) {
       Accept: 'application/json',
     },
     body: form.toString(),
-  });
+  }, 8000);
   const json = await res.json().catch(() => ({}));
   if (!res.ok) {
     const msg = json?.message || `Twilio ${res.status}`;

@@ -52,6 +52,9 @@ export default async function handler(req, res) {
     const errors = [];
     const inserted = [];
 
+    // Validate + dedupe in memory (no per-row DB round trips), collecting the
+    // survivors. The actual inserts happen in batches below.
+    const toInsert = [];
     for (let i = 0; i < body.rows.length; i++) {
       const r = body.rows[i] || {};
       const name = (r.name || '').toString().trim();
@@ -78,24 +81,46 @@ export default async function handler(req, res) {
         skipped++;
         continue;
       }
+      if (email) existingEmails.add(email); // prevent duplicate within same batch
+      toInsert.push({ name, email, stage, tags, notes, source });
+    }
 
+    // Bulk-insert in chunks: one multi-row INSERT per chunk instead of one
+    // round trip per row. A 2,000-row CSV used to mean 2,000 serial Neon
+    // HTTP calls (function-timeout territory during bulk onboarding); now
+    // it's ~4 round trips. Chunked so the parameter count per statement
+    // stays well under Postgres's 65,535 limit (500 rows * 7 cols = 3,500).
+    const CHUNK = 500;
+    for (let c = 0; c < toInsert.length; c += CHUNK) {
+      const chunk = toInsert.slice(c, c + CHUNK);
+      const valuesSql = [];
+      const params = [];
+      let p = 0;
+      for (const row of chunk) {
+        valuesSql.push(`($${++p}, $${++p}, $${++p}, $${++p}, $${++p}::text[], $${++p}, $${++p})`);
+        params.push(workspaceId, row.name, row.email, row.stage, row.tags, row.notes, row.source);
+      }
+      const text = `
+        INSERT INTO clients (workspace_id, name, email, stage, tags, notes, source)
+        VALUES ${valuesSql.join(', ')}
+        RETURNING *
+      `;
       try {
         // eslint-disable-next-line no-await-in-loop
-        const ins = await sql`
-          INSERT INTO clients (workspace_id, name, email, stage, tags, notes, source)
-          VALUES (${workspaceId}, ${name}, ${email}, ${stage}, ${tags}, ${notes}, ${source})
-          RETURNING *
-        `;
-        if (email) existingEmails.add(email); // prevent duplicate within same batch
-        created++;
-        if (inserted.length < 50) inserted.push(serializeClient(ins.rows[0]));
-        // Fire invite email — best-effort, idempotent via invite_sent_at.
-        if (email) {
-          sendClientInvite({ workspaceId, clientId: ins.rows[0].id });
+        const result = await sql.query(text, params);
+        created += result.rows.length;
+        for (const cr of result.rows) {
+          if (inserted.length < 50) inserted.push(serializeClient(cr));
+          // Fire invite email — best-effort, idempotent via invite_sent_at.
+          if (cr.email) {
+            sendClientInvite({ workspaceId, clientId: cr.id })
+              .catch((e) => console.error('[import] sendClientInvite failed:', e?.message));
+          }
         }
       } catch (err) {
-        invalid++;
-        errors.push({ row: i + 1, error: err.message?.slice(0, 200) || 'Insert failed' });
+        // A chunk failure shouldn't sink the whole import.
+        invalid += chunk.length;
+        errors.push({ row: `${c + 1}-${c + chunk.length}`, error: err.message?.slice(0, 200) || 'Bulk insert failed' });
       }
     }
 
