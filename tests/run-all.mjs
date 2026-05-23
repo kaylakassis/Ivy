@@ -21,6 +21,22 @@ const suites = [
   'smoke-runner.mjs',
 ];
 
+// Apply the schema ONCE up front, the same way the deploy does (migrate,
+// then run). A brand-new database (e.g. CI's fresh Postgres service) has no
+// tables, and not every suite self-migrates via ensureSchemaApplied — the
+// alphabetically-first ones would otherwise hit "relation does not exist".
+// Run through the bootstrap shim so the Neon driver talks to local Postgres.
+console.log('======== schema migration ========');
+const migrate = spawnSync(
+  process.execPath,
+  ['--import', bootstrap, path.join(dir, '..', 'scripts', 'migrate.mjs')],
+  { stdio: 'inherit' },
+);
+if (migrate.status !== 0) {
+  console.error('schema migration failed — aborting test run');
+  process.exit(1);
+}
+
 const failed = [];
 for (const f of suites) {
   console.log(`\n======== ${f} ========`);
