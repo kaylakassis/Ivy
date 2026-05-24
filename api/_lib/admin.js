@@ -5,11 +5,11 @@
 //   • Authenticated session whose user.email matches the allowlist
 //   • Authenticated session whose users.user_type = 'super_admin' in the DB
 //
-// The email allowlist is the union of:
-//   • DEFAULT_SUPER_ADMINS below (the operator's hardcoded address — keeps
-//     the admin panel reachable even before any env vars are set in a
-//     fresh deploy)
-//   • SUPER_ADMIN_EMAIL env var (comma-separated list, lowercased)
+// The email allowlist comes solely from the SUPER_ADMIN_EMAIL env var
+// (comma/semicolon/space-separated, lowercased). No address is hardcoded —
+// set SUPER_ADMIN_EMAIL in the environment (e.g. Vercel) to grant admin
+// auto-promotion. An unset var means no email-based super-admins (the DB
+// user_type path and x-admin-secret still work).
 //
 // The DB-column path is the most robust: it survives env-var drift and
 // stale-function-instance scenarios. The /api/auth/me endpoint auto-
@@ -19,12 +19,11 @@
 import { requireUser, readSession } from './auth.js';
 import { sql } from './db.js';
 
-const DEFAULT_SUPER_ADMINS = ['kayla@market-theory.com'];
-
 export function superAdminEmails() {
-  const fromEnv = (process.env.SUPER_ADMIN_EMAIL || '')
-    .split(/[,;\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean);
-  return new Set([...DEFAULT_SUPER_ADMINS, ...fromEnv]);
+  return new Set(
+    (process.env.SUPER_ADMIN_EMAIL || '')
+      .split(/[,;\s]+/).map((s) => s.toLowerCase().trim()).filter(Boolean),
+  );
 }
 
 export function emailIsSuperAdmin(email) {
