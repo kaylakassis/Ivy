@@ -21,6 +21,7 @@ const TABS = [
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'support',    label: 'Support',    icon: 'Chat' },
+  { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
   { id: 'export',     label: 'Export',     icon: 'Doc' },
@@ -67,10 +68,60 @@ export default function AdminPage() {
       {tab === 'users'      && <UsersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'support'    && <SupportTab/>}
+      {tab === 'appeals'    && <AppealsTab/>}
       {tab === 'blast'      && <BlastTab/>}
       {tab === 'audit'      && <AuditTab/>}
       {tab === 'export'     && <ExportTab/>}
       {tab === 'settings'   && <SettingsTab/>}
+    </div>
+  );
+}
+
+// ---------- Review appeals tab ----------
+// Business owners can't hide reviews; they appeal, and the appeal lands here
+// for the support team to approve (remove the review) or deny (keep it).
+function AppealsTab() {
+  const [appeals, setAppeals] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+
+  const load = () => api.get('/admin/review-appeals')
+    .then((r) => { setAppeals(r.appeals || []); setErr(null); })
+    .catch(setErr);
+  useEffect(() => { load(); }, []);
+
+  const resolve = async (reviewId, action) => {
+    setBusyId(reviewId);
+    try { await api.post('/admin/review-appeals', { reviewId, action }); await load(); }
+    catch (e) { setErr(e); }
+    finally { setBusyId(null); }
+  };
+
+  if (!appeals) return <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {err && <div className="card" style={{ padding: 12, color: 'var(--danger)', fontSize: 13 }}>{err.message}</div>}
+      {appeals.length === 0 ? (
+        <EmptyNote icon="Star" title="No open appeals"
+          hint="When a business owner appeals a review, it shows up here to approve (remove) or deny (keep)."/>
+      ) : appeals.map((a) => (
+        <div key={a.id} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <span style={{ fontWeight: 600 }}>{a.businessName}</span>
+            <span style={{ color: '#E0B645', letterSpacing: 1 }}>{'★'.repeat(Math.max(0, Math.min(5, a.rating)))}</span>
+            <span style={{ fontSize: 12, color: 'var(--muted)' }}>by {a.reviewerName}</span>
+          </div>
+          {a.text && <div style={{ fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>“{a.text}”</div>}
+          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', borderLeft: '2px solid var(--accent)', paddingLeft: 10 }}>
+            <span style={{ fontWeight: 600 }}>Appeal reason:</span> {a.appealReason}
+          </div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-primary" disabled={busyId === a.id} onClick={() => resolve(a.id, 'approve')} style={{ fontSize: 12.5 }}>Approve (remove review)</button>
+            <button className="btn btn-ghost" disabled={busyId === a.id} onClick={() => resolve(a.id, 'deny')} style={{ fontSize: 12.5 }}>Deny (keep review)</button>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

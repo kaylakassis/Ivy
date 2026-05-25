@@ -711,10 +711,12 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
           overflow: 'hidden',
           boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
         }}>
-        {/* Hero */}
+        {/* Hero — a full 220px photo when the business uploaded one, but a
+            shorter banner for color-only heroes so a flat accent slab doesn't
+            dominate the card. */}
         <div style={{
           position: 'relative',
-          height: 220,
+          height: gallery[0] ? 220 : 132,
           background: heroCover,
         }}>
           <button onClick={onClose} aria-label="Close"
@@ -733,7 +735,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
         {/* Header card — overlaps the hero */}
         <div style={{ padding: '0 22px', marginTop: -38 }}>
           <div style={{
-            display: 'flex', alignItems: 'flex-end', gap: 14,
+            display: 'flex', alignItems: 'center', gap: 14,
           }}>
             {biz?.logoUrl ? (
               <img src={biz.logoUrl} alt={biz.bizName}

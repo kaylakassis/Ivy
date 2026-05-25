@@ -634,19 +634,29 @@ CREATE TABLE IF NOT EXISTS reviews (
   reviewer_name TEXT NOT NULL,
   rating SMALLINT NOT NULL CHECK (rating BETWEEN 1 AND 5),
   text TEXT,
-  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('visible', 'hidden', 'pending')),
+  status TEXT NOT NULL DEFAULT 'visible' CHECK (status IN ('visible', 'hidden', 'pending')),
   owner_response TEXT,
   owner_responded_at TIMESTAMPTZ,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
--- Reviews are held for owner moderation ('pending') before they go public.
--- Only 'visible' shows on the booking page / Discover / business profile;
--- the owner publishes or hides each from the Reviews tab. (Existing rows
--- were all 'visible' and stay so — only the allowed set + default change.)
-ALTER TABLE reviews ALTER COLUMN status SET DEFAULT 'pending';
+-- Reviews now AUTO-PUBLISH ('visible') immediately. Owners can respond to
+-- any review and can APPEAL one for removal; only the support team (super-
+-- admin) hides it via an approved appeal. 'pending' stays a valid value
+-- only for backward-compat with legacy rows.
+ALTER TABLE reviews ALTER COLUMN status SET DEFAULT 'visible';
 ALTER TABLE reviews DROP CONSTRAINT IF EXISTS reviews_status_check;
 ALTER TABLE reviews ADD CONSTRAINT reviews_status_check
   CHECK (status IN ('visible', 'hidden', 'pending')) NOT VALID;
+-- Publish any reviews that were previously held for moderation.
+UPDATE reviews SET status = 'visible' WHERE status = 'pending';
+-- Appeal flow: owner files an appeal (→ 'requested'); support approves
+-- (review hidden) or denies (stays visible).
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS appeal_status TEXT NOT NULL DEFAULT 'none'
+  CHECK (appeal_status IN ('none', 'requested', 'approved', 'denied'));
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS appeal_reason TEXT;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS appeal_requested_at TIMESTAMPTZ;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS appeal_resolved_at TIMESTAMPTZ;
+ALTER TABLE reviews ADD COLUMN IF NOT EXISTS appeal_resolved_by UUID;
 CREATE INDEX IF NOT EXISTS idx_reviews_workspace_recent
   ON reviews(workspace_id, status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_booking

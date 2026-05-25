@@ -72,8 +72,8 @@ export default async function handler(req, res) {
         return badRequest(res, 'rating must be 1–5');
       }
 
-      // Insert review. Held as 'pending' for owner moderation — it won't
-      // appear publicly until the owner publishes it from the Reviews tab.
+      // Insert review. Auto-published ('visible') immediately; the owner can
+      // respond or appeal it for removal from the Reviews tab.
       await sql`
         INSERT INTO reviews (
           workspace_id, client_id, booking_id, reviewer_name,
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
         ) VALUES (
           ${row.workspace_id}, ${row.client_id}, ${row.booking_id},
           ${row.client_name || 'Anonymous'},
-          ${rating}, ${text}, 'pending'
+          ${rating}, ${text}, 'visible'
         )
       `;
 

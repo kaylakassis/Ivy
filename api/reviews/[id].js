@@ -1,17 +1,17 @@
-// PATCH /api/reviews/:id — owner moderation actions on a single review.
-//   body { status?: 'visible' | 'hidden', ownerResponse?: string | null }
+// PATCH /api/reviews/:id — owner actions on a single review.
+//   body { ownerResponse?: string | null, appealReason?: string }
 //
-// Hide takes the review out of the public list + average. Owner response
-// shows up underneath the review on the public page (one per review;
-// posting again replaces).
+// Reviews auto-publish, so owners CANNOT hide/publish them. They can:
+//   • respond publicly (owner_response shows under the review), and
+//   • appeal a review for removal — that flags it for the support team
+//     (super-admin) to approve (hide) or deny. The review stays visible
+//     until an appeal is approved.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeReview } from '../_lib/reviews.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
-
-const VALID_STATUS = new Set(['visible', 'hidden']);
 
 export default async function handler(req, res) {
   if (req.method !== 'PATCH') return methodNotAllowed(res, ['PATCH']);
@@ -28,14 +28,25 @@ export default async function handler(req, res) {
     const values = [];
     const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };
 
-    if ('status' in body) {
-      if (!VALID_STATUS.has(body.status)) return badRequest(res, 'status must be visible or hidden');
-      push('status', body.status);
-    }
     if ('ownerResponse' in body) {
       const t = body.ownerResponse == null ? null : String(body.ownerResponse).trim().slice(0, 2000);
       push('owner_response', t || null);
       push('owner_responded_at', t ? new Date() : null);
+    }
+    if ('appealReason' in body) {
+      // File (or re-file) an appeal. Block if one is already open or was
+      // already approved — owners get one bite per review until support acts.
+      const cur = await sql`SELECT appeal_status FROM reviews WHERE id = ${id} AND workspace_id = ${workspaceId}`;
+      if (cur.rows.length === 0) return notFound(res, 'Review not found');
+      const cs = cur.rows[0].appeal_status || 'none';
+      if (cs === 'requested') return badRequest(res, 'An appeal for this review is already under review.');
+      if (cs === 'approved') return badRequest(res, 'This review has already been removed.');
+      const reason = String(body.appealReason || '').trim().slice(0, 1000);
+      if (!reason) return badRequest(res, 'Please include a reason for the appeal.');
+      push('appeal_status', 'requested');
+      push('appeal_reason', reason);
+      push('appeal_requested_at', new Date());
+      push('appeal_resolved_at', null);
     }
 
     if (sets.length === 0) {

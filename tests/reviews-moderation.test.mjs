@@ -1,7 +1,7 @@
-// Tests review moderation: submitted reviews are held 'pending' (NOT
-// public) until the owner publishes them from the Reviews tab. Previously
-// reviews inserted as 'visible' and went public instantly — a 1-star
-// review with no owner recourse, contradicting the request email.
+// Tests the review lifecycle: reviews AUTO-PUBLISH ('visible') immediately.
+// Owners can respond and can APPEAL a review for removal, but cannot hide it
+// themselves — only the support team (super-admin) resolves an appeal:
+// approve hides the review, deny leaves it visible.
 //
 // Run with:
 //   node --import ./tests/bootstrap.mjs ./tests/reviews-moderation.test.mjs
@@ -11,6 +11,7 @@ import { sql } from '../api/_lib/db.js';
 import { signSession } from '../api/_lib/auth.js';
 import reviewsHandler from '../api/reviews/index.js';
 import reviewIdHandler from '../api/reviews/[id].js';
+import adminAppealsHandler from '../api/admin/review-appeals.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -35,36 +36,60 @@ async function run() {
 
   const publicVisible = async () =>
     (await sql`SELECT COUNT(*)::int n FROM reviews WHERE workspace_id = ${wid} AND status = 'visible'`).rows[0].n;
+  const statusOf = async (id) =>
+    (await sql`SELECT status FROM reviews WHERE id = ${id}`).rows[0].status;
 
-  console.log('\n[1] a submitted review defaults to pending (not public)');
-  // No status specified → column default. Verifies the DEFAULT migration applied.
-  const revId = (await sql`INSERT INTO reviews (workspace_id, reviewer_name, rating, text)
+  console.log('\n[1] a submitted review auto-publishes (visible) immediately');
+  const rev = (await sql`INSERT INTO reviews (workspace_id, reviewer_name, rating, text)
     VALUES (${wid}, 'Casey Client', 2, 'Was just okay') RETURNING id, status`).rows[0];
-  assert(revId.status === 'pending', `new review status defaults to 'pending' (got '${revId.status}')`);
-  assert((await publicVisible()) === 0, 'pending review is NOT counted in the public (visible) set');
+  assert(rev.status === 'visible', `new review defaults to 'visible' (got '${rev.status}')`);
+  assert((await publicVisible()) === 1, 'auto-published review counts in the public set');
 
-  console.log('\n[2] owner sees it in the moderation list with a pending count');
+  console.log('\n[2] owner can respond to a review');
   let res = mockRes();
+  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev.id }, body: { ownerResponse: 'Thanks for the feedback — we hear you!' } }, res);
+  assert(res.body?.review?.ownerResponse === 'Thanks for the feedback — we hear you!', 'owner response is saved + returned');
+
+  console.log('\n[3] owner CANNOT hide/publish a review directly');
+  res = mockRes();
+  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev.id }, body: { status: 'hidden' } }, res);
+  assert((await statusOf(rev.id)) === 'visible', "owner's status change is ignored — review stays visible");
+  assert((await publicVisible()) === 1, 'review remains public after the owner attempts to hide it');
+
+  console.log('\n[4] owner can appeal a review for removal');
+  res = mockRes();
+  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev.id }, body: { appealReason: 'This review is fake / defamatory.' } }, res);
+  assert(res.body?.review?.appealStatus === 'requested', 'appeal filed (→ requested)');
+  assert((await publicVisible()) === 1, 'review stays visible while the appeal is pending');
+
+  console.log('\n[5] owner cannot file a second appeal while one is open');
+  res = mockRes();
+  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev.id }, body: { appealReason: 'again' } }, res);
+  assert(res.statusCode === 400, 'double-appeal is rejected (400)');
+
+  console.log('\n[6] support (super-admin) sees the appeal and can approve → hide');
+  await sql`UPDATE users SET user_type = 'super_admin' WHERE id = ${uid}`;
+  res = mockRes();
+  await adminAppealsHandler({ method: 'GET', headers: hdr(cookie), query: {} }, res);
+  assert(res.body?.appeals?.some((a) => a.id === rev.id), 'appeal appears in the super-admin queue');
+  res = mockRes();
+  await adminAppealsHandler({ method: 'POST', headers: hdr(cookie), query: {}, body: { reviewId: rev.id, action: 'approve' } }, res);
+  assert(res.body?.resolved?.status === 'hidden', 'approving the appeal hides the review');
+  assert((await publicVisible()) === 0, 'approved-appeal review is removed from public');
+
+  console.log('\n[7] a denied appeal leaves the review visible');
+  const rev2 = (await sql`INSERT INTO reviews (workspace_id, reviewer_name, rating, text)
+    VALUES (${wid}, 'Other Client', 1, 'bad') RETURNING id`).rows[0];
+  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev2.id }, body: { appealReason: 'please remove' } }, mockRes());
+  res = mockRes();
+  await adminAppealsHandler({ method: 'POST', headers: hdr(cookie), query: {}, body: { reviewId: rev2.id, action: 'deny' } }, res);
+  assert(res.body?.resolved?.appeal_status === 'denied', 'denying resolves the appeal as denied');
+  assert((await statusOf(rev2.id)) === 'visible', 'denied-appeal review stays visible');
+
+  console.log('\n[8] owner reviews list still loads (sanity)');
+  res = mockRes();
   await reviewsHandler({ method: 'GET', headers: hdr(cookie), query: {} }, res);
-  assert(res.body?.summary?.pendingCount === 1, 'summary.pendingCount = 1');
-  assert(res.body?.summary?.visibleCount === 0, 'summary.visibleCount = 0');
-  assert(res.body?.reviews?.some((r) => r.id === revId.id && r.status === 'pending'), 'review appears in the owner list as pending');
-
-  console.log('\n[3] publishing it makes it public');
-  res = mockRes();
-  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: revId.id }, body: { status: 'visible' } }, res);
-  assert(res.body?.review?.status === 'visible', 'PATCH status=visible publishes the review');
-  assert((await publicVisible()) === 1, 'published review now counts in the public set');
-
-  res = mockRes();
-  await reviewsHandler({ method: 'GET', headers: hdr(cookie), query: {} }, res);
-  assert(res.body?.summary?.pendingCount === 0 && res.body?.summary?.visibleCount === 1, 'summary reflects publish (pending 0, visible 1)');
-
-  console.log('\n[4] hiding a review pulls it back out of public');
-  res = mockRes();
-  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: revId.id }, body: { status: 'hidden' } }, res);
-  assert(res.body?.review?.status === 'hidden', 'PATCH status=hidden hides it');
-  assert((await publicVisible()) === 0, 'hidden review is not public');
+  assert(Array.isArray(res.body?.reviews), 'GET /api/reviews returns the owner list');
 
   // Cleanup.
   await sql`DELETE FROM reviews WHERE workspace_id = ${wid}`;
