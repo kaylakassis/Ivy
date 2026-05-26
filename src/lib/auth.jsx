@@ -1,7 +1,7 @@
 // Auth context — holds the logged-in user and exposes sign-in / sign-up / sign-out.
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api } from './api.js';
-import { CURRENT_TERMS_VERSION } from './legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
 const Ctx = createContext(null);
 
@@ -41,7 +41,11 @@ export function AuthProvider({ children }) {
   const signUp = useCallback(async (email, password, name, mode = 'owner', ref = null) => {
     const r = await api.post('/auth/signup', {
       email, password, name, mode, ref,
+      // The AuthPage checkbox says "I agree to the Terms and Privacy
+      // Policy" — one click covers both. Send both versions so the
+      // server can record an immutable acceptance row per document.
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
+      acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,
     });
     setUser(r.user);
     return r;

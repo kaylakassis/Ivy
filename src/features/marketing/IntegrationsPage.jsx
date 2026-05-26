@@ -13,7 +13,7 @@ const LIVE = [
   { name: 'Video meetings',   icon: 'Camera',   sub: 'Virtual bookings auto-mint a private video room - or drop in your own link.' },
   { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in THRYVE.' },
   { name: 'Apple Calendar',   icon: 'Calendar', sub: 'CalDAV subscription. Read-only view of your THRYVE schedule.' },
-  { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Same as Google - two-way sync via iCal feed.' },
+  { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Subscribe to your THRYVE schedule via iCal feed (read-only view in Outlook).' },
   { name: 'Webhooks',         icon: 'Globe',    sub: 'POST events on booking, payment, message - wire it to anywhere.' },
   { name: 'Embeddable widget', icon: 'Doc',     sub: 'One-line script to embed booking on any external site.' },
   { name: 'Custom domain',    icon: 'Globe',    sub: 'Point your domain at THRYVE; DNS verification built-in.' },

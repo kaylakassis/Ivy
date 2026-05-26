@@ -118,6 +118,7 @@ export async function requireUser(req, res) {
     SELECT id, email, name, created_at, email_verified_at,
            walkthrough_completed_at, user_type,
            terms_accepted_at, terms_version,
+           privacy_version, privacy_accepted_at,
            password_changed_at, deleted_at
     FROM users WHERE id = ${session.sub}
   `;

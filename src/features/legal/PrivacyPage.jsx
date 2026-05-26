@@ -1,13 +1,20 @@
 // /privacy — public Privacy Policy. Generic template; replace placeholders
 // (CONTACT_EMAIL, COMPANY_NAME, COMPANY_LOCATION) with real values before
 // charging customers, and have a lawyer review before EU rollout.
+//
+// Bumping the version: change CURRENT_PRIVACY_VERSION in api/_lib/legal.js
+// (+ the mirror in src/lib/legal.js) so every existing user is re-prompted
+// to re-accept on next request. The PRIVACY_VERSION below is just the
+// display copy and should match.
 import React from 'react';
 import LegalPage, { H2, P, UL } from './LegalPage.jsx';
 
+export const PRIVACY_VERSION = '2026-05-25';
+
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="May 1, 2026">
-      <P>
+    <LegalPage title="Privacy Policy" lastUpdated="May 25, 2026">
+      <P><strong>Effective version: {PRIVACY_VERSION}.</strong>
         This Privacy Policy explains what information THRYVE ("we", "us", "the
         Service") collects from you, how we use it, and what choices you have.
         If anything here is unclear, please email us at{' '}
@@ -75,8 +82,13 @@ export default function PrivacyPage() {
 
       <H2>Where it's stored</H2>
       <P>The Postgres database is hosted in the United States. Email and AI
-        processing happen in the U.S. as well. If you're outside the U.S.,
-        your data will be transferred to and processed in the U.S.</P>
+        processing happen in the U.S. as well. Our application serves traffic
+        from edge regions in the United States, Europe (Frankfurt), and
+        Asia-Pacific (Sydney) to keep page loads fast — but those edge
+        instances are stateless. Persistent storage of your data stays in
+        the U.S. If you're outside the U.S., your data will be transferred
+        to and processed in the U.S. under standard contractual clauses
+        with each of our sub-processors.</P>
 
       <H2>How long we keep it</H2>
       <P>We keep workspace data for as long as your account is active. When you

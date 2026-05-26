@@ -40,6 +40,13 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
 -- under them. Lets us undo an accidental delete within the window.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 
+-- Privacy Policy versioning. Same shape as terms_version: bump the
+-- CURRENT_PRIVACY_VERSION constant in api/_lib/legal.js when /privacy
+-- changes substantively + every existing user gets force-re-prompted.
+-- legal_acceptances captures the full audit trail (document='privacy').
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ;
+
 -- In-app notification feed. push.js' notifyOwner / notifyClient INSERT
 -- a row here BEFORE the push fanout so the bell + dropdown surface
 -- every important event regardless of whether the user has push

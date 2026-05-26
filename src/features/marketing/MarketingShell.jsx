@@ -241,6 +241,7 @@ export function SimpleFooter() {
           <Link to="/about" style={{ color: 'inherit', textDecoration: 'none' }}>About</Link>
           <Link to="/privacy" style={{ color: 'inherit', textDecoration: 'none' }}>Privacy</Link>
           <Link to="/terms" style={{ color: 'inherit', textDecoration: 'none' }}>Terms</Link>
+          <Link to="/do-not-sell" style={{ color: 'inherit', textDecoration: 'none' }}>Do Not Sell My Info</Link>
           <Link to="/signin" style={{ color: 'inherit', textDecoration: 'none' }}>Sign in</Link>
         </div>
       </div>

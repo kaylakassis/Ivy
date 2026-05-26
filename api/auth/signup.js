@@ -15,7 +15,7 @@ import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { renderWelcome } from '../_lib/welcome-content.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
-import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../_lib/legal.js';
 import { recordReferralSignup } from '../_lib/referrals.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     // schema hasn't been applied yet, the SELECT users at line ~85
     // would 500. Bootstrap explicitly here.
     await ensureSchemaApplied();
-    const { email, password, name, mode, ref, acceptedTermsVersion } = await readBody(req);
+    const { email, password, name, mode, ref, acceptedTermsVersion, acceptedPrivacyVersion } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');
     if (typeof password !== 'string' || password.length < 8) {
       return badRequest(res, 'Password must be at least 8 characters');
@@ -67,10 +67,15 @@ export default async function handler(req, res) {
     const cleanName = (name || '').toString().trim().slice(0, 200);
     if (!cleanName) return badRequest(res, 'Your name is required');
     // Hard requirement: signup cannot proceed without an explicit
-    // acceptance of the current Terms version. Refuse the request
-    // rather than silently default — we want the proof.
+    // acceptance of the current Terms AND Privacy versions. Refuse
+    // the request rather than silently default — we want the proof.
+    // The frontend checkbox text says "I agree to the Terms and
+    // Privacy Policy" so a single click is expected to send both.
     if (acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
       return badRequest(res, `You must accept the current Terms (${CURRENT_TERMS_VERSION}) to create an account.`);
+    }
+    if (acceptedPrivacyVersion !== CURRENT_PRIVACY_VERSION) {
+      return badRequest(res, `You must accept the current Privacy Policy (${CURRENT_PRIVACY_VERSION}) to create an account.`);
     }
     // 'owner' (default) creates a workspace; 'client' does not — they're
     // signing up to view their bookings/invoices/messages from businesses
@@ -100,8 +105,16 @@ export default async function handler(req, res) {
 
     const password_hash = await hashPassword(password);
     const insertUser = await sql`
-      INSERT INTO users (email, password_hash, name, terms_version, terms_accepted_at)
-      VALUES (${emailKey}, ${password_hash}, ${cleanName}, ${CURRENT_TERMS_VERSION}, NOW())
+      INSERT INTO users (
+        email, password_hash, name,
+        terms_version, terms_accepted_at,
+        privacy_version, privacy_accepted_at
+      )
+      VALUES (
+        ${emailKey}, ${password_hash}, ${cleanName},
+        ${CURRENT_TERMS_VERSION}, NOW(),
+        ${CURRENT_PRIVACY_VERSION}, NOW()
+      )
       RETURNING id, email, name, created_at, email_verified_at
     `;
     const user = insertUser.rows[0];
@@ -114,13 +127,17 @@ export default async function handler(req, res) {
     // Deleting the user cascades, cleaning up anything partial, and frees
     // the email for a clean retry.
     try {
-      // Append the immutable acceptance row right after user creation.
-      // legal_acceptances is append-only — we never delete; this row
-      // plus its IP + UA is the proof if it ever matters.
+      // Append the immutable acceptance rows right after user creation.
+      // legal_acceptances is append-only — we never delete; the rows
+      // plus IP + UA are the proof if it ever matters. Two rows: one
+      // per document (terms + privacy) so a future change to either
+      // one is independently auditable.
       const ua = req.headers['user-agent']?.toString().slice(0, 500) || null;
       await sql`
         INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
-        VALUES (${user.id}, 'terms', ${CURRENT_TERMS_VERSION}, ${ip}, ${ua})
+        VALUES
+          (${user.id}, 'terms',   ${CURRENT_TERMS_VERSION},   ${ip}, ${ua}),
+          (${user.id}, 'privacy', ${CURRENT_PRIVACY_VERSION}, ${ip}, ${ua})
       `;
 
       if (role === 'owner') {
