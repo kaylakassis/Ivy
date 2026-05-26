@@ -39,6 +39,32 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
 -- after 30 days, at which point CASCADE drops workspaces + everything
 -- under them. Lets us undo an accidental delete within the window.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+-- In-app notification feed. push.js' notifyOwner / notifyClient INSERT
+-- a row here BEFORE the push fanout so the bell + dropdown surface
+-- every important event regardless of whether the user has push
+-- enabled. Web push is opt-in (mobile Safari especially) — without
+-- the feed, owners closing the tab lose every alert. read_at = NULL
+-- counts as unread for the bell badge. tag is the same coalescing
+-- key push uses so a re-fired notification (e.g. five new messages
+-- from the same client) doesn't drown the feed; we de-dupe on (user_id,
+-- tag) inserts. db-prune trims rows > 60 days.
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  type TEXT,
+  title TEXT NOT NULL,
+  body TEXT,
+  url TEXT,
+  tag TEXT,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_recent
+  ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, created_at DESC) WHERE read_at IS NULL;
 -- Partial index for the subscription-dunning cron (api/cron/subscription-
 -- dunning.js). It scans for `subscription_status = 'past_due'` rows every
 -- day; without this index that's a full table scan that gets worse with

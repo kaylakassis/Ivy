@@ -14,6 +14,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 import { useTutorial } from '../../lib/tutorialState.jsx';
 import { getTutorial } from '../../lib/tutorials.js';
+import NotificationBell from './NotificationBell.jsx';
 
 // Synthesize the same Cmd+K event the CommandPalette listens for. This
 // keeps the topbar dumb (no prop drilling) and the palette as the single
@@ -159,6 +160,8 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
         }}>
         <Icons.Chat size={isMobile ? 16 : 15}/>
       </button>
+
+      <NotificationBell isMobile={isMobile}/>
 
       {children}
     </header>
