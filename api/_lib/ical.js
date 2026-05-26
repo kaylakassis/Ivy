@@ -11,18 +11,27 @@
 // lines start with a single space. Most modern calendar clients are lax
 // about this but Apple Cal and Outlook still complain.
 //
-// First chunk: 75 chars. Continuation chunks: 74 chars (the leading space
-// in the output makes each continuation line 75 wide).
+// First line: 75 octets. Continuation lines: 74 octets of content (the
+// leading space makes each 75 wide). We count UTF-8 BYTES and split on
+// code points so a multibyte char (accents, emoji) is never cut in half —
+// strict parsers (Apple Cal, Outlook) reject a line split mid-sequence.
 function fold(line) {
-  if (line.length <= 75) return line;
-  const out = [line.slice(0, 75)];
-  let i = 75;
-  while (i < line.length) {
-    const chunk = line.slice(i, i + 74);
-    out.push(' ' + chunk);
-    i += chunk.length;
+  const byteLen = (s) => Buffer.byteLength(s, 'utf8');
+  if (byteLen(line) <= 75) return line;
+  const out = [];
+  let cur = '';
+  let limit = 75; // first line; continuations drop to 74 (leading space → 75)
+  for (const ch of Array.from(line)) {  // Array.from splits on code points
+    if (byteLen(cur) + byteLen(ch) > limit) {
+      out.push(cur);
+      cur = ch;
+      limit = 74;
+    } else {
+      cur += ch;
+    }
   }
-  return out.join('\r\n');
+  if (cur) out.push(cur);
+  return out.map((c, idx) => (idx === 0 ? c : ' ' + c)).join('\r\n');
 }
 
 // Escape per RFC 5545 §3.3.11. ICAL TEXT escapes \, ;, , and newlines.

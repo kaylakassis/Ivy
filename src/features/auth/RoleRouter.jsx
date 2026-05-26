@@ -32,7 +32,10 @@ export default function RoleRouter({ children }) {
         catch { /* private mode */ }
         const skipping = skipUntil > Date.now();
         if (r.isOwner && !r.onboardedAt && !skipping) { setDecision('onboarding'); return; }
-        if (r.isOwner) setDecision('business');
+        // Super-admins always land in the business shell so the /admin tab
+        // is reachable, even if they're only a client elsewhere.
+        const isSuperAdmin = !!(user?.isSuperAdmin || r.isSuperAdmin);
+        if (r.isOwner || isSuperAdmin) setDecision('business');
         else if (r.isClient) setDecision('client');
         else setDecision('business'); // fall back; the empty business shell is harmless
       })

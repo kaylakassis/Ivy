@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     if (!code || !state) return back('error', 'Missing code or state');
 
     let payload;
-    try { payload = jwt.verify(state, process.env.JWT_SECRET); }
+    try { payload = jwt.verify(state, process.env.JWT_SECRET, { algorithms: ['HS256'] }); }
     catch { return back('error', 'State token invalid or expired'); }
     if (payload.kind !== 'square_oauth' || !payload.wid) return back('error', 'State payload mismatch');
 

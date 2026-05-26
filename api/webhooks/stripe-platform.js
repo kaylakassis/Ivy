@@ -256,12 +256,17 @@ export default async function handler(req, res) {
         return ok(res, { received: true, ignored: 'invoice already paid' });
       }
       const totals = computeTotals(i.items, i.tax_rate, i.discount);
+      // Record what was actually charged (== totals.total to the cent when
+      // Stripe Tax is off; includes Stripe-computed tax when it's on).
+      const paidAmount = Number.isFinite(session.amount_total)
+        ? session.amount_total / 100
+        : totals.total;
       const upd = await sql`
         UPDATE invoices SET
           status = 'paid',
           paid_at = NOW(),
           paid_method = 'card',
-          paid_amount = ${totals.total},
+          paid_amount = ${paidAmount},
           stripe_payment_intent = ${paymentIntent},
           stripe_session_id = ${sessionId},
           updated_at = NOW()
@@ -275,13 +280,13 @@ export default async function handler(req, res) {
       }
       notifyOwnerSafe({
         workspaceId, type: 'payments',
-        payload: { title: 'Invoice paid', body: `${i.number} · $${Number(totals.total).toFixed(2)}`,
+        payload: { title: 'Invoice paid', body: `${i.number} · $${Number(paidAmount).toFixed(2)}`,
           url: `/finance?invoice=${invoiceId}`, tag: `inv-${invoiceId}` },
       });
       // Receipt email to the client. Best-effort; never blocks the
       // webhook ack so Stripe doesn't retry.
       notifyInvoicePaid({
-        workspaceId, invoiceId, totalAmount: totals.total, method: 'card',
+        workspaceId, invoiceId, totalAmount: paidAmount, method: 'card',
       });
       return ok(res, { received: true, applied: 'invoice-paid' });
     }

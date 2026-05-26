@@ -249,17 +249,55 @@ export async function issueReward({
   const expires = new Date(Date.now() + Math.max(1, validityDays) * 86400 * 1000).toISOString();
   const rewardText = rule.rewardText || rule.reward_text || rule.name || 'A loyalty reward';
 
-  const ins = await sql`
-    INSERT INTO reward_redemptions (
-      workspace_id, rule_id, client_id, client_name, reward_text,
-      status, expires_at, auto_detected
-    )
-    VALUES (
-      ${workspaceId}, ${rule.id}, ${clientId}, ${cl.rows[0].name}, ${rewardText},
-      'issued', ${expires}, TRUE
-    )
-    RETURNING *
-  `;
+  // Eligibility + double-issue guard for milestone rules. `earned` is how
+  // many thresholds the client has crossed; `claimed` is how many
+  // redemptions already exist. Issue only while claimed < earned. The
+  // count is re-evaluated inside the INSERT so a double-click / retry
+  // (whose first write has committed) matches 0 rows and no-ops. 'custom'
+  // rules have no threshold and are issued manually by the owner, so they
+  // skip this check.
+  const threshold = Number(rule.threshold || 0);
+  let earned = null;
+  if (rule.type !== 'custom' && threshold > 0) {
+    const progress = await clientProgressForRule(workspaceId, rule);
+    const mine = progress.find((p) => p.clientId === clientId);
+    earned = Math.floor(Number(mine?.current || 0) / threshold);
+    if (earned <= 0) {
+      throw Object.assign(new Error('Client is not eligible for this reward yet'), { status: 400 });
+    }
+  }
+
+  let ins;
+  if (earned != null) {
+    ins = await sql`
+      INSERT INTO reward_redemptions (
+        workspace_id, rule_id, client_id, client_name, reward_text,
+        status, expires_at, auto_detected
+      )
+      SELECT ${workspaceId}, ${rule.id}, ${clientId}, ${cl.rows[0].name}, ${rewardText},
+             'issued', ${expires}, TRUE
+      WHERE (
+        SELECT COUNT(*) FROM reward_redemptions
+        WHERE workspace_id = ${workspaceId} AND rule_id = ${rule.id} AND client_id = ${clientId}
+      ) < ${earned}
+      RETURNING *
+    `;
+    if (ins.rows.length === 0) {
+      throw Object.assign(new Error("This reward was already issued for the client's current milestone"), { status: 400 });
+    }
+  } else {
+    ins = await sql`
+      INSERT INTO reward_redemptions (
+        workspace_id, rule_id, client_id, client_name, reward_text,
+        status, expires_at, auto_detected
+      )
+      VALUES (
+        ${workspaceId}, ${rule.id}, ${clientId}, ${cl.rows[0].name}, ${rewardText},
+        'issued', ${expires}, TRUE
+      )
+      RETURNING *
+    `;
+  }
   const redemption = ins.rows[0];
 
   let messageId = null;

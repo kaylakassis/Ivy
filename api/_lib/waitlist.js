@@ -7,6 +7,7 @@ import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { appUrl } from './tokens.js';
+import { hasConflict, depositFor } from './calendar.js';
 
 export function serializeWaitlistEntry(row) {
   if (!row) return null;
@@ -67,6 +68,42 @@ export async function promoteWaitlistOnCancel({ workspaceId, serviceId, dateISO,
   `;
   if (claim.rows.length === 0) return null; // someone else got it
 
+  // Capacity recheck: the freed seat may have been re-booked by a public
+  // booker between the cancel and this promotion. Pull the service +
+  // workspace buffers and run the same overlap check the booker uses; if
+  // the slot is full again, put the waiter back in line and bail rather
+  // than over-book.
+  const svcRows = await sql`
+    SELECT id, capacity, price, deposit_type, deposit_amount, travel_buffer_minutes
+    FROM services WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
+  `;
+  const svc = svcRows.rows[0];
+  const csRows = await sql`
+    SELECT buffer_minutes FROM calendar_settings WHERE workspace_id = ${workspaceId}
+  `;
+  const bufferMin = Math.max(0, Number(csRows.rows[0]?.buffer_minutes || 0));
+  const serviceCapacity = Math.max(1, Number(svc?.capacity) || 1);
+  const travelBufferMin = Math.max(0, Number(svc?.travel_buffer_minutes || 0));
+
+  const slotFull = await hasConflict({
+    workspaceId, dateISO: date, start: w.start_min, end: w.end_min,
+    serviceId, capacity: serviceCapacity, travelBufferMin, bufferMin,
+  });
+  if (slotFull) {
+    // Release the claim — the waiter keeps their place for the next opening.
+    await sql`
+      UPDATE waitlist_entries SET status = 'waiting', promoted_at = NULL
+      WHERE id = ${w.id} AND status = 'promoted' AND promoted_booking_id IS NULL
+    `;
+    return null;
+  }
+
+  // Snapshot deposit + total from the service so the promoted booking has
+  // the same financial fields a normal booking would (waitlist entries
+  // carry no add-ons, so the base service price is the total).
+  const bookingTotal = Number(svc?.price || 0);
+  const depositRequired = depositFor(svc, bookingTotal);
+
   // Reuse the same client-row attach logic the public booker uses.
   let clientId = w.client_id;
   if (!clientId && w.client_email) {
@@ -90,10 +127,10 @@ export async function promoteWaitlistOnCancel({ workspaceId, serviceId, dateISO,
   const booking = await sql`
     INSERT INTO bookings (
       workspace_id, service_id, client_id, client_name, client_email, client_phone,
-      date, start_min, end_min, notes
+      date, start_min, end_min, notes, deposit_required, booking_total
     ) VALUES (
       ${workspaceId}, ${serviceId}, ${clientId}, ${w.client_name}, ${w.client_email}, ${w.client_phone},
-      ${date}, ${w.start_min}, ${w.end_min}, ${w.notes}
+      ${date}, ${w.start_min}, ${w.end_min}, ${w.notes}, ${depositRequired}, ${bookingTotal}
     )
     RETURNING *
   `;

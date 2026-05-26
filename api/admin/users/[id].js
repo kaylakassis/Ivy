@@ -215,7 +215,7 @@ function firstName(name) {
 }
 
 async function deleteUser(u, req, res) {
-  if (emailIsSuperAdmin(u.email)) {
+  if (emailIsSuperAdmin(u.email) || u.user_type === 'super_admin') {
     return badRequest(res, "Refusing to delete a super-admin account through this endpoint.");
   }
   const actor = await getAdminActor(req);

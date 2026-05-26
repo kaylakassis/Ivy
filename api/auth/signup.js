@@ -224,7 +224,7 @@ export default async function handler(req, res) {
     return created(res, {
       // Decorate with isSuperAdmin so the sidebar shows the Admin tab on
       // first paint when the signing-up email matches SUPER_ADMIN_EMAIL.
-      user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) },
+      user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) || user.user_type === 'super_admin' },
       role,
       // Surface email send errors to the client. Frontend can show a
       // banner ("we couldn't send your verification email — resend it

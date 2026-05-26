@@ -231,6 +231,7 @@ export async function createRefund({
   amountCents,
   currency = 'USD',
   reason,
+  idempotencyKey,  // deterministic key (caller) dedups retries; random fallback
 }) {
   if (!paymentIntent) throw new Error('paymentIntent (Square payment_id) is required');
   const fs = settings || await fetchFinanceSettings(workspaceId);
@@ -238,7 +239,7 @@ export async function createRefund({
   const env = fs.squareEnvironment || squareEnv();
 
   const body = {
-    idempotency_key: crypto.randomUUID(),
+    idempotency_key: idempotencyKey || crypto.randomUUID(),
     payment_id: paymentIntent,
     reason: reason ? String(reason).slice(0, 192) : undefined,
   };

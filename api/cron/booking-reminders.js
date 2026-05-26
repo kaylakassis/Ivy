@@ -160,6 +160,18 @@ async function handler(req, res) {
         // Email path. Decoupled from SMS so a Twilio failure doesn't
         // re-fire the email on the next cron tick (and vice versa).
         if (emailEligible && !alreadyEmail[key]) {
+          // Atomically CLAIM this beat before sending so two overlapping
+          // cron runs can't both pass the !alreadyEmail check and send the
+          // same reminder twice. Only the run that adds the key (rowCount=1)
+          // proceeds; if the send then fails we release the claim below so
+          // the next tick retries.
+          const claim = await sql`
+            UPDATE bookings
+            SET reminders_sent = reminders_sent || jsonb_build_object(${key}, NOW()::text)
+            WHERE id = ${r.id} AND NOT (reminders_sent ? ${key})
+            RETURNING id
+          `;
+          if (claim.rowCount > 0) {
           try {
             const branding = await getBranding(r.workspace_id);
             await sendReminder({
@@ -175,14 +187,9 @@ async function handler(req, res) {
               notes: r.notes,
               branding,
             });
-            await sql`
-              UPDATE bookings
-              SET reminders_sent = reminders_sent || jsonb_build_object(${key}, NOW()::text)
-              WHERE id = ${r.id}
-            `;
             // Push reminder to the client too (no-op if they haven't
             // claimed the portal or enabled push). Idempotency rides on
-            // the reminders_sent stamp above — we only get here once.
+            // the reminders_sent claim above — we only get here once.
             if (r.client_id) {
               await notifyClientSafe({
                 clientId: r.client_id,
@@ -197,43 +204,61 @@ async function handler(req, res) {
             }
             sent++;
           } catch (err) {
+            // Release the claim so the next tick retries (don't drop the
+            // reminder just because this send failed).
+            await sql`UPDATE bookings SET reminders_sent = reminders_sent - ${key} WHERE id = ${r.id}`
+              .catch(() => {});
             // eslint-disable-next-line no-console
             console.error(`[booking-reminder ${r.id}/${key}] email failed:`, err.message);
             reportError(err, { extra: { bookingId: r.id, beat: key, channel: 'email' } });
             failed++;
           }
+          }
         }
 
         // SMS path. Re-checks consent + phone (sendClientSms enforces).
         if (smsEligible && !alreadySms[key]) {
-          const body = composeReminderSms({
-            clientName: r.client_name,
-            serviceName: r.service_name || 'Session',
-            businessName: r.biz_name || 'Your business',
-            dateISO,
-            startMin: r.start_min,
-            reminderMinutes: minsNum,
-          });
-          const out = await sendClientSms({
-            phone:       r.client_phone,
-            consentAt:   r.sms_consent_at,
-            body,
-            workspaceId: r.workspace_id, // gates the daily per-workspace SMS cap
-          });
-          if (out.ok) {
-            await sql`
-              UPDATE bookings
-              SET sms_sent = sms_sent || jsonb_build_object(${key}, NOW()::text)
-              WHERE id = ${r.id}
-            `;
-            sent++;
-          } else {
-            // eslint-disable-next-line no-console
-            console.warn(`[booking-reminder ${r.id}/${key}] sms skipped: ${out.reason}`);
-            // Don't bump `failed` for benign skip reasons; only if Twilio
-            // returned an actual error from a configured account.
-            if (!/no consent|no phone|invalid phone|twilio not configured/i.test(out.reason)) {
-              failed++;
+          // Atomically claim this SMS beat first (see email path). Released
+          // below if the send is skipped/fails so a later tick can retry.
+          const claim = await sql`
+            UPDATE bookings
+            SET sms_sent = sms_sent || jsonb_build_object(${key}, NOW()::text)
+            WHERE id = ${r.id} AND NOT (sms_sent ? ${key})
+            RETURNING id
+          `;
+          if (claim.rowCount > 0) {
+            const body = composeReminderSms({
+              clientName: r.client_name,
+              serviceName: r.service_name || 'Session',
+              businessName: r.biz_name || 'Your business',
+              dateISO,
+              startMin: r.start_min,
+              reminderMinutes: minsNum,
+            });
+            let out;
+            try {
+              out = await sendClientSms({
+                phone:       r.client_phone,
+                consentAt:   r.sms_consent_at,
+                body,
+                workspaceId: r.workspace_id, // gates the daily per-workspace SMS cap
+              });
+            } catch (err) {
+              out = { ok: false, reason: err.message || 'send error' };
+            }
+            if (out.ok) {
+              sent++;
+            } else {
+              // Release the claim so a later tick can retry.
+              await sql`UPDATE bookings SET sms_sent = sms_sent - ${key} WHERE id = ${r.id}`
+                .catch(() => {});
+              // eslint-disable-next-line no-console
+              console.warn(`[booking-reminder ${r.id}/${key}] sms skipped: ${out.reason}`);
+              // Don't bump `failed` for benign skip reasons; only if Twilio
+              // returned an actual error from a configured account.
+              if (!/no consent|no phone|invalid phone|twilio not configured/i.test(out.reason)) {
+                failed++;
+              }
             }
           }
         }

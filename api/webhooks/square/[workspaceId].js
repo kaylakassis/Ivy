@@ -9,7 +9,7 @@
 import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js';
-import { fetchFinanceSettings } from '../../_lib/finance.js';
+import { fetchFinanceSettings, computeTotals } from '../../_lib/finance.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { appUrl } from '../../_lib/tokens.js';
@@ -111,6 +111,29 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
   }
 
   const paidAmountDollars = Math.round(Number(parsed.amountCents || 0)) / 100;
+  // Don't let a partial/under-capture (or currency mismatch) flip the
+  // invoice to fully paid. Only settle when the captured amount covers the
+  // invoice total (1¢ tolerance). Square checkout amount is the invoice
+  // total — no Stripe-Tax add-on to expect here.
+  const expectedTotal = computeTotals(inv.items, inv.tax_rate, inv.discount).total;
+  if (paidAmountDollars < expectedTotal - 0.01) {
+    const partialActivity = [
+      ...(inv.activity || []),
+      { ts: new Date().toISOString(), kind: 'partial-payment',
+        text: `Partial Square payment · $${paidAmountDollars.toFixed(2)} of $${expectedTotal.toFixed(2)}` },
+    ];
+    await sql`
+      UPDATE invoices SET
+        paid_amount           = ${paidAmountDollars},
+        paid_method           = 'card',
+        stripe_payment_intent = ${parsed.paymentId || null},
+        activity              = ${JSON.stringify(partialActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+    `;
+    return;
+  }
+
   const newActivity = [
     ...(inv.activity || []),
     {

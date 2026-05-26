@@ -28,7 +28,7 @@ export async function verifyPassword(pw, hash) {
 }
 
 export function signSession(userId, extraClaims = {}) {
-  return jwt.sign({ sub: userId, ...extraClaims }, secret(), { expiresIn: `${MAX_AGE}s` });
+  return jwt.sign({ sub: userId, ...extraClaims }, secret(), { expiresIn: `${MAX_AGE}s`, algorithm: 'HS256' });
 }
 
 // Vercel runs all deployments over HTTPS, so secure: always-on. NODE_ENV check
@@ -54,10 +54,12 @@ export function setSessionCookie(res, token) {
 }
 
 export function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', cookie.serialize(COOKIE, '', {
-    ...COOKIE_BASE,
-    maxAge: 0,
-  }));
+  // Clear the session AND any impersonation backup, so logging out while
+  // impersonating doesn't leave a stale admin backup cookie behind.
+  setCookies(res,
+    cookie.serialize(COOKIE, '', { ...COOKIE_BASE, maxAge: 0 }),
+    cookie.serialize(IMPERSONATION_BACKUP, '', { ...COOKIE_BASE, maxAge: 0 }),
+  );
 }
 
 // Stash the current session under a backup cookie + set a new one for
@@ -95,7 +97,7 @@ export function readSession(req) {
   const token = parsed[COOKIE];
   if (!token) return null;
   try {
-    return jwt.verify(token, secret());
+    return jwt.verify(token, secret(), { algorithms: ['HS256'] });
   } catch {
     return null;
   }

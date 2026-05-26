@@ -441,12 +441,18 @@ export default async function handler(req, res) {
     }
 
     const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
+    // Record what the buyer was actually charged. With Stripe Tax off this
+    // equals totals.total to the cent; with Stripe Tax on it includes the
+    // Stripe-computed tax, matching the self-heal (markInvoicePaid) path.
+    const paidAmount = Number.isFinite(session.amount_total)
+      ? session.amount_total / 100
+      : totals.total;
     const newActivity = [
       ...(inv.activity || []),
       {
         ts: new Date().toISOString(),
         kind: 'paid',
-        text: `Paid by card · ${fmtMoney(totals.total)}`,
+        text: `Paid by card · ${fmtMoney(paidAmount)}`,
       },
     ];
 
@@ -460,7 +466,7 @@ export default async function handler(req, res) {
       UPDATE invoices SET
         status                 = 'paid',
         paid_at                = NOW(),
-        paid_amount            = ${totals.total},
+        paid_amount            = ${paidAmount},
         paid_method            = 'card',
         view_token_hash        = NULL,
         stripe_payment_intent  = ${paymentIntent},
@@ -473,7 +479,7 @@ export default async function handler(req, res) {
     // ready-to-go thank-you prompt. The /ivy?prompt= deep link is
     // consumed by IvyPro on mount — see the useEffect there.
     const clientLabel = inv.client_name || 'A client';
-    const totalLabel  = fmtMoney(totals.total);
+    const totalLabel  = fmtMoney(paidAmount);
     const ivyPrompt   = `Draft a short, warm thank-you message for ${clientLabel} who just paid invoice ${inv.number} (${totalLabel}). Then send it as a chat message to them.`;
     notifyOwnerSafe({
       workspaceId,

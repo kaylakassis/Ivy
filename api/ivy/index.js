@@ -13,6 +13,7 @@ import {
   generateReply, fetchOwnedSession, getDailyUsage, sanitizeUserText,
 } from '../_lib/ivy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { enforce, getClientIp } from '../_lib/rate-limit.js';
 
 const MAX_MESSAGE_CHARS = 4000;
 // Vercel serverless caps the request body around 4.5 MB. We allow up to
@@ -61,6 +62,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      // Per-minute throttle on the expensive path (each POST can fan out
+      // to several DB reads + up to 8 Anthropic calls). The daily token cap
+      // inside generateReply is the budget ceiling; this stops a tight loop
+      // from hammering the endpoint. Super-admins bypass (see enforce()).
+      if (await enforce(req, res, [
+        { key: `ivy:ws:${workspaceId}`, max: 20, windowSeconds: 60 },
+        { key: `ivy:ip:${getClientIp(req)}`, max: 40, windowSeconds: 60 },
+      ])) return;
+
       const body = await readBody(req);
       // Sanitize before any further processing: strips NUL, control
       // chars, zero-width chars, and bidi overrides that prompt-

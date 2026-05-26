@@ -265,6 +265,7 @@ export async function createRefund({
   amountCents,
   currency = 'USD',
   reason,
+  idempotencyKey,  // deterministic PayPal-Request-Id dedups retries; random fallback
 }) {
   if (!paymentIntent) throw new Error('paymentIntent (PayPal capture ID) is required');
   const fs = settings || await fetchFinanceSettings(workspaceId);
@@ -300,7 +301,7 @@ export async function createRefund({
         'Authorization':         `Bearer ${token}`,
         'Content-Type':          'application/json',
         'PayPal-Auth-Assertion': authAssertion,
-        'PayPal-Request-Id':     crypto.randomUUID(),
+        'PayPal-Request-Id':     idempotencyKey || crypto.randomUUID(),
         'Prefer':                'return=representation',
       },
       body: JSON.stringify(body),

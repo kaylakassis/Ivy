@@ -7,6 +7,7 @@
 // the synchronous capture path in paypal-return.js calling applyPayment
 // directly — can't double-apply.
 import { sql } from './db.js';
+import { computeTotals } from './finance.js';
 
 // Resolve the workspace a PayPal capture/refund belongs to.
 //   • capture.completed carries the payee merchant id → match finance_settings.
@@ -67,6 +68,32 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
   }
 
   const paidAmountDollars = Math.round(Number(parsed.amountCents || 0)) / 100;
+  // Guard against a partial/under-capture (or currency mismatch) silently
+  // flipping the invoice to fully paid. Only settle when the captured
+  // amount covers the invoice total (1¢ tolerance for rounding). PayPal
+  // checkout amount is the invoice total — no Stripe-Tax add-on to expect.
+  const expectedTotal = computeTotals(inv.items, inv.tax_rate, inv.discount).total;
+  const underpaid = paidAmountDollars < expectedTotal - 0.01;
+
+  if (underpaid) {
+    const partialActivity = [
+      ...(inv.activity || []),
+      { ts: new Date().toISOString(), kind: 'partial-payment',
+        text: `Partial PayPal payment · $${paidAmountDollars.toFixed(2)} of $${expectedTotal.toFixed(2)}` },
+    ];
+    // Record the amount + capture id but leave the invoice open (not paid).
+    await sql`
+      UPDATE invoices SET
+        paid_amount           = ${paidAmountDollars},
+        paid_method           = 'paypal',
+        stripe_payment_intent = ${parsed.paymentId || null},
+        activity              = ${JSON.stringify(partialActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+    `;
+    return 'partial-payment';
+  }
+
   const newActivity = [
     ...(inv.activity || []),
     { ts: new Date().toISOString(), kind: 'paid', text: `Paid by PayPal · $${paidAmountDollars.toFixed(2)}` },

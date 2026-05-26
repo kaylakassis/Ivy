@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     // recorded in the imp claim. If not, refuse — something's tampered.
     let backupClaims;
     try {
-      backupClaims = jwt.verify(backup, process.env.JWT_SECRET);
+      backupClaims = jwt.verify(backup, process.env.JWT_SECRET, { algorithms: ['HS256'] });
     } catch {
       return badRequest(res, 'Backup token invalid.');
     }
