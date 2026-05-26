@@ -283,9 +283,128 @@ function Overview() {
             <Stat label="Churn rate"        value={`${data.churn.ratePct}%`}
               hint={`${data.churn.cancelledInWindow} cancelled / ${data.churn.activeAtWindowStart} active at window start`}/>
           </div>
+          {data.platformImpact && <PlatformImpactCard impact={data.platformImpact}/>}
           <SystemCard/>
         </>
       )}
+    </div>
+  );
+}
+
+// Platform-impact snapshot — marketing-friendly aggregates that the
+// super-admin can copy verbatim into landing copy, pitch decks, or
+// social posts. Window is 90 days (rolling), labeled inline so the
+// number is auditable later. PRIVACY: every value here is an aggregate
+// across the active business base — no individual workspace data
+// crosses this surface, intentional by design.
+function PlatformImpactCard({ impact }) {
+  const [copied, setCopied] = useState(null);
+  const copy = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied((k) => (k === key ? null : k)), 1500);
+    } catch { /* clipboard blocked — silent */ }
+  };
+  const snippets = [
+    {
+      key: 'noshow', label: 'Average no-show rate', value: `${impact.noShowRatePct}%`,
+      copy: `THRYVE business owners see an average no-show rate of ${impact.noShowRatePct}% across the last ${impact.lookbackDays} days.`,
+    },
+    {
+      key: 'completion', label: 'Booking completion rate', value: `${impact.completionRatePct}%`,
+      copy: `${impact.completionRatePct}% of bookings on THRYVE complete successfully (last ${impact.lookbackDays} days).`,
+    },
+    {
+      key: 'cancellation', label: 'Cancellation rate', value: `${impact.cancellationRatePct}%`,
+      copy: `Cancellation rate across THRYVE businesses: ${impact.cancellationRatePct}% (last ${impact.lookbackDays} days).`,
+    },
+    {
+      key: 'avg-monthly-rev', label: 'Avg monthly revenue per active workspace',
+      value: fmtMoney(impact.avgMonthlyRevenuePerActive),
+      copy: `Active THRYVE business owners earn an average of ${fmtMoney(impact.avgMonthlyRevenuePerActive)} per month through the platform.`,
+    },
+    {
+      key: 'avg-clients', label: 'Avg clients per workspace',
+      value: fmtN(impact.avgClientsPerActive),
+      copy: `The average THRYVE business manages ${fmtN(impact.avgClientsPerActive)} clients.`,
+    },
+    {
+      key: 'avg-bookings-90d', label: 'Avg bookings per workspace (90 days)',
+      value: fmtN(impact.avgBookingsPerActive90d),
+      copy: `Active THRYVE businesses run an average of ${fmtN(impact.avgBookingsPerActive90d)} bookings every 90 days.`,
+    },
+    {
+      key: 'workflows', label: 'Workflow automation adoption',
+      value: `${impact.workflowAdoptionPct}%`,
+      copy: `${impact.workflowAdoptionPct}% of active THRYVE businesses have at least one automation running.`,
+    },
+    {
+      key: 'ivy', label: 'Ivy AI assistant adoption',
+      value: `${impact.ivyAdoptionPct}%`,
+      copy: `${impact.ivyAdoptionPct}% of active THRYVE businesses use Ivy, our built-in AI operator.`,
+    },
+    {
+      key: 'activation', label: 'Activation rate (signup → first booking in 7d)',
+      value: `${impact.activationPct}%`,
+      copy: `${impact.activationPct}% of THRYVE signups take their first booking within 7 days.`,
+    },
+    {
+      key: 'rating', label: 'Avg published review rating',
+      value: impact.reviews.count > 0
+        ? `${impact.reviews.avgRating.toFixed(2)}★`
+        : '—',
+      copy: impact.reviews.count > 0
+        ? `Customers leave THRYVE businesses an average rating of ${impact.reviews.avgRating.toFixed(2)}★ across ${fmtN(impact.reviews.count)} published reviews.`
+        : '',
+    },
+  ];
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
+        <div style={{ flex: 1 }}>
+          <div className="metric-label">Platform impact</div>
+          <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 600 }}>
+            Marketing-ready stats across the active business base
+          </h3>
+          <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+            Window: rolling {impact.lookbackDays} days · {fmtN(impact.bookingsCounted)} bookings counted.
+            Click any card to copy a sentence ready for landing copy, pitch decks, or social.
+            Aggregates only — no individual-workspace data is in this view.
+          </p>
+        </div>
+      </div>
+      <div className="grid-auto" style={{ gap: 12, marginTop: 14 }}>
+        {snippets.map((s) => (
+          <button key={s.key} onClick={() => s.copy && copy(s.key, s.copy)}
+            type="button"
+            disabled={!s.copy}
+            title={s.copy || 'Not enough data yet'}
+            style={{
+              textAlign: 'left', background: 'var(--surface-2)',
+              border: '1px solid var(--border)', borderRadius: 12,
+              padding: '14px 16px', cursor: s.copy ? 'pointer' : 'default',
+              position: 'relative',
+              transition: 'border-color .12s, background .12s',
+            }}
+            onMouseEnter={(e) => { if (s.copy) e.currentTarget.style.borderColor = 'var(--accent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>
+              {s.label}
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 500, marginTop: 4, letterSpacing: '-0.02em' }}>
+              {s.value}
+            </div>
+            <div style={{
+              fontSize: 11, color: copied === s.key ? 'var(--accent)' : 'var(--muted-2)',
+              marginTop: 6, fontWeight: copied === s.key ? 600 : 400,
+            }}>
+              {copied === s.key ? '✓ Copied' : (s.copy ? 'Tap to copy as sentence' : 'Not enough data yet')}
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -555,6 +674,91 @@ function UsersTab() {
   );
 }
 
+// Per-workspace metrics panel — fetched on-demand from /api/admin/
+// users/[id]/metrics. Counts + sums only; no client identities, no
+// message text, no document content. The endpoint enforces this on
+// the server side too — we display the privacy disclaimer it returns.
+function WorkspaceMetricsPanel({ metrics, err }) {
+  if (err) {
+    return (
+      <div style={{
+        padding: '10px 12px', borderRadius: 8, fontSize: 12.5,
+        background: 'rgba(155,44,44,0.08)', color: 'var(--danger)',
+        border: '1px solid rgba(155,44,44,0.25)',
+      }}>{err}</div>
+    );
+  }
+  if (!metrics) {
+    return <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading…</div>;
+  }
+  if (!metrics.workspace) {
+    return (
+      <div style={{
+        padding: '10px 12px', borderRadius: 8, fontSize: 12.5,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        color: 'var(--fg-2)',
+      }}>{metrics.message || 'This account has no business workspace.'}</div>
+    );
+  }
+  const { counts, revenue, rates, workspace, lastActivity } = metrics;
+  const Row = ({ k, v, hint }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '4px 0' }}>
+      <div style={{ color: 'var(--muted)', flex: 1 }}>{k}{hint && <span style={{ marginLeft: 6, color: 'var(--muted-2)', fontSize: 11 }}>{hint}</span>}</div>
+      <div style={{ fontWeight: 600, fontFamily: 'var(--font-sans)' }}>{v}</div>
+    </div>
+  );
+  return (
+    <div style={{
+      background: 'var(--surface-2)', borderRadius: 12,
+      border: '1px solid var(--border)', padding: 14,
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{
+        fontSize: 11.5, color: 'var(--muted-2)', lineHeight: 1.5,
+        padding: '6px 10px', borderRadius: 8, background: 'var(--surface)',
+        border: '1px solid var(--border)',
+      }}>
+        🔒 {metrics.privacyNote || 'Aggregates only — no client identities or message text shown.'}
+      </div>
+
+      <div className="metric-label">Workspace</div>
+      <Row k="Created" v={workspace.createdAt ? new Date(workspace.createdAt).toLocaleDateString() : '—'}/>
+      <Row k="Subscription" v={workspace.subscriptionStatus || '—'}/>
+      {workspace.trialEndsAt && (
+        <Row k="Trial ends" v={new Date(workspace.trialEndsAt).toLocaleDateString()}/>
+      )}
+      <Row k="Last activity" v={lastActivity ? new Date(lastActivity).toLocaleDateString() : '—'}/>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Counts</div>
+      <Row k="Clients" v={fmtN(counts.clients)}/>
+      <Row k="Bookings (all-time)" v={fmtN(counts.bookings.all)}/>
+      <Row k="Bookings (last 30d)" v={fmtN(counts.bookings.last30d)}/>
+      <Row k="Bookings (last 90d)" v={fmtN(counts.bookings.last90d)}/>
+      <Row k="Upcoming bookings" v={fmtN(counts.bookings.upcoming)}/>
+      <Row k="Completed" v={fmtN(counts.bookings.completed)}/>
+      <Row k="No-shows" v={fmtN(counts.bookings.noShows)}/>
+      <Row k="Cancelled" v={fmtN(counts.bookings.cancelled)}/>
+      <Row k="Invoices (all/paid/overdue)" v={`${fmtN(counts.invoices.all)} / ${fmtN(counts.invoices.paid)} / ${fmtN(counts.invoices.overdue)}`}/>
+      <Row k="Documents (sent/completed)" v={`${fmtN(counts.documents.all)} / ${fmtN(counts.documents.completed)}`}/>
+      <Row k="Workflows (enabled/total)" v={`${fmtN(counts.workflows.enabled)} / ${fmtN(counts.workflows.total)}`}/>
+      <Row k="Reviews" v={counts.reviews.count > 0 ? `${fmtN(counts.reviews.count)} · ${counts.reviews.avgRating.toFixed(2)}★` : '—'}/>
+      <Row k="Message threads" v={fmtN(counts.messageThreads)} hint="(counts only)"/>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Revenue</div>
+      <Row k="All-time paid" v={fmtMoney(revenue.allTime)}/>
+      <Row k="Last 30 days" v={fmtMoney(revenue.last30d)}/>
+      <Row k="Last 90 days" v={fmtMoney(revenue.last90d)}/>
+      <Row k="Avg booking value" v={revenue.avgBookingValue > 0 ? fmtMoney(revenue.avgBookingValue) : '—'}/>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Rates</div>
+      <Row k="No-show rate" v={`${rates.noShowPct}%`}/>
+      <Row k="Cancellation rate" v={`${rates.cancellationPct}%`}/>
+      <Row k="Completion rate" v={`${rates.completionPct}%`}/>
+      <Row k="Paid-invoice rate" v={`${rates.paidInvoicePct}%`}/>
+    </div>
+  );
+}
+
 function CreateUserModal({ onClose, onCreated }) {
   const [email, setEmail] = useState('');
   const [name, setName]   = useState('');
@@ -649,6 +853,20 @@ function UserDetailModal({ user, onClose, onChanged }) {
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Workspace metrics — fetched once when the user expands the panel.
+  // Counts + sums only; PRIVACY: no client identities or message text
+  // are returned by /api/admin/users/[id]/metrics by design.
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [metrics, setMetrics] = useState(null);
+  const [metricsErr, setMetricsErr] = useState(null);
+  useEffect(() => {
+    if (!metricsOpen || metrics) return;
+    let live = true;
+    api.get(`/admin/users/${user.id}/metrics`)
+      .then((r) => { if (live) setMetrics(r); })
+      .catch((e) => { if (live) setMetricsErr(e.message); });
+    return () => { live = false; };
+  }, [metricsOpen, metrics, user.id]);
 
   // `keepOpen` skips the onChanged callback so the modal stays open and
   // the success message is visible. Use for fire-and-forget actions
@@ -759,6 +977,16 @@ function UserDetailModal({ user, onClose, onChanged }) {
             {busy === 'Welcome email sent' ? '…' : 'Resend welcome email'}
           </button>
         </div>
+
+        <div className="metric-label" style={{ marginTop: 8 }}>Workspace metrics</div>
+        {!metricsOpen ? (
+          <button onClick={() => setMetricsOpen(true)} className="btn btn-outline"
+            style={{ padding: '6px 12px', fontSize: 12, alignSelf: 'flex-start' }}>
+            <Icons.Trending size={12} sw={1.7}/> Load metrics
+          </button>
+        ) : (
+          <WorkspaceMetricsPanel metrics={metrics} err={metricsErr}/>
+        )}
 
         <div className="metric-label" style={{ marginTop: 8, color: 'var(--danger)' }}>Danger zone</div>
         <button disabled={!!busy} className="btn btn-outline"
