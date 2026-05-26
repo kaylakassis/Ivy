@@ -66,7 +66,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_recent
 CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
   ON notifications(user_id, created_at DESC) WHERE read_at IS NULL;
 -- Partial index for the subscription-dunning cron (api/cron/subscription-
--- dunning.js). It scans for `subscription_status = 'past_due'` rows every
+-- dunning.js). It scans for subscription_status = 'past_due' rows every
 -- day; without this index that's a full table scan that gets worse with
 -- every new workspace. Partial keeps the index tiny — only past_due rows
 -- live in it (a small fraction of total workspaces).
