@@ -38,11 +38,15 @@ async function call(modPath, opts = {}) {
   return { status: res.statusCode, body: res.body };
 }
 
-const { CURRENT_TERMS_VERSION } = await import('../src/lib/legal.js');
+const { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } = await import('../src/lib/legal.js');
 const email = `runner-${Date.now()}@test.local`;
 const r1 = await call('../api/auth/signup.js', {
   method: 'POST',
-  body: { email, password: 'password1234', name: 'Runner', mode: 'owner', acceptedTermsVersion: CURRENT_TERMS_VERSION },
+  body: {
+    email, password: 'password1234', name: 'Runner', mode: 'owner',
+    acceptedTermsVersion: CURRENT_TERMS_VERSION,
+    acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,
+  },
 });
 console.log('signup:', r1.status, JSON.stringify(r1.body).slice(0, 120));
 
