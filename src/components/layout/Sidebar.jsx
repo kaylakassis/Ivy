@@ -4,6 +4,7 @@ import { Icons } from '../Icons.jsx';
 import { NAV } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
+import ReportBugModal from '../ReportBugModal.jsx';
 
 function initialsOf(user) {
   if (!user) return '?';
@@ -17,6 +18,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
   const { ctx } = useUserContext();
   const nav = useNavigate();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [bugOpen, setBugOpen]   = useState(false);
   const compact = variant === 'compact';
   // Filter out super-admin-only items unless the user qualifies. The
   // /admin route still exists in App.jsx — this is purely cosmetic.
@@ -208,6 +210,21 @@ export default function Sidebar({ direction, variant = 'full' }) {
               <Icons.Chat size={13}/> Help &amp; support
             </Link>
             <button
+              type="button"
+              onClick={() => { setMenuOpen(false); setBugOpen(true); }}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 8, textAlign: 'left',
+                fontSize: 13, color: 'var(--fg)', cursor: 'pointer',
+              }}
+            >
+              <Icons.Spark size={13}/> Report a bug
+              <span style={{
+                marginLeft: 'auto', fontSize: 9.5, fontWeight: 700,
+                color: 'var(--accent)', letterSpacing: '0.08em',
+              }}>BETA</span>
+            </button>
+            <button
               onClick={doSignOut}
               style={{
                 width: '100%', display: 'flex', alignItems: 'center', gap: 10,
@@ -249,6 +266,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
           <Icons.More size={14} stroke="var(--muted)" />
         </button>
       </div>
+      {bugOpen && <ReportBugModal onClose={() => setBugOpen(false)}/>}
     </aside>
   );
 }

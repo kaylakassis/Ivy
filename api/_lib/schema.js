@@ -1741,6 +1741,37 @@ ALTER TABLE reward_redemptions
   ADD CONSTRAINT reward_redemptions_client_id_fkey
   FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL;
 
+-- Bug-report channel for beta. Users hit 'Report a bug' from the
+-- sidebar menu; we capture the URL they were on, user-agent, viewport,
+-- app version, plus their description. The super-admin sees the
+-- inbox in /admin -> Bug reports and triages by setting status +
+-- admin_notes. user_id and workspace_id are ON DELETE SET NULL so
+-- a deleted user's reports survive (we need the trail to track
+-- whether we shipped the fix).
+CREATE TABLE IF NOT EXISTS bug_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  user_email TEXT,                       -- snapshot at report time (survives delete)
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL,
+  url TEXT,                              -- which page the user was on
+  title TEXT NOT NULL,
+  body TEXT,
+  severity TEXT NOT NULL DEFAULT 'minor'
+    CHECK (severity IN ('info', 'minor', 'major', 'critical')),
+  user_agent TEXT,                       -- browser + OS context for repro
+  viewport TEXT,                         -- e.g. '375x812' for mobile-only bugs
+  app_version TEXT,                      -- build sha or release tag if exposed
+  status TEXT NOT NULL DEFAULT 'open'
+    CHECK (status IN ('open', 'triaged', 'resolved', 'dismissed')),
+  admin_notes TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_status_recent
+  ON bug_reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bug_reports_user_recent
+  ON bug_reports(user_id, created_at DESC) WHERE user_id IS NOT NULL;
+
 -- Ivy Pro: AI coach chat history. Each workspace owns its sessions; messages
 -- live in a child table so we can stream and paginate later. Replies are
 -- generated server-side (mock now, real Anthropic API later) so the secret

@@ -21,6 +21,7 @@ const TABS = [
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'support',    label: 'Support',    icon: 'Chat' },
+  { id: 'bugs',       label: 'Bug reports', icon: 'Spark' },
   { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
@@ -36,16 +37,21 @@ export default function AdminPage() {
   // waiting for me" at a glance without clicking through. Polled
   // every 30s so a fresh message lights up without manual refresh.
   const [supportUnread, setSupportUnread] = useState(0);
+  const [bugsOpen, setBugsOpen]           = useState(0);
   useEffect(() => {
     if (!user?.isSuperAdmin) return undefined;
     let live = true;
     const load = async () => {
       try {
-        const r = await api.get('/admin/support');
+        const [s, b] = await Promise.all([
+          api.get('/admin/support').catch(() => ({ threads: [] })),
+          api.get('/admin/bug-reports?status=open').catch(() => ({ openCount: 0 })),
+        ]);
         if (!live) return;
-        const total = (r.threads || []).reduce((sum, t) => sum + (t.unreadAdmin || 0), 0);
+        const total = (s.threads || []).reduce((sum, t) => sum + (t.unreadAdmin || 0), 0);
         setSupportUnread(total);
-      } catch { /* ignore — badge degrades to zero, not a blocker */ }
+        setBugsOpen(b.openCount || 0);
+      } catch { /* ignore — badges degrade to zero, not a blocker */ }
     };
     load();
     const id = setInterval(() => { if (!document.hidden) load(); }, 30_000);
@@ -79,7 +85,10 @@ export default function AdminPage() {
         {TABS.map((t) => {
           const Icon = Icons[t.icon] || Icons.Check;
           const active = tab === t.id;
-          const badge = t.id === 'support' && supportUnread > 0 ? supportUnread : 0;
+          const badge =
+              t.id === 'support' && supportUnread > 0 ? supportUnread
+            : t.id === 'bugs'    && bugsOpen       > 0 ? bugsOpen
+            : 0;
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`btn ${active ? 'btn-primary' : 'btn-outline'}`}
@@ -105,11 +114,183 @@ export default function AdminPage() {
       {tab === 'users'      && <UsersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'support'    && <SupportTab/>}
+      {tab === 'bugs'       && <BugsTab/>}
       {tab === 'appeals'    && <AppealsTab/>}
       {tab === 'blast'      && <BlastTab/>}
       {tab === 'audit'      && <AuditTab/>}
       {tab === 'export'     && <ExportTab/>}
       {tab === 'settings'   && <SettingsTab/>}
+    </div>
+  );
+}
+
+// ---------- Bug reports tab ----------
+// Beta-feedback inbox. Users POST to /api/bug-reports from the
+// 'Report a bug' sidebar menu; this tab lists them newest-first with
+// status filter, severity badge, and an inline triage panel.
+const BUG_STATUSES = [
+  { id: 'open',      label: 'Open',      tone: 'var(--danger, #B23A48)' },
+  { id: 'triaged',   label: 'Triaged',   tone: 'var(--accent)' },
+  { id: 'resolved',  label: 'Resolved',  tone: 'var(--ok)' },
+  { id: 'dismissed', label: 'Dismissed', tone: 'var(--muted)' },
+];
+const BUG_SEVERITIES = {
+  critical: { label: 'Critical', tone: 'var(--danger, #B23A48)' },
+  major:    { label: 'Major',    tone: 'var(--warn, #C68B2C)' },
+  minor:    { label: 'Minor',    tone: 'var(--accent)' },
+  info:     { label: 'Info',     tone: 'var(--muted)' },
+};
+function BugsTab() {
+  const [status, setStatus]   = useState('open');
+  const [reports, setReports] = useState(null);
+  const [active, setActive]   = useState(null);
+  const [err, setErr]         = useState(null);
+
+  const reload = async () => {
+    setReports(null); setErr(null);
+    try {
+      const r = await api.get(`/admin/bug-reports?status=${encodeURIComponent(status)}`);
+      setReports(r.reports || []);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [status]);
+
+  const triage = async (patch) => {
+    if (!active) return;
+    try {
+      const r = await api.patch('/admin/bug-reports', { id: active.id, ...patch });
+      setActive(r.report);
+      reload();
+    } catch (e) { setErr(e.message); }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {BUG_STATUSES.map((s) => (
+          <button key={s.id} onClick={() => setStatus(s.id)}
+            className={`btn ${status === s.id ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '5px 12px', fontSize: 12 }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {err && <ErrCard msg={err}/>}
+      <div className="support-grid" style={{ minHeight: 420 }}>
+        <div className="card" style={{ padding: 0, overflow: 'auto', maxHeight: 600 }}>
+          {!reports && !err && <div style={{ padding: 12, fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
+          {reports && reports.length === 0 && (
+            <div style={{ padding: 18 }}>
+              <EmptyNote icon="Spark" title="Nothing here"
+                hint={status === 'open' ? 'No open bug reports right now. 🎉' : `No ${status} reports.`}/>
+            </div>
+          )}
+          {reports && reports.map((r) => {
+            const sev = BUG_SEVERITIES[r.severity] || BUG_SEVERITIES.minor;
+            return (
+              <button key={r.id} onClick={() => setActive(r)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: 12, borderTop: '1px solid var(--border)',
+                  background: active?.id === r.id ? 'var(--surface-2)' : 'transparent',
+                  cursor: 'pointer',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em',
+                    padding: '2px 6px', borderRadius: 99,
+                    background: `color-mix(in srgb, ${sev.tone} 16%, transparent)`,
+                    color: sev.tone, textTransform: 'uppercase',
+                  }}>{sev.label}</span>
+                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                    {r.title}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span>{r.userEmail || '(deleted user)'}</span>
+                  <span>·</span>
+                  <span>{new Date(r.createdAt).toLocaleString()}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div>
+          {active ? <BugDetail report={active} onTriage={triage}/>
+                  : <div className="card" style={{ padding: 28 }}>
+                      <EmptyNote icon="Spark" title="Pick a report" hint="Click a row on the left."/>
+                    </div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BugDetail({ report, onTriage }) {
+  const [notes, setNotes] = useState(report.adminNotes || '');
+  // Reset notes when switching reports.
+  useEffect(() => { setNotes(report.adminNotes || ''); }, [report.id, report.adminNotes]);
+  const sev = BUG_SEVERITIES[report.severity] || BUG_SEVERITIES.minor;
+  const Row = ({ k, v }) => (
+    <div style={{ display: 'flex', gap: 10, fontSize: 12.5, padding: '3px 0' }}>
+      <div style={{ color: 'var(--muted)', minWidth: 96 }}>{k}</div>
+      <div style={{ flex: 1, wordBreak: 'break-word', color: 'var(--fg)' }}>{v || '—'}</div>
+    </div>
+  );
+  return (
+    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 420 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{
+          fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em',
+          padding: '2px 6px', borderRadius: 99,
+          background: `color-mix(in srgb, ${sev.tone} 16%, transparent)`,
+          color: sev.tone, textTransform: 'uppercase',
+        }}>{sev.label}</span>
+        <span style={{ fontWeight: 600, fontSize: 15, flex: 1 }}>{report.title}</span>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{report.status}</span>
+      </div>
+      {report.body && (
+        <div style={{
+          background: 'var(--surface-2)', borderRadius: 10, padding: 12,
+          fontSize: 13, lineHeight: 1.55, color: 'var(--fg)',
+          border: '1px solid var(--border)', whiteSpace: 'pre-wrap',
+        }}>{report.body}</div>
+      )}
+      <div>
+        <Row k="From"        v={report.userEmail || '(deleted user)'}/>
+        <Row k="Submitted"   v={new Date(report.createdAt).toLocaleString()}/>
+        <Row k="On page"     v={report.url ? <a href={report.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>{report.url}</a> : '—'}/>
+        <Row k="Viewport"    v={report.viewport}/>
+        <Row k="App version" v={report.appVersion ? <code>{report.appVersion}</code> : '—'}/>
+        <Row k="User agent"  v={report.userAgent}/>
+      </div>
+
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="metric-label">Triage notes</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="What's the disposition? Ticket / commit / 'fixed in …'"
+          rows={3} maxLength={2000}
+          style={{
+            padding: '10px 12px', borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+            color: 'var(--fg)', fontSize: 13, outline: 'none',
+            fontFamily: 'inherit', resize: 'vertical',
+          }}/>
+        <button onClick={() => onTriage({ adminNotes: notes })}
+          className="btn btn-outline"
+          style={{ padding: '5px 12px', fontSize: 12, alignSelf: 'flex-start' }}>
+          Save notes
+        </button>
+      </label>
+
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {BUG_STATUSES.filter((s) => s.id !== report.status).map((s) => (
+          <button key={s.id} onClick={() => onTriage({ status: s.id })}
+            className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}>
+            Mark {s.label.toLowerCase()}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
