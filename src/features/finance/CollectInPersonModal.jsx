@@ -12,6 +12,7 @@ import React, { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
   const [url, setUrl] = useState(null);
@@ -64,9 +65,11 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
     ? `Pay ${totalLabel} for invoice ${invoice.number || ''}: ${url}`
     : '';
 
+  useEscapeKey(onClose);
   return createPortal(
     <div
       onClick={onClose}
+      role="dialog" aria-modal="true" aria-labelledby="collect-in-person-title"
       style={{
         position: 'fixed', inset: 0, zIndex: 300,
         background: 'rgba(0,0,0,.45)',

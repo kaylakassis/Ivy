@@ -2018,12 +2018,12 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
   ON invoices(workspace_id, paid_at DESC)
   WHERE paid_at IS NOT NULL;
 
--- /api/clients lookups by email (used by AddBookingModal to resolve a
--- name typed in by the owner, and by the public-booking flow to merge
--- a recurring client). Email is normalized lowercase at write time so
--- the index doesn't need a LOWER() expression.
-CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
-  ON clients(workspace_id, email) WHERE email IS NOT NULL;
+-- idx_clients_workspace_email is created higher up (with lower(email)
+-- for defensive case-insensitive lookups even if a write path forgets
+-- to lowercase). Removed the duplicate definition here; CREATE INDEX
+-- IF NOT EXISTS would have no-op'd on the second one's name match
+-- anyway, but two conflicting expression sets in the source confused
+-- new readers about which form actually applies.
 
 -- ─── Global search (Cmd+K) trigram indexes ──────────────────────────
 -- /api/search runs leading-wildcard ILIKE '%q%' across clients,

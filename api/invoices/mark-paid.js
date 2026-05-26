@@ -39,6 +39,14 @@ export default async function handler(req, res) {
       { ts: new Date().toISOString(), kind: 'paid', text: `Paid by ${method} · ${fmtMoney(totals.total)}` },
     ];
 
+    // Race-safe flip: two concurrent owner clicks ("did the second click
+    // register?") used to both pass the line-33 status check and both
+    // run the UPDATE — the second one would overwrite paid_at + append a
+    // duplicate activity entry, AND both would fire the receipt email.
+    // The AND status <> 'paid' filter + RETURNING id gates the
+    // side-effects below on whether OUR statement actually flipped
+    // the row. Mirrors the per-workspace Stripe webhook pattern at
+    // api/webhooks/stripe/[workspaceId].js:465-487.
     const updated = await sql`
       UPDATE invoices SET
         status = 'paid',
@@ -49,8 +57,15 @@ export default async function handler(req, res) {
         activity = ${JSON.stringify(newActivity)}::jsonb,
         updated_at = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
+        AND status <> 'paid'
       RETURNING *
     `;
+    if (updated.rows.length === 0) {
+      // Lost the race — someone else already marked it. Return the
+      // current state without re-firing the receipt or thread message.
+      const reloaded = await fetchOwnedInvoice({ id, workspaceId });
+      return ok(res, { invoice: serializeInvoice(reloaded), deduped: true });
+    }
 
     // Best-effort thread message.
     try {

@@ -7,6 +7,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { TimeInput, inputSty } from './Drawer.jsx';
 import { RECURRENCE_OPTIONS, fmtDateISO } from './utils.js';
 import { api } from '../../lib/api.js';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function AddBookingModal({ services, onSubmit, onClose, defaultDate, defaultStart, defaultClientId }) {
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
@@ -131,8 +132,9 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   // position:fixed overlay and strand it mid-page. Without this the
   // modal rendered below the calendar content on some layouts and the
   // owner didn't realize it had opened.
+  useEscapeKey(onClose);
   return createPortal((
-    <div onClick={onClose} style={{
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="add-booking-title" style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 130,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
