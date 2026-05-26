@@ -47,6 +47,17 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_version TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ;
 
+-- TOTP / two-factor authentication. Owners opt in from Account ->
+-- Security. The secret is encrypted at rest via api/_lib/secrets.js
+-- (same AES-256-GCM the Stripe/Google credentials use). enrolled_at
+-- is NULL until the owner verifies their first code — until then the
+-- secret is "pending" and login isn't gated. backup_codes_hashed is
+-- a JSONB array of SHA-256 hashes of the 10 single-use recovery codes
+-- shown once at enrollment.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret_encrypted TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enrolled_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup_codes_hashed JSONB;
+
 -- In-app notification feed. push.js' notifyOwner / notifyClient INSERT
 -- a row here BEFORE the push fanout so the bell + dropdown surface
 -- every important event regardless of whether the user has push
