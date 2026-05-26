@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS workspaces (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_id);
+-- Partial index for the subscription-dunning cron (api/cron/subscription-
+-- dunning.js). It scans for `subscription_status = 'past_due'` rows every
+-- day; without this index that's a full table scan that gets worse with
+-- every new workspace. Partial keeps the index tiny — only past_due rows
+-- live in it (a small fraction of total workspaces).
+CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
+  ON workspaces(subscription_past_due_since)
+  WHERE subscription_status = 'past_due';
 -- Tracks first-run onboarding completion so we know whether to route the
 -- owner to /onboarding or straight to /dashboard. Self-correcting backfill:
 -- any pre-existing workspace that already has clients or services is marked
@@ -454,6 +462,13 @@ CREATE TABLE IF NOT EXISTS clients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_stage ON clients(workspace_id, stage);
+-- Public-contact lookup (api/calendar/public/contact.js) and invite-claim
+-- (api/_lib/clientPortal.js) both query clients by (workspace_id,
+-- lower(email)). Without this, every inbound contact-form submit and
+-- every portal signup runs a full clients scan for the workspace.
+CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
+  ON clients(workspace_id, lower(email))
+  WHERE email IS NOT NULL;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
 -- Phone + per-client SMS consent. sms_consent_at NULL means "not opted in"

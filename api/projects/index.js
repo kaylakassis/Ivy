@@ -43,17 +43,25 @@ export default async function handler(req, res) {
       // If any of the project_id subquery columns hasn't migrated yet,
       // the subqueries 500 the whole list. Try the rich query first;
       // on column-missing, retry with the simple version (no counts).
+      //
+      // Counts used to be four correlated subqueries per row, so a
+      // workspace with 200 projects ran 800 COUNT(*) scans per request.
+      // Now each related table is scanned once and grouped, then joined.
       let rows;
       try {
         ({ rows } = await sql.query(
           `SELECT p.*,
                   c.name AS client_name,
-                  (SELECT COUNT(*)::int FROM bookings  b WHERE b.project_id  = p.id) AS booking_count,
-                  (SELECT COUNT(*)::int FROM invoices  i WHERE i.project_id  = p.id) AS invoice_count,
-                  (SELECT COUNT(*)::int FROM quotes    q WHERE q.project_id  = p.id) AS quote_count,
-                  (SELECT COUNT(*)::int FROM documents d WHERE d.project_id  = p.id) AS document_count
+                  COALESCE(bc.cnt, 0)::int AS booking_count,
+                  COALESCE(ic.cnt, 0)::int AS invoice_count,
+                  COALESCE(qc.cnt, 0)::int AS quote_count,
+                  COALESCE(dc.cnt, 0)::int AS document_count
              FROM projects p
              LEFT JOIN clients c ON c.id = p.client_id AND c.workspace_id = p.workspace_id
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM bookings  WHERE project_id IS NOT NULL GROUP BY project_id) bc ON bc.project_id = p.id
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM invoices  WHERE project_id IS NOT NULL GROUP BY project_id) ic ON ic.project_id = p.id
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM quotes    WHERE project_id IS NOT NULL GROUP BY project_id) qc ON qc.project_id = p.id
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM documents WHERE project_id IS NOT NULL GROUP BY project_id) dc ON dc.project_id = p.id
             WHERE ${where.join(' AND ')}
             ORDER BY p.updated_at DESC
             LIMIT 200`,

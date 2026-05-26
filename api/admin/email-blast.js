@@ -97,16 +97,26 @@ export default async function handler(req, res) {
       footer: `Sent from THRYVE. Reply to this email and we'll see it.`,
     });
 
+    // Batched parallel sends. Serial at 200ms/email × 2000 = 400s,
+    // far past the 60s function timeout. 20-at-a-time keeps us well
+    // under Resend's burst limit (10/s on the free tier, 100/s paid)
+    // while finishing 2000 sends in ~20s of wall time.
     let sent = 0; let failed = 0;
-    for (const r of recipients) {
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        await sendEmail({ to: r.email, subject, html });
-        sent++;
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.warn('[email-blast] failed for', r.email, err.message);
-        failed++;
+    const BATCH = 20;
+    for (let i = 0; i < recipients.length; i += BATCH) {
+      const slice = recipients.slice(i, i + BATCH);
+      // eslint-disable-next-line no-await-in-loop
+      const results = await Promise.allSettled(
+        slice.map((r) => sendEmail({ to: r.email, subject, html })),
+      );
+      for (let j = 0; j < results.length; j++) {
+        if (results[j].status === 'fulfilled') {
+          sent++;
+        } else {
+          failed++;
+          // eslint-disable-next-line no-console
+          console.warn('[email-blast] failed for', slice[j].email, results[j].reason?.message || results[j].reason);
+        }
       }
     }
 

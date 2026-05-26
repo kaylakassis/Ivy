@@ -498,26 +498,31 @@ export async function executeIvyTool(name, args, ctx) {
 async function list_quiet_clients({ workspaceId, args }) {
   const days = clampInt(args.days_quiet, 21, 1, 365);
   const limit = clampInt(args.limit, 20, 1, 50);
+  // Pre-aggregate last_message_at once via a LEFT JOIN against the
+  // per-thread MAX (workspace_id is part of message_threads, so we can
+  // filter the join down to a single workspace before grouping). The
+  // old form ran the same correlated MAX subquery three times per
+  // candidate client (SELECT, WHERE, ORDER BY) — at 5k active clients
+  // that was 15k subquery executions per Ivy call. Now it's one
+  // aggregate scan.
   const { rows } = await sql.query(
-    `SELECT c.id, c.name, c.email, c.phone, c.stage,
+    `WITH thread_last AS (
+       SELECT client_id, MAX(last_message_at) AS last_message_at
+         FROM message_threads
+        WHERE workspace_id = $1
+        GROUP BY client_id
+     )
+     SELECT c.id, c.name, c.email, c.phone, c.stage,
             c.last_seen_at,
-            (SELECT MAX(t.last_message_at) FROM message_threads t
-              WHERE t.workspace_id = c.workspace_id AND t.client_id = c.id) AS last_message_at
+            tl.last_message_at AS last_message_at,
+            COALESCE(tl.last_message_at, c.last_seen_at, c.joined_at) AS last_contact
        FROM clients c
+       LEFT JOIN thread_last tl ON tl.client_id = c.id
        WHERE c.workspace_id = $1
          AND c.stage = 'active'
-         AND COALESCE(
-           (SELECT MAX(t.last_message_at) FROM message_threads t
-              WHERE t.workspace_id = c.workspace_id AND t.client_id = c.id),
-           c.last_seen_at,
-           c.joined_at
-         ) < NOW() - ($2 || ' days')::interval
-       ORDER BY COALESCE(
-           (SELECT MAX(t.last_message_at) FROM message_threads t
-              WHERE t.workspace_id = c.workspace_id AND t.client_id = c.id),
-           c.last_seen_at,
-           c.joined_at
-         ) ASC
+         AND COALESCE(tl.last_message_at, c.last_seen_at, c.joined_at)
+             < NOW() - ($2 || ' days')::interval
+       ORDER BY COALESCE(tl.last_message_at, c.last_seen_at, c.joined_at) ASC
        LIMIT $3`,
     [workspaceId, String(days), limit],
   );

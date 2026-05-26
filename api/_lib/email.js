@@ -405,6 +405,13 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
     const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
     return { ok: true, sent: true, result };
   } catch (err) {
+    // Log loudly even though we don't throw — callers commonly wrap us
+    // in try/catch expecting a throw on failure (Resend rate-limit, 422,
+    // timeout). Without this line, a Resend outage silently swallows
+    // every transactional email and operators only find out via user
+    // complaints. Caller can still inspect { ok: false } if they care.
+    // eslint-disable-next-line no-console
+    console.error('[email/sendEmailToUser] send failed:', err.message, '(to', to, 'subject', JSON.stringify(subject).slice(0, 80) + ')');
     return { ok: false, sent: false, reason: err.message };
   }
 }
@@ -423,6 +430,11 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
     const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
     return { ok: true, sent: true, result };
   } catch (err) {
+    // Same rationale as sendEmailToUser above — log loud on failure so
+    // a Resend outage doesn't silently lose every invoice receipt /
+    // booking confirmation / etc.
+    // eslint-disable-next-line no-console
+    console.error('[email/sendEmailToClient] send failed:', err.message, '(to', to, 'subject', JSON.stringify(subject).slice(0, 80) + ')');
     return { ok: false, sent: false, reason: err.message };
   }
 }

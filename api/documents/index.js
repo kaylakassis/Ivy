@@ -25,12 +25,18 @@ export default async function handler(req, res) {
         // (or absent) returns instances. ServicesDrawer's intake picker
         // calls with templates=1.
         const templatesOnly = req.query.templates === '1';
+        // Hard cap at 200 — workspaces with 1000+ docs/templates would
+        // otherwise OOM the function on the JSON serialize step. Matches
+        // the pattern used by /api/clients, /api/invoices, /api/messages.
+        // Future: add cursor pagination if owners legitimately need
+        // more than 200 visible at once.
         let rows;
         if (templatesOnly) {
           const r = await sql`
             SELECT * FROM documents
             WHERE workspace_id = ${workspaceId} AND is_template = TRUE
             ORDER BY name ASC
+            LIMIT 200
           `;
           rows = r.rows;
         } else if (status && VALID_STATUS.has(status)) {
@@ -39,6 +45,7 @@ export default async function handler(req, res) {
             WHERE workspace_id = ${workspaceId} AND status = ${status}
               AND is_template = FALSE
             ORDER BY updated_at DESC
+            LIMIT 200
           `;
           rows = r.rows;
         } else {
@@ -46,6 +53,7 @@ export default async function handler(req, res) {
             SELECT * FROM documents
             WHERE workspace_id = ${workspaceId} AND is_template = FALSE
             ORDER BY updated_at DESC
+            LIMIT 200
           `;
           rows = r.rows;
         }
