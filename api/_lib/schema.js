@@ -24,6 +24,13 @@ CREATE TABLE IF NOT EXISTS workspaces (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_id);
+
+-- password_changed_at lets requireUser invalidate every JWT issued
+-- before the timestamp — used by reset-password.js so a compromised
+-- session can't outlive a password change. Stateless JWTs can't be
+-- revoked individually; this stamp is the single source of truth for
+-- "the password is newer than your token, log in again".
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
 -- Partial index for the subscription-dunning cron (api/cron/subscription-
 -- dunning.js). It scans for `subscription_status = 'past_due'` rows every
 -- day; without this index that's a full table scan that gets worse with

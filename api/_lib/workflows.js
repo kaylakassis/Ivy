@@ -338,8 +338,25 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
     const out = await sendClientSms({
       phone: client.phone, consentAt: client.sms_consent_at, body,
       workspaceId: workflow.workspace_id,
+      // Workflow SMS is marketing-class (nurture / win-back / drip)
+      // — gate to 8am-9pm in the workspace's IANA timezone. The cron
+      // will retry on its next pass; this isn't ideal exactness (a
+      // send queued at 7:55am workspace-local for a workflow that
+      // ran at 7am will sit until 8am next-pass) but it keeps us
+      // inside TCPA / carrier quiet-hours rules.
+      respectQuietHours: true,
     });
-    if (!out.ok) throw new Error(out.error || 'SMS send failed');
+    if (!out.ok) {
+      if (out.reason === 'quiet-hours') {
+        // Don't treat a quiet-hours skip as a failure; the workflow
+        // action just no-ops for now and the next cron tick during
+        // daylight will retry. (For one-shot workflow runs after a
+        // trigger fires once, this means quiet-hour triggers
+        // currently skip the SMS — acceptable for nurture cadence.)
+        return { to: client.phone, skipped: 'quiet-hours' };
+      }
+      throw new Error(out.reason || 'SMS send failed');
+    }
     return { to: client.phone };
   }
 

@@ -117,11 +117,22 @@ export async function requireUser(req, res) {
   const { rows } = await sql`
     SELECT id, email, name, created_at, email_verified_at,
            walkthrough_completed_at, user_type,
-           terms_accepted_at, terms_version
+           terms_accepted_at, terms_version,
+           password_changed_at
     FROM users WHERE id = ${session.sub}
   `;
   if (rows.length === 0) {
     res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  // Stateless JWT revocation: a JWT issued before the user's
+  // password_changed_at stamp is invalid. Lets reset-password.js
+  // force-logout every existing session for that user without a
+  // server-side session table. session.iat is in SECONDS since epoch
+  // (jsonwebtoken default); password_changed_at is a timestamp.
+  const pcAt = rows[0].password_changed_at;
+  if (pcAt && session.iat && (session.iat * 1000) < new Date(pcAt).getTime()) {
+    res.status(401).json({ error: 'Session expired — please sign in again' });
     return null;
   }
   return rows[0];
