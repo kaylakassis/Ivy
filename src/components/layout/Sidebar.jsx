@@ -196,6 +196,17 @@ export default function Sidebar({ direction, variant = 'full' }) {
             >
               <Icons.Settings size={13}/> Account settings
             </Link>
+            <Link
+              to="/account?support=1"
+              onClick={() => setMenuOpen(false)}
+              style={{
+                width: '100%', display: 'flex', alignItems: 'center', gap: 10,
+                padding: '8px 10px', borderRadius: 8, textAlign: 'left',
+                fontSize: 13, color: 'var(--fg)', textDecoration: 'none',
+              }}
+            >
+              <Icons.Chat size={13}/> Help &amp; support
+            </Link>
             <button
               onClick={doSignOut}
               style={{

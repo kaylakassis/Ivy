@@ -31,6 +31,31 @@ const TABS = [
 export default function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState('overview');
+  // Total unread support messages across all threads — drives the
+  // red badge on the Support tab so the operator can see "someone's
+  // waiting for me" at a glance without clicking through. Polled
+  // every 30s so a fresh message lights up without manual refresh.
+  const [supportUnread, setSupportUnread] = useState(0);
+  useEffect(() => {
+    if (!user?.isSuperAdmin) return undefined;
+    let live = true;
+    const load = async () => {
+      try {
+        const r = await api.get('/admin/support');
+        if (!live) return;
+        const total = (r.threads || []).reduce((sum, t) => sum + (t.unreadAdmin || 0), 0);
+        setSupportUnread(total);
+      } catch { /* ignore — badge degrades to zero, not a blocker */ }
+    };
+    load();
+    const id = setInterval(() => { if (!document.hidden) load(); }, 30_000);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user?.isSuperAdmin, tab]);
 
   if (!user?.isSuperAdmin) {
     return (
@@ -54,11 +79,23 @@ export default function AdminPage() {
         {TABS.map((t) => {
           const Icon = Icons[t.icon] || Icons.Check;
           const active = tab === t.id;
+          const badge = t.id === 'support' && supportUnread > 0 ? supportUnread : 0;
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`btn ${active ? 'btn-primary' : 'btn-outline'}`}
-              style={{ padding: '7px 14px', fontSize: 13, whiteSpace: 'nowrap' }}>
+              style={{ padding: '7px 14px', fontSize: 13, whiteSpace: 'nowrap', position: 'relative' }}>
               <Icon size={13} sw={1.7}/> {t.label}
+              {badge > 0 && (
+                <span aria-label={`${badge} unread support message${badge === 1 ? '' : 's'}`}
+                  style={{
+                    marginLeft: 6, padding: '0 6px', borderRadius: 99,
+                    background: active ? 'var(--accent-ink)' : 'var(--danger, #B23A48)',
+                    color: active ? 'var(--accent)' : '#fff',
+                    fontSize: 10.5, fontWeight: 700,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: 16, height: 16,
+                  }}>{badge > 99 ? '99+' : badge}</span>
+              )}
             </button>
           );
         })}

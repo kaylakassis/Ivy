@@ -1005,7 +1005,23 @@ function SupportCard() {
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
-  const [open, setOpen] = useState(false);
+  // Deep-link: the admin reply push notification routes to
+  // /account?support=1 (see api/admin/support.js sendPushToUser).
+  // Auto-open the chat so the user lands where their reply lives,
+  // not on a collapsed card they have to find + click.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [open, setOpen] = useState(() => searchParams.get('support') === '1');
+  useEffect(() => {
+    if (searchParams.get('support') === '1' && !open) setOpen(true);
+    // Strip the param after consuming so a refresh + later collapse
+    // doesn't re-open against the user's later choice.
+    if (searchParams.get('support')) {
+      const next = new URLSearchParams(searchParams);
+      next.delete('support');
+      setSearchParams(next, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const load = async () => {
     try {
