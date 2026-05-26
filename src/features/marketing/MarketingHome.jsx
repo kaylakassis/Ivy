@@ -252,7 +252,7 @@ function ClientAudienceView() {
           pay to use THRYVE.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
-          <Link to="/signup?role=client" className="btn btn-primary" style={{ padding: '14px 24px', fontSize: 15, gap: 10 }}>
+          <Link to="/signup?mode=client" className="btn btn-primary" style={{ padding: '14px 24px', fontSize: 15, gap: 10 }}>
             Create your free portal <Icons.Arrow size={14} sw={2}/>
           </Link>
           <Link to="/signin" className="btn btn-outline" style={{ padding: '14px 24px', fontSize: 15 }}>
@@ -417,7 +417,7 @@ function Hero() {
           style={{ padding: '14px 24px', fontSize: 15, gap: 10 }}>
           Start free <Icons.Arrow size={14} sw={2}/>
         </Link>
-        <Link to="/signup?role=client" className="btn btn-outline"
+        <Link to="/signup?mode=client" className="btn btn-outline"
           style={{ padding: '14px 24px', fontSize: 15 }}>
           I'm a client
         </Link>

@@ -1,6 +1,7 @@
 // /me/bookings — every appointment across all the user's businesses,
 // grouped Upcoming / Past / Cancelled with a tab picker.
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
@@ -24,11 +25,33 @@ const TABS = [
   { id: 'cancelled', label: 'Cancelled' },
 ];
 
+// Tab IDs we accept from a ?tab= deep link. Anything else falls back
+// to 'upcoming' — guards against a copy-pasted typo opening an empty
+// pane.
+const VALID_TAB_PARAMS = new Set(['upcoming', 'past', 'cancelled']);
+
 export default function ClientBookings() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [data, setData]       = useState({ upcoming: [], past: [], cancelled: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
-  const [tab, setTab]         = useState('upcoming');
+  // Honour ?tab= deep links from ClientHome ("Reviews to leave" stat
+  // card points us at past, etc.). Strip the param after first read so
+  // a refresh after the user clicks a different tab doesn't snap them
+  // back. Lazy init so we read searchParams just once.
+  const [tab, setTab] = useState(() => {
+    const t = searchParams.get('tab');
+    return t && VALID_TAB_PARAMS.has(t) ? t : 'upcoming';
+  });
+  const tabParamConsumedRef = useRef(false);
+  useEffect(() => {
+    if (tabParamConsumedRef.current) return;
+    if (!searchParams.get('tab')) return;
+    tabParamConsumedRef.current = true;
+    const next = new URLSearchParams(searchParams);
+    next.delete('tab');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
   const [confirming, setConfirming] = useState(null); // booking object pending cancel
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelErr, setCancelErr]   = useState(null);
