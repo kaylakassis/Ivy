@@ -286,7 +286,16 @@ export function verifyWebhook({ rawBody, headers, notificationUrl }) {
   const expected = crypto.createHmac('sha256', key)
     .update(url + (typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')))
     .digest('base64');
-  if (expected !== sig) throw new Error('Square webhook signature mismatch');
+  // Timing-safe compare — plain string `!==` leaks the position of the
+  // first byte mismatch, which is enough to recover a signature offline
+  // against a chatty endpoint. timingSafeEqual requires equal-length
+  // buffers, so length-check first (length differences are public anyway:
+  // both digests are base64-encoded HMAC-SHA256, always 44 bytes).
+  const expBuf = Buffer.from(expected, 'utf8');
+  const sigBuf = Buffer.from(sig, 'utf8');
+  if (expBuf.length !== sigBuf.length || !crypto.timingSafeEqual(expBuf, sigBuf)) {
+    throw new Error('Square webhook signature mismatch');
+  }
   return JSON.parse(typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8'));
 }
 

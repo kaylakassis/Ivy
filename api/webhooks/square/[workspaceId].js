@@ -13,6 +13,8 @@ import { fetchFinanceSettings, computeTotals } from '../../_lib/finance.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { appUrl } from '../../_lib/tokens.js';
+import { notifyOwnerSafe } from '../../_lib/push.js';
+import { notifyInvoicePaid } from '../../_lib/invoiceNotify.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -143,7 +145,7 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
     },
   ];
 
-  await sql`
+  const upd = await sql`
     UPDATE invoices SET
       status                = 'paid',
       paid_at               = NOW(),
@@ -154,7 +156,32 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
       activity              = ${JSON.stringify(newActivity)}::jsonb,
       updated_at            = NOW()
     WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+    RETURNING id, number, client_name
   `;
+  // Race guard: a concurrent retry can land here too — if our UPDATE
+  // didn't flip the row, somebody else's already did. Don't double-fire
+  // the owner push or the client receipt email.
+  if (upd.rows.length === 0) return;
+
+  // Owner push + client receipt — parity with the Stripe path at
+  // /api/webhooks/stripe/[workspaceId].js:482-502. Without these,
+  // workspaces taking payment through Square saw "paid" land in their
+  // dashboard but got no notification and the customer got no receipt.
+  const number = upd.rows[0].number;
+  const clientLabel = upd.rows[0].client_name || 'A client';
+  notifyOwnerSafe({
+    workspaceId,
+    type: 'payments',
+    payload: {
+      title: 'Invoice paid',
+      body: `${clientLabel} · ${number} · $${paidAmountDollars.toFixed(2)}`,
+      url: `/finance?invoice=${invoiceId}`,
+      tag: `inv-${invoiceId}`,
+    },
+  });
+  notifyInvoicePaid({
+    workspaceId, invoiceId, totalAmount: paidAmountDollars, method: 'square',
+  });
 }
 
 // Apply a Square refund event to the matching invoice. Triggers:
