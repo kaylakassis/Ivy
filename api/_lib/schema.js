@@ -1730,6 +1730,16 @@ ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ;
 ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
 ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS auto_detected BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_redemptions_rule_client ON reward_redemptions(rule_id, client_id);
+-- Rewards are an audit ledger ("Jane got 10% off in Feb") and need to
+-- survive client deletion so disputes ("did I earn that reward?") can
+-- still be answered. The original FK cascaded the row away when the
+-- client was hard-deleted via the owner DELETE. client_name is already
+-- denormalized so the row stays identifiable. Switch to SET NULL.
+-- Idempotent: DROP CONSTRAINT IF EXISTS + re-add with new ON DELETE.
+ALTER TABLE reward_redemptions DROP CONSTRAINT IF EXISTS reward_redemptions_client_id_fkey;
+ALTER TABLE reward_redemptions
+  ADD CONSTRAINT reward_redemptions_client_id_fkey
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL;
 
 -- Ivy Pro: AI coach chat history. Each workspace owns its sessions; messages
 -- live in a child table so we can stream and paginate later. Replies are

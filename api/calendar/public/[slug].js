@@ -489,8 +489,15 @@ async function createBooking(req, res) {
 
     // Atomically debit the gift card after the booking row exists. If
     // the redemption fails (race against another concurrent redemption),
-    // roll back the gift_card_credit_cents on the booking — the booking
-    // itself stays so the slot isn't lost.
+    // we MUST delete the booking row — leaving it half-committed creates
+    // two bad outcomes:
+    //   (a) deposit_required was already reduced by giftCardCreditCents
+    //       at line ~ above, so the customer would pay a lower deposit
+    //       for a booking they didn't actually fund with the card;
+    //   (b) the slot stays held against a client who hasn't really
+    //       paid, blocking other prospects from booking it.
+    // Better: tear down the booking + release the slot + tell the
+    // customer to try a different code.
     if (giftCardRow && giftCardCreditCents > 0) {
       try {
         await redeemAtomic({
@@ -502,7 +509,10 @@ async function createBooking(req, res) {
           clientId,
         });
       } catch (err) {
-        await sql`UPDATE bookings SET gift_card_credit_cents = 0 WHERE id = ${newBookingRow.id}`;
+        // Roll back the booking entirely. Best-effort — if the DELETE
+        // also fails the row will be picked up by /api/cron/db-prune
+        // eventually, but the slot stays held until then.
+        await sql`DELETE FROM bookings WHERE id = ${newBookingRow.id}`.catch(() => {});
         return badRequest(res, 'Gift card was just used by another transaction — please try a different code.');
       }
     }
