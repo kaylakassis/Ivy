@@ -65,6 +65,7 @@ const PublicQuote   = lazy(() => import('./features/finance/PublicQuote.jsx'));
 const ReviewPage    = lazy(() => import('./features/reviews/ReviewPage.jsx'));
 const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
 const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
+const DoNotSellPage = lazy(() => import('./features/legal/DoNotSellPage.jsx'));
 const AboutPage     = lazy(() => import('./features/marketing/AboutPage.jsx'));
 const VerticalPage  = lazy(() => import('./features/marketing/VerticalPage.jsx'));
 const PricingPage     = lazy(() => import('./features/marketing/PricingPage.jsx'));
@@ -199,6 +200,7 @@ export default function App() {
         {/* Legal (public, no auth) */}
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms"   element={<TermsPage />} />
+        <Route path="/do-not-sell" element={<DoNotSellPage />} />
 
         {/* Marketing — extra public surfaces beyond the home page. */}
         <Route path="/about"       element={<AboutPage />} />

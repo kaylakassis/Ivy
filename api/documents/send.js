@@ -23,7 +23,8 @@ import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { notifyClientSafe } from '../_lib/push.js';
-import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { withIdempotency } from '../_lib/idempotency.js';
+import { methodNotAllowed, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
 function escapeHtml(s) {
@@ -39,9 +40,18 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
     if (!(await requireActiveSubscription(workspaceId, req, res))) return;
 
+    // Idempotent wrap — sending the same multi-signer document twice
+    // would DELETE + INSERT new signer rows (with new tokens), invalidating
+    // the in-flight link the first signer just received. With the
+    // Idempotency-Key header, retries collapse to the cached response.
+    const idemp = await withIdempotency(req, user.id, async () => doSend());
+    if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+    return res.status(idemp.status).json(idemp.body);
+
+    async function doSend() {
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
-    if (!id) return badRequest(res, 'id is required');
+    if (!id) return { status: 400, body: { error: 'id is required' } };
 
     // Normalize input: accept either a `recipients` array OR a legacy
     // single-clientId shape. Cap at 10 signers to keep the UI sane.
@@ -51,31 +61,31 @@ export default async function handler(req, res) {
     } else if (body.clientId) {
       recipients = [{ clientId: body.clientId }];
     } else {
-      return badRequest(res, 'recipients or clientId is required');
+      return { status: 400, body: { error: 'recipients or clientId is required' } };
     }
-    if (recipients.length > 10) return badRequest(res, 'Up to 10 signers per document');
+    if (recipients.length > 10) return { status: 400, body: { error: 'Up to 10 signers per document' } };
 
     const doc = await fetchOwnedDoc({ id, workspaceId });
-    if (!doc) return badRequest(res, 'Document not found');
-    if (doc.status === 'completed') return badRequest(res, 'Already completed');
-    if (doc.status === 'voided')    return badRequest(res, 'Document is voided — restore first');
-    if (doc.status === 'declined')  return badRequest(res, 'Document was declined — restore to draft first');
+    if (!doc) return { status: 400, body: { error: 'Document not found' } };
+    if (doc.status === 'completed') return { status: 400, body: { error: 'Already completed' } };
+    if (doc.status === 'voided')    return { status: 400, body: { error: 'Document is voided — restore first' } };
+    if (doc.status === 'declined')  return { status: 400, body: { error: 'Document was declined — restore to draft first' } };
 
     // Resolve each recipient: must belong to this workspace, must have an
     // email. Build the rows we'll insert.
     const resolved = [];
     for (const r of recipients) {
       const cid = r.clientId ? String(r.clientId) : null;
-      if (!cid) return badRequest(res, 'Each recipient needs a clientId');
+      if (!cid) return { status: 400, body: { error: 'Each recipient needs a clientId' } };
       const cl = await sql`
         SELECT id, name, email FROM clients
         WHERE id = ${cid} AND workspace_id = ${workspaceId}
       `;
-      if (cl.rows.length === 0) return badRequest(res, `Unknown client: ${cid}`);
+      if (cl.rows.length === 0) return { status: 400, body: { error: `Unknown client: ${cid}` } };
       const c = cl.rows[0];
       const name = (r.name || c.name || '').toString().slice(0, 200);
       const email = (r.email || c.email || '').toString().toLowerCase().trim();
-      if (!email) return badRequest(res, `Client ${name || cid} has no email`);
+      if (!email) return { status: 400, body: { error: `Client ${name || cid} has no email` } };
       resolved.push({ clientId: cid, name, email });
     }
 
@@ -227,10 +237,14 @@ export default async function handler(req, res) {
       },
     });
 
-    return ok(res, {
-      document: serializeDoc(updated.rows[0]),
-      ...(emailWarning ? { warning: emailWarning } : {}),
-    });
+    return {
+      status: 200,
+      body: {
+        document: serializeDoc(updated.rows[0]),
+        ...(emailWarning ? { warning: emailWarning } : {}),
+      },
+    };
+    } // end doSend
   } catch (err) {
     return serverError(res, err);
   }

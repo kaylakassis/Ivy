@@ -24,6 +24,73 @@ CREATE TABLE IF NOT EXISTS workspaces (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_id);
+
+-- password_changed_at lets requireUser invalidate every JWT issued
+-- before the timestamp — used by reset-password.js so a compromised
+-- session can't outlive a password change. Stateless JWTs can't be
+-- revoked individually; this stamp is the single source of truth for
+-- "the password is newer than your token, log in again".
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+
+-- Soft-delete grace window. account/delete sets deleted_at + mangles
+-- the email (appending +deleted-<id>) to free the original address for
+-- re-signup. requireUser rejects rows with deleted_at set so a stolen
+-- session is dead the moment the owner deletes. db-prune.js hard-deletes
+-- after 30 days, at which point CASCADE drops workspaces + everything
+-- under them. Lets us undo an accidental delete within the window.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
+
+-- Privacy Policy versioning. Same shape as terms_version: bump the
+-- CURRENT_PRIVACY_VERSION constant in api/_lib/legal.js when /privacy
+-- changes substantively + every existing user gets force-re-prompted.
+-- legal_acceptances captures the full audit trail (document='privacy').
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_version TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ;
+
+-- TOTP / two-factor authentication. Owners opt in from Account ->
+-- Security. The secret is encrypted at rest via api/_lib/secrets.js
+-- (same AES-256-GCM the Stripe/Google credentials use). enrolled_at
+-- is NULL until the owner verifies their first code — until then the
+-- secret is "pending" and login isn't gated. backup_codes_hashed is
+-- a JSONB array of SHA-256 hashes of the 10 single-use recovery codes
+-- shown once at enrollment.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_secret_encrypted TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_enrolled_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup_codes_hashed JSONB;
+
+-- In-app notification feed. push.js' notifyOwner / notifyClient INSERT
+-- a row here BEFORE the push fanout so the bell + dropdown surface
+-- every important event regardless of whether the user has push
+-- enabled. Web push is opt-in (mobile Safari especially) — without
+-- the feed, owners closing the tab lose every alert. read_at = NULL
+-- counts as unread for the bell badge. tag is the same coalescing
+-- key push uses so a re-fired notification (e.g. five new messages
+-- from the same client) doesn't drown the feed; we de-dupe on (user_id,
+-- tag) inserts. db-prune trims rows > 60 days.
+CREATE TABLE IF NOT EXISTS notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  type TEXT,
+  title TEXT NOT NULL,
+  body TEXT,
+  url TEXT,
+  tag TEXT,
+  read_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_recent
+  ON notifications(user_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
+  ON notifications(user_id, created_at DESC) WHERE read_at IS NULL;
+-- Partial index for the subscription-dunning cron (api/cron/subscription-
+-- dunning.js). It scans for subscription_status = 'past_due' rows every
+-- day; without this index that's a full table scan that gets worse with
+-- every new workspace. Partial keeps the index tiny — only past_due rows
+-- live in it (a small fraction of total workspaces).
+CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
+  ON workspaces(subscription_past_due_since)
+  WHERE subscription_status = 'past_due';
 -- Tracks first-run onboarding completion so we know whether to route the
 -- owner to /onboarding or straight to /dashboard. Self-correcting backfill:
 -- any pre-existing workspace that already has clients or services is marked
@@ -338,6 +405,16 @@ CREATE TABLE IF NOT EXISTS audit_events (
   user_agent TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- workspace_id + target_kind + target_id extend the table for
+-- workspace-scoped audit (refunds, voids, deletions, workflow toggles).
+-- target_user_id stays for the super-admin code path. All three new
+-- columns are nullable so existing rows + super-admin writes work
+-- unchanged.
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS target_kind TEXT;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS target_id   TEXT;
+CREATE INDEX IF NOT EXISTS idx_audit_events_workspace
+  ON audit_events(workspace_id, created_at DESC) WHERE workspace_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_events_created
   ON audit_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_events_target
@@ -454,6 +531,13 @@ CREATE TABLE IF NOT EXISTS clients (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_stage ON clients(workspace_id, stage);
+-- Public-contact lookup (api/calendar/public/contact.js) and invite-claim
+-- (api/_lib/clientPortal.js) both query clients by (workspace_id,
+-- lower(email)). Without this, every inbound contact-form submit and
+-- every portal signup runs a full clients scan for the workspace.
+CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
+  ON clients(workspace_id, lower(email))
+  WHERE email IS NOT NULL;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
 -- Phone + per-client SMS consent. sms_consent_at NULL means "not opted in"
@@ -1646,6 +1730,16 @@ ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS used_at TIMESTAMPTZ;
 ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS notified_at TIMESTAMPTZ;
 ALTER TABLE reward_redemptions ADD COLUMN IF NOT EXISTS auto_detected BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_redemptions_rule_client ON reward_redemptions(rule_id, client_id);
+-- Rewards are an audit ledger ("Jane got 10% off in Feb") and need to
+-- survive client deletion so disputes ("did I earn that reward?") can
+-- still be answered. The original FK cascaded the row away when the
+-- client was hard-deleted via the owner DELETE. client_name is already
+-- denormalized so the row stays identifiable. Switch to SET NULL.
+-- Idempotent: DROP CONSTRAINT IF EXISTS + re-add with new ON DELETE.
+ALTER TABLE reward_redemptions DROP CONSTRAINT IF EXISTS reward_redemptions_client_id_fkey;
+ALTER TABLE reward_redemptions
+  ADD CONSTRAINT reward_redemptions_client_id_fkey
+  FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL;
 
 -- Ivy Pro: AI coach chat history. Each workspace owns its sessions; messages
 -- live in a child table so we can stream and paginate later. Replies are
@@ -1934,12 +2028,12 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
   ON invoices(workspace_id, paid_at DESC)
   WHERE paid_at IS NOT NULL;
 
--- /api/clients lookups by email (used by AddBookingModal to resolve a
--- name typed in by the owner, and by the public-booking flow to merge
--- a recurring client). Email is normalized lowercase at write time so
--- the index doesn't need a LOWER() expression.
-CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
-  ON clients(workspace_id, email) WHERE email IS NOT NULL;
+-- idx_clients_workspace_email is created higher up (with lower(email)
+-- for defensive case-insensitive lookups even if a write path forgets
+-- to lowercase). Removed the duplicate definition here; CREATE INDEX
+-- IF NOT EXISTS would have no-op'd on the second one's name match
+-- anyway, but two conflicting expression sets in the source confused
+-- new readers about which form actually applies.
 
 -- ─── Global search (Cmd+K) trigram indexes ──────────────────────────
 -- /api/search runs leading-wildcard ILIKE '%q%' across clients,

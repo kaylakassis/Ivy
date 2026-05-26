@@ -126,6 +126,36 @@ export async function syncOnBookingUpdated({ workspaceId, bookingId }) {
   }
 }
 
+// Express an absolute instant as wall-clock { date, minutes } in the
+// workspace's IANA timezone. THRYVE bookings/slots use floating LOCAL
+// time, so a Google event at 2pm Pacific must block the 2pm slot — not
+// 9pm (its UTC hour). When no workspace timezone is configured we fall
+// back to the event's own wall-clock (the time as written before the
+// RFC3339 offset), which is still closer than coercing to UTC.
+function eventLocalParts(rfc3339, timeZone) {
+  if (timeZone) {
+    try {
+      const d = new Date(rfc3339);
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat('en-CA', {
+          timeZone, year: 'numeric', month: '2-digit', day: '2-digit',
+          hour: '2-digit', minute: '2-digit', hour12: false,
+        }).formatToParts(d).map((p) => [p.type, p.value]),
+      );
+      let hour = parseInt(parts.hour, 10);
+      if (hour === 24) hour = 0; // some runtimes emit 24 for midnight
+      return {
+        date: `${parts.year}-${parts.month}-${parts.day}`,
+        minutes: hour * 60 + parseInt(parts.minute, 10),
+      };
+    } catch { /* bad tz string — fall through to wall-clock parse */ }
+  }
+  const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(rfc3339));
+  if (m) return { date: `${m[1]}-${m[2]}-${m[3]}`, minutes: (+m[4]) * 60 + (+m[5]) };
+  const d = new Date(rfc3339);
+  return { date: d.toISOString().slice(0, 10), minutes: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+
 // Pull busy times from the owner's primary Google calendar over the
 // next `daysAhead` days and mirror them into external_busy_blocks. The
 // dedicated THRYVE Bookings calendar (where we PUSH) is excluded so
@@ -141,7 +171,8 @@ export async function syncOnBookingUpdated({ workspaceId, bookingId }) {
 // taking a whole day off via a Google all-day event would be surprising.
 export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
   const { rows } = await sql`
-    SELECT google_refresh_token_encrypted, google_calendar_id, google_block_inbound
+    SELECT google_refresh_token_encrypted, google_calendar_id, google_block_inbound,
+           google_email, timezone
     FROM calendar_settings
     WHERE workspace_id = ${workspaceId}
   `;
@@ -187,16 +218,18 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     const end = ev.end?.dateTime;
     if (!start || !end) { skipped++; continue; }   // all-day, skip
 
-    const sd = new Date(start);
-    const ed = new Date(end);
-    // Only mirror events that fall on a single date — multi-day events
-    // need expanding into per-day rows. Rare for personal events; punt.
-    const dateA = sd.toISOString().slice(0, 10);
-    const dateB = ed.toISOString().slice(0, 10);
+    // Convert to the workspace's local wall-clock so busy blocks line up
+    // with THRYVE's local-time slot model (see eventLocalParts above).
+    const sp = eventLocalParts(start, r.timezone);
+    const ep = eventLocalParts(end, r.timezone);
+    const dateA = sp.date;
+    const dateB = ep.date;
+    // Only mirror events that fall on a single local date — multi-day
+    // events need expanding into per-day rows. Rare for personal events; punt.
     if (dateA !== dateB) { skipped++; continue; }
 
-    const startMin = sd.getUTCHours() * 60 + sd.getUTCMinutes();
-    const endMin   = ed.getUTCHours() * 60 + ed.getUTCMinutes();
+    const startMin = sp.minutes;
+    const endMin   = ep.minutes;
     if (endMin <= startMin) continue;
 
     seenIds.push(ev.id);

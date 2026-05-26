@@ -47,7 +47,7 @@ export async function notifyPackageExhausted({ workspaceId, clientPackageId, cli
       payload: {
         title: `${clientName} is out of sessions`,
         body: `${r.package_name} fully consumed (${r.credits_total} of ${r.credits_total} used). Time to offer a renewal?`,
-        url: `/clients?open=${encodeURIComponent(r.client_id)}`,
+        url: `/clients?id=${encodeURIComponent(r.client_id)}`,
         tag: `pkg-exhausted-${r.package_id}`,
       },
     });
@@ -63,7 +63,7 @@ export async function notifyPackageExhausted({ workspaceId, clientPackageId, cli
           <p><strong>${escapeHtml(clientName)}</strong> just used the last credit on <strong>${escapeHtml(r.package_name)}</strong>.</p>
           <p>Good moment to offer a renewal — they're booking actively and won't have credits for next time.</p>`,
         ctaText: 'Open client',
-        ctaUrl: `${appUrl()}/clients?open=${encodeURIComponent(r.client_id)}`,
+        ctaUrl: `${appUrl()}/clients?id=${encodeURIComponent(r.client_id)}`,
         footer: `Adjust which alerts you receive from Account → Notifications.`,
       });
       await sendEmailToUser({

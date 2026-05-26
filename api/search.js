@@ -202,7 +202,7 @@ export default async function handler(req, res) {
           id: 'thread:' + r.id,
           title: r.client_name,
           subtitle: r.last_message_preview || '',
-          url: `/messages/${r.id}`,
+          url: `/messages?threadId=${r.id}`,
           icon: 'Chat',
         })),
       });

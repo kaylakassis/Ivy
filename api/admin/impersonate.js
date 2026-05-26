@@ -37,10 +37,11 @@ export default async function handler(req, res) {
     const { userId } = await readBody(req);
     if (!userId) return badRequest(res, 'userId is required');
 
-    const r = await sql`SELECT id, email FROM users WHERE id = ${userId}`;
+    const r = await sql`SELECT id, email, user_type FROM users WHERE id = ${userId}`;
     if (r.rows.length === 0) return badRequest(res, 'User not found');
     const target = r.rows[0];
-    if (emailIsSuperAdmin(target.email) && target.id !== actor.id) {
+    const targetIsSuperAdmin = emailIsSuperAdmin(target.email) || target.user_type === 'super_admin';
+    if (targetIsSuperAdmin && target.id !== actor.id) {
       return badRequest(res, 'Refusing to impersonate another super-admin.');
     }
     if (target.id === actor.id) return badRequest(res, "That's already you.");

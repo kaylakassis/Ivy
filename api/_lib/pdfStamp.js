@@ -95,26 +95,27 @@ export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) 
     }
   }
 
-  // Audit page.
-  const audit = pdf.addPage();
-  const { width: aw, height: ah } = audit.getSize();
+  // Audit page. `current` advances to each spill page so overflow entries
+  // are drawn on the page we actually added (not the original one).
+  let current = pdf.addPage();
+  const { width: aw, height: ah } = current.getSize();
   const margin = 56;
   let cy = ah - margin;
-  audit.drawText('Signing record', { x: margin, y: cy, size: 22, font: helvBold, color: rgb(0.05, 0.07, 0.12) });
+  current.drawText('Signing record', { x: margin, y: cy, size: 22, font: helvBold, color: rgb(0.05, 0.07, 0.12) });
   cy -= 30;
-  audit.drawText(doc.name || 'Document', { x: margin, y: cy, size: 12, font: helv, color: rgb(0.30, 0.30, 0.32) });
+  current.drawText(doc.name || 'Document', { x: margin, y: cy, size: 12, font: helv, color: rgb(0.30, 0.30, 0.32) });
   cy -= 28;
-  audit.drawLine({ start: { x: margin, y: cy }, end: { x: aw - margin, y: cy }, thickness: 0.5, color: rgb(0.7, 0.7, 0.72) });
+  current.drawLine({ start: { x: margin, y: cy }, end: { x: aw - margin, y: cy }, thickness: 0.5, color: rgb(0.7, 0.7, 0.72) });
   cy -= 22;
 
   for (const s of signers) {
     if (cy < 140) {
       // Spill onto another page if we run out of room (rare unless 8+ signers).
-      const extra = pdf.addPage();
-      cy = extra.getSize().height - margin;
-      audit.drawText('— continued on next page —', { x: margin, y: 30, size: 9, font: helv, color: rgb(0.5, 0.5, 0.5) });
+      current.drawText('— continued on next page —', { x: margin, y: 30, size: 9, font: helv, color: rgb(0.5, 0.5, 0.5) });
+      current = pdf.addPage();
+      cy = current.getSize().height - margin;
     }
-    audit.drawText(`${s.order_index + 1}. ${s.name}`, { x: margin, y: cy, size: 13, font: helvBold, color: rgb(0.05, 0.07, 0.12) });
+    current.drawText(`${s.order_index + 1}. ${s.name}`, { x: margin, y: cy, size: 13, font: helvBold, color: rgb(0.05, 0.07, 0.12) });
     cy -= 16;
     const lines = [
       s.email,
@@ -124,23 +125,28 @@ export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) 
       s.decline_reason ? truncate(`Reason: ${s.decline_reason}`, 90) : null,
     ].filter(Boolean);
     for (const line of lines) {
-      audit.drawText(line, { x: margin + 14, y: cy, size: 10, font: helv, color: rgb(0.30, 0.30, 0.32) });
+      current.drawText(line, { x: margin + 14, y: cy, size: 10, font: helv, color: rgb(0.30, 0.30, 0.32) });
       cy -= 13;
     }
     cy -= 12;
   }
 
   if (hash) {
+    // The hash block needs ~70px; spill if it won't fit on the current page.
+    if (cy < 90) {
+      current = pdf.addPage();
+      cy = current.getSize().height - margin;
+    }
     cy -= 8;
-    audit.drawLine({ start: { x: margin, y: cy }, end: { x: aw - margin, y: cy }, thickness: 0.5, color: rgb(0.7, 0.7, 0.72) });
+    current.drawLine({ start: { x: margin, y: cy }, end: { x: aw - margin, y: cy }, thickness: 0.5, color: rgb(0.7, 0.7, 0.72) });
     cy -= 18;
-    audit.drawText('Tamper-evident hash (SHA-256)', { x: margin, y: cy, size: 10, font: helvBold, color: rgb(0.30, 0.30, 0.32) });
+    current.drawText('Tamper-evident hash (SHA-256)', { x: margin, y: cy, size: 10, font: helvBold, color: rgb(0.30, 0.30, 0.32) });
     cy -= 14;
     // Wrap the hash so it always fits.
     const half = Math.ceil(hash.length / 2);
-    audit.drawText(hash.slice(0, half), { x: margin, y: cy, size: 9, font: helv, color: rgb(0.05, 0.07, 0.12) });
+    current.drawText(hash.slice(0, half), { x: margin, y: cy, size: 9, font: helv, color: rgb(0.05, 0.07, 0.12) });
     cy -= 12;
-    audit.drawText(hash.slice(half),    { x: margin, y: cy, size: 9, font: helv, color: rgb(0.05, 0.07, 0.12) });
+    current.drawText(hash.slice(half),    { x: margin, y: cy, size: 9, font: helv, color: rgb(0.05, 0.07, 0.12) });
   }
 
   const bytes = await pdf.save();

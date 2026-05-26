@@ -116,30 +116,48 @@ export default async function handler(req, res) {
       if (included.length === 0) return badRequest(res, 'Select at least one option before accepting.');
       const invoiceItems = included.map(({ id, description, quantity, rate }) => ({ id, description, quantity, rate }));
 
-      const num = await nextInvoiceNumber(row.workspace_id);
-      const invNumber = `INV-${num}`;
+      // Atomically claim the accept BEFORE minting the invoice so two
+      // concurrent submits (double-click / retry) can't each create an
+      // invoice. Only the request that flips sent→accepted proceeds.
+      const claim = await sql`
+        UPDATE quotes SET status = 'accepted', accepted_at = NOW(), updated_at = NOW()
+        WHERE id = ${row.id} AND status = 'sent'
+        RETURNING id
+      `;
+      if (claim.rowCount === 0) return badRequest(res, 'This estimate is no longer active.');
+
       const issueDate = new Date().toISOString().slice(0, 10);
       const due = new Date(); due.setDate(due.getDate() + 14);
       const dueDate = due.toISOString().slice(0, 10);
 
-      const invIns = await sql`
-        INSERT INTO invoices (
-          workspace_id, number, client_id, client_name, client_email,
-          issue_date, due_date, items, tax_rate, discount, notes,
-          status, activity, currency
-        ) VALUES (
-          ${row.workspace_id}, ${invNumber},
-          ${row.client_id}, ${row.client_name}, ${row.client_email},
-          ${issueDate}, ${dueDate},
-          ${JSON.stringify(invoiceItems)}::jsonb,
-          ${row.tax_rate}, ${row.discount}, ${row.notes},
-          'draft',
-          ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Created from accepted estimate ${row.number}` }])}::jsonb,
-          COALESCE((SELECT currency FROM finance_settings WHERE workspace_id = ${row.workspace_id}), 'USD')
-        )
-        RETURNING *
-      `;
-      const newInvoice = invIns.rows[0];
+      let newInvoice;
+      try {
+        const num = await nextInvoiceNumber(row.workspace_id);
+        const invNumber = `INV-${num}`;
+        const invIns = await sql`
+          INSERT INTO invoices (
+            workspace_id, number, client_id, client_name, client_email,
+            issue_date, due_date, items, tax_rate, discount, notes,
+            status, activity, currency
+          ) VALUES (
+            ${row.workspace_id}, ${invNumber},
+            ${row.client_id}, ${row.client_name}, ${row.client_email},
+            ${issueDate}, ${dueDate},
+            ${JSON.stringify(invoiceItems)}::jsonb,
+            ${row.tax_rate}, ${row.discount}, ${row.notes},
+            'draft',
+            ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Created from accepted estimate ${row.number}` }])}::jsonb,
+            COALESCE((SELECT currency FROM finance_settings WHERE workspace_id = ${row.workspace_id}), 'USD')
+          )
+          RETURNING *
+        `;
+        newInvoice = invIns.rows[0];
+      } catch (err) {
+        // Invoice creation failed — release the claim so the client can retry.
+        await sql`UPDATE quotes SET status = 'sent', accepted_at = NULL, updated_at = NOW() WHERE id = ${row.id}`
+          .catch(() => {});
+        throw err;
+      }
 
       const newActivity = [
         ...(row.activity || []),

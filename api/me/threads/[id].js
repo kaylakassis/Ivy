@@ -12,6 +12,14 @@ import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { serializeThread, serializeMessage } from '../../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
+import { sendEmailToUser, emailShell } from '../../_lib/email.js';
+import { fetchBranding } from '../../_lib/branding.js';
+import { appUrl } from '../../_lib/tokens.js';
+import { withIdempotency } from '../../_lib/idempotency.js';
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -85,10 +93,22 @@ export default async function handler(req, res) {
       if (thread.mode === 'one-way') {
         return badRequest(res, 'This conversation is read-only');
       }
+      // Idempotency: mobile clients on flaky LTE re-POST the moment a
+      // request spinner hangs even though the original landed. Without
+      // this wrapper the thread gets the SAME message twice, the owner
+      // is pushed twice, and unread_biz double-increments. Owner→client
+      // direction (api/messages/[id].js) already wraps the same way.
+      const idemp = await withIdempotency(req, user.id, async () => {
+        return await sendMessage();
+      });
+      if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+      return res.status(idemp.status).json(idemp.body);
+
+      async function sendMessage() {
       const body = await readBody(req);
       const text = (body.text || '').toString().trim();
-      if (!text) return badRequest(res, 'Message text is required');
-      if (text.length > 4000) return badRequest(res, 'Message is too long');
+      if (!text) return { status: 400, body: { error: 'Message text is required' } };
+      if (text.length > 4000) return { status: 400, body: { error: 'Message is too long' } };
 
       const inserted = await sql`
         INSERT INTO messages (thread_id, sender, text)
@@ -107,18 +127,57 @@ export default async function handler(req, res) {
          WHERE id = $2 AND client_id = ANY($3)`,
         [preview, id, myIds],
       );
-      // Notify the workspace owner (best-effort).
+      // Notify the workspace owner — push + email. Push alone leaves
+      // owners with push-disabled (most do, frankly) totally blind to
+      // inbound client messages. Owner→client direction at
+      // api/messages/[id].js:141-172 already sends both; we mirror it.
       notifyOwnerSafe({
         workspaceId: thread.workspace_id,
         type: 'messages',
         payload: {
           title: `Message from ${thread.client_name || 'a client'}`,
           body: preview,
-          url: `/messages/${id}`,
+          url: `/messages?threadId=${id}`,
           tag: `thread-${id}`,
         },
       });
-      return created(res, { message: serializeMessage(inserted.rows[0]) });
+      try {
+        const ownerRow = await sql`
+          SELECT u.id, u.email FROM workspaces w
+            JOIN users u ON u.id = w.owner_id
+           WHERE w.id = ${thread.workspace_id} LIMIT 1
+        `;
+        const ownerEmail = ownerRow.rows[0]?.email;
+        const ownerUserId = ownerRow.rows[0]?.id;
+        if (ownerEmail && ownerUserId) {
+          const branding = await fetchBranding(thread.workspace_id);
+          await sendEmailToUser({
+            userId: ownerUserId,
+            type: 'messages',
+            to: ownerEmail,
+            subject: `New message from ${thread.client_name || thread.client_email || 'a client'}`,
+            // Reply-To = the client's email so the owner can reply
+            // straight from their mail client; the round-trip lands
+            // back in their THRYVE thread via the normal inbound flow.
+            replyTo: thread.client_email || branding.replyTo,
+            html: emailShell({
+              heading: 'New message in your inbox',
+              body: `<p>${escapeHtml(thread.client_name || thread.client_email || 'A client')} just sent you a message:</p>
+                <blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #C7BFA8;background:#F6F5F1;border-radius:6px;font-size:14px;line-height:1.55;color:#3F3D38;white-space:pre-wrap;">${escapeHtml(text)}</blockquote>
+                <p>Reply from your THRYVE Messages inbox or hit Reply on this email.</p>`,
+              ctaText: 'Open conversation',
+              ctaUrl: `${appUrl()}/messages?threadId=${id}`,
+              footer: `Replying to this email reaches ${escapeHtml(thread.client_name || 'them')} directly.`,
+              branding,
+            }),
+          });
+        }
+      } catch (mailErr) {
+        // eslint-disable-next-line no-console
+        console.error('[me/threads] owner email failed:', mailErr.message);
+      }
+      return { status: 201, body: { message: serializeMessage(inserted.rows[0]) } };
+      } // end sendMessage
     }
 
     return methodNotAllowed(res, ['GET', 'POST']);

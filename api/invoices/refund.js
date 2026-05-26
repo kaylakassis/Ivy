@@ -22,6 +22,7 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { createRefund as squareCreateRefund } from '../_lib/payments/square.js';
 import { createRefund as paypalCreateRefund } from '../_lib/payments/paypal.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals, fetchFinanceSettings } from '../_lib/finance.js';
+import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const VALID_REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer']);
@@ -68,6 +69,13 @@ export default async function handler(req, res) {
     const reason = body.reason && VALID_REASONS.has(body.reason) ? body.reason : null;
     const method = inv.stripe_payment_intent ? 'card' : (inv.paid_method || 'manual');
 
+    // Deterministic key so a double-click / function-retry that reads the
+    // same `alreadyRefunded` reuses the same provider idempotency key — the
+    // provider returns the original refund instead of issuing a second one.
+    // A genuinely new partial refund (after one already settled) has a
+    // different alreadyRefunded, hence a different key.
+    const refundKey = `refund-${id}-${Math.round(alreadyRefunded * 100)}`;
+
     let stripeRefundId = null;
     if (inv.stripe_payment_intent) {
       // Card refund. Routes to the workspace's active payment provider
@@ -85,6 +93,7 @@ export default async function handler(req, res) {
             amountCents: Math.round(amount * 100),
             currency: fs.currency,
             reason,
+            idempotencyKey: refundKey,
           });
           stripeRefundId = out.id;
         } else if (provider === 'paypal') {
@@ -94,6 +103,7 @@ export default async function handler(req, res) {
             amountCents: Math.round(amount * 100),
             currency: fs.currency,
             reason,
+            idempotencyKey: refundKey,
           });
           stripeRefundId = out.id;
         } else {
@@ -112,6 +122,7 @@ export default async function handler(req, res) {
             paymentIntent: inv.stripe_payment_intent,
             amountCents: Math.round(amount * 100),
             reason,
+            idempotencyKey: refundKey,
           });
           stripeRefundId = r.id;
         }
@@ -131,6 +142,10 @@ export default async function handler(req, res) {
       ...(stripeRefundId ? { stripeRefundId } : {}),
     };
 
+    // Concurrency guard: only apply if refunded_amount is still what we
+    // read. If a racing request already recorded a refund, this matches 0
+    // rows — and because the provider call above was idempotent (same key),
+    // no double money moved; we just return the already-updated state.
     const updated = await sql`
       UPDATE invoices SET
         status            = ${newStatus},
@@ -139,8 +154,32 @@ export default async function handler(req, res) {
         activity          = ${JSON.stringify([...(inv.activity || []), activityEntry])}::jsonb,
         updated_at        = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
+        AND COALESCE(refunded_amount, 0) = ${alreadyRefunded}
       RETURNING *
     `;
+    if (updated.rowCount === 0) {
+      const current = await fetchOwnedInvoice({ id, workspaceId });
+      const curRefunded = Number(current?.refunded_amount || 0);
+      return ok(res, {
+        invoice: serializeInvoice(current),
+        refund: { amount, method, fullyRefunded: curRefunded >= totals.total - 0.001, stripeRefundId, deduped: true },
+      });
+    }
+    // Immutable trail of money moving out. Records who, when, how much,
+    // which provider, which transaction. Fire-and-forget.
+    recordWorkspaceAudit(req, {
+      workspaceId, actor: user,
+      action: 'invoice.refund',
+      target: { kind: 'invoice', id: inv.id },
+      meta: {
+        number: inv.number,
+        amount,
+        method,
+        reason: reason || null,
+        provider_refund_id: stripeRefundId || null,
+        fully_refunded: fullyRefunded,
+      },
+    });
     return ok(res, {
       invoice: serializeInvoice(updated.rows[0]),
       refund: { amount, method, fullyRefunded, stripeRefundId },

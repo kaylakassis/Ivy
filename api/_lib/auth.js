@@ -28,7 +28,7 @@ export async function verifyPassword(pw, hash) {
 }
 
 export function signSession(userId, extraClaims = {}) {
-  return jwt.sign({ sub: userId, ...extraClaims }, secret(), { expiresIn: `${MAX_AGE}s` });
+  return jwt.sign({ sub: userId, ...extraClaims }, secret(), { expiresIn: `${MAX_AGE}s`, algorithm: 'HS256' });
 }
 
 // Vercel runs all deployments over HTTPS, so secure: always-on. NODE_ENV check
@@ -54,10 +54,12 @@ export function setSessionCookie(res, token) {
 }
 
 export function clearSessionCookie(res) {
-  res.setHeader('Set-Cookie', cookie.serialize(COOKIE, '', {
-    ...COOKIE_BASE,
-    maxAge: 0,
-  }));
+  // Clear the session AND any impersonation backup, so logging out while
+  // impersonating doesn't leave a stale admin backup cookie behind.
+  setCookies(res,
+    cookie.serialize(COOKIE, '', { ...COOKIE_BASE, maxAge: 0 }),
+    cookie.serialize(IMPERSONATION_BACKUP, '', { ...COOKIE_BASE, maxAge: 0 }),
+  );
 }
 
 // Stash the current session under a backup cookie + set a new one for
@@ -95,7 +97,7 @@ export function readSession(req) {
   const token = parsed[COOKIE];
   if (!token) return null;
   try {
-    return jwt.verify(token, secret());
+    return jwt.verify(token, secret(), { algorithms: ['HS256'] });
   } catch {
     return null;
   }
@@ -115,11 +117,32 @@ export async function requireUser(req, res) {
   const { rows } = await sql`
     SELECT id, email, name, created_at, email_verified_at,
            walkthrough_completed_at, user_type,
-           terms_accepted_at, terms_version
+           terms_accepted_at, terms_version,
+           privacy_version, privacy_accepted_at,
+           password_changed_at, deleted_at
     FROM users WHERE id = ${session.sub}
   `;
   if (rows.length === 0) {
     res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  // Soft-deleted accounts can't sign in. The row hangs around for the
+  // 30-day recovery window (db-prune hard-deletes after) so the data
+  // isn't immediately gone, but the session is dead the moment the
+  // owner clicks Delete. Different status code from password-change
+  // so the frontend can show a more accurate message if needed.
+  if (rows[0].deleted_at) {
+    res.status(401).json({ error: 'Account has been deleted' });
+    return null;
+  }
+  // Stateless JWT revocation: a JWT issued before the user's
+  // password_changed_at stamp is invalid. Lets reset-password.js
+  // force-logout every existing session for that user without a
+  // server-side session table. session.iat is in SECONDS since epoch
+  // (jsonwebtoken default); password_changed_at is a timestamp.
+  const pcAt = rows[0].password_changed_at;
+  if (pcAt && session.iat && (session.iat * 1000) < new Date(pcAt).getTime()) {
+    res.status(401).json({ error: 'Session expired — please sign in again' });
     return null;
   }
   return rows[0];

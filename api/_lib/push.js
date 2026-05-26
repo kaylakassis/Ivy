@@ -90,17 +90,66 @@ export async function clientUserId(clientId) {
   return rows[0]?.user_id || null;
 }
 
-// Convenience: notify a workspace owner. Resolves owner → user → push.
+// In-app notification feed. The bell icon + dropdown read from this
+// table. We INSERT before the push fanout (even if the user has no
+// push subscription, the bell still surfaces the event) so push is
+// purely additive — disabling push doesn't lose alerts.
+//
+// tag coalesces: 5 messages from the same client should land as ONE
+// feed row that updates the title/body to the latest, not 5 rows.
+// We use the same tag the push payload carries so the surfaces stay
+// in sync. UPDATE-or-INSERT pattern keyed on (user_id, tag).
+async function recordNotificationRow({ userId, workspaceId, type, payload }) {
+  if (!userId || !payload?.title) return;
+  try {
+    const title = String(payload.title).slice(0, 200);
+    const body  = payload.body ? String(payload.body).slice(0, 500) : null;
+    const url   = payload.url ? String(payload.url).slice(0, 500) : null;
+    const tag   = payload.tag ? String(payload.tag).slice(0, 200) : null;
+    if (tag) {
+      // Same tag from same user → update in place + bump created_at +
+      // reopen (clear read_at) so the bell badge re-lights. The
+      // UPDATE...RETURNING pattern is followed by INSERT only on miss.
+      const upd = await sql`
+        UPDATE notifications SET
+          title = ${title}, body = ${body}, url = ${url}, type = ${type || null},
+          workspace_id = COALESCE(${workspaceId || null}, workspace_id),
+          read_at = NULL,
+          created_at = NOW()
+        WHERE user_id = ${userId} AND tag = ${tag}
+        RETURNING id
+      `;
+      if (upd.rowCount > 0) return;
+    }
+    await sql`
+      INSERT INTO notifications (user_id, workspace_id, type, title, body, url, tag)
+      VALUES (${userId}, ${workspaceId || null}, ${type || null}, ${title}, ${body}, ${url}, ${tag})
+    `;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[notifications] feed insert failed:', err.message);
+  }
+}
+
+// Convenience: notify a workspace owner. Resolves owner → user → push,
+// AND inserts a feed row so the bell sees the event even when push is
+// unsubscribed / muted / on a different device.
 export async function notifyOwner({ workspaceId, payload, type }) {
   const userId = await ownerUserIdForWorkspace(workspaceId);
   if (!userId) return { ok: false, reason: 'no owner', sent: 0 };
+  await recordNotificationRow({ userId, workspaceId, type, payload });
   return sendPushToUser({ userId, payload, type });
 }
 
 // Convenience: notify the user behind a clients row (if claimed).
+// Same feed insert as notifyOwner.
 export async function notifyClient({ clientId, payload, type }) {
   const userId = await clientUserId(clientId);
   if (!userId) return { ok: false, reason: 'unclaimed', sent: 0 };
+  // workspace_id intentionally null on the client side — the
+  // notification is about a business they engage with, not their own
+  // workspace. The URL points into /me/* which is workspace-agnostic.
+  await recordNotificationRow({ userId, workspaceId: null, type, payload });
   return sendPushToUser({ userId, payload, type });
 }
 

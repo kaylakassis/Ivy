@@ -12,6 +12,40 @@
 // only pass workspaceId + recipient details, no token plumbing.
 import { sendSms, isTwilioConfigured } from './twilio.js';
 import { tryConsumeQuota, DEFAULT_SMS_CAP_PER_DAY } from './usageCounters.js';
+import { sql } from './db.js';
+
+// TCPA + carrier best practice: avoid SMS outside 8am-9pm local time.
+// Booking reminders are transactional (TCPA exempt) and should fire on
+// schedule regardless — they pass respectQuietHours: false. Workflow
+// SMS actions (marketing/nurture) pass true, gating them to daytime
+// in the workspace's IANA timezone. If we have no timezone on file,
+// fall back to America/New_York (most US workspaces today).
+async function isInQuietHours(workspaceId) {
+  if (!workspaceId) return false;
+  let tz = 'America/New_York';
+  try {
+    const r = await sql`
+      SELECT timezone FROM calendar_settings
+       WHERE workspace_id = ${workspaceId} LIMIT 1
+    `;
+    if (r.rows[0]?.timezone) tz = r.rows[0].timezone;
+  } catch {
+    // calendar_settings missing on a brand-new workspace — accept the
+    // default and continue. SMS sending is rare on day-zero so any
+    // misalignment is short-lived.
+  }
+  try {
+    const fmt = new Intl.DateTimeFormat('en-US', {
+      hour: 'numeric', hour12: false, timeZone: tz,
+    });
+    const hour = Number(fmt.format(new Date()));
+    if (!Number.isFinite(hour)) return false;
+    // 8:00 - 20:59 local is OK; 21:00 - 07:59 is quiet.
+    return hour < 8 || hour >= 21;
+  } catch {
+    return false;
+  }
+}
 
 // Normalize whatever the user typed to E.164. Strip non-digits, then:
 //   • starts with '+' → assume already E.164, keep digits + plus
@@ -52,13 +86,21 @@ export function withOptOutSuffix(body) {
 // cap is skipped. Every NEW caller should pass it so an abusive
 // workspace cannot burn through THRYVE-paid Twilio credits in a
 // single afternoon.
-export async function sendClientSms({ phone, consentAt, body, workspaceId }) {
+export async function sendClientSms({ phone, consentAt, body, workspaceId, respectQuietHours = false }) {
   if (!isTwilioConfigured()) return { ok: false, reason: 'twilio not configured' };
   if (!phone) return { ok: false, reason: 'no phone' };
   if (!consentAt) return { ok: false, reason: 'no consent' };
 
   const to = normalizePhone(phone);
   if (!to) return { ok: false, reason: 'invalid phone' };
+
+  // Quiet hours: marketing-class SMS (workflow actions, broadcasts)
+  // must not fire outside 8am-9pm local time. Transactional sends
+  // (booking reminders, two-way replies) pass respectQuietHours=false
+  // and bypass — TCPA exempts transactional/emergency.
+  if (respectQuietHours && await isInQuietHours(workspaceId)) {
+    return { ok: false, reason: 'quiet-hours' };
+  }
 
   // Pre-charge the quota counter so two parallel sends can't both
   // pass the check. The counter increments first; if we're over the

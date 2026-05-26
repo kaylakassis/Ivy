@@ -77,10 +77,18 @@ export default async function handler(req, res) {
     let session;
     try {
       const { adapter, name, settings } = await getProvider(inv.workspace_id);
+      // When Stripe Tax is the source of truth it adds tax on top of the
+      // amount we send (tax_behavior=exclusive). The invoice's own tax_rate
+      // is already baked into `totals.total`, so sending that would tax the
+      // buyer twice. Send the tax-exclusive base and let Stripe be the only
+      // tax layer. (No-op when stripe tax is off, or tax_rate is already 0.)
+      const amountCents = (name === 'stripe' && settings?.stripeTaxEnabled)
+        ? Math.round((totals.total - totals.tax) * 100)
+        : totalCents;
       session = await adapter.createCheckoutSession({
         workspaceId: inv.workspace_id,
         settings,
-        amountCents: totalCents,
+        amountCents,
         currency: (settings?.currency || 'USD').toUpperCase(),
         description: `Invoice ${inv.number}`,
         metadata: { invoice_id: inv.id, invoice_number: inv.number, workspace_id: inv.workspace_id },

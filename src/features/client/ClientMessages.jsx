@@ -79,23 +79,38 @@ export default function ClientMessages() {
     setSelectedId(r.thread.id);
   }, []);
 
-  // Deep-link consumer: when ClientHome sends us here with ?clientId=<id>,
-  // open the matching thread (or create one) and strip the param so a
-  // refresh doesn't re-trigger.
+  // Deep-link consumer. Two entry points:
+  //   ?threadId=<id>  — push-notification + transactional-email CTAs
+  //                     ("New message from ${biz}") land here. We just
+  //                     select the thread if it's in our list.
+  //   ?clientId=<id>  — ClientHome's "Message" quick-action sends here
+  //                     when the client may not have an open thread yet;
+  //                     we either pick the existing one or create one.
+  // Both params are stripped after consuming so a refresh doesn't
+  // re-trigger over the user's later pick.
   const consumedRef = useRef(false);
   useEffect(() => {
     if (consumedRef.current) return;
     if (loading) return;
+    const tid = searchParams.get('threadId');
     const cid = searchParams.get('clientId');
-    if (!cid) return;
+    if (!tid && !cid) return;
     consumedRef.current = true;
-    const existing = threads.find((t) => t.clientId === cid);
-    if (existing) {
-      setSelectedId(existing.id);
-    } else if ((ctx?.memberships || []).some((m) => m.clientId === cid)) {
-      startThreadFor(cid).catch(() => {});
+    if (tid) {
+      // Only honor threadIds that belong to one of our threads — a
+      // copy-pasted link to someone else's thread should silently no-op
+      // rather than dead-pane on an unloadable selection.
+      if (threads.some((t) => t.id === tid)) setSelectedId(tid);
+    } else if (cid) {
+      const existing = threads.find((t) => t.clientId === cid);
+      if (existing) {
+        setSelectedId(existing.id);
+      } else if ((ctx?.memberships || []).some((m) => m.clientId === cid)) {
+        startThreadFor(cid).catch(() => {});
+      }
     }
     const next = new URLSearchParams(searchParams);
+    next.delete('threadId');
     next.delete('clientId');
     setSearchParams(next, { replace: true });
   }, [loading, threads, searchParams, ctx, startThreadFor, setSearchParams]);

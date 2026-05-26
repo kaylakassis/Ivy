@@ -68,6 +68,15 @@ async function handler(req, res) {
     results.idempotencyRecords = await prune('idempotency_records',
       `created_at < NOW() - INTERVAL '48 hours'`);
 
+    // Soft-deleted accounts. account/delete.js stamps users.deleted_at
+    // and mangles the email so re-signup with the original address
+    // works immediately; the actual row sticks around for 30 days so
+    // a mistaken delete can be undone (super-admin clears deleted_at
+    // + restores original email from the audit_events meta). After 30d
+    // the DELETE here cascades workspaces → everything underneath.
+    results.softDeletedUsers = await prune('users',
+      `deleted_at IS NOT NULL AND deleted_at < NOW() - INTERVAL '30 days'`);
+
     return ok(res, { ok: true, results, durationMs: Date.now() - t0 });
   } catch (err) {
     return serverError(res, err);

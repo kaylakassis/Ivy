@@ -17,7 +17,8 @@ import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/fina
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
-import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { withIdempotency } from '../_lib/idempotency.js';
+import { methodNotAllowed, serverError } from '../_lib/json.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -33,18 +34,26 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
+    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
 
+    // Same idempotency rationale as invoices/send — double-clicking
+    // Resend used to mint two tokens + send two reminder emails. Now
+    // the Idempotency-Key header collapses retries.
+    const idemp = await withIdempotency(req, user.id, async () => doResend());
+    if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+    return res.status(idemp.status).json(idemp.body);
+
+    async function doResend() {
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
-    if (!id) return badRequest(res, 'id is required');
+    if (!id) return { status: 400, body: { error: 'id is required' } };
 
     const inv = await fetchOwnedInvoice({ id, workspaceId });
-    if (!inv) return badRequest(res, 'Invoice not found');
-    if (inv.status === 'paid')   return badRequest(res, 'Already paid — nothing to resend');
-    if (inv.status === 'voided') return badRequest(res, 'Voided — restore before resending');
-    if (inv.status === 'draft')  return badRequest(res, 'Draft hasn\'t been sent yet — use Send instead');
-    if (!inv.client_email)       return badRequest(res, 'No recipient email on file');
+    if (!inv) return { status: 400, body: { error: 'Invoice not found' } };
+    if (inv.status === 'paid')   return { status: 400, body: { error: 'Already paid — nothing to resend' } };
+    if (inv.status === 'voided') return { status: 400, body: { error: 'Voided — restore before resending' } };
+    if (inv.status === 'draft')  return { status: 400, body: { error: 'Draft hasn\'t been sent yet — use Send instead' } };
+    if (!inv.client_email)       return { status: 400, body: { error: 'No recipient email on file' } };
 
     const rawToken = generateRawToken(32);
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -118,10 +127,14 @@ export default async function handler(req, res) {
       console.error('[invoices/resend] thread message failed:', msgErr.message);
     }
 
-    return ok(res, {
-      invoice: serializeInvoice(updated.rows[0]),
-      ...(emailWarning ? { warning: emailWarning } : {}),
-    });
+    return {
+      status: 200,
+      body: {
+        invoice: serializeInvoice(updated.rows[0]),
+        ...(emailWarning ? { warning: emailWarning } : {}),
+      },
+    };
+    } // end doResend
   } catch (err) {
     return serverError(res, err);
   }

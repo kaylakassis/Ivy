@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     const state = jwt.sign(
       { wid: workspaceId, uid: user.id, kind: 'square_oauth' },
       process.env.JWT_SECRET,
-      { expiresIn: '15m' },
+      { expiresIn: '15m', algorithm: 'HS256' },
     );
     const redirectUri = squareRedirectUri();
     const url = buildAuthorizeUrl({ state, redirectUri });

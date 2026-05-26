@@ -21,7 +21,14 @@
   "functions": {
     "api/site/**/*.js": {
       "includeFiles": "dist/**"
-    }
+    },
+    "api/ivy/**/*.js":            { "maxDuration": 60 },
+    "api/cron/**/*.js":           { "maxDuration": 60 },
+    "api/admin/email-blast.js":   { "maxDuration": 60 },
+    "api/sign/[token].js":        { "maxDuration": 45 },
+    "api/documents/send.js":      { "maxDuration": 30 },
+    "api/campaigns/[id]/send.js": { "maxDuration": 60 },
+    "api/auth/signup.js":         { "maxDuration": 30 }
   },
   "rewrites": [
     { "source": "/marketing-sitemap.xml",    "destination": "/api/marketing-sitemap.xml" },

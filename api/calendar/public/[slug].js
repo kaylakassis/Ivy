@@ -19,8 +19,7 @@ import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
 import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
-import { createCheckoutSession } from '../../_lib/stripe.js';
-import { loadStripeCreds } from '../../_lib/stripeCreds.js';
+import { getProvider } from '../../_lib/payments/index.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { sendClientInvite } from '../../_lib/clientNotify.js';
 import {
@@ -490,8 +489,15 @@ async function createBooking(req, res) {
 
     // Atomically debit the gift card after the booking row exists. If
     // the redemption fails (race against another concurrent redemption),
-    // roll back the gift_card_credit_cents on the booking — the booking
-    // itself stays so the slot isn't lost.
+    // we MUST delete the booking row — leaving it half-committed creates
+    // two bad outcomes:
+    //   (a) deposit_required was already reduced by giftCardCreditCents
+    //       at line ~ above, so the customer would pay a lower deposit
+    //       for a booking they didn't actually fund with the card;
+    //   (b) the slot stays held against a client who hasn't really
+    //       paid, blocking other prospects from booking it.
+    // Better: tear down the booking + release the slot + tell the
+    // customer to try a different code.
     if (giftCardRow && giftCardCreditCents > 0) {
       try {
         await redeemAtomic({
@@ -503,56 +509,59 @@ async function createBooking(req, res) {
           clientId,
         });
       } catch (err) {
-        await sql`UPDATE bookings SET gift_card_credit_cents = 0 WHERE id = ${newBookingRow.id}`;
+        // Roll back the booking entirely. Best-effort — if the DELETE
+        // also fails the row will be picked up by /api/cron/db-prune
+        // eventually, but the slot stays held until then.
+        await sql`DELETE FROM bookings WHERE id = ${newBookingRow.id}`.catch(() => {});
         return badRequest(res, 'Gift card was just used by another transaction — please try a different code.');
       }
     }
     const b = newBookingRow;
 
-    // If a deposit is required AND the workspace has Stripe connected,
-    // mint a Checkout session for the deposit and return its URL so
-    // the public booker can redirect the client to pay. Failures here
-    // don't block the booking — the slot is held; owner can collect
-    // the deposit manually later.
+    // If a deposit is required AND the workspace has its chosen payment
+    // provider connected (Stripe / Square / PayPal), mint a checkout
+    // session for the deposit and return its URL so the public booker
+    // can redirect the client to pay. Failures here don't block the
+    // booking — the slot is held; owner can collect manually later.
+    //
+    // Was hardcoded to Stripe before, which silently no-op'd deposit
+    // collection for Square/PayPal workspaces — clients were "confirmed"
+    // without ever being asked to pay. Now routes through the provider
+    // registry so all three work. The webhook handlers match the
+    // returned sessionId back to the booking via bookings.deposit_
+    // payment_intent (post-payment the webhook overwrites with the
+    // real PI / payment id).
     let depositCheckoutUrl = null;
     if (depositRequired > 0) {
       try {
-        // loadStripeCreds throws on no_stripe_connection; we swallow
-        // (deposit becomes manual) so the booking still completes.
-        let creds = null;
-        try { creds = await loadStripeCreds(workspaceId); }
-        catch (credsErr) {
-          if (credsErr.code !== 'no_stripe_connection') throw credsErr;
-        }
-        if (creds) {
-          const base = appUrl();
-          const session = await createCheckoutSession({
-            secretKey:     creds.secretKey,
-            stripeAccount: creds.stripeAccount,
-            invoice: {
-              id: `bookdep_${b.id}`,
-              number: `Deposit · ${b.id.slice(0, 8)}`,
-              workspace_id: workspaceId,
-            },
-            currency:   creds.currency,
-            totalCents: Math.round(depositRequired * 100),
-            successUrl: `${base}/book/${encodeURIComponent(slug)}?deposit=paid`,
-            cancelUrl:  `${base}/book/${encodeURIComponent(slug)}?deposit=cancelled`,
-            customerEmail: clientEmail,
-          });
-          depositCheckoutUrl = session.url;
-          // Persist the session_id so the webhook can match it back to
-          // the booking. Reuse the bookings.deposit_payment_intent slot
-          // post-payment; for now stash the session id there as the
-          // forward pointer (webhook overwrites with the PI).
-          await sql`
-            UPDATE bookings SET deposit_payment_intent = ${session.id}
-            WHERE id = ${b.id}
-          `;
-        }
+        const { adapter, name, settings } = await getProvider(workspaceId);
+        // adapter.createCheckoutSession throws if the provider isn't
+        // connected — swallow so the booking still completes. Owner can
+        // collect the deposit manually after the fact.
+        const base = appUrl();
+        const depositCents = Math.round(depositRequired * 100);
+        const session = await adapter.createCheckoutSession({
+          workspaceId,
+          settings,
+          amountCents: depositCents,
+          currency: (settings?.currency || 'usd').toUpperCase(),
+          description: `Deposit · ${b.id.slice(0, 8)}`,
+          // invoice_id sentinel `bookdep_<bookingId>` is recognized by
+          // the webhook apply paths (stripe + square + paypal) to flip
+          // bookings.deposit_paid instead of marking an invoice paid.
+          metadata: { invoice_id: `bookdep_${b.id}`, booking_id: b.id, workspace_id: workspaceId },
+          successUrl: `${base}/book/${encodeURIComponent(slug)}?deposit=paid`,
+          cancelUrl:  `${base}/book/${encodeURIComponent(slug)}?deposit=cancelled`,
+          customerEmail: clientEmail,
+        });
+        depositCheckoutUrl = session.url;
+        await sql`
+          UPDATE bookings SET deposit_payment_intent = ${session.sessionId}
+          WHERE id = ${b.id}
+        `;
       } catch (err) {
         // eslint-disable-next-line no-console
-        console.warn('[deposit] checkout session failed:', err.message);
+        console.warn(`[deposit] checkout session failed (provider connected?):`, err.message);
       }
     }
     // Side effects (thread + emails). Don't await — the public booker

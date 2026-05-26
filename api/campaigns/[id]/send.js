@@ -38,9 +38,14 @@ export default async function handler(req, res) {
     if (campaign.status === 'sent') return badRequest(res, 'This campaign was already sent');
     if (!campaign.subject?.trim()) return badRequest(res, 'Add a subject before sending');
 
-    // Mark sending (best-effort guard against a double-click double-send).
-    await sql`UPDATE email_campaigns SET status = 'sending', updated_at = NOW()
+    // Atomically claim the send: only the request that flips draft→sending
+    // proceeds. A racing double-click matches 0 rows here and bails, so the
+    // audience is never emailed twice.
+    const claim = await sql`UPDATE email_campaigns SET status = 'sending', updated_at = NOW()
               WHERE id = ${id} AND workspace_id = ${workspaceId} AND status = 'draft'`;
+    if (claim.rowCount === 0) {
+      return badRequest(res, 'This campaign is already sending or was already sent');
+    }
 
     let result;
     try {

@@ -5,6 +5,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function SendDocumentModal({ documentName, onSend, onClose }) {
   const [clients, setClients] = useState([]);
@@ -55,8 +56,9 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
     }
   };
 
+  useEscapeKey(onClose);
   return (
-    <div onClick={onClose} style={{
+    <div onClick={onClose} role="dialog" aria-modal="true" aria-labelledby="send-document-title" style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>

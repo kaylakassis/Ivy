@@ -441,12 +441,18 @@ export default async function handler(req, res) {
     }
 
     const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
+    // Record what the buyer was actually charged. With Stripe Tax off this
+    // equals totals.total to the cent; with Stripe Tax on it includes the
+    // Stripe-computed tax, matching the self-heal (markInvoicePaid) path.
+    const paidAmount = Number.isFinite(session.amount_total)
+      ? session.amount_total / 100
+      : totals.total;
     const newActivity = [
       ...(inv.activity || []),
       {
         ts: new Date().toISOString(),
         kind: 'paid',
-        text: `Paid by card · ${fmtMoney(totals.total)}`,
+        text: `Paid by card · ${fmtMoney(paidAmount)}`,
       },
     ];
 
@@ -456,24 +462,34 @@ export default async function handler(req, res) {
       ? session.payment_intent
       : session.payment_intent?.id || null;
 
-    await sql`
+    const upd = await sql`
       UPDATE invoices SET
         status                 = 'paid',
         paid_at                = NOW(),
-        paid_amount            = ${totals.total},
+        paid_amount            = ${paidAmount},
         paid_method            = 'card',
         view_token_hash        = NULL,
         stripe_payment_intent  = ${paymentIntent},
         activity               = ${JSON.stringify(newActivity)}::jsonb,
         updated_at             = NOW()
       WHERE id = ${inv.id} AND workspace_id = ${workspaceId} AND status <> 'paid'
+      RETURNING id
     `;
+    // Lost a race with a concurrent webhook delivery (Stripe can fan a
+    // single payment into checkout.session.completed + payment_intent.
+    // succeeded for the same invoice, and each carries a different
+    // event.id so markProcessed dedup doesn't catch them). Without
+    // this guard we'd fire the owner push + client receipt email twice.
+    // Mirrors the platform-webhook handler's pattern at lines 277-279.
+    if (upd.rows.length === 0) {
+      return ok(res, { received: true, ignored: 'already paid (race)' });
+    }
 
     // Proactive Ivy hand-off: tap the push to land in Ivy with a
     // ready-to-go thank-you prompt. The /ivy?prompt= deep link is
     // consumed by IvyPro on mount — see the useEffect there.
     const clientLabel = inv.client_name || 'A client';
-    const totalLabel  = fmtMoney(totals.total);
+    const totalLabel  = fmtMoney(paidAmount);
     const ivyPrompt   = `Draft a short, warm thank-you message for ${clientLabel} who just paid invoice ${inv.number} (${totalLabel}). Then send it as a chat message to them.`;
     notifyOwnerSafe({
       workspaceId,
@@ -486,13 +502,13 @@ export default async function handler(req, res) {
       },
     });
 
-    // Client receipt. The platform webhook + manual mark-paid both send
-    // this; this per-workspace path used to omit it, so card payers on the
-    // legacy / Standard-OAuth flow got charged with no confirmation email.
-    // Best-effort — guarded above by the `status === 'paid'` early-return
-    // so a webhook retry can't double-send. Fire-and-forget.
+    // Client receipt. Use paidAmount (what the buyer was actually
+    // charged, including Stripe-Tax add-on) — not totals.total (which
+    // is the invoice subtotal+tax_rate). For Stripe-Tax-enabled
+    // workspaces the two differ. Best-effort — the race guard above
+    // means this only fires when our UPDATE actually flipped status.
     notifyInvoicePaid({
-      workspaceId, invoiceId: inv.id, totalAmount: totals.total, method: 'card',
+      workspaceId, invoiceId: inv.id, totalAmount: paidAmount, method: 'card',
     });
 
     return ok(res, { received: true, marked: 'paid' });

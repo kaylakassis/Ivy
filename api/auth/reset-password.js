@@ -27,7 +27,20 @@ export default async function handler(req, res) {
     if (!valid) return unauthorized(res, 'This reset link is invalid or has expired');
 
     const password_hash = await hashPassword(password);
-    await sql`UPDATE users SET password_hash = ${password_hash}, updated_at = NOW() WHERE id = ${valid.userId}`;
+    // Stamp password_changed_at so requireUser invalidates every JWT
+    // issued before this moment — defends against an attacker who
+    // already stole a session cookie (the password reset itself was
+    // a proof-of-email-control, not a proof of session uniqueness).
+    // Brief 1-second offset to NOW() so the freshly-signed cookie
+    // below (which embeds iat at the same NOW()) still validates;
+    // older sessions are decisively past.
+    await sql`
+      UPDATE users SET
+        password_hash = ${password_hash},
+        password_changed_at = NOW() - INTERVAL '1 second',
+        updated_at = NOW()
+      WHERE id = ${valid.userId}
+    `;
 
     // Burn this token, plus any other live reset tokens for the user.
     await consumeToken(valid.tokenId);

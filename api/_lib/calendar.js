@@ -227,6 +227,54 @@ export function withinAvailability(availability, weekday, start, end) {
   return windows.some((w) => start >= w.start && end <= w.end);
 }
 
+// True when a recurring booking master has an occurrence landing exactly
+// on `dateISO`. Recurring bookings store only the master row (first
+// occurrence) + a rule; future occurrences are virtual, so the plain
+// `date = dateISO` queries below would miss them and double-book the
+// owner. This mirrors the stepping the calendar UI uses
+// (src/features/calendar/utils.js expandBookings) so server + client agree.
+function recurringOccursOn(master, dateISO) {
+  const rule = master.recurrence_rule;
+  if (!rule) return master.date === dateISO;
+  if (dateISO < master.date) return false;
+  if (master.recurrence_until && dateISO > master.recurrence_until) return false;
+  const cancelled = (master.cancelled_occurrences || []).map((d) => String(d).slice(0, 10));
+  if (cancelled.includes(dateISO)) return false;
+
+  const [y, mo, d] = master.date.split('-').map(Number);
+  let cursor = new Date(Date.UTC(y, mo - 1, d));
+  const targetMs = Date.parse(dateISO + 'T00:00:00Z');
+  let safety = 0;
+  while (cursor.getTime() <= targetMs && safety < 1000) {
+    safety += 1;
+    if (cursor.toISOString().slice(0, 10) === dateISO) return true;
+    if (rule === 'weekly')        cursor = new Date(cursor.getTime() + 7 * 86400000);
+    else if (rule === 'biweekly') cursor = new Date(cursor.getTime() + 14 * 86400000);
+    else if (rule === 'monthly')  { const n = new Date(cursor); n.setUTCMonth(n.getUTCMonth() + 1); cursor = n; }
+    else return false;
+  }
+  return false;
+}
+
+// Pull recurring masters whose series window spans `dateISO` and whose
+// time overlaps the (buffered) proposed window. Caller filters to those
+// that actually have an occurrence on dateISO via recurringOccursOn.
+async function overlappingRecurringMasters({ workspaceId, dateISO, startBuf, endBuf }) {
+  const { rows } = await sql`
+    SELECT id, service_id, start_min, end_min, created_at,
+           date::text AS date, recurrence_until::text AS recurrence_until,
+           recurrence_rule, cancelled_occurrences
+    FROM bookings
+    WHERE workspace_id = ${workspaceId}
+      AND cancelled_at IS NULL
+      AND recurrence_rule IS NOT NULL
+      AND date <= ${dateISO}
+      AND (recurrence_until IS NULL OR recurrence_until >= ${dateISO})
+      AND start_min < ${endBuf} AND end_min > ${startBuf}
+  `;
+  return rows;
+}
+
 // Returns true if the slot collides with any block or active booking on the given date.
 // Slot conflict check. Permits group bookings — if serviceId + capacity
 // are passed and capacity > 1, multiple bookings of the SAME service in
@@ -303,6 +351,19 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
     if (!isSameService || !isExactSlot) return true;
     sameSlotSameService++;
   }
+
+  // Virtual occurrences of recurring bookings that land on this date.
+  const recurringMasters = await overlappingRecurringMasters({ workspaceId, dateISO, startBuf, endBuf });
+  for (const m of recurringMasters) {
+    if (excludeBookingId && m.id === excludeBookingId) continue;
+    if (m.date === dateISO) continue; // first occurrence already counted by the date= query above
+    if (!recurringOccursOn(m, dateISO)) continue;
+    const isExactSlot = m.start_min === start && m.end_min === end;
+    const isSameService = serviceId && m.service_id === serviceId;
+    if (!isSameService || !isExactSlot) return true;
+    sameSlotSameService++;
+  }
+
   return sameSlotSameService >= Math.max(1, Number(capacity) || 1);
 }
 
@@ -344,6 +405,25 @@ export async function losesBookingRace({
     if (!isSameService || !isExactSlot) return true;
     sameSlotSameService++;
   }
+
+  // Recurring series occurrences landing on this date that rank before us.
+  // Their masters pre-exist (older created_at), so a new single booking on
+  // a future occurrence date correctly loses to the established series.
+  const recurringMasters = await overlappingRecurringMasters({ workspaceId, dateISO, startBuf, endBuf });
+  const myTs = new Date(createdAt).getTime();
+  for (const m of recurringMasters) {
+    if (m.id === bookingId) continue;
+    if (m.date === dateISO) continue; // first occurrence already counted by the date= query above
+    const mTs = new Date(m.created_at).getTime();
+    const ranksEarlier = mTs < myTs || (mTs === myTs && m.id < bookingId);
+    if (!ranksEarlier) continue;
+    if (!recurringOccursOn(m, dateISO)) continue;
+    const isExactSlot = m.start_min === start && m.end_min === end;
+    const isSameService = serviceId && m.service_id === serviceId;
+    if (!isSameService || !isExactSlot) return true;
+    sameSlotSameService++;
+  }
+
   return sameSlotSameService >= Math.max(1, Number(capacity) || 1);
 }
 

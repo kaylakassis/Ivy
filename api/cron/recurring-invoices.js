@@ -72,6 +72,26 @@ async function handler(req, res) {
           // eslint-disable-next-line no-console
           console.error('[cron/recurring] send failed:', sendErr.message);
           errors++;
+          // Revert the invoice from 'sent' back to 'draft' so the owner
+          // sees it as undelivered (autoSendInvoice flips status + mints
+          // a token before sending). Without this, a Resend outage
+          // leaves a forever-pending "sent" invoice that the owner thinks
+          // landed in the client's inbox. Best-effort — if the rollback
+          // itself fails we've still logged the original send error.
+          try {
+            await sql`
+              UPDATE invoices SET
+                status = 'draft',
+                view_token_hash = NULL,
+                sent_at = NULL,
+                updated_at = NOW()
+              WHERE id = ${invoice.id} AND workspace_id = ${invoice.workspace_id}
+                AND status = 'sent'
+            `;
+          } catch (rollbackErr) {
+            // eslint-disable-next-line no-console
+            console.error('[cron/recurring] rollback also failed:', rollbackErr.message);
+          }
         }
       } catch (err) {
         // eslint-disable-next-line no-console

@@ -508,11 +508,62 @@ function Stat({ label, value }) {
 
 // Subscription panel — shows current state for owners and links to the
 // Stripe billing portal when there's a customer record. For client-only
+// Pre-checkout auto-renewal disclosure. California SB-313 and the FTC
+// ROSCA rule both require recurring-charge consumers to see, BEFORE
+// authorizing the first charge, (1) renewal cadence, (2) renewal
+// price source, (3) how to cancel. Stripe Checkout shows the price on
+// the next page; we own the framing here so the consent is clear.
+// Owners click Subscribe → this modal → Continue → Stripe Checkout.
+function AutoRenewalDisclosureModal({ onCancel, onConfirm, busy }) {
+  return (
+    <div role="dialog" aria-modal="true" aria-labelledby="auto-renew-title"
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        background: 'rgba(20, 18, 14, 0.55)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        padding: 20,
+      }}>
+      <div className="card" style={{
+        maxWidth: 460, padding: 28, background: 'var(--surface)',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.18)',
+      }}>
+        <h2 id="auto-renew-title" style={{
+          margin: '0 0 8px', fontFamily: 'var(--font-display)',
+          fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em',
+        }}>Confirm your subscription</h2>
+        <p style={{ margin: '0 0 16px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          Before you continue to Stripe, here's the plain-English version:
+        </p>
+        <ul style={{ margin: '0 0 18px 18px', padding: 0, fontSize: 13.5, color: 'var(--fg)', lineHeight: 1.65 }}>
+          <li><strong>Auto-renews.</strong> Your card is charged on the same day each billing period (monthly or annual — Stripe's next page shows which).</li>
+          <li><strong>Price.</strong> The amount you'll be charged is shown on Stripe's checkout page. It doesn't change without notice.</li>
+          <li><strong>Cancel anytime.</strong> From <em>Account → Manage subscription</em> here. You keep access through the end of the current billing period; no partial refunds.</li>
+          <li><strong>Receipts</strong> are emailed to you after every successful charge.</li>
+        </ul>
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button className="btn btn-ghost" onClick={onCancel} disabled={busy}>
+            Cancel
+          </button>
+          <button className="btn btn-primary" onClick={onConfirm} disabled={busy} autoFocus>
+            {busy ? 'Redirecting…' : 'Agree and continue to payment'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // users it renders nothing (no business workspace to subscribe).
 function SubscriptionCard() {
   const { ctx, refresh } = useUserContext();
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
+  // CA SB-313 + FTC ROSCA: auto-renewal terms must be disclosed
+  // clearly + conspicuously BEFORE the customer authorizes the
+  // charge. Stripe Checkout shows the price; we own the renewal-
+  // cadence + cancellation-method explanation. confirmingSubscribe
+  // holds the click while the disclosure modal is up.
+  const [confirmingSubscribe, setConfirmingSubscribe] = useState(false);
 
   if (!ctx?.isOwner) return null;
   const sub = ctx.subscription || { status: 'inactive', isActive: false };
@@ -529,7 +580,15 @@ function SubscriptionCard() {
     }
   };
 
-  const subscribeNow = async () => {
+  // Triggered when the owner clicks Subscribe/Resubscribe — opens the
+  // disclosure modal instead of jumping straight to Stripe. The actual
+  // redirect happens in confirmSubscribe below after they accept.
+  const subscribeNow = () => {
+    setErr(null);
+    setConfirmingSubscribe(true);
+  };
+
+  const confirmSubscribe = async () => {
     setBusy(true); setErr(null);
     try {
       const r = await api.post('/billing/checkout', {});
@@ -538,6 +597,7 @@ function SubscriptionCard() {
     } catch (e) {
       setErr(e.message || 'Could not open checkout');
       setBusy(false);
+      setConfirmingSubscribe(false);
     }
   };
 
@@ -618,6 +678,13 @@ function SubscriptionCard() {
           <button className="btn btn-primary" onClick={subscribeNow} disabled={busy}>
             {busy ? 'Redirecting…' : (sub.status === 'cancelled' ? 'Resubscribe' : 'Subscribe')} <Icons.Arrow size={12} sw={2}/>
           </button>
+        )}
+        {confirmingSubscribe && (
+          <AutoRenewalDisclosureModal
+            onCancel={() => setConfirmingSubscribe(false)}
+            onConfirm={confirmSubscribe}
+            busy={busy}
+          />
         )}
         {!sub.isActive && !sub.trialEndsAt && (
           <button className="btn btn-ghost" onClick={startTrial} disabled={busy}

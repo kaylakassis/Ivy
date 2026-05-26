@@ -127,7 +127,7 @@ export default async function handler(req, res) {
         payload: {
           title: 'New message',
           body: preview,
-          url: `/me/messages/${id}`,
+          url: `/me/messages?threadId=${id}`,
           tag: `thread-${id}`,
         },
       });
@@ -143,7 +143,7 @@ export default async function handler(req, res) {
           const branding = await fetchBranding(workspaceId);
           const ownerName = branding.businessName || 'your business';
           const portalUrl = thread.client_user_id
-            ? `${appUrl()}/me/messages/${id}`
+            ? `${appUrl()}/me/messages?threadId=${id}`
             : `${appUrl()}/signup?email=${encodeURIComponent(thread.client_email)}`;
           await sendEmailToClient({
             clientId: thread.client_id, type: 'messages',

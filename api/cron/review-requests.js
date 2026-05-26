@@ -119,7 +119,7 @@ async function handler(req, res) {
               </p>`,
             ctaText: 'Leave a review',
             ctaUrl: link,
-            footer: `One-time link — once you submit, this email's link won't work again. Only ${escapeHtml(business)} sees the review until they choose to publish it.`,
+            footer: `One-time link — once you submit, this email's link won't work again. Your review is published to ${escapeHtml(business)}'s public profile.`,
             branding,
           }),
         });

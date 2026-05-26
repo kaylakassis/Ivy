@@ -180,6 +180,22 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
 }
 
 async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress }) {
+  // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
+  // straight at /me. Unclaimed walk-ins or never-signed-up public
+  // bookers go to /signup with the email pre-filled — hitting /me
+  // logged-out bounces to /signin with confusing "no account" friction.
+  let hasPortal = false;
+  if (clientId) {
+    try {
+      const r = await sql`SELECT user_id FROM clients WHERE id = ${clientId} LIMIT 1`;
+      hasPortal = !!r.rows[0]?.user_id;
+    } catch { /* default to signup path */ }
+  }
+  const portalUrl = hasPortal
+    ? `${appUrl()}/me`
+    : `${appUrl()}/signup?mode=client&email=${encodeURIComponent(to)}`;
+  const portalCtaText = hasPortal ? 'Open my portal' : 'Claim your portal account';
+
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const opener = source === 'public'
     ? `Your booking with <strong>${escapeHtml(businessName)}</strong> is confirmed.`
@@ -201,10 +217,11 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
         <a href="${escapeHtml(videoRoomUrl)}" style="color:#2E3168;word-break:break-all;">${escapeHtml(videoRoomUrl)}</a>
         <br/><span style="font-size:12px;color:#85827B;">Save this — open it at the start of your session.</span>
       </p>` : ''}
-      <p>Need to reschedule or message ${escapeHtml(businessName)}? You can view this booking
-      and chat with them through your THRYVE portal.</p>`,
-    ctaText: 'Open my portal',
-    ctaUrl: `${appUrl()}/me`,
+      <p>Need to reschedule or message ${escapeHtml(businessName)}? ${hasPortal
+        ? 'You can view this booking and chat with them through your THRYVE portal.'
+        : 'Create a free THRYVE portal account to see this booking, future visits, invoices, and messages from them in one place.'}</p>`,
+    ctaText: portalCtaText,
+    ctaUrl: portalUrl,
     footer: `If you didn't make this booking, please reach out to ${escapeHtml(businessName)} directly.`,
     branding,
   });

@@ -27,7 +27,17 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     const c = rows[0];
     if (!c) return;
     if (!c.email) return;            // can't invite without an inbox
-    if (c.invite_sent_at) return;    // already invited; idempotent
+    if (c.invite_sent_at) return;    // already invited; idempotent (fast path)
+
+    // Atomically claim the invite BEFORE sending so two near-simultaneous
+    // first-adds for the same client can't both email. Only the request
+    // that stamps invite_sent_at (from NULL) proceeds. Released on failure.
+    const claim = await sql`
+      UPDATE clients SET invite_sent_at = NOW()
+      WHERE id = ${clientId} AND workspace_id = ${workspaceId} AND invite_sent_at IS NULL
+      RETURNING id
+    `;
+    if (claim.rowCount === 0) return; // a concurrent add already claimed it
 
     // Deliberately broad: every workspace-add gets one invite. The
     // signup path auto-claims existing clients-rows with matching
@@ -43,6 +53,7 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     const bookingHref = c.slug ? `${base}/book/${encodeURIComponent(c.slug)}` : null;
     const branding = await fetchBranding(workspaceId);
 
+    try {
     await sendEmailToClient({
       clientId,
       // Invitations are tied to the bookings vertical — opting out of
@@ -77,11 +88,14 @@ export async function sendClientInvite({ workspaceId, clientId }) {
         footer: `Already have a THRYVE account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> — we'll link you to ${escapeHtml(bizName)} automatically.`,
       }),
     });
-
-    await sql`
-      UPDATE clients SET invite_sent_at = NOW()
-      WHERE id = ${clientId} AND workspace_id = ${workspaceId}
-    `;
+    } catch (sendErr) {
+      // Send failed — release the claim so a later add/retry can re-invite.
+      await sql`
+        UPDATE clients SET invite_sent_at = NULL
+        WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+      `.catch(() => {});
+      throw sendErr;
+    }
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[client-invite] failed for client', clientId, err.message);

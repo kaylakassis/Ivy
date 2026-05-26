@@ -7,6 +7,9 @@
 // the synchronous capture path in paypal-return.js calling applyPayment
 // directly — can't double-apply.
 import { sql } from './db.js';
+import { computeTotals } from './finance.js';
+import { notifyOwnerSafe } from './push.js';
+import { notifyInvoicePaid } from './invoiceNotify.js';
 
 // Resolve the workspace a PayPal capture/refund belongs to.
 //   • capture.completed carries the payee merchant id → match finance_settings.
@@ -67,6 +70,32 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
   }
 
   const paidAmountDollars = Math.round(Number(parsed.amountCents || 0)) / 100;
+  // Guard against a partial/under-capture (or currency mismatch) silently
+  // flipping the invoice to fully paid. Only settle when the captured
+  // amount covers the invoice total (1¢ tolerance for rounding). PayPal
+  // checkout amount is the invoice total — no Stripe-Tax add-on to expect.
+  const expectedTotal = computeTotals(inv.items, inv.tax_rate, inv.discount).total;
+  const underpaid = paidAmountDollars < expectedTotal - 0.01;
+
+  if (underpaid) {
+    const partialActivity = [
+      ...(inv.activity || []),
+      { ts: new Date().toISOString(), kind: 'partial-payment',
+        text: `Partial PayPal payment · $${paidAmountDollars.toFixed(2)} of $${expectedTotal.toFixed(2)}` },
+    ];
+    // Record the amount + capture id but leave the invoice open (not paid).
+    await sql`
+      UPDATE invoices SET
+        paid_amount           = ${paidAmountDollars},
+        paid_method           = 'paypal',
+        stripe_payment_intent = ${parsed.paymentId || null},
+        activity              = ${JSON.stringify(partialActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+    `;
+    return 'partial-payment';
+  }
+
   const newActivity = [
     ...(inv.activity || []),
     { ts: new Date().toISOString(), kind: 'paid', text: `Paid by PayPal · $${paidAmountDollars.toFixed(2)}` },
@@ -83,9 +112,32 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
       activity              = ${JSON.stringify(newActivity)}::jsonb,
       updated_at            = NOW()
     WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
-    RETURNING id
+    RETURNING id, number, client_name
   `;
-  return upd.rows.length > 0 ? 'paid' : 'already-paid';
+  if (upd.rows.length === 0) return 'already-paid';
+
+  // Owner push + client receipt — parity with the Stripe path at
+  // /api/webhooks/stripe/[workspaceId].js:482-502. Without these,
+  // workspaces taking payment via PayPal saw the invoice flip to paid
+  // but got no notification and the customer got no receipt email.
+  // Fire-and-forget; the RETURNING-id race guard above means these
+  // only fire when our UPDATE actually flipped the row.
+  const number = upd.rows[0].number;
+  const clientLabel = upd.rows[0].client_name || 'A client';
+  notifyOwnerSafe({
+    workspaceId,
+    type: 'payments',
+    payload: {
+      title: 'Invoice paid',
+      body: `${clientLabel} · ${number} · $${paidAmountDollars.toFixed(2)}`,
+      url: `/finance?invoice=${invoiceId}`,
+      tag: `inv-${invoiceId}`,
+    },
+  });
+  notifyInvoicePaid({
+    workspaceId, invoiceId, totalAmount: paidAmountDollars, method: 'paypal',
+  });
+  return 'paid';
 }
 
 // Apply a refund/reversal from a PayPal webhook (or a dashboard-initiated

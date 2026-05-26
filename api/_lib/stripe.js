@@ -568,12 +568,14 @@ export async function cancelSubscription({ secretKey, stripeAccount, subscriptio
   });
 }
 
-export async function createRefund({ secretKey, stripeAccount, paymentIntent, amountCents, reason }) {
+export async function createRefund({ secretKey, stripeAccount, paymentIntent, amountCents, reason, idempotencyKey }) {
   if (!paymentIntent) throw new Error('paymentIntent is required');
   const body = { payment_intent: paymentIntent };
   if (amountCents != null) body.amount = amountCents;
   if (reason) body.reason = reason;
-  const refund = await stripeFetch('/refunds', { method: 'POST', secretKey, stripeAccount, body });
+  // Idempotency-Key backstops double-click / function-retry double refunds:
+  // Stripe returns the original refund instead of issuing a second one.
+  const refund = await stripeFetch('/refunds', { method: 'POST', secretKey, stripeAccount, body, idempotencyKey });
   return {
     id:     refund.id,
     amount: refund.amount,
