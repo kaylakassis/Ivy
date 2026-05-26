@@ -14,7 +14,8 @@ import { fetchOwnedClient } from '../../_lib/clients.js';
 import { sendEmailToClient, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
 import { appUrl } from '../../_lib/tokens.js';
-import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
+import { withIdempotency } from '../../_lib/idempotency.js';
+import { methodNotAllowed, serverError } from '../../_lib/json.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -28,13 +29,20 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
+    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
     const { id: clientId } = req.query;
 
+    // Idempotent wrap — a double-click on Resend invite used to fire
+    // two invitation emails to the same address.
+    const idemp = await withIdempotency(req, user.id, async () => doResendInvite());
+    if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+    return res.status(idemp.status).json(idemp.body);
+
+    async function doResendInvite() {
     const client = await fetchOwnedClient({ id: clientId, workspaceId });
-    if (!client) return notFound(res, 'Client not found');
-    if (!client.email) return badRequest(res, 'No email on file for this client');
-    if (client.user_id) return badRequest(res, 'Client has already claimed their portal account');
+    if (!client) return { status: 404, body: { error: 'Client not found' } };
+    if (!client.email) return { status: 400, body: { error: 'No email on file for this client' } };
+    if (client.user_id) return { status: 400, body: { error: 'Client has already claimed their portal account' } };
 
     const branding = await fetchBranding(workspaceId);
     const bizName = branding.businessName || 'Your business';
@@ -64,10 +72,14 @@ export default async function handler(req, res) {
 
     await sql`UPDATE clients SET invite_sent_at = NOW() WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
 
-    return ok(res, {
-      sent: result.sent,
-      reason: result.reason || null,
-    });
+    return {
+      status: 200,
+      body: {
+        sent: result.sent,
+        reason: result.reason || null,
+      },
+    };
+    } // end doResendInvite
   } catch (err) {
     return serverError(res, err);
   }

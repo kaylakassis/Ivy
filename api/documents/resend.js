@@ -19,7 +19,8 @@ import { fetchOwnedDoc, serializeDoc } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
-import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { withIdempotency } from '../_lib/idempotency.js';
+import { methodNotAllowed, serverError } from '../_lib/json.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -32,18 +33,26 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
+    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
 
+    // Idempotent wrap — a Resend retry used to mint a fresh token
+    // every time (invalidating the prior link sent moments earlier),
+    // so a double-click would race itself.
+    const idemp = await withIdempotency(req, user.id, async () => doResend());
+    if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+    return res.status(idemp.status).json(idemp.body);
+
+    async function doResend() {
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
-    if (!id) return badRequest(res, 'id is required');
+    if (!id) return { status: 400, body: { error: 'id is required' } };
 
     const doc = await fetchOwnedDoc({ id, workspaceId });
-    if (!doc) return badRequest(res, 'Document not found');
-    if (doc.status === 'completed') return badRequest(res, 'Already signed — nothing to resend');
-    if (doc.status === 'voided')    return badRequest(res, 'Document is voided');
-    if (doc.status === 'draft')     return badRequest(res, "Draft hasn't been sent — use Send instead");
-    if (doc.status === 'declined')  return badRequest(res, 'Document was declined — revise + resend a new copy');
+    if (!doc) return { status: 400, body: { error: 'Document not found' } };
+    if (doc.status === 'completed') return { status: 400, body: { error: 'Already signed — nothing to resend' } };
+    if (doc.status === 'voided')    return { status: 400, body: { error: 'Document is voided' } };
+    if (doc.status === 'draft')     return { status: 400, body: { error: "Draft hasn't been sent — use Send instead" } };
+    if (doc.status === 'declined')  return { status: 400, body: { error: 'Document was declined — revise + resend a new copy' } };
 
     // Find the current awaiting signer. Multi-signer flow records each
     // signer in document_signers ordered by order_index; the one with
@@ -70,8 +79,8 @@ export default async function handler(req, res) {
         order_index: 0,
       };
     }
-    if (!target) return badRequest(res, 'No pending signer to resend to');
-    if (!target.email) return badRequest(res, 'Current signer has no email on file');
+    if (!target) return { status: 400, body: { error: 'No pending signer to resend to' } };
+    if (!target.email) return { status: 400, body: { error: 'Current signer has no email on file' } };
 
     const raw = generateRawToken(32);
     const hash = crypto.createHash('sha256').update(raw).digest('hex');
@@ -125,10 +134,14 @@ export default async function handler(req, res) {
     }
 
     const reloaded = await fetchOwnedDoc({ id, workspaceId });
-    return ok(res, {
-      document: serializeDoc(reloaded),
-      ...(emailWarning ? { warning: emailWarning } : {}),
-    });
+    return {
+      status: 200,
+      body: {
+        document: serializeDoc(reloaded),
+        ...(emailWarning ? { warning: emailWarning } : {}),
+      },
+    };
+    } // end doResend
   } catch (err) {
     return serverError(res, err);
   }

@@ -13,7 +13,8 @@ import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
-import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { withIdempotency } from '../_lib/idempotency.js';
+import { methodNotAllowed, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
 function escapeHtml(s) {
@@ -28,27 +29,35 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
+    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
 
+    // Idempotent wrap — same rationale as invoices/send. A double-click
+    // on the owner's "Send estimate" button used to mint two tokens +
+    // fire two emails; only the second was visible to the recipient.
+    const idemp = await withIdempotency(req, user.id, async () => doSend());
+    if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+    return res.status(idemp.status).json(idemp.body);
+
+    async function doSend() {
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
-    if (!id) return badRequest(res, 'id is required');
+    if (!id) return { status: 400, body: { error: 'id is required' } };
 
     const q = await fetchOwnedQuote({ id, workspaceId });
-    if (!q) return badRequest(res, 'Quote not found');
-    if (q.status === 'accepted') return badRequest(res, 'Already accepted');
-    if (q.status === 'voided')   return badRequest(res, 'Voided — restore first');
+    if (!q) return { status: 400, body: { error: 'Quote not found' } };
+    if (q.status === 'accepted') return { status: 400, body: { error: 'Already accepted' } };
+    if (q.status === 'voided')   return { status: 400, body: { error: 'Voided — restore first' } };
 
     let clientId = body.clientId ? String(body.clientId) : q.client_id;
     let recipientName  = q.client_name;
     let recipientEmail = q.client_email;
     if (clientId) {
       const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
-      if (cl.rows.length === 0) return badRequest(res, 'Unknown client');
+      if (cl.rows.length === 0) return { status: 400, body: { error: 'Unknown client' } };
       recipientName  = cl.rows[0].name;
       recipientEmail = cl.rows[0].email;
     }
-    if (!recipientEmail) return badRequest(res, 'Recipient has no email on file');
+    if (!recipientEmail) return { status: 400, body: { error: 'Recipient has no email on file' } };
 
     const rawToken = generateRawToken(32);
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
@@ -128,7 +137,8 @@ export default async function handler(req, res) {
       console.error('[quotes/send] thread message failed:', msgErr.message);
     }
 
-    return ok(res, { quote: serializeQuote(updated.rows[0]) });
+    return { status: 200, body: { quote: serializeQuote(updated.rows[0]) } };
+    } // end doSend
   } catch (err) {
     return serverError(res, err);
   }

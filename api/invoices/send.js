@@ -15,7 +15,8 @@ import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/fina
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
-import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { withIdempotency } from '../_lib/idempotency.js';
+import { methodNotAllowed, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
 function escapeHtml(s) {
@@ -30,16 +31,27 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
+    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
 
+    // Idempotent wrap. Owners double-clicking Send or hitting a flaky
+    // network used to fire the invoice email twice with different
+    // tokens — only the second worked, but both landed in the
+    // client's inbox + activity log. Now an Idempotency-Key header
+    // (api.js sets one on every mutating POST) collapses retries to
+    // the cached response without re-sending.
+    const idemp = await withIdempotency(req, user.id, async () => doSend());
+    if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
+    return res.status(idemp.status).json(idemp.body);
+
+    async function doSend() {
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
-    if (!id) return badRequest(res, 'id is required');
+    if (!id) return { status: 400, body: { error: 'id is required' } };
 
     const inv = await fetchOwnedInvoice({ id, workspaceId });
-    if (!inv) return badRequest(res, 'Invoice not found');
-    if (inv.status === 'paid')   return badRequest(res, 'Already paid');
-    if (inv.status === 'voided') return badRequest(res, 'Voided — restore first');
+    if (!inv) return { status: 400, body: { error: 'Invoice not found' } };
+    if (inv.status === 'paid')   return { status: 400, body: { error: 'Already paid' } };
+    if (inv.status === 'voided') return { status: 400, body: { error: 'Voided — restore first' } };
 
     // Resolve recipient. Allow override clientId in body, otherwise use stored.
     let clientId = body.clientId ? String(body.clientId) : inv.client_id;
@@ -48,11 +60,11 @@ export default async function handler(req, res) {
 
     if (clientId) {
       const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
-      if (cl.rows.length === 0) return badRequest(res, 'Unknown client');
+      if (cl.rows.length === 0) return { status: 400, body: { error: 'Unknown client' } };
       recipientName  = cl.rows[0].name;
       recipientEmail = cl.rows[0].email;
     }
-    if (!recipientEmail) return badRequest(res, 'Recipient has no email on file');
+    if (!recipientEmail) return { status: 400, body: { error: 'Recipient has no email on file' } };
 
     // Token: stored hashed; raw lives only in the email link.
     const rawToken = generateRawToken(32);
@@ -135,7 +147,8 @@ export default async function handler(req, res) {
       console.error('[invoices/send] thread message failed:', msgErr.message);
     }
 
-    return ok(res, { invoice: serializeInvoice(updated.rows[0]) });
+    return { status: 200, body: { invoice: serializeInvoice(updated.rows[0]) } };
+    } // end doSend
   } catch (err) {
     return serverError(res, err);
   }
