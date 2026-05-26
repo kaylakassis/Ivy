@@ -118,11 +118,20 @@ export async function requireUser(req, res) {
     SELECT id, email, name, created_at, email_verified_at,
            walkthrough_completed_at, user_type,
            terms_accepted_at, terms_version,
-           password_changed_at
+           password_changed_at, deleted_at
     FROM users WHERE id = ${session.sub}
   `;
   if (rows.length === 0) {
     res.status(401).json({ error: 'Unauthorized' });
+    return null;
+  }
+  // Soft-deleted accounts can't sign in. The row hangs around for the
+  // 30-day recovery window (db-prune hard-deletes after) so the data
+  // isn't immediately gone, but the session is dead the moment the
+  // owner clicks Delete. Different status code from password-change
+  // so the frontend can show a more accurate message if needed.
+  if (rows[0].deleted_at) {
+    res.status(401).json({ error: 'Account has been deleted' });
     return null;
   }
   // Stateless JWT revocation: a JWT issued before the user's

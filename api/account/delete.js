@@ -19,6 +19,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { cancelSubscription, platformStripeSecret } from '../_lib/stripe.js';
+import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -72,9 +73,38 @@ export default async function handler(req, res) {
       console.error('[account/delete] subscription cleanup failed:', subErr.message);
     }
 
-    // Delete the user. Cascades to workspaces → all workspace-scoped tables,
-    // and to auth_tokens. Returns the row count for sanity.
-    const r = await sql`DELETE FROM users WHERE id = ${user.id}`;
+    // Audit the deletion BEFORE we mutate the row — the audit_events
+    // row outlives the user (target_user_id is ON DELETE SET NULL),
+    // so the trail of who-deleted-when survives even after the cron
+    // hard-deletes 30 days from now. Meta carries the original email
+    // so a future admin restore can verify identity.
+    recordAudit(req, {
+      actor: user,
+      targetUserId: user.id,
+      action: 'account.soft_delete',
+      meta: { email: userEmail, name: userName },
+    });
+
+    // Soft-delete: stamp deleted_at + mangle the email so the unique
+    // constraint frees the original address for re-signup. The row
+    // stays for the 30-day grace window; db-prune.js hard-deletes
+    // after, at which point the workspace cascades. requireUser
+    // already rejects deleted_at rows so the session is effectively
+    // dead immediately (the cookie clear below is belt-and-suspenders).
+    //
+    // Mangle pattern: 'someone@domain.tld' → 'someone+deleted-<uuid>@domain.tld'
+    // — keeps the address parseable as an email and bounded in length.
+    const mangledEmail = userEmail
+      ? userEmail.replace(/^([^@]+)@(.+)$/, `$1+deleted-${user.id}@$2`)
+      : `deleted-${user.id}@invalid.local`;
+    const r = await sql`
+      UPDATE users SET
+        deleted_at = NOW(),
+        email = ${mangledEmail},
+        updated_at = NOW()
+      WHERE id = ${user.id}
+      RETURNING id
+    `;
 
     clearSessionCookie(res);
 

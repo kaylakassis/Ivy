@@ -31,6 +31,14 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_id);
 -- revoked individually; this stamp is the single source of truth for
 -- "the password is newer than your token, log in again".
 ALTER TABLE users ADD COLUMN IF NOT EXISTS password_changed_at TIMESTAMPTZ;
+
+-- Soft-delete grace window. account/delete sets deleted_at + mangles
+-- the email (appending +deleted-<id>) to free the original address for
+-- re-signup. requireUser rejects rows with deleted_at set so a stolen
+-- session is dead the moment the owner deletes. db-prune.js hard-deletes
+-- after 30 days, at which point CASCADE drops workspaces + everything
+-- under them. Lets us undo an accidental delete within the window.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 -- Partial index for the subscription-dunning cron (api/cron/subscription-
 -- dunning.js). It scans for `subscription_status = 'past_due'` rows every
 -- day; without this index that's a full table scan that gets worse with
