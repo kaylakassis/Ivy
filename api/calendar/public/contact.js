@@ -21,7 +21,6 @@ import { validEmail } from '../../_lib/auth.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
-import { triggerWorkflow } from '../../_lib/workflows.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
@@ -88,22 +87,15 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       clientId = ins.rows[0].id;
-      // Fire lead_created + client_created workflows. Non-blocking
-      // — wrapped in try so a workflow failure can't break the
-      // contact-form flow.
-      try {
-        await triggerWorkflow({
-          workspaceId, triggerType: 'lead_created',
-          client: ins.rows[0], context: { source: 'public-contact' },
-        });
-        await triggerWorkflow({
-          workspaceId, triggerType: 'client_created',
-          client: ins.rows[0], context: { source: 'public-contact' },
-        });
-      } catch (wfErr) {
-        // eslint-disable-next-line no-console
-        console.error('[public-contact] workflow trigger failed:', wfErr.message);
-      }
+      // Deliberately DO NOT fire lead_created / client_created workflows
+      // from the public-contact path. This is a prospect asking a
+      // question, not a confirmed onboarding — letting an auto-responder
+      // (e.g. the "Instant lead reply" template) speak for the owner
+      // robs them of the chance to answer personally, which is the
+      // entire point of an inbound question. The owner still gets the
+      // notification email + push below and can reply from Messages.
+      // Workflows still fire from the real client-creation paths
+      // (booking confirmation, owner-side add, CSV import).
     }
 
     // Find or create the thread for (workspace, client). The two-way
@@ -140,7 +132,7 @@ export default async function handler(req, res) {
       payload: {
         title: `New message from ${name}`,
         body: preview,
-        url: `/messages/${threadId}`,
+        url: `/messages?threadId=${threadId}`,
         tag: `prospect-${threadId}`,
       },
     });
@@ -166,7 +158,7 @@ export default async function handler(req, res) {
               <blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #C7BFA8;background:#F6F5F1;border-radius:6px;font-size:14px;line-height:1.55;color:#3F3D38;white-space:pre-wrap;">${escapeHtml(text)}</blockquote>
               <p>This conversation is now in your Messages inbox under <strong>${escapeHtml(name)}</strong> — replying there sends them an email.</p>`,
             ctaText: 'Open conversation',
-            ctaUrl: `${appUrl()}/messages/${threadId}`,
+            ctaUrl: `${appUrl()}/messages?threadId=${threadId}`,
             footer: `Replying to this email goes straight to ${escapeHtml(name)}. The conversation is also tracked in your THRYVE Messages inbox.`,
             branding,
           }),

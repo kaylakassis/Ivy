@@ -602,7 +602,7 @@ async function send_message_to_client({ workspaceId, args }) {
     payload: {
       title: 'New message',
       body: preview,
-      url: `/me/messages/${threadId}`,
+      url: `/me/messages?threadId=${threadId}`,
       tag: `thread-${threadId}`,
     },
   });

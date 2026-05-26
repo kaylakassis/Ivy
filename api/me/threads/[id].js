@@ -114,7 +114,7 @@ export default async function handler(req, res) {
         payload: {
           title: `Message from ${thread.client_name || 'a client'}`,
           body: preview,
-          url: `/messages/${id}`,
+          url: `/messages?threadId=${id}`,
           tag: `thread-${id}`,
         },
       });
