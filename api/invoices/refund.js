@@ -22,6 +22,7 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { createRefund as squareCreateRefund } from '../_lib/payments/square.js';
 import { createRefund as paypalCreateRefund } from '../_lib/payments/paypal.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals, fetchFinanceSettings } from '../_lib/finance.js';
+import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const VALID_REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer']);
@@ -164,6 +165,21 @@ export default async function handler(req, res) {
         refund: { amount, method, fullyRefunded: curRefunded >= totals.total - 0.001, stripeRefundId, deduped: true },
       });
     }
+    // Immutable trail of money moving out. Records who, when, how much,
+    // which provider, which transaction. Fire-and-forget.
+    recordWorkspaceAudit(req, {
+      workspaceId, actor: user,
+      action: 'invoice.refund',
+      target: { kind: 'invoice', id: inv.id },
+      meta: {
+        number: inv.number,
+        amount,
+        method,
+        reason: reason || null,
+        provider_refund_id: stripeRefundId || null,
+        fully_refunded: fullyRefunded,
+      },
+    });
     return ok(res, {
       invoice: serializeInvoice(updated.rows[0]),
       refund: { amount, method, fullyRefunded, stripeRefundId },

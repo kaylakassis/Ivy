@@ -353,6 +353,16 @@ CREATE TABLE IF NOT EXISTS audit_events (
   user_agent TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- workspace_id + target_kind + target_id extend the table for
+-- workspace-scoped audit (refunds, voids, deletions, workflow toggles).
+-- target_user_id stays for the super-admin code path. All three new
+-- columns are nullable so existing rows + super-admin writes work
+-- unchanged.
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS target_kind TEXT;
+ALTER TABLE audit_events ADD COLUMN IF NOT EXISTS target_id   TEXT;
+CREATE INDEX IF NOT EXISTS idx_audit_events_workspace
+  ON audit_events(workspace_id, created_at DESC) WHERE workspace_id IS NOT NULL;
 CREATE INDEX IF NOT EXISTS idx_audit_events_created
   ON audit_events(created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_audit_events_target

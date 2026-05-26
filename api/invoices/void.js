@@ -6,6 +6,7 @@ import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice } from '../_lib/finance.js';
+import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -39,6 +40,14 @@ export default async function handler(req, res) {
       WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *
     `;
+    // Immutable trail of an irreversible state change. Fire-and-forget;
+    // a logging blip won't undo the void.
+    recordWorkspaceAudit(req, {
+      workspaceId, actor: user,
+      action: 'invoice.void',
+      target: { kind: 'invoice', id: inv.id },
+      meta: { number: inv.number, client_name: inv.client_name },
+    });
     return ok(res, { invoice: serializeInvoice(updated.rows[0]) });
   } catch (err) {
     return serverError(res, err);

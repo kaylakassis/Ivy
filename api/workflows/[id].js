@@ -8,6 +8,7 @@ import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { validateWorkflowShape, serializeWorkflow } from '../_lib/workflows.js';
+import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -57,6 +58,15 @@ export default async function handler(req, res) {
            WHERE id = ${id} AND workspace_id = ${workspaceId}
            RETURNING *
         `;
+        // Audit the toggle — workflows automate outbound comms; an
+        // accidental flip from disabled→enabled can mass-send emails,
+        // so the trail of who toggled when matters.
+        recordWorkspaceAudit(req, {
+          workspaceId, actor: user,
+          action: 'workflow.toggle',
+          target: { kind: 'workflow', id },
+          meta: { enabled: !!body.enabled, name: row.name, trigger_type: row.trigger_type },
+        });
         return ok(res, { workflow: serializeWorkflow(upd.rows[0]) });
       }
       // Full update — merge incoming with existing then re-validate.
