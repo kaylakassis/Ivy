@@ -13,7 +13,7 @@ import signupHandler from '../api/auth/signup.js';
 import loginHandler  from '../api/auth/login.js';
 import meHandler     from '../api/auth/me.js';
 import logoutHandler from '../api/auth/logout.js';
-import { CURRENT_TERMS_VERSION } from '../api/_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../api/_lib/legal.js';
 
 let pass = 0, fail = 0;
 function assert(cond, label) {
@@ -91,7 +91,7 @@ async function setup() {
 async function testSignupAndImmediateAccess() {
   console.log('\n[1] Signup creates a user + session');
   const email = `auth-test-${Date.now()}-a@example.com`;
-  const req = makeReq({ body: { email, password: 'sufficiently-long-password', name: 'Tester', acceptedTermsVersion: CURRENT_TERMS_VERSION } });
+  const req = makeReq({ body: { email, password: 'sufficiently-long-password', name: 'Tester', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } });
   const res = makeRes();
   await signupHandler(req, res);
   assert(res.statusCode === 201 || res.statusCode === 200, 'signup returns 200/201');
@@ -113,7 +113,7 @@ async function testLoginRejectsWrongPassword() {
   const email = `auth-test-${Date.now()}-b@example.com`;
   // Provision a user first via signup
   const signupRes = makeRes();
-  await signupHandler(makeReq({ body: { email, password: 'correct-password-1234', name: 'B', acceptedTermsVersion: CURRENT_TERMS_VERSION } }), signupRes);
+  await signupHandler(makeReq({ body: { email, password: 'correct-password-1234', name: 'B', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), signupRes);
   assert(signupRes.statusCode === 201 || signupRes.statusCode === 200, 'provisioned account');
 
   // Now try login with the wrong password
@@ -126,7 +126,7 @@ async function testLoginRejectsWrongPassword() {
 async function testLoginSuccessIssuesSession() {
   console.log('\n[3] Login with correct password issues a session');
   const email = `auth-test-${Date.now()}-c@example.com`;
-  await signupHandler(makeReq({ body: { email, password: 'correct-pass-7777', name: 'C', acceptedTermsVersion: CURRENT_TERMS_VERSION } }), makeRes());
+  await signupHandler(makeReq({ body: { email, password: 'correct-pass-7777', name: 'C', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), makeRes());
 
   // Burn the original cookie by signing out (the signup already
   // gave us one, but we want to test login independently).
@@ -140,7 +140,7 @@ async function testLogoutClearsSession() {
   console.log('\n[4] Logout clears the session cookie');
   const email = `auth-test-${Date.now()}-d@example.com`;
   const signupRes = makeRes();
-  await signupHandler(makeReq({ body: { email, password: 'pass-8888', name: 'D', acceptedTermsVersion: CURRENT_TERMS_VERSION } }), signupRes);
+  await signupHandler(makeReq({ body: { email, password: 'pass-8888', name: 'D', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), signupRes);
   const cookie = extractSessionCookie(signupRes);
 
   const logoutRes = makeRes();
@@ -161,11 +161,11 @@ async function testDuplicateEmailSignupRejected() {
   console.log('\n[5] Signing up with an existing email is rejected');
   const email = `auth-test-${Date.now()}-e@example.com`;
   const first = makeRes();
-  await signupHandler(makeReq({ body: { email, password: 'pass-1234', name: 'E1', acceptedTermsVersion: CURRENT_TERMS_VERSION } }), first);
+  await signupHandler(makeReq({ body: { email, password: 'pass-1234', name: 'E1', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), first);
   assert(first.statusCode === 201 || first.statusCode === 200, 'first signup OK');
 
   const dup = makeRes();
-  await signupHandler(makeReq({ body: { email, password: 'pass-5678', name: 'E2', acceptedTermsVersion: CURRENT_TERMS_VERSION } }), dup);
+  await signupHandler(makeReq({ body: { email, password: 'pass-5678', name: 'E2', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), dup);
   assert(dup.statusCode === 400 || dup.statusCode === 409, 'duplicate email → 4xx');
 }
 

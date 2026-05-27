@@ -21,6 +21,7 @@ const TABS = [
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'support',    label: 'Support',    icon: 'Chat' },
+  { id: 'bugs',       label: 'Bug reports', icon: 'Spark' },
   { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
@@ -31,6 +32,36 @@ const TABS = [
 export default function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState('overview');
+  // Total unread support messages across all threads — drives the
+  // red badge on the Support tab so the operator can see "someone's
+  // waiting for me" at a glance without clicking through. Polled
+  // every 30s so a fresh message lights up without manual refresh.
+  const [supportUnread, setSupportUnread] = useState(0);
+  const [bugsOpen, setBugsOpen]           = useState(0);
+  useEffect(() => {
+    if (!user?.isSuperAdmin) return undefined;
+    let live = true;
+    const load = async () => {
+      try {
+        const [s, b] = await Promise.all([
+          api.get('/admin/support').catch(() => ({ threads: [] })),
+          api.get('/admin/bug-reports?status=open').catch(() => ({ openCount: 0 })),
+        ]);
+        if (!live) return;
+        const total = (s.threads || []).reduce((sum, t) => sum + (t.unreadAdmin || 0), 0);
+        setSupportUnread(total);
+        setBugsOpen(b.openCount || 0);
+      } catch { /* ignore — badges degrade to zero, not a blocker */ }
+    };
+    load();
+    const id = setInterval(() => { if (!document.hidden) load(); }, 30_000);
+    const onVisible = () => { if (!document.hidden) load(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [user?.isSuperAdmin, tab]);
 
   if (!user?.isSuperAdmin) {
     return (
@@ -54,11 +85,26 @@ export default function AdminPage() {
         {TABS.map((t) => {
           const Icon = Icons[t.icon] || Icons.Check;
           const active = tab === t.id;
+          const badge =
+              t.id === 'support' && supportUnread > 0 ? supportUnread
+            : t.id === 'bugs'    && bugsOpen       > 0 ? bugsOpen
+            : 0;
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
               className={`btn ${active ? 'btn-primary' : 'btn-outline'}`}
-              style={{ padding: '7px 14px', fontSize: 13, whiteSpace: 'nowrap' }}>
+              style={{ padding: '7px 14px', fontSize: 13, whiteSpace: 'nowrap', position: 'relative' }}>
               <Icon size={13} sw={1.7}/> {t.label}
+              {badge > 0 && (
+                <span aria-label={`${badge} unread support message${badge === 1 ? '' : 's'}`}
+                  style={{
+                    marginLeft: 6, padding: '0 6px', borderRadius: 99,
+                    background: active ? 'var(--accent-ink)' : 'var(--danger, #B23A48)',
+                    color: active ? 'var(--accent)' : '#fff',
+                    fontSize: 10.5, fontWeight: 700,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    minWidth: 16, height: 16,
+                  }}>{badge > 99 ? '99+' : badge}</span>
+              )}
             </button>
           );
         })}
@@ -68,11 +114,183 @@ export default function AdminPage() {
       {tab === 'users'      && <UsersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'support'    && <SupportTab/>}
+      {tab === 'bugs'       && <BugsTab/>}
       {tab === 'appeals'    && <AppealsTab/>}
       {tab === 'blast'      && <BlastTab/>}
       {tab === 'audit'      && <AuditTab/>}
       {tab === 'export'     && <ExportTab/>}
       {tab === 'settings'   && <SettingsTab/>}
+    </div>
+  );
+}
+
+// ---------- Bug reports tab ----------
+// Beta-feedback inbox. Users POST to /api/bug-reports from the
+// 'Report a bug' sidebar menu; this tab lists them newest-first with
+// status filter, severity badge, and an inline triage panel.
+const BUG_STATUSES = [
+  { id: 'open',      label: 'Open',      tone: 'var(--danger, #B23A48)' },
+  { id: 'triaged',   label: 'Triaged',   tone: 'var(--accent)' },
+  { id: 'resolved',  label: 'Resolved',  tone: 'var(--ok)' },
+  { id: 'dismissed', label: 'Dismissed', tone: 'var(--muted)' },
+];
+const BUG_SEVERITIES = {
+  critical: { label: 'Critical', tone: 'var(--danger, #B23A48)' },
+  major:    { label: 'Major',    tone: 'var(--warn, #C68B2C)' },
+  minor:    { label: 'Minor',    tone: 'var(--accent)' },
+  info:     { label: 'Info',     tone: 'var(--muted)' },
+};
+function BugsTab() {
+  const [status, setStatus]   = useState('open');
+  const [reports, setReports] = useState(null);
+  const [active, setActive]   = useState(null);
+  const [err, setErr]         = useState(null);
+
+  const reload = async () => {
+    setReports(null); setErr(null);
+    try {
+      const r = await api.get(`/admin/bug-reports?status=${encodeURIComponent(status)}`);
+      setReports(r.reports || []);
+    } catch (e) { setErr(e.message); }
+  };
+  useEffect(() => { reload(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [status]);
+
+  const triage = async (patch) => {
+    if (!active) return;
+    try {
+      const r = await api.patch('/admin/bug-reports', { id: active.id, ...patch });
+      setActive(r.report);
+      reload();
+    } catch (e) { setErr(e.message); }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {BUG_STATUSES.map((s) => (
+          <button key={s.id} onClick={() => setStatus(s.id)}
+            className={`btn ${status === s.id ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '5px 12px', fontSize: 12 }}>
+            {s.label}
+          </button>
+        ))}
+      </div>
+      {err && <ErrCard msg={err}/>}
+      <div className="support-grid" style={{ minHeight: 420 }}>
+        <div className="card" style={{ padding: 0, overflow: 'auto', maxHeight: 600 }}>
+          {!reports && !err && <div style={{ padding: 12, fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
+          {reports && reports.length === 0 && (
+            <div style={{ padding: 18 }}>
+              <EmptyNote icon="Spark" title="Nothing here"
+                hint={status === 'open' ? 'No open bug reports right now. 🎉' : `No ${status} reports.`}/>
+            </div>
+          )}
+          {reports && reports.map((r) => {
+            const sev = BUG_SEVERITIES[r.severity] || BUG_SEVERITIES.minor;
+            return (
+              <button key={r.id} onClick={() => setActive(r)}
+                style={{
+                  display: 'block', width: '100%', textAlign: 'left',
+                  padding: 12, borderTop: '1px solid var(--border)',
+                  background: active?.id === r.id ? 'var(--surface-2)' : 'transparent',
+                  cursor: 'pointer',
+                }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{
+                    fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em',
+                    padding: '2px 6px', borderRadius: 99,
+                    background: `color-mix(in srgb, ${sev.tone} 16%, transparent)`,
+                    color: sev.tone, textTransform: 'uppercase',
+                  }}>{sev.label}</span>
+                  <span style={{ fontWeight: 600, fontSize: 13, flex: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
+                    {r.title}
+                  </span>
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 3, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                  <span>{r.userEmail || '(deleted user)'}</span>
+                  <span>·</span>
+                  <span>{new Date(r.createdAt).toLocaleString()}</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <div>
+          {active ? <BugDetail report={active} onTriage={triage}/>
+                  : <div className="card" style={{ padding: 28 }}>
+                      <EmptyNote icon="Spark" title="Pick a report" hint="Click a row on the left."/>
+                    </div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function BugDetail({ report, onTriage }) {
+  const [notes, setNotes] = useState(report.adminNotes || '');
+  // Reset notes when switching reports.
+  useEffect(() => { setNotes(report.adminNotes || ''); }, [report.id, report.adminNotes]);
+  const sev = BUG_SEVERITIES[report.severity] || BUG_SEVERITIES.minor;
+  const Row = ({ k, v }) => (
+    <div style={{ display: 'flex', gap: 10, fontSize: 12.5, padding: '3px 0' }}>
+      <div style={{ color: 'var(--muted)', minWidth: 96 }}>{k}</div>
+      <div style={{ flex: 1, wordBreak: 'break-word', color: 'var(--fg)' }}>{v || '—'}</div>
+    </div>
+  );
+  return (
+    <div className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 12, minHeight: 420 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <span style={{
+          fontSize: 9.5, fontWeight: 700, letterSpacing: '0.06em',
+          padding: '2px 6px', borderRadius: 99,
+          background: `color-mix(in srgb, ${sev.tone} 16%, transparent)`,
+          color: sev.tone, textTransform: 'uppercase',
+        }}>{sev.label}</span>
+        <span style={{ fontWeight: 600, fontSize: 15, flex: 1 }}>{report.title}</span>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{report.status}</span>
+      </div>
+      {report.body && (
+        <div style={{
+          background: 'var(--surface-2)', borderRadius: 10, padding: 12,
+          fontSize: 13, lineHeight: 1.55, color: 'var(--fg)',
+          border: '1px solid var(--border)', whiteSpace: 'pre-wrap',
+        }}>{report.body}</div>
+      )}
+      <div>
+        <Row k="From"        v={report.userEmail || '(deleted user)'}/>
+        <Row k="Submitted"   v={new Date(report.createdAt).toLocaleString()}/>
+        <Row k="On page"     v={report.url ? <a href={report.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>{report.url}</a> : '—'}/>
+        <Row k="Viewport"    v={report.viewport}/>
+        <Row k="App version" v={report.appVersion ? <code>{report.appVersion}</code> : '—'}/>
+        <Row k="User agent"  v={report.userAgent}/>
+      </div>
+
+      <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <span className="metric-label">Triage notes</span>
+        <textarea value={notes} onChange={(e) => setNotes(e.target.value)}
+          placeholder="What's the disposition? Ticket / commit / 'fixed in …'"
+          rows={3} maxLength={2000}
+          style={{
+            padding: '10px 12px', borderRadius: 10,
+            background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
+            color: 'var(--fg)', fontSize: 13, outline: 'none',
+            fontFamily: 'inherit', resize: 'vertical',
+          }}/>
+        <button onClick={() => onTriage({ adminNotes: notes })}
+          className="btn btn-outline"
+          style={{ padding: '5px 12px', fontSize: 12, alignSelf: 'flex-start' }}>
+          Save notes
+        </button>
+      </label>
+
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+        {BUG_STATUSES.filter((s) => s.id !== report.status).map((s) => (
+          <button key={s.id} onClick={() => onTriage({ status: s.id })}
+            className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}>
+            Mark {s.label.toLowerCase()}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -246,9 +464,128 @@ function Overview() {
             <Stat label="Churn rate"        value={`${data.churn.ratePct}%`}
               hint={`${data.churn.cancelledInWindow} cancelled / ${data.churn.activeAtWindowStart} active at window start`}/>
           </div>
+          {data.platformImpact && <PlatformImpactCard impact={data.platformImpact}/>}
           <SystemCard/>
         </>
       )}
+    </div>
+  );
+}
+
+// Platform-impact snapshot — marketing-friendly aggregates that the
+// super-admin can copy verbatim into landing copy, pitch decks, or
+// social posts. Window is 90 days (rolling), labeled inline so the
+// number is auditable later. PRIVACY: every value here is an aggregate
+// across the active business base — no individual workspace data
+// crosses this surface, intentional by design.
+function PlatformImpactCard({ impact }) {
+  const [copied, setCopied] = useState(null);
+  const copy = async (key, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(key);
+      setTimeout(() => setCopied((k) => (k === key ? null : k)), 1500);
+    } catch { /* clipboard blocked — silent */ }
+  };
+  const snippets = [
+    {
+      key: 'noshow', label: 'Average no-show rate', value: `${impact.noShowRatePct}%`,
+      copy: `THRYVE business owners see an average no-show rate of ${impact.noShowRatePct}% across the last ${impact.lookbackDays} days.`,
+    },
+    {
+      key: 'completion', label: 'Booking completion rate', value: `${impact.completionRatePct}%`,
+      copy: `${impact.completionRatePct}% of bookings on THRYVE complete successfully (last ${impact.lookbackDays} days).`,
+    },
+    {
+      key: 'cancellation', label: 'Cancellation rate', value: `${impact.cancellationRatePct}%`,
+      copy: `Cancellation rate across THRYVE businesses: ${impact.cancellationRatePct}% (last ${impact.lookbackDays} days).`,
+    },
+    {
+      key: 'avg-monthly-rev', label: 'Avg monthly revenue per active workspace',
+      value: fmtMoney(impact.avgMonthlyRevenuePerActive),
+      copy: `Active THRYVE business owners earn an average of ${fmtMoney(impact.avgMonthlyRevenuePerActive)} per month through the platform.`,
+    },
+    {
+      key: 'avg-clients', label: 'Avg clients per workspace',
+      value: fmtN(impact.avgClientsPerActive),
+      copy: `The average THRYVE business manages ${fmtN(impact.avgClientsPerActive)} clients.`,
+    },
+    {
+      key: 'avg-bookings-90d', label: 'Avg bookings per workspace (90 days)',
+      value: fmtN(impact.avgBookingsPerActive90d),
+      copy: `Active THRYVE businesses run an average of ${fmtN(impact.avgBookingsPerActive90d)} bookings every 90 days.`,
+    },
+    {
+      key: 'workflows', label: 'Workflow automation adoption',
+      value: `${impact.workflowAdoptionPct}%`,
+      copy: `${impact.workflowAdoptionPct}% of active THRYVE businesses have at least one automation running.`,
+    },
+    {
+      key: 'ivy', label: 'Ivy AI assistant adoption',
+      value: `${impact.ivyAdoptionPct}%`,
+      copy: `${impact.ivyAdoptionPct}% of active THRYVE businesses use Ivy, our built-in AI operator.`,
+    },
+    {
+      key: 'activation', label: 'Activation rate (signup → first booking in 7d)',
+      value: `${impact.activationPct}%`,
+      copy: `${impact.activationPct}% of THRYVE signups take their first booking within 7 days.`,
+    },
+    {
+      key: 'rating', label: 'Avg published review rating',
+      value: impact.reviews.count > 0
+        ? `${impact.reviews.avgRating.toFixed(2)}★`
+        : '—',
+      copy: impact.reviews.count > 0
+        ? `Customers leave THRYVE businesses an average rating of ${impact.reviews.avgRating.toFixed(2)}★ across ${fmtN(impact.reviews.count)} published reviews.`
+        : '',
+    },
+  ];
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 6 }}>
+        <div style={{ flex: 1 }}>
+          <div className="metric-label">Platform impact</div>
+          <h3 style={{ margin: '4px 0 0', fontSize: 16, fontWeight: 600 }}>
+            Marketing-ready stats across the active business base
+          </h3>
+          <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+            Window: rolling {impact.lookbackDays} days · {fmtN(impact.bookingsCounted)} bookings counted.
+            Click any card to copy a sentence ready for landing copy, pitch decks, or social.
+            Aggregates only — no individual-workspace data is in this view.
+          </p>
+        </div>
+      </div>
+      <div className="grid-auto" style={{ gap: 12, marginTop: 14 }}>
+        {snippets.map((s) => (
+          <button key={s.key} onClick={() => s.copy && copy(s.key, s.copy)}
+            type="button"
+            disabled={!s.copy}
+            title={s.copy || 'Not enough data yet'}
+            style={{
+              textAlign: 'left', background: 'var(--surface-2)',
+              border: '1px solid var(--border)', borderRadius: 12,
+              padding: '14px 16px', cursor: s.copy ? 'pointer' : 'default',
+              position: 'relative',
+              transition: 'border-color .12s, background .12s',
+            }}
+            onMouseEnter={(e) => { if (s.copy) e.currentTarget.style.borderColor = 'var(--accent)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}
+          >
+            <div style={{ fontSize: 11, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', fontWeight: 600 }}>
+              {s.label}
+            </div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 26, fontWeight: 500, marginTop: 4, letterSpacing: '-0.02em' }}>
+              {s.value}
+            </div>
+            <div style={{
+              fontSize: 11, color: copied === s.key ? 'var(--accent)' : 'var(--muted-2)',
+              marginTop: 6, fontWeight: copied === s.key ? 600 : 400,
+            }}>
+              {copied === s.key ? '✓ Copied' : (s.copy ? 'Tap to copy as sentence' : 'Not enough data yet')}
+            </div>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -518,6 +855,91 @@ function UsersTab() {
   );
 }
 
+// Per-workspace metrics panel — fetched on-demand from /api/admin/
+// users/[id]/metrics. Counts + sums only; no client identities, no
+// message text, no document content. The endpoint enforces this on
+// the server side too — we display the privacy disclaimer it returns.
+function WorkspaceMetricsPanel({ metrics, err }) {
+  if (err) {
+    return (
+      <div style={{
+        padding: '10px 12px', borderRadius: 8, fontSize: 12.5,
+        background: 'rgba(155,44,44,0.08)', color: 'var(--danger)',
+        border: '1px solid rgba(155,44,44,0.25)',
+      }}>{err}</div>
+    );
+  }
+  if (!metrics) {
+    return <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Loading…</div>;
+  }
+  if (!metrics.workspace) {
+    return (
+      <div style={{
+        padding: '10px 12px', borderRadius: 8, fontSize: 12.5,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        color: 'var(--fg-2)',
+      }}>{metrics.message || 'This account has no business workspace.'}</div>
+    );
+  }
+  const { counts, revenue, rates, workspace, lastActivity } = metrics;
+  const Row = ({ k, v, hint }) => (
+    <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13, padding: '4px 0' }}>
+      <div style={{ color: 'var(--muted)', flex: 1 }}>{k}{hint && <span style={{ marginLeft: 6, color: 'var(--muted-2)', fontSize: 11 }}>{hint}</span>}</div>
+      <div style={{ fontWeight: 600, fontFamily: 'var(--font-sans)' }}>{v}</div>
+    </div>
+  );
+  return (
+    <div style={{
+      background: 'var(--surface-2)', borderRadius: 12,
+      border: '1px solid var(--border)', padding: 14,
+      display: 'flex', flexDirection: 'column', gap: 10,
+    }}>
+      <div style={{
+        fontSize: 11.5, color: 'var(--muted-2)', lineHeight: 1.5,
+        padding: '6px 10px', borderRadius: 8, background: 'var(--surface)',
+        border: '1px solid var(--border)',
+      }}>
+        🔒 {metrics.privacyNote || 'Aggregates only — no client identities or message text shown.'}
+      </div>
+
+      <div className="metric-label">Workspace</div>
+      <Row k="Created" v={workspace.createdAt ? new Date(workspace.createdAt).toLocaleDateString() : '—'}/>
+      <Row k="Subscription" v={workspace.subscriptionStatus || '—'}/>
+      {workspace.trialEndsAt && (
+        <Row k="Trial ends" v={new Date(workspace.trialEndsAt).toLocaleDateString()}/>
+      )}
+      <Row k="Last activity" v={lastActivity ? new Date(lastActivity).toLocaleDateString() : '—'}/>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Counts</div>
+      <Row k="Clients" v={fmtN(counts.clients)}/>
+      <Row k="Bookings (all-time)" v={fmtN(counts.bookings.all)}/>
+      <Row k="Bookings (last 30d)" v={fmtN(counts.bookings.last30d)}/>
+      <Row k="Bookings (last 90d)" v={fmtN(counts.bookings.last90d)}/>
+      <Row k="Upcoming bookings" v={fmtN(counts.bookings.upcoming)}/>
+      <Row k="Completed" v={fmtN(counts.bookings.completed)}/>
+      <Row k="No-shows" v={fmtN(counts.bookings.noShows)}/>
+      <Row k="Cancelled" v={fmtN(counts.bookings.cancelled)}/>
+      <Row k="Invoices (all/paid/overdue)" v={`${fmtN(counts.invoices.all)} / ${fmtN(counts.invoices.paid)} / ${fmtN(counts.invoices.overdue)}`}/>
+      <Row k="Documents (sent/completed)" v={`${fmtN(counts.documents.all)} / ${fmtN(counts.documents.completed)}`}/>
+      <Row k="Workflows (enabled/total)" v={`${fmtN(counts.workflows.enabled)} / ${fmtN(counts.workflows.total)}`}/>
+      <Row k="Reviews" v={counts.reviews.count > 0 ? `${fmtN(counts.reviews.count)} · ${counts.reviews.avgRating.toFixed(2)}★` : '—'}/>
+      <Row k="Message threads" v={fmtN(counts.messageThreads)} hint="(counts only)"/>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Revenue</div>
+      <Row k="All-time paid" v={fmtMoney(revenue.allTime)}/>
+      <Row k="Last 30 days" v={fmtMoney(revenue.last30d)}/>
+      <Row k="Last 90 days" v={fmtMoney(revenue.last90d)}/>
+      <Row k="Avg booking value" v={revenue.avgBookingValue > 0 ? fmtMoney(revenue.avgBookingValue) : '—'}/>
+
+      <div className="metric-label" style={{ marginTop: 6 }}>Rates</div>
+      <Row k="No-show rate" v={`${rates.noShowPct}%`}/>
+      <Row k="Cancellation rate" v={`${rates.cancellationPct}%`}/>
+      <Row k="Completion rate" v={`${rates.completionPct}%`}/>
+      <Row k="Paid-invoice rate" v={`${rates.paidInvoicePct}%`}/>
+    </div>
+  );
+}
+
 function CreateUserModal({ onClose, onCreated }) {
   const [email, setEmail] = useState('');
   const [name, setName]   = useState('');
@@ -612,6 +1034,20 @@ function UserDetailModal({ user, onClose, onChanged }) {
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Workspace metrics — fetched once when the user expands the panel.
+  // Counts + sums only; PRIVACY: no client identities or message text
+  // are returned by /api/admin/users/[id]/metrics by design.
+  const [metricsOpen, setMetricsOpen] = useState(false);
+  const [metrics, setMetrics] = useState(null);
+  const [metricsErr, setMetricsErr] = useState(null);
+  useEffect(() => {
+    if (!metricsOpen || metrics) return;
+    let live = true;
+    api.get(`/admin/users/${user.id}/metrics`)
+      .then((r) => { if (live) setMetrics(r); })
+      .catch((e) => { if (live) setMetricsErr(e.message); });
+    return () => { live = false; };
+  }, [metricsOpen, metrics, user.id]);
 
   // `keepOpen` skips the onChanged callback so the modal stays open and
   // the success message is visible. Use for fire-and-forget actions
@@ -722,6 +1158,16 @@ function UserDetailModal({ user, onClose, onChanged }) {
             {busy === 'Welcome email sent' ? '…' : 'Resend welcome email'}
           </button>
         </div>
+
+        <div className="metric-label" style={{ marginTop: 8 }}>Workspace metrics</div>
+        {!metricsOpen ? (
+          <button onClick={() => setMetricsOpen(true)} className="btn btn-outline"
+            style={{ padding: '6px 12px', fontSize: 12, alignSelf: 'flex-start' }}>
+            <Icons.Trending size={12} sw={1.7}/> Load metrics
+          </button>
+        ) : (
+          <WorkspaceMetricsPanel metrics={metrics} err={metricsErr}/>
+        )}
 
         <div className="metric-label" style={{ marginTop: 8, color: 'var(--danger)' }}>Danger zone</div>
         <button disabled={!!busy} className="btn btn-outline"
