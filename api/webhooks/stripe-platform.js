@@ -124,7 +124,13 @@ export default async function handler(req, res) {
       // Stripe-Dashboard-originated subs (matched via customer +
       // price lookups). Returns 'race' / 'mismatch' for anything that
       // doesn't resolve to a known client + tier in this workspace.
-      const result = await applySubscriptionState({ workspaceId, sub });
+      // stripeContext lets it fetch unknown customers and auto-provision
+      // a clients row when the Dashboard-originated path can't match.
+      const platformKey = platformStripeSecret();
+      const result = await applySubscriptionState({
+        workspaceId, sub,
+        stripeContext: platformKey ? { secretKey: platformKey, stripeAccount: acctId } : undefined,
+      });
       return ok(res, { received: true, applied: 'membership-state', result });
     }
 

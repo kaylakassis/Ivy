@@ -101,8 +101,15 @@ export default async function handler(req, res) {
       // No metadata.purpose gate: applySubscriptionState resolves both
       // THRYVE-originated and Stripe-Dashboard-originated subs by
       // matching customer + price. Subs that don't map are returned
-      // as 'race' / 'mismatch' and quietly dropped.
-      const result = await applySubscriptionState({ workspaceId, sub });
+      // as 'race' / 'mismatch' and quietly dropped. stripeContext lets
+      // applySubscriptionState fetch unknown customers and auto-
+      // provision a clients row on the Dashboard path.
+      let stripeContext;
+      try {
+        const c = await loadStripeCreds(workspaceId);
+        stripeContext = { secretKey: c.secretKey, stripeAccount: c.stripeAccount };
+      } catch { /* no creds available — fall back to pure-DB matching */ }
+      const result = await applySubscriptionState({ workspaceId, sub, stripeContext });
       return ok(res, { received: true, applied: 'membership-state', result });
     }
 

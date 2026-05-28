@@ -143,6 +143,70 @@ async function run() {
   });
   assert(r10 === 'race', `unknown price → race (got '${r10}')`);
 
+  console.log('\n[10] Auto-provision clients row from Stripe customer when unknown');
+  // stripeContext provides credentials so applySubscriptionState can
+  // fetch the unknown customer from Stripe. We stub globalThis.fetch
+  // to return a synthetic customer payload instead of hitting Stripe.
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/customers/cus_new_buyer')) {
+      return {
+        ok: true,
+        json: async () => ({ id: 'cus_new_buyer', email: 'autoprov@example.com', name: 'Auto Buyer' }),
+      };
+    }
+    throw new Error(`unexpected fetch in test: ${url}`);
+  };
+  try {
+    const r11 = await applySubscriptionState({
+      workspaceId: wid,
+      sub: {
+        id: `sub_${tag}_H`, status: 'active',
+        customer: 'cus_new_buyer',
+        items: { data: [{ price: { id: 'price_dash_silver' } }] },
+        current_period_end: 1893456000,
+      },
+      stripeContext: { secretKey: 'sk_test_fake', stripeAccount: 'acct_test' },
+    });
+    assert(r11 === 'created', `auto-provisioned client + sub (got '${r11}')`);
+    const newClient = (await sql`SELECT id, email FROM clients WHERE workspace_id = ${wid} AND email = 'autoprov@example.com'`).rows[0];
+    assert(!!newClient, 'clients row created from Stripe customer email');
+    const newMem = (await sql`SELECT client_id FROM client_memberships WHERE stripe_subscription_id = ${`sub_${tag}_H`}`).rows[0];
+    assert(newMem && newMem.client_id === newClient.id, 'membership linked to new client');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
+  console.log('\n[11] Auto-provision links to EXISTING client when email matches');
+  // The owner had the client in CRM already; the auto-provision path
+  // should attach the stripe_customer_id, not create a duplicate.
+  await sql`INSERT INTO clients (workspace_id, name, email, stage)
+    VALUES (${wid}, 'Pre-existing', 'preexisting@example.com', 'active')`;
+  globalThis.fetch = async (url) => {
+    if (String(url).includes('/customers/cus_link_existing')) {
+      return { ok: true, json: async () => ({ id: 'cus_link_existing', email: 'preexisting@example.com', name: 'Pre-existing' }) };
+    }
+    throw new Error(`unexpected fetch: ${url}`);
+  };
+  try {
+    const r12 = await applySubscriptionState({
+      workspaceId: wid,
+      sub: {
+        id: `sub_${tag}_I`, status: 'active',
+        customer: 'cus_link_existing',
+        items: { data: [{ price: { id: 'price_dash_silver' } }] },
+      },
+      stripeContext: { secretKey: 'sk_test_fake', stripeAccount: 'acct_test' },
+    });
+    assert(r12 === 'created', `linked to existing client (got '${r12}')`);
+    const cnt = (await sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${wid} AND email = 'preexisting@example.com'`).rows[0].n;
+    assert(cnt === 1, 'no duplicate clients row created');
+    const linked = (await sql`SELECT stripe_customer_id FROM clients WHERE workspace_id = ${wid} AND email = 'preexisting@example.com'`).rows[0];
+    assert(linked.stripe_customer_id === 'cus_link_existing', 'existing client stamped with stripe_customer_id');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+
   // Cleanup
   await sql`DELETE FROM client_memberships WHERE workspace_id = ${wid}`;
   await sql`DELETE FROM memberships WHERE workspace_id = ${wid}`;

@@ -1,5 +1,6 @@
 // Helpers for membership tier templates + per-client subscription state.
 import { sql } from './db.js';
+import { fetchStripeCustomer } from './stripe.js';
 
 export const VALID_INTERVAL = new Set(['week', 'month', 'quarter', 'year']);
 export const VALID_STATUS = new Set(['active', 'past_due', 'cancelled', 'incomplete']);
@@ -125,7 +126,13 @@ export function extractSubPriceId(sub) {
 // Plan changes (UI or Stripe Dashboard) re-sync the tier snapshot
 // (membership_id/name/price_cents/interval) when the active price
 // id changes — 'retiered' is returned so the webhook can log it.
-export async function applySubscriptionState({ workspaceId, sub }) {
+//
+// stripeContext (optional): { secretKey, stripeAccount } passed by the
+// webhook layer so the Dashboard-originated path can fetch a missing
+// customer from Stripe and auto-provision a clients row. Omit it in
+// pure-unit tests; tests that exercise the auto-provision branch
+// pass it.
+export async function applySubscriptionState({ workspaceId, sub, stripeContext }) {
   const subId = sub?.id;
   if (!subId) return 'invalid';
   const ours = await sql`
@@ -191,18 +198,64 @@ export async function applySubscriptionState({ workspaceId, sub }) {
     // workspace, otherwise we ignore. This is the same scope as case
     // (a) — we never insert across workspaces.
     if (!customerId || !priceId) return 'race';
-    const client = (await sql`
-      SELECT id FROM clients
-       WHERE stripe_customer_id = ${customerId} AND workspace_id = ${workspaceId}
-       LIMIT 1
-    `).rows[0];
-    if (!client) return 'race';
     const tier = (await sql`
       SELECT id, name, price_cents, interval FROM memberships
        WHERE stripe_price_id = ${priceId} AND workspace_id = ${workspaceId}
        LIMIT 1
     `).rows[0];
     if (!tier) return 'race';
+
+    let client = (await sql`
+      SELECT id FROM clients
+       WHERE stripe_customer_id = ${customerId} AND workspace_id = ${workspaceId}
+       LIMIT 1
+    `).rows[0];
+
+    // Auto-provision: subscription created from Stripe Dashboard
+    // against a customer THRYVE has never seen. Fetch the customer
+    // from Stripe to get email/name, then find-or-create a clients
+    // row scoped to this workspace and link the Stripe customer id.
+    // Requires stripeContext from the webhook (platform secret +
+    // connected account id); if it's not supplied, fall back to
+    // 'race' so the next event with context can resolve it.
+    if (!client && stripeContext?.secretKey) {
+      let cust;
+      try {
+        cust = await fetchStripeCustomer({
+          secretKey: stripeContext.secretKey,
+          stripeAccount: stripeContext.stripeAccount,
+          customerId,
+        });
+      } catch {
+        return 'race';
+      }
+      const email = (cust?.email || '').toString().toLowerCase().trim();
+      if (!email) return 'race';
+      // Match an existing client by email first (the owner may have
+      // added the contact in THRYVE before the Stripe-side subscription)
+      // — that's a stronger link than always inserting a new row.
+      const byEmail = (await sql`
+        SELECT id FROM clients
+         WHERE workspace_id = ${workspaceId} AND email = ${email}
+         LIMIT 1
+      `).rows[0];
+      if (byEmail) {
+        await sql`
+          UPDATE clients SET stripe_customer_id = ${customerId}
+           WHERE id = ${byEmail.id} AND workspace_id = ${workspaceId}
+             AND stripe_customer_id IS NULL
+        `;
+        client = byEmail;
+      } else {
+        const ins = await sql`
+          INSERT INTO clients (workspace_id, name, email, stage, source, stripe_customer_id)
+          VALUES (${workspaceId}, ${cust.name || email}, ${email}, 'active', 'membership', ${customerId})
+          RETURNING id
+        `;
+        client = ins.rows[0];
+      }
+    }
+    if (!client) return 'race';
 
     await sql`
       INSERT INTO client_memberships (
