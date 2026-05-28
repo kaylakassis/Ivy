@@ -10,6 +10,7 @@ import { readBody } from '../../_lib/body.js';
 import {
   fetchOwnedGroup,
   serializeGroupThread, serializeGroupMember, serializeGroupMessage,
+  loadReactionsForMessages,
 } from '../../_lib/groupChat.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
@@ -54,10 +55,13 @@ export default async function handler(req, res) {
         await sql`UPDATE group_threads SET unread_biz = 0 WHERE id = ${id} AND workspace_id = ${workspaceId}`;
         thread.unread_biz = 0;
       }
+      const reactionMap = await loadReactionsForMessages(messages.rows.map((r) => r.id), 'biz');
       return ok(res, {
         group: serializeGroupThread(thread, { memberCount: members.rows.length }),
         members: members.rows.map(serializeGroupMember),
-        messages: messages.rows.map(serializeGroupMessage),
+        messages: messages.rows.map((r) =>
+          serializeGroupMessage({ ...r, reactions: reactionMap[r.id] || [] }),
+        ),
       });
     }
 

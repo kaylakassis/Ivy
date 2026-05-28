@@ -20,6 +20,10 @@ const { default: meGroupsList }  = await import('../api/me/groups/index.js');
 const { default: meGroupOne }    = await import('../api/me/groups/[id].js');
 const { default: meGroupSend }   = await import('../api/me/groups/[id]/messages.js');
 const { default: meGroupLeave }  = await import('../api/me/groups/[id]/leave.js');
+const { default: ownerReact }    = await import('../api/messages/groups/[id]/messages/[mid]/reactions.js');
+const { default: clientReact }   = await import('../api/me/groups/[id]/messages/[mid]/reactions.js');
+const { default: invites }       = await import('../api/messages/groups/[id]/invites.js');
+const { default: acceptInvite }  = await import('../api/me/groups/accept-invite.js');
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -191,13 +195,128 @@ async function run() {
     await groupsList(ownerReq({ method: 'GET', cookie: cookie1, query: { includeArchived: '1' } }), listAll);
     assert(listAll.body?.groups?.length === 1, 'includeArchived=1 brings it back');
 
+    // ─── 13. Threading + reactions + mentions + invites ──────────
+    // Fresh group for these — the previous one is archived.
+    console.log('\n[13] threading + reactions + mentions + invite-by-link');
+    const createR = mkRes();
+    await groupsList(ownerReq({
+      method: 'POST', cookie: cookie1,
+      body: { name: 'Phase2 Group', mode: 'open', clientIds: [c1, c2, c3] },
+    }), createR);
+    const gid2 = createR.body?.group?.id;
+    assert(!!gid2, 'phase-2 group created');
+
+    // Owner sends a top-level message that mentions Bob (c2).
+    const sendMention = mkRes();
+    await groupMsgs(ownerReq({
+      method: 'POST', cookie: cookie1, query: { id: gid2 },
+      body: { text: 'Hey @Bob can you bring the mats?' },
+    }), sendMention);
+    assert(sendMention.statusCode === 201, '@mention send → 201');
+    assert(sendMention.body?.message?.mentions?.length === 1
+      && sendMention.body.message.mentions[0].clientId === c2,
+      'mention resolved to Bob');
+    const parentId = sendMention.body.message.id;
+    const mentionRow = await sql`SELECT * FROM group_message_mentions WHERE message_id = ${parentId}`;
+    assert(mentionRow.rows.length === 1 && mentionRow.rows[0].mentioned_client_id === c2,
+      'mention persisted');
+
+    // Alice replies in the thread.
+    const reply = mkRes();
+    await meGroupSend(ownerReq({
+      method: 'POST', cookie: cookieClient, query: { id: gid2 },
+      body: { text: 'On it!', parentMessageId: parentId },
+    }), reply);
+    assert(reply.statusCode === 201, 'threaded reply → 201');
+    assert(reply.body?.message?.parentMessageId === parentId, 'parentMessageId stored');
+
+    // Bad parentMessageId is rejected.
+    const badReply = mkRes();
+    await meGroupSend(ownerReq({
+      method: 'POST', cookie: cookieClient, query: { id: gid2 },
+      body: { text: 'x', parentMessageId: 'a0000000-0000-0000-0000-000000000000' },
+    }), badReply);
+    assert(badReply.statusCode === 400, `unknown parent → 400 (got ${badReply.statusCode})`);
+
+    // Owner reacts with 👍 to Alice's reply.
+    const replyId = reply.body.message.id;
+    const reactOwner = mkRes();
+    await ownerReact(ownerReq({
+      method: 'POST', cookie: cookie1, query: { id: gid2, mid: replyId },
+      body: { emoji: '👍' },
+    }), reactOwner);
+    assert(reactOwner.statusCode === 200, 'owner reacted');
+
+    // Alice also reacts with 👍.
+    const reactClient = mkRes();
+    await clientReact(ownerReq({
+      method: 'POST', cookie: cookieClient, query: { id: gid2, mid: replyId },
+      body: { emoji: '👍' },
+    }), reactClient);
+    assert(reactClient.statusCode === 200, 'client reacted');
+
+    // Fetch via owner — should see count=2 with mine=true.
+    const fetchOwner = mkRes();
+    await groupOne(ownerReq({ method: 'GET', cookie: cookie1, query: { id: gid2 } }), fetchOwner);
+    const replyMsg = fetchOwner.body.messages.find((m) => m.id === replyId);
+    const thumbs = replyMsg?.reactions?.find((r) => r.emoji === '👍');
+    assert(thumbs && thumbs.count === 2 && thumbs.mine === true,
+      `owner sees count=2, mine=true (got ${JSON.stringify(thumbs)})`);
+
+    // Owner removes reaction.
+    const unreact = mkRes();
+    await ownerReact(ownerReq({
+      method: 'DELETE', cookie: cookie1, query: { id: gid2, mid: replyId, emoji: '👍' },
+    }), unreact);
+    assert(unreact.statusCode === 204, 'owner unreacted → 204');
+
+    // Invite-by-link: owner mints, second portal user accepts.
+    const invR = mkRes();
+    await invites(ownerReq({
+      method: 'POST', cookie: cookie1, query: { id: gid2 },
+      body: { maxUses: 5, expiresInHours: 24 },
+    }), invR);
+    assert(invR.statusCode === 200 && !!invR.body?.invite?.token, 'invite token minted');
+    const plaintext = invR.body.invite.token;
+
+    // New user signs up + accepts.
+    const newUser = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
+      VALUES (${`${tag}-nu@example.com`}, 'x', 'New', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
+    const newCookie = `thryve_session=${signSession(newUser)}`;
+    const acc = mkRes();
+    await acceptInvite(ownerReq({
+      method: 'POST', cookie: newCookie, body: { token: plaintext },
+    }), acc);
+    assert(acc.statusCode === 200 && acc.body?.groupId === gid2, `invite accepted (got ${JSON.stringify(acc.body)})`);
+    const memberNow = await sql`
+      SELECT COUNT(*)::int AS n FROM group_thread_members m
+        JOIN clients c ON c.id = m.client_id
+       WHERE m.thread_id = ${gid2} AND c.user_id = ${newUser} AND m.left_at IS NULL
+    `;
+    assert(memberNow.rows[0].n === 1, 'new user is now a member');
+    const usage = await sql`SELECT used_count FROM group_invite_tokens WHERE token_hash = ${
+      // compute hash here to verify
+      (await import('node:crypto')).createHash('sha256').update(plaintext).digest('hex')
+    }`;
+    assert(usage.rows[0].used_count === 1, 'invite usage counter incremented');
+
+    // Bogus token rejected.
+    const badAcc = mkRes();
+    await acceptInvite(ownerReq({
+      method: 'POST', cookie: newCookie, body: { token: 'not-a-real-token' },
+    }), badAcc);
+    assert(badAcc.statusCode === 400, 'bogus invite → 400');
+
     // Cleanup
+    await sql`DELETE FROM group_invite_tokens WHERE workspace_id IN (${ws1}, ${ws2})`;
+    await sql`DELETE FROM group_message_mentions WHERE workspace_id IN (${ws1}, ${ws2})`;
+    await sql`DELETE FROM group_message_reactions WHERE workspace_id IN (${ws1}, ${ws2})`;
     await sql`DELETE FROM group_messages WHERE workspace_id IN (${ws1}, ${ws2})`;
     await sql`DELETE FROM group_thread_members WHERE workspace_id IN (${ws1}, ${ws2})`;
     await sql`DELETE FROM group_threads WHERE workspace_id IN (${ws1}, ${ws2})`;
     await sql`DELETE FROM clients WHERE workspace_id IN (${ws1}, ${ws2})`;
     await sql`DELETE FROM workspaces WHERE id IN (${ws1}, ${ws2})`;
-    await sql`DELETE FROM users WHERE id IN (${owner1}, ${owner2}, ${portalUser})`;
+    await sql`DELETE FROM users WHERE id IN (${owner1}, ${owner2}, ${portalUser}, ${newUser})`;
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;

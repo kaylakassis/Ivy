@@ -1,6 +1,7 @@
 // Shared serializers + ownership helpers for the group_chat tables.
 // Parallel to api/_lib/messages.js (1:1 threads) — the two systems
 // do not share rows.
+import crypto from 'node:crypto';
 import { sql } from './db.js';
 import { notifyClientSafe, notifyOwnerSafe } from './push.js';
 
@@ -39,17 +40,74 @@ export function serializeGroupMember(row) {
 export function serializeGroupMessage(row) {
   if (!row) return null;
   return {
-    id:             row.id,
-    threadId:       row.thread_id,
-    sender:         row.sender,
-    senderClientId: row.sender_client_id || null,
-    senderName:     row.sender_name || null,    // joined client name when sender='client'
-    text:           row.text,
-    attachments:    row.attachments || [],
-    kind:           row.kind,
-    meta:           row.meta || {},
-    createdAt:      row.created_at,
+    id:              row.id,
+    threadId:        row.thread_id,
+    sender:          row.sender,
+    senderClientId:  row.sender_client_id || null,
+    senderName:      row.sender_name || null,    // joined client name when sender='client'
+    parentMessageId: row.parent_message_id || null,
+    text:            row.text,
+    attachments:     row.attachments || [],
+    kind:            row.kind,
+    meta:            row.meta || {},
+    reactions:       row.reactions || [],         // [{ emoji, count, mine }]
+    mentions:        row.mentions || [],          // [{ clientId, name }]
+    createdAt:       row.created_at,
   };
+}
+
+// Parses @mentions out of message text. Resolves each @Name fragment
+// against the supplied active-member list (case-insensitive substring
+// match against client name) AND against the literal token '@owner' /
+// '@everyone'. Returns:
+//   mentions    — [{ clientId, displayName, isOwner }]
+//   broadcastAll — true when @everyone was used
+// Resolution is best-effort: ambiguous matches are dropped (we never
+// fire a notification at the wrong person). The original text is left
+// unchanged — the UI renders @Name as a chip via the saved mention rows.
+export function extractMentions(text, activeMembers = []) {
+  const out = { mentions: [], broadcastAll: false, isOwnerMention: false };
+  if (!text) return out;
+  const tokens = String(text).match(/@[A-Za-z][\w\-.]{0,40}/g) || [];
+  const seen = new Set();
+  for (const raw of tokens) {
+    const lower = raw.slice(1).toLowerCase();
+    if (lower === 'everyone' || lower === 'all') { out.broadcastAll = true; continue; }
+    if (lower === 'owner' || lower === 'business') { out.isOwnerMention = true; continue; }
+    // Match against member first names + full names. Pick the unique winner.
+    const candidates = activeMembers.filter((m) => {
+      const name = String(m.client_name || m.clientName || '').toLowerCase();
+      if (!name) return false;
+      const first = name.split(/\s+/)[0];
+      return name.startsWith(lower) || first === lower;
+    });
+    if (candidates.length === 1) {
+      const m = candidates[0];
+      const cid = m.client_id || m.clientId;
+      if (cid && !seen.has(cid)) {
+        seen.add(cid);
+        out.mentions.push({
+          clientId: cid,
+          displayName: m.client_name || m.clientName || null,
+          isOwner: false,
+        });
+      }
+    }
+  }
+  return out;
+}
+
+// Mint a new invite token. Returns the plaintext token (to put in the
+// invite URL) AND the hashed row. We only persist the hash so a leaked
+// DB read can't redeem invites.
+export function mintInviteToken() {
+  const plaintext = crypto.randomBytes(24).toString('base64url');
+  const hash = crypto.createHash('sha256').update(plaintext).digest('hex');
+  return { plaintext, hash };
+}
+
+export function hashInviteToken(plaintext) {
+  return crypto.createHash('sha256').update(plaintext).digest('hex');
 }
 
 // Verify the named group_thread belongs to this workspace + return
@@ -93,9 +151,14 @@ export async function fetchClientGroupMembership({ threadId, clientId, workspace
 // Vercel doesn't kill it.
 //
 // senderClientId = null when sender is the owner.
+// mentionedClientIds / mentionedOwner control notification BOOSTING:
+//   non-mentioned recipients get the standard "New group message" push.
+//   mentioned recipients get "You were mentioned in X" with a different tag.
 export async function fanoutGroupMessage({
   workspaceId, threadId, threadName, senderClientId, preview,
+  mentionedClientIds = [], mentionedOwner = false,
 }) {
+  const mentionedSet = new Set(mentionedClientIds);
   // Bump unread for every active member who isn't the sender + isn't
   // muted. One UPDATE, atomic.
   await sql`
@@ -139,27 +202,32 @@ export async function fanoutGroupMessage({
        AND (${senderClientId}::uuid IS NULL OR client_id <> ${senderClientId}::uuid)
   `;
   for (const r of recipients.rows) {
+    const mentioned = mentionedSet.has(r.client_id);
     notifyClientSafe({
       clientId: r.client_id,
       type: 'messages',
       payload: {
-        title: threadName ? `Group · ${threadName}` : 'New group message',
+        title: mentioned
+          ? `You were mentioned · ${threadName || 'group'}`
+          : (threadName ? `Group · ${threadName}` : 'New group message'),
         body: preview,
         url: `/me/messages?group=${threadId}`,
-        tag: `group-${threadId}`,
+        tag: mentioned ? `group-mention-${threadId}-${r.client_id}` : `group-${threadId}`,
       },
     });
   }
 
-  // If a client sent, ping the owner too.
+  // If a client sent, ping the owner too — boost if @owner mentioned.
   if (senderClientId) {
     notifyOwnerSafe({
       workspaceId, type: 'messages',
       payload: {
-        title: threadName ? `Group · ${threadName}` : 'New group message',
+        title: mentionedOwner
+          ? `You were mentioned · ${threadName || 'group'}`
+          : (threadName ? `Group · ${threadName}` : 'New group message'),
         body: preview,
         url: `/messages?group=${threadId}`,
-        tag: `group-${threadId}`,
+        tag: mentionedOwner ? `group-owner-mention-${threadId}` : `group-${threadId}`,
       },
     });
   }
@@ -173,6 +241,103 @@ export function previewFor({ text, attachments }) {
   if (audioOnly) return '🎙️ Voice message';
   if ((attachments || []).length > 0) return 'Attachment';
   return '';
+}
+
+// Single canonical send path used by both owner and client message
+// endpoints. Handles:
+//   • parent_message_id validation (must be in same thread)
+//   • @mention extraction + persistence
+//   • reaction-counts shape on the returned message
+//   • fan-out with mention-boosted notifications
+//
+// Returns { message } on success or { error, status } on validation
+// failure. Callers wrap the call in withIdempotency.
+export async function insertGroupMessage({
+  workspaceId, threadId, threadName, sender, senderClientId,
+  text, attachments, parentMessageId,
+  activeMembers,
+}) {
+  if (parentMessageId) {
+    const parent = await sql`
+      SELECT id FROM group_messages
+       WHERE id = ${parentMessageId} AND thread_id = ${threadId} AND workspace_id = ${workspaceId}
+       LIMIT 1
+    `;
+    if (parent.rows.length === 0) {
+      return { error: 'Parent message not found', status: 400 };
+    }
+  }
+
+  // Resolve @mentions BEFORE insert so the mention rows + the message
+  // row land in one logical send. If active-members weren't supplied,
+  // skip mention extraction silently — owner-side send already loads
+  // members; client-side does too.
+  const { mentions, isOwnerMention } = extractMentions(text, activeMembers || []);
+
+  const inserted = await sql`
+    INSERT INTO group_messages (thread_id, workspace_id, sender, sender_client_id,
+                                text, attachments, parent_message_id)
+    VALUES (${threadId}, ${workspaceId}, ${sender}, ${senderClientId},
+            ${text}, ${JSON.stringify(attachments || [])}::jsonb, ${parentMessageId || null})
+    RETURNING *
+  `;
+  const msg = inserted.rows[0];
+
+  if (mentions.length > 0) {
+    // Persist as one row per mention. ON CONFLICT for safety on retried
+    // sends though composite PK + insert-once flow already prevents dupes.
+    for (const m of mentions) {
+      await sql`
+        INSERT INTO group_message_mentions (message_id, mentioned_client_id, workspace_id, display_name)
+        VALUES (${msg.id}, ${m.clientId}, ${workspaceId}, ${m.displayName})
+        ON CONFLICT (message_id, mentioned_client_id) DO NOTHING
+      `;
+    }
+  }
+
+  await fanoutGroupMessage({
+    workspaceId, threadId, threadName,
+    senderClientId,
+    preview: previewFor({ text, attachments }),
+    mentionedClientIds: mentions.map((m) => m.clientId),
+    mentionedOwner: isOwnerMention,
+  });
+
+  // Return message with mentions inline for the client to render the @chips
+  // immediately (without re-fetching the thread).
+  return {
+    message: {
+      ...serializeGroupMessage(msg),
+      mentions: mentions.map((m) => ({ clientId: m.clientId, name: m.displayName })),
+      reactions: [],
+    },
+  };
+}
+
+// Aggregate reactions per emoji for a list of message ids. Returns
+// { [messageId]: [{ emoji, count, mine }] }. `mineKey` is either a
+// clients.id or the string 'biz' (owner reactions).
+export async function loadReactionsForMessages(messageIds, mineKey) {
+  if (messageIds.length === 0) return {};
+  const r = await sql.query(
+    `SELECT message_id, emoji,
+            COUNT(*)::int AS count,
+            BOOL_OR(
+              CASE WHEN $2::text = 'biz' THEN is_owner = TRUE
+                   ELSE reactor_client_id::text = $2::text END
+            ) AS mine
+       FROM group_message_reactions
+      WHERE message_id = ANY($1::uuid[])
+      GROUP BY message_id, emoji
+      ORDER BY message_id, count DESC, emoji ASC`,
+    [messageIds, mineKey],
+  );
+  const map = {};
+  for (const row of r.rows) {
+    if (!map[row.message_id]) map[row.message_id] = [];
+    map[row.message_id].push({ emoji: row.emoji, count: row.count, mine: !!row.mine });
+  }
+  return map;
 }
 
 // Sanitize the attachments payload — same shape as messages POST.

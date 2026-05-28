@@ -2403,4 +2403,75 @@ CREATE TABLE IF NOT EXISTS group_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_group_messages_thread_time
   ON group_messages(thread_id, created_at);
+
+-- Threaded replies: parent_message_id points at the message being replied
+-- to. NULL = top-level. Indexed so a thread-view query "all replies to msg X"
+-- is a single scan.
+ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS parent_message_id UUID
+  REFERENCES group_messages(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_group_messages_parent
+  ON group_messages(parent_message_id) WHERE parent_message_id IS NOT NULL;
+
+-- Emoji reactions. One row per (message, reactor, emoji) — same client/owner
+-- can react with multiple emojis but only once with each. Reactor key is
+-- either a clients.id (sender_client_id) OR the literal string 'biz' meaning
+-- the workspace owner (we don't need user-level identity since there's only
+-- one owner per workspace).
+CREATE TABLE IF NOT EXISTS group_message_reactions (
+  message_id UUID NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  reactor_client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  is_owner BOOLEAN NOT NULL DEFAULT FALSE,
+  emoji TEXT NOT NULL CHECK (length(emoji) BETWEEN 1 AND 16),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- One reaction per reactor per emoji per message. Two unique indexes
+  -- (one for clients, one for owner) because UNIQUE NULLS NOT DISTINCT
+  -- isn't available across all PG versions.
+  UNIQUE (message_id, reactor_client_id, emoji)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_group_message_reactions_owner_uniq
+  ON group_message_reactions(message_id, emoji) WHERE is_owner = TRUE;
+CREATE INDEX IF NOT EXISTS idx_group_message_reactions_message
+  ON group_message_reactions(message_id);
+
+-- @mentions resolved at send time. Lets us boost the recipient's
+-- notification ("Alice mentioned you") AND render the mention as a chip
+-- in the message body. Storing the resolved client_id (vs re-parsing on
+-- read) means a rename of the mentioned client doesn't break old @mentions.
+CREATE TABLE IF NOT EXISTS group_message_mentions (
+  message_id UUID NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
+  mentioned_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  is_owner_mention BOOLEAN NOT NULL DEFAULT FALSE,
+  display_name TEXT,
+  PRIMARY KEY (message_id, mentioned_client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_message_mentions_client
+  ON group_message_mentions(mentioned_client_id);
+
+-- Invite-by-link: owner generates a one-time-use-ish token (configurable
+-- max_uses + expires_at). Accepting joins the user's clients-row to the
+-- group. Token is sha256-hashed at rest — we never store the plaintext
+-- value the URL carries.
+CREATE TABLE IF NOT EXISTS group_invite_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES group_threads(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  max_uses INT NOT NULL DEFAULT 50,
+  used_count INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMPTZ,
+  created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_group_invite_tokens_thread
+  ON group_invite_tokens(thread_id) WHERE revoked_at IS NULL;
+
+-- Per-user digest preferences. opt_in_groups defaults to TRUE so users
+-- who never touch settings still get the daily group-chat summary
+-- (everything else is unaffected — direct messages keep instant push).
+-- Per-thread mute is already in group_thread_members.muted.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_groups_daily BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_last_sent_at TIMESTAMPTZ;
 `;

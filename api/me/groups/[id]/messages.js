@@ -7,7 +7,7 @@ import { readBody } from '../../../_lib/body.js';
 import { withIdempotency } from '../../../_lib/idempotency.js';
 import { requireSameOrigin } from '../../../_lib/security.js';
 import {
-  serializeGroupMessage, cleanAttachments, previewFor, fanoutGroupMessage,
+  cleanAttachments, insertGroupMessage,
 } from '../../../_lib/groupChat.js';
 import { methodNotAllowed, notFound, serverError } from '../../../_lib/json.js';
 
@@ -46,22 +46,26 @@ export default async function handler(req, res) {
       const body = await readBody(req);
       const text = String(body.text || '').trim();
       const attachments = cleanAttachments(body.attachments);
+      const parentMessageId = body.parentMessageId ? String(body.parentMessageId) : null;
       if (!text && attachments.length === 0) {
         return { status: 400, body: { error: 'Message text or attachment is required' } };
       }
       if (text.length > 4000) return { status: 400, body: { error: 'Message is too long' } };
 
-      const inserted = await sql`
-        INSERT INTO group_messages (thread_id, workspace_id, sender, sender_client_id, text, attachments)
-        VALUES (${id}, ${workspaceId}, 'client', ${myClientId}, ${text}, ${JSON.stringify(attachments)}::jsonb)
-        RETURNING *
+      const members = await sql`
+        SELECT m.client_id, c.name AS client_name
+          FROM group_thread_members m
+          JOIN clients c ON c.id = m.client_id AND c.workspace_id = m.workspace_id
+         WHERE m.thread_id = ${id} AND m.workspace_id = ${workspaceId} AND m.left_at IS NULL
       `;
-      await fanoutGroupMessage({
+      const result = await insertGroupMessage({
         workspaceId, threadId: id, threadName,
-        senderClientId: myClientId,
-        preview: previewFor({ text, attachments }),
+        sender: 'client', senderClientId: myClientId,
+        text, attachments, parentMessageId,
+        activeMembers: members.rows,
       });
-      return { status: 201, body: { message: serializeGroupMessage(inserted.rows[0]) } };
+      if (result.error) return { status: result.status || 400, body: { error: result.error } };
+      return { status: 201, body: { message: result.message } };
     });
     if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
     return res.status(idemp.status).json(idemp.body);

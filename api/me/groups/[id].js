@@ -5,6 +5,7 @@ import { requireUser } from '../../_lib/auth.js';
 import { myClientIds } from '../../_lib/clientPortal.js';
 import {
   serializeGroupThread, serializeGroupMember, serializeGroupMessage,
+  loadReactionsForMessages,
 } from '../../_lib/groupChat.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
@@ -73,6 +74,7 @@ export default async function handler(req, res) {
       `;
     }
 
+    const reactionMap = await loadReactionsForMessages(messages.rows.map((r) => r.id), myClientId);
     return ok(res, {
       group: serializeGroupThread(row, {
         memberCount: showMembers ? members.rows.length : null,
@@ -80,7 +82,9 @@ export default async function handler(req, res) {
       }),
       myClientId,
       members: members.rows.map(serializeGroupMember),
-      messages: messages.rows.map(serializeGroupMessage),
+      messages: messages.rows.map((r) =>
+        serializeGroupMessage({ ...r, reactions: reactionMap[r.id] || [] }),
+      ),
       canReply: row.mode === 'open',
     });
   } catch (err) {
