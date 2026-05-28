@@ -28,6 +28,12 @@ export function serializeClient(row) {
     // already claimed their account.
     inviteSentAt:  row.invite_sent_at || null,
     hasClaimedPortal: !!row.user_id,
+    // Card-on-file metadata (no raw PM id leaks to the UI — only the
+    // brand/last4 for display + a boolean for gating off-session
+    // charges from the POS and recurring auto-charge surfaces).
+    hasCardOnFile:    !!row.payment_method_id,
+    cardBrand:        row.payment_method_brand || null,
+    cardLast4:        row.payment_method_last4 || null,
   };
 }
 

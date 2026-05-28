@@ -1,6 +1,12 @@
 // API-backed finance store: invoices + dashboard summary.
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
+
+// Background refresh cadence while the Finance page is visible. Webhook
+// confirmations from Stripe/Square/PayPal land in the DB asynchronously;
+// without this poll a freshly-paid invoice would sit as "Sent" on the
+// owner's screen until they manually reloaded.
+const POLL_MS = 60_000;
 
 export function useInvoices() {
   const [invoices, setInvoices] = useState([]);
@@ -11,6 +17,13 @@ export function useInvoices() {
   const [hasMore, setHasMore]   = useState(false);
   const [nextOffset, setNextOffset] = useState(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  // Tracks the latest fetch so out-of-order responses (a slow first
+  // fetch finishing after a fast retry) don't overwrite fresh state.
+  const fetchSeqRef = useRef(0);
+  // Once the user pages past the first 1000 invoices via loadMore,
+  // the silent background refresh stops re-fetching the invoice list
+  // (which would discard those appended pages). Summary still refreshes.
+  const paginatedRef = useRef(false);
 
   const refreshSummary = useCallback(async () => {
     try {
@@ -19,20 +32,54 @@ export function useInvoices() {
     } catch { /* non-fatal */ }
   }, []);
 
+  // Initial load + background refresh on focus / visibility / interval.
+  // The list page is the surface where webhook-driven paid status needs
+  // to appear without a manual reload, so we refetch when the user
+  // returns to the tab and on a slow poll while it's visible.
   useEffect(() => {
     let live = true;
-    Promise.all([
-      api.get('/invoices').then((r) => {
-        if (!live) return;
-        setInvoices(r.invoices || []);
-        setHasMore(!!r.hasMore);
-        setNextOffset(r.nextOffset ?? null);
-      }),
-      api.get('/finance').then((r) => live && setSummary(r.summary)),
-    ])
-      .catch((e) => live && setError(e))
-      .finally(() => live && setLoading(false));
-    return () => { live = false; };
+
+    const fetchAll = async ({ silent = false } = {}) => {
+      const seq = ++fetchSeqRef.current;
+      // Background refresh after pagination: refresh summary only.
+      // Re-fetching /invoices would drop pages 2+ that loadMore appended.
+      const skipInvoices = silent && paginatedRef.current;
+      try {
+        const [invRes, finRes] = await Promise.all([
+          skipInvoices ? Promise.resolve(null) : api.get('/invoices'),
+          api.get('/finance'),
+        ]);
+        if (!live || seq !== fetchSeqRef.current) return;
+        if (invRes) {
+          setInvoices(invRes.invoices || []);
+          setHasMore(!!invRes.hasMore);
+          setNextOffset(invRes.nextOffset ?? null);
+        }
+        setSummary(finRes.summary);
+        if (!silent) setError(null);
+      } catch (e) {
+        if (!live || seq !== fetchSeqRef.current) return;
+        if (!silent) setError(e);
+      } finally {
+        if (live && !silent) setLoading(false);
+      }
+    };
+
+    fetchAll();
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') fetchAll({ silent: true });
+    };
+    const intervalId = setInterval(refreshIfVisible, POLL_MS);
+    window.addEventListener('focus', refreshIfVisible);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+
+    return () => {
+      live = false;
+      clearInterval(intervalId);
+      window.removeEventListener('focus', refreshIfVisible);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
   }, []);
 
   const loadMore = useCallback(async () => {
@@ -45,6 +92,7 @@ export function useInvoices() {
       setInvoices((prev) => [...prev, ...fresh]);
       setHasMore(!!r.hasMore);
       setNextOffset(r.nextOffset ?? null);
+      paginatedRef.current = true;
     } finally {
       setLoadingMore(false);
     }

@@ -147,6 +147,48 @@ export async function fetchAccountSummary(arg) {
   };
 }
 
+// ─── Listing endpoints (for retroactive reconciliation) ─────────────
+//
+// Used by /api/finance/sync-stripe to walk the workspace's Stripe
+// history and reconcile against local invoices. Both list helpers
+// take optional `sinceMs` (a JS millisecond timestamp; converted to
+// Stripe's unix-seconds) and follow Stripe pagination via
+// `startingAfter`. Caller stops when `has_more=false` or when it has
+// enough.
+
+// List Stripe Checkout Sessions for the connected account.
+export async function listCheckoutSessions({
+  secretKey, stripeAccount, sinceMs, limit = 100, startingAfter,
+}) {
+  const params = [`limit=${Math.min(100, Math.max(1, Number(limit) || 100))}`];
+  if (sinceMs) {
+    params.push(`created%5Bgte%5D=${Math.floor(Number(sinceMs) / 1000)}`);
+  }
+  if (startingAfter) {
+    params.push(`starting_after=${encodeURIComponent(startingAfter)}`);
+  }
+  const path = `/checkout/sessions?${params.join('&')}`;
+  return stripeFetch(path, { secretKey, stripeAccount });
+}
+
+// List Stripe Invoices (the platform's "invoice" object — what
+// subscription renewals settle against). Defaults to status='paid'
+// so a sync run only pulls down completed payments.
+export async function listStripeInvoices({
+  secretKey, stripeAccount, sinceMs, limit = 100, startingAfter, status = 'paid',
+}) {
+  const params = [`limit=${Math.min(100, Math.max(1, Number(limit) || 100))}`];
+  if (status) params.push(`status=${encodeURIComponent(status)}`);
+  if (sinceMs) {
+    params.push(`created%5Bgte%5D=${Math.floor(Number(sinceMs) / 1000)}`);
+  }
+  if (startingAfter) {
+    params.push(`starting_after=${encodeURIComponent(startingAfter)}`);
+  }
+  const path = `/invoices?${params.join('&')}`;
+  return stripeFetch(path, { secretKey, stripeAccount });
+}
+
 // ─── Account Links (modern Connect onboarding) ───────────────────────
 // Used by stripe-oauth-init to create an Express account on demand and
 // hand the owner a Stripe-hosted onboarding link. Returns { id }.

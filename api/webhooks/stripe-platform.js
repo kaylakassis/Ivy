@@ -23,15 +23,24 @@ import {
 } from '../_lib/stripe.js';
 import { computeTotals } from '../_lib/finance.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
+import { recordMembershipRenewal } from '../_lib/membershipRevenue.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { notifyInvoicePaid } from '../_lib/invoiceNotify.js';
-import { markProcessed } from '../_lib/webhookDedup.js';
+import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
 
+function fmtMoney(n) {
+  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  // Tracks the dedup claim so a mid-handler throw can release it,
+  // letting Stripe's retry re-run the handler instead of getting
+  // deduped (which would silently swallow the event).
+  let claimedEventId = null;
   try {
     const secret = platformWebhookSecret();
     if (!secret) {
@@ -57,6 +66,7 @@ export default async function handler(req, res) {
     if (!await markProcessed('stripe-platform', event.id, null)) {
       return ok(res, { received: true, deduped: true });
     }
+    claimedEventId = event.id;
 
     // event.account = the connected account id. Platform events
     // (originating from the platform itself, not a connected acct)
@@ -102,6 +112,25 @@ export default async function handler(req, res) {
         console.warn('[stripe-platform] account.updated refresh failed:', err.message);
       }
       return ok(res, { received: true, applied: 'account-status' });
+    }
+
+    // Membership renewals. Stripe fires invoice.payment_succeeded
+    // for every successful subscription charge — the initial payment
+    // and each renewal thereafter. We mint a local paid invoice row
+    // so membership revenue shows up in the revenue tiles, the
+    // accounting export, and the year-end Schedule C. The helper is
+    // idempotent on the Stripe invoice id, so retries / replays /
+    // cross-webhook races converge on one row.
+    if (event.type === 'invoice.payment_succeeded') {
+      const stripeInvoice = event.data?.object || {};
+      // Only subscription-driven invoices are revenue events here —
+      // one-off invoices in Stripe are not used by THRYVE, but defend
+      // against a stray event by gating on subscription presence.
+      if (!stripeInvoice.subscription) {
+        return ok(res, { received: true, ignored: 'invoice without subscription' });
+      }
+      const result = await recordMembershipRenewal({ workspaceId, stripeInvoice });
+      return ok(res, { received: true, applied: 'membership-renewal', ...result });
     }
 
     // Membership subscription lifecycle. customer.subscription.* events
@@ -239,27 +268,57 @@ export default async function handler(req, res) {
         return ok(res, { received: true, ignored: 'invoice not found' });
       }
       const i = inv.rows[0];
+      // Idempotent: dedup already filters retries by event id, but this
+      // also catches the case where a different event for the same
+      // invoice arrives after we've already marked it paid (manual
+      // mark-paid, prior session, etc.).
+      if (i.status === 'paid') {
+        return ok(res, { received: true, ignored: 'already paid' });
+      }
       const totals = computeTotals(i.items, i.tax_rate, i.discount);
+      // Record what Stripe actually settled (session.amount_total is
+      // in the currency's smallest unit). If items changed between
+      // session creation and payment, this captures what the
+      // customer was charged, not the now-different computed total.
+      // Falls back to computed total when Stripe omits amount_total
+      // (older API versions / non-payment modes).
+      const stripeAmountCents = Number(session.amount_total);
+      const collectedAmount = Number.isFinite(stripeAmountCents) && stripeAmountCents > 0
+        ? Math.round(stripeAmountCents) / 100
+        : totals.total;
+      // Append a paid-by-card entry to the activity log so the owner
+      // can see when/how the payment landed. Mirrors the legacy
+      // per-workspace webhook's behavior.
+      const newActivity = [
+        ...(i.activity || []),
+        {
+          ts: new Date().toISOString(),
+          kind: 'paid',
+          text: `Paid by card · ${fmtMoney(collectedAmount)}`,
+        },
+      ];
       await sql`
         UPDATE invoices SET
           status = 'paid',
           paid_at = NOW(),
           paid_method = 'card',
-          paid_amount = ${totals.total},
+          paid_amount = ${collectedAmount},
           stripe_payment_intent = ${paymentIntent},
           stripe_session_id = ${sessionId},
+          view_token_hash = NULL,
+          activity = ${JSON.stringify(newActivity)}::jsonb,
           updated_at = NOW()
-        WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
+        WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
       `;
       notifyOwnerSafe({
         workspaceId, type: 'payments',
-        payload: { title: 'Invoice paid', body: `${i.number} · $${Number(totals.total).toFixed(2)}`,
+        payload: { title: 'Invoice paid', body: `${i.number} · $${Number(collectedAmount).toFixed(2)}`,
           url: `/finance?invoice=${invoiceId}`, tag: `inv-${invoiceId}` },
       });
       // Receipt email to the client. Best-effort; never blocks the
       // webhook ack so Stripe doesn't retry.
       notifyInvoicePaid({
-        workspaceId, invoiceId, totalAmount: totals.total, method: 'card',
+        workspaceId, invoiceId, totalAmount: collectedAmount, method: 'card',
       });
       return ok(res, { received: true, applied: 'invoice-paid' });
     }
@@ -267,6 +326,12 @@ export default async function handler(req, res) {
     // All other event types — quietly accept so Stripe stops retrying.
     return ok(res, { received: true, ignored: event.type });
   } catch (err) {
+    // Processing threw after we claimed the event — release the claim
+    // so Stripe's retry re-runs the handler rather than being deduped
+    // into silent failure. The handler's natural idempotency guards
+    // (status='paid' early exit, etc.) keep the retry from double-
+    // applying.
+    if (claimedEventId) await releaseProcessed('stripe-platform', claimedEventId);
     return serverError(res, err);
   }
 }

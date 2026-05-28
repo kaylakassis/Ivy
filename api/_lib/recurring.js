@@ -31,6 +31,7 @@ export function serializeRecurring(row) {
     lastRunAt:     row.last_run_at,
     lastInvoiceId: row.last_invoice_id,
     occurrencesRun: row.occurrences_run,
+    autoCharge:    !!row.auto_charge,
     subtotal:      totals.subtotal,
     tax:           totals.tax,
     total:         totals.total,
@@ -48,17 +49,37 @@ function toDateString(v) {
 
 // Advance a YYYY-MM-DD string by one cadence interval. Pure function
 // — operates in UTC to dodge DST surprises around month boundaries.
+//
+// Month/quarter/year cadences clamp end-of-month overflow to the
+// last day of the intended target month so a schedule starting on
+// the 31st doesn't jitter onto the 1st-3rd of the following month.
+// Without the clamp, Jan 31 + 1 month → Mar 3 (JS rolls overflow
+// days). With the clamp, Jan 31 + 1 month → Feb 28 (or 29).
 export function advanceDate(dateStr, cadence) {
   const d = new Date(dateStr + 'T00:00:00Z');
   switch (cadence) {
     case 'weekly':    d.setUTCDate(d.getUTCDate() + 7); break;
     case 'biweekly':  d.setUTCDate(d.getUTCDate() + 14); break;
-    case 'monthly':   d.setUTCMonth(d.getUTCMonth() + 1); break;
-    case 'quarterly': d.setUTCMonth(d.getUTCMonth() + 3); break;
-    case 'yearly':    d.setUTCFullYear(d.getUTCFullYear() + 1); break;
+    case 'monthly':   addMonthsClamped(d, 1);  break;
+    case 'quarterly': addMonthsClamped(d, 3);  break;
+    case 'yearly':    addMonthsClamped(d, 12); break;
     default: break;
   }
   return d.toISOString().slice(0, 10);
+}
+
+// In-place month addition that clamps to the last day of the target
+// month if the source day-of-month doesn't exist there (Jan 31 + 1m
+// → Feb 28 instead of Mar 3).
+function addMonthsClamped(d, n) {
+  const monthIdx = d.getUTCMonth() + n;
+  const expectedMonth = ((monthIdx % 12) + 12) % 12;
+  d.setUTCMonth(monthIdx);
+  if (d.getUTCMonth() !== expectedMonth) {
+    // Overflowed past the intended month. setUTCDate(0) backs up to
+    // the last day of the previous (= intended) month.
+    d.setUTCDate(0);
+  }
 }
 
 // Caller-side validator for incoming POST/PATCH bodies. Returns
@@ -119,6 +140,9 @@ export function cleanRecurringInput(body, { partial = false } = {}) {
   if ('autoSend' in body) {
     out.autoSend = !!body.autoSend;
   }
+  if ('autoCharge' in body) {
+    out.autoCharge = !!body.autoCharge;
+  }
   return { ok: true, sanitized: out };
 }
 
@@ -138,7 +162,10 @@ export async function materializeOne(scheduleId) {
   const today = new Date().toISOString().slice(0, 10);
   if (toDateString(s.next_run_at) > today) return { skipped: true, reason: 'not-due' };
   if (s.end_date && toDateString(s.end_date) < toDateString(s.next_run_at)) {
-    await sql`UPDATE recurring_invoices SET status = 'ended', updated_at = NOW() WHERE id = ${scheduleId}`;
+    await sql`
+      UPDATE recurring_invoices SET status = 'ended', updated_at = NOW()
+       WHERE id = ${scheduleId} AND workspace_id = ${s.workspace_id}
+    `;
     return { skipped: true, reason: 'past-end' };
   }
 
@@ -164,6 +191,7 @@ export async function materializeOne(scheduleId) {
       status           = ${overEnd ? 'ended' : s.status},
       updated_at       = NOW()
     WHERE id = ${scheduleId}
+      AND workspace_id = ${s.workspace_id}
       AND next_run_at = ${oldNext}::date
       AND status = 'active'
     RETURNING id
@@ -200,12 +228,14 @@ export async function materializeOne(scheduleId) {
   const newInvoice = ins.rows[0];
 
   // Stamp last_invoice_id now that we own the row (race already
-  // resolved above; this is unconditional).
+  // resolved above; this is unconditional). Workspace scope on the
+  // WHERE is defense-in-depth — materializeOne should never be
+  // called for a schedule outside the caller's tenant.
   await sql`
     UPDATE recurring_invoices SET
       last_invoice_id = ${newInvoice.id},
       updated_at      = NOW()
-    WHERE id = ${scheduleId}
+    WHERE id = ${scheduleId} AND workspace_id = ${s.workspace_id}
   `;
 
   return { skipped: false, schedule: s, invoice: newInvoice };

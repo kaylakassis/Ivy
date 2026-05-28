@@ -2158,4 +2158,23 @@ CREATE TABLE IF NOT EXISTS discover_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_discover_snapshots_refreshed
   ON discover_snapshots(refreshed_at);
+
+-- ─── Recurring auto-charge + invoice source tag ──────────────────────
+-- auto_charge: when TRUE, the daily recurring cron creates an off-
+-- session PaymentIntent against the client's saved card immediately
+-- after materializing the invoice. On success, the invoice is marked
+-- paid in the same call; on failure (decline, 3DS required) the
+-- cron falls back to the pay-link / auto-send path so the cycle
+-- doesn't silently drop. Defaults FALSE so existing schedules
+-- behavior is unchanged.
+ALTER TABLE recurring_invoices ADD COLUMN IF NOT EXISTS auto_charge BOOLEAN NOT NULL DEFAULT FALSE;
+
+-- invoices.source: tracks how the invoice came into existence. Lets
+-- the membership-renewal flow distinguish auto-created revenue rows
+-- from owner-issued invoices, and lets the UI group "subscription
+-- revenue" separately from one-off sales. NULL on legacy rows.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source_id TEXT;
+CREATE INDEX IF NOT EXISTS idx_invoices_source_id
+  ON invoices(source, source_id) WHERE source IS NOT NULL;
 `;

@@ -305,17 +305,46 @@ function HeroBand() {
   );
 }
 
+// Background refresh cadence while the Dashboard is visible. Mirrors
+// the Finance page — paid-status / revenue tiles depend on async
+// webhook writes, so we refetch when the owner returns to the tab and
+// on a slow poll otherwise.
+const DASHBOARD_POLL_MS = 60_000;
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let cancelled = false;
-    api.get('/dashboard')
-      .then((r) => { if (!cancelled) setData(r); })
-      .catch(() => { /* leave panels in their empty state */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+
+    const load = async ({ silent = false } = {}) => {
+      try {
+        const r = await api.get('/dashboard');
+        if (!cancelled) setData(r);
+      } catch {
+        /* leave panels in their empty state on initial load; silent
+           refreshes shouldn't blow away data we already have. */
+      } finally {
+        if (!cancelled && !silent) setLoading(false);
+      }
+    };
+
+    load();
+
+    const refreshIfVisible = () => {
+      if (document.visibilityState === 'visible') load({ silent: true });
+    };
+    const intervalId = setInterval(refreshIfVisible, DASHBOARD_POLL_MS);
+    window.addEventListener('focus', refreshIfVisible);
+    document.addEventListener('visibilitychange', refreshIfVisible);
+
+    return () => {
+      cancelled = true;
+      clearInterval(intervalId);
+      window.removeEventListener('focus', refreshIfVisible);
+      document.removeEventListener('visibilitychange', refreshIfVisible);
+    };
   }, []);
 
   const currency = data?.currency || 'USD';

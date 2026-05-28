@@ -33,6 +33,31 @@ export default async function handler(req, res) {
     if (!s) return badRequest(res, 'Schedule not found');
     if (s.status !== 'active') return badRequest(res, 'Schedule is not active');
 
+    // Race-safe claim: bump updated_at gated on the value we read. Two
+    // simultaneous "Run now" clicks (or a click that races with the
+    // cron) both see the same updated_at; only one UPDATE matches,
+    // the loser bails with no invoice inserted. Without this guard
+    // double-firing produced two invoices for the same cycle.
+    const oldNextStr = s.next_run_at instanceof Date ? s.next_run_at.toISOString().slice(0, 10) : s.next_run_at;
+    const newNext = advanceDate(oldNextStr, s.cadence);
+    const overEnd = s.end_date && (s.end_date instanceof Date ? s.end_date.toISOString().slice(0, 10) : s.end_date) < newNext;
+    const claim = await sql`
+      UPDATE recurring_invoices SET
+        next_run_at      = ${newNext}::date,
+        last_run_at      = NOW(),
+        occurrences_run  = occurrences_run + 1,
+        status           = ${overEnd ? 'ended' : s.status},
+        updated_at       = NOW()
+      WHERE id = ${id}
+        AND workspace_id = ${workspaceId}
+        AND updated_at = ${s.updated_at}
+        AND status = 'active'
+      RETURNING id
+    `;
+    if (claim.rows.length === 0) {
+      return badRequest(res, 'This schedule was already run — refresh and try again.');
+    }
+
     // Mint the invoice with TODAY as the issue date — distinct from
     // the cron path which uses next_run_at. We don't advance through
     // multiple cycles even if the schedule is overdue.
@@ -57,16 +82,11 @@ export default async function handler(req, res) {
     `;
     const newInvoice = ins.rows[0];
 
-    const oldNextStr = s.next_run_at instanceof Date ? s.next_run_at.toISOString().slice(0, 10) : s.next_run_at;
-    const newNext = advanceDate(oldNextStr, s.cadence);
-    const overEnd = s.end_date && (s.end_date instanceof Date ? s.end_date.toISOString().slice(0, 10) : s.end_date) < newNext;
+    // Stamp last_invoice_id now that we own the cycle (claim
+    // already resolved above).
     const upd = await sql`
       UPDATE recurring_invoices SET
-        next_run_at      = ${newNext}::date,
-        last_run_at      = NOW(),
         last_invoice_id  = ${newInvoice.id},
-        occurrences_run  = occurrences_run + 1,
-        status           = ${overEnd ? 'ended' : s.status},
         updated_at       = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *

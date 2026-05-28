@@ -72,6 +72,7 @@ export default async function handler(req, res) {
       if ('endDate' in sanitized)   push('end_date',     sanitized.endDate);
       if ('status' in sanitized)    push('status',       sanitized.status);
       if ('autoSend' in sanitized)  push('auto_send',    sanitized.autoSend);
+      if ('autoCharge' in sanitized) push('auto_charge', sanitized.autoCharge);
 
       if (sets.length === 0) return ok(res, { schedule: serializeRecurring(s) });
 

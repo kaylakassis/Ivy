@@ -126,7 +126,11 @@ function ScheduleRow({ schedule, first, onOpen, onRunNow, busy }) {
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {schedule.clientName || 'No client yet'}
-          {schedule.autoSend ? ' · auto-sends' : ' · creates as draft'}
+          {schedule.autoCharge
+            ? ' · auto-charges card'
+            : schedule.autoSend
+              ? ' · auto-sends'
+              : ' · creates as draft'}
           {' · '}{schedule.occurrencesRun} cycle{schedule.occurrencesRun === 1 ? '' : 's'} run
         </div>
       </div>
@@ -174,6 +178,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
   );
   const [endDate, setEndDate] = useState(schedule?.endDate || '');
   const [autoSend, setAutoSend] = useState(schedule ? !!schedule.autoSend : true);
+  const [autoCharge, setAutoCharge] = useState(schedule ? !!schedule.autoCharge : false);
   const [status, setStatus] = useState(schedule?.status || 'active');
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
@@ -213,6 +218,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
         nextRunAt,
         endDate: endDate || null,
         autoSend,
+        autoCharge,
         ...(isNew ? {} : { status }),
       });
     } catch (e) { setErr(e.message || 'Save failed'); }
@@ -280,6 +286,13 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--fg-2)' }}>
                 <input type="checkbox" checked={autoSend} onChange={(e) => setAutoSend(e.target.checked)}/>
                 Email the client automatically when each invoice is generated
+              </label>
+            </Field>
+            <Field label="Auto-charge"
+              hint="Requires the client to have a card on file. If the charge declines, the pay-link is emailed as a fallback (when auto-send is on).">
+              <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13.5, color: 'var(--fg-2)' }}>
+                <input type="checkbox" checked={autoCharge} onChange={(e) => setAutoCharge(e.target.checked)}/>
+                Automatically charge the client's saved card each cycle
               </label>
             </Field>
           </div>

@@ -163,6 +163,15 @@ export default function PaymentProviderCard() {
         />
       </div>
 
+      {/* Resync from Stripe — surfaced only when Stripe is connected,
+          since this endpoint hits the workspace's Stripe history.
+          Fixes the "I have payments in Stripe but revenue shows $0"
+          case (missed webhooks, retroactive backfill after wiring
+          membership renewal handling). Idempotent on every run. */}
+      {data.providers.stripe?.connected && (
+        <StripeResyncBox/>
+      )}
+
       <div style={{
         marginTop: 14, padding: '8px 12px', borderRadius: 8,
         background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55,
@@ -173,6 +182,96 @@ export default function PaymentProviderCard() {
         Saved-card auto-charges (no-show / late-cancel fees) and
         recurring invoice subscriptions still only run through Stripe.
       </div>
+    </div>
+  );
+}
+
+// Owner-triggered reconciliation: walks the workspace's Stripe
+// checkout sessions + subscription invoices and brings the local DB
+// into agreement (marking previously-missed invoices paid and
+// inserting membership renewal rows). Idempotent — safe to click
+// repeatedly. Defaults to a 90-day window; the "Deeper backfill"
+// button extends to 1 year for first-time recoveries.
+function StripeResyncBox() {
+  const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState(null);
+  const [err, setErr] = useState(null);
+  const run = async (days) => {
+    setBusy(true);
+    setErr(null);
+    setReport(null);
+    try {
+      const r = await api.post(`/finance/sync-stripe?days=${days}`);
+      setReport(r);
+    } catch (e) {
+      setErr(e.message || 'Sync failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div style={{
+      marginTop: 14, padding: '12px 14px', borderRadius: 10,
+      background: 'var(--surface-2)', border: '1px solid var(--border)',
+      display: 'flex', flexDirection: 'column', gap: 8,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <Icons.Repeat size={14} stroke="var(--accent)"/>
+        <div style={{ flex: 1, minWidth: 220 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>Resync revenue from Stripe</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+            Walks recent Stripe checkout sessions and subscription
+            invoices, marks matching invoices paid, and creates rows
+            for any membership renewals missed before webhooks were
+            wired up. Idempotent — safe to run anytime.
+          </div>
+        </div>
+        <button className="btn btn-outline" onClick={() => run(90)} disabled={busy}
+          style={{ fontSize: 12, padding: '6px 12px' }}>
+          {busy ? 'Syncing…' : 'Sync last 90 days'}
+        </button>
+        <button className="btn btn-ghost" onClick={() => run(365)} disabled={busy}
+          style={{ fontSize: 12, padding: '6px 12px', color: 'var(--muted)' }}>
+          Deeper backfill (1 yr)
+        </button>
+      </div>
+      {err && (
+        <div style={{
+          padding: '8px 10px', borderRadius: 6, fontSize: 12,
+          background: 'rgba(155,44,44,0.08)', color: 'var(--danger)',
+        }}>{err}</div>
+      )}
+      {report && (
+        <div style={{
+          padding: '10px 12px', borderRadius: 8, fontSize: 12, lineHeight: 1.5,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          color: 'var(--fg-2)',
+        }}>
+          <div style={{ fontWeight: 600, marginBottom: 4, color: 'var(--fg)' }}>
+            Sync complete · {report.window?.days}d window
+          </div>
+          <div>
+            Checkout sessions: {report.sessions?.scanned} scanned ·{' '}
+            <strong style={{ color: 'var(--ok)' }}>{report.sessions?.marked_paid} marked paid</strong>{' '}
+            (already paid: {report.sessions?.already_paid}, not found: {report.sessions?.not_found})
+          </div>
+          <div>
+            Membership renewals: {report.invoices?.scanned} scanned ·{' '}
+            <strong style={{ color: 'var(--ok)' }}>{report.invoices?.created} created</strong>{' '}
+            (already recorded: {report.invoices?.already_recorded}, no membership match: {report.invoices?.no_membership})
+          </div>
+          {Array.isArray(report.errors) && report.errors.length > 0 && (
+            <div style={{ marginTop: 6, color: 'var(--danger)' }}>
+              {report.errors.length} error{report.errors.length === 1 ? '' : 's'} —{' '}
+              {report.errors.slice(0, 2).map((e) => e.message).join('; ')}
+              {report.errors.length > 2 ? '…' : ''}
+            </div>
+          )}
+          <div style={{ marginTop: 6, fontSize: 11, color: 'var(--muted)' }}>
+            Refresh the Finance page to see the updated tiles.
+          </div>
+        </div>
+      )}
     </div>
   );
 }

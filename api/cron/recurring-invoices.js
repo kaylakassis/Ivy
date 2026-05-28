@@ -20,6 +20,8 @@ import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding, makeBrandingCache } from '../_lib/branding.js';
+import { chargeInvoiceOffSession } from '../_lib/invoiceCharge.js';
+import { notifyOwnerSafe } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
@@ -51,6 +53,8 @@ async function handler(req, res) {
     `;
     let materialized = 0;
     let sent = 0;
+    let autoCharged = 0;
+    let chargeFailed = 0;
     let errors = 0;
     const getBranding = makeBrandingCache();
 
@@ -61,6 +65,49 @@ async function handler(req, res) {
         materialized++;
 
         const { schedule, invoice } = result;
+
+        // Auto-charge first when enabled. On success the invoice is
+        // marked paid in the same call (chargeInvoiceOffSession runs
+        // the same shape of UPDATE the checkout webhooks do), so
+        // there's nothing left to send. On failure (no card on file,
+        // decline, 3DS required) we record the attempt and fall
+        // through to the auto-send path so the client can still pay
+        // via the pay-link.
+        if (schedule.auto_charge && schedule.client_id) {
+          const charged = await chargeInvoiceOffSession({
+            invoiceId: invoice.id,
+            workspaceId: schedule.workspace_id,
+          });
+          if (charged.ok && charged.code === 'charged') {
+            autoCharged++;
+            const amt = Number(charged.chargeAmount || 0);
+            notifyOwnerSafe({
+              workspaceId: schedule.workspace_id,
+              type: 'payments',
+              payload: {
+                title: 'Recurring auto-charge succeeded',
+                body: `${schedule.client_name || 'A client'} · ${invoice.number} · $${amt.toFixed(2)}`,
+                url: `/finance?invoice=${invoice.id}`,
+                tag: `inv-${invoice.id}`,
+              },
+            });
+            continue;
+          }
+          // Failure: increment counter, then fall through to
+          // auto-send (the pay-link) so the cycle still settles.
+          chargeFailed++;
+          notifyOwnerSafe({
+            workspaceId: schedule.workspace_id,
+            type: 'payments',
+            payload: {
+              title: 'Recurring auto-charge failed',
+              body: `${schedule.client_name || 'A client'} · ${invoice.number} — ${charged.message || charged.code}. Pay-link will be sent.`,
+              url: `/finance?invoice=${invoice.id}`,
+              tag: `inv-charge-failed-${invoice.id}`,
+            },
+          });
+        }
+
         if (!schedule.auto_send) continue;
         // Auto-send: skip if no email on file. Unsent invoices stay
         // 'draft' so the owner can review + send manually.
@@ -85,6 +132,8 @@ async function handler(req, res) {
       considered: due.rows.length,
       materialized,
       sent,
+      autoCharged,
+      chargeFailed,
       errors,
     });
   } catch (err) {

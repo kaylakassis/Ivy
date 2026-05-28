@@ -13,6 +13,7 @@ import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { applySubscriptionState } from '../../_lib/memberships.js';
+import { recordMembershipRenewal } from '../../_lib/membershipRevenue.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
@@ -84,6 +85,20 @@ export default async function handler(req, res) {
       return ok(res, { received: true, deduped: true });
     }
     claimedEventId = event.id;
+
+    // Membership renewals → local invoice rows so subscription
+    // revenue is captured in the same place as everything else
+    // (revenue tiles, accounting export, tax export). Idempotent on
+    // the Stripe invoice id; safe to retry. See
+    // _lib/membershipRevenue.js for the full contract.
+    if (event.type === 'invoice.payment_succeeded') {
+      const stripeInvoice = event.data?.object || {};
+      if (!stripeInvoice.subscription) {
+        return ok(res, { received: true, ignored: 'invoice without subscription' });
+      }
+      const result = await recordMembershipRenewal({ workspaceId, stripeInvoice });
+      return ok(res, { received: true, applied: 'membership-renewal', ...result });
+    }
 
     // Subscription lifecycle for memberships. We only act on the
     // events that move client_memberships state; everything else is
@@ -440,12 +455,19 @@ export default async function handler(req, res) {
     }
 
     const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
+    // Record what Stripe actually settled. session.amount_total is in
+    // the currency's smallest unit; falling back to computed total
+    // keeps legacy behavior when Stripe omits the field.
+    const stripeAmountCents = Number(session.amount_total);
+    const collectedAmount = Number.isFinite(stripeAmountCents) && stripeAmountCents > 0
+      ? Math.round(stripeAmountCents) / 100
+      : totals.total;
     const newActivity = [
       ...(inv.activity || []),
       {
         ts: new Date().toISOString(),
         kind: 'paid',
-        text: `Paid by card · ${fmtMoney(totals.total)}`,
+        text: `Paid by card · ${fmtMoney(collectedAmount)}`,
       },
     ];
 
@@ -459,7 +481,7 @@ export default async function handler(req, res) {
       UPDATE invoices SET
         status                 = 'paid',
         paid_at                = NOW(),
-        paid_amount            = ${totals.total},
+        paid_amount            = ${collectedAmount},
         paid_method            = 'card',
         view_token_hash        = NULL,
         stripe_payment_intent  = ${paymentIntent},
@@ -472,7 +494,7 @@ export default async function handler(req, res) {
     // ready-to-go thank-you prompt. The /ivy?prompt= deep link is
     // consumed by IvyPro on mount — see the useEffect there.
     const clientLabel = inv.client_name || 'A client';
-    const totalLabel  = fmtMoney(totals.total);
+    const totalLabel  = fmtMoney(collectedAmount);
     const ivyPrompt   = `Draft a short, warm thank-you message for ${clientLabel} who just paid invoice ${inv.number} (${totalLabel}). Then send it as a chat message to them.`;
     notifyOwnerSafe({
       workspaceId,

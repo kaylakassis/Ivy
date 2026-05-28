@@ -24,21 +24,29 @@ export default async function handler(req, res) {
     // Tolerate partial schema: if the column or table isn't there
     // yet (cold install before migrations apply), return zeros
     // instead of bricking the Finance tile.
+    // Paid-revenue tiles sum the amount actually collected NET of
+    // refunds: GREATEST(paid_amount - refunded_amount, 0). Including
+    // status='refunded' makes the math symmetrical — fully-refunded
+    // invoices contribute zero rather than vanishing from the period.
+    // Outstanding/overdue use `total` since paid_amount is NULL
+    // pre-payment.
     let rows;
     try { ({ rows } = await sql`
       SELECT
-        COALESCE(SUM(CASE WHEN status = 'paid'                   THEN total END), 0)::numeric AS total_paid,
+        COALESCE(SUM(CASE WHEN status IN ('paid','refunded')     THEN GREATEST(COALESCE(paid_amount, total) - COALESCE(refunded_amount, 0), 0) END), 0)::numeric AS total_paid,
         COALESCE(SUM(CASE WHEN status IN ('sent','overdue')      THEN total END), 0)::numeric AS total_outstanding,
         COALESCE(SUM(CASE WHEN status = 'overdue'                THEN total END), 0)::numeric AS total_overdue,
-        COALESCE(SUM(CASE WHEN status = 'paid'
-          AND paid_at >= date_trunc('month', NOW())              THEN total END), 0)::numeric AS month_paid,
-        COALESCE(SUM(CASE WHEN status = 'paid'
-          AND paid_at >= date_trunc('year', NOW())               THEN total END), 0)::numeric AS year_paid,
+        COALESCE(SUM(CASE WHEN status IN ('paid','refunded')
+          AND paid_at >= date_trunc('month', NOW())              THEN GREATEST(COALESCE(paid_amount, total) - COALESCE(refunded_amount, 0), 0) END), 0)::numeric AS month_paid,
+        COALESCE(SUM(CASE WHEN status IN ('paid','refunded')
+          AND paid_at >= date_trunc('year', NOW())               THEN GREATEST(COALESCE(paid_amount, total) - COALESCE(refunded_amount, 0), 0) END), 0)::numeric AS year_paid,
+        COALESCE(SUM(CASE WHEN status IN ('paid','refunded')     THEN COALESCE(refunded_amount, 0) END), 0)::numeric AS total_refunded,
         COUNT(*) FILTER (WHERE status = 'draft')                 AS count_draft,
         COUNT(*) FILTER (WHERE status = 'sent')                  AS count_sent,
         COUNT(*) FILTER (WHERE status = 'paid')                  AS count_paid,
         COUNT(*) FILTER (WHERE status = 'overdue')               AS count_overdue,
-        COUNT(*) FILTER (WHERE status = 'voided')                AS count_voided
+        COUNT(*) FILTER (WHERE status = 'voided')                AS count_voided,
+        COUNT(*) FILTER (WHERE status = 'refunded')              AS count_refunded
       FROM invoices
       WHERE workspace_id = ${workspaceId}
     `); } catch (e) {
@@ -53,6 +61,7 @@ export default async function handler(req, res) {
         totalPaid:        Number(r.total_paid || 0),
         totalOutstanding: Number(r.total_outstanding || 0),
         totalOverdue:     Number(r.total_overdue || 0),
+        totalRefunded:    Number(r.total_refunded || 0),
         monthPaid:        Number(r.month_paid || 0),
         yearPaid:         Number(r.year_paid || 0),
         counts: {
@@ -61,6 +70,7 @@ export default async function handler(req, res) {
           paid:     Number(r.count_paid || 0),
           overdue:  Number(r.count_overdue || 0),
           voided:   Number(r.count_voided || 0),
+          refunded: Number(r.count_refunded || 0),
         },
       },
     });

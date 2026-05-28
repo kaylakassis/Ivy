@@ -17,8 +17,18 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     const [rev, cli, booked, hours, exp, today, recentInv, recentBk, taskRows] = await Promise.all([
-      sql`SELECT COALESCE(SUM(total), 0)::numeric AS v FROM invoices
-           WHERE workspace_id = ${workspaceId} AND status = 'paid'
+      // Revenue is the amount actually collected (paid_amount, set
+      // by every webhook + the manual mark-paid handler) NET of any
+      // refunds (refunded_amount, written by the refund flow). Falls
+      // back to the precomputed total on legacy rows where
+      // paid_amount is NULL. Includes status='refunded' so fully-
+      // refunded invoices' net (zero) is represented; status='paid'
+      // with partial refunds is also netted. GREATEST guards against
+      // weird states where refunded_amount > paid_amount.
+      sql`SELECT COALESCE(SUM(GREATEST(COALESCE(paid_amount, total) - COALESCE(refunded_amount, 0), 0)), 0)::numeric AS v
+            FROM invoices
+           WHERE workspace_id = ${workspaceId}
+             AND status IN ('paid', 'refunded')
              AND paid_at >= date_trunc('month', NOW())`,
       sql`SELECT COUNT(*)::int AS v FROM clients
            WHERE workspace_id = ${workspaceId} AND stage = 'active'`,

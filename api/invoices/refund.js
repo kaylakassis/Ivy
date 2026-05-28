@@ -49,8 +49,18 @@ export default async function handler(req, res) {
     }
 
     const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
+    // Cap refunds against what was ACTUALLY collected (paid_amount),
+    // not the items-derived total. If a customer overpaid (tip on
+    // top, Stripe Tax adjustment) the cap should allow refunding the
+    // full collected sum. If they underpaid, the cap should match
+    // what's refundable at the provider so Stripe doesn't 4xx the
+    // /refunds call. Falls back to computed total for legacy rows
+    // where paid_amount is NULL.
+    const collected = Number(inv.paid_amount || 0) > 0
+      ? Number(inv.paid_amount)
+      : totals.total;
     const alreadyRefunded = Number(inv.refunded_amount || 0);
-    const remaining = Math.max(0, totals.total - alreadyRefunded);
+    const remaining = Math.max(0, collected - alreadyRefunded);
     if (remaining <= 0) {
       return badRequest(res, 'This invoice has already been fully refunded');
     }
@@ -101,8 +111,18 @@ export default async function handler(req, res) {
           let creds;
           try { creds = await loadStripeCreds(workspaceId); }
           catch (err) {
+            // Surface every loadStripeCreds failure as an actionable
+            // message rather than a 500. The owner can fix all three
+            // (reconnect, set env var, re-paste secret) without
+            // contacting support.
             if (err.code === 'no_stripe_connection') {
               return badRequest(res, 'Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually below.');
+            }
+            if (err.code === 'platform_secret_missing') {
+              return badRequest(res, 'Stripe platform key not configured on this deploy. Set STRIPE_SECRET_KEY in Vercel env and redeploy, or refund manually below.');
+            }
+            if (err.code === 'stripe_credentials_invalid') {
+              return badRequest(res, 'Saved Stripe credentials could not be decrypted. Disconnect and reconnect Stripe in Finance, or refund manually below.');
             }
             return serverError(res, err);
           }
@@ -121,7 +141,11 @@ export default async function handler(req, res) {
     }
 
     const newRefunded = alreadyRefunded + amount;
-    const fullyRefunded = newRefunded >= totals.total - 0.001;
+    // "Fully refunded" is measured against what was actually collected,
+    // matching the cap above and what the Square/PayPal webhook
+    // refund handlers use. Keeps all three refund paths in agreement
+    // on when an invoice flips to status='refunded'.
+    const fullyRefunded = newRefunded >= collected - 0.001;
     const newStatus = fullyRefunded ? 'refunded' : 'paid';
 
     const activityEntry = {
