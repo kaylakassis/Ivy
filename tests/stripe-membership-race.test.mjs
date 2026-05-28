@@ -88,6 +88,61 @@ async function run() {
   });
   assert(r6 === 'race', `unknown membership id → race (got '${r6}')`);
 
+  console.log('\n[6] Stripe-Dashboard-originated sub (no THRYVE metadata) matches via customer + price');
+  // Stamp the client with a stripe_customer_id + provision a Stripe
+  // price on the tier — this is the state for a workspace where the
+  // owner set up recurring billing in the Stripe Dashboard, not via
+  // THRYVE's checkout flow.
+  await sql`UPDATE clients SET stripe_customer_id = 'cus_dash_match' WHERE id = ${cid}`;
+  await sql`UPDATE memberships SET stripe_price_id = 'price_dash_silver' WHERE id = ${mid}`;
+  const dashSub = {
+    id: `sub_${tag}_F`,
+    status: 'active',
+    customer: 'cus_dash_match',
+    items: { data: [{ price: { id: 'price_dash_silver' } }] },
+    current_period_end: 1893456000,
+    // No metadata at all — that's the whole point.
+  };
+  const r7 = await applySubscriptionState({ workspaceId: wid, sub: dashSub });
+  assert(r7 === 'created', `dashboard sub matched + materialized (got '${r7}')`);
+  const dashRow = (await sql`SELECT * FROM client_memberships WHERE stripe_subscription_id = ${dashSub.id}`).rows[0];
+  assert(dashRow && dashRow.client_id === cid && dashRow.membership_id === mid, 'dashboard sub linked to right client + tier via stripe_customer_id + stripe_price_id');
+
+  console.log('\n[7] Plan-change resyncs tier snapshot');
+  // Create a second tier on the same workspace and provision its price.
+  const mid2 = (await sql`INSERT INTO memberships (workspace_id, name, price_cents, interval, active, stripe_price_id)
+    VALUES (${wid}, 'Gold', 5000, 'month', TRUE, 'price_dash_gold') RETURNING id`).rows[0].id;
+  // Existing sub gets switched to the Gold price (owner edited from Stripe Dashboard or via change-plan UI).
+  const upgraded = {
+    ...dashSub,
+    status: 'active',
+    items: { data: [{ price: { id: 'price_dash_gold' } }] },
+  };
+  const r8 = await applySubscriptionState({ workspaceId: wid, sub: upgraded });
+  assert(r8 === 'retiered', `plan change returns 'retiered' (got '${r8}')`);
+  const retieredRow = (await sql`SELECT * FROM client_memberships WHERE stripe_subscription_id = ${dashSub.id}`).rows[0];
+  assert(retieredRow.membership_id === mid2, 'membership_id updated to new tier');
+  assert(retieredRow.membership_name === 'Gold', 'membership_name resynced');
+  assert(Number(retieredRow.price_cents) === 5000, 'price_cents resynced');
+
+  console.log('\n[8] same-tier update is still ok, not retiered');
+  const r9 = await applySubscriptionState({
+    workspaceId: wid,
+    sub: { ...upgraded, status: 'past_due' },
+  });
+  assert(r9 === 'ok', `same-price update returns 'ok' (got '${r9}')`);
+
+  console.log('\n[9] Dashboard sub with unknown price → race (no insert)');
+  const r10 = await applySubscriptionState({
+    workspaceId: wid,
+    sub: {
+      id: `sub_${tag}_G`, status: 'active',
+      customer: 'cus_dash_match',
+      items: { data: [{ price: { id: 'price_unknown' } }] },
+    },
+  });
+  assert(r10 === 'race', `unknown price → race (got '${r10}')`);
+
   // Cleanup
   await sql`DELETE FROM client_memberships WHERE workspace_id = ${wid}`;
   await sql`DELETE FROM memberships WHERE workspace_id = ${wid}`;

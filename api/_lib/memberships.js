@@ -82,30 +82,54 @@ export function mapSubStatus(s) {
   return 'active';
 }
 
+// Pulls the active price id off a Stripe Subscription object. Modern
+// API exposes it on items.data[0].price.id; the legacy plan.id is kept
+// as a fallback for older event payloads. Returns null when neither
+// is present (e.g. malformed event).
+export function extractSubPriceId(sub) {
+  const item = sub?.items?.data?.[0];
+  const priceFromItems = item?.price?.id || (typeof item?.price === 'string' ? item.price : null);
+  if (priceFromItems) return priceFromItems;
+  const planId = sub?.plan?.id || (typeof sub?.plan === 'string' ? sub.plan : null);
+  return planId || null;
+}
+
 // Take a Stripe subscription object + the workspace_id it belongs to
 // and reconcile client_memberships. Returns:
-//   'ok'      — applied (update)
-//   'created' — applied (insert) when checkout.session.completed hadn't
-//               landed yet and the subscription event arrived first
-//   'race'    — subscription row hasn't reached us AND the sub carries
-//               insufficient metadata to upsert (checkout.session.completed
-//               flow will pick it up if/when it arrives)
-//   'mismatch'— cross-tenant event, dropped
-//   'invalid' — no subscription id
+//   'ok'        — applied (update)
+//   'created'   — applied (insert) when checkout.session.completed hadn't
+//                 landed yet and the subscription event arrived first
+//   'retiered'  — update + tier resync (Stripe-side plan change)
+//   'race'      — subscription row hasn't reached us AND the sub carries
+//                 insufficient info to upsert (no THRYVE metadata, and
+//                 customer/price don't resolve to anything in this
+//                 workspace either)
+//   'mismatch'  — cross-tenant event, dropped
+//   'invalid'   — no subscription id
 //
-// The upsert path closes a race: Stripe doesn't guarantee that
-// checkout.session.completed lands before customer.subscription.created.
-// When the sub arrives first we'd previously skip and the row would
-// never materialize if the session event later failed to deliver,
-// leaving a live Stripe subscription that THRYVE never tracked.
-// `subscription_data.metadata` is stamped by createMembershipCheckoutSession
-// with workspace_id/membership_id/client_id/purpose, giving us enough
-// to safely materialize the row from the subscription event alone.
+// Two upsert paths close two races / gaps:
+//
+// (a) Stripe doesn't guarantee that checkout.session.completed lands
+//     before customer.subscription.created. When the sub arrives first
+//     and carries subscription_data.metadata stamped by
+//     createMembershipCheckoutSession (workspace_id/membership_id/
+//     client_id/purpose), we materialize the row from the sub event.
+//
+// (b) Subscriptions created from the Stripe Dashboard don't carry
+//     THRYVE metadata at all. If the sub's customer maps to a clients
+//     row in this workspace AND the price maps to a memberships.
+//     stripe_price_id, we still materialize — owners who set up
+//     recurring billing through Stripe directly shouldn't have their
+//     revenue disappear from Finance.
+//
+// Plan changes (UI or Stripe Dashboard) re-sync the tier snapshot
+// (membership_id/name/price_cents/interval) when the active price
+// id changes — 'retiered' is returned so the webhook can log it.
 export async function applySubscriptionState({ workspaceId, sub }) {
   const subId = sub?.id;
   if (!subId) return 'invalid';
   const ours = await sql`
-    SELECT id, workspace_id FROM client_memberships
+    SELECT id, workspace_id, membership_id FROM client_memberships
      WHERE stripe_subscription_id = ${subId}
      LIMIT 1
   `;
@@ -115,35 +139,71 @@ export async function applySubscriptionState({ workspaceId, sub }) {
   const cpeMs = sub.current_period_end ? sub.current_period_end * 1000 : null;
   const cpeIso = cpeMs ? new Date(cpeMs).toISOString() : null;
   const cancelledAt = (status === 'cancelled') ? new Date().toISOString() : null;
+  const priceId = extractSubPriceId(sub);
+  const customerId = typeof sub?.customer === 'string'
+    ? sub.customer
+    : sub?.customer?.id || null;
 
   if (ours.rows.length === 0) {
-    // No row yet — try to materialize from subscription metadata.
+    // Path (a): row materialized from subscription_data.metadata.
     const md = sub.metadata || {};
     const mdWorkspaceId = md.workspace_id;
     const membershipId = md.membership_id;
-    const clientId = md.client_id;
-    if (md.purpose !== 'membership' || !membershipId || !clientId) {
-      return 'race';
+    const clientIdFromMd = md.client_id;
+    const hasThryveMetadata = md.purpose === 'membership' && membershipId && clientIdFromMd;
+    if (hasThryveMetadata) {
+      if (mdWorkspaceId && mdWorkspaceId !== workspaceId) return 'mismatch';
+      const tier = (await sql`
+        SELECT id, name, price_cents, interval FROM memberships
+         WHERE id = ${membershipId} AND workspace_id = ${workspaceId}
+      `).rows[0];
+      const client = tier ? (await sql`
+        SELECT id FROM clients
+         WHERE id = ${clientIdFromMd} AND workspace_id = ${workspaceId}
+      `).rows[0] : null;
+      if (tier && client) {
+        await sql`
+          INSERT INTO client_memberships (
+            workspace_id, client_id, membership_id,
+            membership_name, price_cents, interval,
+            stripe_subscription_id, status,
+            cancel_at_period_end, current_period_end, cancelled_at
+          ) VALUES (
+            ${workspaceId}, ${client.id}, ${tier.id},
+            ${tier.name}, ${tier.price_cents}, ${tier.interval},
+            ${subId}, ${status},
+            ${cancelAtPeriodEnd}, ${cpeIso}, ${cancelledAt}
+          )
+          ON CONFLICT (stripe_subscription_id) DO UPDATE SET
+            status = EXCLUDED.status,
+            cancel_at_period_end = EXCLUDED.cancel_at_period_end,
+            current_period_end = EXCLUDED.current_period_end,
+            cancelled_at = COALESCE(client_memberships.cancelled_at, EXCLUDED.cancelled_at),
+            updated_at = NOW()
+        `;
+        return 'created';
+      }
     }
-    if (mdWorkspaceId && mdWorkspaceId !== workspaceId) return 'mismatch';
 
-    // Validate both the tier and the client belong to this workspace
-    // before insert. The FKs would prevent cross-tenant inserts anyway,
-    // but failing loud here keeps the webhook response informative.
-    const tier = (await sql`
-      SELECT id, name, price_cents, interval FROM memberships
-       WHERE id = ${membershipId} AND workspace_id = ${workspaceId}
-    `).rows[0];
-    if (!tier) return 'race';
+    // Path (b): Stripe-Dashboard-originated subscription with no THRYVE
+    // metadata. Match the customer to a clients row and the price to a
+    // memberships tier — both must resolve unambiguously within this
+    // workspace, otherwise we ignore. This is the same scope as case
+    // (a) — we never insert across workspaces.
+    if (!customerId || !priceId) return 'race';
     const client = (await sql`
       SELECT id FROM clients
-       WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+       WHERE stripe_customer_id = ${customerId} AND workspace_id = ${workspaceId}
+       LIMIT 1
     `).rows[0];
     if (!client) return 'race';
+    const tier = (await sql`
+      SELECT id, name, price_cents, interval FROM memberships
+       WHERE stripe_price_id = ${priceId} AND workspace_id = ${workspaceId}
+       LIMIT 1
+    `).rows[0];
+    if (!tier) return 'race';
 
-    // ON CONFLICT covers the case where checkout.session.completed
-    // lands between the SELECT above and this INSERT — defense against
-    // the same race we're fixing.
     await sql`
       INSERT INTO client_memberships (
         workspace_id, client_id, membership_id,
@@ -151,7 +211,7 @@ export async function applySubscriptionState({ workspaceId, sub }) {
         stripe_subscription_id, status,
         cancel_at_period_end, current_period_end, cancelled_at
       ) VALUES (
-        ${workspaceId}, ${clientId}, ${tier.id},
+        ${workspaceId}, ${client.id}, ${tier.id},
         ${tier.name}, ${tier.price_cents}, ${tier.interval},
         ${subId}, ${status},
         ${cancelAtPeriodEnd}, ${cpeIso}, ${cancelledAt}
@@ -168,6 +228,29 @@ export async function applySubscriptionState({ workspaceId, sub }) {
 
   if (ours.rows[0].workspace_id !== workspaceId) return 'mismatch';
 
+  // Plan-change resync: if the active price id maps to a different
+  // membership tier than the one currently stamped on this row, update
+  // the snapshot fields too. Same workspace-scoped lookup as path (b).
+  let retiered = false;
+  if (priceId) {
+    const newTier = (await sql`
+      SELECT id, name, price_cents, interval FROM memberships
+       WHERE stripe_price_id = ${priceId} AND workspace_id = ${workspaceId}
+       LIMIT 1
+    `).rows[0];
+    if (newTier && newTier.id !== ours.rows[0].membership_id) {
+      await sql`
+        UPDATE client_memberships SET
+          membership_id   = ${newTier.id},
+          membership_name = ${newTier.name},
+          price_cents     = ${newTier.price_cents},
+          interval        = ${newTier.interval}
+        WHERE stripe_subscription_id = ${subId} AND workspace_id = ${workspaceId}
+      `;
+      retiered = true;
+    }
+  }
+
   await sql`
     UPDATE client_memberships SET
       status = ${status},
@@ -177,5 +260,5 @@ export async function applySubscriptionState({ workspaceId, sub }) {
       updated_at = NOW()
     WHERE stripe_subscription_id = ${subId} AND workspace_id = ${workspaceId}
   `;
-  return 'ok';
+  return retiered ? 'retiered' : 'ok';
 }

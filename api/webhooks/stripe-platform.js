@@ -119,9 +119,11 @@ export default async function handler(req, res) {
       if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
         return res.status(400).json({ error: 'workspace mismatch' });
       }
-      if (sub.metadata?.purpose !== 'membership') {
-        return ok(res, { received: true, ignored: 'subscription not a membership' });
-      }
+      // No metadata.purpose gate: applySubscriptionState handles both
+      // THRYVE-originated subs (metadata.purpose='membership') AND
+      // Stripe-Dashboard-originated subs (matched via customer +
+      // price lookups). Returns 'race' / 'mismatch' for anything that
+      // doesn't resolve to a known client + tier in this workspace.
       const result = await applySubscriptionState({ workspaceId, sub });
       return ok(res, { received: true, applied: 'membership-state', result });
     }

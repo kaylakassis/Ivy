@@ -98,11 +98,12 @@ export default async function handler(req, res) {
       if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
         return res.status(400).json({ error: 'workspace mismatch' });
       }
-      if (sub.metadata?.purpose !== 'membership') {
-        return ok(res, { received: true, ignored: 'subscription not a membership' });
-      }
-      await applySubscriptionState({ workspaceId, sub });
-      return ok(res, { received: true, applied: 'membership-state' });
+      // No metadata.purpose gate: applySubscriptionState resolves both
+      // THRYVE-originated and Stripe-Dashboard-originated subs by
+      // matching customer + price. Subs that don't map are returned
+      // as 'race' / 'mismatch' and quietly dropped.
+      const result = await applySubscriptionState({ workspaceId, sub });
+      return ok(res, { received: true, applied: 'membership-state', result });
     }
 
     // payment_intent.succeeded — safety net for invoice payments.
