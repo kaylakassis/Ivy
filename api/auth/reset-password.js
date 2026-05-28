@@ -5,7 +5,7 @@ import { hashPassword, signSession, setSessionCookie } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { findValidToken, consumeToken, invalidateUserTokens, KIND_RESET } from '../_lib/tokens.js';
+import { findValidToken, consumeToken, invalidateUserTokens, KIND_RESET, KIND_VERIFY } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -24,14 +24,25 @@ export default async function handler(req, res) {
     if (blocked) return;
 
     const valid = await findValidToken({ kind: KIND_RESET, raw: token });
-    if (!valid) return unauthorized(res, 'This reset link is invalid or has expired');
+    // CRITICAL: must reject alreadyUsed tokens. findValidToken returns
+    // a truthy object for consumed tokens (so the verify-email flow can
+    // distinguish "wrong token" from "already verified"). Without this
+    // check, anyone who recovers a consumed reset URL can replay it for
+    // persistent account takeover.
+    if (!valid || valid.alreadyUsed) {
+      return unauthorized(res, 'This reset link is invalid or has expired');
+    }
 
     const password_hash = await hashPassword(password);
     await sql`UPDATE users SET password_hash = ${password_hash}, updated_at = NOW() WHERE id = ${valid.userId}`;
 
     // Burn this token, plus any other live reset tokens for the user.
+    // Also invalidate any outstanding verify_email tokens so a prior
+    // account-controller can't keep a verification claim active after
+    // a recovery flip.
     await consumeToken(valid.tokenId);
     await invalidateUserTokens({ userId: valid.userId, kind: KIND_RESET });
+    await invalidateUserTokens({ userId: valid.userId, kind: KIND_VERIFY });
 
     // Sign them in immediately — they just proved control of the email.
     setSessionCookie(res, signSession(valid.userId));

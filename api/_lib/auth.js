@@ -13,9 +13,27 @@ const COOKIE = 'thryve_session';
 const IMPERSONATION_BACKUP = 'thryve_admin_session';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
+// Known placeholder values shipped in .env.example. Sessions signed
+// with these are forgeable by anyone who can read the template, so
+// boot-time rejection here protects against the "operator copied the
+// example and didn't replace the secret" failure mode.
+const PLACEHOLDER_SECRETS = new Set([
+  'change-me-to-a-long-random-string',
+  'changeme',
+  'CHANGE_ME',
+  'replace-me',
+]);
+
 function secret() {
   const s = process.env.JWT_SECRET;
   if (!s) throw new Error('JWT_SECRET not set');
+  // Reject obvious placeholders + suspiciously short keys. 32 chars is
+  // a low floor (Stripe / Twilio secrets are 32+); the bcrypt-equivalent
+  // SHA-256 needs at least this for security parity. Real fix is for
+  // the operator to set a properly random value.
+  if (PLACEHOLDER_SECRETS.has(s) || s.length < 32) {
+    throw new Error('JWT_SECRET is too weak — must be at least 32 random characters and not a placeholder');
+  }
   return s;
 }
 
