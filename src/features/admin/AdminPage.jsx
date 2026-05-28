@@ -18,6 +18,7 @@ import { useAuth } from '../../lib/auth.jsx';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
+  { id: 'readiness',  label: 'Readiness',  icon: 'Check' },
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
   { id: 'support',    label: 'Support',    icon: 'Chat' },
@@ -111,6 +112,7 @@ export default function AdminPage() {
       </div>
 
       {tab === 'overview'   && <Overview/>}
+      {tab === 'readiness'  && <ReadinessTab/>}
       {tab === 'users'      && <UsersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
       {tab === 'support'    && <SupportTab/>}
@@ -1917,6 +1919,94 @@ function SettingsTab() {
 
         {msg && <div style={{ fontSize: 12, color: 'var(--ok)' }}>✓ {msg}</div>}
         {err && <ErrCard msg={err}/>}
+      </div>
+    </div>
+  );
+}
+
+// Production-readiness probe. Polls /api/admin/prod-readiness and
+// renders each env-var/feature check color-coded so the operator can
+// see at a glance what's still missing before flipping the public DNS.
+function ReadinessTab() {
+  const [data, setData] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+
+  const refresh = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const r = await api.get('/admin/prod-readiness');
+      setData(r);
+    } catch (e) {
+      setErr(e.message || 'Probe failed');
+    } finally { setBusy(false); }
+  };
+  useEffect(() => { refresh(); }, []);
+
+  if (!data && !err) {
+    return <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13 }}>Probing…</div>;
+  }
+  if (err) return <ErrCard msg={err}/>;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div style={{
+        padding: '16px 18px', borderRadius: 12,
+        background: data.ok ? 'rgba(56, 142, 60, 0.08)' : 'rgba(155, 44, 44, 0.08)',
+        border: '1px solid ' + (data.ok ? 'var(--ok)' : 'var(--danger)'),
+        display: 'flex', alignItems: 'center', gap: 14,
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
+            {data.ok ? '✓ All required config present' : `${data.blockers} blocker${data.blockers === 1 ? '' : 's'} remaining`}
+          </div>
+          <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+            {data.goLive}
+          </div>
+        </div>
+        <button className="btn btn-outline" onClick={refresh} disabled={busy}
+          style={{ padding: '8px 14px', fontSize: 13 }}>
+          {busy ? 'Probing…' : 'Re-probe'}
+        </button>
+      </div>
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {(data.checks || []).map((c, i) => (
+          <div key={c.key} style={{
+            padding: '12px 16px', display: 'flex', gap: 12, alignItems: 'flex-start',
+            borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+          }}>
+            <div style={{
+              width: 8, height: 8, borderRadius: '50%', marginTop: 8, flexShrink: 0,
+              background: c.level === 'ok' ? 'var(--ok)'
+                : c.level === 'warn' ? 'var(--warn)' : 'var(--danger)',
+            }}/>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600 }}>{c.label}</div>
+              {c.detail && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, lineHeight: 1.5 }}>
+                  {c.detail}
+                </div>
+              )}
+            </div>
+            <div style={{
+              fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em',
+              padding: '3px 8px', borderRadius: 6, alignSelf: 'flex-start',
+              background: c.level === 'ok' ? 'rgba(56, 142, 60, 0.12)'
+                : c.level === 'warn' ? 'rgba(217, 119, 6, 0.12)' : 'rgba(155, 44, 44, 0.12)',
+              color: c.level === 'ok' ? 'var(--ok)'
+                : c.level === 'warn' ? 'var(--warn)' : 'var(--danger)',
+            }}>
+              {c.level === 'ok' ? 'READY' : c.level === 'warn' ? 'WARN' : 'BLOCKER'}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.6 }}>
+        <strong>BLOCKER</strong> = launch is unsafe until fixed.
+        <strong> WARN</strong> = the feature won't work but the app boots fine without it.
+        See LAUNCH.md in the repo for the full go-live runbook.
       </div>
     </div>
   );
