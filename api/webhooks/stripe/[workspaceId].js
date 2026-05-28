@@ -16,6 +16,7 @@ import { applySubscriptionState } from '../../_lib/memberships.js';
 import { computeTotals } from '../../_lib/finance.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { notifyInvoicePaid } from '../../_lib/invoiceNotify.js';
+import { markInvoicePaid } from '../../_lib/invoicePayments.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
@@ -102,6 +103,33 @@ export default async function handler(req, res) {
       }
       await applySubscriptionState({ workspaceId, sub });
       return ok(res, { received: true, applied: 'membership-state' });
+    }
+
+    // payment_intent.succeeded — safety net for invoice payments.
+    // Stripe fans a single Checkout payment into both events; if
+    // checkout.session.completed is dropped for any reason (or the
+    // payment came in via chargeOffSession rather than Checkout), the
+    // PI event still marks the invoice paid. markInvoicePaid is
+    // idempotent so the duplicate from the pair is a no-op. Booking
+    // deposits (invoice_id 'bookdep_…') skip — they ride session.completed.
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data?.object || {};
+      const invoiceId = pi.metadata?.invoice_id;
+      const eventWorkspaceId = pi.metadata?.workspace_id;
+      if (!invoiceId) {
+        return ok(res, { received: true, ignored: 'no invoice_id in metadata' });
+      }
+      if (invoiceId.startsWith('bookdep_')) {
+        return ok(res, { received: true, ignored: 'booking deposit handled via session.completed' });
+      }
+      if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch' });
+      }
+      const result = await markInvoicePaid({
+        workspaceId, invoiceId, paymentIntent: pi.id,
+        amountCents: pi.amount_received,
+      });
+      return ok(res, { received: true, applied: 'invoice-paid', result });
     }
 
     // Only checkout.session.completed remains as the path that
