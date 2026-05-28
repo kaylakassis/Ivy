@@ -1,12 +1,14 @@
-// Client-portal cohort group chat UI. Lists groups this client is in
-// across all the businesses they're a client of, with per-thread
-// view/send/leave.
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+// Client portal direct messages. List of 1:1 conversations with other
+// clients in groups you share. Each conversation has block / mute / leave /
+// report actions.
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useViewport } from '../../lib/viewport.js';
 import { upload } from '@vercel/blob/client';
+
+const QUICK_EMOJIS = ['👍', '❤️', '🎉', '🔥', '😂', '👀'];
 
 function fmtTime(iso) {
   if (!iso) return '';
@@ -14,31 +16,30 @@ function fmtTime(iso) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
-export default function ClientGroups() {
+export default function ClientDms() {
   const { isMobile } = useViewport();
-  const [groups, setGroups] = useState([]);
+  const [dms, setDms]         = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError]   = useState(null);
   const [selectedId, setSelectedId] = useState(null);
+  const [err, setErr]         = useState(null);
 
   const refresh = useCallback(async () => {
-    try { const r = await api.get('/me/groups'); setGroups(r.groups || []); }
-    catch (e) { setError(e); } finally { setLoading(false); }
+    try { const r = await api.get('/me/dms'); setDms(r.dms || []); }
+    catch (e) { setErr(e); } finally { setLoading(false); }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
-
   useEffect(() => {
-    if (!isMobile && !selectedId && groups.length > 0) setSelectedId(groups[0].id);
-  }, [groups, selectedId, isMobile]);
+    if (!isMobile && !selectedId && dms.length > 0) setSelectedId(dms[0].id);
+  }, [dms, selectedId, isMobile]);
 
-  const selected = useMemo(() => groups.find((g) => g.id === selectedId) || null, [groups, selectedId]);
+  const selected = dms.find((d) => d.id === selectedId) || null;
   const showList = !isMobile || !selectedId;
   const showThread = !isMobile || !!selectedId;
 
   if (loading) return <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
-  if (error) return (
+  if (err) return (
     <div style={{ padding: 20 }}>
-      <EmptyNote icon="Chat" title="Couldn't load groups" hint={error.message || 'Try refreshing.'}/>
+      <EmptyNote icon="Chat" title="Couldn't load DMs" hint={err.message || 'Try refreshing.'}/>
     </div>
   );
 
@@ -50,38 +51,43 @@ export default function ClientGroups() {
       {showList && (
         <div style={{
           borderRight: isMobile ? 'none' : '1px solid var(--border)',
-          display: 'flex', flexDirection: 'column', minHeight: 0, background: 'var(--surface)',
+          display: 'flex', flexDirection: 'column', background: 'var(--surface)', minHeight: 0,
         }}>
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)',
-            fontSize: 13, fontWeight: 600 }}>Groups</div>
+            fontSize: 13, fontWeight: 600 }}>
+            Direct messages
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, fontWeight: 400 }}>
+              With people you share a group with.
+            </div>
+          </div>
           <div className="scroll" style={{ flex: 1, overflowY: 'auto' }}>
-            {groups.length === 0 ? (
+            {dms.length === 0 ? (
               <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
-                You're not in any groups yet.
+                No DMs yet. Start one from a group's member list.
               </div>
-            ) : groups.map((g) => (
-              <button key={g.id} onClick={() => setSelectedId(g.id)} style={{
+            ) : dms.map((d) => (
+              <button key={d.id} onClick={() => setSelectedId(d.id)} style={{
                 display: 'block', width: '100%', textAlign: 'left', padding: '12px 16px',
-                background: g.id === selectedId ? 'var(--surface-2)' : 'transparent',
+                background: d.id === selectedId ? 'var(--surface-2)' : 'transparent',
                 border: 'none', borderBottom: '1px solid var(--border)', cursor: 'pointer',
               }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, minWidth: 0,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {g.name}
+                    {d.otherClientName || d.otherClientEmail || 'Unnamed'}
                   </div>
-                  {g.unreadClient > 0 && (
+                  {d.unread > 0 && (
                     <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--surface)',
                       background: 'var(--accent)', borderRadius: 999, padding: '2px 7px' }}>
-                      {g.unreadClient}
+                      {d.unread}
                     </span>
                   )}
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3,
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {g.businessName}
-                  {g.mode === 'broadcast' && ' · Announcements'}
-                  {g.lastPreview && ` · ${g.lastPreview}`}
+                  {d.mutedByMe && '🔕 '}
+                  {d.blockedByMe && '🚫 '}
+                  {d.lastPreview || '—'}
                 </div>
               </button>
             ))}
@@ -90,54 +96,44 @@ export default function ClientGroups() {
       )}
       {showThread && (
         selected ? (
-          <GroupView
+          <DmView
             key={selected.id}
-            groupId={selected.id}
+            dmId={selected.id}
             onBack={() => isMobile && setSelectedId(null)}
+            onChanged={refresh}
             onLeave={async () => {
-              if (!window.confirm('Leave this group?')) return;
-              await api.post('/me/groups/' + encodeURIComponent(selected.id) + '/leave', {});
+              if (!window.confirm('Hide this conversation? You can come back if they message you again.')) return;
+              await api.del('/me/dms/' + encodeURIComponent(selected.id));
               setSelectedId(null);
               refresh();
             }}
           />
         ) : (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            color: 'var(--muted)', fontSize: 13 }}>Select a group.</div>
+            color: 'var(--muted)', fontSize: 13 }}>Select a conversation.</div>
         )
       )}
     </div>
   );
 }
 
-const QUICK_EMOJIS = ['👍', '❤️', '🎉', '🔥', '😂', '👀'];
-
-function GroupView({ groupId, onBack, onLeave }) {
+function DmView({ dmId, onBack, onChanged, onLeave }) {
   const [data, setData] = useState(null);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [pendingFiles, setPendingFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
-  const [showMembers, setShowMembers] = useState(false);
+  const fileInputRef = useRef(null);
   const scrollRef = useRef(null);
   const { isMobile } = useViewport();
 
-  const startDm = async (otherClientId) => {
-    try {
-      const r = await api.post('/me/dms', { recipientClientId: otherClientId });
-      // Take user to the new DM via the messages page's DM tab.
-      window.location.assign(`/me/messages?dm=${r.dm.id}`);
-    } catch (err) {
-      window.alert(err.message || 'Could not start DM.');
-    }
-  };
-
   const refresh = useCallback(async () => {
-    const r = await api.get('/me/groups/' + encodeURIComponent(groupId));
+    const r = await api.get('/me/dms/' + encodeURIComponent(dmId));
     setData(r);
-  }, [groupId]);
+  }, [dmId]);
   useEffect(() => { refresh(); }, [refresh]);
-  // Smart polling: 2s when this tab is focused + visible, 30s otherwise.
-  // See GroupChats.jsx for the trade-off rationale.
+
+  // Smart polling.
   useEffect(() => {
     let cancelled = false;
     let timer = null;
@@ -145,8 +141,8 @@ function GroupView({ groupId, onBack, onLeave }) {
       if (cancelled) return;
       try { await refresh(); } catch { /* ignore */ }
       if (cancelled) return;
-      const visible = document.visibilityState === 'visible' && document.hasFocus();
-      timer = setTimeout(tick, visible ? 2000 : 30000);
+      const v = document.visibilityState === 'visible' && document.hasFocus();
+      timer = setTimeout(tick, v ? 2000 : 30000);
     };
     timer = setTimeout(tick, 2000);
     const onVis = () => { if (timer) clearTimeout(timer); tick(); };
@@ -161,27 +157,23 @@ function GroupView({ groupId, onBack, onLeave }) {
       window.removeEventListener('blur', onVis);
     };
   }, [refresh]);
+
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [data?.messages?.length]);
-
-  const [pendingFiles, setPendingFiles] = useState([]);
-  const fileInputRef = useRef(null);
 
   const onPickFiles = async (e) => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
     for (const f of files) {
       try {
-        const path = `messages/cg-${Date.now()}-${f.name}`;
+        const path = `messages/dm-${Date.now()}-${f.name}`;
         const uploaded = await upload(path, f, {
           access: 'public', handleUploadUrl: '/api/messages/upload-token',
           contentType: f.type || 'application/octet-stream',
         });
         setPendingFiles((p) => [...p, { url: uploaded.url, type: f.type, name: f.name }]);
-      } catch (err) {
-        window.alert(`Couldn't upload ${f.name}: ${err.message}`);
-      }
+      } catch (err) { window.alert(`Couldn't upload ${f.name}: ${err.message}`); }
     }
   };
 
@@ -191,46 +183,43 @@ function GroupView({ groupId, onBack, onLeave }) {
     if ((!t && pendingFiles.length === 0) || sending) return;
     setSending(true);
     try {
-      const r = await api.post('/me/groups/' + encodeURIComponent(groupId) + '/messages',
+      const r = await api.post('/me/dms/' + encodeURIComponent(dmId) + '/messages',
         { text: t, attachments: pendingFiles, parentMessageId: replyingTo?.id || null });
       setData((d) => d ? ({ ...d, messages: [...d.messages, r.message] }) : d);
-      setText('');
-      setPendingFiles([]);
-      setReplyingTo(null);
+      setText(''); setPendingFiles([]); setReplyingTo(null);
     } catch (err) {
       window.alert(err.message || 'Send failed.');
     } finally { setSending(false); }
   };
 
-  const toggleReaction = async (msg, emoji) => {
-    const existing = (msg.reactions || []).find((r) => r.emoji === emoji);
-    const mine = !!existing?.mine;
+  const toggleBlock = async () => {
     try {
-      if (mine) {
-        await api.del('/me/groups/' + encodeURIComponent(groupId)
-          + '/messages/' + encodeURIComponent(msg.id)
-          + '/reactions?emoji=' + encodeURIComponent(emoji));
-      } else {
-        await api.post('/me/groups/' + encodeURIComponent(groupId)
-          + '/messages/' + encodeURIComponent(msg.id) + '/reactions', { emoji });
-      }
-      setData((d) => d ? ({
-        ...d,
-        messages: d.messages.map((m) => {
-          if (m.id !== msg.id) return m;
-          const next = (m.reactions || []).filter((r) => r.emoji !== emoji);
-          const newCount = (existing?.count || 0) + (mine ? -1 : 1);
-          if (newCount > 0) next.push({ emoji, count: newCount, mine: !mine });
-          return { ...m, reactions: next };
-        }),
-      }) : d);
-    } catch (err) {
-      window.alert(err.message || 'Failed.');
-    }
+      if (data.dm.blockedByMe) await api.del('/me/dms/' + encodeURIComponent(dmId) + '/block');
+      else await api.post('/me/dms/' + encodeURIComponent(dmId) + '/block', {});
+      await refresh(); onChanged?.();
+    } catch (e) { window.alert(e.message || 'Failed.'); }
+  };
+  const toggleMute = async () => {
+    try {
+      if (data.dm.mutedByMe) await api.del('/me/dms/' + encodeURIComponent(dmId) + '/mute');
+      else await api.post('/me/dms/' + encodeURIComponent(dmId) + '/mute', {});
+      await refresh(); onChanged?.();
+    } catch (e) { window.alert(e.message || 'Failed.'); }
+  };
+
+  const reportMessage = async (msg) => {
+    const reason = window.prompt('What\'s the issue? (optional)') ?? '';
+    try {
+      await api.post('/me/dms/' + encodeURIComponent(dmId)
+        + '/messages/' + encodeURIComponent(msg.id) + '/report', { reason });
+      window.alert('Reported. Our team will review.');
+      await refresh();
+    } catch (e) { window.alert(e.message || 'Could not report.'); }
   };
 
   if (!data) return <div style={{ flex: 1, padding: 24, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
-  const { group, messages, members, canReply, myClientId } = data;
+  const { dm, messages } = data;
+  const blocked = dm.blockedByMe;
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
@@ -244,62 +233,22 @@ function GroupView({ groupId, onBack, onLeave }) {
           </button>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{group.name}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{dm.otherClientName || dm.otherClientEmail}</div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
-            {group.mode === 'broadcast'
-              ? 'Announcements only'
-              : (members.length > 0 ? `${members.length} member${members.length === 1 ? '' : 's'}` : 'Group')}
-            {group.muted && ' · Muted'}
+            {dm.mutedByMe && '🔕 Muted · '}{dm.blockedByMe && '🚫 Blocked · '}Direct message
           </div>
         </div>
-        {members.length > 0 && group.mode === 'open' && (
-          <button className="btn btn-ghost" onClick={() => setShowMembers((v) => !v)}
-            style={{ padding: '6px 10px', fontSize: 12 }}>
-            Members
-          </button>
-        )}
-        <button className="btn btn-ghost" onClick={async () => {
-          try {
-            if (group.muted) {
-              await api.del('/me/groups/' + encodeURIComponent(groupId) + '/mute');
-            } else {
-              await api.post('/me/groups/' + encodeURIComponent(groupId) + '/mute', {});
-            }
-            await refresh();
-          } catch (err) { window.alert(err.message || 'Failed.'); }
-        }} style={{ padding: '6px 10px', fontSize: 12 }}>
-          {group.muted ? 'Unmute' : 'Mute'}
+        <button className="btn btn-ghost" onClick={toggleMute} style={{ padding: '6px 10px', fontSize: 12 }}>
+          {dm.mutedByMe ? 'Unmute' : 'Mute'}
+        </button>
+        <button className="btn btn-ghost" onClick={toggleBlock} style={{ padding: '6px 10px', fontSize: 12 }}>
+          {dm.blockedByMe ? 'Unblock' : 'Block'}
         </button>
         <button className="btn btn-ghost" onClick={onLeave}
           style={{ padding: '6px 10px', fontSize: 12, color: 'var(--danger)' }}>
-          Leave
+          Hide
         </button>
       </div>
-
-      {showMembers && members.length > 0 && (
-        <div style={{ borderBottom: '1px solid var(--border)', background: 'var(--surface-2)',
-          padding: '8px 16px', maxHeight: 220, overflowY: 'auto' }}>
-          {members.map((m) => {
-            const isMe = m.clientId === data.myClientId;
-            return (
-              <div key={m.clientId} style={{
-                display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 13,
-              }}>
-                <div style={{ flex: 1 }}>
-                  {m.clientName || m.clientEmail}
-                  {isMe && <span style={{ color: 'var(--muted)', marginLeft: 6 }}>(you)</span>}
-                </div>
-                {!isMe && (
-                  <button onClick={() => startDm(m.clientId)} className="btn btn-ghost"
-                    style={{ fontSize: 11.5, padding: '4px 10px' }}>
-                    Message directly
-                  </button>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
 
       <div ref={scrollRef} className="scroll"
         style={{ flex: 1, overflowY: 'auto', padding: '16px 20px',
@@ -307,10 +256,11 @@ function GroupView({ groupId, onBack, onLeave }) {
         {messages.length === 0 ? (
           <EmptyNote icon="Chat" title="No messages yet" hint=""/>
         ) : messages.map((m) => (
-          <MessageBubble key={m.id} msg={m} mine={m.senderClientId === myClientId}
+          <DmBubble key={m.id} msg={m}
             parent={m.parentMessageId ? messages.find((x) => x.id === m.parentMessageId) : null}
-            onReact={canReply ? (e) => toggleReaction(m, e) : null}
-            onReply={canReply ? () => setReplyingTo(m) : null}/>
+            onReply={() => setReplyingTo(m)}
+            onReport={() => reportMessage(m)}
+          />
         ))}
       </div>
 
@@ -323,17 +273,22 @@ function GroupView({ groupId, onBack, onLeave }) {
           <span style={{ color: 'var(--muted)' }}>Replying to</span>
           <span style={{ flex: 1, fontWeight: 500, whiteSpace: 'nowrap',
             overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--fg)' }}>
-            {(replyingTo.text || replyingTo.kind || '').slice(0, 80)}
+            {(replyingTo.text || '').slice(0, 80)}
           </span>
-          <button onClick={() => setReplyingTo(null)}
-            style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-              color: 'var(--muted)', padding: 0 }}>
+          <button onClick={() => setReplyingTo(null)} style={{
+            background: 'transparent', border: 'none', cursor: 'pointer',
+            color: 'var(--muted)', padding: 0 }}>
             <Icons.X size={14}/>
           </button>
         </div>
       )}
 
-      {canReply ? (
+      {blocked ? (
+        <div style={{ padding: 14, borderTop: '1px solid var(--border)',
+          background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 12.5, textAlign: 'center' }}>
+          You've blocked this person. Their new messages won't reach you, and you can't send theirs. Unblock to resume.
+        </div>
+      ) : (
         <>
           {pendingFiles.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 12px',
@@ -368,7 +323,7 @@ function GroupView({ groupId, onBack, onLeave }) {
               <Icons.Plus size={14} sw={2}/>
             </button>
             <input value={text} onChange={(e) => setText(e.target.value)}
-              placeholder="Message the group…"
+              placeholder="Type a message…"
               style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
                 borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
             <button type="submit" className="btn btn-primary"
@@ -377,138 +332,79 @@ function GroupView({ groupId, onBack, onLeave }) {
             </button>
           </form>
         </>
-      ) : (
-        <div style={{ padding: 14, borderTop: '1px solid var(--border)',
-          background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 12.5, textAlign: 'center' }}>
-          This group is announcements-only. You'll receive messages but can't reply here.
-        </div>
       )}
     </div>
   );
 }
 
-function MessageBubble({ msg, mine, parent, onReact, onReply }) {
-  const [pickerOpen, setPickerOpen] = useState(false);
-  if (msg.sender === 'system') {
-    return (
-      <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--muted)', margin: '6px 0' }}>
-        {msg.text || (msg.kind || '').replace(/_/g, ' ')}
-      </div>
-    );
-  }
-  const fromBiz = msg.sender === 'biz';
+function DmBubble({ msg, parent, onReply, onReport }) {
+  const [hover, setHover] = useState(false);
   return (
-    <div style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '78%' }}
-      onMouseEnter={() => setPickerOpen(true)} onMouseLeave={() => setPickerOpen(false)}>
-      {!mine && (
-        <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 2, marginLeft: 4 }}>
-          {fromBiz ? 'Owner' : (msg.senderName || 'Member')}
-        </div>
-      )}
+    <div style={{ alignSelf: msg.mine ? 'flex-end' : 'flex-start', maxWidth: '78%' }}
+      onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}>
       {parent && (
         <div style={{ fontSize: 11, color: 'var(--muted)',
           borderLeft: '2px solid var(--border)', paddingLeft: 8, marginBottom: 4,
           whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          ↳ {(parent.text || parent.kind || '').slice(0, 80)}
+          ↳ {(parent.text || '').slice(0, 80)}
         </div>
       )}
       <div style={{ position: 'relative' }}>
         <div style={{
           padding: '10px 14px', borderRadius: 14,
-          background: mine ? 'var(--accent)' : 'var(--surface-2)',
-          color: mine ? 'var(--surface)' : 'var(--fg)',
+          background: msg.mine ? 'var(--accent)' : 'var(--surface-2)',
+          color: msg.mine ? 'var(--surface)' : 'var(--fg)',
           fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap',
         }}>
-          {renderMentions(msg.text, msg.mentions)}
+          {msg.text}
           {(msg.attachments || []).length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-              {msg.attachments.map((a, i) => {
-                if ((a.type || '').startsWith('image/')) {
-                  return (
-                    <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
-                      <img src={a.url} alt={a.name || 'image'}
-                        style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
-                    </a>
-                  );
-                }
-                return (
+              {msg.attachments.map((a, i) => (
+                (a.type || '').startsWith('image/') ? (
+                  <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
+                    <img src={a.url} alt={a.name || 'image'}
+                      style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
+                  </a>
+                ) : (
                   <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" download={a.name || true}
                     style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8,
-                      background: mine ? 'rgba(255,255,255,0.18)' : 'var(--surface)',
-                      border: '1px solid ' + (mine ? 'rgba(255,255,255,0.18)' : 'var(--border)'),
+                      background: msg.mine ? 'rgba(255,255,255,0.18)' : 'var(--surface)',
+                      border: '1px solid ' + (msg.mine ? 'rgba(255,255,255,0.18)' : 'var(--border)'),
                       color: 'inherit', textDecoration: 'none',
                       display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 260 }}>
                     📎 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                       {a.name || 'Attachment'}
                     </span>
                   </a>
-                );
-              })}
+                )
+              ))}
             </div>
           )}
         </div>
-        {(onReact || onReply) && pickerOpen && (
+        {(onReply || onReport) && hover && (
           <div style={{
-            position: 'absolute', top: -16,
-            [mine ? 'left' : 'right']: 0,
+            position: 'absolute', top: -16, [msg.mine ? 'left' : 'right']: 0,
             display: 'flex', gap: 2, padding: 2, borderRadius: 999,
             background: 'var(--surface)', border: '1px solid var(--border)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: 14,
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: 11,
           }}>
-            {onReact && QUICK_EMOJIS.map((e) => (
-              <button key={e} onClick={() => onReact?.(e)}
-                style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: '2px 4px', borderRadius: 8 }}>{e}</button>
-            ))}
             {onReply && (
               <button onClick={onReply} title="Reply"
                 style={{ background: 'transparent', border: 'none', cursor: 'pointer',
-                  padding: '2px 6px', borderRadius: 8, fontSize: 11, color: 'var(--muted)' }}>
-                ↩
-              </button>
+                  padding: '2px 8px', borderRadius: 8, color: 'var(--muted)' }}>↩ Reply</button>
+            )}
+            {onReport && !msg.mine && (
+              <button onClick={onReport} title="Report message"
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '2px 8px', borderRadius: 8, color: 'var(--danger)' }}>⚐ Report</button>
             )}
           </div>
         )}
       </div>
-      {(msg.reactions || []).length > 0 && (
-        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4,
-          justifyContent: mine ? 'flex-end' : 'flex-start' }}>
-          {msg.reactions.map((r) => (
-            <button key={r.emoji} onClick={() => onReact?.(r.emoji)}
-              disabled={!onReact}
-              style={{
-                fontSize: 12, padding: '2px 8px', borderRadius: 999,
-                border: r.mine ? '1px solid var(--accent)' : '1px solid var(--border)',
-                background: r.mine ? 'var(--accent-soft, rgba(0,0,0,0.05))' : 'var(--surface-2)',
-                cursor: onReact ? 'pointer' : 'default',
-              }}>
-              {r.emoji} {r.count}
-            </button>
-          ))}
-        </div>
-      )}
       <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3,
-        textAlign: mine ? 'right' : 'left' }}>
-        {fmtTime(msg.createdAt)}
+        textAlign: msg.mine ? 'right' : 'left' }}>
+        {msg.reportedAt && '⚐ Reported · '}{fmtTime(msg.createdAt)}
       </div>
     </div>
   );
-}
-
-function renderMentions(text, mentions) {
-  if (!text) return text;
-  const names = (mentions || []).map((m) => m.name).filter(Boolean);
-  if (names.length === 0) return text;
-  const parts = text.split(/(@[\w\-.]+)/g);
-  return parts.map((p, i) => {
-    if (!p.startsWith('@')) return p;
-    const lower = p.slice(1).toLowerCase();
-    const match = names.some((n) => {
-      const first = String(n).toLowerCase().split(/\s+/)[0];
-      return first === lower || String(n).toLowerCase().startsWith(lower);
-    });
-    return match
-      ? <span key={i} style={{ fontWeight: 600, color: 'var(--accent)' }}>{p}</span>
-      : p;
-  });
 }

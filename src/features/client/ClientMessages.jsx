@@ -13,17 +13,21 @@ import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
 import { useClientPortal } from './clientContext.jsx';
 import ClientGroups from './ClientGroups.jsx';
+import ClientDms from './ClientDms.jsx';
 
 export default function ClientMessagesPage() {
-  const [tab, setTab] = useState('direct'); // 'direct' | 'groups'
+  const [tab, setTab] = useState('direct'); // 'direct' | 'groups' | 'dms'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{ display: 'flex', gap: 4, padding: '8px 16px',
         borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
-        <CTab active={tab === 'direct'} onClick={() => setTab('direct')}>Direct</CTab>
+        <CTab active={tab === 'direct'} onClick={() => setTab('direct')}>From businesses</CTab>
         <CTab active={tab === 'groups'} onClick={() => setTab('groups')}>Groups</CTab>
+        <CTab active={tab === 'dms'} onClick={() => setTab('dms')}>People</CTab>
       </div>
-      {tab === 'direct' ? <ClientMessages/> : <ClientGroups/>}
+      {tab === 'direct' ? <ClientMessages/>
+        : tab === 'groups' ? <ClientGroups/>
+        : <ClientDms/>}
     </div>
   );
 }
