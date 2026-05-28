@@ -6,6 +6,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useViewport } from '../../lib/viewport.js';
+import { upload } from '@vercel/blob/client';
 
 function fmtTime(iso) {
   if (!iso) return '';
@@ -132,16 +133,37 @@ function GroupView({ groupId, onBack, onLeave }) {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [data?.messages?.length]);
 
+  const [pendingFiles, setPendingFiles] = useState([]);
+  const fileInputRef = useRef(null);
+
+  const onPickFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    for (const f of files) {
+      try {
+        const path = `messages/cg-${Date.now()}-${f.name}`;
+        const uploaded = await upload(path, f, {
+          access: 'public', handleUploadUrl: '/api/messages/upload-token',
+          contentType: f.type || 'application/octet-stream',
+        });
+        setPendingFiles((p) => [...p, { url: uploaded.url, type: f.type, name: f.name }]);
+      } catch (err) {
+        window.alert(`Couldn't upload ${f.name}: ${err.message}`);
+      }
+    }
+  };
+
   const submit = async (e) => {
     e?.preventDefault?.();
     const t = text.trim();
-    if (!t || sending) return;
+    if ((!t && pendingFiles.length === 0) || sending) return;
     setSending(true);
     try {
       const r = await api.post('/me/groups/' + encodeURIComponent(groupId) + '/messages',
-        { text: t, parentMessageId: replyingTo?.id || null });
+        { text: t, attachments: pendingFiles, parentMessageId: replyingTo?.id || null });
       setData((d) => d ? ({ ...d, messages: [...d.messages, r.message] }) : d);
       setText('');
+      setPendingFiles([]);
       setReplyingTo(null);
     } catch (err) {
       window.alert(err.message || 'Send failed.');
@@ -236,18 +258,49 @@ function GroupView({ groupId, onBack, onLeave }) {
       )}
 
       {canReply ? (
-        <form onSubmit={submit} style={{
-          padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
-          display: 'flex', gap: 8,
-        }}>
-          <input value={text} onChange={(e) => setText(e.target.value)}
-            placeholder="Message the group…"
-            style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
-              borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
-          <button type="submit" className="btn btn-primary" disabled={!text.trim() || sending}>
-            {sending ? '…' : 'Send'}
-          </button>
-        </form>
+        <>
+          {pendingFiles.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 12px',
+              borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+              {pendingFiles.map((f, i) => (
+                <div key={i} style={{
+                  display: 'flex', alignItems: 'center', gap: 6, fontSize: 11,
+                  padding: '4px 8px', borderRadius: 6, background: 'var(--surface)',
+                  border: '1px solid var(--border)',
+                }}>
+                  <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap' }}>{f.name}</span>
+                  <button onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
+                    style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                      padding: 0, color: 'var(--muted)' }}>
+                    <Icons.X size={12}/>
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+          <form onSubmit={submit} style={{
+            padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
+            display: 'flex', gap: 8,
+          }}>
+            <input ref={fileInputRef} type="file" multiple hidden onChange={onPickFiles}
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"/>
+            <button type="button" onClick={() => fileInputRef.current?.click()}
+              title="Attach file"
+              style={{ padding: '8px 10px', background: 'transparent',
+                border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}>
+              <Icons.Plus size={14} sw={2}/>
+            </button>
+            <input value={text} onChange={(e) => setText(e.target.value)}
+              placeholder="Message the group…"
+              style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
+                borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
+            <button type="submit" className="btn btn-primary"
+              disabled={(!text.trim() && pendingFiles.length === 0) || sending}>
+              {sending ? '…' : 'Send'}
+            </button>
+          </form>
+        </>
       ) : (
         <div style={{ padding: 14, borderTop: '1px solid var(--border)',
           background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 12.5, textAlign: 'center' }}>
@@ -291,6 +344,32 @@ function MessageBubble({ msg, mine, parent, onReact, onReply }) {
           fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap',
         }}>
           {renderMentions(msg.text, msg.mentions)}
+          {(msg.attachments || []).length > 0 && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              {msg.attachments.map((a, i) => {
+                if ((a.type || '').startsWith('image/')) {
+                  return (
+                    <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
+                      <img src={a.url} alt={a.name || 'image'}
+                        style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
+                    </a>
+                  );
+                }
+                return (
+                  <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" download={a.name || true}
+                    style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8,
+                      background: mine ? 'rgba(255,255,255,0.18)' : 'var(--surface)',
+                      border: '1px solid ' + (mine ? 'rgba(255,255,255,0.18)' : 'var(--border)'),
+                      color: 'inherit', textDecoration: 'none',
+                      display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 260 }}>
+                    📎 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {a.name || 'Attachment'}
+                    </span>
+                  </a>
+                );
+              })}
+            </div>
+          )}
         </div>
         {(onReact || onReply) && pickerOpen && (
           <div style={{

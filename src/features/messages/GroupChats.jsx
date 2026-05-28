@@ -6,6 +6,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useViewport } from '../../lib/viewport.js';
 import { fmtTime } from './utils.js';
+import { upload } from '@vercel/blob/client';
 
 export default function GroupChats() {
   const [groups, setGroups]         = useState([]);
@@ -197,16 +198,39 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length]);
 
+  const [pendingFiles, setPendingFiles] = useState([]); // [{ name, type, url }]
+  const fileInputRef = useRef(null);
+
+  const onPickFiles = async (e) => {
+    const files = Array.from(e.target.files || []);
+    e.target.value = '';
+    if (files.length === 0) return;
+    for (const f of files) {
+      try {
+        const path = `messages/group-${Date.now()}-${f.name}`;
+        const uploaded = await upload(path, f, {
+          access: 'public', handleUploadUrl: '/api/messages/upload-token',
+          contentType: f.type || 'application/octet-stream',
+        });
+        setPendingFiles((p) => [...p, { url: uploaded.url, type: f.type, name: f.name }]);
+      } catch (err) {
+        window.alert(`Couldn't upload ${f.name}: ${err.message}`);
+      }
+    }
+  };
+
   const submit = async (e) => {
     e?.preventDefault?.();
     const trimmed = text.trim();
-    if (!trimmed || sending) return;
+    if (!trimmed && pendingFiles.length === 0) return;
+    if (sending) return;
     setSending(true);
     try {
       const r = await api.post('/messages/groups/' + encodeURIComponent(groupId) + '/messages',
-        { text: trimmed, parentMessageId: replyingTo?.id || null });
+        { text: trimmed, attachments: pendingFiles, parentMessageId: replyingTo?.id || null });
       setMessages((m) => [...m, r.message]);
       setText('');
+      setPendingFiles([]);
       setReplyingTo(null);
     } catch (err) {
       // eslint-disable-next-line no-alert
@@ -329,15 +353,45 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
         </div>
       )}
 
+      {pendingFiles.length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, padding: '6px 12px',
+          borderTop: '1px solid var(--border)', background: 'var(--surface-2)' }}>
+          {pendingFiles.map((f, i) => (
+            <div key={i} style={{
+              display: 'flex', alignItems: 'center', gap: 6, fontSize: 11,
+              padding: '4px 8px', borderRadius: 6, background: 'var(--surface)',
+              border: '1px solid var(--border)',
+            }}>
+              <span style={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap' }}>{f.name}</span>
+              <button onClick={() => setPendingFiles((p) => p.filter((_, j) => j !== i))}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: 0, color: 'var(--muted)' }}>
+                <Icons.X size={12}/>
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
       <form onSubmit={submit} style={{
         padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
         display: 'flex', gap: 8,
       }}>
+        <input ref={fileInputRef} type="file" multiple hidden onChange={onPickFiles}
+          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"/>
+        <button type="button" onClick={() => fileInputRef.current?.click()}
+          title="Attach file"
+          style={{ padding: '8px 10px', background: 'transparent',
+            border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}>
+          <Icons.Plus size={14} sw={2}/>
+        </button>
         <input value={text} onChange={(e) => setText(e.target.value)}
           placeholder={group.mode === 'broadcast' ? 'Announce to the group…' : 'Message the group…'}
           style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
             borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
-        <button type="submit" className="btn btn-primary" disabled={!text.trim() || sending}>
+        <button type="submit" className="btn btn-primary"
+          disabled={(!text.trim() && pendingFiles.length === 0) || sending}>
           {sending ? '…' : 'Send'}
         </button>
       </form>
@@ -378,6 +432,7 @@ function MessageBubble({ msg, parent, onReact, onReply }) {
           fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap',
         }}>
           {renderTextWithMentions(msg.text, msg.mentions)}
+          <AttachmentList attachments={msg.attachments} fromBiz={fromBiz}/>
         </div>
         {(onReact || onReply) && pickerOpen && (
           <div style={{
@@ -430,6 +485,40 @@ function MessageBubble({ msg, parent, onReact, onReply }) {
 
 // Render text with @mention chips highlighted. Mentions are pre-resolved
 // by the backend — we just style any @Name token that matches a mention.
+function AttachmentList({ attachments, fromBiz }) {
+  if (!attachments || attachments.length === 0) return null;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 6,
+      marginTop: attachments.length > 0 ? 8 : 0 }}>
+      {attachments.map((a, i) => {
+        if ((a.type || '').startsWith('image/')) {
+          return (
+            <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
+              style={{ display: 'block' }}>
+              <img src={a.url} alt={a.name || 'image'}
+                style={{ maxWidth: 280, maxHeight: 280, borderRadius: 8, display: 'block' }}/>
+            </a>
+          );
+        }
+        return (
+          <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
+            download={a.name || true}
+            style={{
+              fontSize: 12, padding: '6px 10px', borderRadius: 8,
+              background: fromBiz ? 'rgba(255,255,255,0.18)' : 'var(--surface)',
+              color: 'inherit', textDecoration: 'none',
+              border: '1px solid ' + (fromBiz ? 'rgba(255,255,255,0.18)' : 'var(--border)'),
+              display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 280,
+            }}>
+            📎 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap' }}>{a.name || 'Attachment'}</span>
+          </a>
+        );
+      })}
+    </div>
+  );
+}
+
 function renderTextWithMentions(text, mentions) {
   if (!text) return text;
   const names = (mentions || []).map((m) => m.name).filter(Boolean);
