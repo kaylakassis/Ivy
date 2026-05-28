@@ -3,13 +3,28 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { useUserContext } from '../../lib/userContext.jsx';
 
-const METRICS = [
+// Dashboard tiles per business type. 'both' is the default and shows
+// the original service-centric mix so existing workspaces look the
+// same; 'service' is identical; 'product' swaps booking-only tiles
+// for product-only ones so a candle maker's dashboard isn't visually
+// "broken" with zero bookings + zero hours.
+const METRICS_SERVICE = [
   { k: 'mrr',     label: 'Revenue this month', kind: 'money', to: '/finance' },
   { k: 'clients', label: 'Active clients',     kind: 'int',   to: '/clients' },
   { k: 'booked',  label: 'Booked this month',  kind: 'int',   to: '/calendar' },
   { k: 'hours',   label: 'Hours this month',   kind: 'hours', to: '/calendar' },
 ];
+const METRICS_PRODUCT = [
+  { k: 'mrr',       label: 'Revenue this month', kind: 'money', to: '/finance' },
+  { k: 'clients',   label: 'Customers',          kind: 'int',   to: '/clients' },
+  { k: 'orders',    label: 'Orders this month',  kind: 'int',   to: '/finance?section=invoices' },
+  { k: 'itemsSold', label: 'Items sold',         kind: 'int',   to: '/finance?section=invoices' },
+];
+function metricsFor(businessType) {
+  return businessType === 'product' ? METRICS_PRODUCT : METRICS_SERVICE;
+}
 
 function fmtMoney(n, currency = 'USD') {
   try {
@@ -323,6 +338,8 @@ function HeroBand() {
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const { ctx } = useUserContext();
+  const businessType = ctx?.owns?.businessType || 'both';
 
   useEffect(() => {
     let cancelled = false;
@@ -345,7 +362,7 @@ export default function Dashboard() {
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SetupChecklist/>
         <div className="grid-auto">
-          {METRICS.map((m) => (
+          {metricsFor(businessType).map((m) => (
             <MetricCard key={m.k} label={m.label} kind={m.kind} to={m.to}
               value={data?.metrics?.[m.k]} currency={currency} loading={loading}/>
           ))}

@@ -42,6 +42,7 @@ const ClientHome      = lazy(() => import('./features/client/ClientHome.jsx'));
 const ClientMessages  = lazy(() => import('./features/client/ClientMessages.jsx'));
 const ClientBookings  = lazy(() => import('./features/client/ClientBookings.jsx'));
 const ClientInvoices  = lazy(() => import('./features/client/ClientInvoices.jsx'));
+const ClientOrders    = lazy(() => import('./features/client/ClientOrders.jsx'));
 const ClientDocuments = lazy(() => import('./features/client/ClientDocuments.jsx'));
 const ClientBilling   = lazy(() => import('./features/client/ClientBilling.jsx'));
 const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
@@ -253,6 +254,7 @@ export default function App() {
           <Route path="/me"           element={<ClientHome />} />
           <Route path="/me/messages"  element={<ClientMessages />} />
           <Route path="/me/bookings"  element={<ClientBookings />} />
+          <Route path="/me/orders"    element={<ClientOrders />} />
           <Route path="/me/invoices"  element={<ClientInvoices />} />
           <Route path="/me/documents" element={<ClientDocuments />} />
           <Route path="/me/billing"   element={<ClientBilling />} />

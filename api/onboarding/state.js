@@ -18,7 +18,7 @@
 //     lastActiveAt: '<ISO>',
 //   }
 import { sql } from '../_lib/db.js';
-import { requireUser } from '../_lib/auth.js';
+import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -45,9 +45,12 @@ async function healColumn() {
 // blob from being filled with arbitrary keys.
 const VALID_STEPS = new Set([
   'welcome', 'business', 'services', 'availability',
+  'first_product',                              // product-only flow replaces 'services' with this
   'payments', 'branding', 'first_client', 'website',
   'tour', 'done',
 ]);
+
+const VALID_BUSINESS_TYPES = new Set(['service', 'product', 'both']);
 
 function normalizeState(raw) {
   const s = (raw && typeof raw === 'object') ? raw : {};
@@ -111,7 +114,17 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       const raw = await readState(user.id);
-      return ok(res, { state: normalizeState(raw) });
+      // Carry business_type alongside wizard state so the OnboardingPage
+      // can render the right step set on first paint without an extra
+      // round trip. Self-heal: if the column hasn't been added yet,
+      // default to 'both' (the schema default) instead of 500-ing.
+      let businessType = 'both';
+      try {
+        const workspaceId = await ensureWorkspace(user.id);
+        const w = await sql`SELECT business_type FROM workspaces WHERE id = ${workspaceId}`;
+        businessType = w.rows[0]?.business_type || 'both';
+      } catch { /* missing column on a cold deploy — fall back to default */ }
+      return ok(res, { state: normalizeState(raw), businessType });
     }
 
     if (req.method === 'PATCH') {
@@ -135,7 +148,32 @@ export default async function handler(req, res) {
         return badRequest(res, 'Too many step entries');
       }
       await writeState(user.id, JSON.stringify(normalized));
-      return ok(res, { state: normalized });
+
+      // Business type writes go to workspaces (not the JSONB state) so
+      // the rest of the app can use a single source of truth via a
+      // simple column read. We accept it on the same PATCH so the
+      // Welcome step's "What do you sell?" radio commits in one round
+      // trip with the step advance.
+      let businessType = 'both';
+      if (body.businessType && VALID_BUSINESS_TYPES.has(body.businessType)) {
+        try {
+          const workspaceId = await ensureWorkspace(user.id);
+          await sql`UPDATE workspaces SET business_type = ${body.businessType} WHERE id = ${workspaceId}`;
+          businessType = body.businessType;
+        } catch (e) {
+          // Don't fail the wizard PATCH on a schema-laggy cold deploy
+          // — the column will heal on next refresh.
+          // eslint-disable-next-line no-console
+          console.error('[onboarding/state] business_type write failed:', e.message);
+        }
+      } else {
+        try {
+          const workspaceId = await ensureWorkspace(user.id);
+          const w = await sql`SELECT business_type FROM workspaces WHERE id = ${workspaceId}`;
+          businessType = w.rows[0]?.business_type || 'both';
+        } catch { /* fall back */ }
+      }
+      return ok(res, { state: normalized, businessType });
     }
 
     return methodNotAllowed(res, ['GET', 'PATCH']);

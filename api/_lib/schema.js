@@ -96,6 +96,25 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
 -- any pre-existing workspace that already has clients or services is marked
 -- onboarded so existing users don't get bumped through the wizard.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+
+-- Business type — drives onboarding flow, sidebar (Calendar hidden
+-- for product-only), dashboard tiles (orders vs bookings), and the
+-- /book/:slug fallback (product-only workspaces get a "no
+-- appointments — visit our shop" empty state). Default 'both' keeps
+-- every existing workspace unaffected.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS business_type TEXT
+  NOT NULL DEFAULT 'both';
+DO $business_type_check$ BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint c
+    JOIN pg_class t ON t.oid = c.conrelid
+    WHERE t.relname = 'workspaces' AND c.contype = 'c'
+      AND pg_get_constraintdef(c.oid) LIKE '%business_type%'
+  ) THEN
+    ALTER TABLE workspaces ADD CONSTRAINT workspaces_business_type_check
+      CHECK (business_type IN ('service', 'product', 'both'));
+  END IF;
+END $business_type_check$;
 UPDATE workspaces w SET onboarded_at = created_at
 WHERE onboarded_at IS NULL
   AND (
@@ -2571,4 +2590,44 @@ CREATE TABLE IF NOT EXISTS ivy_nudges_fired (
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_nudges_fired_recent
   ON ivy_nudges_fired(fired_at DESC);
+
+-- ─── Online product orders ───────────────────────────────────────────
+-- Separate from pos_sales (which is in-person walk-in only) so the
+-- online checkout pipeline can grow its own status enum (pending →
+-- paid → cancelled → refunded), webhook reconciliation, and per-
+-- customer history without distorting the POS reporting.
+CREATE TABLE IF NOT EXISTS orders (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  customer_name TEXT NOT NULL,
+  customer_email TEXT NOT NULL,
+  -- Snapshot of the cart at checkout time so a later product rename
+  -- or price change doesn't rewrite history. items[] = [{productId, name, qty, rate}]
+  items JSONB NOT NULL DEFAULT '[]'::jsonb,
+  subtotal NUMERIC(12,2) NOT NULL DEFAULT 0,
+  tax NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total NUMERIC(12,2) NOT NULL DEFAULT 0,
+  status TEXT NOT NULL DEFAULT 'pending'
+    CHECK (status IN ('pending', 'paid', 'cancelled', 'refunded')),
+  stripe_session_id TEXT,
+  stripe_payment_intent TEXT,
+  paid_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_orders_workspace_recent
+  ON orders(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_orders_client
+  ON orders(client_id) WHERE client_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_orders_session
+  ON orders(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
+
+-- discover_snapshots gains a has_products flag so the Discover page
+-- can offer a "Sells products" filter without a per-row product
+-- subquery. Refreshed by the existing /api/cron/discover-refresh
+-- cron (15-min cadence).
+ALTER TABLE discover_snapshots ADD COLUMN IF NOT EXISTS has_products BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_discover_snapshots_has_products
+  ON discover_snapshots(has_products) WHERE has_products = TRUE;
 `;

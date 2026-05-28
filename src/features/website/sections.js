@@ -37,6 +37,21 @@ export const SECTION_TYPES = {
       videoUrl: '',   // video_bg variant — looping muted MP4 background
     }),
   },
+  // Product storefront. Renders live from /api/site/:handle/products
+  // (active products only) — owners manage the catalog in
+  // Finance → Products, no per-section editing here. Add-to-cart +
+  // checkout are wired in SectionRenderer's Shop renderer.
+  shop: {
+    label: 'Shop',
+    icon: 'Gift',
+    desc: 'Sell products with add-to-cart',
+    category: 'commerce',
+    default: () => ({
+      headline: 'Shop',
+      sub: '',
+      showOutOfStock: false,
+    }),
+  },
   services: {
     label: 'Services',
     icon: 'Dollar',

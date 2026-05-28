@@ -81,7 +81,7 @@ export function ids(memberships) {
 export async function ownsWorkspace(userId) {
   try {
     const { rows } = await sql`
-      SELECT w.id, w.onboarded_at,
+      SELECT w.id, w.onboarded_at, w.business_type,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end,
              cs.biz_name, cs.slug
       FROM workspaces w
@@ -93,6 +93,7 @@ export async function ownsWorkspace(userId) {
     return {
       id: r.id,
       onboardedAt: r.onboarded_at,
+      businessType: r.business_type || 'both',
       bizName: r.biz_name || null,
       slug:    r.slug || null,
       subscription: deriveSubscription(r),
@@ -106,6 +107,7 @@ export async function ownsWorkspace(userId) {
       return {
         id: rows[0].id,
         onboardedAt: rows[0].onboarded_at,
+        businessType: 'both',  // safe default — column may be pre-migration
         bizName: null,
         slug: null,
         subscription: { status: 'inactive', isActive: false, inTrial: false, trialEndsAt: null, periodEndsAt: null, daysRemaining: null },

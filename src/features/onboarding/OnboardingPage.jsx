@@ -31,18 +31,39 @@ import { useAuth } from '../../lib/auth.jsx';
 import { publicOrigin } from '../../lib/publicUrl.js';
 import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
 
-const STEPS = [
-  { id: 'welcome',      label: 'Welcome',         optional: false },
-  { id: 'business',     label: 'Business',        optional: false },
-  { id: 'services',     label: 'Services',        optional: false },
-  { id: 'availability', label: 'Availability',    optional: false },
-  { id: 'payments',     label: 'Payments',        optional: true  },
-  { id: 'branding',     label: 'Branding',        optional: true  },
-  { id: 'first_client', label: 'First client',    optional: true  },
-  { id: 'website',      label: 'Website',         optional: true  },
-  { id: 'tour',         label: 'Quick tour',      optional: false },
-  { id: 'done',         label: 'Done',            optional: false },
-];
+// Step set per business type. 'both' keeps every step so existing
+// workspaces aren't affected; 'service' removes the first_product
+// step (irrelevant to pure-service); 'product' removes services +
+// availability (they don't take appointments) and inserts a
+// lightweight first_product step in their place.
+function stepsFor(businessType) {
+  const base = [
+    { id: 'welcome',      label: 'Welcome',         optional: false },
+    { id: 'business',     label: 'Business',        optional: false },
+  ];
+  if (businessType === 'product') {
+    base.push({ id: 'first_product', label: 'First product', optional: false });
+  } else {
+    base.push({ id: 'services',     label: 'Services',     optional: false });
+    base.push({ id: 'availability', label: 'Availability', optional: false });
+    if (businessType === 'both') {
+      base.push({ id: 'first_product', label: 'First product', optional: true });
+    }
+  }
+  base.push(
+    { id: 'payments',     label: 'Payments',        optional: true  },
+    { id: 'branding',     label: 'Branding',        optional: true  },
+    { id: 'first_client', label: 'First client',    optional: true  },
+    { id: 'website',      label: 'Website',         optional: true  },
+    { id: 'tour',         label: 'Quick tour',      optional: false },
+    { id: 'done',         label: 'Done',            optional: false },
+  );
+  return base;
+}
+
+// Legacy export — defaults to the full set so any unrelated import
+// (none today, but defense-in-depth) keeps working.
+const STEPS = stepsFor('both');
 
 const WEEKDAYS = [
   { idx: 1, short: 'Mon', long: 'Monday' },
@@ -85,6 +106,10 @@ export default function OnboardingPage() {
   const [currentStep, setCurrentStep] = useState('welcome');
   const [completedSteps, setCompletedSteps] = useState([]);
   const [skippedSteps, setSkippedSteps]     = useState([]);
+  const [businessType, setBusinessType]     = useState('both');
+  // First-product draft (only used when businessType !== 'service').
+  const [productDraft, setProductDraft]     = useState({ name: '', price: '', description: '' });
+  const [productCreated, setProductCreated] = useState(false);
 
   // Form state — pre-filled from existing settings on mount so re-
   // entering doesn't blow away earlier work.
@@ -123,6 +148,7 @@ export default function OnboardingPage() {
         setCompletedSteps(st.completedSteps || []);
         setSkippedSteps(st.skippedSteps || []);
       }
+      if (stateRes?.businessType) setBusinessType(stateRes.businessType);
       const s = calRes?.cal?.settings || {};
       if (s.bizName && s.bizName !== 'My business') setBizName(s.bizName);
       if (s.slug)     { setSlug(s.slug); setSlugTouched(true); }
@@ -172,8 +198,12 @@ export default function OnboardingPage() {
     return () => { if (saveStateTimer.current) clearTimeout(saveStateTimer.current); };
   }, [currentStep, completedSteps, skippedSteps, stateLoaded]);
 
-  const stepIdx = STEPS.findIndex((s) => s.id === currentStep);
-  const stepSpec = STEPS[stepIdx] || STEPS[0];
+  // Derived step set — depends on business_type chosen at Welcome.
+  // useMemo so identity is stable across renders even though the
+  // array is computed on the fly.
+  const steps = useMemo(() => stepsFor(businessType), [businessType]);
+  const stepIdx = steps.findIndex((s) => s.id === currentStep);
+  const stepSpec = steps[stepIdx] || steps[0];
 
   // Advance the wizard. We try to persist the navigational state to
   // the server, but we DO NOT block progress on it — the nav state is
@@ -188,7 +218,7 @@ export default function OnboardingPage() {
     const nextSkipped = markSkipped
       ? Array.from(new Set([...skippedSteps, currentStep]))
       : skippedSteps.filter((s) => s !== currentStep);
-    const next = STEPS[stepIdx + 1];
+    const next = steps[stepIdx + 1];
     const nextStepId = next ? next.id : currentStep;
 
     setBusy(true); setErr(null);
@@ -206,6 +236,11 @@ export default function OnboardingPage() {
       currentStep: nextStepId,
       completedSteps: nextCompleted,
       skippedSteps: nextSkipped,
+      // Carry businessType on every PATCH so a user who picks Products
+      // on Welcome AND a returning user whose row still reads 'both'
+      // both end up with their selection persisted. The server only
+      // writes if the value passes validation, so this is safe.
+      businessType,
     };
     try {
       try {
@@ -226,7 +261,7 @@ export default function OnboardingPage() {
   const goNext = () => flushAndAdvance({ markCompleted: true,  markSkipped: false });
   const skipStep = () => flushAndAdvance({ markCompleted: false, markSkipped: true });
   const goBack = () => {
-    const prev = STEPS[stepIdx - 1];
+    const prev = steps[stepIdx - 1];
     if (prev) setCurrentStep(prev.id);
   };
 
@@ -332,6 +367,33 @@ export default function OnboardingPage() {
     finally { setBusy(false); }
   };
 
+  // First-product step (product / both flows). Idempotent — if the
+  // owner already created the product (productCreated=true), skip the
+  // POST so re-clicking Next doesn't add a duplicate row. Allows
+  // skipping when the form is empty (matches the Services step's
+  // "I'll add later" affordance).
+  const saveFirstProduct = async () => {
+    setBusy(true); setErr(null);
+    try {
+      const name = (productDraft.name || '').trim();
+      const priceCents = Math.round(Number(productDraft.price || 0) * 100);
+      if (!productCreated && name) {
+        if (!Number.isFinite(priceCents) || priceCents < 0) {
+          setBusy(false); setErr('Price must be a non-negative number'); return;
+        }
+        await api.post('/products', {
+          name,
+          price: priceCents / 100,
+          description: productDraft.description || null,
+          active: true,
+        });
+        setProductCreated(true);
+      }
+      await goNext();
+    } catch (e) { setErr(prettifyError(e)); }
+    finally { setBusy(false); }
+  };
+
   const saveAvailability = async () => {
     setBusy(true); setErr(null);
     try {
@@ -385,12 +447,12 @@ export default function OnboardingPage() {
   return (
     <Shell tweaks={tweaks}>
       <StripeBounceBanner search={location.search} nav={nav}/>
-      <ProgressRow steps={STEPS} currentStep={currentStep} completed={completedSteps} skipped={skippedSteps}
+      <ProgressRow steps={steps} currentStep={currentStep} completed={completedSteps} skipped={skippedSteps}
         onJump={(id) => {
           // Allow jumping to any step that's already been visited
           // (completed OR skipped OR ≤ currentIdx). Future steps stay
           // gated until the owner gets there normally.
-          const targetIdx = STEPS.findIndex((s) => s.id === id);
+          const targetIdx = steps.findIndex((s) => s.id === id);
           const visited = completedSteps.includes(id) || skippedSteps.includes(id) || targetIdx <= stepIdx;
           if (visited) setCurrentStep(id);
         }}/>
@@ -399,7 +461,8 @@ export default function OnboardingPage() {
         padding: '32px 36px', marginTop: 18,
         display: 'flex', flexDirection: 'column', gap: 18,
       }}>
-        {currentStep === 'welcome'      && <WelcomeStep user={user}/>}
+        {currentStep === 'welcome'      && <WelcomeStep user={user}
+          businessType={businessType} setBusinessType={setBusinessType}/>}
         {currentStep === 'business'     && <BusinessStep
           bizName={bizName} setBizName={setBizName}
           slug={slug} setSlug={setSlug} setSlugTouched={setSlugTouched}
@@ -408,6 +471,9 @@ export default function OnboardingPage() {
         {currentStep === 'services'     && <ServicesStep
           services={services} setServices={setServices}
           draft={draft} setDraft={setDraft} category={category}/>}
+        {currentStep === 'first_product' && <FirstProductStep
+          productDraft={productDraft} setProductDraft={setProductDraft}
+          productCreated={productCreated} setProductCreated={setProductCreated}/>}
         {currentStep === 'availability' && <AvailabilityStep
           availability={availability} setAvailability={setAvailability}/>}
         {currentStep === 'payments'     && <PaymentsStep stripeStatus={stripeStatus} setStripeStatus={setStripeStatus}/>}
@@ -427,7 +493,7 @@ export default function OnboardingPage() {
         )}
 
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
-          {stepIdx > 0 && stepIdx < STEPS.length - 1 && (
+          {stepIdx > 0 && stepIdx < steps.length - 1 && (
             <button onClick={goBack} className="btn btn-ghost" disabled={busy}>
               <Icons.ArrowLeft size={13}/> Back
             </button>
@@ -452,6 +518,7 @@ export default function OnboardingPage() {
               if (currentStep === 'welcome')      return goNext();
               if (currentStep === 'business')     return saveBusiness();
               if (currentStep === 'services')     return saveServices();
+              if (currentStep === 'first_product') return saveFirstProduct();
               if (currentStep === 'availability') return saveAvailability();
               if (currentStep === 'payments')     return goNext();
               if (currentStep === 'branding')     return saveBranding();
@@ -468,8 +535,13 @@ export default function OnboardingPage() {
 
 // ─── Step components ──────────────────────────────────────────────────
 
-function WelcomeStep({ user }) {
+function WelcomeStep({ user, businessType, setBusinessType }) {
   const name = (user?.name || '').split(/\s+/)[0] || 'there';
+  const options = [
+    { id: 'service', label: 'Services', sub: 'Appointments, sessions, classes.' },
+    { id: 'product', label: 'Products', sub: 'Physical goods, retail, makers.' },
+    { id: 'both',    label: 'Both',     sub: 'Services AND products.' },
+  ];
   return (
     <div style={{ textAlign: 'center', padding: '14px 0' }}>
       <div style={{
@@ -480,16 +552,78 @@ function WelcomeStep({ user }) {
       <h1 style={{ fontFamily: 'var(--font-display)', fontStyle: 'italic', fontSize: 30, fontWeight: 600, margin: '0 0 8px' }}>
         Welcome, {name}.
       </h1>
-      <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 520, margin: '0 auto' }}>
-        Let's get THRYVE working for your business. We'll set up the basics
-        in 10 quick steps — your business profile, services, availability,
-        payments, branding, your first client, and your website.
-        <br/><br/>
-        <strong>Auto-saves at every step</strong> — close the tab anytime and we'll
-        pick up where you left off. You can also skip any step you're not
-        ready for; we'll remind you later.
+      <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 520, margin: '0 auto 22px' }}>
+        Let's set up THRYVE for your business. First — what do you sell?
+        We'll tailor the next steps based on your answer.
+      </p>
+
+      <div style={{
+        display: 'grid', gap: 10, maxWidth: 520, margin: '0 auto',
+        gridTemplateColumns: 'repeat(3, 1fr)',
+      }}>
+        {options.map((o) => {
+          const active = businessType === o.id;
+          return (
+            <button key={o.id} type="button" onClick={() => setBusinessType(o.id)}
+              style={{
+                textAlign: 'left', padding: '14px 14px', borderRadius: 12,
+                border: '1px solid ' + (active ? 'var(--accent)' : 'var(--border-strong)'),
+                background: active ? 'var(--accent-soft)' : 'var(--surface)',
+                color: active ? 'var(--accent)' : 'var(--fg)',
+                cursor: 'pointer',
+              }}>
+              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 4 }}>{o.label}</div>
+              <div style={{ fontSize: 12, color: active ? 'var(--accent)' : 'var(--muted)', lineHeight: 1.5 }}>
+                {o.sub}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+      <p style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 18, maxWidth: 460, margin: '18px auto 0' }}>
+        Don't worry — you can change this later in your account settings.
+        <strong> Auto-saves at every step.</strong>
       </p>
     </div>
+  );
+}
+
+function FirstProductStep({ productDraft, setProductDraft, productCreated }) {
+  return (
+    <>
+      <StepHeader title="Add your first product"
+        subtitle="The thing you sell. You can add the full catalog later in Finance → Products."/>
+      <Field label="Product name" required>
+        <input className="input" value={productDraft.name}
+          onChange={(e) => setProductDraft({ ...productDraft, name: e.target.value })}
+          placeholder="e.g. Vanilla Soy Candle (8oz)" autoFocus
+          style={inputStyle}/>
+      </Field>
+      <Field label="Price" hint="In whole dollars, e.g. 24.00">
+        <div style={{
+          display: 'flex', alignItems: 'center',
+          border: '1px solid var(--border-strong)', borderRadius: 10, background: 'var(--surface)',
+          overflow: 'hidden',
+        }}>
+          <span style={{ padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 14 }}>$</span>
+          <input type="number" min="0" step="0.01" value={productDraft.price}
+            onChange={(e) => setProductDraft({ ...productDraft, price: e.target.value })}
+            placeholder="24.00"
+            style={{ flex: 1, padding: '10px 12px', background: 'transparent', border: 0, outline: 'none', color: 'var(--fg)', fontSize: 14 }}/>
+        </div>
+      </Field>
+      <Field label="Short description (optional)">
+        <input className="input" value={productDraft.description}
+          onChange={(e) => setProductDraft({ ...productDraft, description: e.target.value.slice(0, 280) })}
+          placeholder="One line shoppers will see on your store page."
+          style={inputStyle}/>
+      </Field>
+      {productCreated && (
+        <div style={{ fontSize: 12, color: 'var(--ok)' }}>
+          ✓ Product saved. You can edit or add more in Finance → Products anytime.
+        </div>
+      )}
+    </>
   );
 }
 

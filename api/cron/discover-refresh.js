@@ -40,7 +40,7 @@ async function handler(req, res) {
       INSERT INTO discover_snapshots (
         workspace_id, service_count, min_price, max_price,
         cover_photo_url, site_handle, review_count, rating_avg,
-        refreshed_at
+        has_products, refreshed_at
       )
       SELECT
         cs.workspace_id,
@@ -66,6 +66,8 @@ async function handler(req, res) {
                      AND r.status = 'visible'), 0),
         (SELECT AVG(rating)::numeric FROM reviews r
           WHERE r.workspace_id = cs.workspace_id AND r.status = 'visible'),
+        EXISTS (SELECT 1 FROM products p
+                 WHERE p.workspace_id = cs.workspace_id AND p.active = TRUE),
         NOW()
       FROM calendar_settings cs
       ON CONFLICT (workspace_id) DO UPDATE SET
@@ -76,6 +78,7 @@ async function handler(req, res) {
         site_handle     = EXCLUDED.site_handle,
         review_count    = EXCLUDED.review_count,
         rating_avg      = EXCLUDED.rating_avg,
+        has_products    = EXCLUDED.has_products,
         refreshed_at    = NOW()
     `;
 
