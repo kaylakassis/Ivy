@@ -2555,4 +2555,20 @@ ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS kind TEXT;
 ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS meta JSONB NOT NULL DEFAULT '{}'::jsonb;
 CREATE INDEX IF NOT EXISTS idx_support_messages_kind
   ON support_messages(kind) WHERE kind IS NOT NULL;
+
+-- ─── Ivy nudges (proactive owner alerts) ─────────────────────────────
+-- The ivy-nudges cron emits owner pushes for situations that would
+-- otherwise stay silent: a client message left unanswered for >24h,
+-- a previously-active client going quiet for 14+ days. Each (workspace,
+-- client, kind) combo dedups for COOLDOWN_DAYS so a single situation
+-- doesn't re-ping daily.
+CREATE TABLE IF NOT EXISTS ivy_nudges_fired (
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id    UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL CHECK (kind IN ('awaiting_reply', 'gone_quiet')),
+  fired_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (workspace_id, client_id, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_nudges_fired_recent
+  ON ivy_nudges_fired(fired_at DESC);
 `;

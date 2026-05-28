@@ -12,7 +12,7 @@ import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
-import { notifyClientSafe } from '../_lib/push.js';
+import { notifyClientSafe, notifyOwnerSafe } from '../_lib/push.js';
 import { notifyInvoiceOverdue } from '../_lib/invoiceNotify.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -85,6 +85,19 @@ async function handler(req, res) {
             },
           });
         }
+        // Owner push so they know the chase is active without checking
+        // Finance manually. Daily cadence is governed by the
+        // last_overdue_reminder_at UPDATE below, so this won't spam.
+        notifyOwnerSafe({
+          workspaceId: r.workspace_id,
+          type: 'payments',
+          payload: {
+            title: 'Invoice still unpaid',
+            body: `${r.number} · ${r.client_name || 'client'} · ${days} day${days === 1 ? '' : 's'} overdue`,
+            url: `/finance?invoice=${r.id}`,
+            tag: `inv-overdue-owner-${r.id}`,
+          },
+        });
         await sql`
           UPDATE invoices SET last_overdue_reminder_at = NOW()
           WHERE id = ${r.id}

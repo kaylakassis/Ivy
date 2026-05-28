@@ -14,7 +14,7 @@ import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './ema
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
-import { notifyOwnerSafe } from './push.js';
+import { notifyOwnerSafe, notifyClientSafe } from './push.js';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -313,13 +313,27 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
       }));
     }
 
-    // Client-facing email (when the owner cancelled)
+    // Client-facing email + push (when the owner cancelled)
     if (source === 'owner' && ctx.client_email) {
       tasks.push(sendCancellationToClient({
         clientId: ctx.client_id,
         to: ctx.client_email,
         clientName: ctx.client_name,
         businessName, serviceName, dateLabel, timeLabel, branding,
+      }));
+    }
+    // Client-side push when owner cancels — email may sit unread for
+    // hours; the client needs to know their appointment is off NOW.
+    if (source === 'owner' && ctx.client_id) {
+      tasks.push(notifyClientSafe({
+        clientId: ctx.client_id,
+        type: 'bookings',
+        payload: {
+          title: 'Appointment cancelled',
+          body: `${businessName} cancelled ${serviceName} on ${dateLabel} at ${fmtTime(ctx.start_min)}`,
+          url: '/me/bookings',
+          tag: `booking-cancel-${ctx.id}-${dateISO}`,
+        },
       }));
     }
 
