@@ -161,6 +161,8 @@ export default function GroupChats() {
   );
 }
 
+const QUICK_EMOJIS = ['👍', '❤️', '🎉', '🔥', '😂', '👀'];
+
 function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeChange, onRename, onUnreadCleared }) {
   const [group, setGroup]     = useState(null);
   const [members, setMembers] = useState([]);
@@ -169,6 +171,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
   const [sending, setSending] = useState(false);
   const [renaming, setRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState('');
+  const [replyingTo, setReplyingTo] = useState(null); // message being replied to
   const scrollRef = useRef(null);
   const { isMobile } = useViewport();
 
@@ -201,13 +204,39 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
     setSending(true);
     try {
       const r = await api.post('/messages/groups/' + encodeURIComponent(groupId) + '/messages',
-        { text: trimmed });
+        { text: trimmed, parentMessageId: replyingTo?.id || null });
       setMessages((m) => [...m, r.message]);
       setText('');
+      setReplyingTo(null);
     } catch (err) {
       // eslint-disable-next-line no-alert
       window.alert(err.message || 'Send failed.');
     } finally { setSending(false); }
+  };
+
+  const toggleReaction = async (msg, emoji) => {
+    const existing = (msg.reactions || []).find((r) => r.emoji === emoji);
+    const mine = !!existing?.mine;
+    try {
+      if (mine) {
+        await api.del('/messages/groups/' + encodeURIComponent(groupId)
+          + '/messages/' + encodeURIComponent(msg.id)
+          + '/reactions?emoji=' + encodeURIComponent(emoji));
+      } else {
+        await api.post('/messages/groups/' + encodeURIComponent(groupId)
+          + '/messages/' + encodeURIComponent(msg.id) + '/reactions', { emoji });
+      }
+      // Optimistic update.
+      setMessages((arr) => arr.map((m) => {
+        if (m.id !== msg.id) return m;
+        const next = (m.reactions || []).filter((r) => r.emoji !== emoji);
+        const newCount = (existing?.count || 0) + (mine ? -1 : 1);
+        if (newCount > 0) next.push({ emoji, count: newCount, mine: !mine });
+        return { ...m, reactions: next };
+      }));
+    } catch (err) {
+      window.alert(err.message || 'Failed.');
+    }
   };
 
   if (!group) {
@@ -272,8 +301,33 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
           display: 'flex', flexDirection: 'column', gap: 10 }}>
         {messages.length === 0 ? (
           <EmptyNote icon="Chat" title="No messages yet" hint="Send the first one."/>
-        ) : messages.map((m) => <MessageBubble key={m.id} msg={m}/>)}
+        ) : messages.map((m) => (
+          <MessageBubble key={m.id} msg={m}
+            parent={m.parentMessageId ? messages.find((x) => x.id === m.parentMessageId) : null}
+            onReact={(emoji) => toggleReaction(m, emoji)}
+            onReply={() => setReplyingTo(m)}
+          />
+        ))}
       </div>
+
+      {replyingTo && (
+        <div style={{
+          padding: '8px 16px', background: 'var(--surface-2)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', alignItems: 'center', gap: 10, fontSize: 12,
+        }}>
+          <span style={{ color: 'var(--muted)' }}>Replying to</span>
+          <span style={{ flex: 1, fontWeight: 500, whiteSpace: 'nowrap',
+            overflow: 'hidden', textOverflow: 'ellipsis', color: 'var(--fg)' }}>
+            {(replyingTo.text || replyingTo.kind || '').slice(0, 80)}
+          </span>
+          <button onClick={() => setReplyingTo(null)}
+            style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+              color: 'var(--muted)', padding: 0 }}>
+            <Icons.X size={14}/>
+          </button>
+        </div>
+      )}
 
       <form onSubmit={submit} style={{
         padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
@@ -291,7 +345,8 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
   );
 }
 
-function MessageBubble({ msg }) {
+function MessageBubble({ msg, parent, onReact, onReply }) {
+  const [pickerOpen, setPickerOpen] = useState(false);
   if (msg.sender === 'system') {
     return (
       <div style={{ textAlign: 'center', fontSize: 11, color: 'var(--muted)', margin: '8px 0' }}>
@@ -301,29 +356,96 @@ function MessageBubble({ msg }) {
   }
   const fromBiz = msg.sender === 'biz';
   return (
-    <div style={{
-      alignSelf: fromBiz ? 'flex-end' : 'flex-start',
-      maxWidth: '78%',
-    }}>
+    <div style={{ alignSelf: fromBiz ? 'flex-end' : 'flex-start', maxWidth: '78%' }}
+      onMouseEnter={() => setPickerOpen(true)} onMouseLeave={() => setPickerOpen(false)}>
       {!fromBiz && msg.senderName && (
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', marginBottom: 2, marginLeft: 4 }}>
           {msg.senderName}
         </div>
       )}
-      <div style={{
-        padding: '10px 14px', borderRadius: 14,
-        background: fromBiz ? 'var(--accent)' : 'var(--surface-2)',
-        color: fromBiz ? 'var(--surface)' : 'var(--fg)',
-        fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap',
-      }}>
-        {msg.text}
+      {parent && (
+        <div style={{ fontSize: 11, color: 'var(--muted)',
+          borderLeft: '2px solid var(--border)', paddingLeft: 8, marginBottom: 4,
+          maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          ↳ {(parent.text || parent.kind || '').slice(0, 80)}
+        </div>
+      )}
+      <div style={{ position: 'relative' }}>
+        <div style={{
+          padding: '10px 14px', borderRadius: 14,
+          background: fromBiz ? 'var(--accent)' : 'var(--surface-2)',
+          color: fromBiz ? 'var(--surface)' : 'var(--fg)',
+          fontSize: 14, lineHeight: 1.45, whiteSpace: 'pre-wrap',
+        }}>
+          {renderTextWithMentions(msg.text, msg.mentions)}
+        </div>
+        {(onReact || onReply) && pickerOpen && (
+          <div style={{
+            position: 'absolute', top: -16,
+            [fromBiz ? 'left' : 'right']: 0,
+            display: 'flex', gap: 2, padding: 2, borderRadius: 999,
+            background: 'var(--surface)', border: '1px solid var(--border)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.08)', fontSize: 14,
+          }}>
+            {QUICK_EMOJIS.map((e) => (
+              <button key={e} onClick={() => onReact?.(e)} title={`React ${e}`}
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '2px 4px', borderRadius: 8 }}>
+                {e}
+              </button>
+            ))}
+            {onReply && (
+              <button onClick={onReply} title="Reply in thread"
+                style={{ background: 'transparent', border: 'none', cursor: 'pointer',
+                  padding: '2px 6px', borderRadius: 8, fontSize: 11, color: 'var(--muted)' }}>
+                ↩ Reply
+              </button>
+            )}
+          </div>
+        )}
       </div>
+      {(msg.reactions || []).length > 0 && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 4,
+          justifyContent: fromBiz ? 'flex-end' : 'flex-start' }}>
+          {msg.reactions.map((r) => (
+            <button key={r.emoji} onClick={() => onReact?.(r.emoji)}
+              style={{
+                fontSize: 12, padding: '2px 8px', borderRadius: 999,
+                border: r.mine ? '1px solid var(--accent)' : '1px solid var(--border)',
+                background: r.mine ? 'var(--accent-soft, rgba(0,0,0,0.05))' : 'var(--surface-2)',
+                cursor: 'pointer',
+              }}>
+              {r.emoji} {r.count}
+            </button>
+          ))}
+        </div>
+      )}
       <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3,
         textAlign: fromBiz ? 'right' : 'left' }}>
         {fmtTime(msg.createdAt)}
       </div>
     </div>
   );
+}
+
+// Render text with @mention chips highlighted. Mentions are pre-resolved
+// by the backend — we just style any @Name token that matches a mention.
+function renderTextWithMentions(text, mentions) {
+  if (!text) return text;
+  const names = (mentions || []).map((m) => m.name).filter(Boolean);
+  if (names.length === 0) return text;
+  const parts = text.split(/(@[\w\-.]+)/g);
+  return parts.map((p, i) => {
+    if (!p.startsWith('@')) return p;
+    const lower = p.slice(1).toLowerCase();
+    const match = names.some((n) => {
+      const first = String(n).toLowerCase().split(/\s+/)[0];
+      return first === lower || String(n).toLowerCase().startsWith(lower);
+    });
+    return match
+      ? <span key={i} style={{ fontWeight: 600, color: 'var(--accent)' }}>{p}</span>
+      : p;
+  });
 }
 
 function NewGroupModal({ onClose, onCreated }) {
@@ -434,6 +556,8 @@ function AddMembersModal({ groupId, onClose, onAdded }) {
   const [search, setSearch] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
+  const [inviteUrl, setInviteUrl] = useState(null);
+  const [mintingInvite, setMintingInvite] = useState(false);
 
   useEffect(() => {
     api.get('/clients').then((r) => setClients(r.clients || [])).catch((e) => setErr(e));
@@ -460,12 +584,27 @@ function AddMembersModal({ groupId, onClose, onAdded }) {
     } finally { setBusy(false); }
   };
 
+  const mintInvite = async () => {
+    setMintingInvite(true);
+    try {
+      const r = await api.post('/messages/groups/' + encodeURIComponent(groupId) + '/invites',
+        { maxUses: 50, expiresInHours: 24 * 30 });
+      setInviteUrl(r.invite.url);
+    } catch (e) {
+      setErr(e);
+    } finally { setMintingInvite(false); }
+  };
+  const copyInvite = () => {
+    if (!inviteUrl) return;
+    navigator.clipboard?.writeText(inviteUrl);
+  };
+
   return (
     <ModalShell title="Add members" onClose={onClose}>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         <input value={search} onChange={(e) => setSearch(e.target.value)}
           placeholder="Search clients…" style={inputStyle}/>
-        <div style={{ maxHeight: 320, overflowY: 'auto', border: '1px solid var(--border)',
+        <div style={{ maxHeight: 280, overflowY: 'auto', border: '1px solid var(--border)',
           borderRadius: 8, background: 'var(--surface-2)' }}>
           {clients === null ? (
             <div style={{ padding: 12, color: 'var(--muted)', fontSize: 12 }}>Loading…</div>
@@ -496,6 +635,29 @@ function AddMembersModal({ groupId, onClose, onAdded }) {
           </button>
         </div>
       </form>
+
+      <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
+          textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 }}>
+          Or share an invite link
+        </div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10, lineHeight: 1.4 }}>
+          Anyone with this link who signs in (or signs up) becomes a member.
+          Defaults: up to 50 uses, expires in 30 days.
+        </div>
+        {!inviteUrl ? (
+          <button type="button" className="btn btn-outline" onClick={mintInvite} disabled={mintingInvite}>
+            {mintingInvite ? 'Generating…' : 'Generate invite link'}
+          </button>
+        ) : (
+          <div style={{ display: 'flex', gap: 6 }}>
+            <input value={inviteUrl} readOnly
+              onFocus={(e) => e.target.select()}
+              style={{ ...inputStyle, fontSize: 12 }}/>
+            <button type="button" className="btn btn-primary" onClick={copyInvite}>Copy</button>
+          </div>
+        )}
+      </div>
     </ModalShell>
   );
 }

@@ -47,6 +47,7 @@ const ClientBilling   = lazy(() => import('./features/client/ClientBilling.jsx')
 const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'));
 const ClientNotifications = lazy(() => import('./features/client/ClientNotifications.jsx'));
 const ClientProfile   = lazy(() => import('./features/client/ClientProfile.jsx'));
+const AcceptGroupInvite = lazy(() => import('./features/client/AcceptGroupInvite.jsx'));
 const NotFoundPage    = lazy(() => import('./features/marketing/NotFoundPage.jsx'));
 
 // ── Lazy: secondary auth flows + onboarding ──
@@ -243,6 +244,11 @@ export default function App() {
 
         {/* Client portal shell (auth-gated). Anyone can navigate here directly;
             the data they see is filtered by their email / user_id. */}
+        {/* Group-chat invite landing — auth required; component itself
+            handles the "redirect to /signup with next=..." bounce. */}
+        <Route path="/invite/group/:token"
+          element={<RequireAuth><AcceptGroupInvite /></RequireAuth>} />
+
         <Route element={<RequireAuth><ClientShell /></RequireAuth>}>
           <Route path="/me"           element={<ClientHome />} />
           <Route path="/me/messages"  element={<ClientMessages />} />
