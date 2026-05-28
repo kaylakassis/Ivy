@@ -16,6 +16,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { FLAGS } from '../../lib/featureFlags.js';
 
 export default function PaymentProviderCard() {
   const [data, setData] = useState(null);
@@ -137,42 +138,48 @@ export default function PaymentProviderCard() {
           onChanged={refresh}
           busy={busy}
         />
-        <ProviderRow
-          id="square" label="Square"
-          description="Cards + Cash App Pay (US) on Square's hosted checkout."
-          provider={data.providers.square}
-          platformReady={data.platform.squareReady}
-          active={data.active === 'square'}
-          connectHref="/api/finance/square-oauth-init"
-          disconnectPath="/finance/square-disconnect"
-          onSwitch={() => switchTo('square')}
-          onChanged={refresh}
-          busy={busy}
-        />
-        <ProviderRow
-          id="paypal" label="PayPal"
-          description="PayPal balance, cards, and Venmo (US) on PayPal's hosted checkout."
-          provider={data.providers.paypal}
-          platformReady={data.platform.paypalReady}
-          active={data.active === 'paypal'}
-          connectHref="/api/finance/paypal-onboard-init"
-          disconnectPath="/finance/paypal-disconnect"
-          onSwitch={() => switchTo('paypal')}
-          onChanged={refresh}
-          busy={busy}
-        />
+        {FLAGS.squarePaypal && (
+          <>
+            <ProviderRow
+              id="square" label="Square"
+              description="Cards + Cash App Pay (US) on Square's hosted checkout."
+              provider={data.providers.square}
+              platformReady={data.platform.squareReady}
+              active={data.active === 'square'}
+              connectHref="/api/finance/square-oauth-init"
+              disconnectPath="/finance/square-disconnect"
+              onSwitch={() => switchTo('square')}
+              onChanged={refresh}
+              busy={busy}
+            />
+            <ProviderRow
+              id="paypal" label="PayPal"
+              description="PayPal balance, cards, and Venmo (US) on PayPal's hosted checkout."
+              provider={data.providers.paypal}
+              platformReady={data.platform.paypalReady}
+              active={data.active === 'paypal'}
+              connectHref="/api/finance/paypal-onboard-init"
+              disconnectPath="/finance/paypal-disconnect"
+              onSwitch={() => switchTo('paypal')}
+              onChanged={refresh}
+              busy={busy}
+            />
+          </>
+        )}
       </div>
 
-      <div style={{
-        marginTop: 14, padding: '8px 12px', borderRadius: 8,
-        background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55,
-      }}>
-        <strong style={{ color: 'var(--fg-2)' }}>Provider parity:</strong> all three providers accept
-        payments + refunds (including refunds you issue directly from
-        the Square/PayPal dashboard — THRYVE picks them up via webhook).
-        Saved-card auto-charges (no-show / late-cancel fees) and
-        recurring invoice subscriptions still only run through Stripe.
-      </div>
+      {FLAGS.squarePaypal && (
+        <div style={{
+          marginTop: 14, padding: '8px 12px', borderRadius: 8,
+          background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55,
+        }}>
+          <strong style={{ color: 'var(--fg-2)' }}>Provider parity:</strong> all three providers accept
+          payments + refunds (including refunds you issue directly from
+          the Square/PayPal dashboard — THRYVE picks them up via webhook).
+          Saved-card auto-charges (no-show / late-cancel fees) and
+          recurring invoice subscriptions still only run through Stripe.
+        </div>
+      )}
     </div>
   );
 }

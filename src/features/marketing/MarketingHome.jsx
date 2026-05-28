@@ -108,7 +108,7 @@ const TESTIMONIALS = [
 const FAQ = [
   {
     q: 'Do you take a cut of my payments?',
-    a: "No - we never touch your money. Payments go straight to your own processor account. Connect Stripe for the full toolkit (card on file, auto-charged deposits, late-cancel & no-show fees, and tips), or use Square or PayPal for checkout and refunds. You just pay your processor's standard fee; THRYVE adds zero markup.",
+    a: "No - we never touch your money. Payments go straight to your own Stripe account. The full toolkit (card on file, auto-charged deposits, late-cancel & no-show fees, tips) runs on Stripe. You just pay Stripe's standard fee; THRYVE adds zero markup.",
   },
   {
     q: 'Can I bring my existing clients in?',

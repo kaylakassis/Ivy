@@ -59,7 +59,12 @@ Preview + Development.
 
 **Optional providers** (skip if not using):
 
-`THRYVE_TWILIO_*` (SMS) · `SQUARE_*` (Square checkout) · `PAYPAL_*` (PayPal checkout) · `GOOGLE_OAUTH_*` (Calendar busy-sync)
+`THRYVE_TWILIO_*` (SMS) · `GOOGLE_OAUTH_*` (Calendar busy-sync)
+
+> Square + PayPal: tabled for the initial launch. Backend code remains
+> intact; the UI surface is hidden behind `VITE_FLAG_SQUARE_PAYPAL=true`.
+> Set that env var and redeploy when you're ready to re-expose them
+> (and add the corresponding `SQUARE_*` + `PAYPAL_*` provider keys).
 
 ## 3 · Apply the database schema
 

@@ -5,11 +5,14 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
+import { FLAGS } from '../../lib/featureFlags.js';
 
 const LIVE = [
   { name: 'Stripe',           icon: 'Dollar',   sub: 'The full toolkit: card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
-  { name: 'Square',           icon: 'Receipt',  sub: 'Connect via OAuth for hosted checkout + refunds, paid into your Square account.' },
-  { name: 'PayPal',           icon: 'Dollar',   sub: 'Hosted checkout (incl. Venmo) + refunds, paid into your PayPal account.' },
+  ...(FLAGS.squarePaypal ? [
+    { name: 'Square',         icon: 'Receipt',  sub: 'Connect via OAuth for hosted checkout + refunds, paid into your Square account.' },
+    { name: 'PayPal',         icon: 'Dollar',   sub: 'Hosted checkout (incl. Venmo) + refunds, paid into your PayPal account.' },
+  ] : []),
   { name: 'Video meetings',   icon: 'Camera',   sub: 'Virtual bookings auto-mint a private video room - or drop in your own link.' },
   { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in THRYVE.' },
   { name: 'Apple Calendar',   icon: 'Calendar', sub: 'CalDAV subscription. Read-only view of your THRYVE schedule.' },
@@ -26,7 +29,10 @@ export default function IntegrationsPage() {
   useEffect(() => {
     document.title = 'Integrations - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'THRYVE connects to Stripe, Square & PayPal payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.');
+    if (desc) desc.setAttribute('content',
+      FLAGS.squarePaypal
+        ? 'THRYVE connects to Stripe, Square & PayPal payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.'
+        : 'THRYVE connects to Stripe payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.');
   }, []);
   return (
     <MarketingShell>
