@@ -113,7 +113,7 @@ export default async function handler(req, res) {
       sql`SELECT COUNT(*)::int                       AS count,
                  COALESCE(AVG(rating)::numeric(3,2), 0) AS avg_rating
             FROM reviews
-           WHERE workspace_id = ${wsId} AND published_at IS NOT NULL`,
+           WHERE workspace_id = ${wsId} AND status = 'visible'`,
       // Count only — no message text, no client identities.
       sql`SELECT COUNT(*)::int AS n FROM message_threads WHERE workspace_id = ${wsId}`,
       // Cheapest recency signal — last booking edit OR last invoice

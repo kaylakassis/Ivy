@@ -226,7 +226,7 @@ export default async function handler(req, res) {
           COUNT(*)::int                       AS count,
           COALESCE(AVG(rating)::numeric(3,2), 0) AS avg_rating
           FROM reviews
-         WHERE published_at IS NOT NULL
+         WHERE status = 'visible'
       `,
       // Activation rate: workspaces that took their first booking within
       // 7 days of signup. Strong product-market-fit signal.
