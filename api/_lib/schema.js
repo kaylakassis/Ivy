@@ -2474,4 +2474,85 @@ CREATE INDEX IF NOT EXISTS idx_group_invite_tokens_thread
 -- Per-thread mute is already in group_thread_members.muted.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_groups_daily BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_last_sent_at TIMESTAMPTZ;
+
+-- ─── Client ↔ client direct messages ─────────────────────────────────
+-- Permission rule: two clients can DM each other only if they share at
+-- least one active group_thread_members row in the SAME workspace. The
+-- thread row gates that at start; subsequent sends re-check.
+--
+-- Owner cannot see these threads — there is no /api/messages/dms
+-- endpoint. The owner-side admin support inbox only ever surfaces a
+-- DM if the recipient explicitly reports a message (which creates a
+-- support_messages row with kind='report').
+--
+-- We always store the pair with client_a_id < client_b_id so (a,b) and
+-- (b,a) collapse to the same row. The UNIQUE constraint enforces it.
+CREATE TABLE IF NOT EXISTS client_dm_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_a_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  client_b_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  last_message_at TIMESTAMPTZ,
+  last_message_preview TEXT,
+  unread_a INT NOT NULL DEFAULT 0,
+  unread_b INT NOT NULL DEFAULT 0,
+  -- Per-side archive flag for "leave" semantics — hides the thread from
+  -- that client's list without losing history for the other side. Re-
+  -- messaging un-archives automatically.
+  archived_a BOOLEAN NOT NULL DEFAULT FALSE,
+  archived_b BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (client_a_id < client_b_id),
+  UNIQUE (workspace_id, client_a_id, client_b_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_dm_threads_a
+  ON client_dm_threads(client_a_id, archived_a, last_message_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_client_dm_threads_b
+  ON client_dm_threads(client_b_id, archived_b, last_message_at DESC NULLS LAST);
+
+CREATE TABLE IF NOT EXISTS client_dm_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES client_dm_threads(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  sender_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  text TEXT,
+  attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  parent_message_id UUID REFERENCES client_dm_messages(id) ON DELETE SET NULL,
+  reported_at TIMESTAMPTZ,
+  reported_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_client_dm_messages_thread
+  ON client_dm_messages(thread_id, created_at);
+
+-- Block: prevents the blocked client from sending DMs to the blocker.
+-- Asymmetric — a block does not automatically reciprocate, but the
+-- blocker also won't see the blocked client's existing messages
+-- (we filter at fetch). Same workspace scope as the underlying group.
+CREATE TABLE IF NOT EXISTS client_dm_blocks (
+  blocker_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  blocked_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (blocker_client_id, blocked_client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_dm_blocks_blocked
+  ON client_dm_blocks(blocked_client_id);
+
+-- Mute: muter still receives muted's messages in the thread, but no
+-- push notification. Symmetric to "muted" on group_thread_members.
+CREATE TABLE IF NOT EXISTS client_dm_mutes (
+  muter_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  muted_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (muter_client_id, muted_client_id)
+);
+
+-- Report kind on support_messages so DM-reports route to THRYVE admin's
+-- support tab tagged 'report' (separate from normal user-↔-admin chat).
+ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS kind TEXT;
+ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS meta JSONB NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_support_messages_kind
+  ON support_messages(kind) WHERE kind IS NOT NULL;
 `;

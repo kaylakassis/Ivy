@@ -125,9 +125,30 @@ function GroupView({ groupId, onBack, onLeave }) {
     setData(r);
   }, [groupId]);
   useEffect(() => { refresh(); }, [refresh]);
+  // Smart polling: 2s when this tab is focused + visible, 30s otherwise.
+  // See GroupChats.jsx for the trade-off rationale.
   useEffect(() => {
-    const t = setInterval(() => { refresh().catch(() => {}); }, 15000);
-    return () => clearInterval(t);
+    let cancelled = false;
+    let timer = null;
+    const tick = async () => {
+      if (cancelled) return;
+      try { await refresh(); } catch { /* ignore */ }
+      if (cancelled) return;
+      const visible = document.visibilityState === 'visible' && document.hasFocus();
+      timer = setTimeout(tick, visible ? 2000 : 30000);
+    };
+    timer = setTimeout(tick, 2000);
+    const onVis = () => { if (timer) clearTimeout(timer); tick(); };
+    document.addEventListener('visibilitychange', onVis);
+    window.addEventListener('focus', onVis);
+    window.addEventListener('blur', onVis);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVis);
+      window.removeEventListener('focus', onVis);
+      window.removeEventListener('blur', onVis);
+    };
   }, [refresh]);
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;

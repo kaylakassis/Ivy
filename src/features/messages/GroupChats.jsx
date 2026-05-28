@@ -186,11 +186,37 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
 
   useEffect(() => { refresh(); }, [refresh]);
 
-  // Light polling for new messages (15s). Existing Messages.jsx uses
-  // the same idle-polling pattern; real-time is Phase 2.
+  // Smart polling: 2s when this tab is focused + visible, 30s when not.
+  // Cheap "real-time" without any new infra — feels instant for the
+  // active reader, near-free for background tabs. SSE with Neon would
+  // still need server-side DB polling so the cost trade is identical,
+  // and Pusher/Ably are paid. Revisit if active simultaneous members
+  // per group regularly exceed a few dozen.
   useEffect(() => {
-    const t = setInterval(() => { refresh().catch(() => {}); }, 15000);
-    return () => clearInterval(t);
+    let cancelled = false;
+    let timer = null;
+    const tick = async () => {
+      if (cancelled) return;
+      try { await refresh(); } catch { /* ignore */ }
+      if (cancelled) return;
+      const visible = document.visibilityState === 'visible' && document.hasFocus();
+      timer = setTimeout(tick, visible ? 2000 : 30000);
+    };
+    timer = setTimeout(tick, 2000);
+    const onVisChange = () => {
+      if (timer) clearTimeout(timer);
+      tick();
+    };
+    document.addEventListener('visibilitychange', onVisChange);
+    window.addEventListener('focus', onVisChange);
+    window.addEventListener('blur', onVisChange);
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      document.removeEventListener('visibilitychange', onVisChange);
+      window.removeEventListener('focus', onVisChange);
+      window.removeEventListener('blur', onVisChange);
+    };
   }, [refresh]);
 
   // Scroll to bottom on new message.
