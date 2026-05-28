@@ -11,7 +11,7 @@ import Drawer, { inputSty } from './Drawer.jsx';
 import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
 
-export default function PackagesDrawer({ services, onClose }) {
+export default function PackagesDrawer({ services, onClose, inline = false }) {
   const [packages, setPackages] = useState(null);
   const [editing, setEditing]   = useState(null); // null = list view, {} = new, row = edit
   const [confirmDelete, setConfirmDelete] = useState(null); // { pkg, outstanding }
@@ -75,7 +75,7 @@ export default function PackagesDrawer({ services, onClose }) {
   return (
     <Drawer title="Packages"
       subtitle="Bundle multiple sessions into one upfront purchase. Sell to clients from the client drawer."
-      onClose={onClose}>
+      onClose={onClose} inline={inline}>
       {err && (
         <div style={{
           padding: '8px 12px', borderRadius: 8, marginBottom: 12,
