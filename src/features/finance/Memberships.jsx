@@ -22,10 +22,16 @@ export default function Memberships() {
   const [error, setError] = useState(null);
   const [editing, setEditing] = useState(null); // 'new' | tier object
   const [busy, setBusy] = useState(false);
+  const [expandedTierId, setExpandedTierId] = useState(null);
+  const [moving, setMoving] = useState(null); // client_membership object being moved
 
   const refresh = async () => {
-    const r = await api.get('/memberships');
-    setTiers(r.memberships || []);
+    const [t, m] = await Promise.all([
+      api.get('/memberships'),
+      api.get('/memberships/members').catch(() => ({ members: [] })),
+    ]);
+    setTiers(t.memberships || []);
+    setMembers(m.members || []);
   };
 
   useEffect(() => {
@@ -79,6 +85,18 @@ export default function Memberships() {
       setError(e);
     } finally { setBusy(false); }
   };
+  const changePlan = async (cmId, newTierId) => {
+    setBusy(true); setError(null);
+    try {
+      await api.post('/memberships/change-plan', {
+        clientMembershipId: cmId, newMembershipId: newTierId,
+      });
+      await refresh();
+      setMoving(null);
+    } catch (e) {
+      setError(e);
+    } finally { setBusy(false); }
+  };
 
   if (tiers === null && !error) {
     return <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13 }}>Loading memberships…</div>;
@@ -125,16 +143,21 @@ export default function Memberships() {
           }}>
             <div>Name</div><div>Price</div><div>Members</div><div>Stripe</div><div>Active</div><div/>
           </div>
-          {tiers.map((t, i) => (
-            <div key={t.id} onClick={() => setEditing(t)}
+          {tiers.map((t, i) => {
+            const tierMembers = totalsByTier.get(t.id) || [];
+            const isExpanded = expandedTierId === t.id;
+            return (
+            <React.Fragment key={t.id}>
+            <div onClick={() => setEditing(t)}
               style={{
                 display: 'grid', gridTemplateColumns: '2fr 130px 130px 100px 80px 40px',
                 padding: '14px 20px', alignItems: 'center', cursor: 'pointer',
                 borderTop: i === 0 ? 'none' : '1px solid var(--border)',
                 opacity: t.active ? 1 : 0.6,
+                background: isExpanded ? 'var(--surface-2)' : 'transparent',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
-              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}>
+              onMouseEnter={(e) => { if (!isExpanded) e.currentTarget.style.background = 'var(--surface-2)'; }}
+              onMouseLeave={(e) => { if (!isExpanded) e.currentTarget.style.background = 'transparent'; }}>
               <div style={{ minWidth: 0 }}>
                 <div style={{ fontSize: 13.5, fontWeight: 600 }}>{t.name}</div>
                 {t.description && (
@@ -147,9 +170,19 @@ export default function Memberships() {
               <div className="mono-num" style={{ fontSize: 13, fontWeight: 600 }}>
                 {fmtMoney(t.priceCents)}<span style={{ color: 'var(--muted)', fontWeight: 500 }}> {intervalLabel(t.interval)}</span>
               </div>
-              <div style={{ fontSize: 12, color: 'var(--fg-2)' }}>
-                {(totalsByTier.get(t.id) || []).length} member{(totalsByTier.get(t.id) || []).length === 1 ? '' : 's'}
-              </div>
+              <button type="button"
+                onClick={(e) => { e.stopPropagation(); setExpandedTierId(isExpanded ? null : t.id); }}
+                disabled={tierMembers.length === 0}
+                style={{
+                  fontSize: 12, color: tierMembers.length === 0 ? 'var(--muted)' : 'var(--accent)',
+                  background: 'transparent', border: 'none', padding: 0, textAlign: 'left',
+                  cursor: tierMembers.length === 0 ? 'default' : 'pointer',
+                  fontWeight: tierMembers.length === 0 ? 400 : 600,
+                  textDecoration: tierMembers.length === 0 ? 'none' : 'underline dotted',
+                  textUnderlineOffset: 3,
+                }}>
+                {tierMembers.length} member{tierMembers.length === 1 ? '' : 's'}
+              </button>
               <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase',
                 color: t.stripeReady ? 'var(--ok)' : 'var(--warn)' }}>
                 {t.stripeReady ? 'Ready' : 'Not connected'}
@@ -159,7 +192,36 @@ export default function Memberships() {
               </div>
               <Icons.Arrow size={13} stroke="var(--muted)"/>
             </div>
-          ))}
+            {isExpanded && (
+              <div style={{ padding: '8px 20px 14px 20px', background: 'var(--surface-2)',
+                borderTop: '1px dashed var(--border)' }}>
+                {tierMembers.map((m) => (
+                  <div key={m.id} style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0',
+                    fontSize: 13,
+                  }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 600 }}>{m.clientName || m.clientEmail || 'Unnamed'}</div>
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+                        {m.clientEmail}
+                        {m.status === 'past_due' && ' · Past due'}
+                        {m.cancelAtPeriodEnd && m.currentPeriodEnd && ` · Cancels ${new Date(m.currentPeriodEnd).toLocaleDateString()}`}
+                      </div>
+                    </div>
+                    {m.provider === 'stripe' && m.hasStripe && !m.cancelAtPeriodEnd && (
+                      <button type="button" className="btn btn-ghost"
+                        onClick={() => setMoving(m)}
+                        style={{ fontSize: 12, padding: '6px 12px' }}>
+                        Change plan
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+            </React.Fragment>
+          );
+          })}
         </div>
       )}
 
@@ -173,6 +235,85 @@ export default function Memberships() {
           onArchive={archive}
         />
       )}
+
+      {moving && (
+        <ChangePlanModal
+          member={moving}
+          tiers={tiers}
+          busy={busy}
+          onClose={() => setMoving(null)}
+          onConfirm={(newTierId) => changePlan(moving.id, newTierId)}
+        />
+      )}
+    </div>
+  );
+}
+
+function ChangePlanModal({ member, tiers, busy, onClose, onConfirm }) {
+  // Only tiers that are active AND have a Stripe price provisioned can
+  // be the destination — the backend rejects either otherwise. Exclude
+  // the member's current tier (they're already on it).
+  const candidates = (tiers || []).filter((t) =>
+    t.id !== member.membershipId && t.active && t.stripeReady,
+  );
+  const [selected, setSelected] = useState(candidates[0]?.id || '');
+  return (
+    <div role="dialog" aria-modal="true"
+      onClick={onClose}
+      style={{
+        position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        zIndex: 60, padding: 20,
+      }}>
+      <div onClick={(e) => e.stopPropagation()}
+        style={{
+          background: 'var(--surface)', borderRadius: 14, padding: 24,
+          width: '100%', maxWidth: 460,
+          border: '1px solid var(--border)',
+        }}>
+        <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 4 }}>
+          Change plan for {member.clientName || member.clientEmail}
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
+          Stripe will prorate the difference automatically — the client gets a credit
+          (or charge) for the rest of the current period on their next invoice.
+          Currently on <strong>{member.membershipName}</strong>.
+        </div>
+
+        {candidates.length === 0 ? (
+          <div style={{ fontSize: 13, color: 'var(--muted)', padding: '8px 0 16px' }}>
+            No other tiers are ready to switch to. Add another active tier with
+            Stripe connected first.
+          </div>
+        ) : (
+          <label style={{ display: 'block', marginBottom: 18 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
+              textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6 }}>
+              Move to
+            </div>
+            <select value={selected} onChange={(e) => setSelected(e.target.value)}
+              className="input"
+              style={{ width: '100%', padding: '10px 12px', fontSize: 14 }}>
+              {candidates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name} · ${(t.priceCents / 100).toFixed(2)} {({ week: '/wk', month: '/mo', quarter: '/qtr', year: '/yr' })[t.interval] || ''}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={busy}>
+            Cancel
+          </button>
+          <button type="button" className="btn btn-primary"
+            disabled={busy || !selected || candidates.length === 0}
+            onClick={() => onConfirm(selected)}>
+            {busy ? 'Switching…' : 'Confirm switch'}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
