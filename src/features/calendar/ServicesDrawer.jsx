@@ -41,7 +41,7 @@ function reminderLabel(min) {
   return `${Math.round(min / 1440)}d before`;
 }
 
-export default function ServicesDrawer({ initial, onSave, onClose }) {
+export default function ServicesDrawer({ initial, onSave, onClose, inline = false }) {
   const [items, setItems] = useState(() => initial.length > 0
     ? initial.map((s) => ({ ...s, _key: s.id || Math.random().toString(36).slice(2) }))
     : []);
@@ -137,6 +137,7 @@ export default function ServicesDrawer({ initial, onSave, onClose }) {
       subtitle={previewing ? "What clients see when they're picking a service to book." : 'What clients can book on your calendar.'}
       onClose={onClose}
       width={520}
+      inline={inline}
     >
       {/* Top toolbar — preview toggle + add */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>

@@ -12,6 +12,36 @@ import { SkelRowList } from '../../components/Skeleton.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
 import { useClientPortal } from './clientContext.jsx';
+import ClientGroups from './ClientGroups.jsx';
+import ClientDms from './ClientDms.jsx';
+
+export default function ClientMessagesPage() {
+  const [tab, setTab] = useState('direct'); // 'direct' | 'groups' | 'dms'
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div style={{ display: 'flex', gap: 4, padding: '8px 16px',
+        borderBottom: '1px solid var(--border)', background: 'var(--surface)' }}>
+        <CTab active={tab === 'direct'} onClick={() => setTab('direct')}>From businesses</CTab>
+        <CTab active={tab === 'groups'} onClick={() => setTab('groups')}>Groups</CTab>
+        <CTab active={tab === 'dms'} onClick={() => setTab('dms')}>People</CTab>
+      </div>
+      {tab === 'direct' ? <ClientMessages/>
+        : tab === 'groups' ? <ClientGroups/>
+        : <ClientDms/>}
+    </div>
+  );
+}
+function CTab({ active, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      background: 'transparent', border: 'none', cursor: 'pointer',
+      padding: '8px 14px', fontSize: 13, fontWeight: 600,
+      color: active ? 'var(--fg)' : 'var(--muted)',
+      borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+      marginBottom: -9,
+    }}>{children}</button>
+  );
+}
 
 function fmtTime(iso) {
   const d = new Date(iso);
@@ -35,7 +65,7 @@ function avatarBg(seed) {
   return AVATAR_PALETTE[Math.abs(h) % AVATAR_PALETTE.length];
 }
 
-export default function ClientMessages() {
+function ClientMessages() {
   const { isMobile } = useViewport();
   const { data: ctx } = useClientPortal();
   const [threads, setThreads] = useState([]);

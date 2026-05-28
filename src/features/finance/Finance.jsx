@@ -17,6 +17,8 @@ import Quotes from './Quotes.jsx';
 import GiftCards from './GiftCards.jsx';
 import Products from './Products.jsx';
 import PointOfSale from './PointOfSale.jsx';
+import FinanceServices from './Services.jsx';
+import FinancePackages from './Packages.jsx';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -128,6 +130,14 @@ export default function Finance() {
       setSection('quotes');
       // Leave ?quote in the URL — Quotes.jsx consumes + strips it.
     }
+    // ?section=<id> — used by the Calendar → /finance redirect for the
+    // legacy ?service= deep link and any future tab-switch links.
+    const sectionParam = params.get('section');
+    if (sectionParam) {
+      setSection(sectionParam);
+      params.delete('section');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
@@ -217,15 +227,18 @@ export default function Finance() {
         {[
           { id: 'invoices',    label: 'Invoices' },
           { id: 'pos',         label: 'Sell' },
+          { id: 'services',    label: 'Services' },
           { id: 'products',    label: 'Products' },
+          { id: 'packages',    label: 'Packages' },
+          { id: 'memberships', label: 'Memberships' },
           { id: 'quotes',      label: 'Estimates' },
           { id: 'recurring',   label: 'Recurring' },
-          { id: 'memberships', label: 'Memberships' },
           { id: 'giftcards',   label: 'Gift cards' },
           { id: 'time',        label: 'Time' },
           { id: 'expenses',    label: 'Expenses' },
         ].map(({ id, label }) => (
-          <button key={id} onClick={() => setSection(id)} style={{
+          <button key={id} onClick={() => setSection(id)}
+            data-section={id} style={{
             padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
             background: section === id ? 'var(--surface)' : 'transparent',
             color: section === id ? 'var(--fg)' : 'var(--muted)',
@@ -239,8 +252,12 @@ export default function Finance() {
         <Expenses/>
       ) : section === 'pos' ? (
         <PointOfSale/>
+      ) : section === 'services' ? (
+        <FinanceServices/>
       ) : section === 'products' ? (
         <Products/>
+      ) : section === 'packages' ? (
+        <FinancePackages/>
       ) : section === 'quotes' ? (
         <Quotes/>
       ) : section === 'recurring' ? (

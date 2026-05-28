@@ -48,11 +48,11 @@ const STEPS = [
     placement: 'right',
   },
   {
-    id: 'calendar-packages',
+    id: 'finance-packages',
     title: 'Sell session packages',
     body: "Bundle multiple sessions into one upfront purchase — '5-pack of massage', 'monthly retainer'. Sell to a client from their drawer; credits get consumed as they book.",
-    route: '/calendar',
-    selector: '[data-tour="calendar-packages"]',
+    route: '/finance?section=packages',
+    selector: '[data-section="packages"]',
     placement: 'bottom',
   },
   {

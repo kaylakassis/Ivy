@@ -334,9 +334,12 @@ export async function fetchCheckoutSession({ secretKey, sessionId, stripeAccount
   return stripeFetch(`/checkout/sessions/${encodeURIComponent(sessionId)}?expand[0]=subscription`, { secretKey, stripeAccount });
 }
 
-export async function fetchSubscription({ secretKey, subscriptionId }) {
+export async function fetchSubscription({ secretKey, stripeAccount, subscriptionId }) {
   if (!subscriptionId) throw new Error('subscriptionId is required');
-  return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, { secretKey });
+  return stripeFetch(
+    `/subscriptions/${encodeURIComponent(subscriptionId)}`,
+    { secretKey, stripeAccount },
+  );
 }
 
 // Apply a credit to a customer's Stripe balance. Stripe automatically
@@ -565,6 +568,47 @@ export async function cancelSubscription({ secretKey, stripeAccount, subscriptio
   }
   return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, {
     method: 'DELETE', secretKey, stripeAccount,
+  });
+}
+
+// Fetches a customer by id. Used by applySubscriptionState's reconcile
+// path to auto-provision a clients row when a Dashboard-originated
+// subscription arrives before the client has been seen in THRYVE.
+export async function fetchStripeCustomer({ secretKey, stripeAccount, customerId }) {
+  if (!customerId) throw new Error('customerId is required');
+  return stripeFetch(`/customers/${encodeURIComponent(customerId)}`, { secretKey, stripeAccount });
+}
+
+// Lists subscriptions on a connected account. Used by the reconcile
+// cron — paginates via starting_after cursor. status=all so we pick
+// up trialing/past_due/cancelled too (their state may have drifted
+// since the last webhook).
+export async function listStripeSubscriptions({ secretKey, stripeAccount, startingAfter, limit = 100 }) {
+  const params = new URLSearchParams({ limit: String(limit), status: 'all' });
+  if (startingAfter) params.set('starting_after', startingAfter);
+  return stripeFetch(`/subscriptions?${params.toString()}`, { secretKey, stripeAccount });
+}
+
+// Switches a subscription's price (plan change). Stripe handles
+// proration automatically when proration_behavior=create_prorations
+// (default) — the next invoice carries the credit/charge for the
+// remainder of the current period. The customer.subscription.updated
+// webhook then carries the new items[] and applySubscriptionState
+// resyncs the local tier snapshot.
+export async function updateSubscriptionPrice({
+  secretKey, stripeAccount, subscriptionId, itemId, newPriceId,
+  prorationBehavior = 'create_prorations',
+}) {
+  if (!subscriptionId) throw new Error('subscriptionId is required');
+  if (!itemId)         throw new Error('itemId is required');
+  if (!newPriceId)     throw new Error('newPriceId is required');
+  return stripeFetch(`/subscriptions/${encodeURIComponent(subscriptionId)}`, {
+    method: 'POST', secretKey, stripeAccount,
+    body: {
+      'items[0][id]':    itemId,
+      'items[0][price]': newPriceId,
+      proration_behavior: prorationBehavior,
+    },
   });
 }
 

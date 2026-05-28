@@ -5,7 +5,7 @@
 // configure — Express/Connect owners can't). Idempotent and side-effect-safe.
 import { sql } from './db.js';
 import { computeTotals } from './finance.js';
-import { notifyOwnerSafe } from './push.js';
+import { notifyOwnerSafe, notifyClientSafe } from './push.js';
 import { notifyInvoicePaid } from './invoiceNotify.js';
 import { loadStripeCreds } from './stripeCreds.js';
 import { fetchCheckoutSession } from './stripe.js';
@@ -55,6 +55,20 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
       tag: `invoice-paid-${invoiceId}`,
     },
   });
+  // Client receipt push (in addition to the email). Email may sit
+  // unread for hours; clients want the moment-of-charge confirmation.
+  if (inv.client_id) {
+    notifyClientSafe({
+      clientId: inv.client_id,
+      type: 'payments',
+      payload: {
+        title: 'Payment received',
+        body: `${inv.number} · ${fmtMoney(paidAmount)} paid. Thanks!`,
+        url: '/me/invoices',
+        tag: `invoice-paid-client-${invoiceId}`,
+      },
+    });
+  }
   notifyInvoicePaid({ workspaceId, invoiceId, totalAmount: paidAmount, method });
   return 'paid';
 }

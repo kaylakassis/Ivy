@@ -818,6 +818,46 @@ function NotificationsCard() {
           )}
         </>
       )}
+      <DigestPrefs/>
+    </div>
+  );
+}
+
+// Group-chat digest opt-in for the owner. Mirrors the client-portal
+// section in ClientNotifications.jsx so owners can also turn it off.
+function DigestPrefs() {
+  const [prefs, setPrefs] = useState(null);
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    api.get('/me/notification-prefs').then((r) => setPrefs(r.prefs))
+      .catch(() => { /* silent — defaults */ });
+  }, []);
+  const toggle = async () => {
+    const next = !(prefs?.digestGroupsDaily !== false);
+    setPrefs((p) => ({ ...(p || {}), digestGroupsDaily: next }));
+    try {
+      const r = await api.patch('/me/notification-prefs', { digestGroupsDaily: next });
+      setPrefs(r.prefs);
+    } catch (e) {
+      setPrefs((p) => ({ ...(p || {}), digestGroupsDaily: !next }));
+      setErr(e.message || 'Could not update');
+    }
+  };
+  return (
+    <div style={{ marginTop: 18, paddingTop: 18, borderTop: '1px solid var(--border)' }}>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Group chat digest</h3>
+      {err && <div style={{ color: 'var(--danger)', fontSize: 12, marginBottom: 8 }}>{err}</div>}
+      <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '8px 0', cursor: 'pointer' }}>
+        <input type="checkbox"
+          checked={prefs?.digestGroupsDaily !== false}
+          onChange={toggle} style={{ marginTop: 2 }}/>
+        <div>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>Daily group recap email</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+            One morning email summarizing every unread group message. Turn off if push is enough.
+          </div>
+        </div>
+      </label>
     </div>
   );
 }

@@ -116,12 +116,12 @@ export default function Calendar() {
     }
 
     if (serviceId) {
-      // Services drawer doesn't currently accept an id to highlight,
-      // but opening the drawer is the right next step for the user.
-      // Future polish: scrollIntoView + flash the matching row.
-      setDrawer('services');
+      // Services moved to Finance → Services. Forward the deep-link
+      // (notifications + tutorial CTAs may still arrive here) instead
+      // of stranding the user on Calendar with no way to reach it.
       params.delete('service');
-      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+      const carry = params.toString();
+      navigate(`/finance?section=services${carry ? '&' + carry : ''}`, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, cal?.bookings]);
@@ -312,15 +312,11 @@ export default function Calendar() {
           <div style={{ marginLeft: 8 }}><ViewToggle/></div>
 
           <div style={{ flex: 1 }}/>
-          <button className="btn btn-outline" onClick={() => setDrawer('services')}>
-            <Icons.Dollar size={14}/> {!isTablet && 'Services'}
-          </button>
+          {/* Services + Packages moved to Finance → Services / Packages.
+              The drawer code remains so the ?service= deep-link below
+              still resolves (now redirected to /finance). */}
           <button className="btn btn-outline" onClick={() => setDrawer('staff')}>
             <Icons.Users size={14}/> {!isTablet && 'Staff'}
-          </button>
-          <button className="btn btn-outline" onClick={() => setDrawer('packages')}
-            data-tour="calendar-packages">
-            <Icons.Doc size={14}/> {!isTablet && 'Packages'}
           </button>
           <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
             <Icons.Clock size={14}/> {!isTablet && 'Availability'}
@@ -694,10 +690,10 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
 // Bottom-sheet menu used by the mobile toolbar to expose Services /
 // Availability / Share / Block-time without crowding the header row.
 function ActionSheet({ onClose, onPick }) {
+  // Services + Packages relocated to /finance — removed from this
+  // sheet so the mobile "+" menu only surfaces calendar-scoped actions.
   const items = [
-    { id: 'services',     label: 'Services',     icon: 'Dollar' },
     { id: 'staff',        label: 'Staff',        icon: 'Users' },
-    { id: 'packages',     label: 'Packages',     icon: 'Doc' },
     { id: 'availability', label: 'Availability', icon: 'Clock' },
     { id: 'share',        label: 'Share booking link', icon: 'Globe' },
     { id: 'sync',         label: 'Calendar sync', icon: 'Arrow' },

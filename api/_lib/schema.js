@@ -2343,4 +2343,232 @@ CREATE TABLE IF NOT EXISTS discover_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_discover_snapshots_refreshed
   ON discover_snapshots(refreshed_at);
+
+-- ─── Group chat (cohort threads: owner + many clients) ───────────────
+-- Parallel to message_threads/messages so the 1:1 flow stays untouched.
+-- A group thread has many client members (group_thread_members) and
+-- many messages (group_messages); the owner is implicit (workspace owner).
+--
+-- mode='open'      → clients see each other + can reply
+-- mode='broadcast' → owner posts only; members list hidden from clients
+CREATE TABLE IF NOT EXISTS group_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  mode TEXT NOT NULL DEFAULT 'open' CHECK (mode IN ('open', 'broadcast')),
+  archived BOOLEAN NOT NULL DEFAULT FALSE,
+  unread_biz INT NOT NULL DEFAULT 0,
+  last_message_at TIMESTAMPTZ,
+  last_message_preview TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_group_threads_workspace_recent
+  ON group_threads(workspace_id, archived, last_message_at DESC NULLS LAST);
+
+-- workspace_id denormalized for defense-in-depth: every member query
+-- filters by it so a cross-tenant client_id can't be joined to a group
+-- in another workspace even if FK constraints alone would prevent it.
+CREATE TABLE IF NOT EXISTS group_thread_members (
+  thread_id UUID NOT NULL REFERENCES group_threads(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  left_at TIMESTAMPTZ,
+  unread_count INT NOT NULL DEFAULT 0,
+  last_read_at TIMESTAMPTZ,
+  muted BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (thread_id, client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_thread_members_client_active
+  ON group_thread_members(client_id, workspace_id) WHERE left_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_group_thread_members_thread_active
+  ON group_thread_members(thread_id) WHERE left_at IS NULL;
+
+-- sender='biz' → workspace owner; sender_client_id NULL
+-- sender='client' → sender_client_id = the speaking client (must be a member)
+-- sender='system' → ambient ("Alice joined", "Bob left"); sender_client_id NULL
+CREATE TABLE IF NOT EXISTS group_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES group_threads(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('biz', 'client', 'system')),
+  sender_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  text TEXT,
+  attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  kind TEXT,
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_group_messages_thread_time
+  ON group_messages(thread_id, created_at);
+
+-- Threaded replies: parent_message_id points at the message being replied
+-- to. NULL = top-level. Indexed so a thread-view query "all replies to msg X"
+-- is a single scan.
+ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS parent_message_id UUID
+  REFERENCES group_messages(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_group_messages_parent
+  ON group_messages(parent_message_id) WHERE parent_message_id IS NOT NULL;
+
+-- Emoji reactions. One row per (message, reactor, emoji) — same client/owner
+-- can react with multiple emojis but only once with each. Reactor key is
+-- either a clients.id (sender_client_id) OR the literal string 'biz' meaning
+-- the workspace owner (we don't need user-level identity since there's only
+-- one owner per workspace).
+CREATE TABLE IF NOT EXISTS group_message_reactions (
+  message_id UUID NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  reactor_client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  is_owner BOOLEAN NOT NULL DEFAULT FALSE,
+  emoji TEXT NOT NULL CHECK (length(emoji) BETWEEN 1 AND 16),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  -- One reaction per reactor per emoji per message. Two unique indexes
+  -- (one for clients, one for owner) because UNIQUE NULLS NOT DISTINCT
+  -- isn't available across all PG versions.
+  UNIQUE (message_id, reactor_client_id, emoji)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_group_message_reactions_owner_uniq
+  ON group_message_reactions(message_id, emoji) WHERE is_owner = TRUE;
+CREATE INDEX IF NOT EXISTS idx_group_message_reactions_message
+  ON group_message_reactions(message_id);
+
+-- @mentions resolved at send time. Lets us boost the recipient's
+-- notification ("Alice mentioned you") AND render the mention as a chip
+-- in the message body. Storing the resolved client_id (vs re-parsing on
+-- read) means a rename of the mentioned client doesn't break old @mentions.
+CREATE TABLE IF NOT EXISTS group_message_mentions (
+  message_id UUID NOT NULL REFERENCES group_messages(id) ON DELETE CASCADE,
+  mentioned_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  is_owner_mention BOOLEAN NOT NULL DEFAULT FALSE,
+  display_name TEXT,
+  PRIMARY KEY (message_id, mentioned_client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_message_mentions_client
+  ON group_message_mentions(mentioned_client_id);
+
+-- Invite-by-link: owner generates a one-time-use-ish token (configurable
+-- max_uses + expires_at). Accepting joins the user's clients-row to the
+-- group. Token is sha256-hashed at rest — we never store the plaintext
+-- value the URL carries.
+CREATE TABLE IF NOT EXISTS group_invite_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES group_threads(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE,
+  max_uses INT NOT NULL DEFAULT 50,
+  used_count INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMPTZ,
+  created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  revoked_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_group_invite_tokens_thread
+  ON group_invite_tokens(thread_id) WHERE revoked_at IS NULL;
+
+-- Per-user digest preferences. opt_in_groups defaults to TRUE so users
+-- who never touch settings still get the daily group-chat summary
+-- (everything else is unaffected — direct messages keep instant push).
+-- Per-thread mute is already in group_thread_members.muted.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_groups_daily BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_last_sent_at TIMESTAMPTZ;
+
+-- ─── Client ↔ client direct messages ─────────────────────────────────
+-- Permission rule: two clients can DM each other only if they share at
+-- least one active group_thread_members row in the SAME workspace. The
+-- thread row gates that at start; subsequent sends re-check.
+--
+-- Owner cannot see these threads — there is no /api/messages/dms
+-- endpoint. The owner-side admin support inbox only ever surfaces a
+-- DM if the recipient explicitly reports a message (which creates a
+-- support_messages row with kind='report').
+--
+-- We always store the pair with client_a_id < client_b_id so (a,b) and
+-- (b,a) collapse to the same row. The UNIQUE constraint enforces it.
+CREATE TABLE IF NOT EXISTS client_dm_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_a_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  client_b_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  last_message_at TIMESTAMPTZ,
+  last_message_preview TEXT,
+  unread_a INT NOT NULL DEFAULT 0,
+  unread_b INT NOT NULL DEFAULT 0,
+  -- Per-side archive flag for "leave" semantics — hides the thread from
+  -- that client's list without losing history for the other side. Re-
+  -- messaging un-archives automatically.
+  archived_a BOOLEAN NOT NULL DEFAULT FALSE,
+  archived_b BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (client_a_id < client_b_id),
+  UNIQUE (workspace_id, client_a_id, client_b_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_dm_threads_a
+  ON client_dm_threads(client_a_id, archived_a, last_message_at DESC NULLS LAST);
+CREATE INDEX IF NOT EXISTS idx_client_dm_threads_b
+  ON client_dm_threads(client_b_id, archived_b, last_message_at DESC NULLS LAST);
+
+CREATE TABLE IF NOT EXISTS client_dm_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES client_dm_threads(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  sender_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  text TEXT,
+  attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  parent_message_id UUID REFERENCES client_dm_messages(id) ON DELETE SET NULL,
+  reported_at TIMESTAMPTZ,
+  reported_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_client_dm_messages_thread
+  ON client_dm_messages(thread_id, created_at);
+
+-- Block: prevents the blocked client from sending DMs to the blocker.
+-- Asymmetric — a block does not automatically reciprocate, but the
+-- blocker also won't see the blocked client's existing messages
+-- (we filter at fetch). Same workspace scope as the underlying group.
+CREATE TABLE IF NOT EXISTS client_dm_blocks (
+  blocker_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  blocked_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (blocker_client_id, blocked_client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_client_dm_blocks_blocked
+  ON client_dm_blocks(blocked_client_id);
+
+-- Mute: muter still receives muted's messages in the thread, but no
+-- push notification. Symmetric to "muted" on group_thread_members.
+CREATE TABLE IF NOT EXISTS client_dm_mutes (
+  muter_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  muted_client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (muter_client_id, muted_client_id)
+);
+
+-- Report kind on support_messages so DM-reports route to THRYVE admin's
+-- support tab tagged 'report' (separate from normal user-↔-admin chat).
+ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS kind TEXT;
+ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS meta JSONB NOT NULL DEFAULT '{}'::jsonb;
+CREATE INDEX IF NOT EXISTS idx_support_messages_kind
+  ON support_messages(kind) WHERE kind IS NOT NULL;
+
+-- ─── Ivy nudges (proactive owner alerts) ─────────────────────────────
+-- The ivy-nudges cron emits owner pushes for situations that would
+-- otherwise stay silent: a client message left unanswered for >24h,
+-- a previously-active client going quiet for 14+ days. Each (workspace,
+-- client, kind) combo dedups for COOLDOWN_DAYS so a single situation
+-- doesn't re-ping daily.
+CREATE TABLE IF NOT EXISTS ivy_nudges_fired (
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id    UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL CHECK (kind IN ('awaiting_reply', 'gone_quiet')),
+  fired_at     TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (workspace_id, client_id, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_nudges_fired_recent
+  ON ivy_nudges_fired(fired_at DESC);
 `;

@@ -14,6 +14,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
+import { notifyClientSafe } from '../_lib/push.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { withIdempotency } from '../_lib/idempotency.js';
 import { methodNotAllowed, serverError } from '../_lib/json.js';
@@ -116,6 +117,21 @@ export default async function handler(req, res) {
     } catch (mailErr) {
       // eslint-disable-next-line no-console
       console.error('[invoices/send] email failed:', mailErr.message);
+    }
+
+    // Client-side push so the email isn't the only signal. Helpful for
+    // clients who've claimed their portal — they get the invoice in
+    // their pocket without inbox-fatigue gambling.
+    if (clientId) {
+      notifyClientSafe({
+        clientId, type: 'payments',
+        payload: {
+          title: `Invoice from ${business || 'your provider'}`,
+          body: `${inv.number} · ${fmtMoney(totals.total)}${inv.due_date ? ` · due ${new Date(inv.due_date).toLocaleDateString()}` : ''}`,
+          url: '/me/invoices',
+          tag: `invoice-sent-${inv.id}`,
+        },
+      });
     }
 
     // Best-effort: post into the chat thread.

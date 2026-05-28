@@ -19,6 +19,7 @@ import { materializeOne } from '../_lib/recurring.js';
 import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
+import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { fetchBranding, makeBrandingCache } from '../_lib/branding.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -61,6 +62,21 @@ async function handler(req, res) {
         materialized++;
 
         const { schedule, invoice } = result;
+        // Owner-side push: a new invoice just dropped into Finance —
+        // worth a heads-up even when auto_send delivered it to the
+        // client. Type 'payments' so it inherits the same per-user
+        // opt-out as paid-invoice pushes.
+        notifyOwnerSafe({
+          workspaceId: invoice.workspace_id,
+          type: 'payments',
+          payload: {
+            title: 'Recurring invoice issued',
+            body: `${invoice.number} · ${schedule.client_name || schedule.client_email || 'a client'}`,
+            url: `/finance?invoice=${invoice.id}`,
+            tag: `recurring-issued-${invoice.id}`,
+          },
+        });
+
         if (!schedule.auto_send) continue;
         // Auto-send: skip if no email on file. Unsent invoices stay
         // 'draft' so the owner can review + send manually.
@@ -160,6 +176,19 @@ async function autoSendInvoice({ schedule, invoice, getBranding = fetchBranding 
       branding,
     }),
   });
+  // Client push so the auto-issued invoice doesn't depend solely on
+  // an email landing in their inbox.
+  if (invoice.client_id) {
+    notifyClientSafe({
+      clientId: invoice.client_id, type: 'payments',
+      payload: {
+        title: `New invoice · ${business || 'your provider'}`,
+        body: `${invoice.number} · ${fmtMoney(totals.total)}${invoice.due_date ? ` · due ${new Date(invoice.due_date).toLocaleDateString()}` : ''}`,
+        url: '/me/invoices',
+        tag: `invoice-recurring-${invoice.id}`,
+      },
+    });
+  }
   } catch (emailErr) {
     // Email send failed → revert the invoice to draft so the owner
     // sees it back in their queue. Keep the activity entry as

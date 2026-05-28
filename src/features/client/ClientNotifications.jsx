@@ -19,6 +19,7 @@ export default function ClientNotifications() {
   const [emailTypes, setEmailTypes] = useState([]);
   const [busy, setBusy] = useState(null);
   const [err, setErr] = useState(null);
+  const [prefs, setPrefs] = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -29,8 +30,23 @@ export default function ClientNotifications() {
         setEmailTypes(r.emailTypes || []);
       })
       .catch((e) => { if (live) setErr(e.message || 'Failed to load'); });
+    api.get('/me/notification-prefs')
+      .then((r) => { if (live) setPrefs(r.prefs); })
+      .catch(() => { /* silent — defaults */ });
     return () => { live = false; };
   }, []);
+
+  const toggleDigest = async () => {
+    const next = !(prefs?.digestGroupsDaily !== false);
+    setPrefs((p) => ({ ...(p || {}), digestGroupsDaily: next }));
+    try {
+      const r = await api.patch('/me/notification-prefs', { digestGroupsDaily: next });
+      setPrefs(r.prefs);
+    } catch (e) {
+      setPrefs((p) => ({ ...(p || {}), digestGroupsDaily: !next }));
+      setErr(e.message || 'Could not update');
+    }
+  };
 
   const toggle = async (clientId, type) => {
     setMemberships((list) => list.map((m) => m.clientId === clientId
@@ -74,6 +90,26 @@ export default function ClientNotifications() {
           border: '1px solid rgba(155,44,44,0.25)',
         }}>{err}</div>
       )}
+
+      <section className="card" style={{ padding: 18, marginBottom: 16 }}>
+        <div style={{ fontSize: 16, fontWeight: 600, marginBottom: 12 }}>Group chat</div>
+        <label style={{
+          display: 'flex', alignItems: 'flex-start', gap: 12, padding: '8px 0',
+          cursor: 'pointer',
+        }}>
+          <input type="checkbox"
+            checked={prefs?.digestGroupsDaily !== false}
+            onChange={toggleDigest}
+            style={{ marginTop: 2 }}/>
+          <div>
+            <div style={{ fontSize: 14, fontWeight: 500 }}>Daily digest email</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>
+              One email each morning summarizing every unread group message across the businesses
+              you're a member of. Turn off if you want push only.
+            </div>
+          </div>
+        </label>
+      </section>
 
       {memberships === null && !err && (
         <div className="card" style={{ padding: 32, textAlign: 'center', color: 'var(--muted)', fontSize: 13.5 }}>

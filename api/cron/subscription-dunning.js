@@ -26,6 +26,7 @@
 import { sql } from '../_lib/db.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyPaymentFailed } from '../_lib/subscriptionNotify.js';
+import { notifyOwnerSafe } from '../_lib/push.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 
@@ -60,6 +61,19 @@ async function handler(req, res) {
       RETURNING id
     `;
     suspended = suspendResult.rowCount ?? 0;
+    // Push the owner of every just-suspended workspace — this is the
+    // moment write-actions start failing, so silence here is dangerous.
+    for (const w of suspendResult.rows || []) {
+      notifyOwnerSafe({
+        workspaceId: w.id, type: 'payments',
+        payload: {
+          title: 'Subscription suspended',
+          body: 'Card retries exhausted — update payment to restore access.',
+          url: '/account?tab=billing',
+          tag: `subscription-suspended-${w.id}`,
+        },
+      });
+    }
 
     // 2. Dunning emails for workspaces still inside the grace
     //    window, capped at one per day per workspace.
@@ -85,6 +99,15 @@ async function handler(req, res) {
         // it just omits that line). Owner gets a reminder; if they
         // want detail they click into Billing.
         await notifyPaymentFailed({ workspaceId: w.id });
+        notifyOwnerSafe({
+          workspaceId: w.id, type: 'payments',
+          payload: {
+            title: 'Subscription payment overdue',
+            body: "Stripe couldn't charge your card. Update it to keep your account active.",
+            url: '/account?tab=billing',
+            tag: `subscription-dunning-${w.id}`,
+          },
+        });
         await sql`
           UPDATE workspaces SET subscription_last_dunning_at = NOW()
           WHERE id = ${w.id}

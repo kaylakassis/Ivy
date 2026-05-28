@@ -25,6 +25,7 @@ import { computeTotals } from '../_lib/finance.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { notifyInvoicePaid } from '../_lib/invoiceNotify.js';
+import { markInvoicePaid } from '../_lib/invoicePayments.js';
 import { markProcessed } from '../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -118,10 +119,18 @@ export default async function handler(req, res) {
       if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
         return res.status(400).json({ error: 'workspace mismatch' });
       }
-      if (sub.metadata?.purpose !== 'membership') {
-        return ok(res, { received: true, ignored: 'subscription not a membership' });
-      }
-      const result = await applySubscriptionState({ workspaceId, sub });
+      // No metadata.purpose gate: applySubscriptionState handles both
+      // THRYVE-originated subs (metadata.purpose='membership') AND
+      // Stripe-Dashboard-originated subs (matched via customer +
+      // price lookups). Returns 'race' / 'mismatch' for anything that
+      // doesn't resolve to a known client + tier in this workspace.
+      // stripeContext lets it fetch unknown customers and auto-provision
+      // a clients row when the Dashboard-originated path can't match.
+      const platformKey = platformStripeSecret();
+      const result = await applySubscriptionState({
+        workspaceId, sub,
+        stripeContext: platformKey ? { secretKey: platformKey, stripeAccount: acctId } : undefined,
+      });
       return ok(res, { received: true, applied: 'membership-state', result });
     }
 
@@ -289,6 +298,36 @@ export default async function handler(req, res) {
         workspaceId, invoiceId, totalAmount: paidAmount, method: 'card',
       });
       return ok(res, { received: true, applied: 'invoice-paid' });
+    }
+
+    // payment_intent.succeeded — safety net for invoice payments. Stripe
+    // fans a single Checkout payment into checkout.session.completed +
+    // payment_intent.succeeded; if the former never lands (webhook
+    // misconfigured, transient delivery failure, payment created outside
+    // the Checkout flow via chargeOffSession), this branch still marks
+    // the invoice paid. markInvoicePaid is idempotent (UPDATE guarded by
+    // status<>'paid'), so the duplicate from the pair is a no-op.
+    //
+    // Booking-deposit PIs (metadata.invoice_id starting 'bookdep_') are
+    // skipped here — those flow through checkout.session.completed only.
+    if (event.type === 'payment_intent.succeeded') {
+      const pi = event.data?.object || {};
+      const invoiceId = pi.metadata?.invoice_id;
+      const eventWorkspaceId = pi.metadata?.workspace_id;
+      if (!invoiceId) {
+        return ok(res, { received: true, ignored: 'no invoice_id in metadata' });
+      }
+      if (invoiceId.startsWith('bookdep_')) {
+        return ok(res, { received: true, ignored: 'booking deposit handled via session.completed' });
+      }
+      if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch' });
+      }
+      const result = await markInvoicePaid({
+        workspaceId, invoiceId, paymentIntent: pi.id,
+        amountCents: pi.amount_received,
+      });
+      return ok(res, { received: true, applied: 'invoice-paid', result });
     }
 
     // All other event types — quietly accept so Stripe stops retrying.

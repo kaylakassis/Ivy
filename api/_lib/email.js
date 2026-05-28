@@ -28,6 +28,17 @@ function replyToAddress() {
   return process.env.EMAIL_REPLY_TO || null;
 }
 
+// Reports the email-sending posture so handlers (notably /auth/signup)
+// can surface a banner when the operator hasn't moved off the Resend
+// sandbox yet. 'sandbox' = onboarding@resend.dev / no EMAIL_FROM,
+// which only delivers to the Resend account-owner's verified address.
+// 'unconfigured' = no RESEND_API_KEY at all; emails will throw.
+export function emailSendingMode() {
+  if (!process.env.RESEND_API_KEY) return 'unconfigured';
+  if (!process.env.EMAIL_FROM || fromDomain() === 'resend.dev') return 'sandbox';
+  return 'production';
+}
+
 function fromDomain() {
   // Pull "user@domain.tld" out of either bare or "Name <addr>" form.
   const raw = fromAddress();

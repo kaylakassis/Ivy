@@ -11,8 +11,37 @@ import NewThreadModal from './NewThreadModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { useDictation, useVoiceMemo } from '../../lib/speech.js';
 import { upload } from '@vercel/blob/client';
+import GroupChats from './GroupChats.jsx';
 
 export default function Messages() {
+  const [tab, setTab] = useState('direct'); // 'direct' | 'groups'
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
+      <div style={{
+        display: 'flex', gap: 4, padding: '8px 16px',
+        borderBottom: '1px solid var(--border)', background: 'var(--surface)',
+      }}>
+        <TabButton active={tab === 'direct'} onClick={() => setTab('direct')}>Direct</TabButton>
+        <TabButton active={tab === 'groups'} onClick={() => setTab('groups')}>Groups</TabButton>
+      </div>
+      {tab === 'direct' ? <DirectMessages/> : <GroupChats/>}
+    </div>
+  );
+}
+
+function TabButton({ active, onClick, children }) {
+  return (
+    <button onClick={onClick} style={{
+      background: 'transparent', border: 'none', cursor: 'pointer',
+      padding: '8px 14px', fontSize: 13, fontWeight: 600,
+      color: active ? 'var(--fg)' : 'var(--muted)',
+      borderBottom: active ? '2px solid var(--accent)' : '2px solid transparent',
+      marginBottom: -9,
+    }}>{children}</button>
+  );
+}
+
+function DirectMessages() {
   const { threads, loading, error, startThread, updateThread, setMode } = useThreads();
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);

@@ -13,6 +13,7 @@ import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { notifyOwnerSafe } from '../_lib/push.js';
 import crypto from 'node:crypto';
 
 function hashToken(raw) {
@@ -92,6 +93,20 @@ export default async function handler(req, res) {
           updated_at = NOW()
         WHERE id = ${row.booking_id}
       `;
+
+      // Owner push so a fresh review surfaces immediately — high-signal
+      // event that almost always wants a response. Type 'messages' keeps
+      // it in the same opt-out bucket as client messages so an owner
+      // who wants quiet hours can still mute it cleanly.
+      notifyOwnerSafe({
+        workspaceId: row.workspace_id, type: 'messages',
+        payload: {
+          title: `★ ${rating} review from ${row.client_name || 'a client'}`,
+          body: (text || '').slice(0, 200) || 'No comment — just a rating.',
+          url: '/reviews',
+          tag: `review-${row.booking_id}`,
+        },
+      });
 
       return ok(res, { ok: true });
     }

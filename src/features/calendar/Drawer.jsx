@@ -4,8 +4,29 @@ import { createPortal } from 'react-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
-export default function Drawer({ title, subtitle, onClose, children, width = 460 }) {
-  useEscapeKey(onClose);
+export default function Drawer({ title, subtitle, onClose, children, width = 460, inline = false }) {
+  useEscapeKey(onClose || (() => {}), !inline);
+  // Inline mode: same content, rendered as a normal in-flow block (no
+  // portal, no overlay, no close button). Used when the drawer's
+  // content is hosted inside a page section instead of as an overlay
+  // — see /finance Services + Packages tabs.
+  if (inline) {
+    return (
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {title && (
+          <div style={{
+            padding: '14px 18px', borderBottom: '1px solid var(--border)',
+          }}>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 18, fontWeight: 500, letterSpacing: '-0.015em' }}>
+              {title}
+            </div>
+            {subtitle && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>{subtitle}</div>}
+          </div>
+        )}
+        <div style={{ padding: 20 }}>{children}</div>
+      </div>
+    );
+  }
   // Portal to <body>. A transformed/filtered/contain ancestor (the
   // app shell + route-enter animations use transforms) would otherwise
   // become the containing block for these position:fixed layers,
