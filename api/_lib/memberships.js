@@ -84,11 +84,23 @@ export function mapSubStatus(s) {
 
 // Take a Stripe subscription object + the workspace_id it belongs to
 // and reconcile client_memberships. Returns:
-//   'ok'      — applied
-//   'race'    — subscription row hasn't reached us yet (checkout-completed
-//               flow will pick it up)
+//   'ok'      — applied (update)
+//   'created' — applied (insert) when checkout.session.completed hadn't
+//               landed yet and the subscription event arrived first
+//   'race'    — subscription row hasn't reached us AND the sub carries
+//               insufficient metadata to upsert (checkout.session.completed
+//               flow will pick it up if/when it arrives)
 //   'mismatch'— cross-tenant event, dropped
 //   'invalid' — no subscription id
+//
+// The upsert path closes a race: Stripe doesn't guarantee that
+// checkout.session.completed lands before customer.subscription.created.
+// When the sub arrives first we'd previously skip and the row would
+// never materialize if the session event later failed to deliver,
+// leaving a live Stripe subscription that THRYVE never tracked.
+// `subscription_data.metadata` is stamped by createMembershipCheckoutSession
+// with workspace_id/membership_id/client_id/purpose, giving us enough
+// to safely materialize the row from the subscription event alone.
 export async function applySubscriptionState({ workspaceId, sub }) {
   const subId = sub?.id;
   if (!subId) return 'invalid';
@@ -97,18 +109,70 @@ export async function applySubscriptionState({ workspaceId, sub }) {
      WHERE stripe_subscription_id = ${subId}
      LIMIT 1
   `;
-  if (ours.rows.length === 0) return 'race';
-  if (ours.rows[0].workspace_id !== workspaceId) return 'mismatch';
 
   const status = mapSubStatus(sub.status);
   const cancelAtPeriodEnd = !!sub.cancel_at_period_end;
   const cpeMs = sub.current_period_end ? sub.current_period_end * 1000 : null;
+  const cpeIso = cpeMs ? new Date(cpeMs).toISOString() : null;
   const cancelledAt = (status === 'cancelled') ? new Date().toISOString() : null;
+
+  if (ours.rows.length === 0) {
+    // No row yet — try to materialize from subscription metadata.
+    const md = sub.metadata || {};
+    const mdWorkspaceId = md.workspace_id;
+    const membershipId = md.membership_id;
+    const clientId = md.client_id;
+    if (md.purpose !== 'membership' || !membershipId || !clientId) {
+      return 'race';
+    }
+    if (mdWorkspaceId && mdWorkspaceId !== workspaceId) return 'mismatch';
+
+    // Validate both the tier and the client belong to this workspace
+    // before insert. The FKs would prevent cross-tenant inserts anyway,
+    // but failing loud here keeps the webhook response informative.
+    const tier = (await sql`
+      SELECT id, name, price_cents, interval FROM memberships
+       WHERE id = ${membershipId} AND workspace_id = ${workspaceId}
+    `).rows[0];
+    if (!tier) return 'race';
+    const client = (await sql`
+      SELECT id FROM clients
+       WHERE id = ${clientId} AND workspace_id = ${workspaceId}
+    `).rows[0];
+    if (!client) return 'race';
+
+    // ON CONFLICT covers the case where checkout.session.completed
+    // lands between the SELECT above and this INSERT — defense against
+    // the same race we're fixing.
+    await sql`
+      INSERT INTO client_memberships (
+        workspace_id, client_id, membership_id,
+        membership_name, price_cents, interval,
+        stripe_subscription_id, status,
+        cancel_at_period_end, current_period_end, cancelled_at
+      ) VALUES (
+        ${workspaceId}, ${clientId}, ${tier.id},
+        ${tier.name}, ${tier.price_cents}, ${tier.interval},
+        ${subId}, ${status},
+        ${cancelAtPeriodEnd}, ${cpeIso}, ${cancelledAt}
+      )
+      ON CONFLICT (stripe_subscription_id) DO UPDATE SET
+        status = EXCLUDED.status,
+        cancel_at_period_end = EXCLUDED.cancel_at_period_end,
+        current_period_end = EXCLUDED.current_period_end,
+        cancelled_at = COALESCE(client_memberships.cancelled_at, EXCLUDED.cancelled_at),
+        updated_at = NOW()
+    `;
+    return 'created';
+  }
+
+  if (ours.rows[0].workspace_id !== workspaceId) return 'mismatch';
+
   await sql`
     UPDATE client_memberships SET
       status = ${status},
       cancel_at_period_end = ${cancelAtPeriodEnd},
-      current_period_end = ${cpeMs ? new Date(cpeMs).toISOString() : null},
+      current_period_end = ${cpeIso},
       cancelled_at = COALESCE(cancelled_at, ${cancelledAt}),
       updated_at = NOW()
     WHERE stripe_subscription_id = ${subId} AND workspace_id = ${workspaceId}
