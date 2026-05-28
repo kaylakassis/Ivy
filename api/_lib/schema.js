@@ -2343,4 +2343,64 @@ CREATE TABLE IF NOT EXISTS discover_snapshots (
 );
 CREATE INDEX IF NOT EXISTS idx_discover_snapshots_refreshed
   ON discover_snapshots(refreshed_at);
+
+-- ─── Group chat (cohort threads: owner + many clients) ───────────────
+-- Parallel to message_threads/messages so the 1:1 flow stays untouched.
+-- A group thread has many client members (group_thread_members) and
+-- many messages (group_messages); the owner is implicit (workspace owner).
+--
+-- mode='open'      → clients see each other + can reply
+-- mode='broadcast' → owner posts only; members list hidden from clients
+CREATE TABLE IF NOT EXISTS group_threads (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  description TEXT,
+  mode TEXT NOT NULL DEFAULT 'open' CHECK (mode IN ('open', 'broadcast')),
+  archived BOOLEAN NOT NULL DEFAULT FALSE,
+  unread_biz INT NOT NULL DEFAULT 0,
+  last_message_at TIMESTAMPTZ,
+  last_message_preview TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_group_threads_workspace_recent
+  ON group_threads(workspace_id, archived, last_message_at DESC NULLS LAST);
+
+-- workspace_id denormalized for defense-in-depth: every member query
+-- filters by it so a cross-tenant client_id can't be joined to a group
+-- in another workspace even if FK constraints alone would prevent it.
+CREATE TABLE IF NOT EXISTS group_thread_members (
+  thread_id UUID NOT NULL REFERENCES group_threads(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  joined_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  left_at TIMESTAMPTZ,
+  unread_count INT NOT NULL DEFAULT 0,
+  last_read_at TIMESTAMPTZ,
+  muted BOOLEAN NOT NULL DEFAULT FALSE,
+  PRIMARY KEY (thread_id, client_id)
+);
+CREATE INDEX IF NOT EXISTS idx_group_thread_members_client_active
+  ON group_thread_members(client_id, workspace_id) WHERE left_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_group_thread_members_thread_active
+  ON group_thread_members(thread_id) WHERE left_at IS NULL;
+
+-- sender='biz' → workspace owner; sender_client_id NULL
+-- sender='client' → sender_client_id = the speaking client (must be a member)
+-- sender='system' → ambient ("Alice joined", "Bob left"); sender_client_id NULL
+CREATE TABLE IF NOT EXISTS group_messages (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  thread_id UUID NOT NULL REFERENCES group_threads(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  sender TEXT NOT NULL CHECK (sender IN ('biz', 'client', 'system')),
+  sender_client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  text TEXT,
+  attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+  kind TEXT,
+  meta JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_group_messages_thread_time
+  ON group_messages(thread_id, created_at);
 `;
