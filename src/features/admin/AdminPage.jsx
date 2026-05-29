@@ -1920,6 +1920,64 @@ function SettingsTab() {
         {msg && <div style={{ fontSize: 12, color: 'var(--ok)' }}>✓ {msg}</div>}
         {err && <ErrCard msg={err}/>}
       </div>
+
+      <PushTestCard/>
+    </div>
+  );
+}
+
+// One-click "what does a notification look like" preview. Hits
+// /api/admin/push-test which fires a webpush to the admin's own
+// subscriptions — so the operator can sanity-check VAPID config,
+// browser permission state, and the actual rendering without
+// waiting for a real Ivy nudge or booking reminder to fire.
+function PushTestCard() {
+  const [busy, setBusy] = useState(false);
+  const [msg,  setMsg]  = useState(null);
+  const [err,  setErr]  = useState(null);
+
+  const send = async () => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const r = await api.post('/admin/push-test', {});
+      if (r?.ok === false && r?.reason === 'not configured') {
+        setErr('Web push is not configured on this deploy — set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT in Vercel and redeploy.');
+      } else if ((r?.sent || 0) === 0) {
+        setMsg("Sent to 0 devices. This account doesn't have any push subscriptions yet — accept the browser's notification permission prompt on a device, then try again.");
+      } else {
+        const removed = r?.removed ? `, removed ${r.removed} dead` : '';
+        setMsg(`Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}${removed}. Check your browser / OS notification tray.`);
+      }
+    } catch (e) {
+      setErr(e.message || 'Failed to send test push');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Test push notification</h3>
+        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 600 }}>
+          Fires a sample push notification to whichever devices you've subscribed on this account.
+          Use this to preview the look + tap-through, or to verify VAPID is wired correctly after a deploy.
+          The test bypasses your per-type notification preferences and does NOT add a row to the
+          in-app notification feed.
+        </p>
+      </div>
+      <div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={send}
+        >
+          {busy ? 'Sending…' : 'Send test push notification'}
+        </button>
+      </div>
+      {msg && <div style={{ fontSize: 12.5, color: 'var(--ok)', lineHeight: 1.5 }}>{msg}</div>}
+      {err && <ErrCard msg={err}/>}
     </div>
   );
 }
