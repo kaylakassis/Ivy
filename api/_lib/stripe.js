@@ -53,6 +53,16 @@ export function platformWebhookSecret() {
     || process.env.THRYVE_STRIPE_WEBHOOK_SECRET
     || null;
 }
+// THRYVE's own subscription webhook (/api/webhooks/billing) lives at a
+// different Stripe endpoint URL than the Connect platform webhook
+// (/api/webhooks/stripe-platform). Stripe issues a separate signing
+// secret per endpoint, so the two cannot share STRIPE_WEBHOOK_SECRET.
+// Falls back to the platform secret only when the dedicated var is
+// unset — useful for single-endpoint dev setups.
+export function billingWebhookSecret() {
+  return process.env.THRYVE_BILLING_WEBHOOK_SECRET
+    || platformWebhookSecret();
+}
 export function platformPublishableKey() {
   return process.env.STRIPE_PUBLISHABLE_KEY
     || process.env.THRYVE_STRIPE_PUBLISHABLE_KEY

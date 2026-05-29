@@ -1,8 +1,11 @@
 // POST /api/webhooks/billing  (public, signature-verified)
 // THRYVE-side Stripe webhook — handles the subscription lifecycle for
-// workspaces. Verified against THRYVE_STRIPE_WEBHOOK_SECRET, scoped to a
-// single platform Stripe account, NOT the per-workspace customer-Stripe
-// (those land in /api/webhooks/stripe/<workspaceId>).
+// workspaces. Verified against THRYVE_BILLING_WEBHOOK_SECRET (dedicated
+// secret for this endpoint URL — Stripe issues a separate signing
+// secret per endpoint, so it cannot share STRIPE_WEBHOOK_SECRET with
+// the Connect platform webhook at /api/webhooks/stripe-platform).
+// Scoped to a single platform Stripe account, NOT the per-workspace
+// customer-Stripe (those land in /api/webhooks/stripe/<workspaceId>).
 //
 // Source of truth for subscription_status — the /api/billing/sync endpoint
 // is just race-mitigation for the redirect→webhook gap.
@@ -11,7 +14,7 @@
 // bytes; any re-encoding breaks verification.
 import { sql } from '../_lib/db.js';
 import { readRawBody } from '../_lib/body.js';
-import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, platformWebhookSecret } from '../_lib/stripe.js';
+import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, billingWebhookSecret } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { markReferralConverted, grantPendingReferralCredits } from '../_lib/referrals.js';
@@ -32,7 +35,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   try {
     const secretKey     = platformStripeSecret();
-    const webhookSecret = platformWebhookSecret();
+    const webhookSecret = billingWebhookSecret();
     if (!secretKey || !webhookSecret) {
       return res.status(500).json({ error: 'THRYVE Stripe billing is not configured' });
     }

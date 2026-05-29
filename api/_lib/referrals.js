@@ -15,8 +15,8 @@ import { sql } from './db.js';
 import { platformStripeSecret, applyCustomerCredit } from './stripe.js';
 
 // One month's credit, in cents. Mirrors the affiliate fallback +
-// pricing ($39/mo). Override via env if pricing changes.
-const REWARD_CENTS = parseInt(process.env.THRYVE_PLAN_MONTHLY_CENTS || '3900', 10);
+// pricing ($49/mo). Override via env if pricing changes.
+const REWARD_CENTS = parseInt(process.env.THRYVE_PLAN_MONTHLY_CENTS || '4900', 10);
 
 // Codes are uppercased, alphanumeric + dashes, 3-40 chars. Returns the
 // normalized code or null if it can't be made valid.
