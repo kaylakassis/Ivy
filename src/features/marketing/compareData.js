@@ -107,7 +107,7 @@ export const COMPETITORS = {
     name: 'Acuity',
     angle: 'Great booking; nothing else built in.',
     headline: 'Acuity is just booking. THRYVE is the whole business.',
-    sub: "Acuity has a clean booking page but stops there - you still need a CRM, an invoicer, a contract tool, and AI. THRYVE replaces the whole stack for less than Acuity's mid-tier.",
+    sub: "Acuity has a clean booking page but stops there - you still need a CRM, an invoicer, a contract tool, and AI. THRYVE matches Acuity's top tier at $49/mo and gives you the whole stack instead of just scheduling.",
     theirPrice: '$16 - $49 / mo',
     pains: [
       "Acuity is just booking - you still pay separately for invoicing, contracts, CRM.",
