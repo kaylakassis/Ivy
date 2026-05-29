@@ -1400,9 +1400,217 @@ function CustomHtml({ data }) {
   );
 }
 
+// Shop section: live product grid + add-to-cart. Read-only — owners
+// edit the catalog in Finance → Products, not the section editor.
+// Cart state lives in sessionStorage keyed by handle so a refresh
+// doesn't dump it. Checkout POSTs to /api/site/:handle/checkout which
+// resolves to a Stripe Checkout Session URL the browser navigates to.
+function Shop({ section, handle }) {
+  const { headline = 'Shop', sub = '', showOutOfStock = false } = section.props || {};
+  const [products, setProducts] = React.useState(null);
+  const [err, setErr]           = React.useState(null);
+  const [cart, setCart]         = React.useState({});           // { productId: qty }
+  const [cartOpen, setCartOpen] = React.useState(false);
+  const [busy, setBusy]         = React.useState(false);
+  const [customerName, setName] = React.useState('');
+  const [customerEmail, setEmail] = React.useState('');
+  const cartKey = `thryve:cart:${handle || 'preview'}`;
+
+  React.useEffect(() => {
+    if (!handle) return;
+    fetch(`/api/site/${encodeURIComponent(handle)}/products`)
+      .then((r) => r.ok ? r.json() : Promise.reject(new Error('Failed to load')))
+      .then((j) => setProducts(j.products || []))
+      .catch((e) => setErr(e.message || 'Failed'));
+    try {
+      const stored = JSON.parse(sessionStorage.getItem(cartKey) || '{}');
+      if (stored && typeof stored === 'object') setCart(stored);
+    } catch { /* ignore */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handle]);
+
+  React.useEffect(() => {
+    try { sessionStorage.setItem(cartKey, JSON.stringify(cart)); } catch { /* quota */ }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cart]);
+
+  const visible = (products || []).filter((p) => showOutOfStock || p.inStock);
+  const cartItems = (products || [])
+    .filter((p) => (cart[p.id] || 0) > 0)
+    .map((p) => ({ ...p, qty: cart[p.id] }));
+  const cartCount = cartItems.reduce((n, x) => n + x.qty, 0);
+  const cartTotal = cartItems.reduce((n, x) => n + (x.price * x.qty), 0);
+
+  const add = (id) => setCart((c) => ({ ...c, [id]: (c[id] || 0) + 1 }));
+  const dec = (id) => setCart((c) => {
+    const next = { ...c, [id]: Math.max(0, (c[id] || 0) - 1) };
+    if (next[id] === 0) delete next[id];
+    return next;
+  });
+
+  const checkout = async () => {
+    const validEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(customerEmail.trim());
+    if (!customerName.trim() || !validEmail) {
+      // eslint-disable-next-line no-alert
+      window.alert('Name and a valid email are required.');
+      return;
+    }
+    setBusy(true);
+    try {
+      const r = await fetch(`/api/site/${encodeURIComponent(handle)}/checkout`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: cartItems.map((x) => ({ productId: x.id, qty: x.qty })),
+          customer: { name: customerName.trim(), email: customerEmail.trim() },
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'Checkout failed');
+      // Clear cart before navigating so a back-button doesn't show
+      // a stale "x in cart" pill.
+      try { sessionStorage.removeItem(cartKey); } catch { /* ignore */ }
+      window.location.assign(j.url);
+    } catch (e) {
+      // eslint-disable-next-line no-alert
+      window.alert(e.message || 'Checkout failed.');
+    } finally { setBusy(false); }
+  };
+
+  return (
+    <section style={{ padding: '48px 24px', position: 'relative' }}>
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <h2 style={{ fontSize: 28, margin: '0 0 6px', textAlign: 'center' }}>{headline}</h2>
+        {sub && <p style={{ color: '#666', textAlign: 'center', marginTop: 0, marginBottom: 24 }}>{sub}</p>}
+        {err && <div style={{ color: '#b22', textAlign: 'center' }}>{err}</div>}
+        {products === null && !err && (
+          <div style={{ color: '#888', textAlign: 'center' }}>Loading…</div>
+        )}
+        {products && visible.length === 0 && (
+          <div style={{ color: '#888', textAlign: 'center' }}>No products yet.</div>
+        )}
+
+        <div style={{ display: 'grid', gap: 18,
+          gridTemplateColumns: 'repeat(auto-fill, minmax(min(220px, 100%), 1fr))' }}>
+          {visible.map((p) => {
+            const inCart = cart[p.id] || 0;
+            const disabled = !p.inStock;
+            return (
+              <div key={p.id} style={{
+                border: '1px solid #e6e2d6', borderRadius: 12, overflow: 'hidden',
+                background: '#fff', display: 'flex', flexDirection: 'column',
+              }}>
+                {p.photoUrl && (
+                  <div style={{ aspectRatio: '1 / 1', background: '#f6f5f1' }}>
+                    <img src={p.photoUrl} alt={p.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}/>
+                  </div>
+                )}
+                <div style={{ padding: 14, display: 'flex', flexDirection: 'column', gap: 6, flex: 1 }}>
+                  <div style={{ fontWeight: 600, fontSize: 15 }}>{p.name}</div>
+                  {p.description && (
+                    <div style={{ fontSize: 12.5, color: '#666', lineHeight: 1.45 }}>{p.description}</div>
+                  )}
+                  <div style={{ fontSize: 15, color: '#000', marginTop: 'auto', paddingTop: 8, fontWeight: 600 }}>
+                    ${Number(p.price).toFixed(2)}
+                  </div>
+                  {inCart === 0 ? (
+                    <button onClick={() => add(p.id)} disabled={disabled}
+                      style={{
+                        marginTop: 6, padding: '8px 12px', borderRadius: 8,
+                        border: 'none', cursor: disabled ? 'not-allowed' : 'pointer',
+                        background: disabled ? '#ddd' : '#0e0e0e', color: '#fff',
+                        fontSize: 13, fontWeight: 600,
+                      }}>
+                      {disabled ? 'Out of stock' : 'Add to cart'}
+                    </button>
+                  ) : (
+                    <div style={{
+                      marginTop: 6, display: 'flex', alignItems: 'center', gap: 8,
+                      border: '1px solid #ccc', borderRadius: 8, padding: 4,
+                    }}>
+                      <button onClick={() => dec(p.id)} style={{ width: 28, height: 28, border: 'none', cursor: 'pointer', background: 'transparent' }}>−</button>
+                      <div style={{ flex: 1, textAlign: 'center', fontSize: 13 }}>{inCart}</div>
+                      <button onClick={() => add(p.id)} style={{ width: 28, height: 28, border: 'none', cursor: 'pointer', background: 'transparent' }}>+</button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {cartCount > 0 && !cartOpen && (
+        <button onClick={() => setCartOpen(true)} style={{
+          position: 'fixed', bottom: 20, right: 20, zIndex: 9990,
+          padding: '12px 18px', borderRadius: 999, border: 'none', cursor: 'pointer',
+          background: '#0e0e0e', color: '#fff', fontSize: 14, fontWeight: 600,
+          boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+        }}>
+          🛒 {cartCount} · ${cartTotal.toFixed(2)}
+        </button>
+      )}
+
+      {cartOpen && (
+        <div onClick={() => setCartOpen(false)} style={{
+          position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 9991,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        }}>
+          <div onClick={(e) => e.stopPropagation()} style={{
+            background: '#fff', borderRadius: 14, padding: 24,
+            width: '100%', maxWidth: 480, maxHeight: '90vh', overflow: 'auto',
+          }}>
+            <h3 style={{ margin: '0 0 14px', fontSize: 18 }}>Your cart</h3>
+            {cartItems.length === 0 ? (
+              <div style={{ color: '#888', fontSize: 13 }}>Empty.</div>
+            ) : (
+              <>
+                {cartItems.map((it) => (
+                  <div key={it.id} style={{ display: 'flex', justifyContent: 'space-between',
+                    padding: '8px 0', borderBottom: '1px solid #eee', fontSize: 14 }}>
+                    <span>{it.qty}× {it.name}</span>
+                    <span>${(it.price * it.qty).toFixed(2)}</span>
+                  </div>
+                ))}
+                <div style={{ display: 'flex', justifyContent: 'space-between',
+                  fontWeight: 600, fontSize: 15, marginTop: 10 }}>
+                  <span>Total</span>
+                  <span>${cartTotal.toFixed(2)}</span>
+                </div>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
+                  <input value={customerName} onChange={(e) => setName(e.target.value)}
+                    placeholder="Your name"
+                    style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #ccc', fontSize: 14 }}/>
+                  <input value={customerEmail} onChange={(e) => setEmail(e.target.value)}
+                    type="email" placeholder="Email"
+                    style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #ccc', fontSize: 14 }}/>
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+                  <button onClick={() => setCartOpen(false)}
+                    style={{ flex: 1, padding: '10px', borderRadius: 8, border: '1px solid #ccc',
+                      background: '#fff', cursor: 'pointer' }}>
+                    Keep shopping
+                  </button>
+                  <button onClick={checkout} disabled={busy || cartItems.length === 0}
+                    style={{ flex: 1, padding: '10px', borderRadius: 8, border: 'none',
+                      background: '#0e0e0e', color: '#fff', cursor: 'pointer', fontWeight: 600 }}>
+                    {busy ? 'Redirecting…' : 'Checkout'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
 const RENDERERS = {
   hero: Hero,
   services: Services,
+  shop: Shop,
   about: About,
   booking: Booking,
   testimonials: Testimonials,

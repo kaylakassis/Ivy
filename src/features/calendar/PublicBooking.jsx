@@ -632,9 +632,31 @@ export default function PublicBooking({ embedded = false }) {
           <div className="card" style={{ padding: 18, marginBottom: 18 }}>
             <div className="metric-label" style={{ marginBottom: 12 }}>Choose a service</div>
             {cal.services.length === 0 ? (
-              <div style={{ color: 'var(--muted)', fontSize: 13, padding: 12 }}>
-                This business hasn't published any services yet.
-              </div>
+              cal.businessType === 'product' ? (
+                <div style={{ padding: 16, textAlign: 'center' }}>
+                  <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 6 }}>
+                    This business doesn't take appointments.
+                  </div>
+                  <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.55 }}>
+                    They sell products — visit their shop to see what's in stock.
+                  </div>
+                  {cal.websiteHandle && (
+                    <a className="btn btn-primary" href={`/site/${encodeURIComponent(cal.websiteHandle)}`}
+                      style={{ display: 'inline-block', padding: '10px 18px' }}>
+                      Visit shop →
+                    </a>
+                  )}
+                </div>
+              ) : (
+                <div style={{ color: 'var(--muted)', fontSize: 13, padding: 12 }}>
+                  This business hasn't published any services yet.
+                  {cal.websiteHandle && (
+                    <> <a href={`/site/${encodeURIComponent(cal.websiteHandle)}`} style={{ color: 'var(--accent)' }}>
+                      Visit their site →
+                    </a></>
+                  )}
+                </div>
+              )
             ) : (
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))', gap: 10 }}>
                 {cal.services.map((s) => {

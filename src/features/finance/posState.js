@@ -6,12 +6,21 @@ export function useProducts() {
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  // Today's POS totals for the in-person summary strip. Refreshes on
+  // every sale so the cashier sees the drawer creep up live.
+  const [today, setToday] = useState(null);
+
+  const refreshToday = useCallback(async () => {
+    try { const r = await api.get('/pos/today'); setToday(r); }
+    catch { /* leave whatever's there */ }
+  }, []);
 
   const refresh = useCallback(async () => {
     try { const r = await api.get('/products?all=1'); setProducts(r.products || []); setError(null); }
     catch (e) { setError(e); }
     finally { setLoading(false); }
-  }, []);
+    refreshToday();
+  }, [refreshToday]);
   useEffect(() => { refresh(); }, [refresh]);
 
   const create = useCallback(async (input) => {
@@ -32,8 +41,9 @@ export function useProducts() {
     const opts = idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : undefined;
     const r = await api.post('/pos/sale', payload, opts);
     await refresh(); // stock changed
+    refreshToday();
     return r;
-  }, [refresh]);
+  }, [refresh, refreshToday]);
 
-  return { products, loading, error, refresh, create, update, remove, recordSale };
+  return { products, loading, error, refresh, create, update, remove, recordSale, today, refreshToday };
 }

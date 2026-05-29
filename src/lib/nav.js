@@ -5,11 +5,16 @@
 // useAuth().user.isSuperAdmin and skips them otherwise). The route still
 // exists in App.jsx — visibility is purely cosmetic; the API endpoints
 // behind /admin already enforce super-admin auth.
+// `productOnlyHidden: true` items are filtered out of the sidebar when
+// the workspace's business_type === 'product' — Calendar is meaningless
+// to a candle-maker / retailer. Sidebar.jsx pulls business_type from
+// useUserContext() and drops these. The route still exists in App.jsx
+// so deep links + manual navigation still work.
 export const NAV = [
   { id: 'dashboard', to: '/dashboard',  label: 'Dashboard',      icon: 'Home' },
   { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users' },
   { id: 'projects',  to: '/projects',   label: 'Projects',       icon: 'Doc' },
-  { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar' },
+  { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar', productOnlyHidden: true },
   { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar' },
   { id: 'goals',     to: '/goals',      label: 'Goals & Tasks',  icon: 'Check' },
   { id: 'workflows', to: '/workflows',  label: 'Workflows',      icon: 'Spark' },

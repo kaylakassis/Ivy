@@ -48,6 +48,25 @@ async function getCalendar(req, res) {
     if (settings.rows.length === 0) return notFound(res, 'No booking page for that handle');
     const s = settings.rows[0];
 
+    // Pull the workspace's business_type + website handle so the
+    // public booking page can render a "Visit our shop" CTA when the
+    // owner doesn't take appointments. Best-effort — defaults keep the
+    // booking page working even if the column or website row is absent.
+    let businessType = 'both';
+    let websiteHandle = null;
+    try {
+      const ws = await sql`
+        SELECT w.business_type, web.handle
+          FROM workspaces w
+          LEFT JOIN websites web ON web.workspace_id = w.id
+         WHERE w.id = ${s.workspace_id} LIMIT 1
+      `;
+      if (ws.rows[0]) {
+        businessType = ws.rows[0].business_type || 'both';
+        websiteHandle = ws.rows[0].handle || null;
+      }
+    } catch { /* column may be pre-migration — fall back to defaults */ }
+
     // Public booking page hides 'only_me' services entirely (they're
     // drafts the owner doesn't want anyone to see) but keeps 'private'
     // ones — clients with a direct link/share can still book those.
@@ -151,6 +170,8 @@ async function getCalendar(req, res) {
         bookings: bookings.rows.map((r) => serializeBooking(r, { redactClient: true })),
         reviews:  reviewSummary,
         memberships: membershipsOut,
+        businessType,
+        websiteHandle,
       },
     });
   } catch (err) {

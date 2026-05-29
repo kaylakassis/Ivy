@@ -18,7 +18,17 @@ import { serializeInvoice, nextInvoiceNumber } from '../_lib/finance.js';
 import { decrementStock, restoreStock } from '../_lib/products.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { withIdempotency } from '../_lib/idempotency.js';
+import { sendEmailToClient, emailShell } from '../_lib/email.js';
+import { fetchBranding } from '../_lib/branding.js';
 import { methodNotAllowed, serverError } from '../_lib/json.js';
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+function fmtMoney(n) {
+  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
 
 const lid = () => `li_${Math.random().toString(36).slice(2, 9)}`;
 
@@ -83,7 +93,15 @@ export default async function handler(req, res) {
       }
 
       const cash = body.payment === 'cash';
-      const taxRate = Math.max(0, Number(body.taxRate) || 0);
+      // Tax rate: if the request doesn't override, fall back to the
+      // workspace's saved default_tax_rate so a cashier doesn't have
+      // to re-key it on every sale. body.taxRate=0 explicitly skips
+      // tax for this sale (non-taxed items, e.g. groceries).
+      let taxRate = body.taxRate != null ? Math.max(0, Number(body.taxRate) || 0) : null;
+      if (taxRate === null) {
+        const fs = await sql`SELECT default_tax_rate FROM finance_settings WHERE workspace_id = ${workspaceId}`;
+        taxRate = Number(fs.rows[0]?.default_tax_rate || 0);
+      }
       const discount = Math.max(0, Number(body.discount) || 0);
       const rawToken = cash ? null : generateRawToken(32);
       const tokenHash = rawToken ? crypto.createHash('sha256').update(rawToken).digest('hex') : null;
@@ -138,11 +156,49 @@ export default async function handler(req, res) {
         }
       }
 
+      // Email receipt for cash sales when the customer left an email.
+      // Best-effort — never fails the sale. Pay-link mode skips this
+      // because the buyer will see the invoice + receipt via the
+      // /invoice/<token> flow anyway.
+      const clientEmail = body.clientEmail ? String(body.clientEmail).trim().toLowerCase().slice(0, 200) : null;
+      if (cash && clientEmail && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
+        try {
+          const branding = await fetchBranding(workspaceId);
+          const business = branding.businessName || 'your provider';
+          const lineHtml = (invoice.items || []).map((it) =>
+            `<tr><td style="padding:6px 0;color:#3F3D38;font-size:13px">${it.quantity}× ${escapeHtml(it.description)}</td>
+              <td align="right" style="padding:6px 0;color:#3F3D38;font-size:13px;white-space:nowrap">${fmtMoney(Number(it.rate) * Number(it.quantity))}</td></tr>`
+          ).join('');
+          await sendEmailToClient({
+            clientId: body.clientId || null, type: 'payments',
+            to: clientEmail,
+            subject: `Receipt from ${business} · ${fmtMoney(invoice.total)}`,
+            replyTo: branding.replyTo,
+            html: emailShell({
+              heading: 'Thanks for your purchase',
+              body: `<p>Here's your receipt from <strong>${escapeHtml(business)}</strong>.</p>
+                <table style="width:100%;border-collapse:collapse;margin:16px 0;border-top:1px solid #E6E2D6;border-bottom:1px solid #E6E2D6;padding:8px 0">
+                  ${lineHtml}
+                </table>
+                <div style="display:flex;justify-content:space-between;font-weight:600;font-size:15px;color:#0E0E0E">
+                  <span>Total paid</span><span>${fmtMoney(invoice.total)}</span>
+                </div>
+                <p style="color:#7B7867;font-size:12px;margin-top:14px">Paid in person · ${new Date().toLocaleDateString()}</p>`,
+              branding,
+            }),
+          });
+        } catch (mailErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[pos/sale] receipt email failed:', mailErr.message);
+        }
+      }
+
       return {
         status: 200,
         body: {
           invoice: serializeInvoice(invoice),
           paid: cash,
+          receiptEmailed: cash && !!clientEmail,
           payUrl: rawToken ? `${appUrl()}/invoice/${encodeURIComponent(rawToken)}` : null,
         },
       };

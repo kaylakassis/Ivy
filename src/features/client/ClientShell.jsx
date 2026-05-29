@@ -18,6 +18,7 @@ const NAV = [
   { to: '/me',           label: 'Home',      icon: 'Home',     end: true },
   { to: '/me/messages',  label: 'Messages',  icon: 'Chat' },
   { to: '/me/bookings',  label: 'Bookings',  icon: 'Calendar' },
+  { to: '/me/orders',    label: 'Orders',    icon: 'Gift' },
   { to: '/me/invoices',  label: 'Payments',  icon: 'Dollar' },
   { to: '/me/documents', label: 'Documents', icon: 'Doc' },
   { to: '/me/billing',   label: 'Billing',   icon: 'Lock' },
