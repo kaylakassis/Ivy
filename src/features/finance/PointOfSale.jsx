@@ -1,7 +1,8 @@
 // In-person quick-sale (Finance → Sell). Tap products into a cart, add
 // ad-hoc items, take cash or issue a pay-link (QR) — inventory updates
-// on completion.
-import React, { useState, useRef } from 'react';
+// on completion. Built for in-person product sales: searchable picker,
+// optional tax + customer email, today's drawer totals at the top.
+import React, { useMemo, useState, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
@@ -10,9 +11,12 @@ import { useProducts } from './posState.js';
 const money = (n) => '$' + Number(n || 0).toFixed(2);
 
 export default function PointOfSale() {
-  const { products, loading, recordSale } = useProducts();
+  const { products, loading, recordSale, today } = useProducts();
   const [cart, setCart] = useState([]); // [{ key, productId?, name, rate, qty, stockQty?, trackStock? }]
-  const [clientName, setClientName] = useState('');
+  const [clientName, setClientName]   = useState('');
+  const [clientEmail, setClientEmail] = useState('');
+  const [taxRate, setTaxRate]         = useState(''); // empty → use workspace default on the server
+  const [search, setSearch]           = useState('');
   const [payment, setPayment] = useState('cash');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState(null); // { paid } | { payUrl }
@@ -22,7 +26,22 @@ export default function PointOfSale() {
   // or timeout-then-retry), so the server dedupes instead of charging /
   // decrementing stock twice. Cleared after a successful sale.
   const saleKeyRef = useRef(null);
-  const sellable = products.filter((p) => p.active);
+  const sellable = useMemo(() => {
+    const all = products.filter((p) => p.active);
+    const q = search.trim().toLowerCase();
+    if (!q) return all;
+    return all.filter((p) =>
+      (p.name || '').toLowerCase().includes(q)
+      || (p.sku || '').toLowerCase().includes(q)
+    );
+  }, [products, search]);
+
+  // Subtotal / tax / total — tax is whatever the cashier typed (or
+  // 0 when empty; the server falls back to the workspace default).
+  const subtotal = cart.reduce((s, x) => s + (Number(x.rate) || 0) * (Number(x.qty) || 0), 0);
+  const taxPct = Number(taxRate) || 0;
+  const tax = Math.round(subtotal * taxPct) / 100;
+  const total = Math.round((subtotal + tax) * 100) / 100;
 
   const addProduct = (p) => setCart((c) => {
     const i = c.findIndex((x) => x.productId === p.id);
@@ -32,7 +51,6 @@ export default function PointOfSale() {
   const addAdhoc = () => setCart((c) => [...c, { key: `adhoc_${Date.now()}`, name: '', rate: 0, qty: 1, adhoc: true }]);
   const setLine = (key, patch) => setCart((c) => c.map((x) => (x.key === key ? { ...x, ...patch } : x)));
   const removeLine = (key) => setCart((c) => c.filter((x) => x.key !== key));
-  const total = cart.reduce((s, x) => s + (Number(x.rate) || 0) * (Number(x.qty) || 0), 0);
 
   const checkout = async () => {
     if (!cart.length || busy) return; // re-entry guard for rapid double-clicks
@@ -47,9 +65,15 @@ export default function PointOfSale() {
           : { productId: x.productId, quantity: x.qty }),
         payment,
         clientName: clientName.trim() || 'Walk-in',
+        clientEmail: clientEmail.trim() || null,
+        // Send only when the cashier typed a number; otherwise let the
+        // server fall back to finance_settings.default_tax_rate.
+        taxRate: taxRate === '' ? undefined : Number(taxRate),
       }, idempotencyKey);
-      setResult(r.paid ? { paid: true } : { payUrl: r.payUrl });
-      setCart([]); setClientName('');
+      setResult(r.paid
+        ? { paid: true, receiptEmailed: !!r.receiptEmailed }
+        : { payUrl: r.payUrl });
+      setCart([]); setClientName(''); setClientEmail('');
       saleKeyRef.current = null; // success — next sale gets a fresh key
     } catch (e) {
       setErr(e.message || 'Sale failed'); // keep the key so a retry dedupes
@@ -59,12 +83,49 @@ export default function PointOfSale() {
   if (loading) return <div style={{ color: 'var(--muted)', fontSize: 13, padding: 12 }}>Loading…</div>;
 
   return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {today && (
+        <div className="card" style={{
+          padding: '12px 16px', display: 'flex', flexWrap: 'wrap', gap: 24,
+          alignItems: 'center', fontSize: 13,
+        }}>
+          <div className="metric-label" style={{ marginRight: 'auto' }}>Today</div>
+          <div>
+            <div className="metric-label">Sales</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{today.paidCount}</div>
+          </div>
+          <div>
+            <div className="metric-label">Total taken</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{money(today.paidTotal)}</div>
+          </div>
+          <div>
+            <div className="metric-label">Cash drawer</div>
+            <div style={{ fontSize: 16, fontWeight: 700 }}>{money(today.cashTotal)}</div>
+          </div>
+          {today.openCount > 0 && (
+            <div>
+              <div className="metric-label">Pending pay-links</div>
+              <div style={{ fontSize: 16, fontWeight: 700, color: 'var(--warn)' }}>{today.openCount}</div>
+            </div>
+          )}
+        </div>
+      )}
+
     <div className="split-2" style={{ alignItems: 'start' }}>
       {/* Product picker */}
       <div className="card" style={{ padding: 16 }}>
-        <div className="metric-label" style={{ marginBottom: 10 }}>Tap to add</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+          <div className="metric-label" style={{ flex: 1 }}>Tap to add</div>
+        </div>
+        {products.filter((p) => p.active).length > 0 && (
+          <input value={search} onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search products by name or SKU…"
+            style={{ ...inp, marginBottom: 10 }}/>
+        )}
         {sellable.length === 0 ? (
-          <EmptyNote icon="Gift" title="No products" hint="Add products in the Products tab to sell them here."/>
+          products.filter((p) => p.active).length === 0
+            ? <EmptyNote icon="Gift" title="No products" hint="Add products in the Products tab to sell them here."/>
+            : <div style={{ color: 'var(--muted)', fontSize: 13, padding: 12 }}>No matches.</div>
         ) : (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 8 }}>
             {sellable.map((p) => {
@@ -112,11 +173,34 @@ export default function PointOfSale() {
           </div>
         ))}
 
-        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10, display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700 }}>
-          <span>Total</span><span>{money(total)}</span>
+        <div style={{ borderTop: '1px solid var(--border)', paddingTop: 10 }}>
+          {cart.length > 0 && (
+            <>
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: 'var(--muted)', marginBottom: 4 }}>
+                <span>Subtotal</span><span>{money(subtotal)}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>Tax</span>
+                <input type="number" min="0" step="0.01" max="100"
+                  value={taxRate}
+                  onChange={(e) => setTaxRate(e.target.value)}
+                  placeholder="0"
+                  style={{ ...inp, width: 60, textAlign: 'right' }}/>
+                <span style={{ fontSize: 13, color: 'var(--muted)' }}>%</span>
+                <span style={{ flex: 1, textAlign: 'right', fontSize: 13, color: 'var(--muted)' }}>
+                  {money(tax)}
+                </span>
+              </div>
+            </>
+          )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 16, fontWeight: 700 }}>
+            <span>Total</span><span>{money(total)}</span>
+          </div>
         </div>
 
         <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Customer name (optional)" style={inp}/>
+        <input value={clientEmail} onChange={(e) => setClientEmail(e.target.value)}
+          type="email" placeholder="Email (optional — send receipt)" style={inp}/>
         <div style={{ display: 'flex', gap: 8 }}>
           {[['cash', 'Cash / in person'], ['link', 'Card — pay link / QR']].map(([id, label]) => (
             <button key={id} onClick={() => setPayment(id)} style={{
@@ -135,13 +219,15 @@ export default function PointOfSale() {
       </div>
 
       {result?.paid && (
-        <Toast onClose={() => setResult(null)} icon="Check" text="Paid — sale recorded."/>
+        <Toast onClose={() => setResult(null)} icon="Check"
+          text={result.receiptEmailed ? 'Paid — receipt emailed.' : 'Paid — sale recorded.'}/>
       )}
       {result?.payUrl && (
         <QRCodeModal url={result.payUrl} label="Scan to pay"
           sublabel="Customer scans with their phone camera to pay this sale."
           onClose={() => setResult(null)}/>
       )}
+    </div>
     </div>
   );
 }
