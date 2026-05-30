@@ -11,6 +11,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import {
   serializeSession, serializeMessage, workspaceContext,
   generateReply, fetchOwnedSession, getDailyUsage, sanitizeUserText,
+  IVY_MODEL,
 } from '../_lib/ivy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -57,6 +58,7 @@ export default async function handler(req, res) {
         context,
         mode: hasKey ? 'live' : 'mock',
         modeError: hasKey ? null : 'no-api-key',
+        model: IVY_MODEL,
         usage,
       });
     }
