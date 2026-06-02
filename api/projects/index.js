@@ -58,10 +58,13 @@ export default async function handler(req, res) {
                   COALESCE(dc.cnt, 0)::int AS document_count
              FROM projects p
              LEFT JOIN clients c ON c.id = p.client_id AND c.workspace_id = p.workspace_id
-             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM bookings  WHERE project_id IS NOT NULL GROUP BY project_id) bc ON bc.project_id = p.id
-             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM invoices  WHERE project_id IS NOT NULL GROUP BY project_id) ic ON ic.project_id = p.id
-             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM quotes    WHERE project_id IS NOT NULL GROUP BY project_id) qc ON qc.project_id = p.id
-             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM documents WHERE project_id IS NOT NULL GROUP BY project_id) dc ON dc.project_id = p.id
+             -- Subqueries are workspace-scoped via $1 (same param the outer
+             -- WHERE uses) so a cross-workspace project_id collision can't
+             -- inflate counts or leak existence of artifacts in another tenant.
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM bookings  WHERE project_id IS NOT NULL AND workspace_id = $1 GROUP BY project_id) bc ON bc.project_id = p.id
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM invoices  WHERE project_id IS NOT NULL AND workspace_id = $1 GROUP BY project_id) ic ON ic.project_id = p.id
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM quotes    WHERE project_id IS NOT NULL AND workspace_id = $1 GROUP BY project_id) qc ON qc.project_id = p.id
+             LEFT JOIN (SELECT project_id, COUNT(*) AS cnt FROM documents WHERE project_id IS NOT NULL AND workspace_id = $1 GROUP BY project_id) dc ON dc.project_id = p.id
             WHERE ${where.join(' AND ')}
             ORDER BY p.updated_at DESC
             LIMIT 200`,
