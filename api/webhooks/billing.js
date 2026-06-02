@@ -15,7 +15,7 @@ import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, platfo
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { markReferralConverted, grantPendingReferralCredits } from '../_lib/referrals.js';
-import { markProcessed } from '../_lib/webhookDedup.js';
+import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
 import {
   notifySubscriptionStarted, notifyUpcomingRenewal,
   notifyPaymentFailed, notifySubscriptionCancelled,
@@ -30,6 +30,10 @@ export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  // Tracked across the try so the catch can release the dedup claim and
+  // let Stripe's retry re-process the event instead of getting silently
+  // deduped on a transient error. Same pattern as stripe/[workspaceId].js.
+  let claimedEventId = null;
   try {
     const secretKey     = platformStripeSecret();
     const webhookSecret = platformWebhookSecret();
@@ -57,6 +61,7 @@ export default async function handler(req, res) {
     if (!(await markProcessed('billing', event.id, null))) {
       return ok(res, { received: true, deduped: true });
     }
+    claimedEventId = event.id;
 
     switch (event.type) {
       case 'checkout.session.completed':
@@ -84,6 +89,9 @@ export default async function handler(req, res) {
     }
     return ok(res, { received: true });
   } catch (err) {
+    // Processing threw after we claimed the event — release the claim so
+    // Stripe's retry re-runs the handler rather than getting deduped.
+    if (claimedEventId) await releaseProcessed('billing', claimedEventId);
     return serverError(res, err);
   }
 }
