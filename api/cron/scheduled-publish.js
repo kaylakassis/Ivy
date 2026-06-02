@@ -39,7 +39,8 @@ async function handler(req, res) {
       WHERE scheduled_publish_at IS NOT NULL
         AND scheduled_publish_at <= NOW()
     `;
-    let fired = 0;
+    let fired  = 0;
+    let failed = 0;
     for (const row of due.rows) {
       try {
         // Snapshot current state into versions for rollback.
@@ -79,9 +80,10 @@ async function handler(req, res) {
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[cron/scheduled-publish] site', row.id, 'failed:', e.message);
+        failed += 1;
       }
     }
-    return ok(res, { fired, total: due.rows.length });
+    return ok(res, { fired, failed, total: due.rows.length });
   } catch (err) {
     return serverError(res, err);
   }
