@@ -1,0 +1,87 @@
+name: Check for newer Claude Opus model
+
+on:
+  # Mondays 14:00 UTC. Off-peak for our US user base, gives the operator
+  # the work-week to review + merge before the next run.
+  schedule:
+    - cron: '0 14 * * 1'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: Why are you running this manually?
+        required: false
+
+# Allow exactly one in-flight run at a time. If a manual dispatch lands
+# while the weekly cron is still running, the new one waits — keeps the
+# PR-open step from racing itself.
+concurrency:
+  group: check-claude-model
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for peter-evans/create-pull-request to push the branch
+      # and open the PR. No other repo-write surface needed.
+      contents: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Check Anthropic for a newer Opus
+        id: check
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: node scripts/check-claude-model.mjs
+
+      - name: Open auto-bump PR
+        if: steps.check.outputs.bumped == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          # Stable branch name keyed by target version — re-running the
+          # workflow on the same week updates the same PR instead of
+          # opening duplicates. If a newer-still model appears next
+          # week, the branch name changes and a new PR opens.
+          branch: auto/bump-ivy-model-${{ steps.check.outputs.latest }}
+          base: main
+          commit-message: |
+            ivy: bump IVY_MODEL ${{ steps.check.outputs.current }} → ${{ steps.check.outputs.latest }}
+          title: "ivy: bump IVY_MODEL to ${{ steps.check.outputs.latest }}"
+          body: |
+            ## Auto-bump
+
+            The weekly `check-claude-model` workflow detected a newer Claude Opus model on Anthropic's API.
+
+            | | |
+            |---|---|
+            | Previous pin | `${{ steps.check.outputs.current }}` |
+            | New pin | `${{ steps.check.outputs.latest }}` |
+            | Major version bump? | `${{ steps.check.outputs.is_major_bump }}` |
+
+            ## Review checklist
+
+            - [ ] CI passes (full test suite runs against the new model name — verifies the API still accepts it and tool-use loops still work)
+            - [ ] If `is_major_bump=true`, manually exercise Ivy on `/ivy` against a real workspace. Major version bumps often shift refusal behavior, tool-use compliance, and pricing.
+            - [ ] Check Anthropic's [pricing page](https://www.anthropic.com/pricing) — confirm the new model's cost-per-token doesn't blow the unit economics on our $49/mo plan. Update `ivyDailyRequests` caps in the plans config if it does.
+            - [ ] After merge, the Ivy Pro chip auto-updates because the label is sourced from `IVY_MODEL` (no UI change needed).
+
+            ## How this works
+
+            `scripts/check-claude-model.mjs` queries `GET https://api.anthropic.com/v1/models`, filters for `claude-opus-*-*` (the rolling marketing-name aliases, not date-pinned variants), and picks the highest `(major, minor)` tuple. The workflow only opens a PR when it's strictly newer than the value currently in `api/_lib/ivy.js`.
+
+            To skip this bump, just close the PR without merging — the workflow will re-open it next week if the model is still the latest.
+
+            To pause auto-bumps entirely, disable the workflow in the Actions tab.
+          labels: |
+            auto-bump
+            ivy
+          # Created by the GHA bot account so the PR appears in the
+          # right place in review queues. peter-evans/create-pull-request
+          # uses GITHUB_TOKEN by default, which the permissions block
+          # above grants the contents+pull-requests scope needed.
+          delete-branch: true
