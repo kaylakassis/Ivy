@@ -18,7 +18,7 @@ function anthropic() {
   return _client;
 }
 
-const IVY_MODEL = 'claude-opus-4-8';
+export const IVY_MODEL = 'claude-opus-4-8';
 const IVY_MAX_TOKENS = 1024;
 const IVY_HISTORY_TURNS = 10;
 // Cap on tool-use loop iterations per user message. Real conversations

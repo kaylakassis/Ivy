@@ -137,9 +137,22 @@ export default async function handler(req, res) {
     }
     if (!stripeWebhook) {
       checks.push(check('stripe_webhook', 'STRIPE_WEBHOOK_SECRET', 'fail',
-        "Webhook signature verification will fail every delivery → no auto-mark-paid, no subscription state updates."));
+        "Connect platform webhook signature verification will fail every delivery → no auto-mark-paid."));
     } else {
       checks.push(check('stripe_webhook', 'STRIPE_WEBHOOK_SECRET', 'ok'));
+    }
+    // Subscription billing webhook (separate Stripe endpoint, separate
+    // signing secret). Falls back to STRIPE_WEBHOOK_SECRET in code, but
+    // that only works if you've intentionally configured a single
+    // Stripe endpoint listening for both Connect + subscription events
+    // — which the LAUNCH.md runbook does not recommend. Warn the
+    // operator when the dedicated var is missing so a misrouted secret
+    // doesn't silently break the subscription flow.
+    if (!process.env.THRYVE_BILLING_WEBHOOK_SECRET) {
+      checks.push(check('billing_webhook', 'THRYVE_BILLING_WEBHOOK_SECRET', 'warn',
+        "Subscription webhook (/api/webhooks/billing) will fall back to STRIPE_WEBHOOK_SECRET. If you configured separate Stripe endpoints per LAUNCH.md §4a, the subscription endpoint will reject events."));
+    } else {
+      checks.push(check('billing_webhook', 'THRYVE_BILLING_WEBHOOK_SECRET', 'ok'));
     }
     if (!process.env.STRIPE_CONNECT_CLIENT_ID) {
       checks.push(check('stripe_connect', 'STRIPE_CONNECT_CLIENT_ID', 'warn',

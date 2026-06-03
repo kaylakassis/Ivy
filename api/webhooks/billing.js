@@ -1,8 +1,11 @@
 // POST /api/webhooks/billing  (public, signature-verified)
 // THRYVE-side Stripe webhook — handles the subscription lifecycle for
-// workspaces. Verified against THRYVE_STRIPE_WEBHOOK_SECRET, scoped to a
-// single platform Stripe account, NOT the per-workspace customer-Stripe
-// (those land in /api/webhooks/stripe/<workspaceId>).
+// workspaces. Verified against THRYVE_BILLING_WEBHOOK_SECRET (dedicated
+// secret for this endpoint URL — Stripe issues a separate signing
+// secret per endpoint, so it cannot share STRIPE_WEBHOOK_SECRET with
+// the Connect platform webhook at /api/webhooks/stripe-platform).
+// Scoped to a single platform Stripe account, NOT the per-workspace
+// customer-Stripe (those land in /api/webhooks/stripe/<workspaceId>).
 //
 // Source of truth for subscription_status — the /api/billing/sync endpoint
 // is just race-mitigation for the redirect→webhook gap.
@@ -11,11 +14,11 @@
 // bytes; any re-encoding breaks verification.
 import { sql } from '../_lib/db.js';
 import { readRawBody } from '../_lib/body.js';
-import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, platformWebhookSecret } from '../_lib/stripe.js';
+import { verifyWebhookSignature, fetchSubscription, platformStripeSecret, billingWebhookSecret } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { markReferralConverted, grantPendingReferralCredits } from '../_lib/referrals.js';
-import { markProcessed } from '../_lib/webhookDedup.js';
+import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
 import {
   notifySubscriptionStarted, notifyUpcomingRenewal,
   notifyPaymentFailed, notifySubscriptionCancelled,
@@ -30,9 +33,13 @@ export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  // Tracked across the try so the catch can release the dedup claim and
+  // let Stripe's retry re-process the event instead of getting silently
+  // deduped on a transient error. Same pattern as stripe/[workspaceId].js.
+  let claimedEventId = null;
   try {
     const secretKey     = platformStripeSecret();
-    const webhookSecret = platformWebhookSecret();
+    const webhookSecret = billingWebhookSecret();
     if (!secretKey || !webhookSecret) {
       return res.status(500).json({ error: 'THRYVE Stripe billing is not configured' });
     }
@@ -57,6 +64,7 @@ export default async function handler(req, res) {
     if (!(await markProcessed('billing', event.id, null))) {
       return ok(res, { received: true, deduped: true });
     }
+    claimedEventId = event.id;
 
     switch (event.type) {
       case 'checkout.session.completed':
@@ -84,6 +92,9 @@ export default async function handler(req, res) {
     }
     return ok(res, { received: true });
   } catch (err) {
+    // Processing threw after we claimed the event — release the claim so
+    // Stripe's retry re-runs the handler rather than getting deduped.
+    if (claimedEventId) await releaseProcessed('billing', claimedEventId);
     return serverError(res, err);
   }
 }

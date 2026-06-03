@@ -17,7 +17,7 @@ import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import RoiCalculator, { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from './RoiCalculator.jsx';
 
 // One plan, two states: a free trial while we're in beta, then a
-// single paid subscription ("THRYVING") at $39/mo. We deliberately
+// single paid subscription ("THRYVING") at $49/mo. We deliberately
 // don't sell team / multi-location tiers yet because they aren't
 // supported — one honest plan beats three aspirational ones.
 const PLAN = {
@@ -62,10 +62,6 @@ const FAQ = [
   {
     q: 'Can I cancel anytime?',
     a: 'Yes. No contract, no notice period. Cancel from your account page - your data stays accessible for 60 days for export, then is deleted.',
-  },
-  {
-    q: 'Do you offer annual discounts?',
-    a: 'Yes - pay annually and get 2 months free (effectively a 16% discount).',
   },
   {
     q: 'Is there a free trial?',
@@ -116,7 +112,7 @@ export default function PricingPage() {
           }}>
             Replace your full stack - CRM, scheduler, invoicing, contracts, website,
             email, AI - with one subscription. Start with a free trial; simple
-            $39/mo when you're ready.
+            ${THRYVE_PRICE}/mo when you're ready.
           </p>
         </section>
 

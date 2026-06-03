@@ -412,7 +412,7 @@ function ReferralCard() {
     let live = true;
     api.get('/referrals')
       .then((r) => { if (live) { setData(r); setDraft(r.code || ''); } })
-      .catch(() => { if (live) setData({ code: null, stats: {}, rewardCents: 3900 }); });
+      .catch(() => { if (live) setData({ code: null, stats: {}, rewardCents: 4900 }); });
     return () => { live = false; };
   }, []);
 

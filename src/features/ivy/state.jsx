@@ -49,6 +49,7 @@ function useIvyState() {
   const [error, setError]         = useState(null);
   const [mode, setMode]           = useState(null);     // 'live' | 'mock' | null (unknown)
   const [modeError, setModeError] = useState(null);
+  const [model, setModel]         = useState(null);     // e.g. 'claude-opus-4-8'
   const [usage, setUsage]         = useState(null);
   const msgCacheRef = useRef(new Map()); // sessionId -> messages[]
 
@@ -63,6 +64,7 @@ function useIvyState() {
         setContext(r.context || EMPTY_CTX);
         if (r.mode) setMode(r.mode);
         setModeError(r.modeError || null);
+        if (r.model) setModel(r.model);
         if (r.usage) setUsage(r.usage);
       })
       .catch((e) => live && setError(e))
@@ -149,7 +151,7 @@ function useIvyState() {
 
   return {
     sessions, activeId, messages, context,
-    loading, thinking, error, mode, modeError, usage,
+    loading, thinking, error, mode, modeError, model, usage,
     openSession, newChat, send, removeSession,
   };
 }

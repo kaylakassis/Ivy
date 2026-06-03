@@ -23,7 +23,7 @@ const TOOL_STACK = [
 ];
 const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
 
-const THRYVE_PRICE = 39;
+const THRYVE_PRICE = 49;
 
 // Tunable assumptions, all deliberately conservative + cited in the
 // footnote so the calculator never feels like fantasy math.
@@ -37,7 +37,7 @@ export default function RoiCalculator() {
 
   const calc = useMemo(() => {
     // 1. Tool savings - a FIXED, always-positive number: THRYVE
-    //    replaces the whole stack ($122) for one price ($39). The old
+    //    replaces the whole stack ($122) for one price ($49). The old
     //    calculator let you drag your current spend BELOW THRYVE's
     //    price, which showed "$0 savings vs the $122 stack" - a
     //    contradiction. This is the honest, appealing framing.

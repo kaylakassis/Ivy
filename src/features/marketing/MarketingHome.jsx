@@ -15,6 +15,7 @@ import { useTweaks } from '../../lib/tweaks.js';
 import { MarketingMobileMenu, AudienceToggle } from './MarketingShell.jsx';
 import { api } from '../../lib/api.js';
 import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
+import { THRYVE_PRICE } from './RoiCalculator.jsx';
 
 // Feature showcase, grouped the way an owner actually thinks about the
 // day: get booked → get paid → keep clients → grow. Each band maps a
@@ -116,7 +117,7 @@ const FAQ = [
   },
   {
     q: "What's pricing going to look like?",
-    a: "Start with a free trial, then one simple subscription at $39/mo - no per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use THRYVE.",
+    a: `Start with a free trial, then one simple subscription at $${THRYVE_PRICE}/mo - no per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use THRYVE.`,
   },
   {
     q: 'Is there a mobile app?',
@@ -734,7 +735,7 @@ function TrustStrip() {
     'Stripe-verified · no transaction fees',
     'Cancel anytime · no contract',
     'Export your data any time',
-    'Start with a free trial · simple $39/mo when you subscribe',
+    `Start with a free trial · simple $${THRYVE_PRICE}/mo when you subscribe`,
   ];
   return (
     <section style={{
@@ -1287,7 +1288,7 @@ function Pricing() {
             Start with a free trial.
           </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            Use everything free on a trial, then a simple $39/mo when you subscribe -
+            Use everything free on a trial, then a simple ${THRYVE_PRICE}/mo when you subscribe -
             no per-seat math, no surprise bills. Early users get a discount locked in
             for life. The client portal stays free forever for clients.
           </p>

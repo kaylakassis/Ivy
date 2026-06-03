@@ -1920,6 +1920,210 @@ function SettingsTab() {
         {msg && <div style={{ fontSize: 12, color: 'var(--ok)' }}>✓ {msg}</div>}
         {err && <ErrCard msg={err}/>}
       </div>
+
+      <PushTestCard/>
+    </div>
+  );
+}
+
+// One-click "what does a notification look like" preview. Hits
+// /api/admin/push-test which fires a webpush to the admin's own
+// subscriptions (or, with a selected target user, that user's
+// subscriptions) — so the operator can sanity-check VAPID config,
+// browser permission state, the actual rendering, AND show a customer
+// what a real notification looks like in support.
+function PushTestCard() {
+  const [target, setTarget]   = useState(null);   // null = self
+  const [query, setQuery]     = useState('');
+  const [matches, setMatches] = useState(null);   // null = idle, [] = no results, [User] = list
+  const [searching, setSearching] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState(null);     // last server response (for device list + sent count)
+  const [msg, setMsg]   = useState(null);
+  const [err, setErr]   = useState(null);
+
+  // Live search, debounced so we don't flood /admin/users on every
+  // keystroke. Min 2 chars (the API will happily accept anything,
+  // but 1-char queries return ~everyone and are useless visually).
+  useEffect(() => {
+    if (!query.trim() || query.trim().length < 2) { setMatches(null); return undefined; }
+    let live = true;
+    const handle = setTimeout(async () => {
+      setSearching(true);
+      try {
+        const r = await api.get(`/admin/users?q=${encodeURIComponent(query.trim())}`);
+        if (live) setMatches(Array.isArray(r?.users) ? r.users.slice(0, 8) : []);
+      } catch {
+        if (live) setMatches([]);
+      } finally {
+        if (live) setSearching(false);
+      }
+    }, 220);
+    return () => { live = false; clearTimeout(handle); };
+  }, [query]);
+
+  const pick = (u) => {
+    setTarget({ id: u.id, email: u.email, name: u.name || null });
+    setQuery(''); setMatches(null);
+  };
+
+  const send = async () => {
+    setBusy(true); setErr(null); setMsg(null); setResult(null);
+    try {
+      const body = target ? { userId: target.id } : {};
+      const r = await api.post('/admin/push-test', body);
+      setResult(r);
+      if (r?.ok === false && r?.reason === 'not configured') {
+        setErr('Web push is not configured on this deploy — set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT in Vercel and redeploy.');
+      } else if ((r?.sent || 0) === 0 && (r?.devices?.length || 0) === 0) {
+        const who = r?.target?.isSelf ? "This account doesn't" : `${r?.target?.email || 'That user'} doesn't`;
+        setMsg(`Sent to 0 devices. ${who} have any push subscriptions yet — they need to enable notifications in /account first.`);
+      } else if ((r?.sent || 0) === 0) {
+        setMsg(`Sent to 0 of ${r?.devices?.length || 0} devices. All subscriptions appear dead — they may have been cleared just now (see device list below).`);
+      } else {
+        const who = r?.target?.isSelf ? 'your devices' : (r?.target?.email || 'the target user');
+        const removed = r?.removed ? `, removed ${r.removed} dead` : '';
+        setMsg(`Sent to ${r.sent} device${r.sent === 1 ? '' : 's'}${removed} (${who}). Check the notification tray.`);
+      }
+    } catch (e) {
+      setErr(e.message || 'Failed to send test push');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const targetLabel = target ? (target.email || target.name || target.id) : 'yourself';
+
+  return (
+    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Test push notification</h3>
+        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 600 }}>
+          Fires a sample push notification to preview the look + tap-through, or to verify VAPID is
+          wired correctly. Defaults to your own devices; search for a user below to send it to them
+          instead. The test bypasses per-type notification preferences and does NOT add a row to
+          the in-app notification feed.
+        </p>
+      </div>
+
+      {/* Target picker */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+        <div style={{ fontSize: 12.5, color: 'var(--fg-2)', fontWeight: 500 }}>Send to</div>
+        {target ? (
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 10,
+            padding: '8px 12px', borderRadius: 8,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+          }}>
+            <div style={{ flex: 1, fontSize: 13.5 }}>
+              <div style={{ fontWeight: 600 }}>{target.email}</div>
+              {target.name && (
+                <div style={{ fontSize: 12, color: 'var(--muted)' }}>{target.name}</div>
+              )}
+            </div>
+            <button
+              type="button"
+              onClick={() => setTarget(null)}
+              style={{
+                fontSize: 11.5, padding: '4px 10px', borderRadius: 6,
+                background: 'transparent', color: 'var(--muted)',
+                border: '1px solid var(--border)',
+              }}
+            >
+              Clear (send to self)
+            </button>
+          </div>
+        ) : (
+          <div style={{ position: 'relative' }}>
+            <input
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search by email or name… (leave empty to send to yourself)"
+              className="input"
+              style={{
+                width: '100%', padding: '9px 12px', fontSize: 13.5,
+                background: 'var(--surface)', border: '1px solid var(--border-strong)',
+                borderRadius: 8, color: 'var(--fg)',
+              }}
+            />
+            {/* Results dropdown */}
+            {matches !== null && (
+              <div style={{
+                position: 'absolute', top: '100%', left: 0, right: 0, marginTop: 4,
+                background: 'var(--surface)', border: '1px solid var(--border-strong)',
+                borderRadius: 8, boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+                maxHeight: 260, overflowY: 'auto', zIndex: 10,
+              }}>
+                {searching && (
+                  <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--muted)' }}>
+                    Searching…
+                  </div>
+                )}
+                {!searching && matches.length === 0 && (
+                  <div style={{ padding: '10px 12px', fontSize: 12, color: 'var(--muted)' }}>
+                    No users match.
+                  </div>
+                )}
+                {!searching && matches.map((u) => (
+                  <button
+                    key={u.id}
+                    type="button"
+                    onClick={() => pick(u)}
+                    style={{
+                      width: '100%', textAlign: 'left', padding: '9px 12px',
+                      background: 'transparent', border: 'none',
+                      borderBottom: '1px solid var(--border)', cursor: 'pointer',
+                      fontSize: 13,
+                    }}
+                  >
+                    <div style={{ fontWeight: 600 }}>{u.email}</div>
+                    {u.name && (
+                      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1 }}>{u.name}</div>
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div>
+        <button
+          type="button"
+          className="btn btn-primary"
+          disabled={busy}
+          onClick={send}
+        >
+          {busy ? 'Sending…' : `Send test push to ${targetLabel}`}
+        </button>
+      </div>
+
+      {msg && <div style={{ fontSize: 12.5, color: 'var(--ok)', lineHeight: 1.5 }}>{msg}</div>}
+      {err && <ErrCard msg={err}/>}
+
+      {/* Device list — surfaced after every send so the operator can
+          see exactly which subscriptions were attempted. */}
+      {result?.devices && result.devices.length > 0 && (
+        <div style={{
+          marginTop: 4, padding: 12, borderRadius: 8,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+        }}>
+          <div style={{ fontSize: 12, color: 'var(--fg-2)', fontWeight: 600, marginBottom: 8 }}>
+            Subscriptions on file ({result.devices.length})
+          </div>
+          <ul style={{ margin: 0, padding: 0, listStyle: 'none', display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {result.devices.map((d) => (
+              <li key={d.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', fontSize: 12 }}>
+                <span style={{ fontWeight: 500 }}>{d.label}</span>
+                <span style={{ color: 'var(--muted)', fontSize: 11 }}>
+                  {d.lastUsedAt ? `last used ${new Date(d.lastUsedAt).toLocaleString()}` : 'never used'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
     </div>
   );
 }

@@ -40,9 +40,10 @@ Preview + Development.
 | `APP_URL` | `https://getthryve.ai` (or your domain) | Used in email links — **must be HTTPS** |
 | `VITE_APP_URL` | Same as `APP_URL` | Frontend mirror |
 | `STRIPE_SECRET_KEY` | `sk_live_…` | TEST mode shows as a WARN |
-| `STRIPE_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4) | Webhook signing |
+| `STRIPE_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4) | Connect platform webhook signing |
+| `THRYVE_BILLING_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4a) | Subscription billing webhook signing |
 | `STRIPE_CONNECT_CLIENT_ID` | Stripe → Settings → Connect → "Connect platform" | OAuth |
-| `THRYVE_STRIPE_PRICE_ID` | The Price for THRYVE's monthly subscription | |
+| `THRYVE_STRIPE_PRICE_ID` | The Price for THRYVE's $49/mo subscription (see §4a) | |
 | `RESEND_API_KEY` | From Resend dashboard | Outbound email |
 | `EMAIL_FROM` | `THRYVE <hello@getthryve.ai>` | **Domain must be verified in Resend** |
 | `EMAIL_REPLY_TO` | `hello@getthryve.ai` | |
@@ -94,6 +95,69 @@ In **Stripe Dashboard → Developers → Webhooks → Add endpoint**:
 
 After saving, click the endpoint and copy the **Signing secret** into
 `STRIPE_WEBHOOK_SECRET`. Redeploy so the new env var takes effect.
+
+## 4a · Subscription billing setup ($49/mo)
+
+The webhook in §4 handles owner-facing payments (the money clients send
+to owners via Stripe Connect). THRYVE's own subscription — the $49/mo
+that owners pay us — is a separate Product, separate webhook endpoint,
+separate signing secret.
+
+### Create the THRYVE subscription Product
+
+In **Stripe Dashboard → Products → Add product**:
+
+- **Name:** `THRYVE Business Platform`
+- **Description:** `All-in-one platform for service businesses — bookings, clients, payments, marketing, Ivy AI.`
+- **Pricing:** Recurring · **$49.00 USD** · billed **monthly**.
+- Save. Open the product, copy the `price_…` id from the Pricing
+  section, paste it into `THRYVE_STRIPE_PRICE_ID` in Vercel.
+
+### Enable the Customer Portal
+
+**Stripe Dashboard → Settings → Billing → Customer portal**. Enable.
+Allow customers to: update payment method, cancel subscription, view
+invoices. Save. (The portal link in Account → Billing won't work until
+this is on.)
+
+### Add the subscription webhook endpoint
+
+**Stripe Dashboard → Developers → Webhooks → Add endpoint** — this is
+a *second* endpoint, separate from the §4 one.
+
+- **URL:** `https://<your-domain>/api/webhooks/billing`
+- **Events:**
+  - `checkout.session.completed`
+  - `customer.subscription.created`
+  - `customer.subscription.updated`
+  - `customer.subscription.deleted`
+  - `invoice.upcoming`
+  - `invoice.payment_succeeded`
+  - `invoice.payment_failed`
+
+Save. Copy the new endpoint's **Signing secret** into
+`THRYVE_BILLING_WEBHOOK_SECRET` in Vercel (mark Sensitive). This is a
+**different** secret than `STRIPE_WEBHOOK_SECRET` from §4 — Stripe
+issues one signing secret per endpoint URL, so the two webhook handlers
+each need their own. If you reuse the §4 secret here, the subscription
+webhook will reject every event with "signature verification failed."
+Redeploy after pasting.
+
+### Subscription smoke test
+
+1. Sign up fresh on `https://<your-domain>` → click "Start free trial"
+   → DB row reads `subscription_status='trialing'`,
+   `trial_ends_at` 28 days out.
+2. Open `/dashboard` → confirm trial banner shows correct days remaining.
+3. Click "Subscribe" on the Paywall → Stripe Checkout opens at $49/mo.
+4. Pay with test card `4242 4242 4242 4242` (any future expiry, any CVC).
+5. Redirect back to app → DB row reads `subscription_status='active'`,
+   `subscription_period_end` set.
+6. Account → Billing → "Manage billing" → opens Stripe Portal in a new
+   tab, shows the subscription.
+7. In Stripe Dashboard, cancel the test subscription → the billing
+   webhook fires → DB row reads `subscription_status='canceled'` →
+   Paywall reappears in the app on next reload.
 
 ## 5 · Verify the readiness probe is green
 
