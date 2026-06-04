@@ -11,6 +11,7 @@ import NewThreadModal from './NewThreadModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { useDictation, useVoiceMemo } from '../../lib/speech.js';
 import { upload } from '@vercel/blob/client';
+import { AudioPlayer, RecordingBar, uploadVoiceMemo } from '../../components/AudioMessage.jsx';
 import GroupChats from './GroupChats.jsx';
 
 export default function Messages() {
@@ -308,25 +309,12 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
     try {
       const result = await memo.stop();
       if (!result || !result.blob || result.blob.size === 0) return;
-      // Upload the audio blob directly to Vercel Blob storage. Bypasses
-      // our 4.5MB serverless body limit and matches how image
-      // attachments work.
-      const ext = result.mime.includes('mp4') ? 'm4a'
-                : result.mime.includes('ogg') ? 'ogg'
-                : result.mime.includes('mpeg') ? 'mp3'
-                : 'webm';
-      const path = `messages/voice-${Date.now()}.${ext}`;
-      const uploaded = await upload(path, result.blob, {
-        access: 'public',
-        handleUploadUrl: '/api/messages/upload-token',
-        contentType: result.mime,
-      });
-      await send(result.transcript || '', [{
-        url: uploaded.url,
-        type: result.mime,
-        name: 'Voice message',
-        durationMs: result.durationMs,
-      }]);
+      // Upload the audio blob directly to Vercel Blob storage; bypasses
+      // the 4.5MB serverless body limit. The transcript travels as the
+      // visible text so a recipient can read the message without
+      // playback.
+      const attachment = await uploadVoiceMemo(upload, result, 'voice');
+      await send(result.transcript || '', [attachment]);
     } catch (err) {
       setVoiceErr(err.message || 'Could not send voice message');
     } finally {
@@ -612,66 +600,6 @@ function DictationIcon({ active }) {
   );
 }
 
-// Big red record bar that takes the place of the regular composer while
-// a voice memo is being captured. Shows the elapsed counter, the live
-// transcript so the owner sees what is being captured, and Send/Cancel.
-function RecordingBar({ elapsedMs, transcript, onSend, onCancel, sending }) {
-  const sec = Math.floor(elapsedMs / 1000);
-  const m = Math.floor(sec / 60);
-  const s = String(sec % 60).padStart(2, "0");
-  return (
-    <div style={{
-      display: "flex", alignItems: "center", gap: 10,
-      padding: "10px 12px", borderRadius: 14,
-      background: "color-mix(in srgb, var(--danger) 6%, var(--surface-2))",
-      border: "1px solid color-mix(in srgb, var(--danger) 35%, var(--border-strong))",
-    }}>
-      <span style={{
-        width: 10, height: 10, borderRadius: 999, background: "var(--danger)",
-        animation: "msg-mic-pulse 1.2s ease-in-out infinite",
-        flex: "0 0 auto",
-      }}/>
-      <span className="mono-num" style={{ fontSize: 13, fontWeight: 600, color: "var(--fg)", flex: "0 0 auto" }}>
-        {m}:{s}
-      </span>
-      <span style={{
-        flex: 1, minWidth: 0, fontSize: 13, color: "var(--muted)",
-        whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-      }}>
-        {transcript || "Recording…"}
-      </span>
-      <button type="button" onClick={onCancel} disabled={sending}
-        className="btn btn-ghost" style={{ fontSize: 12, padding: "4px 10px" }}>
-        Cancel
-      </button>
-      <button type="button" onClick={onSend} disabled={sending}
-        className="btn btn-primary" style={{ fontSize: 12, padding: "6px 14px" }}>
-        {sending ? "Sending…" : "Send"}
-      </button>
-    </div>
-  );
-}
-
-function AudioPlayer({ url, mine, durationMs }) {
-  const totalSec = durationMs ? Math.round(durationMs / 1000) : 0;
-  const m = Math.floor(totalSec / 60);
-  const s = String(totalSec % 60).padStart(2, "0");
-  return (
-    <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 200 }}>
-      <audio controls preload="metadata" src={url} style={{
-        flex: 1, height: 36,
-        // Keep the player in our brand by tinting the controls — Chromium
-        // respects accentColor, Safari uses its own appearance.
-        accentColor: mine ? "var(--accent-ink)" : "var(--accent)",
-      }}/>
-      {totalSec > 0 && (
-        <span className="mono-num" style={{
-          fontSize: 11, opacity: 0.85,
-          color: mine ? "var(--accent-ink)" : "var(--muted)",
-        }}>
-          {m}:{s}
-        </span>
-      )}
-    </div>
-  );
-}
+// RecordingBar + AudioPlayer come from ../../components/AudioMessage.jsx;
+// MicButton lives there too but this file wraps its own ComposerIconButton
+// (with dictation pulse styling) so we keep the inline MicIcon for that.

@@ -107,15 +107,31 @@ export default async function handler(req, res) {
       async function sendMessage() {
       const body = await readBody(req);
       const text = (body.text || '').toString().trim();
-      if (!text) return { status: 400, body: { error: 'Message text is required' } };
+      // Voice memos (and image / file attachments more generally) send
+      // empty text plus an attachments array. Mirror the validation
+      // and normalization the owner side already runs at
+      // api/messages/[id].js so the two directions agree on the shape.
+      const rawAttachments = Array.isArray(body.attachments) ? body.attachments : [];
+      const attachments = rawAttachments
+        .map((a) => ({
+          url: String(a?.url || '').slice(0, 1000),
+          type: String(a?.type || '').slice(0, 80),
+          name: a?.name ? String(a.name).slice(0, 200) : null,
+          durationMs: Number.isFinite(Number(a?.durationMs)) ? Number(a.durationMs) : null,
+        }))
+        .filter((a) => a.url && a.type);
+      if (!text && attachments.length === 0) {
+        return { status: 400, body: { error: 'Message text or attachment is required' } };
+      }
       if (text.length > 4000) return { status: 400, body: { error: 'Message is too long' } };
 
       const inserted = await sql`
-        INSERT INTO messages (thread_id, sender, text)
-        VALUES (${id}, 'client', ${text})
+        INSERT INTO messages (thread_id, sender, text, attachments)
+        VALUES (${id}, 'client', ${text}, ${JSON.stringify(attachments)}::jsonb)
         RETURNING *
       `;
-      const preview = text.slice(0, 200);
+      const audioOnly = !text && attachments.some((a) => a.type.startsWith('audio/'));
+      const preview = (text || (audioOnly ? '🎙️ Voice message' : 'Attachment')).slice(0, 200);
       // Defense-in-depth: thread ownership is verified by the SELECT above,
       // but re-scope the UPDATE to client_id = ANY(myIds) so a future
       // regression can't bump the unread counter on someone else's thread.
