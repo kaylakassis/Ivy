@@ -156,7 +156,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
           </div>
         )}
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Stage */}
           <div>
             <Section label="Stage"/>

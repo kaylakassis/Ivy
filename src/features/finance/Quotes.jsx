@@ -255,7 +255,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 16 }}>
           {isLocked && (
             <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)',
               border: '1px solid var(--border)', fontSize: 12.5, color: 'var(--muted)' }}>

@@ -385,7 +385,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 14 }}>
           {!isNew && (
             <div style={{
               padding: '10px 14px', borderRadius: 10,

@@ -54,7 +54,7 @@ export default function ClientGroups() {
         }}>
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)',
             fontSize: 13, fontWeight: 600 }}>Groups</div>
-          <div className="scroll" style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {groups.length === 0 ? (
               <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
                 You're not in any groups yet.
@@ -302,7 +302,7 @@ function GroupView({ groupId, onBack, onLeave }) {
       )}
 
       <div ref={scrollRef} className="scroll"
-        style={{ flex: 1, overflowY: 'auto', padding: '16px 20px',
+        style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px',
           display: 'flex', flexDirection: 'column', gap: 10 }}>
         {messages.length === 0 ? (
           <EmptyNote icon="Chat" title="No messages yet" hint=""/>
