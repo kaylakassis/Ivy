@@ -7,8 +7,10 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useViewport } from '../../lib/viewport.js';
 import { upload } from '@vercel/blob/client';
-
-const QUICK_EMOJIS = ['👍', '❤️', '🎉', '🔥', '😂', '👀'];
+import { useVoiceMemo } from '../../lib/speech.js';
+import {
+  AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
+} from '../../components/AudioMessage.jsx';
 
 function fmtTime(iso) {
   if (!iso) return '';
@@ -123,9 +125,11 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
   const [sending, setSending] = useState(false);
   const [pendingFiles, setPendingFiles] = useState([]);
   const [replyingTo, setReplyingTo] = useState(null);
+  const [voiceErr, setVoiceErr] = useState(null);
   const fileInputRef = useRef(null);
   const scrollRef = useRef(null);
   const { isMobile } = useViewport();
+  const memo = useVoiceMemo();
 
   const refresh = useCallback(async () => {
     const r = await api.get('/me/dms/' + encodeURIComponent(dmId));
@@ -189,6 +193,31 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
       setText(''); setPendingFiles([]); setReplyingTo(null);
     } catch (err) {
       window.alert(err.message || 'Send failed.');
+    } finally { setSending(false); }
+  };
+
+  const startVoiceMemo = async () => {
+    setVoiceErr(null);
+    if (!memo.supported) { setVoiceErr('Recording not supported in this browser'); return; }
+    await memo.start();
+  };
+  const cancelVoiceMemo = () => { memo.cancel(); setVoiceErr(null); };
+  const sendVoiceMemo = async () => {
+    if (!memo.recording) return;
+    setSending(true);
+    try {
+      const result = await memo.stop();
+      if (!result || !result.blob || result.blob.size === 0) return;
+      const attachment = await uploadVoiceMemo(upload, result, 'dm-voice');
+      const r = await api.post('/me/dms/' + encodeURIComponent(dmId) + '/messages', {
+        text: result.transcript || '',
+        attachments: [attachment],
+        parentMessageId: replyingTo?.id || null,
+      });
+      setData((d) => d ? ({ ...d, messages: [...d.messages, r.message] }) : d);
+      setReplyingTo(null);
+    } catch (err) {
+      setVoiceErr(err.message || 'Could not send voice message');
     } finally { setSending(false); }
   };
 
@@ -310,27 +339,49 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
               ))}
             </div>
           )}
-          <form onSubmit={submit} style={{
-            padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
-            display: 'flex', gap: 8,
-          }}>
-            <input ref={fileInputRef} type="file" multiple hidden onChange={onPickFiles}
-              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"/>
-            <button type="button" onClick={() => fileInputRef.current?.click()}
-              title="Attach file"
-              style={{ padding: '8px 10px', background: 'transparent',
-                border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}>
-              <Icons.Plus size={14} sw={2}/>
-            </button>
-            <input value={text} onChange={(e) => setText(e.target.value)}
-              placeholder="Type a message…"
-              style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
-                borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
-            <button type="submit" className="btn btn-primary"
-              disabled={(!text.trim() && pendingFiles.length === 0) || sending}>
-              {sending ? '…' : 'Send'}
-            </button>
-          </form>
+          {voiceErr && (
+            <div style={{
+              fontSize: 11, color: 'var(--danger)', padding: '6px 14px',
+              borderTop: '1px solid var(--border)',
+              background: 'color-mix(in srgb, var(--danger) 8%, var(--surface))',
+            }}>{voiceErr}</div>
+          )}
+          {memo.recording ? (
+            <div style={{ padding: 12, borderTop: '1px solid var(--border)',
+              background: 'var(--surface)' }}>
+              <RecordingBar
+                elapsedMs={memo.elapsedMs}
+                transcript={memo.transcript}
+                onSend={sendVoiceMemo}
+                onCancel={cancelVoiceMemo}
+                sending={sending}/>
+            </div>
+          ) : (
+            <form onSubmit={submit} style={{
+              padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
+              display: 'flex', gap: 8, alignItems: 'center',
+            }}>
+              <input ref={fileInputRef} type="file" multiple hidden onChange={onPickFiles}
+                accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"/>
+              <button type="button" onClick={() => fileInputRef.current?.click()}
+                title="Attach file"
+                style={{ padding: '8px 10px', background: 'transparent',
+                  border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}>
+                <Icons.Plus size={14} sw={2}/>
+              </button>
+              <input value={text} onChange={(e) => setText(e.target.value)}
+                placeholder="Type a message…"
+                style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
+                  borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
+              {memo.supported && (
+                <MicButton onClick={startVoiceMemo} disabled={sending}/>
+              )}
+              <button type="submit" className="btn btn-primary"
+                disabled={(!text.trim() && pendingFiles.length === 0) || sending}>
+                {sending ? '…' : 'Send'}
+              </button>
+            </form>
+          )}
         </>
       )}
     </div>
@@ -359,13 +410,19 @@ function DmBubble({ msg, parent, onReply, onReport }) {
           {msg.text}
           {(msg.attachments || []).length > 0 && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-              {msg.attachments.map((a, i) => (
-                (a.type || '').startsWith('image/') ? (
-                  <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
-                    <img src={a.url} alt={a.name || 'image'}
-                      style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
-                  </a>
-                ) : (
+              {msg.attachments.map((a, i) => {
+                if (isAudioAttachment(a)) {
+                  return <AudioPlayer key={i} url={a.url} mine={msg.mine} durationMs={a.durationMs}/>;
+                }
+                if ((a.type || '').startsWith('image/')) {
+                  return (
+                    <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
+                      <img src={a.url} alt={a.name || 'image'}
+                        style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
+                    </a>
+                  );
+                }
+                return (
                   <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" download={a.name || true}
                     style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8,
                       background: msg.mine ? 'rgba(255,255,255,0.18)' : 'var(--surface)',
@@ -376,8 +433,8 @@ function DmBubble({ msg, parent, onReply, onReport }) {
                       {a.name || 'Attachment'}
                     </span>
                   </a>
-                )
-              ))}
+                );
+              })}
             </div>
           )}
         </div>

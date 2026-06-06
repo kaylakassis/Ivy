@@ -7,6 +7,10 @@ import { api } from '../../lib/api.js';
 import { useViewport } from '../../lib/viewport.js';
 import { fmtTime } from './utils.js';
 import { upload } from '@vercel/blob/client';
+import { useVoiceMemo } from '../../lib/speech.js';
+import {
+  AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
+} from '../../components/AudioMessage.jsx';
 
 export default function GroupChats() {
   const [groups, setGroups]         = useState([]);
@@ -226,6 +230,8 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
 
   const [pendingFiles, setPendingFiles] = useState([]); // [{ name, type, url }]
   const fileInputRef = useRef(null);
+  const memo = useVoiceMemo();
+  const [voiceErr, setVoiceErr] = useState(null);
 
   const onPickFiles = async (e) => {
     const files = Array.from(e.target.files || []);
@@ -243,6 +249,29 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
         window.alert(`Couldn't upload ${f.name}: ${err.message}`);
       }
     }
+  };
+
+  const startVoiceMemo = async () => {
+    setVoiceErr(null);
+    if (!memo.supported) { setVoiceErr('Recording not supported in this browser'); return; }
+    await memo.start();
+  };
+  const cancelVoiceMemo = () => { memo.cancel(); setVoiceErr(null); };
+  const sendVoiceMemo = async () => {
+    if (!memo.recording) return;
+    setSending(true);
+    try {
+      const result = await memo.stop();
+      if (!result || !result.blob || result.blob.size === 0) return;
+      const attachment = await uploadVoiceMemo(upload, result, 'group-voice');
+      const r = await api.post('/messages/groups/' + encodeURIComponent(groupId) + '/messages',
+        { text: result.transcript || '', attachments: [attachment],
+          parentMessageId: replyingTo?.id || null });
+      setMessages((m) => [...m, r.message]);
+      setReplyingTo(null);
+    } catch (err) {
+      setVoiceErr(err.message || 'Could not send voice message');
+    } finally { setSending(false); }
   };
 
   const submit = async (e) => {
@@ -400,27 +429,49 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
         </div>
       )}
 
-      <form onSubmit={submit} style={{
-        padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
-        display: 'flex', gap: 8,
-      }}>
-        <input ref={fileInputRef} type="file" multiple hidden onChange={onPickFiles}
-          accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"/>
-        <button type="button" onClick={() => fileInputRef.current?.click()}
-          title="Attach file"
-          style={{ padding: '8px 10px', background: 'transparent',
-            border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}>
-          <Icons.Plus size={14} sw={2}/>
-        </button>
-        <input value={text} onChange={(e) => setText(e.target.value)}
-          placeholder={group.mode === 'broadcast' ? 'Announce to the group…' : 'Message the group…'}
-          style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
-            borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
-        <button type="submit" className="btn btn-primary"
-          disabled={(!text.trim() && pendingFiles.length === 0) || sending}>
-          {sending ? '…' : 'Send'}
-        </button>
-      </form>
+      {voiceErr && (
+        <div style={{
+          fontSize: 11, color: 'var(--danger)', padding: '6px 14px',
+          borderTop: '1px solid var(--border)',
+          background: 'color-mix(in srgb, var(--danger) 8%, var(--surface))',
+        }}>{voiceErr}</div>
+      )}
+
+      {memo.recording ? (
+        <div style={{ padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)' }}>
+          <RecordingBar
+            elapsedMs={memo.elapsedMs}
+            transcript={memo.transcript}
+            onSend={sendVoiceMemo}
+            onCancel={cancelVoiceMemo}
+            sending={sending}/>
+        </div>
+      ) : (
+        <form onSubmit={submit} style={{
+          padding: 12, borderTop: '1px solid var(--border)', background: 'var(--surface)',
+          display: 'flex', gap: 8, alignItems: 'center',
+        }}>
+          <input ref={fileInputRef} type="file" multiple hidden onChange={onPickFiles}
+            accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.csv,.txt"/>
+          <button type="button" onClick={() => fileInputRef.current?.click()}
+            title="Attach file"
+            style={{ padding: '8px 10px', background: 'transparent',
+              border: '1px solid var(--border)', borderRadius: 8, cursor: 'pointer' }}>
+            <Icons.Plus size={14} sw={2}/>
+          </button>
+          <input value={text} onChange={(e) => setText(e.target.value)}
+            placeholder={group.mode === 'broadcast' ? 'Announce to the group…' : 'Message the group…'}
+            style={{ flex: 1, padding: '10px 12px', border: '1px solid var(--border)',
+              borderRadius: 8, fontSize: 14, background: 'var(--surface)' }}/>
+          {memo.supported && (
+            <MicButton onClick={startVoiceMemo} disabled={sending}/>
+          )}
+          <button type="submit" className="btn btn-primary"
+            disabled={(!text.trim() && pendingFiles.length === 0) || sending}>
+            {sending ? '…' : 'Send'}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
@@ -517,6 +568,9 @@ function AttachmentList({ attachments, fromBiz }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 6,
       marginTop: attachments.length > 0 ? 8 : 0 }}>
       {attachments.map((a, i) => {
+        if (isAudioAttachment(a)) {
+          return <AudioPlayer key={i} url={a.url} mine={fromBiz} durationMs={a.durationMs}/>;
+        }
         if ((a.type || '').startsWith('image/')) {
           return (
             <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"

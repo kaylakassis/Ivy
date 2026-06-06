@@ -14,6 +14,11 @@ import { api } from '../../lib/api.js';
 import { useClientPortal } from './clientContext.jsx';
 import ClientGroups from './ClientGroups.jsx';
 import ClientDms from './ClientDms.jsx';
+import { useVoiceMemo } from '../../lib/speech.js';
+import { upload } from '@vercel/blob/client';
+import {
+  AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
+} from '../../components/AudioMessage.jsx';
 
 export default function ClientMessagesPage() {
   const [tab, setTab] = useState('direct'); // 'direct' | 'groups' | 'dms'
@@ -290,7 +295,9 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
   const [error, setError]       = useState(null);
   const [input, setInput]       = useState('');
   const [sending, setSending]   = useState(false);
+  const [voiceErr, setVoiceErr] = useState(null);
   const scrollRef = useRef(null);
+  const memo = useVoiceMemo();
 
   useEffect(() => {
     if (!threadId) return;
@@ -347,6 +354,30 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
     } finally { setSending(false); }
   };
 
+  const startVoiceMemo = async () => {
+    setVoiceErr(null);
+    if (!memo.supported) { setVoiceErr('Recording not supported in this browser'); return; }
+    await memo.start();
+  };
+  const cancelVoiceMemo = () => { memo.cancel(); setVoiceErr(null); };
+  const sendVoiceMemo = async () => {
+    if (!memo.recording) return;
+    setSending(true);
+    try {
+      const result = await memo.stop();
+      if (!result || !result.blob || result.blob.size === 0) return;
+      const attachment = await uploadVoiceMemo(upload, result, 'client-voice');
+      const r = await api.post('/me/threads/' + threadId, {
+        text: result.transcript || '',
+        attachments: [attachment],
+      });
+      setMessages((m) => [...m, r.message]);
+      onUpdated?.();
+    } catch (err) {
+      setVoiceErr(err.message || 'Could not send voice message');
+    } finally { setSending(false); }
+  };
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', minWidth: 0, minHeight: 0 }}>
       <div style={{ padding: '14px 22px', borderBottom: '1px solid var(--border)',
@@ -382,30 +413,50 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
         ) : messages.map((m) => <Bubble key={m.id} msg={m}/>)}
       </div>
 
-      <form onSubmit={submit} style={{ padding: '14px 20px', borderTop: '1px solid var(--border)',
+      <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)',
         background: 'var(--surface)' }}>
         {thread.mode === 'one-way' ? (
           <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center', padding: 6 }}>
             This business has set replies off. Reach out via their booking link instead.
           </div>
+        ) : memo.recording ? (
+          <RecordingBar
+            elapsedMs={memo.elapsedMs}
+            transcript={memo.transcript}
+            onSend={sendVoiceMemo}
+            onCancel={cancelVoiceMemo}
+            sending={sending}/>
         ) : (
-          <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8,
-            padding: 6, borderRadius: 14,
-            background: 'var(--surface-2)', border: '1px solid var(--border-strong)' }}>
-            <textarea value={input} onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
-              placeholder="Write a message…" rows={1}
-              style={{ flex: 1, resize: 'none', minHeight: 32, maxHeight: 200,
-                padding: '8px 10px', border: 0, outline: 'none',
-                background: 'transparent', color: 'var(--fg)',
-                fontSize: 14, fontFamily: 'inherit', lineHeight: 1.45 }}/>
-            <button type="submit" className="btn btn-primary" disabled={sending || !input.trim()}
-              style={{ padding: '8px 14px', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
-              {sending ? '…' : <Icons.Arrow size={14} sw={2.2}/>}
-            </button>
-          </div>
+          <form onSubmit={submit}>
+            {voiceErr && (
+              <div style={{
+                fontSize: 11, color: 'var(--danger)', marginBottom: 8,
+                padding: '6px 10px', borderRadius: 8,
+                background: 'rgba(155,44,44,0.08)',
+                border: '1px solid rgba(155,44,44,0.25)',
+              }}>{voiceErr}</div>
+            )}
+            <div style={{ display: 'flex', alignItems: 'flex-end', gap: 8,
+              padding: 6, borderRadius: 14,
+              background: 'var(--surface-2)', border: '1px solid var(--border-strong)' }}>
+              <textarea value={input} onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
+                placeholder="Write a message…" rows={1}
+                style={{ flex: 1, resize: 'none', minHeight: 32, maxHeight: 200,
+                  padding: '8px 10px', border: 0, outline: 'none',
+                  background: 'transparent', color: 'var(--fg)',
+                  fontSize: 14, fontFamily: 'inherit', lineHeight: 1.45 }}/>
+              {memo.supported && (
+                <MicButton onClick={startVoiceMemo} disabled={sending}/>
+              )}
+              <button type="submit" className="btn btn-primary" disabled={sending || !input.trim()}
+                style={{ padding: '8px 14px', opacity: (sending || !input.trim()) ? 0.5 : 1 }}>
+                {sending ? '…' : <Icons.Arrow size={14} sw={2.2}/>}
+              </button>
+            </div>
+          </form>
         )}
-      </form>
+      </div>
     </div>
   );
 }
@@ -421,6 +472,8 @@ function Bubble({ msg }) {
       </div>
     );
   }
+  const audioAtt = (msg.attachments || []).find(isAudioAttachment);
+  const nonAudio = (msg.attachments || []).filter((a) => !isAudioAttachment(a));
   return (
     <div style={{
       alignSelf: mine ? 'flex-end' : 'flex-start',
@@ -430,6 +483,40 @@ function Bubble({ msg }) {
       border: mine ? 'none' : '1px solid var(--border)',
       fontSize: 14, lineHeight: 1.45,
       wordBreak: 'break-word', whiteSpace: 'pre-wrap',
-    }}>{msg.text}</div>
+    }}>
+      {audioAtt && <AudioPlayer url={audioAtt.url} mine={mine} durationMs={audioAtt.durationMs}/>}
+      {msg.text && (
+        <div style={{
+          marginTop: audioAtt ? 6 : 0,
+          fontSize: audioAtt ? 13 : 14,
+          opacity: audioAtt ? 0.92 : 1,
+        }}>
+          {msg.text}
+        </div>
+      )}
+      {nonAudio.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+          {nonAudio.map((a, i) => (
+            (a.type || '').startsWith('image/') ? (
+              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
+                <img src={a.url} alt={a.name || 'image'}
+                  style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
+              </a>
+            ) : (
+              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" download={a.name || true}
+                style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8,
+                  background: mine ? 'rgba(255,255,255,0.18)' : 'var(--surface-2)',
+                  border: '1px solid ' + (mine ? 'rgba(255,255,255,0.18)' : 'var(--border)'),
+                  color: 'inherit', textDecoration: 'none',
+                  display: 'inline-flex', alignItems: 'center', gap: 6, maxWidth: 260 }}>
+                📎 <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {a.name || 'Attachment'}
+                </span>
+              </a>
+            )
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
