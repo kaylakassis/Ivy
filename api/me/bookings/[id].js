@@ -13,7 +13,7 @@ import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
-import { serializeBooking, hasConflict, losesBookingRace, withinAvailability } from '../../_lib/calendar.js';
+import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, slotEpochMs } from '../../_lib/calendar.js';
 import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
@@ -315,10 +315,16 @@ async function maybeChargeLateCancel({ booking, myIds }) {
     if (!row.stripe_customer_id || !row.payment_method_id) return { charged: null, error: null };
 
     // "Inside the window" = booking starts before NOW + windowHours.
+    // The (date, start_min) pair is wall-clock in the workspace timezone,
+    // so the UTC epoch we compare against has to honor that tz — otherwise
+    // a non-UTC owner sees cancellation-fee math drift by several hours
+    // (same root cause as the public-booking notice-window bug).
     const dateISO = booking.date instanceof Date
       ? booking.date.toISOString().slice(0, 10)
       : booking.date;
-    const startMs = Date.parse(`${dateISO}T00:00:00Z`) + booking.start_min * 60 * 1000;
+    const tzRow = await sql`SELECT timezone FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}`;
+    const workspaceTz = tzRow.rows[0]?.timezone || null;
+    const startMs = slotEpochMs(dateISO, booking.start_min, workspaceTz);
     const cutoffMs = Date.now() + windowHours * 60 * 60 * 1000;
     if (startMs >= cutoffMs) return { charged: null, error: null }; // outside window — free cancel
 

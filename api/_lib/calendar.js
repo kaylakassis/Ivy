@@ -261,6 +261,59 @@ export function withinAvailability(availability, weekday, start, end, serviceAva
   return windows.some((w) => start >= w.start && end <= w.end);
 }
 
+// Resolve a (dateISO, startMin) pair — both in the workspace's wall-clock
+// timezone — to a UTC epoch (ms). Critical for the min-notice / horizon
+// checks: previously the server treated the pair as UTC, which meant an
+// owner in PST testing a 3pm slot tomorrow got rejected at 9pm-tonight-
+// PST as "less than 12h" because the server thought "3pm" meant 3pm UTC
+// (only ~6h away), not 3pm PST (~18h away).
+//
+// Two-pass to handle DST transitions cleanly: the offset of `tz` near a
+// spring-forward / fall-back boundary depends on the moment, so we
+// refine our guess once.
+//
+// `tz` is an IANA name (e.g. "America/Los_Angeles"). When null/missing —
+// matches the legacy behavior — we treat the inputs as UTC.
+export function slotEpochMs(dateISO, startMin, tz) {
+  if (!dateISO || !Number.isFinite(startMin)) return NaN;
+  const [y, m, d] = dateISO.split('-').map(Number);
+  const h = Math.floor(startMin / 60);
+  const min = startMin % 60;
+  const naiveUtcMs = Date.UTC(y, (m || 1) - 1, d, h, min);
+  if (!tz) return naiveUtcMs;
+  // First-pass offset at the naive UTC moment, then refine at the
+  // corrected moment to absorb a DST transition.
+  const guess1 = tzOffsetMinutes(naiveUtcMs, tz);
+  const corrected = naiveUtcMs - guess1 * 60_000;
+  const guess2 = tzOffsetMinutes(corrected, tz);
+  return naiveUtcMs - guess2 * 60_000;
+}
+
+// Minutes to ADD to UTC to get wall-clock time in `tz` at the given
+// moment. PST (UTC-8) returns -480; CEST (UTC+2) returns 120.
+function tzOffsetMinutes(epochMs, tz) {
+  if (!tz) return 0;
+  try {
+    const dtf = new Intl.DateTimeFormat('en-US', {
+      timeZone: tz, hourCycle: 'h23',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    });
+    const parts = dtf.formatToParts(new Date(epochMs)).reduce((acc, p) => {
+      if (p.type !== 'literal') acc[p.type] = p.value;
+      return acc;
+    }, {});
+    const localAsUtcMs = Date.UTC(
+      Number(parts.year), Number(parts.month) - 1, Number(parts.day),
+      Number(parts.hour), Number(parts.minute), Number(parts.second),
+    );
+    return Math.round((localAsUtcMs - epochMs) / 60_000);
+  } catch {
+    // Unknown tz — fall back to UTC (offset 0). Same legacy behavior.
+    return 0;
+  }
+}
+
 // True when a recurring booking master has an occurrence landing exactly
 // on `dateISO`. Recurring bookings store only the master row (first
 // occurrence) + a rule; future occurrences are virtual, so the plain
