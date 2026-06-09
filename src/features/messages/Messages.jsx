@@ -119,7 +119,7 @@ function DirectMessages() {
             <Icons.Plus size={15} sw={2}/>
           </button>
         </div>
-        <div className="scroll" style={{ flex: 1, overflowY: 'auto' }}>
+        <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {threads.length === 0 ? (
             <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
               No conversations yet.<br/>
@@ -379,7 +379,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
 
       {/* Messages */}
       <div ref={scrollRef} className="scroll" style={{
-        flex: 1, overflowY: 'auto', padding: '20px 32px',
+        flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px',
         background: 'var(--page)',
         display: 'flex', flexDirection: 'column', gap: 4,
       }}>

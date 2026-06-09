@@ -248,7 +248,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
           </button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 20 }}>
           {/* Client */}
           <Field label="Client">
             <select value={clientId} onChange={(e) => setClientId(e.target.value)} style={inputS}>

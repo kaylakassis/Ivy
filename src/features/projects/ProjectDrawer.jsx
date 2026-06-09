@@ -112,7 +112,7 @@ export default function ProjectDrawer({ project, onClose, onUpdate, onDelete }) 
           }}>{saveStatus.text}</div>
         )}
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 20, display: 'flex', flexDirection: 'column', gap: 18 }}>
           {/* Status pills */}
           <div>
             <Label>Status</Label>

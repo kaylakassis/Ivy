@@ -181,7 +181,7 @@ export default function NotificationBell({ isMobile }) {
             )}
           </div>
 
-          <div style={{ flex: 1, overflowY: 'auto' }}>
+          <div style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {loading && items.length === 0 ? (
               <div style={{ padding: 24, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>
                 Loading…

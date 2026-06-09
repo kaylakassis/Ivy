@@ -386,7 +386,7 @@ function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
         </div>
 
         {/* Body */}
-        <div style={{ padding: '18px 24px', flex: 1, overflowY: 'auto' }}>
+        <div style={{ padding: '18px 24px', flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {/* Blank doc tile */}
           <div style={{
             padding: 14, borderRadius: 10,
