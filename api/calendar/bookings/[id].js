@@ -74,6 +74,18 @@ export default async function handler(req, res) {
           }
         }
 
+        // Fetch the booking's service first so we can apply its per-service
+        // availability override (if any) to the availability check below.
+        let capacity = 1;
+        let serviceAvailability = null;
+        if (booking.service_id) {
+          const sv = await sql`
+            SELECT capacity, availability FROM services WHERE id = ${booking.service_id} AND workspace_id = ${workspaceId}
+          `;
+          if (sv.rows[0]?.capacity) capacity = Number(sv.rows[0].capacity);
+          serviceAvailability = sv.rows[0]?.availability || null;
+        }
+
         // Availability check — getUTCDay() to match other booking paths.
         // Owner can override via skipAvailabilityCheck for off-hours
         // bookings (e.g. a Sunday session when normal hours are
@@ -84,17 +96,11 @@ export default async function handler(req, res) {
           `;
           const availability = cs.rows[0]?.availability || {};
           const weekday = new Date(newDate + 'T00:00:00Z').getUTCDay();
-          if (!withinAvailability(availability, weekday, newStart, newEnd)) {
-            return badRequest(res, "That time isn't in your available hours — toggle Override to book anyway");
+          if (!withinAvailability(availability, weekday, newStart, newEnd, serviceAvailability)) {
+            return badRequest(res, serviceAvailability
+              ? "That time isn't in this service’s available hours — toggle Override to book anyway"
+              : "That time isn't in your available hours — toggle Override to book anyway");
           }
-        }
-
-        let capacity = 1;
-        if (booking.service_id) {
-          const sv = await sql`
-            SELECT capacity FROM services WHERE id = ${booking.service_id} AND workspace_id = ${workspaceId}
-          `;
-          if (sv.rows[0]?.capacity) capacity = Number(sv.rows[0].capacity);
         }
 
         if (!skipConflict) {

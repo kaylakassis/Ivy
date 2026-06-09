@@ -52,10 +52,12 @@ export default async function handler(req, res) {
     // Validate service if provided + capture capacity for the slot
     // conflict check (group services let multiple bookings share a slot).
     let serviceCapacity = 1;
+    let serviceAvailability = null;
     if (serviceId) {
-      const r = await sql`SELECT id, capacity FROM services WHERE id = ${serviceId} AND workspace_id = ${workspaceId}`;
+      const r = await sql`SELECT id, capacity, availability FROM services WHERE id = ${serviceId} AND workspace_id = ${workspaceId}`;
       if (r.rows.length === 0) return badRequest(res, 'Unknown service');
       serviceCapacity = Math.max(1, Number(r.rows[0].capacity) || 1);
+      serviceAvailability = r.rows[0].availability || null;
     }
     // Validate client if provided.
     let resolvedClientId = clientId;
@@ -84,8 +86,10 @@ export default async function handler(req, res) {
     if (!skipConflictCheck) {
       const weekday = new Date(date + 'T00:00:00Z').getUTCDay();
       const settings = await sql`SELECT availability FROM calendar_settings WHERE workspace_id = ${workspaceId}`;
-      if (settings.rows.length > 0 && !withinAvailability(settings.rows[0].availability, weekday, start, end)) {
-        return badRequest(res, 'That slot is outside your availability — toggle Override to book anyway');
+      if (settings.rows.length > 0 && !withinAvailability(settings.rows[0].availability, weekday, start, end, serviceAvailability)) {
+        return badRequest(res, serviceAvailability
+          ? 'That slot is outside this service’s availability — toggle Override to book anyway'
+          : 'That slot is outside your availability — toggle Override to book anyway');
       }
       if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity })) {
         return badRequest(res, serviceCapacity > 1

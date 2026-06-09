@@ -1,5 +1,21 @@
 // Time + slot helpers shared by the calendar feature.
 
+// Intersect two lists of {start, end} windows. Mirrors the server-side
+// helper in api/_lib/calendar.js so the slot grid and the booking-validation
+// endpoint never disagree.
+function intersectWindowsLocal(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || b.length === 0) return [];
+  const out = [];
+  for (const wa of a) {
+    for (const wb of b) {
+      const start = Math.max(wa.start, wb.start);
+      const end = Math.min(wa.end, wb.end);
+      if (start < end) out.push({ start, end });
+    }
+  }
+  return out;
+}
+
 export function minToHM(m) {
   const h = Math.floor(m / 60);
   const mm = m % 60;
@@ -73,7 +89,16 @@ export function slotsForDate(cal, date, serviceOrDur) {
   const capacity = Math.max(1, Number(service.capacity) || 1);
   const dayIdx = date.getDay();
   const dateISO = fmtDateISO(date);
-  const windows = (cal.settings?.availability && cal.settings.availability[String(dayIdx)]) || [];
+  // Effective windows = workspace general availability, optionally narrowed
+  // by a per-service override. The override can only restrict (intersect),
+  // never expand, so a service set to "5–8pm" on a workspace open 8am–8pm
+  // becomes 5–8pm; a service set to "9–11pm" on the same workspace
+  // becomes empty for that day.
+  const wsWindows = (cal.settings?.availability && cal.settings.availability[String(dayIdx)]) || [];
+  const svcWindowsRaw = service.availability?.[String(dayIdx)];
+  const windows = svcWindowsRaw
+    ? intersectWindowsLocal(wsWindows, svcWindowsRaw)
+    : wsWindows;
   // Start-time spacing: a fixed grid (slotMinutes — e.g. 60 = top of the
   // hour) or, when slotFitService is set, each service's own length so
   // appointments pack back-to-back. Floored at 5 min to avoid a 0-step loop.

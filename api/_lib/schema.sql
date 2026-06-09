@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS services (
   duration_minutes INT NOT NULL,
   price NUMERIC(12,2) NOT NULL DEFAULT 0,
   display_order INT NOT NULL DEFAULT 0,
+  availability JSONB,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_services_workspace ON services(workspace_id, display_order);

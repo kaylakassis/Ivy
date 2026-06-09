@@ -16,6 +16,7 @@ import { ColorPicker } from './EventDrawer.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
+import { WEEKDAYS_SHORT, minToHM, hmToMin } from './utils.js';
 import { upload } from '@vercel/blob/client';
 
 const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
@@ -73,6 +74,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
       noShowFeeAmount: 0,
       addOns: [],
       customFields: [],
+      availability: null,
     };
     setItems((xs) => [...xs, draft]);
     setEditId(id);
@@ -122,6 +124,8 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
           required: !!f.required,
           options: Array.isArray(f.options) ? f.options.map((o) => String(o).trim()).filter(Boolean) : [],
         })).filter((f) => f.label),
+        color: s.color || null,
+        availability: s.availability || null,
       })));
       onClose();
     } catch (e) {
@@ -338,6 +342,16 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           <VisibilityPicker
             value={service.visibility || 'public'}
             onChange={(visibility) => onChange({ visibility })}
+          />
+        </Field>
+
+        <Field label="When can clients book this?"
+          hint={service.availability
+            ? "Custom windows are intersected with your general availability — a service can only narrow the bookable hours, never expand them past your business hours."
+            : "Inheriting your general availability. Switch on custom windows to restrict this service to specific hours (e.g. 'Strength training 5–8pm only')."}>
+          <ServiceAvailabilityEditor
+            value={service.availability}
+            onChange={(availability) => onChange({ availability })}
           />
         </Field>
 
@@ -811,6 +825,141 @@ function Field({ label, hint, children }) {
       {children}
       {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6, lineHeight: 1.45 }}>{hint}</div>}
     </div>
+  );
+}
+
+// Per-service availability override. value === null means "inherit
+// workspace general availability" (the default). When set, the value is
+// { "0": [{start,end},...], "1": [...], ... } — same shape as the workspace
+// availability, in minutes from midnight, where 0 = Sunday. Per-day arrays
+// can be empty (= service closed that day even if the shop is open).
+const DEFAULT_PER_SERVICE_AVAILABILITY = {
+  // Mon–Fri 9am–5pm as a sensible starting point; the owner edits from there.
+  0: [],
+  1: [{ start: 540, end: 1020 }],
+  2: [{ start: 540, end: 1020 }],
+  3: [{ start: 540, end: 1020 }],
+  4: [{ start: 540, end: 1020 }],
+  5: [{ start: 540, end: 1020 }],
+  6: [],
+};
+
+function ServiceAvailabilityEditor({ value, onChange }) {
+  const enabled = !!value;
+  const a = value || {};
+
+  const toggle = () => {
+    if (enabled) onChange(null);
+    else onChange({ ...DEFAULT_PER_SERVICE_AVAILABILITY });
+  };
+
+  const updateDay = (dayIdx, windows) => {
+    onChange({ ...a, [String(dayIdx)]: windows });
+  };
+
+  return (
+    <div>
+      <button type="button" onClick={toggle} style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '10px 12px', borderRadius: 10,
+        background: enabled ? 'var(--accent-soft)' : 'var(--surface-2)',
+        border: '1px solid ' + (enabled ? 'var(--accent)' : 'var(--border)'),
+        color: enabled ? 'var(--accent)' : 'var(--fg-2)',
+        fontSize: 13, fontWeight: 600, cursor: 'pointer', width: '100%',
+        textAlign: 'left',
+      }}>
+        <span style={{
+          width: 32, height: 18, borderRadius: 999, position: 'relative',
+          background: enabled ? 'var(--accent)' : 'var(--border-strong)',
+          transition: 'background .12s',
+          flex: '0 0 auto',
+        }}>
+          <span style={{
+            position: 'absolute', top: 2, left: enabled ? 16 : 2,
+            width: 14, height: 14, borderRadius: 999, background: '#fff',
+            transition: 'left .12s',
+          }}/>
+        </span>
+        <span style={{ flex: 1 }}>
+          {enabled ? 'Custom windows for this service' : 'Use general availability'}
+        </span>
+      </button>
+
+      {enabled && (
+        <div style={{
+          marginTop: 10, padding: 12, borderRadius: 10,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          display: 'flex', flexDirection: 'column', gap: 8,
+        }}>
+          {WEEKDAYS_SHORT.map((label, dayIdx) => (
+            <ServiceAvailabilityDayRow
+              key={dayIdx}
+              label={label}
+              windows={a[String(dayIdx)] || []}
+              onChange={(windows) => updateDay(dayIdx, windows)}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ServiceAvailabilityDayRow({ label, windows, onChange }) {
+  const active = windows.length > 0;
+  const addWindow = () => onChange([...(windows || []), { start: 540, end: 1020 }]);
+  const removeWindow = (i) => onChange(windows.filter((_, idx) => idx !== i));
+  const updateWindow = (i, patch) => onChange(windows.map((w, idx) => idx === i ? { ...w, ...patch } : w));
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+      <div style={{
+        width: 48, fontSize: 12, fontWeight: 600, paddingTop: 8,
+        color: active ? 'var(--fg)' : 'var(--muted)',
+      }}>{label}</div>
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {windows.length === 0 ? (
+          <button type="button" onClick={addWindow} className="btn btn-ghost"
+            style={{ fontSize: 12, padding: '6px 10px', alignSelf: 'flex-start' }}>
+            <Icons.Plus size={11} sw={2}/> Add window
+          </button>
+        ) : (
+          windows.map((w, i) => (
+            <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <TimeMinInput value={w.start} onChange={(start) => updateWindow(i, { start })}/>
+              <span style={{ fontSize: 11, color: 'var(--muted)' }}>to</span>
+              <TimeMinInput value={w.end} onChange={(end) => updateWindow(i, { end })}/>
+              <button type="button" onClick={() => removeWindow(i)} className="btn btn-ghost"
+                style={{ padding: 4 }} title="Remove window">
+                <Icons.X size={12}/>
+              </button>
+              {i === windows.length - 1 && (
+                <button type="button" onClick={addWindow} className="btn btn-ghost"
+                  style={{ padding: 4 }} title="Add another window">
+                  <Icons.Plus size={12} sw={2}/>
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function TimeMinInput({ value, onChange }) {
+  // <input type="time"> gives a native picker on every browser. We store
+  // minutes-from-midnight; convert at the boundary.
+  const hm = `${Math.floor(value / 60).toString().padStart(2, '0')}:${(value % 60).toString().padStart(2, '0')}`;
+  return (
+    <input type="time" value={hm} step={300}
+      onChange={(e) => {
+        const v = e.target.value;
+        if (!v) return;
+        const next = hmToMin(v);
+        if (Number.isInteger(next) && next >= 0 && next <= 1440) onChange(next);
+      }}
+      style={{ ...inputSty, width: 110, padding: '6px 8px', fontSize: 12.5 }}/>
   );
 }
 

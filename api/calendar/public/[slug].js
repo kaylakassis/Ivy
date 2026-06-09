@@ -246,7 +246,7 @@ async function createBooking(req, res) {
     const svcRows = await sql`
       SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount,
              location_type, travel_buffer_minutes,
-             custom_fields, add_ons, visibility
+             custom_fields, add_ons, visibility, availability
         FROM services
        WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
     `;
@@ -372,9 +372,11 @@ async function createBooking(req, res) {
       return badRequest(res, `This business only takes bookings up to ${horizonLabel} in advance.`);
     }
 
-    // Availability + conflict check.
+    // Availability + conflict check. Per-service availability narrows the
+    // bookable hours (e.g. "Strength training 5–8pm only") on top of the
+    // workspace general availability.
     const weekday = new Date(date + 'T00:00:00Z').getUTCDay();
-    if (!withinAvailability(availability, weekday, start, end)) {
+    if (!withinAvailability(availability, weekday, start, end, svc.availability || null)) {
       return badRequest(res, 'That slot is outside booking hours');
     }
 
