@@ -152,9 +152,15 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
           flexDirection: 'row',
         }}>
           {/* LEFT — editor controls (rich text + fields). Hidden on
-              mobile when the user is on the "preview" tab. */}
+              mobile when the user is on the "preview" tab.
+              minHeight: 0 is load-bearing: flex's implicit
+              min-height: auto would otherwise keep the pane at the
+              full intrinsic height of its content, defeating
+              overflow-y: auto. On mobile that meant the pane
+              refused to scroll and the footer action bar got pushed
+              below (or behind, on iOS) the visible viewport. */}
           <div className="doc-editor-pane-left" data-mobile-tab={mobileTab} style={{
-            flex: '1 1 480px', minWidth: 0, maxWidth: isPdf ? '100%' : 580,
+            flex: '1 1 480px', minWidth: 0, minHeight: 0, maxWidth: isPdf ? '100%' : 580,
             padding: 22, overflowY: 'auto',
             display: 'flex', flexDirection: 'column', gap: 22,
             borderRight: '1px solid var(--border)',
@@ -263,7 +269,11 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
               pane — the PdfFieldEditor itself is the preview. */}
           {!isPdf && (
             <div className="doc-editor-pane-right" data-mobile-tab={mobileTab} style={{
-              flex: '1 1 540px', minWidth: 0,
+              // Same minHeight: 0 reasoning as the left pane —
+              // without it the inner .doc-preview-shell's
+              // overflow-y: auto never engages and the preview
+              // page silently extends past the drawer.
+              flex: '1 1 540px', minWidth: 0, minHeight: 0,
               padding: 0,
               background: 'var(--surface-2)',
               display: 'flex', flexDirection: 'column',
