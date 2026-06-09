@@ -162,6 +162,30 @@ async function getCalendar(req, res) {
       perks:       r.perks || [],
     }));
 
+    // Active public packages, surfaced on the public booking page so
+    // visitors can buy a bundle of sessions up-front. Only active rows
+    // marked visibility='public' show; 'private'/'only_me' are owner-
+    // sold flows (assigned client-by-client). Unlike memberships, no
+    // pre-provisioned Stripe price is needed — we mint a one-time
+    // price inline at checkout, so the gating is just active+public.
+    const pkgs = await sql`
+      SELECT id, name, description, service_ids, session_count, price, expiry_days
+        FROM packages
+       WHERE workspace_id = ${s.workspace_id}
+         AND active = TRUE
+         AND visibility = 'public'
+       ORDER BY created_at ASC
+    `;
+    const packagesOut = pkgs.rows.map((r) => ({
+      id:           r.id,
+      name:         r.name,
+      description:  r.description || '',
+      serviceIds:   r.service_ids || [],
+      sessionCount: Number(r.session_count || 0),
+      price:        Number(r.price || 0),
+      expiryDays:   r.expiry_days == null ? null : Number(r.expiry_days),
+    }));
+
     return ok(res, {
       calendar: {
         settings: serializeSettings(s),
@@ -170,6 +194,7 @@ async function getCalendar(req, res) {
         bookings: bookings.rows.map((r) => serializeBooking(r, { redactClient: true })),
         reviews:  reviewSummary,
         memberships: membershipsOut,
+        packages: packagesOut,
         businessType,
         websiteHandle,
       },
