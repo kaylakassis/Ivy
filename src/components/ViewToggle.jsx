@@ -18,6 +18,19 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
 import { useViewport } from '../lib/viewport.js';
 
+// Routes that put a composer at the bottom edge of the viewport (chat-style
+// surfaces). The default centered-and-anchored-to-bottom pill collides with
+// the composer on these — Send button to the right, textarea in the middle.
+// Bumping `bottom` higher via .view-toggle-raised lifts the pill clear of
+// the composer without changing layout anywhere else.
+const RAISE_PREFIXES = [
+  '/messages',     // owner: Direct + Groups
+  '/me/messages',  // client: 1:1 with each business
+  '/me/groups',    // client: group chats
+  '/me/dms',       // client: client-to-client DMs
+  '/ivy',          // Ivy Pro chat
+];
+
 // Anything that's not a logged-in shell route. Conservative allowlist would
 // flicker the pill on auth state changes; explicit denylist keeps the pill
 // stable as we add new shell routes.
@@ -51,6 +64,10 @@ export default function ViewToggle() {
 
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
   const view = onClient ? 'client' : 'business';
+  // On chat-style routes the default bottom-center position lands the
+  // pill directly on top of the composer. Add a class so global.css can
+  // lift it above the composer without affecting any other route.
+  const raised = RAISE_PREFIXES.some((p) => location.pathname === p || location.pathname.startsWith(p + '/') || location.pathname === p);
 
   const go = (target) => {
     if (target === view) return;
@@ -72,7 +89,7 @@ export default function ViewToggle() {
       background: 'var(--surface)', border: '1px solid var(--border-strong)',
       borderRadius: 999, boxShadow: 'var(--shadow)',
     }}
-    className="view-toggle"
+    className={'view-toggle' + (raised ? ' view-toggle-raised' : '')}
     >
       <ToggleButton
         active={view === 'business'}
