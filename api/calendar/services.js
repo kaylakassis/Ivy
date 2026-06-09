@@ -155,6 +155,52 @@ export default async function handler(req, res) {
         });
       }
 
+      // Per-service availability override. Null/undefined → inherit
+      // workspace general availability. When set, must be an object keyed
+      // by weekday "0".."6" with arrays of { start, end } minute pairs
+      // (0–1440). The slot computation intersects this with the workspace
+      // windows so a service can only narrow availability, never expand
+      // it past business hours.
+      let availability = null;
+      if (s?.availability != null) {
+        if (typeof s.availability !== 'object' || Array.isArray(s.availability)) {
+          return badRequest(res, `services[${idx}].availability must be an object`);
+        }
+        availability = {};
+        for (let d = 0; d < 7; d++) {
+          const dayKey = String(d);
+          const raw = s.availability[dayKey];
+          if (raw == null) { availability[dayKey] = []; continue; }
+          if (!Array.isArray(raw)) {
+            return badRequest(res, `services[${idx}].availability[${dayKey}] must be an array`);
+          }
+          if (raw.length > 6) {
+            return badRequest(res, `services[${idx}].availability[${dayKey}] capped at 6 windows`);
+          }
+          const windows = [];
+          for (const w of raw) {
+            const start = Number(w?.start);
+            const end = Number(w?.end);
+            if (!Number.isInteger(start) || start < 0 || start > 1440) {
+              return badRequest(res, `services[${idx}].availability[${dayKey}] window.start must be 0–1440`);
+            }
+            if (!Number.isInteger(end) || end <= start || end > 1440) {
+              return badRequest(res, `services[${idx}].availability[${dayKey}] window.end must be > start and ≤ 1440`);
+            }
+            windows.push({ start, end });
+          }
+          // Sort + merge overlaps so callers get a normalized shape.
+          windows.sort((a, b) => a.start - b.start);
+          const merged = [];
+          for (const w of windows) {
+            const tail = merged[merged.length - 1];
+            if (tail && w.start <= tail.end) tail.end = Math.max(tail.end, w.end);
+            else merged.push({ ...w });
+          }
+          availability[dayKey] = merged;
+        }
+      }
+
       // Per-service custom intake fields. Each:
       //   { id, label, type, required, options[] }
       const rawFields = Array.isArray(s?.customFields) ? s.customFields : [];
@@ -207,6 +253,7 @@ export default async function handler(req, res) {
         noShowFeeAmount,
         addOns,
         customFields,
+        availability,
         // Per-service color for the calendar grid. Validate as
         // #RGB / #RRGGBB; anything else gets nulled so we don't
         // stuff junk into an inline style attribute.
@@ -273,7 +320,8 @@ export default async function handler(req, res) {
             no_show_fee_amount = ${s.noShowFeeAmount},
             add_ons = ${JSON.stringify(s.addOns)}::jsonb,
             custom_fields = ${JSON.stringify(s.customFields)}::jsonb,
-            color = ${s.color || null}
+            color = ${s.color || null},
+            availability = ${s.availability ? JSON.stringify(s.availability) : null}::jsonb
           WHERE id = ${s.id} AND workspace_id = ${workspaceId}
           RETURNING *
         `;
@@ -287,7 +335,7 @@ export default async function handler(req, res) {
             intake_form_template_ids, deposit_type, deposit_amount,
             location_type, location_label, visibility, travel_buffer_minutes,
             cancellation_fee_amount, cancellation_window_hours, no_show_fee_amount,
-            add_ons, custom_fields, color
+            add_ons, custom_fields, color, availability
           )
           VALUES (
             ${workspaceId}, ${s.name}, ${s.durationMinutes}, ${s.price}, ${s.displayOrder},
@@ -295,7 +343,8 @@ export default async function handler(req, res) {
             ${s.intakeFormTemplateIds}, ${s.depositType}, ${s.depositAmount},
             ${s.locationType}, ${s.locationLabel}, ${s.visibility}, ${s.travelBufferMinutes},
             ${s.cancellationFeeAmount}, ${s.cancellationWindowHours}, ${s.noShowFeeAmount},
-            ${JSON.stringify(s.addOns)}::jsonb, ${JSON.stringify(s.customFields)}::jsonb, ${s.color || null}
+            ${JSON.stringify(s.addOns)}::jsonb, ${JSON.stringify(s.customFields)}::jsonb, ${s.color || null},
+            ${s.availability ? JSON.stringify(s.availability) : null}::jsonb
           )
           RETURNING *
         `;

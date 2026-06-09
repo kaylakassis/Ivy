@@ -154,25 +154,31 @@ export default async function handler(req, res) {
         if (newDate < today) return badRequest(res, "Can't reschedule into the past");
 
         // Pull the workspace's availability + the service's capacity
-        // for conflict-checking. If the service was deleted (orphan
-        // booking), default capacity to 1.
+        // and per-service availability override for conflict-checking.
+        // If the service was deleted (orphan booking), default capacity
+        // to 1 and skip the service-availability narrow.
         const cs = await sql`
           SELECT availability, buffer_minutes FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}
         `;
         const availability = cs.rows[0]?.availability || {};
         const bufferMin = Math.max(0, Number(cs.rows[0]?.buffer_minutes || 0));
+
+        let capacity = 1;
+        let serviceAvailability = null;
+        if (booking.service_id) {
+          const sv = await sql`SELECT capacity, availability FROM services WHERE id = ${booking.service_id} AND workspace_id = ${booking.workspace_id}`;
+          if (sv.rows[0]?.capacity) capacity = Number(sv.rows[0].capacity);
+          serviceAvailability = sv.rows[0]?.availability || null;
+        }
+
         // getUTCDay() (not getDay()) — matches the other booking paths
         // so a workspace in a non-UTC timezone doesn't see day-of-week
         // drift around midnight UTC.
         const weekday = new Date(newDate + 'T00:00:00Z').getUTCDay();
-        if (!withinAvailability(availability, weekday, newStart, newEnd)) {
-          return badRequest(res, "That time isn't in the business's available hours.");
-        }
-
-        let capacity = 1;
-        if (booking.service_id) {
-          const sv = await sql`SELECT capacity FROM services WHERE id = ${booking.service_id} AND workspace_id = ${booking.workspace_id}`;
-          if (sv.rows[0]?.capacity) capacity = Number(sv.rows[0].capacity);
+        if (!withinAvailability(availability, weekday, newStart, newEnd, serviceAvailability)) {
+          return badRequest(res, serviceAvailability
+            ? "That time isn't in this service's available hours."
+            : "That time isn't in the business's available hours.");
         }
 
         const conflict = await hasConflict({

@@ -2630,4 +2630,11 @@ CREATE INDEX IF NOT EXISTS idx_orders_session
 ALTER TABLE discover_snapshots ADD COLUMN IF NOT EXISTS has_products BOOLEAN NOT NULL DEFAULT FALSE;
 CREATE INDEX IF NOT EXISTS idx_discover_snapshots_has_products
   ON discover_snapshots(has_products) WHERE has_products = TRUE;
+
+-- Per-service availability override. NULL means the service inherits the
+-- workspace's general availability (calendar_settings.availability). When
+-- set, the same { "0": [], "1": [{start, end}], ... } shape applies but
+-- is intersected with the workspace windows at slot-compute time, so a
+-- service can only narrow availability, never expand outside business hours.
+ALTER TABLE services ADD COLUMN IF NOT EXISTS availability JSONB;
 `;

@@ -74,6 +74,12 @@ export function serializeService(row) {
     noShowFeeAmount:   Number(row.no_show_fee_amount || 0),
     customFields:      row.custom_fields || [],
     addOns:            row.add_ons || [],
+    // Per-service availability override. null → inherit workspace
+    // general availability. When set, shape mirrors calendar_settings:
+    //   { "0": [], "1": [{start, end}], ... }  (0 = Sunday)
+    // Slot computation intersects this with the workspace windows so a
+    // service can only narrow availability, never expand outside hours.
+    availability:      row.availability || null,
   };
 }
 
@@ -221,9 +227,37 @@ export function mintVideoRoomUrl() {
 
 export const VALID_RECURRENCE = new Set([null, 'weekly', 'biweekly', 'monthly']);
 
-// Returns true if [start, end) overlaps any availability window for the given weekday.
-export function withinAvailability(availability, weekday, start, end) {
-  const windows = (availability && availability[String(weekday)]) || [];
+// Intersect two lists of {start, end} windows. Empty/missing inputs yield [].
+// Used to combine workspace general availability with a per-service override
+// so a service can only restrict, never expand, the bookable hours.
+export function intersectWindows(a, b) {
+  if (!Array.isArray(a) || !Array.isArray(b) || a.length === 0 || b.length === 0) return [];
+  const out = [];
+  for (const wa of a) {
+    for (const wb of b) {
+      const start = Math.max(wa.start, wb.start);
+      const end = Math.min(wa.end, wb.end);
+      if (start < end) out.push({ start, end });
+    }
+  }
+  return out;
+}
+
+// Effective windows for [weekday] given workspace general availability and
+// an optional per-service override. When serviceAvailability is null the
+// service inherits the workspace windows; when set, the two are intersected.
+export function effectiveWindows(workspaceAvailability, serviceAvailability, weekday) {
+  const wsWindows = (workspaceAvailability && workspaceAvailability[String(weekday)]) || [];
+  if (!serviceAvailability) return wsWindows;
+  const svcWindows = serviceAvailability[String(weekday)] || [];
+  return intersectWindows(wsWindows, svcWindows);
+}
+
+// Returns true if [start, end) sits inside any effective availability window
+// for the given weekday. `serviceAvailability` is optional — when present,
+// the workspace windows are intersected with the service override.
+export function withinAvailability(availability, weekday, start, end, serviceAvailability) {
+  const windows = effectiveWindows(availability, serviceAvailability, weekday);
   return windows.some((w) => start >= w.start && end <= w.end);
 }
 
