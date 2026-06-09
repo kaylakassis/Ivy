@@ -2637,4 +2637,14 @@ CREATE INDEX IF NOT EXISTS idx_discover_snapshots_has_products
 -- is intersected with the workspace windows at slot-compute time, so a
 -- service can only narrow availability, never expand outside business hours.
 ALTER TABLE services ADD COLUMN IF NOT EXISTS availability JSONB;
+
+-- Public package self-checkout: visitors buying a bundle from the public
+-- booking link mint a one-time Stripe Checkout session. Storing the
+-- session id on the provisioned client_packages row gives the webhook
+-- handler a hard idempotency key so a duplicate checkout.session.completed
+-- event (retry, replay, function cold-start race) can't double-provision
+-- credits. Owner-sold packages have NULL here.
+ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_client_packages_stripe_session
+  ON client_packages(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
 `;

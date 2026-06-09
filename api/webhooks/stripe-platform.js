@@ -214,10 +214,80 @@ export default async function handler(req, res) {
         }
       }
 
-      // Payment flow: invoice or booking-deposit. Mark the invoice
-      // paid + record the payment intent for refunds. Booking
-      // deposits route through the bookings table separately —
-      // their invoice_id starts with 'bookdep_'.
+      // Payment flow: invoice, booking-deposit, or package purchase.
+      // Mark the invoice paid + record the payment intent for refunds.
+      // Booking deposits route through the bookings table separately —
+      // their invoice_id starts with 'bookdep_'. Package purchases have
+      // metadata.purpose='package' and no invoice_id.
+
+      // Package purchase (public booking link → /api/packages/checkout).
+      // Provisions a client_packages row with credits_remaining =
+      // session_count. Idempotent on (session_id) so a duplicate event
+      // can't double-provision credits.
+      if (session.metadata?.purpose === 'package') {
+        const packageId = session.metadata?.package_id;
+        const clientId  = session.metadata?.client_id;
+        if (!packageId || !clientId) {
+          return ok(res, { received: true, ignored: 'package metadata incomplete' });
+        }
+        // Idempotency guard: bail out if we've already provisioned for
+        // this session id. Looks for any client_packages row stamped
+        // with this stripe_session_id in the snapshot's metadata via
+        // the dedup table approach — markProcessed gates the whole
+        // event id earlier, so this is belt-and-suspenders for the
+        // double-fire case across function restarts.
+        const dup = await sql`
+          SELECT id FROM client_packages
+           WHERE workspace_id = ${workspaceId}
+             AND stripe_session_id = ${sessionId}
+           LIMIT 1
+        `;
+        if (dup.rows.length > 0) {
+          return ok(res, { received: true, ignored: 'package already provisioned' });
+        }
+        // Snapshot the package at sale time so owner-side edits to the
+        // template don't mutate the outstanding bundle (matches the
+        // pattern in /api/clients/:id/packages).
+        const pkg = await sql`
+          SELECT id, name, service_ids, session_count, price, expiry_days
+            FROM packages
+           WHERE id = ${packageId} AND workspace_id = ${workspaceId}
+        `;
+        if (pkg.rows.length === 0) {
+          return ok(res, { received: true, ignored: 'package not found' });
+        }
+        const p = pkg.rows[0];
+        const credits = Math.max(1, Number(p.session_count) || 1);
+        const priceCharged = Number.isFinite(session.amount_total)
+          ? session.amount_total / 100
+          : Number(p.price || 0);
+        const expiresAt = p.expiry_days
+          ? new Date(Date.now() + Number(p.expiry_days) * 86400 * 1000)
+          : null;
+        await sql`
+          INSERT INTO client_packages (
+            workspace_id, client_id, package_id, name, service_ids,
+            credits_total, credits_remaining, price, expires_at, status,
+            stripe_session_id
+          )
+          VALUES (
+            ${workspaceId}, ${clientId}, ${p.id}, ${p.name}, ${p.service_ids || []},
+            ${credits}, ${credits}, ${priceCharged}, ${expiresAt}, 'active',
+            ${sessionId}
+          )
+        `;
+        notifyOwnerSafe({
+          workspaceId, type: 'payments',
+          payload: {
+            title: 'Package sold 🎟️',
+            body: `${p.name} (${credits} sessions) — $${priceCharged.toFixed(0)}`,
+            url: '/clients',
+            tag: `package-${sessionId}`,
+          },
+        });
+        return ok(res, { received: true, applied: 'package-provisioned' });
+      }
+
       const invoiceId = session.metadata?.invoice_id;
       if (!invoiceId) {
         return ok(res, { received: true, ignored: 'no invoice_id in metadata' });
