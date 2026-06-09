@@ -129,15 +129,17 @@ export default async function handler(req, res) {
     const availability = settings.availability || {};
     const minNoticeHours = Math.max(0, Number(settings.min_notice_hours ?? 24));
     const maxAdvanceDays = Math.max(0, Number(settings.max_advance_days ?? 60));
+    const bufferMinutes  = Math.max(0, Number(settings.buffer_minutes ?? 0));
     const tz = settings.timezone || null;
 
     const sv = await sql`
-      SELECT capacity, availability, name FROM services
+      SELECT capacity, availability, name, travel_buffer_minutes FROM services
        WHERE id = ${serviceId} AND workspace_id = ${cp.workspace_id}
     `;
     if (sv.rows.length === 0) return badRequest(res, "That service isn't offered anymore.");
     const capacity = Math.max(1, Number(sv.rows[0].capacity) || 1);
     const serviceAvail = sv.rows[0].availability || null;
+    const travelBuffer = Math.max(0, Number(sv.rows[0].travel_buffer_minutes ?? 0));
 
     // Validate every slot before consuming credits — atomic all-or-nothing.
     const now = Date.now();
@@ -162,6 +164,7 @@ export default async function handler(req, res) {
         workspaceId: cp.workspace_id,
         dateISO: s.date, start: s.startMin, end: s.endMin,
         serviceId, capacity,
+        travelBufferMin: travelBuffer, bufferMin: bufferMinutes,
       });
       if (conflict) {
         return badRequest(res, `${s.date} ${fmtMin(s.startMin)}: that slot is taken.`);
