@@ -73,7 +73,15 @@ export default async function handler(req, res) {
         subscription_status     = ${mapped},
         stripe_customer_id      = ${customerId},
         stripe_subscription_id  = ${subscription.id},
-        subscription_period_end = ${periodEnd}
+        subscription_period_end = ${periodEnd},
+        -- Funnel: stamp the first conversion. COALESCE keeps the
+        -- original timestamp on every subsequent sync so we measure
+        -- FIRST-paying-time, not most-recent-renewal.
+        converted_at            = CASE
+          WHEN ${mapped} IN ('active', 'past_due')
+          THEN COALESCE(converted_at, NOW())
+          ELSE converted_at
+        END
       WHERE id = ${workspaceId}
     `;
     if (PAYING_STATUSES.has(mapped)) {

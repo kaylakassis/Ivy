@@ -134,6 +134,15 @@ export async function ensureActiveWorkspace(user, req, res) {
     return workspaceId;
   }
 
+  // Funnel instrumentation: stamp the very first time this workspace
+  // hits the wall. Fire-and-forget — a write failure here mustn't
+  // block the 402 response. COALESCE keeps the original timestamp on
+  // every subsequent denial so we measure FIRST-seen, not last-seen.
+  sql`UPDATE workspaces
+        SET paywall_first_seen_at = COALESCE(paywall_first_seen_at, NOW())
+      WHERE id = ${workspaceId} AND paywall_first_seen_at IS NULL`
+    .catch((e) => console.error('[workspaceGate] paywall stamp failed:', e.message));
+
   // Surface a structured payload the UI uses to pick the right CTA.
   const status = row.subscription_status || 'inactive';
   const trialExpired = status === 'trialing'
