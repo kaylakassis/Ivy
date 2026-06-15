@@ -19,6 +19,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { platformStripeSecret } from '../_lib/stripe.js';
 import { ensureWinbackOffer } from '../_lib/winback.js';
+import { isWorkspaceActive } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -32,16 +33,20 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
 
-    // Only lapsed, non-sponsored, never-converted owners get the offer.
-    // (An active sub wouldn't see the wall, but guard anyway so a stray
-    // call can't mint a coupon for a paying customer.)
+    // Only LAPSED, non-sponsored, never-converted owners get the offer.
+    // Crucially, an owner still inside a LIVE trial who merely abandons
+    // an early upgrade-checkout must NOT burn their one lifetime offer —
+    // they haven't lapsed yet. isWorkspaceActive captures exactly that:
+    // a live trial (or live paid / past_due grace) reads as active and
+    // is excluded; an EXPIRED trial reads as inactive and qualifies.
     const { rows } = await sql`
-      SELECT subscription_status, converted_at FROM workspaces WHERE id = ${workspaceId}
+      SELECT subscription_status, trial_ends_at, subscription_period_end, converted_at
+        FROM workspaces WHERE id = ${workspaceId}
     `;
     const w = rows[0];
-    if (user.user_type === 'sponsored'
-        || w?.converted_at
-        || !['inactive', 'cancelled', 'suspended', 'trialing'].includes(w?.subscription_status)) {
+    const lapsed = ['inactive', 'cancelled', 'suspended', 'trialing'].includes(w?.subscription_status)
+      && !isWorkspaceActive(w);
+    if (user.user_type === 'sponsored' || w?.converted_at || !lapsed) {
       return ok(res, { eligible: false });
     }
 

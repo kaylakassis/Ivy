@@ -73,6 +73,7 @@ export default async function handler(req, res) {
       ivyAdoptionRow,           // workspaces with >=1 ivy_sessions row
       reviewsRow,               // count + avg rating
       activationRow,            // workspaces that took their first booking within 7d of signup
+      funnelRow,                // acquisition funnel cohort counts (signup→converted)
     ] = await Promise.all([
       sql`SELECT COUNT(*)::int AS n FROM users`,
       sql.query(
@@ -244,6 +245,53 @@ export default async function handler(req, res) {
           (SELECT COUNT(*)::int FROM workspaces WHERE created_at < NOW() - INTERVAL '7 days') AS eligible
         `,
       ),
+      // ─── Acquisition funnel (cohort = workspaces created in window) ──
+      // Tracks how far each signup cohort progressed, regardless of WHEN
+      // they reached each step. Five steps, all derived from columns that
+      // are stamped once and never rewound:
+      //   signup            → workspaces.created_at in [from,to)
+      //   onboardingStarted → owner's users.onboarding_state shows progress
+      //                       past the first screen
+      //   onboardingDone    → workspaces.onboarded_at set
+      //   paywallSeen       → workspaces.paywall_first_seen_at set (the
+      //                       hard wall denied them at least once)
+      //   converted         → workspaces.converted_at set (first paid)
+      //
+      // NOTE: paywall_first_seen_at + converted_at only began stamping
+      // when the hard paywall shipped, so cohorts from before that deploy
+      // under-report those two steps. Recent cohorts are accurate. The
+      // onboarding step is best-effort: onboarding_state is JSONB and a
+      // brand-new row may be '{}' (counts as not-started).
+      sql.query(
+        `WITH cohort AS (
+           SELECT w.id, w.onboarded_at, w.paywall_first_seen_at, w.converted_at,
+                  u.onboarding_state
+             FROM workspaces w
+             LEFT JOIN users u ON u.id = w.owner_id
+            WHERE w.created_at >= $1 AND w.created_at < $2
+         )
+         SELECT
+           COUNT(*)::int AS signups,
+           COUNT(*) FILTER (
+             WHERE onboarding_state IS NOT NULL
+               AND (
+                 -- jsonb_array_length() raises if completedSteps is present
+                 -- but not a JSON array (legacy/partial writes). Guard with
+                 -- jsonb_typeof so one malformed row can't 500 the whole
+                 -- analytics endpoint.
+                 COALESCE(
+                   CASE WHEN jsonb_typeof(onboarding_state->'completedSteps') = 'array'
+                        THEN jsonb_array_length(onboarding_state->'completedSteps')
+                        ELSE 0 END, 0) > 0
+                 OR COALESCE(onboarding_state->>'currentStep', 'welcome') <> 'welcome'
+               )
+           )::int AS onboarding_started,
+           COUNT(*) FILTER (WHERE onboarded_at IS NOT NULL)::int       AS onboarding_done,
+           COUNT(*) FILTER (WHERE paywall_first_seen_at IS NOT NULL)::int AS paywall_seen,
+           COUNT(*) FILTER (WHERE converted_at IS NOT NULL)::int       AS converted
+           FROM cohort`,
+        [fromIso, toIso],
+      ),
     ]);
 
     const cancelled = churnCancelledRow.rows[0]?.n || 0;
@@ -299,6 +347,15 @@ export default async function handler(req, res) {
       ? Math.round((activatedCount / eligibleCount) * 1000) / 10
       : 0;
 
+    // ── Acquisition funnel ───────────────────────────────────────────
+    // Raw cohort counts; the UI computes step-to-step + overall rates so
+    // the math is visible in one place. Every count is a subset of
+    // `signups`, so the funnel is monotonically non-increasing by
+    // construction (a converted workspace also has paywall_seen etc. —
+    // except where a cohort predates the paywall deploy; see the query
+    // comment).
+    const fn = funnelRow.rows[0] || {};
+
     return ok(res, {
       range: { from: fromIso, to: toIso },
       totals: {
@@ -340,6 +397,16 @@ export default async function handler(req, res) {
         activationPct,    // signup → first booking within 7 days
         activatedCount,
         eligibleCount,
+      },
+      // Acquisition funnel for the selected window's signup cohort.
+      // Counts only — the UI renders the bars + computes the conversion
+      // and drop-off percentages.
+      funnel: {
+        signups:           fn.signups || 0,
+        onboardingStarted: fn.onboarding_started || 0,
+        onboardingDone:    fn.onboarding_done || 0,
+        paywallSeen:       fn.paywall_seen || 0,
+        converted:         fn.converted || 0,
       },
     });
   } catch (err) {

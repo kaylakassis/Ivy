@@ -170,16 +170,20 @@ function deriveSubscription(row) {
   const trialEndsAt    = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : null;
   const periodEndsAt   = row.subscription_period_end ? new Date(row.subscription_period_end).getTime() : null;
   const trialActive    = status === 'trialing' && trialEndsAt && trialEndsAt > now;
-  // Both 'active' and 'past_due' need a live period_end — without this
-  // guard, a row whose status hadn't been flipped (or whose period_end
-  // is null on a brand-new sub before checkout sync wrote it) would
-  // bypass the hard paywall.
-  const paidActive     = (status === 'active' || status === 'past_due')
+  const periodLive     = (status === 'active' || status === 'past_due')
                           && periodEndsAt && periodEndsAt > now;
-  const isActive = trialActive || paidActive;
+  // isActive MUST come from the shared predicate so the backend gate
+  // (workspaceGate.js) and this /api/me serializer can never disagree —
+  // e.g. past_due is "active" (grace) here exactly as it is in the gate,
+  // even when period_end has lapsed. Computing it independently is what
+  // let them drift before.
+  const isActive = isWorkspaceActive(row);
 
   let daysRemaining = null;
-  const endRef = trialActive ? trialEndsAt : (paidActive ? periodEndsAt : null);
+  // Countdown only when there's a live end timestamp to count toward.
+  // past_due-with-lapsed-period is active but has no countdown (the UI
+  // shows a "payment failed" banner instead of days remaining).
+  const endRef = trialActive ? trialEndsAt : (periodLive ? periodEndsAt : null);
   if (endRef) {
     daysRemaining = Math.max(0, Math.ceil((endRef - now) / (24 * 60 * 60 * 1000)));
   }

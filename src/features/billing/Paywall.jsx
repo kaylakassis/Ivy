@@ -95,7 +95,16 @@ export default function Paywall({ ctx, onRefresh }) {
     if (!cancelled || winbackTried.current) return;
     winbackTried.current = true;
     api.post('/billing/winback-offer', {})
-      .then((r) => { if (r?.eligible) setWinback(r); })
+      .then((r) => {
+        // Only render the offer when the numeric terms are actually
+        // present — guards against a malformed eligible:true response
+        // rendering "NaN% off" / "$NaN/mo".
+        if (r?.eligible
+            && Number.isFinite(r.percentOff) && r.percentOff > 0
+            && Number.isFinite(r.durationMonths) && r.durationMonths > 0) {
+          setWinback(r);
+        }
+      })
       .catch(() => { /* no offer is a fine outcome — fall back to the plain banner */ });
   }, [cancelled]);
 
@@ -148,7 +157,10 @@ export default function Paywall({ ctx, onRefresh }) {
   };
 
   // Distinguish trial-expired from never-trialed so the copy matches.
-  const trialExpired = sub?.status === 'trialing' && sub?.daysRemaining === 0;
+  // A 'trialing' status that isn't active means the trial window has
+  // lapsed. (daysRemaining is null — not 0 — for an expired trial, so
+  // the old `=== 0` check never fired and this copy was dead.)
+  const trialExpired = sub?.status === 'trialing' && !sub?.isActive;
   const everTrialed  = !!sub?.trialEndsAt;
   const wasPaid      = sub?.status === 'cancelled' || sub?.status === 'past_due';
   // The trial CTA only makes sense for owners who've never trialed; for
