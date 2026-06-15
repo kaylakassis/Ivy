@@ -29,6 +29,10 @@ import {
   hasConflict, withinAvailability, slotEpochMs, serializeBooking,
 } from '../../../_lib/calendar.js';
 import { packageCoversService } from '../../../_lib/packages.js';
+import { notifyNewBooking } from '../../../_lib/bookingNotify.js';
+import { notifyPackageExhausted } from '../../../_lib/packageNotify.js';
+import { syncOnBookingCreated } from '../../../_lib/googleSync.js';
+import { attachIntakeForms } from '../../../_lib/intake.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../../_lib/json.js';
 
 const MAX_OCCURRENCES = 52;          // hard ceiling regardless of credits
@@ -192,21 +196,74 @@ export default async function handler(req, res) {
 
     // Insert the bookings. Each gets client_package_id so a future
     // cancellation can restoreCredit() against this package.
+    //
+    // Rollback contract: if any insert throws (transient DB error, a
+    // late race against a concurrent booker that took the slot between
+    // our hasConflict() check and INSERT), we DELETE the rows we already
+    // wrote and REFUND the full N credits we debited. The endpoint stays
+    // "all-or-nothing" from the client's perspective.
     const inserted = [];
-    for (const s of slots) {
-      // eslint-disable-next-line no-await-in-loop
-      const r = await sql`
-        INSERT INTO bookings (
-          workspace_id, service_id, client_id, client_name, client_email,
-          date, start_min, end_min, client_package_id
-        ) VALUES (
-          ${cp.workspace_id}, ${serviceId}, ${cp.client_id},
-          ${cp.client_name}, ${cp.client_email},
-          ${s.date}, ${s.startMin}, ${s.endMin}, ${cpId}
-        )
-        RETURNING *
-      `;
-      inserted.push(serializeBooking(r.rows[0]));
+    const insertedIds = [];
+    try {
+      for (const s of slots) {
+        // eslint-disable-next-line no-await-in-loop
+        const r = await sql`
+          INSERT INTO bookings (
+            workspace_id, service_id, client_id, client_name, client_email,
+            date, start_min, end_min, client_package_id
+          ) VALUES (
+            ${cp.workspace_id}, ${serviceId}, ${cp.client_id},
+            ${cp.client_name}, ${cp.client_email},
+            ${s.date}, ${s.startMin}, ${s.endMin}, ${cpId}
+          )
+          RETURNING *
+        `;
+        inserted.push(serializeBooking(r.rows[0]));
+        insertedIds.push(r.rows[0].id);
+      }
+    } catch (insertErr) {
+      // Best-effort rollback. We swallow rollback errors because we want
+      // the original cause to surface, not a secondary cleanup error.
+      try {
+        if (insertedIds.length > 0) {
+          await sql`DELETE FROM bookings WHERE id = ANY(${insertedIds}::uuid[])`;
+        }
+        await sql`
+          UPDATE client_packages SET
+            credits_remaining = LEAST(credits_remaining + ${slots.length}, credits_total),
+            status = CASE WHEN status = 'exhausted' THEN 'active' ELSE status END,
+            updated_at = NOW()
+           WHERE id = ${cpId}
+        `;
+      } catch (rollbackErr) {
+        // eslint-disable-next-line no-console
+        console.error('[packages/book] rollback failed:', rollbackErr.message);
+      }
+      throw insertErr;
+    }
+
+    // Post-insert side-effects — match the public booking endpoint so
+    // package-credit bookings aren't silent in the rest of the system.
+    // All fire-and-forget; per-booking failures get logged and surface
+    // separately from the 200 OK to the client. This is the same pattern
+    // api/calendar/public/[slug].js uses.
+    for (const b of inserted) {
+      notifyNewBooking({ workspaceId: cp.workspace_id, bookingId: b.id, source: 'client-portal' })
+        .catch((e) => console.error('[packages/book] notifyNewBooking failed:', e?.message));
+      syncOnBookingCreated({ workspaceId: cp.workspace_id, bookingId: b.id })
+        .catch((e) => console.error('[packages/book] syncOnBookingCreated failed:', e?.message));
+      attachIntakeForms({ workspaceId: cp.workspace_id, bookingId: b.id })
+        .catch((e) => console.error('[packages/book] attachIntakeForms failed:', e?.message));
+    }
+    // Owner gets the "client just ran out of credits" nudge exactly
+    // when the debit flipped the status to exhausted (the same moment
+    // /api/calendar/bookings fires it).
+    if (debit.rows[0].status === 'exhausted') {
+      notifyPackageExhausted({
+        workspaceId: cp.workspace_id,
+        clientPackageId: cpId,
+        clientId: cp.client_id,
+      }).catch((e) => console.error('[packages/book] notifyPackageExhausted failed:', e?.message));
     }
 
     return ok(res, {
@@ -223,15 +280,32 @@ export default async function handler(req, res) {
 // Uses UTC arithmetic — the wall-clock TIME is constant across
 // occurrences, only the DATE changes, so DST shifts don't matter for
 // the date math itself.
+//
+// Monthly stepping anchors on the ORIGINAL day-of-month and clamps to
+// the target month's last day when shorter. This matches Outlook /
+// Google Calendar behavior. The naive `setUTCMonth(+1)` would silently
+// roll Jan 31 → "Feb 31" → March 3, skipping February entirely and
+// drifting subsequent dates off the user's chosen day-of-month.
 function expandRecurrence(firstDateISO, rule, n) {
   const out = [];
   const [y, mo, d] = firstDateISO.split('-').map(Number);
+  if (rule === 'monthly') {
+    for (let i = 0; i < n; i++) {
+      const targetMonth = (mo - 1) + i;
+      const yyyy = y + Math.floor(targetMonth / 12);
+      const mm   = ((targetMonth % 12) + 12) % 12;
+      // Date.UTC(yyyy, mm + 1, 0) gives the last day of month mm.
+      const lastDay = new Date(Date.UTC(yyyy, mm + 1, 0)).getUTCDate();
+      const day = Math.min(d, lastDay);
+      out.push(new Date(Date.UTC(yyyy, mm, day)).toISOString().slice(0, 10));
+    }
+    return out;
+  }
   const cursor = new Date(Date.UTC(y, mo - 1, d));
+  const step = rule === 'weekly' ? 7 : 14; // 'biweekly'
   for (let i = 0; i < n; i++) {
     out.push(cursor.toISOString().slice(0, 10));
-    if (rule === 'weekly') cursor.setUTCDate(cursor.getUTCDate() + 7);
-    else if (rule === 'biweekly') cursor.setUTCDate(cursor.getUTCDate() + 14);
-    else if (rule === 'monthly') cursor.setUTCMonth(cursor.getUTCMonth() + 1);
+    cursor.setUTCDate(cursor.getUTCDate() + step);
   }
   return out;
 }
