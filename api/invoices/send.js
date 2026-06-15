@@ -7,8 +7,8 @@
 // disambiguates by static-first).
 
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/finance.js';
@@ -31,9 +31,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     // Idempotent wrap. Owners double-clicking Send or hitting a flaky
     // network used to fire the invoice email twice with different
     // tokens — only the second worked, but both landed in the

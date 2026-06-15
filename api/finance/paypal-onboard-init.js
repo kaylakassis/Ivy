@@ -7,7 +7,8 @@
 // Reached via a top-level <a href> click, so we redirect back to
 // /finance with a query-string error on failure rather than returning
 // raw JSON (which would show as a blank page in the browser).
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { buildOnboardingUrl } from '../_lib/payments/paypal.js';
 import { appUrl } from '../_lib/tokens.js';
@@ -33,7 +34,8 @@ export default async function handler(req, res) {
     }
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET || !process.env.PAYPAL_PARTNER_ID) {
       return back(res, 'PayPal is not configured on this deploy yet — admin needs to set PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, and PAYPAL_PARTNER_ID.');

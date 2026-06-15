@@ -2,8 +2,8 @@
 //   GET  → paginated history (?before=ISO&limit=N)
 //   POST → owner sends { text, attachments? }
 import { sql } from '../../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../../_lib/auth.js';
-import { requireActiveSubscription } from '../../../_lib/subscriptionGate.js';
+import { requireUser } from '../../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../../../_lib/security.js';
 import { readBody } from '../../../_lib/body.js';
 import { withIdempotency } from '../../../_lib/idempotency.js';
@@ -18,7 +18,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const { id } = req.query;
 
     const thread = await fetchOwnedGroup({ id, workspaceId });
@@ -59,7 +60,6 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      if (!(await requireActiveSubscription(workspaceId, req, res))) return;
       if (thread.archived) return badRequest(res, 'Group is archived');
 
       const idemp = await withIdempotency(req, user.id, async () => {

@@ -6,8 +6,8 @@
 // documents) per project so the UI doesn't need follow-up fetches just
 // to render "3 invoices · 2 bookings · 1 doc" subtitles.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeProject, VALID_STATUS } from '../_lib/projects.js';
@@ -18,9 +18,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     if (req.method === 'GET') {
       const status   = (req.query.status   || '').toString().toLowerCase();
       const clientId = (req.query.clientId || '').toString();

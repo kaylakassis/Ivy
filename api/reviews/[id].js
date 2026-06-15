@@ -7,7 +7,8 @@
 //     (super-admin) to approve (hide) or deny. The review stays visible
 //     until an appeal is approved.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeReview } from '../_lib/reviews.js';
@@ -19,7 +20,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const { id } = req.query;
 
     const body = await readBody(req);

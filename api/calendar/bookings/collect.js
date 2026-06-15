@@ -15,7 +15,8 @@
 // Re-clicks reuse the same invoice via bookings.collect_invoice_id —
 // minting a new token invalidates the previous one (last-link-wins).
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { nextInvoiceNumber, serializeInvoice } from '../../_lib/finance.js';
@@ -29,7 +30,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;

@@ -10,7 +10,8 @@
 // Lives as a static sibling to /api/calendar/bookings/[id].js so
 // Vercel routes /no-show here, /[id] to the dynamic handler.
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
@@ -24,7 +25,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;

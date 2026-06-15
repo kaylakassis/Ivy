@@ -5,7 +5,8 @@
 // "Members" view on the Memberships page where the owner can see who
 // is on which tier and change a client's plan.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -15,7 +16,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const { rows } = await sql`
       SELECT cm.id, cm.client_id, cm.membership_id, cm.membership_name,

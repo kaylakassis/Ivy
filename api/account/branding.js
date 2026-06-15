@@ -7,7 +7,8 @@
 // public booking page and email branding stay in lockstep without a
 // new join.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { isValidAccent } from '../_lib/branding.js';
@@ -18,7 +19,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     if (req.method === 'GET') {
       // Ensure a settings row exists so PATCH below has something to update.

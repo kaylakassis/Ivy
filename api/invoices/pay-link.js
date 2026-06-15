@@ -18,7 +18,8 @@
 // The token is stored hashed exactly like /send, so this minting
 // invalidates any previous link to the same invoice — last one wins.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice } from '../_lib/finance.js';
@@ -32,7 +33,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;

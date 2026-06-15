@@ -10,8 +10,8 @@
 // pay-link the owner can show as a QR / send to the buyer's phone.
 import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { readBody } from '../_lib/body.js';
 import { serializeInvoice, nextInvoiceNumber } from '../_lib/finance.js';
@@ -38,9 +38,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const body = await readBody(req);
 
     // Idempotency: a double-click or a timeout-then-retry must not create

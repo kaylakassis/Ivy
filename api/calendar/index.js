@@ -3,8 +3,8 @@
 //   PATCH  → update settings (biz_name, slug, slot_minutes, buffer_minutes, availability)
 
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import {
   ensureCalendarSettings, serializeSettings, serializeService, serializeBlock,
@@ -18,9 +18,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     if (req.method === 'GET') {
       // Per-query try/catch so a single missing table/column degrades to
       // an empty list instead of bricking the whole calendar tab. A

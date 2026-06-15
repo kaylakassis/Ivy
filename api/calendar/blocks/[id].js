@@ -2,8 +2,8 @@
 //   PATCH  → update block (date / start_min / end_min / label)
 //   DELETE → remove block
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
-import { requireActiveSubscription } from '../../_lib/subscriptionGate.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { serializeBlock } from '../../_lib/calendar.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
@@ -14,8 +14,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const { id } = req.query;
 
     const found = await sql`SELECT * FROM calendar_blocks WHERE id = ${id} AND workspace_id = ${workspaceId}`;

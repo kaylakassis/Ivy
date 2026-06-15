@@ -4,8 +4,8 @@
 //          Returns the plaintext token EXACTLY ONCE.
 // DELETE /api/messages/groups/:id/invites?tokenId=… → revoke
 import { sql } from '../../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../../_lib/auth.js';
-import { requireActiveSubscription } from '../../../_lib/subscriptionGate.js';
+import { requireUser } from '../../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../../../_lib/security.js';
 import { readBody } from '../../../_lib/body.js';
 import { fetchOwnedGroup, mintInviteToken } from '../../../_lib/groupChat.js';
@@ -17,7 +17,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const { id } = req.query;
     const thread = await fetchOwnedGroup({ id, workspaceId });
     if (!thread) return notFound(res, 'Group not found');
@@ -39,7 +40,6 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      if (!(await requireActiveSubscription(workspaceId, req, res))) return;
       const body = await readBody(req);
       const maxUses = Math.max(1, Math.min(1000, Number.parseInt(body.maxUses, 10) || 50));
       const expiresInHours = Number.parseInt(body.expiresInHours, 10);

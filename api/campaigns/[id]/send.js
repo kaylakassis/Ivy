@@ -3,8 +3,8 @@
 //   (no status change). Otherwise send the campaign to its audience and
 //   mark it sent.
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
-import { requireActiveSubscription } from '../../_lib/subscriptionGate.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { sendEmail } from '../../_lib/email.js';
@@ -17,9 +17,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const id = (req.query.id || '').toString();
     const { rows } = await sql`SELECT * FROM email_campaigns WHERE id = ${id} AND workspace_id = ${workspaceId}`;
     const campaign = rows[0];
