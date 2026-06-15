@@ -25,6 +25,22 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { THRYVE_PRICE, STACK_TOTAL } from '../../lib/pricing.js';
+
+// Real, truthful conversion proof — mirrors the marketing pricing page.
+// We deliberately do NOT fabricate star ratings or user counts (THRYVE
+// has no review corpus to quote); the stack-replacement savings is a
+// concrete claim we can stand behind.
+const MONTHLY_SAVINGS = Math.max(0, STACK_TOTAL - THRYVE_PRICE);
+
+// The benefit list — each row is a real capability gated behind the wall.
+const PERKS = [
+  'Unlimited clients, bookings & invoices',
+  'Take card payments through your own Stripe',
+  'Documents + legally-binding e-signatures',
+  'Client messaging, all in one inbox',
+  'Your own booking site + custom domain',
+];
 
 export default function Paywall({ ctx, onRefresh }) {
   const sub = ctx?.subscription || null;
@@ -120,151 +136,249 @@ export default function Paywall({ ctx, onRefresh }) {
   const trialExpired = sub?.status === 'trialing' && sub?.daysRemaining === 0;
   const everTrialed  = !!sub?.trialEndsAt;
   const wasPaid      = sub?.status === 'cancelled' || sub?.status === 'past_due';
+  // The trial CTA only makes sense for owners who've never trialed; for
+  // everyone else the wall leads straight to Subscribe.
+  const canTrial = !everTrialed;
+  const syncing  = busy === 'syncing';
+
+  const heading = syncing      ? 'Confirming your subscription…'
+                : wasPaid       ? 'Pick up where you left off'
+                : trialExpired  ? 'Your free trial has ended'
+                : canTrial      ? 'Start your 28-day free trial'
+                :                 'Subscribe to keep going';
 
   return (
     <div role="dialog" aria-modal="true" aria-labelledby="paywall-title" style={{
       position: 'fixed', inset: 0, zIndex: 200,
-      background: 'rgba(10, 12, 8, 0.55)',
-      backdropFilter: 'blur(6px)',
+      background: 'rgba(10, 12, 8, 0.62)',
+      backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 20,
+      padding: 16,
     }}>
       <div className="card" style={{
-        width: '100%', maxWidth: 460, padding: 28,
-        display: 'flex', flexDirection: 'column', gap: 14,
-        boxShadow: '0 24px 60px rgba(0,0,0,0.25)',
+        width: '100%', maxWidth: 430, maxHeight: '94vh',
+        display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden',
+        boxShadow: '0 30px 70px rgba(0,0,0,0.32)',
       }}>
+        {/* ─── HERO BAND ─────────────────────────────────────────────
+            Mirrors the top-earner format (bold icon + benefit headline
+            over a colored band) but uses THRYVE's accent tint, so it
+            reads on-brand in both Calm + Bold themes. */}
         <div style={{
-          width: 44, height: 44, borderRadius: 12, alignSelf: 'flex-start',
-          background: 'var(--accent)', color: 'var(--accent-ink)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}><Icons.Trending size={20}/></div>
-
-        <div>
+          padding: '26px 28px 22px',
+          background: 'linear-gradient(160deg, var(--accent-soft), var(--accent-tint))',
+          borderBottom: '1px solid var(--border)',
+          textAlign: 'center',
+        }}>
+          <div style={{
+            width: 52, height: 52, borderRadius: 14, margin: '0 auto 14px',
+            background: 'var(--accent)', color: 'var(--accent-ink)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            boxShadow: 'var(--shadow)',
+          }}><Icons.Trending size={24}/></div>
           <h2 id="paywall-title" style={{
             margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500,
-            fontSize: 24, letterSpacing: '-0.02em',
-          }}>
-            {busy === 'syncing' ? 'Confirming your subscription…'
-            : wasPaid       ? 'Your subscription has ended'
-            : trialExpired  ? 'Your free trial has ended'
-            : everTrialed   ? 'Subscribe to continue'
-            :                 'Start your 28-day free trial'}
-          </h2>
-          <p style={{ margin: '8px 0 0', color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55 }}>
-            {busy === 'syncing'
-              ? "Stripe just told us payment went through. We're refreshing your account — this usually takes a couple of seconds."
-              : "The business app — clients, calendar, invoices, documents, and messaging — needs an active subscription. The client portal is free and stays available either way."}
-          </p>
+            fontSize: 25, lineHeight: 1.15, letterSpacing: '-0.02em', color: 'var(--fg)',
+          }}>{heading}</h2>
+          {!syncing && (
+            <p style={{ margin: '8px auto 0', maxWidth: 320, color: 'var(--fg-2)', fontSize: 13.5, lineHeight: 1.5 }}>
+              Everything you run your business on — clients, calendar, invoices,
+              documents, messaging — in one place.
+            </p>
+          )}
         </div>
 
-        {/* Perks */}
-        {busy !== 'syncing' && (
-          <ul style={{
-            margin: 0, padding: '4px 0', listStyle: 'none',
-            display: 'flex', flexDirection: 'column', gap: 6,
-            fontSize: 13, color: 'var(--fg-2)',
-          }}>
-            {[
-              'Unlimited clients, bookings, and invoices',
-              'Online card payments through your own Stripe',
-              'Documents + e-signature',
-              'Messaging with clients in one place',
-            ].map((p) => (
-              <li key={p} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <Icons.Check size={13} sw={2.4} stroke="var(--accent)"/> {p}
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* ─── BODY (scrolls if the viewport is short) ──────────────── */}
+        <div style={{
+          padding: '20px 24px 22px',
+          display: 'flex', flexDirection: 'column', gap: 14,
+          overflowY: 'auto',
+        }}>
+          {syncing ? (
+            <p style={{ margin: '6px 0', color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55, textAlign: 'center' }}>
+              Stripe just confirmed your payment. We're refreshing your
+              account — this usually takes a couple of seconds.
+            </p>
+          ) : (
+            <>
+              {/* Truthful savings proof — the refs' "social proof / save
+                  X%" slot, filled with a claim we can stand behind. */}
+              {MONTHLY_SAVINGS > 0 && (
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  padding: '9px 12px', borderRadius: 10,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.4,
+                }}>
+                  <Icons.Spark size={15} stroke="var(--accent)"/>
+                  <span>
+                    Replaces <strong style={{ color: 'var(--fg)' }}>${STACK_TOTAL}/mo</strong> of
+                    stitched-together tools — <strong style={{ color: 'var(--ok)' }}>save ${MONTHLY_SAVINGS}/mo</strong>.
+                  </span>
+                </div>
+              )}
 
-        {cancelled && busy !== 'syncing' && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8,
-            background: 'var(--surface-2)', border: '1px solid var(--border)',
-            color: 'var(--fg-2)', fontSize: 12.5,
-          }}>Checkout was cancelled — try again whenever you're ready.</div>
-        )}
+              {/* Benefit list */}
+              <ul style={{
+                margin: 0, padding: 0, listStyle: 'none',
+                display: 'flex', flexDirection: 'column', gap: 9,
+                fontSize: 13.5, color: 'var(--fg-2)',
+              }}>
+                {PERKS.map((p) => (
+                  <li key={p} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                    <span style={{
+                      flex: '0 0 auto', width: 18, height: 18, borderRadius: 99,
+                      background: 'var(--accent-soft)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}>
+                      <Icons.Check size={11} sw={2.6} stroke="var(--accent)"/>
+                    </span>
+                    {p}
+                  </li>
+                ))}
+              </ul>
 
-        {err && (
-          <div style={{
-            padding: '8px 12px', borderRadius: 8,
-            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
-            color: 'var(--danger)', fontSize: 12.5,
-          }}>{err}</div>
-        )}
+              {/* ─── PLAN CARD (highlighted "best offer" style) ──────
+                  Single real plan — no fabricated Monthly/Annual toggle.
+                  The badge + accent border match the refs' featured-plan
+                  treatment. */}
+              <div style={{
+                position: 'relative', marginTop: 2,
+                padding: '16px 16px 14px', borderRadius: 14,
+                border: '2px solid var(--accent)', background: 'var(--surface)',
+              }}>
+                <div style={{
+                  position: 'absolute', top: -10, right: 14,
+                  padding: '2px 10px', borderRadius: 99,
+                  background: 'var(--accent)', color: 'var(--accent-ink)',
+                  fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
+                }}>{canTrial ? '28 days free' : 'Full access'}</div>
 
-        {busy !== 'syncing' && (
-          <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
-            {!everTrialed && (
-              <button onClick={startTrial} disabled={busy != null}
-                className="btn btn-outline"
-                style={{ flex: 1, justifyContent: 'center', padding: '12px 14px' }}>
-                {busy === 'trial' ? 'Starting…' : 'Start 28-day free trial'}
-              </button>
-            )}
-            <button onClick={subscribe} disabled={busy != null}
-              className="btn btn-primary"
-              style={{ flex: 1, justifyContent: 'center', padding: '12px 14px' }}>
-              {busy === 'subscribe' ? 'Redirecting…' : 'Subscribe'}
-              {busy !== 'subscribe' && <Icons.Arrow size={13} sw={2.2}/>}
-            </button>
-          </div>
-        )}
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>THRYVING</span>
+                  <span style={{
+                    fontFamily: 'var(--font-num)', fontSize: 28, fontWeight: 600,
+                    color: 'var(--fg)', letterSpacing: '-0.02em',
+                  }}>${THRYVE_PRICE}</span>
+                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>/mo</span>
+                </div>
+                <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
+                  {canTrial
+                    ? `Free for 28 days, then $${THRYVE_PRICE}/mo. Cancel anytime.`
+                    : `$${THRYVE_PRICE}/mo · one plan, no per-seat fees. Cancel anytime.`}
+                </div>
+              </div>
 
-        {/* Secondary affordances. These are the entire "escape" surface
-            under the hard wall: nothing else lets you sidestep into the
-            business app. Each is conservative — Manage billing only
-            helps if a Stripe customer exists, Export hits an unrelated
-            GET endpoint, Log out clears the session. */}
-        {busy !== 'syncing' && (
-          <div style={{
-            display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-            gap: 6, marginTop: 6, fontSize: 12.5,
-          }}>
-            {/* Only show "Manage billing" if Stripe has a customer for
-                this workspace — otherwise the endpoint 400s. */}
-            {ctx?.hasBillingRecord && (
-              <>
-                <button onClick={openBillingPortal} disabled={busy != null}
-                  className="btn btn-ghost"
-                  style={{ padding: '6px 10px', color: 'var(--muted)' }}>
-                  {busy === 'portal' ? 'Opening…' : 'Manage billing'}
+              {cancelled && (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 8,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  color: 'var(--fg-2)', fontSize: 12.5,
+                }}>Checkout was cancelled — try again whenever you're ready.</div>
+              )}
+
+              {err && (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 8,
+                  background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+                  color: 'var(--danger)', fontSize: 12.5,
+                }}>{err}</div>
+              )}
+
+              {/* ─── PRIMARY CTA ─────────────────────────────────────
+                  One dominant button, like every top-earner. For owners
+                  who can still trial, the trial is primary (lowest
+                  friction) with subscribe as a quiet secondary. */}
+              {canTrial ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <button onClick={startTrial} disabled={busy != null}
+                    className="btn btn-primary"
+                    style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
+                    {busy === 'trial' ? 'Starting…' : 'Start 28-day free trial'}
+                    {busy !== 'trial' && <Icons.Arrow size={14} sw={2.2}/>}
+                  </button>
+                  <button onClick={subscribe} disabled={busy != null}
+                    className="btn btn-ghost"
+                    style={{ justifyContent: 'center', fontSize: 13, color: 'var(--muted)' }}>
+                    {busy === 'subscribe' ? 'Redirecting…' : `or subscribe now — $${THRYVE_PRICE}/mo`}
+                  </button>
+                </div>
+              ) : (
+                <button onClick={subscribe} disabled={busy != null}
+                  className="btn btn-primary"
+                  style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
+                  {busy === 'subscribe' ? 'Redirecting…' : `Subscribe — $${THRYVE_PRICE}/mo`}
+                  {busy !== 'subscribe' && <Icons.Arrow size={14} sw={2.2}/>}
                 </button>
-                <span aria-hidden="true" style={{ color: 'var(--muted-2)' }}>·</span>
-              </>
-            )}
-            {/* Export is a plain GET so a real <a> with download lets
-                the browser stream the response straight to disk. */}
-            <a href="/api/account/export" download
-              className="btn btn-ghost"
-              style={{ padding: '6px 10px', color: 'var(--muted)', textDecoration: 'none' }}>
-              Export my data
-            </a>
-            <span aria-hidden="true" style={{ color: 'var(--muted-2)' }}>·</span>
-            <button onClick={logout} disabled={busy != null}
-              className="btn btn-ghost"
-              style={{ padding: '6px 10px', color: 'var(--muted)' }}>
-              {busy === 'logout' ? 'Signing out…' : 'Log out'}
-            </button>
-          </div>
-        )}
+              )}
 
-        {/* isClient carve-out: a single, labeled link to the OTHER
-            business's client portal — never a generic /me link, so the
-            owner can't dodge their own wall by claiming to be a client
-            of themselves. Only renders when /api/me reports memberships
-            elsewhere. */}
-        {busy !== 'syncing' && clientOnlyBusiness && (
-          <a href="/me"
-            className="btn btn-ghost"
-            style={{
-              alignSelf: 'center', fontSize: 12.5, color: 'var(--muted)',
-              marginTop: 2, textDecoration: 'none',
-            }}>
-            Go to {clientOnlyBusiness.businessName} as a client →
-          </a>
-        )}
+              {/* Reassurance microcopy — the refs' "No payment now ·
+                  Cancel anytime" trust line. "No payment now" only shows
+                  when it's literally true (no-card trial). */}
+              <div style={{
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 6, fontSize: 11.5, color: 'var(--muted)',
+              }}>
+                <Icons.Check size={12} sw={2.4} stroke="var(--ok)"/>
+                {canTrial ? 'No payment due today · Cancel anytime' : 'Secure checkout · Cancel anytime'}
+              </div>
+
+              {/* ─── Secondary affordances — the entire hard-wall escape
+                  surface. Manage billing only when a Stripe customer
+                  exists; Export hits the ungated data-portability GET;
+                  Log out clears the session. */}
+              <div style={{
+                display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
+                gap: 4, marginTop: 2, paddingTop: 12, borderTop: '1px solid var(--border)',
+                fontSize: 12.5,
+              }}>
+                {ctx?.hasBillingRecord && (
+                  <>
+                    <button onClick={openBillingPortal} disabled={busy != null}
+                      className="btn btn-ghost"
+                      style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                      {busy === 'portal' ? 'Opening…' : 'Manage billing'}
+                    </button>
+                    <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
+                  </>
+                )}
+                <a href="/api/account/export" download
+                  className="btn btn-ghost"
+                  style={{ padding: '5px 9px', color: 'var(--muted)', textDecoration: 'none' }}>
+                  Export my data
+                </a>
+                <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
+                <button onClick={logout} disabled={busy != null}
+                  className="btn btn-ghost"
+                  style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                  {busy === 'logout' ? 'Signing out…' : 'Log out'}
+                </button>
+              </div>
+
+              {/* isClient carve-out: one labeled link to the OTHER
+                  business's portal — never a generic /me link. */}
+              {clientOnlyBusiness && (
+                <a href="/me"
+                  className="btn btn-ghost"
+                  style={{
+                    alignSelf: 'center', fontSize: 12.5, color: 'var(--muted)',
+                    textDecoration: 'none',
+                  }}>
+                  Go to {clientOnlyBusiness.businessName} as a client →
+                </a>
+              )}
+
+              {/* Trust line — every top-earner closes with Terms/Privacy. */}
+              <div style={{
+                textAlign: 'center', fontSize: 11, color: 'var(--muted-2)', marginTop: 2,
+              }}>
+                <a href="/terms" style={{ color: 'inherit', textDecoration: 'underline' }}>Terms</a>
+                {'  ·  '}
+                <a href="/privacy" style={{ color: 'inherit', textDecoration: 'underline' }}>Privacy</a>
+              </div>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
