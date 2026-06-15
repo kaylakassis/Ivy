@@ -107,7 +107,7 @@ export default function IvyPro() {
         }}>
           Recent
         </div>
-        <div className="scroll" style={{ flex: 1, overflowY: 'auto', padding: '4px 8px 16px' }}>
+        <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 8px 16px' }}>
           {sessions.length === 0 ? (
             <div style={{ padding: 16, fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>
               No conversations yet.
@@ -128,7 +128,7 @@ export default function IvyPro() {
           <InsightBanner context={context} direction={direction} onAct={(t) => { submit(t); if (isMobile) setMobileTab('chat'); }}/>
         </div>
 
-        <div ref={scrollRef} className="scroll" style={{ flex: 1, overflowY: 'auto', padding: 24 }}>
+        <div ref={scrollRef} className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24 }}>
           {error && (
             <div style={{
               maxWidth: 720, margin: '0 auto 12px',

@@ -93,7 +93,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
           <button className="btn btn-ghost" onClick={onClose} style={{ padding: 8 }}><Icons.X size={15}/></button>
         </div>
 
-        <div style={{ flex: 1, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
           {isLocked && (
             <div style={{
               padding: '10px 14px', borderRadius: 10,

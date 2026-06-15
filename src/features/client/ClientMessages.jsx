@@ -189,7 +189,7 @@ function ClientMessages() {
           <div style={{ padding: '14px 16px', borderBottom: '1px solid var(--border)', fontSize: 13, fontWeight: 600 }}>
             Conversations
           </div>
-          <div className="scroll" style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {threads.length === 0 && newableMemberships.length === 0 ? (
               <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
                 No conversations yet.
@@ -404,7 +404,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
         </div>
       </div>
 
-      <div ref={scrollRef} className="scroll" style={{ flex: 1, overflowY: 'auto', padding: '20px 32px',
+      <div ref={scrollRef} className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px',
         background: 'var(--page)', display: 'flex', flexDirection: 'column', gap: 6 }}>
         {messages.length === 0 ? (
           <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 40 }}>

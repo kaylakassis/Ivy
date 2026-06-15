@@ -62,7 +62,7 @@ export default function ClientDms() {
               With people you share a group with.
             </div>
           </div>
-          <div className="scroll" style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             {dms.length === 0 ? (
               <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
                 No DMs yet. Start one from a group's member list.
@@ -280,7 +280,7 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
       </div>
 
       <div ref={scrollRef} className="scroll"
-        style={{ flex: 1, overflowY: 'auto', padding: '16px 20px',
+        style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '16px 20px',
           display: 'flex', flexDirection: 'column', gap: 10 }}>
         {messages.length === 0 ? (
           <EmptyNote icon="Chat" title="No messages yet" hint=""/>

@@ -64,7 +64,7 @@ export default function AdvancedPanel({ site, set, onClose }) {
             );
           })}
         </div>
-        <div className="scroll" style={{ flex: 1, overflowY: 'auto', padding: 18 }}>
+        <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 18 }}>
           {tab === 'domain'    && <DomainTab    site={site} set={set}/>}
           {tab === 'forms'     && <FormsTab     site={site} set={set}/>}
           {tab === 'redirects' && <RedirectsTab site={site} set={set}/>}

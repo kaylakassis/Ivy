@@ -61,7 +61,7 @@ export default function Drawer({ title, subtitle, onClose, children, width = 460
           </div>
           <button className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}><Icons.X size={16}/></button>
         </div>
-        <div className="scroll" style={{ flex: 1, overflowY: 'auto', padding: 20 }}>
+        <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 20 }}>
           {children}
         </div>
       </div>

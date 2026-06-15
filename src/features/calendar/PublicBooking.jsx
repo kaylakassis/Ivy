@@ -58,6 +58,7 @@ export default function PublicBooking({ embedded = false }) {
   const [contactOpen, setContactOpen] = useState(false);
   // Membership subscribe modal — separate from the booking flow.
   const [joiningMembership, setJoiningMembership] = useState(null);
+  const [buyingPackage, setBuyingPackage] = useState(null);
   // Gift card buy modal.
   const [giftCardOpen, setGiftCardOpen] = useState(false);
   // Gift card application at checkout.
@@ -312,6 +313,18 @@ export default function PublicBooking({ embedded = false }) {
         />
       )}
 
+      {/* Packages card — bundles of sessions sold up-front. Same
+          gating as memberships (hidden in embed). Clicking a card
+          opens the purchase modal which POSTs to /api/packages/checkout. */}
+      {step === 'pick' && cal.packages?.length > 0 && !embedded && (
+        <PackagesBlock
+          packages={cal.packages}
+          services={cal.services}
+          bizName={cal.settings.bizName}
+          onBuy={(p) => setBuyingPackage(p)}
+        />
+      )}
+
       {/* Gift card CTA — same step as the slot picker so it doesn't
           get in the way of someone who's actively trying to book. */}
       {step === 'pick' && (
@@ -337,6 +350,15 @@ export default function PublicBooking({ embedded = false }) {
           slug={slug}
           bizName={cal.settings.bizName}
           onClose={() => setGiftCardOpen(false)}
+        />
+      )}
+
+      {buyingPackage && (
+        <BuyPackageModal
+          slug={slug}
+          pkg={buyingPackage}
+          bizName={cal.settings.bizName}
+          onClose={() => setBuyingPackage(null)}
         />
       )}
 
@@ -1095,6 +1117,178 @@ function JoinMembershipModal({ slug, membership, bizName, onClose }) {
             required autoFocus style={inputSty}/>
         </Field>
         <Field label="Email" hint="Renewal receipts go here.">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+            required style={inputSty} autoComplete="email"/>
+        </Field>
+
+        {err && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, marginBottom: 14,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)', fontSize: 12.5,
+          }}>{err}</div>
+        )}
+
+        <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+          <button type="button" className="btn btn-outline"
+            onClick={onClose} disabled={busy}
+            style={{ flex: 1, justifyContent: 'center' }}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={busy}
+            style={{ flex: 2, justifyContent: 'center' }}>
+            {busy ? 'Opening checkout…' : 'Continue to checkout'}
+          </button>
+        </div>
+        <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, textAlign: 'center' }}>
+          Card details are entered on Stripe's secure checkout — never on this page.
+        </div>
+      </form>
+    </div>
+  );
+}
+
+// Packages block — bundles of sessions sold up-front. Each card opens
+// the purchase modal which POSTs to /api/packages/checkout. Visitors
+// pay via Stripe; the webhook provisions a client_packages row tied to
+// their email so they can redeem credits on future bookings.
+function PackagesBlock({ packages, services, bizName, onBuy }) {
+  // Map service ids → names so a package scoped to specific services
+  // shows what it's good for instead of a raw UUID list.
+  const nameById = new Map((services || []).map((s) => [s.id, s.name]));
+  return (
+    <div className="card" style={{ padding: 18, marginTop: 18 }}>
+      <div className="metric-label" style={{ marginBottom: 10 }}>
+        Packages {bizName ? `at ${bizName}` : ''}
+      </div>
+      <div style={{
+        display: 'grid', gap: 10,
+        gridTemplateColumns: 'repeat(auto-fill, minmax(min(240px, 100%), 1fr))',
+      }}>
+        {packages.map((p) => {
+          // Empty service_ids = good for any service in the workspace.
+          const scoped = (p.serviceIds || []).map((id) => nameById.get(id)).filter(Boolean);
+          const scopeLabel = scoped.length === 0
+            ? 'Any service'
+            : scoped.length <= 2 ? scoped.join(' or ') : `${scoped.slice(0, 2).join(', ')} +${scoped.length - 2} more`;
+          const perSession = p.price > 0 && p.sessionCount > 0
+            ? p.price / p.sessionCount
+            : null;
+          return (
+            <button key={p.id} type="button" onClick={() => onBuy(p)}
+              style={{
+                padding: 16, borderRadius: 12, textAlign: 'left', cursor: 'pointer',
+                background: 'var(--surface-2)',
+                border: '1px solid var(--border)',
+                display: 'flex', flexDirection: 'column', gap: 6,
+                transition: 'border-color .1s, background .1s',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.borderColor = 'var(--accent)';
+                e.currentTarget.style.background = 'var(--accent-soft)';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.borderColor = 'var(--border)';
+                e.currentTarget.style.background = 'var(--surface-2)';
+              }}>
+              <div style={{ fontSize: 14, fontWeight: 600 }}>{p.name}</div>
+              <div style={{ fontSize: 18, fontWeight: 600, fontFamily: 'var(--font-display)' }}>
+                ${Number(p.price).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}
+                <span style={{ fontSize: 11, color: 'var(--muted)', fontWeight: 500, fontFamily: 'inherit', marginLeft: 4 }}>
+                  · {p.sessionCount} session{p.sessionCount === 1 ? '' : 's'}
+                </span>
+              </div>
+              {perSession != null && p.sessionCount > 1 && (
+                <div style={{ fontSize: 11, color: 'var(--muted)' }}>
+                  ${perSession.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} / session
+                </div>
+              )}
+              {p.description && (
+                <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>
+                  {p.description}
+                </div>
+              )}
+              <div style={{ fontSize: 11, color: 'var(--fg-2)' }}>
+                Good for: {scopeLabel}
+                {p.expiryDays ? ` · Expires in ${p.expiryDays} day${p.expiryDays === 1 ? '' : 's'}` : ''}
+              </div>
+              <div style={{
+                marginTop: 8, padding: '6px 12px', borderRadius: 8,
+                background: 'var(--accent)', color: 'var(--accent-ink)',
+                fontSize: 12, fontWeight: 600, textAlign: 'center',
+              }}>Buy — secure checkout</div>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function BuyPackageModal({ slug, pkg, bizName, onClose }) {
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!name.trim() || !email.trim()) {
+      setErr('Both fields are required'); return;
+    }
+    setBusy(true); setErr(null);
+    try {
+      const res = await fetch('/api/packages/checkout', {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          slug,
+          packageId: pkg.id,
+          name: name.trim(),
+          email: email.trim(),
+        }),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      window.location.href = j.url;
+    } catch (ex) {
+      setErr(ex.message || 'Could not start checkout');
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div onClick={busy ? null : onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card"
+        style={{ width: '100%', maxWidth: 460, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Gift size={16} sw={1.8}/></div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Buy {pkg.name}</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+              ${Number(pkg.price).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              {' · '}{pkg.sessionCount} session{pkg.sessionCount === 1 ? '' : 's'}
+              {bizName ? ` · ${bizName}` : ''}
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+            <Icons.X size={15}/>
+          </button>
+        </div>
+
+        <Field label="Your name">
+          <input value={name} onChange={(e) => setName(e.target.value)}
+            required autoFocus style={inputSty}/>
+        </Field>
+        <Field label="Email" hint="Your package + receipt are sent here.">
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
             required style={inputSty} autoComplete="email"/>
         </Field>
