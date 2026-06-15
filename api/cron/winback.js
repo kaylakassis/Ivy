@@ -71,6 +71,11 @@ async function handler(req, res) {
          AND w.converted_at IS NULL
          AND COALESCE(u.user_type, 'regular') <> 'sponsored'
          AND w.subscription_status IN ('inactive', 'cancelled', 'suspended', 'trialing')
+         -- ...but never an owner still inside a LIVE trial (they haven't
+         -- lapsed yet — don't burn their one lifetime offer).
+         AND NOT (w.subscription_status = 'trialing'
+                  AND w.trial_ends_at IS NOT NULL
+                  AND w.trial_ends_at > NOW())
        ORDER BY w.paywall_first_seen_at ASC
        LIMIT ${WINBACK.MAX_PER_RUN}
     `;
