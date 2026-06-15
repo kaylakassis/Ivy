@@ -1,9 +1,8 @@
 // ensureActiveWorkspace(user, req, res)
 //
-// The hard-paywall enforcement chokepoint. Replaces the soft
-// requireActiveSubscription (which fail-OPENED and only gated writes).
-// Drops into the slot where owner endpoints used to call ensureWorkspace
-// — every gated route looks like:
+// The hard-paywall enforcement chokepoint. Drops into the slot where
+// owner endpoints used to call ensureWorkspace — every gated route
+// looks like:
 //
 //   const workspaceId = await ensureActiveWorkspace(user, req, res);
 //   if (!workspaceId) return;            // 402 already written

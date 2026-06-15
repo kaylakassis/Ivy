@@ -9,7 +9,7 @@
 // whole table.
 import { sql } from './_lib/db.js';
 import { requireUser } from './_lib/auth.js';
-import { ensureActiveWorkspace } from '_lib/workspaceGate.js';
+import { ensureActiveWorkspace } from './_lib/workspaceGate.js';
 import { requireSameOrigin } from './_lib/security.js';
 import { methodNotAllowed, ok, serverError } from './_lib/json.js';
 
