@@ -8,8 +8,8 @@
 // every interval. Editing the schedule template doesn't affect
 // already-issued invoices — they capture a snapshot at issue time.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeRecurring, cleanRecurringInput } from '../_lib/recurring.js';
@@ -20,9 +20,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     if (req.method === 'GET') {
       try {
         const r = await sql`

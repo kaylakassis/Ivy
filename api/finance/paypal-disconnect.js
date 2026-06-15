@@ -1,5 +1,6 @@
 // POST /api/finance/paypal-disconnect
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { disconnect } from '../_lib/payments/paypal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -10,7 +11,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     await disconnect({ workspaceId });
     return ok(res, { disconnected: true });
   } catch (err) {

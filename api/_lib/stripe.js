@@ -304,6 +304,7 @@ export function verifyWebhookSignature({ payload, header, secret, tolerance = 30
 export async function createSubscriptionCheckoutSession({
   secretKey, priceId, customerId, customerEmail,
   workspaceId, successUrl, cancelUrl,
+  couponId, // optional — when set, pre-applies the win-back coupon.
 }) {
   const body = {
     mode: 'subscription',
@@ -313,14 +314,59 @@ export async function createSubscriptionCheckoutSession({
     'line_items[0][quantity]': 1,
     'metadata[workspace_id]': workspaceId,
     'subscription_data[metadata][workspace_id]': workspaceId,
-    allow_promotion_codes: true,
   };
+  if (couponId) {
+    // Stripe rejects `discounts` together with `allow_promotion_codes`,
+    // so the win-back path turns the input box OFF and pre-applies the
+    // single offered coupon instead. The user can't stack additional
+    // promo codes on top — by design, win-back is a single-use lever.
+    body['discounts[0][coupon]'] = couponId;
+  } else {
+    body.allow_promotion_codes = true;
+  }
   if (customerId) body.customer = customerId;
   else if (customerEmail) body.customer_email = customerEmail;
   const session = await stripeFetch('/checkout/sessions', {
     method: 'POST', secretKey, body,
   });
   return { id: session.id, url: session.url, customer: session.customer };
+}
+
+// Create a one-time win-back coupon for a specific workspace. A percent-off
+// coupon that REPEATS for `durationMonths` so the discount survives a
+// renewal cycle (typical win-back offer: 30% off for 3 months). Returns
+// { couponId, promoCode } — the caller persists both on the workspaces row
+// so subsequent checkouts can pre-apply the discount.
+export async function createWinbackCoupon({
+  secretKey, workspaceId, percentOff, durationMonths,
+}) {
+  const couponBody = {
+    duration: 'repeating',
+    duration_in_months: String(durationMonths),
+    percent_off: String(percentOff),
+    name: `THRYVE win-back ${percentOff}% / ${durationMonths}mo`,
+    'metadata[workspace_id]': workspaceId,
+    'metadata[kind]': 'winback',
+  };
+  const coupon = await stripeFetch('/coupons', {
+    method: 'POST', secretKey, body: couponBody,
+    idempotencyKey: `winback-coupon-${workspaceId}`,
+  });
+  // Pair with a single-use promotion code so the offer can be shared
+  // (in the email body) and the user can pop it into a generic Stripe
+  // Checkout if they didn't click through our pre-applied link.
+  const promoBody = {
+    coupon: coupon.id,
+    'metadata[workspace_id]': workspaceId,
+    'metadata[kind]': 'winback',
+    max_redemptions: '1',
+    active: 'true',
+  };
+  const promo = await stripeFetch('/promotion_codes', {
+    method: 'POST', secretKey, body: promoBody,
+    idempotencyKey: `winback-promo-${workspaceId}`,
+  });
+  return { couponId: coupon.id, promoCode: promo.code };
 }
 
 // Stripe Customer Portal — self-serve cancel / update card / view invoices.

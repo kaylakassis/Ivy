@@ -3,7 +3,8 @@
 // DELETE /api/messages/groups/:id/messages/:mid/reactions?emoji=...
 //   → owner removes their reaction
 import { sql } from '../../../../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../../../../_lib/auth.js';
+import { requireUser } from '../../../../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../../../../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../../../../../_lib/security.js';
 import { readBody } from '../../../../../_lib/body.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../../../../_lib/json.js';
@@ -15,7 +16,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const { id, mid } = req.query;
 
     // Verify the message belongs to this workspace + thread.

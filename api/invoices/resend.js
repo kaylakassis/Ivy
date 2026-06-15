@@ -9,8 +9,8 @@
 // Use POST /api/invoices/send for the first send.
 import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/finance.js';
@@ -33,9 +33,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     // Same idempotency rationale as invoices/send — double-clicking
     // Resend used to mint two tokens + send two reminder emails. Now
     // the Idempotency-Key header collapses retries.

@@ -1,7 +1,8 @@
 // /api/rewards/redemptions
 //   POST → log a new redemption (owner records that they gave a client a reward)
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeRedemption } from '../_lib/rewards.js';
@@ -13,7 +14,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const body = await readBody(req);
     const ruleId = body.ruleId ? String(body.ruleId) : null;

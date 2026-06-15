@@ -222,6 +222,14 @@ img, svg, video { max-width: 100%; height: auto; }
   body.has-mobile-nav .app-root > div { padding-bottom: 88px; }
 }
 
+/* Hard paywall: when an owner is walled, hide the floating view-toggle
+   pill (the previous escape hatch) and scroll-lock the background so the
+   business app behind the wall isn't navigable. AppShell sets these
+   classes; un-set on unmount. The isClient carve-out is rendered inside
+   the Paywall itself, not via the toggle. */
+body.app-walled { overflow: hidden; }
+body.app-walled .view-toggle { display: none; }
+
 
 /* MOBILE: < 720px ------------------------------------------- */
 @media (max-width: 720px) {

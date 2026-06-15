@@ -2,7 +2,8 @@
 // their workspace, plus aggregate stats. Used by the Reviews tab in
 // the business app.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeReview } from '../_lib/reviews.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -13,7 +14,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const agg = await sql`
       SELECT COUNT(*) FILTER (WHERE status = 'visible')::int AS visible_count,

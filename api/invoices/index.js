@@ -3,7 +3,8 @@
 //   POST → create a new draft invoice (auto-numbered)
 
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
@@ -11,14 +12,13 @@ import {
 } from '../_lib/finance.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { withIdempotency } from '../_lib/idempotency.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
-
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     if (req.method === 'GET') {
       try {
@@ -71,8 +71,6 @@ export default async function handler(req, res) {
       // Block writes when the workspace's subscription is suspended
       // (set by api/cron/subscription-dunning after grace period
       // elapses). Reads still work — owner can see what's there.
-      if (!(await requireActiveSubscription(workspaceId, req, res))) return;
-
       // Idempotent: client may supply Idempotency-Key. A network
       // retry with the same key replays the cached response instead
       // of creating a duplicate invoice. See api/_lib/idempotency.js.

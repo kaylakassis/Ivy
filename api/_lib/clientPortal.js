@@ -83,6 +83,7 @@ export async function ownsWorkspace(userId) {
     const { rows } = await sql`
       SELECT w.id, w.onboarded_at, w.business_type,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end,
+             w.stripe_customer_id,
              cs.biz_name, cs.slug
       FROM workspaces w
       LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
@@ -97,6 +98,11 @@ export async function ownsWorkspace(userId) {
       bizName: r.biz_name || null,
       slug:    r.slug || null,
       subscription: deriveSubscription(r),
+      // True when a Stripe customer exists for this workspace — the
+      // Paywall uses this to decide whether the "Manage billing"
+      // (Customer Portal) button is meaningful. Without a customer
+      // record the portal endpoint 400s.
+      hasBillingRecord: !!r.stripe_customer_id,
     };
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -120,6 +126,40 @@ export async function ownsWorkspace(userId) {
   }
 }
 
+// The single source of truth for "is this workspace allowed to use the
+// business app?" Both the backend gate (workspaceGate.js) and the
+// frontend-facing serializer (deriveSubscription, below) call this so
+// they can never disagree about whether a row counts as active.
+//
+// Allowed (hard-paywall semantics):
+//   • trialing  — only while trial_ends_at is in the future
+//   • active    — only while subscription_period_end is in the future
+//   • past_due  — Stripe's smart-retry grace; we stay open and let
+//                 webhooks flip to suspended when retries run out.
+//
+// Blocked: incomplete (checkout flips to active in seconds, and
+// blocking surfaces the wall right away if a card fails), suspended,
+// cancelled, inactive, and trial- or period-expired forms of the above.
+//
+// `incomplete` is INTENTIONALLY not on the allowed list — under the
+// hard paywall it shows the wall so the owner sees the right CTA, not
+// a half-broken app.
+export function isWorkspaceActive(row) {
+  if (!row) return false;
+  const status = row.subscription_status || 'inactive';
+  const now = Date.now();
+  const trialEndsAt  = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : null;
+  const periodEndsAt = row.subscription_period_end ? new Date(row.subscription_period_end).getTime() : null;
+  if (status === 'trialing') return !!(trialEndsAt && trialEndsAt > now);
+  if (status === 'active')   return !!(periodEndsAt && periodEndsAt > now);
+  // past_due grace is owned by api/cron/subscription-dunning.js, which
+  // flips the row to 'suspended' GRACE_DAYS (14) after the first failed
+  // invoice. While the row is still 'past_due', Stripe is mid-retry and
+  // we keep the app open — period_end has typically just lapsed.
+  if (status === 'past_due') return true;
+  return false;
+}
+
 // Turn the raw workspace row into the shape the frontend wants. `isActive`
 // is the single source of truth for whether the business app is unlocked
 // — derived from status + the trial / period end timestamps so the UI
@@ -130,11 +170,13 @@ function deriveSubscription(row) {
   const trialEndsAt    = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : null;
   const periodEndsAt   = row.subscription_period_end ? new Date(row.subscription_period_end).getTime() : null;
   const trialActive    = status === 'trialing' && trialEndsAt && trialEndsAt > now;
+  // Both 'active' and 'past_due' need a live period_end — without this
+  // guard, a row whose status hadn't been flipped (or whose period_end
+  // is null on a brand-new sub before checkout sync wrote it) would
+  // bypass the hard paywall.
   const paidActive     = (status === 'active' || status === 'past_due')
                           && periodEndsAt && periodEndsAt > now;
-  // 'past_due' still counts as active for grace — Stripe will retry; we
-  // surface the warning in the UI but don't lock the app immediately.
-  const isActive = trialActive || paidActive || status === 'active';
+  const isActive = trialActive || paidActive;
 
   let daysRemaining = null;
   const endRef = trialActive ? trialEndsAt : (paidActive ? periodEndsAt : null);
@@ -191,6 +233,9 @@ export async function userContext(user) {
     bizName: workspace?.bizName || null,
     bookingSlug: workspace?.slug || null,
     subscription,
+    // Surfaced to the Paywall so it can hide "Manage billing" when no
+    // Stripe customer exists yet.
+    hasBillingRecord: !!workspace?.hasBillingRecord,
     walkthroughCompletedAt: user.walkthrough_completed_at || null,
     memberships,
   };

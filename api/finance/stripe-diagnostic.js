@@ -17,7 +17,8 @@
 //      (only when there's no existing connected acct — we don't
 //      want to spam acct creation on every probe).
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin } from '../_lib/admin.js';
 import { platformStripeSecret, fetchAccountSummary } from '../_lib/stripe.js';
@@ -30,7 +31,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const checks = [];
     const pass = (name, detail) => checks.push({ name, ok: true, detail });

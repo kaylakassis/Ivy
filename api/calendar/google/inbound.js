@@ -5,7 +5,8 @@
 //          instead of waiting up to an hour for the cron.
 //   PATCH → manual "sync now" — owner clicks "Sync now" in the drawer.
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { pullBusyTimes } from '../../_lib/googleSync.js';
@@ -16,7 +17,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     if (req.method === 'GET') {
       const { rows } = await sql`

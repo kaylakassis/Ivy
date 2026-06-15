@@ -8,22 +8,11 @@
 // update the TOOL_STACK constants and the savings number updates
 // everywhere the calculator is embedded.
 import React, { useMemo, useState } from 'react';
-
-// Typical replaceable monthly spend across the SaaS stack a solo
-// business otherwise has to assemble. Numbers are taken from publicly
-// listed entry-tier prices (May 2026) - kept conservative so the
-// calculator never over-promises.
-const TOOL_STACK = [
-  { name: 'HoneyBook',  monthly: 39, replaces: 'clients + invoices + contracts' },
-  { name: 'Calendly',   monthly: 12, replaces: 'booking pages + reminders' },
-  { name: 'QuickBooks Self-Employed', monthly: 20, replaces: 'invoices + expenses + taxes' },
-  { name: 'Mailchimp',  monthly: 13, replaces: 'newsletter + email blasts' },
-  { name: 'Squarespace', monthly: 23, replaces: 'website + custom domain' },
-  { name: 'Loom',       monthly: 15, replaces: 'product walkthroughs' },
-];
-const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
-
-const THRYVE_PRICE = 49;
+// Pricing constants live in one shared module so the paywall + pricing
+// page + this calculator can't drift. Re-exported below to preserve the
+// existing `import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from
+// './RoiCalculator.jsx'` call sites.
+import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from '../../lib/pricing.js';
 
 // Tunable assumptions, all deliberately conservative + cited in the
 // footnote so the calculator never feels like fantasy math.

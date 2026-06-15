@@ -4,8 +4,8 @@
 // Idempotent on (thread, client) — already-present clients are no-ops;
 // previously-left clients get re-activated (left_at NULL'd).
 import { sql } from '../../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../../_lib/auth.js';
-import { requireActiveSubscription } from '../../../_lib/subscriptionGate.js';
+import { requireUser } from '../../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../../../_lib/security.js';
 import { readBody } from '../../../_lib/body.js';
 import { fetchOwnedGroup } from '../../../_lib/groupChat.js';
@@ -17,8 +17,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const { id } = req.query;
 
     const thread = await fetchOwnedGroup({ id, workspaceId });

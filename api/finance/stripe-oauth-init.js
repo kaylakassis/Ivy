@@ -24,7 +24,8 @@
 //                      THRYVE_STRIPE_SECRET / STRIPE_PLATFORM_SECRET).
 //   APP_URL            used to build refresh + return URLs.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { appUrl } from '../_lib/tokens.js';
 import {
   platformStripeSecret, createConnectedAccount, createAccountLink,
@@ -52,7 +53,8 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     step = 'workspace';
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     step = 'platform-key';
     const platformKey = platformStripeSecret();

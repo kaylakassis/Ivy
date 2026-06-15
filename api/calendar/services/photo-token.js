@@ -11,7 +11,8 @@
 //
 // Mirrors api/account/branding-logo-token.js + api/messages/upload-token.js.
 import { handleUpload } from '@vercel/blob/client';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../../_lib/json.js';
@@ -27,7 +28,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       return badRequest(res, 'Photo uploads not configured (BLOB_READ_WRITE_TOKEN missing)');

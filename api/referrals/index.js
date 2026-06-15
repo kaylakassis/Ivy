@@ -6,7 +6,8 @@
 // code; each referred user who becomes paying earns the referrer one
 // free month (credited to their Stripe customer balance). See
 // api/_lib/referrals.js for the reward mechanics.
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { appUrl } from '../_lib/tokens.js';
@@ -18,9 +19,11 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    // Ensure the user is an owner (has a workspace) — referral is an
-    // owner-facing program. ensureWorkspace is idempotent.
-    await ensureWorkspace(user.id);
+    // Ensure the user is an owner (has a workspace) AND the workspace
+    // has an active subscription — referral is an owner-facing program
+    // under the hard paywall.
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     if (req.method === 'GET') {
       const [code, stats] = await Promise.all([

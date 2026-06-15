@@ -4,8 +4,8 @@
 // the client through the workspace's branded shell, and drops a
 // system message in their chat thread. Mirrors /api/invoices/send.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
-import { requireActiveSubscription } from '../_lib/subscriptionGate.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedQuote, serializeQuote } from '../_lib/quotes.js';
@@ -28,9 +28,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (!(await requireActiveSubscription(workspaceId, req, res))) return;
-
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     // Idempotent wrap — same rationale as invoices/send. A double-click
     // on the owner's "Send estimate" button used to mint two tokens +
     // fire two emails; only the second was visible to the recipient.
