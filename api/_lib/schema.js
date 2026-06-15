@@ -2060,6 +2060,27 @@ CREATE INDEX IF NOT EXISTS idx_bookings_staff_date
 -- owner waves off a recommendation.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS onboarding_state JSONB NOT NULL DEFAULT '{}'::jsonb;
 
+-- Owner-stated profile captured during the onboarding "About you" step.
+-- Distinct from onboarding_state (navigation only) and calendar_settings
+-- (booking/branding config): this holds the marketing + intent answers
+-- that (a) feed Ivy's per-owner personalization and (b) roll up into the
+-- admin onboarding-insights aggregates. The preset_* columns hold a
+-- known option id (aggregatable); the *_other / ideal_client columns
+-- hold free text (fed to Ivy, never shown in admin aggregates).
+CREATE TABLE IF NOT EXISTS workspace_profile (
+  workspace_id     UUID PRIMARY KEY REFERENCES workspaces(id) ON DELETE CASCADE,
+  goal             TEXT,   -- preset id: grow_revenue|more_clients|save_time|look_pro
+  goal_other       TEXT,
+  challenge        TEXT,   -- preset id: leads|no_shows|getting_paid|organized|marketing
+  challenge_other  TEXT,
+  ideal_client     TEXT,   -- free text
+  heard_from        TEXT,  -- preset id: instagram|tiktok|google|referral
+  heard_from_other  TEXT,
+  stage            TEXT,   -- preset id: starting|side_hustle|established|scaling
+  created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 -- ─── Performance indexes added 2026-05 after a query audit ───────────
 -- Each one targets a frequently-run query that was either doing a
 -- partial-index miss or a table scan. Single-column FK indexes also
