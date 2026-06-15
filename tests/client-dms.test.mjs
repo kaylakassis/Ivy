@@ -51,7 +51,7 @@ async function run() {
     // Owner of the workspace.
     const owner = (await sql`INSERT INTO users (email, password_hash, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}-o@example.com`}, 'x', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
-    const ws = (await sql`INSERT INTO workspaces (owner_id, subscription_status) VALUES (${owner}, 'active') RETURNING id`).rows[0].id;
+    const ws = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end) VALUES (${owner}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
     // Two portal users → clients of this workspace.
     const uA = (await sql`INSERT INTO users (email, password_hash, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}-a@example.com`}, 'x', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;

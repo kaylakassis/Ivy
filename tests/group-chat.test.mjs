@@ -57,10 +57,10 @@ async function run() {
     // Two owners/workspaces — cross-tenant isolation fixture.
     const owner1 = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}-o1@example.com`}, 'x', 'Owner1', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
-    const ws1 = (await sql`INSERT INTO workspaces (owner_id, subscription_status) VALUES (${owner1}, 'active') RETURNING id`).rows[0].id;
+    const ws1 = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end) VALUES (${owner1}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
     const owner2 = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}-o2@example.com`}, 'x', 'Owner2', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
-    const ws2 = (await sql`INSERT INTO workspaces (owner_id, subscription_status) VALUES (${owner2}, 'active') RETURNING id`).rows[0].id;
+    const ws2 = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end) VALUES (${owner2}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
 
     // Three clients in ws1 — first one will also be a portal user.
     const portalUser = (await sql`INSERT INTO users (email, password_hash, email_verified_at, terms_version, terms_accepted_at)

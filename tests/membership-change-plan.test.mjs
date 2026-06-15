@@ -52,7 +52,7 @@ async function run() {
     const tag = `cp-${Date.now()}`;
     const uid = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}@example.com`}, 'x', 'Owner', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
-    const wid = (await sql`INSERT INTO workspaces (owner_id, subscription_status) VALUES (${uid}, 'active') RETURNING id`).rows[0].id;
+    const wid = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end) VALUES (${uid}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
     await sql`INSERT INTO finance_settings (workspace_id, stripe_connect_user_id, stripe_onboarding_status, currency)
       VALUES (${wid}, ${`acct_${tag}`}, 'complete', 'USD')`;
     const cid = (await sql`INSERT INTO clients (workspace_id, name, email, stage)
