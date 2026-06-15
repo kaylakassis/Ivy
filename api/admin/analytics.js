@@ -275,7 +275,14 @@ export default async function handler(req, res) {
            COUNT(*) FILTER (
              WHERE onboarding_state IS NOT NULL
                AND (
-                 COALESCE(jsonb_array_length(onboarding_state->'completedSteps'), 0) > 0
+                 -- jsonb_array_length() raises if completedSteps is present
+                 -- but not a JSON array (legacy/partial writes). Guard with
+                 -- jsonb_typeof so one malformed row can't 500 the whole
+                 -- analytics endpoint.
+                 COALESCE(
+                   CASE WHEN jsonb_typeof(onboarding_state->'completedSteps') = 'array'
+                        THEN jsonb_array_length(onboarding_state->'completedSteps')
+                        ELSE 0 END, 0) > 0
                  OR COALESCE(onboarding_state->>'currentStep', 'welcome') <> 'welcome'
                )
            )::int AS onboarding_started,

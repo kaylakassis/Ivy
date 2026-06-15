@@ -493,10 +493,19 @@ function FunnelCard({ funnel }) {
   ];
   const top = funnel.signups || 0;
   const pctOf = (n) => (top > 0 ? Math.round((n / top) * 1000) / 10 : 0);
-  const rate = (num, den) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0);
+  // Clamp at 100%: a cohort straddling the paywall deploy can have
+  // converted > paywallSeen (converted_at backfilled, paywall_first_seen_at
+  // only stamped post-deploy), which would otherwise render a nonsense
+  // >100% or negative drop-off.
+  const rate = (num, den) => (den > 0 ? Math.min(100, Math.round((num / den) * 1000) / 10) : 0);
 
   const overallPct = rate(funnel.converted, funnel.signups);
-  const wallPct    = rate(funnel.converted, funnel.paywallSeen);
+  // The wall-conversion rate is only meaningful when paywallSeen actually
+  // captured the converters — for an inverted (pre-deploy) cohort show
+  // "—" rather than a clamped-but-misleading number.
+  const wallPct = funnel.paywallSeen >= funnel.converted
+    ? rate(funnel.converted, funnel.paywallSeen)
+    : null;
 
   return (
     <div className="card" style={{ padding: 22 }}>
@@ -517,8 +526,11 @@ function FunnelCard({ funnel }) {
           <div className="grid-auto" style={{ gap: 12, margin: '12px 0 18px' }}>
             <Stat label="Signup → paid" value={`${overallPct}%`} accent
               hint={`${fmtN(funnel.converted)} of ${fmtN(funnel.signups)} signups`}/>
-            <Stat label="Paywall → paid (wall conversion)" value={`${wallPct}%`}
-              hint={`${fmtN(funnel.converted)} of ${fmtN(funnel.paywallSeen)} who hit the wall`}/>
+            <Stat label="Paywall → paid (wall conversion)"
+              value={wallPct == null ? '—' : `${wallPct}%`}
+              hint={wallPct == null
+                ? 'cohort predates the paywall — not measurable'
+                : `${fmtN(funnel.converted)} of ${fmtN(funnel.paywallSeen)} who hit the wall`}/>
           </div>
 
           {/* Funnel bars */}
