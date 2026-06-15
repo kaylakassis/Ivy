@@ -29,6 +29,7 @@ import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { UserContextProvider, useUserContext } from '../../lib/userContext.jsx';
+import { useAuth } from '../../lib/auth.jsx';
 
 export default function AppShell() {
   return (
@@ -61,7 +62,16 @@ function AppShellInner() {
 
   // Paywall only applies to owners. Client-only users land here briefly
   // when the role router is still resolving — never gate them.
-  const needsPaywall = ctx?.isOwner && !ctx?.subscription?.isActive;
+  //
+  // Preview hook: a super-admin can force the wall to render via
+  // ?previewPaywall=1 to see the live component on any deploy without
+  // expiring a real subscription. Gated to isSuperAdmin so it's not a
+  // public bypass of anything (the wall blocks, it never grants access),
+  // and it only forces the wall ON — it can't turn a real wall off.
+  const { user: authUser } = useAuth();
+  const previewPaywall = !!authUser?.isSuperAdmin
+    && new URLSearchParams(location.search).get('previewPaywall') === '1';
+  const needsPaywall = (ctx?.isOwner && !ctx?.subscription?.isActive) || previewPaywall;
 
   // Auto-launch the in-app walkthrough on first render after signup +
   // onboarding complete. AccountPage's "Replay" button writes
@@ -157,6 +167,20 @@ function AppShellInner() {
       )}
 
       {needsPaywall && <Paywall ctx={ctx} onRefresh={refresh}/>}
+
+      {/* Super-admin preview escape: the wall is unskippable by design, so
+          when it's been FORCED on for preview we surface a clear way back
+          out (navigating to the bare path drops ?previewPaywall=1). Sits
+          above the wall's z-index (200). Never rendered for a real wall. */}
+      {previewPaywall && (
+        <a href={location.pathname} style={{
+          position: 'fixed', top: 14, right: 14, zIndex: 210,
+          padding: '7px 12px', borderRadius: 999,
+          background: 'var(--fg)', color: 'var(--page)',
+          fontSize: 12.5, fontWeight: 600, textDecoration: 'none',
+          boxShadow: 'var(--shadow)',
+        }}>Exit paywall preview →</a>
+      )}
 
       {showWalkthrough && (
         <Walkthrough onClose={() => {
