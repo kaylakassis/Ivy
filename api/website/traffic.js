@@ -9,7 +9,8 @@
 // All data lives in `website_pageviews`. No PII anywhere.
 
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
@@ -19,7 +20,8 @@ export default async function handler(req, res) {
     await ensureSchemaApplied();
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const siteRow = await sql`SELECT id FROM websites WHERE workspace_id = ${workspaceId}`;
     if (siteRow.rows.length === 0) {
       return ok(res, { total: 0, byDay: [], byPage: [], byReferrer: [], byUa: [] });

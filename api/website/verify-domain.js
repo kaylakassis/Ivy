@@ -10,7 +10,8 @@
 // rate-limit to keep the lookups bounded.
 
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { enforce } from '../_lib/rate-limit.js';
@@ -37,7 +38,8 @@ export default async function handler(req, res) {
     if (!user) return;
     // 10 lookups per minute per user — DNS is cheap but external.
     if (await enforce(req, res, [{ key: `verify-domain:${user.id}`, max: 10, windowSeconds: 60 }])) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const row = await sql`SELECT id, custom_domain FROM websites WHERE workspace_id = ${workspaceId}`;
     if (row.rows.length === 0 || !row.rows[0].custom_domain) {
       return badRequest(res, 'Set a custom domain first.');

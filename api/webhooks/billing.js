@@ -123,7 +123,8 @@ async function onCheckoutCompleted(session, secretKey) {
       subscription_status     = ${status},
       stripe_customer_id      = ${session.customer || null},
       stripe_subscription_id  = ${sub?.id || null},
-      subscription_period_end = ${periodEnd}
+      subscription_period_end = ${periodEnd},
+      converted_at            = COALESCE(converted_at, NOW())
     WHERE id = ${workspaceId}
   `;
 
@@ -252,7 +253,8 @@ async function onInvoiceEvent(invoice, type, secretKey) {
         subscription_past_due_since = NULL,
         subscription_failed_attempts = 0,
         subscription_suspended_at   = NULL,
-        subscription_last_dunning_at = NULL
+        subscription_last_dunning_at = NULL,
+        converted_at                = COALESCE(converted_at, NOW())
       WHERE stripe_subscription_id = ${sub.id}
       RETURNING id
     `;

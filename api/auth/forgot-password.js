@@ -30,11 +30,21 @@ export default async function handler(req, res) {
     if (blocked) return;
 
     // Look up the user. If they don't exist, we still respond OK
-    // (don't leak whether the email is registered).
-    if (!validEmail(emailKey)) return ok(res, { sent: true });
+    // (don't leak whether the email is registered). We also pad the
+    // response time with a small randomized delay so the no-user branch
+    // doesn't return ~instantly while the user-exists branch awaits
+    // createToken + sendEmail (~500-2000ms) — that latency gap is a
+    // timing oracle for registration status.
+    if (!validEmail(emailKey)) {
+      await timingDecoy();
+      return ok(res, { sent: true });
+    }
 
     const { rows } = await sql`SELECT id, name FROM users WHERE email = ${emailKey}`;
-    if (rows.length === 0) return ok(res, { sent: true });
+    if (rows.length === 0) {
+      await timingDecoy();
+      return ok(res, { sent: true });
+    }
 
     const user = rows[0];
     const raw = await createToken({ userId: user.id, kind: KIND_RESET, ttlMinutes: TTL_MINUTES });
@@ -62,4 +72,13 @@ export default async function handler(req, res) {
 
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Roughly matches the time of the createToken + sendEmail path so the
+// no-user branch doesn't return ~instantly. 600-1100ms covers the
+// typical Resend round-trip; the random jitter prevents a perfect
+// fixed-delay signature from being detectable on its own.
+function timingDecoy() {
+  const ms = 600 + Math.floor(Math.random() * 500);
+  return new Promise((r) => setTimeout(r, ms));
 }

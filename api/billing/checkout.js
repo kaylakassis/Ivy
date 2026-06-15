@@ -29,13 +29,25 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     const { rows } = await sql`
-      SELECT stripe_customer_id, subscription_status
-      FROM workspaces WHERE id = ${workspaceId}
+      SELECT stripe_customer_id, subscription_status,
+             winback_coupon_id, winback_expires_at
+        FROM workspaces WHERE id = ${workspaceId}
     `;
     const w = rows[0];
     if (w?.subscription_status === 'active') {
       return badRequest(res, 'You already have an active subscription. Open the billing portal to manage it.');
     }
+
+    // Pre-apply the win-back coupon if the cron stamped one and it
+    // hasn't expired. The Stripe helper drops `allow_promotion_codes`
+    // automatically when a coupon is passed (Stripe rejects both at
+    // once); the offer is single-use by construction (a 1-redemption
+    // promotion code paired with the coupon).
+    const winbackCoupon = (
+      w?.winback_coupon_id
+      && w?.winback_expires_at
+      && new Date(w.winback_expires_at).getTime() > Date.now()
+    ) ? w.winback_coupon_id : null;
 
     const base = appUrl();
     const session = await createSubscriptionCheckoutSession({
@@ -45,6 +57,7 @@ export default async function handler(req, res) {
       workspaceId,
       successUrl: `${base}/?subscribed=1&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl:  `${base}/?subscribed=cancelled`,
+      couponId:   winbackCoupon,
     });
 
     return ok(res, { url: session.url });

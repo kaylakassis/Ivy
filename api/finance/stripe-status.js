@@ -8,7 +8,8 @@
 //
 // Never returns the encrypted secrets — only metadata.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { appUrl } from '../_lib/tokens.js';
 import { platformStripeSecret, fetchAccountSummary } from '../_lib/stripe.js';
@@ -24,7 +25,8 @@ async function handleGet(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const status = await readStatus(workspaceId);
     return ok(res, status);
@@ -41,7 +43,8 @@ async function handlePost(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const { rows } = await sql`
       SELECT stripe_connect_user_id

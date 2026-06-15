@@ -5,7 +5,8 @@
 // everything on calendar_settings, and redirects back to /calendar with
 // a success/error flag.
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { encrypt } from '../../_lib/secrets.js';
 import { exchangeCode, fetchUserEmail, createThryveCalendar, isGoogleConfigured } from '../../_lib/google.js';
 import { appUrl } from '../../_lib/tokens.js';
@@ -47,7 +48,8 @@ export default async function handler(req, res) {
 
     const user = await requireUser(req, res);
     if (!user) return; // requireUser already wrote a 401
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const tokens = await exchangeCode({
       code,

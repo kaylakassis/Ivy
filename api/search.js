@@ -8,7 +8,8 @@
 // tenants. Empty query returns an empty result set rather than the
 // whole table.
 import { sql } from './_lib/db.js';
-import { requireUser, ensureWorkspace } from './_lib/auth.js';
+import { requireUser } from './_lib/auth.js';
+import { ensureActiveWorkspace } from './_lib/workspaceGate.js';
 import { requireSameOrigin } from './_lib/security.js';
 import { methodNotAllowed, ok, serverError } from './_lib/json.js';
 
@@ -20,7 +21,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const q = (req.query.q || '').toString().trim();
     if (q.length < 1) return ok(res, { groups: [] });

@@ -1,4 +1,5 @@
 // POST /api/auth/login  { email, password }
+import bcrypt from 'bcryptjs';
 import { sql } from '../_lib/db.js';
 import { verifyPassword, signSession, setSessionCookie, validEmail } from '../_lib/auth.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
@@ -6,8 +7,20 @@ import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireGate } from '../_lib/earlyAccess.js';
+import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+
+// Decoy bcrypt hash for constant-time email-enumeration defense. When
+// the email doesn't exist we still run bcrypt.compare() against this
+// so the response time matches the "user found, wrong password" path.
+// Without it, attackers can distinguish "registered" vs "not registered"
+// addresses by latency even with a generic error message.
+//
+// Hashed once at module load — one ~100ms cost per cold lambda, then
+// the same comparison cost as real logins on subsequent requests. Cost
+// factor 10 matches hashPassword() in api/_lib/auth.js so timing aligns.
+const DECOY_PASSWORD_HASH = bcrypt.hashSync('thryve-decoy-not-a-real-password', 10);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -41,12 +54,24 @@ export default async function handler(req, res) {
       SELECT id, email, name, password_hash, created_at, email_verified_at, user_type
       FROM users WHERE email = ${emailKey}
     `;
-    if (rows.length === 0) return unauthorized(res, 'Invalid email or password');
+    // Always run a bcrypt compare so the timing of the no-user branch
+    // matches the wrong-password branch. Otherwise an attacker can
+    // distinguish registered vs unregistered emails from response
+    // latency (no-user returns in ~5ms, wrong-password in ~100ms).
+    if (rows.length === 0) {
+      await verifyPassword(password, DECOY_PASSWORD_HASH);
+      recordAudit(req, { action: 'auth.login_fail', meta: { email: emailKey, reason: 'no_user' } });
+      return unauthorized(res, 'Invalid email or password');
+    }
     const user = rows[0];
     const okPw = await verifyPassword(password, user.password_hash);
-    if (!okPw) return unauthorized(res, 'Invalid email or password');
+    if (!okPw) {
+      recordAudit(req, { actor: user, action: 'auth.login_fail', meta: { email: emailKey, reason: 'bad_password' } });
+      return unauthorized(res, 'Invalid email or password');
+    }
 
     setSessionCookie(res, signSession(user.id));
+    recordAudit(req, { actor: user, action: 'auth.login', meta: {} });
     // Decorate the user payload with isSuperAdmin so the sidebar /
     // bottom-nav / command-palette show the Admin tab on first paint.
     // /api/auth/me also adds this on subsequent loads; doing it here

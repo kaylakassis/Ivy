@@ -25,10 +25,12 @@ export default async function handler(req, res) {
 
     const all = req.query.all === '1';
     const { rows } = await sql.query(
-      `SELECT * FROM client_packages
-       WHERE client_id = ANY($1)
-         ${all ? '' : "AND status = 'active' AND credits_remaining > 0 AND (expires_at IS NULL OR expires_at > NOW())"}
-       ORDER BY status = 'active' DESC, created_at DESC
+      `SELECT cp.*, cs.slug AS workspace_slug
+         FROM client_packages cp
+         LEFT JOIN calendar_settings cs ON cs.workspace_id = cp.workspace_id
+        WHERE cp.client_id = ANY($1)
+         ${all ? '' : "AND cp.status = 'active' AND cp.credits_remaining > 0 AND (cp.expires_at IS NULL OR cp.expires_at > NOW())"}
+       ORDER BY cp.status = 'active' DESC, cp.created_at DESC
        LIMIT 200`,
       [myIds],
     );
@@ -38,6 +40,9 @@ export default async function handler(req, res) {
       return {
         ...serializeClientPackage(r),
         businessName: m?.businessName || 'Business',
+        // Slug lets the client portal link straight to the public booking
+        // page for that business when redeeming credits.
+        bookingSlug: r.workspace_slug || null,
       };
     });
     return ok(res, { packages });

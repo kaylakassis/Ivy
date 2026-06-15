@@ -10,7 +10,8 @@
 // that's the point of hashing.
 import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -40,7 +41,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     if (req.method === 'GET') {
       const { rows } = await sql`

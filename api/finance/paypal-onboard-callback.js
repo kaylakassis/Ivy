@@ -2,7 +2,8 @@
 // PayPal redirects here when the owner finishes (or aborts) the
 // merchant onboarding flow. We confirm the merchant id, fetch their
 // seller status, and persist the connection.
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { fetchSellerStatus, persistConnection, paypalEnv } from '../_lib/payments/paypal.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
@@ -36,7 +37,8 @@ export default async function handler(req, res) {
     // attacker-controllable param is ignored entirely.
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     let sellerStatus = null;
     try { sellerStatus = await fetchSellerStatus({ merchantId: merchantIdInPayPal }); }

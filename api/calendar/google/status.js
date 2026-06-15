@@ -3,7 +3,8 @@
 // connected, what email it's linked to, and when it connected. Never
 // returns the encrypted refresh token.
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { isGoogleConfigured } from '../../_lib/google.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
@@ -12,7 +13,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const { rows } = await sql`
       SELECT google_email, google_connected_at,

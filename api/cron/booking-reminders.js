@@ -7,11 +7,12 @@
 // Auth: same as welcome-emails — Authorization: Bearer $CRON_SECRET from
 // Vercel cron, OR x-admin-secret for manual testing.
 //
-// TZ caveat: bookings.date + start_min are treated as UTC for the math.
-// For v1 this is good enough — reminders fire within the right hour even
-// if the workspace's local timezone differs. We can layer
-// calendar_settings.timezone on top later.
+// TZ correctness: bookings.(date, start_min) are wall-clock in the
+// workspace's calendar_settings.timezone. Both the SQL prefilter and
+// the per-row JS math convert to UTC using that timezone. A null tz
+// falls back to UTC (legacy workspaces).
 import { sql } from '../_lib/db.js';
+import { slotEpochMs } from '../_lib/calendar.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { makeBrandingCache } from '../_lib/branding.js';
 import { sendClientSms } from '../_lib/sms.js';
@@ -55,9 +56,11 @@ export async function fetchDueBookings(cursor) {
     cursorClause = `AND (b.date, b.start_min, b.id) > ($1, $2, $3)`;
     params.push(cursor.date, cursor.startMin, cursor.id);
   }
-  // Booking start as a UTC instant — matches the JS math
-  // Date.parse(`${dateISO}T00:00:00Z`) + start_min*60000.
-  const startTs = `((b.date::timestamp + make_interval(mins => b.start_min)) AT TIME ZONE 'UTC')`;
+  // Booking start as a UTC instant — interpret (date, start_min) as
+  // wall-clock in the workspace's IANA timezone. A null tz falls back
+  // to UTC for legacy rows. This matches slotEpochMs() in JS so the
+  // SQL prefilter and the per-row math agree.
+  const startTs = `((b.date::timestamp + make_interval(mins => b.start_min)) AT TIME ZONE COALESCE(cs.timezone, 'UTC'))`;
   const text = `
     SELECT
       b.id, b.workspace_id, b.client_id, b.client_email, b.client_name,
@@ -67,7 +70,7 @@ export async function fetchDueBookings(cursor) {
       b.reminders_sent, b.sms_sent,
       s.name AS service_name,
       COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
-      cs.biz_name
+      cs.biz_name, cs.timezone
     FROM bookings b
     LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
     LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
@@ -135,8 +138,8 @@ async function handler(req, res) {
       if (sent >= MAX_PER_RUN) break;
       scanned++;
       const dateISO = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date;
-      const startMs = Date.parse(`${dateISO}T00:00:00Z`) + r.start_min * 60 * 1000;
-      if (Number.isNaN(startMs)) continue;
+      const startMs = slotEpochMs(dateISO, r.start_min, r.timezone || null);
+      if (!Number.isFinite(startMs)) continue;
       // Don't send reminders for bookings that have already started.
       if (startMs <= now) continue;
 

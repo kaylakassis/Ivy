@@ -191,6 +191,7 @@ function PackagesCard() {
   const [includeHistory, setIncludeHistory] = useState(false);
   const [allPackages, setAllPackages] = useState(null); // lazy-loaded
   const [loadingHistory, setLoadingHistory] = useState(false);
+  const [redeemingPackage, setRedeemingPackage] = useState(null);
 
   useEffect(() => {
     api.get('/me/packages')
@@ -284,13 +285,278 @@ function PackagesCard() {
                     transition: 'width 0.3s ease',
                   }}/>
                 </div>
+                {!isInactive && p.bookingSlug && (
+                  <button
+                    type="button"
+                    onClick={() => setRedeemingPackage(p)}
+                    className="btn btn-outline"
+                    style={{ marginTop: 10, fontSize: 12, padding: '6px 12px', width: '100%', justifyContent: 'center' }}>
+                    Book sessions
+                  </button>
+                )}
               </div>
             );
           })}
         </div>
       )}
+      {redeemingPackage && (
+        <RedeemPackageModal
+          pkg={redeemingPackage}
+          onClose={() => setRedeemingPackage(null)}
+          onBooked={() => {
+            setRedeemingPackage(null);
+            // Re-fetch packages so the credit count updates.
+            api.get('/me/packages').then((r) => setActive(r.packages || [])).catch(() => {});
+            if (includeHistory) {
+              api.get('/me/packages?all=1').then((r) => setAllPackages(r.packages || [])).catch(() => {});
+            }
+          }}
+        />
+      )}
     </div>
   );
+}
+
+// Redeem a package by booking N sessions in one shot. Backed by
+// POST /api/me/packages/:id/book which spends credits upfront, validates
+// each slot against the workspace's availability + min-notice +
+// max-advance + conflicts, and creates one bookings row per occurrence
+// (each tagged with client_package_id so a cancellation refunds the
+// credit). The form supports two paths:
+//   • One-off — single session against this package
+//   • Recurring — weekly / bi-weekly / monthly for N occurrences
+function RedeemPackageModal({ pkg, onClose, onBooked }) {
+  const [calendar, setCalendar] = useState(null);
+  const [loadErr, setLoadErr] = useState(null);
+  const [serviceId, setServiceId] = useState(null);
+  const [mode, setMode] = useState('once'); // 'once'|'weekly'|'biweekly'|'monthly'
+  const [firstDate, setFirstDate] = useState(() => {
+    // Tomorrow as a sensible default — most workspaces require some notice.
+    const d = new Date();
+    d.setDate(d.getDate() + 1);
+    return d.toISOString().slice(0, 10);
+  });
+  const [startHm, setStartHm] = useState('10:00');
+  const [occurrences, setOccurrences] = useState(Math.min(4, pkg.creditsRemaining));
+  const [submitting, setSubmitting] = useState(false);
+  const [err, setErr] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/calendar/public/${encodeURIComponent(pkg.bookingSlug)}`)
+      .then((r) => r.json().then((j) => ({ ok: r.ok, j })))
+      .then(({ ok, j }) => {
+        if (cancelled) return;
+        if (!ok) throw new Error(j.error || 'Could not load business calendar');
+        setCalendar(j.calendar);
+        // Default to the first service the package covers.
+        const covered = filterCoveredServices(j.calendar.services || [], pkg.serviceIds);
+        if (covered.length > 0) setServiceId(covered[0].id);
+      })
+      .catch((e) => { if (!cancelled) setLoadErr(e.message); });
+    return () => { cancelled = true; };
+  }, [pkg.bookingSlug, pkg.serviceIds]);
+
+  const services = calendar ? filterCoveredServices(calendar.services || [], pkg.serviceIds) : [];
+  const service = services.find((s) => s.id === serviceId) || null;
+  const slotCount = mode === 'once' ? 1 : Math.max(1, Math.min(occurrences, pkg.creditsRemaining));
+  const startMin = hmToMin(startHm);
+  const endMin = service ? startMin + (service.durationMinutes || 60) : startMin + 60;
+
+  const submit = async (e) => {
+    e?.preventDefault?.();
+    if (submitting) return;
+    if (!service) { setErr('Pick a service'); return; }
+    setSubmitting(true);
+    setErr(null);
+    try {
+      const body = mode === 'once'
+        ? { serviceId: service.id, slots: [{ date: firstDate, startMin, endMin }] }
+        : {
+            serviceId: service.id,
+            recurrence: mode,
+            firstDate, startMin, endMin,
+            occurrences: slotCount,
+          };
+      const res = await fetch(`/api/me/packages/${encodeURIComponent(pkg.id)}/book`, {
+        method: 'POST',
+        credentials: 'same-origin',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      onBooked?.(j);
+    } catch (ex) {
+      setErr(ex.message || 'Could not book');
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <div onClick={submitting ? null : onClose} style={{
+      position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 200,
+      display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+    }}>
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card"
+        style={{ width: '100%', maxWidth: 480, padding: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
+          <div style={{
+            width: 38, height: 38, borderRadius: 10,
+            background: 'var(--accent-soft)', color: 'var(--accent)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}><Icons.Calendar size={16} sw={1.8}/></div>
+          <div style={{ flex: 1 }}>
+            <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Book sessions</h3>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+              {pkg.name} · {pkg.creditsRemaining} credit{pkg.creditsRemaining === 1 ? '' : 's'} left
+            </div>
+          </div>
+          <button type="button" className="btn btn-ghost" onClick={onClose} style={{ padding: 6 }}>
+            <Icons.X size={15}/>
+          </button>
+        </div>
+
+        {loadErr && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, marginBottom: 14,
+            background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+            color: 'var(--danger)', fontSize: 12.5,
+          }}>{loadErr}</div>
+        )}
+
+        {!calendar && !loadErr && (
+          <div style={{ fontSize: 13, color: 'var(--muted)', padding: 12 }}>Loading…</div>
+        )}
+
+        {calendar && services.length === 0 && (
+          <div style={{ fontSize: 13, color: 'var(--muted)', padding: 12 }}>
+            None of this business's current services are covered by this package.
+          </div>
+        )}
+
+        {calendar && services.length > 0 && (
+          <>
+            <RedeemField label="Service">
+              <select value={serviceId || ''} onChange={(e) => setServiceId(e.target.value)}
+                className="input" required>
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.name} · {s.durationMinutes} min
+                  </option>
+                ))}
+              </select>
+            </RedeemField>
+
+            <RedeemField label="Repeat">
+              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                {[
+                  { id: 'once',     label: 'Just once' },
+                  { id: 'weekly',   label: 'Weekly' },
+                  { id: 'biweekly', label: 'Every 2 wks' },
+                  { id: 'monthly',  label: 'Monthly' },
+                ].map(({ id, label }) => (
+                  <button key={id} type="button" onClick={() => setMode(id)}
+                    style={{
+                      padding: '6px 12px', borderRadius: 999,
+                      border: '1px solid ' + (mode === id ? 'var(--accent)' : 'var(--border)'),
+                      background: mode === id ? 'var(--accent-soft)' : 'var(--surface)',
+                      color: mode === id ? 'var(--accent)' : 'var(--fg-2)',
+                      fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                    }}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </RedeemField>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+              <RedeemField label={mode === 'once' ? 'Date' : 'First date'}>
+                <input type="date" value={firstDate}
+                  onChange={(e) => setFirstDate(e.target.value)}
+                  required className="input"/>
+              </RedeemField>
+              <RedeemField label="Start time">
+                <input type="time" step={300} value={startHm}
+                  onChange={(e) => setStartHm(e.target.value)}
+                  required className="input"/>
+              </RedeemField>
+            </div>
+
+            {mode !== 'once' && (
+              <RedeemField label="Number of sessions"
+                hint={`You'll use ${slotCount} of your ${pkg.creditsRemaining} credit${pkg.creditsRemaining === 1 ? '' : 's'}.`}>
+                <input type="number" min={1} max={pkg.creditsRemaining}
+                  value={occurrences}
+                  onChange={(e) => setOccurrences(Math.max(1, Math.min(pkg.creditsRemaining, Number(e.target.value) || 1)))}
+                  className="input"/>
+              </RedeemField>
+            )}
+
+            {service && (
+              <div style={{
+                padding: 10, borderRadius: 8, marginBottom: 14,
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5,
+              }}>
+                Each session is {service.durationMinutes} min ·{' '}
+                ends at {fmtTimeFromMin(endMin)}.
+              </div>
+            )}
+
+            {err && (
+              <div style={{
+                padding: '8px 12px', borderRadius: 8, marginBottom: 14,
+                background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+                color: 'var(--danger)', fontSize: 12.5,
+              }}>{err}</div>
+            )}
+
+            <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+              <button type="button" className="btn btn-outline"
+                onClick={onClose} disabled={submitting}
+                style={{ flex: 1, justifyContent: 'center' }}>
+                Cancel
+              </button>
+              <button type="submit" className="btn btn-primary" disabled={submitting || !service}
+                style={{ flex: 2, justifyContent: 'center' }}>
+                {submitting ? 'Booking…' : (slotCount === 1 ? 'Book session' : `Book ${slotCount} sessions`)}
+              </button>
+            </div>
+          </>
+        )}
+      </form>
+    </div>
+  );
+}
+
+function RedeemField({ label, hint, children }) {
+  return (
+    <div style={{ marginBottom: 12 }}>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 5, fontWeight: 500 }}>{label}</div>
+      {children}
+      {hint && <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4, lineHeight: 1.4 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function filterCoveredServices(allServices, packageServiceIds) {
+  if (!packageServiceIds || packageServiceIds.length === 0) return allServices;
+  const set = new Set(packageServiceIds);
+  return allServices.filter((s) => set.has(s.id));
+}
+
+function hmToMin(hm) {
+  const [h, m] = hm.split(':').map(Number);
+  return (h || 0) * 60 + (m || 0);
+}
+
+function fmtTimeFromMin(m) {
+  const h = Math.floor(m / 60);
+  const mm = String(m % 60).padStart(2, '0');
+  const ap = h >= 12 ? 'pm' : 'am';
+  const h12 = ((h + 11) % 12) + 1;
+  return `${h12}:${mm} ${ap}`;
 }
 
 // Hero card that aggregates the few "you should do this now" items

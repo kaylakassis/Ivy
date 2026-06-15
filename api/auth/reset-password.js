@@ -2,10 +2,12 @@
 // Verifies the reset token, sets a new password, signs the user in.
 import { sql } from '../_lib/db.js';
 import { hashPassword, signSession, setSessionCookie } from '../_lib/auth.js';
+import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { findValidToken, consumeToken, invalidateUserTokens, KIND_RESET } from '../_lib/tokens.js';
+import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -13,9 +15,8 @@ export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
     const { token, password } = await readBody(req);
-    if (typeof password !== 'string' || password.length < 8) {
-      return badRequest(res, 'Password must be at least 8 characters');
-    }
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.ok) return badRequest(res, pwCheck.error);
 
     const ip = getClientIp(req);
     const blocked = await enforce(req, res, [
@@ -49,6 +50,7 @@ export default async function handler(req, res) {
     // Sign them in immediately — they just proved control of the email.
     setSessionCookie(res, signSession(valid.userId));
     const { rows } = await sql`SELECT id, email, name, created_at FROM users WHERE id = ${valid.userId}`;
+    recordAudit(req, { actor: rows[0], action: 'auth.password_reset', meta: {} });
     return ok(res, { user: rows[0] });
   } catch (err) {
     return serverError(res, err);

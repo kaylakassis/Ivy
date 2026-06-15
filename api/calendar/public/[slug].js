@@ -12,6 +12,7 @@ import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
   hasConflict, losesBookingRace, withinAvailability, depositFor, mintVideoRoomUrl,
+  slotEpochMs,
 } from '../../_lib/calendar.js';
 import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail } from '../../_lib/auth.js';
@@ -41,6 +42,18 @@ async function getCalendar(req, res) {
   try {
     const slug = (req.query.slug || '').toString().toLowerCase();
     if (!slug) return notFound(res);
+
+    // Throttle scraping + slug enumeration. The booking response leaks
+    // workspace existence, service catalog with prices, and occupied
+    // time-slots (= revenue/occupancy intelligence) so unauthenticated
+    // bulk reads need a cap. The numbers are generous enough that a
+    // real visitor refreshing the page never hits them.
+    const ip = getClientIp(req);
+    const blocked = await enforce(req, res, [
+      { key: `bookget:ip:${ip}`,     max:  60, windowSeconds: 600 },
+      { key: `bookget:slug:${slug}`, max: 240, windowSeconds: 600 },
+    ]);
+    if (blocked) return;
 
     const settings = await sql`
       SELECT * FROM calendar_settings WHERE slug = ${slug}
@@ -219,7 +232,7 @@ async function createBooking(req, res) {
 
     // Resolve workspace by slug.
     const settingsRows = await sql`
-      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service, buffer_minutes, max_advance_days FROM calendar_settings WHERE slug = ${slug}
+      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service, buffer_minutes, max_advance_days, timezone FROM calendar_settings WHERE slug = ${slug}
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];
@@ -227,6 +240,7 @@ async function createBooking(req, res) {
     const slotFitService = !!settingsRows.rows[0].slot_fit_service;
     const bufferMinutes = Math.max(0, Number(settingsRows.rows[0].buffer_minutes || 0));
     const maxAdvanceDays = Math.max(0, Number(settingsRows.rows[0].max_advance_days ?? 60));
+    const workspaceTz = settingsRows.rows[0].timezone || null;
 
     // Validate inputs.
     const date = (body.date || '').toString();
@@ -375,13 +389,18 @@ async function createBooking(req, res) {
     // Don't allow booking in the past, and honor the workspace's minimum
     // advance-notice window (default 24h; 0 = same-day allowed). The past
     // floor applies even when notice is 0.
+    //
+    // `(date, start)` is in the WORKSPACE'S wall-clock time, not UTC.
+    // Before this change we built slotStart as new Date(date + 'T00:00:00Z')
+    // which interpreted both as UTC — fine for UTC owners, broken for
+    // anyone else (PST owner setting "3pm tomorrow" got compared as if
+    // the slot were 3pm UTC, only ~6h away instead of ~18h away).
     const now = new Date();
-    const slotStart = new Date(date + 'T00:00:00Z');
-    slotStart.setUTCMinutes(slotStart.getUTCMinutes() + start);
-    if (slotStart.getTime() < now.getTime() - 60 * 1000) {
+    const slotStartMs = slotEpochMs(date, start, workspaceTz);
+    if (slotStartMs < now.getTime() - 60 * 1000) {
       return badRequest(res, 'That time has passed');
     }
-    if (minNoticeHours > 0 && slotStart.getTime() < now.getTime() + minNoticeHours * 3600 * 1000) {
+    if (minNoticeHours > 0 && slotStartMs < now.getTime() + minNoticeHours * 3600 * 1000) {
       const noticeLabel = minNoticeHours % 24 === 0
         ? `${minNoticeHours / 24} day${minNoticeHours === 24 ? '' : 's'}`
         : `${minNoticeHours} hour${minNoticeHours === 1 ? '' : 's'}`;
@@ -389,8 +408,8 @@ async function createBooking(req, res) {
     }
     // Booking horizon: clients can't book further out than the owner allows
     // (0 = no limit). One extra day of grace absorbs viewer/server timezone
-    // skew so a slot the UI legitimately offered isn't rejected at the edge.
-    if (maxAdvanceDays > 0 && slotStart.getTime() > now.getTime() + (maxAdvanceDays + 1) * 86400 * 1000) {
+    // skew at the edge.
+    if (maxAdvanceDays > 0 && slotStartMs > now.getTime() + (maxAdvanceDays + 1) * 86400 * 1000) {
       const horizonLabel = maxAdvanceDays % 7 === 0
         ? `${maxAdvanceDays / 7} week${maxAdvanceDays === 7 ? '' : 's'}`
         : `${maxAdvanceDays} day${maxAdvanceDays === 1 ? '' : 's'}`;

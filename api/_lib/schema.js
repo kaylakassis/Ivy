@@ -144,6 +144,34 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_past_due_since TIME
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_failed_attempts INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_suspended_at  TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_last_dunning_at TIMESTAMPTZ;
+
+-- Funnel + win-back instrumentation. paywall_first_seen_at is stamped
+-- the first time ensureActiveWorkspace denies for this workspace; used
+-- as the dwell-window start for the win-back cron, and as the
+-- signup→onboarding→paywall→customer drop-off signal. converted_at is
+-- stamped the first time a workspace transitions to a paying status
+-- (active / past_due) via billing/sync.js or the webhook; gives the
+-- "did they convert?" leg of the funnel.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS paywall_first_seen_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS converted_at          TIMESTAMPTZ;
+
+-- Win-back drip. The cron creates a one-time Stripe coupon + promo
+-- code per lapsed workspace, stamps the row, and emails the offer.
+-- winback_offer_sent_at being non-null is the "already offered, don't
+-- re-offer" guard. winback_expires_at lets billing/checkout.js refuse
+-- to apply an expired coupon (Stripe would error otherwise).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_offer_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_coupon_id     TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_promo_code    TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_expires_at    TIMESTAMPTZ;
+
+-- Partial index that powers the win-back cron's daily scan: candidates
+-- are workspaces that have hit the wall, haven't been offered yet, and
+-- aren't sponsored. Kept tight so the scan stays cheap as workspaces
+-- grows.
+CREATE INDEX IF NOT EXISTS idx_workspaces_winback_candidates
+  ON workspaces(paywall_first_seen_at)
+  WHERE winback_offer_sent_at IS NULL AND paywall_first_seen_at IS NOT NULL;
 -- Update the column default for any future workspace inserts that bypass
 -- the explicit value (e.g. raw SQL admin tooling).
 ALTER TABLE workspaces ALTER COLUMN trial_ends_at SET DEFAULT (NOW() + INTERVAL '28 days');

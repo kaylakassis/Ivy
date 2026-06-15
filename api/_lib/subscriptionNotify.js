@@ -92,6 +92,45 @@ export async function notifyUpcomingRenewal({ workspaceId, periodEnd, amountCent
   }
 }
 
+// One-time win-back offer email. Sent by api/cron/winback.js after a
+// workspace has lapsed (trial-expired / cancelled / suspended) and the
+// dwell window has passed. Includes the promo code (for users who
+// prefer to type it into Stripe Checkout) AND a direct Subscribe link
+// that pre-applies the coupon. The cron stamps winback_offer_sent_at
+// so this is sent AT MOST ONCE per workspace.
+export async function notifyWinbackOffer({
+  workspaceId, percentOff, durationMonths, promoCode, expiresAt,
+}) {
+  try {
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const greeting = o.name ? `Hi ${o.name.split(/\s+/)[0]},` : 'Hi,';
+    const html = emailShell({
+      heading: `${percentOff}% off your first ${durationMonths} months — just for you`,
+      body: `<p>${greeting}</p>
+        <p>We noticed you didn't pick up a THRYVE subscription after your trial.
+        We'd love to have you back, so here's a one-time offer:
+        <strong>${percentOff}% off your first ${durationMonths} months</strong>.</p>
+        <p>Click below and the discount is already applied at checkout.
+        Or use the code <strong>${promoCode}</strong> if you'd rather enter it yourself.</p>
+        <p style="color: #666; font-size: 13px;">Offer expires ${fmtDate(expiresAt)}.</p>`,
+      ctaText: 'Subscribe with discount applied',
+      ctaUrl:  `${appUrl()}/account?tab=billing&winback=1`,
+      footer:  'This is a one-time offer — once it expires it doesn\'t come back.',
+    });
+    await sendEmailToUser({
+      userId: o.owner_id,
+      type: 'billing', // honor billing-prefs opt-out for a marketing-style nudge
+      to: o.email,
+      subject: `${percentOff}% off — your THRYVE comeback offer`,
+      html,
+    });
+  } catch (err) {
+    console.error('[subscriptionNotify.winback] failed:', err.message);
+    reportError(err, { extra: { workspaceId } });
+  }
+}
+
 export async function notifyPaymentFailed({ workspaceId, amountCents, currency, nextAttemptAt }) {
   try {
     const o = await loadOwner(workspaceId);

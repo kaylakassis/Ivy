@@ -25,7 +25,8 @@
 // expense for purchases — the format the tools' importers natively
 // understand. Year-end exports work out of the box.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { SCHEDULE_C_CATEGORIES } from '../_lib/expenses.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
@@ -66,7 +67,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const format = (req.query.format || '').toString().toLowerCase();
     const type   = (req.query.type   || 'invoices').toString().toLowerCase();

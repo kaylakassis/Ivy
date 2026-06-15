@@ -7,8 +7,8 @@
 //
 // Owner-only. Powers the "Service log" tab on the ClientDrawer.
 import { sql } from '../../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../../_lib/auth.js';
-import { requireActiveSubscription } from '../../_lib/subscriptionGate.js';
+import { requireUser } from '../../_lib/auth.js';
+import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { fetchOwnedClient } from '../../_lib/clients.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
@@ -19,8 +19,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
-    if (req.method !== 'GET' && req.method !== 'HEAD' && !(await requireActiveSubscription(workspaceId, req, res))) return;
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
     const { id: clientId } = req.query;
 
     const client = await fetchOwnedClient({ id: clientId, workspaceId });

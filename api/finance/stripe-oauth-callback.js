@@ -9,7 +9,8 @@
 // The owner is signed-in throughout the flow (returnUrl points back at
 // our app), so we use requireUser to scope the workspace.
 import { sql } from '../_lib/db.js';
-import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
+import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { appUrl } from '../_lib/tokens.js';
 import { platformStripeSecret, fetchAccountSummary } from '../_lib/stripe.js';
 import { methodNotAllowed } from '../_lib/json.js';
@@ -33,7 +34,8 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureWorkspace(user.id);
+    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    if (!workspaceId) return;
 
     const platformKey = platformStripeSecret();
     if (!platformKey) return safeRedirect({ stripe: 'error', detail: 'no-platform-secret' });

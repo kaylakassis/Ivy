@@ -17,6 +17,7 @@
     { "path": "/api/cron/blob-prune",            "schedule": "30 4 * * 0" },
     { "path": "/api/cron/discover-refresh",      "schedule": "*/15 * * * *" },
     { "path": "/api/cron/subscription-dunning",  "schedule": "0 10 * * *" },
+    { "path": "/api/cron/winback",               "schedule": "0 11 * * *" },
     { "path": "/api/cron/stripe-reconcile",      "schedule": "0 6 * * *" },
     { "path": "/api/cron/group-digest",          "schedule": "30 8 * * *" },
     { "path": "/api/cron/ivy-nudges",            "schedule": "0 9,13,17 * * *" }
@@ -50,7 +51,8 @@
         { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
         { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
         { "key": "Permissions-Policy", "value": "geolocation=(self), payment=(self), usb=(), magnetometer=(), accelerometer=(), gyroscope=()" },
-        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" }
+        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
+        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://js.squareup.com https://sandbox.web.squarecdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://api.stripe.com https://m.stripe.com https://r.stripe.com https://api.paypal.com https://www.paypal.com https://connect.squareup.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com https://nominatim.openstreetmap.org; frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://player.vimeo.com https://www.youtube.com https://www.youtube-nocookie.com https://www.instagram.com https://www.openstreetmap.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" }
       ]
     },
     {
