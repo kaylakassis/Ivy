@@ -43,6 +43,18 @@ async function getCalendar(req, res) {
     const slug = (req.query.slug || '').toString().toLowerCase();
     if (!slug) return notFound(res);
 
+    // Throttle scraping + slug enumeration. The booking response leaks
+    // workspace existence, service catalog with prices, and occupied
+    // time-slots (= revenue/occupancy intelligence) so unauthenticated
+    // bulk reads need a cap. The numbers are generous enough that a
+    // real visitor refreshing the page never hits them.
+    const ip = getClientIp(req);
+    const blocked = await enforce(req, res, [
+      { key: `bookget:ip:${ip}`,     max:  60, windowSeconds: 600 },
+      { key: `bookget:slug:${slug}`, max: 240, windowSeconds: 600 },
+    ]);
+    if (blocked) return;
+
     const settings = await sql`
       SELECT * FROM calendar_settings WHERE slug = ${slug}
     `;

@@ -7,6 +7,7 @@
 // itself.
 import { sql } from '../_lib/db.js';
 import { hashPassword, signSession, setSessionCookie, validEmail } from '../_lib/auth.js';
+import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -59,9 +60,8 @@ export default async function handler(req, res) {
     await ensureSchemaApplied();
     const { email, password, name, mode, ref, acceptedTermsVersion, acceptedPrivacyVersion } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');
-    if (typeof password !== 'string' || password.length < 8) {
-      return badRequest(res, 'Password must be at least 8 characters');
-    }
+    const pwCheck = validatePassword(password);
+    if (!pwCheck.ok) return badRequest(res, pwCheck.error);
     // Name is required so we can address the user in emails + show
     // them in client portals. Trim + cap length defensively.
     const cleanName = (name || '').toString().trim().slice(0, 200);
