@@ -466,8 +466,99 @@ function Overview() {
             <Stat label="Churn rate"        value={`${data.churn.ratePct}%`}
               hint={`${data.churn.cancelledInWindow} cancelled / ${data.churn.activeAtWindowStart} active at window start`}/>
           </div>
+          {data.funnel && <FunnelCard funnel={data.funnel}/>}
           {data.platformImpact && <PlatformImpactCard impact={data.platformImpact}/>}
           <SystemCard/>
+        </>
+      )}
+    </div>
+  );
+}
+
+// Acquisition funnel for the selected window's signup cohort:
+//   signed up → started onboarding → finished onboarding → hit the
+//   paywall → subscribed.
+// Each bar is sized as a % of signups so drop-off is visible at a
+// glance; the two headline rates (overall signup→paid and the
+// paywall→paid "wall conversion") sit on top. Data comes from
+// /admin/analytics `funnel` (raw counts); all percentages are computed
+// here so the math lives in one place.
+function FunnelCard({ funnel }) {
+  const steps = [
+    { key: 'signups',           label: 'Signed up',            n: funnel.signups },
+    { key: 'onboardingStarted', label: 'Started onboarding',   n: funnel.onboardingStarted },
+    { key: 'onboardingDone',    label: 'Finished onboarding',  n: funnel.onboardingDone },
+    { key: 'paywallSeen',       label: 'Hit the paywall',      n: funnel.paywallSeen },
+    { key: 'converted',         label: 'Subscribed',           n: funnel.converted },
+  ];
+  const top = funnel.signups || 0;
+  const pctOf = (n) => (top > 0 ? Math.round((n / top) * 1000) / 10 : 0);
+  const rate = (num, den) => (den > 0 ? Math.round((num / den) * 1000) / 10 : 0);
+
+  const overallPct = rate(funnel.converted, funnel.signups);
+  const wallPct    = rate(funnel.converted, funnel.paywallSeen);
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+        <div style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>Acquisition funnel</div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+          signups in window · {fmtN(top)} cohort
+        </div>
+      </div>
+
+      {top === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--muted)', padding: '10px 0' }}>
+          No signups in this window.
+        </div>
+      ) : (
+        <>
+          {/* Headline rates */}
+          <div className="grid-auto" style={{ gap: 12, margin: '12px 0 18px' }}>
+            <Stat label="Signup → paid" value={`${overallPct}%`} accent
+              hint={`${fmtN(funnel.converted)} of ${fmtN(funnel.signups)} signups`}/>
+            <Stat label="Paywall → paid (wall conversion)" value={`${wallPct}%`}
+              hint={`${fmtN(funnel.converted)} of ${fmtN(funnel.paywallSeen)} who hit the wall`}/>
+          </div>
+
+          {/* Funnel bars */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {steps.map((s, i) => {
+              const prev = i > 0 ? steps[i - 1].n : null;
+              const stepRetention = prev != null ? rate(s.n, prev) : null;
+              const drop = prev != null ? prev - s.n : null;
+              return (
+                <div key={s.key}>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, marginBottom: 4 }}>
+                    <span style={{ fontSize: 13, fontWeight: 500, flex: 1 }}>{s.label}</span>
+                    <span style={{ fontSize: 13, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtN(s.n)}</span>
+                    <span style={{ fontSize: 11.5, color: 'var(--muted)', width: 44, textAlign: 'right' }}>
+                      {pctOf(s.n)}%
+                    </span>
+                  </div>
+                  <div style={{ height: 8, borderRadius: 99, background: 'var(--surface-2)', overflow: 'hidden' }}>
+                    <div style={{
+                      width: `${Math.max(pctOf(s.n), s.n > 0 ? 1.5 : 0)}%`, height: '100%',
+                      background: s.key === 'converted' ? 'var(--ok)' : 'var(--accent)',
+                      borderRadius: 99, transition: 'width 0.3s ease',
+                    }}/>
+                  </div>
+                  {stepRetention != null && (
+                    <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3 }}>
+                      {stepRetention}% continued
+                      {drop > 0 && <span style={{ color: 'var(--warn)' }}> · {fmtN(drop)} dropped off</span>}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 14, lineHeight: 1.5 }}>
+            "Hit the paywall" + "Subscribed" only began recording when the hard
+            paywall shipped, so cohorts from before that deploy under-report
+            those two steps. Recent windows are accurate.
+          </div>
         </>
       )}
     </div>
