@@ -27,17 +27,12 @@
 //                        once (e.g. after migration).
 import { sql } from '../_lib/db.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
-import { platformStripeSecret, createWinbackCoupon } from '../_lib/stripe.js';
+import { platformStripeSecret } from '../_lib/stripe.js';
+import { ensureWinbackOffer, WINBACK } from '../_lib/winback.js';
 import { notifyWinbackOffer } from '../_lib/subscriptionNotify.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
-
-const DWELL_DAYS       = 3;
-const OFFER_VALID_DAYS = 14;
-const PERCENT_OFF      = 30;
-const DURATION_MONTHS  = 3;
-const MAX_PER_RUN      = 200;
 
 async function handler(req, res) {
   // Same three-path auth as subscription-dunning: Vercel cron header,
@@ -72,57 +67,41 @@ async function handler(req, res) {
         JOIN users u ON u.id = w.owner_id
        WHERE w.winback_offer_sent_at IS NULL
          AND w.paywall_first_seen_at IS NOT NULL
-         AND w.paywall_first_seen_at <= NOW() - (${DWELL_DAYS} || ' days')::interval
+         AND w.paywall_first_seen_at <= NOW() - (${WINBACK.DWELL_DAYS} || ' days')::interval
          AND w.converted_at IS NULL
          AND COALESCE(u.user_type, 'regular') <> 'sponsored'
          AND w.subscription_status IN ('inactive', 'cancelled', 'suspended', 'trialing')
        ORDER BY w.paywall_first_seen_at ASC
-       LIMIT ${MAX_PER_RUN}
+       LIMIT ${WINBACK.MAX_PER_RUN}
     `;
 
     let offered = 0;
     for (const c of candidates) {
       try {
+        // ensureWinbackOffer mints + stamps idempotently (the
+        // winback_offer_sent_at IS NULL guard lives inside it). It
+        // returns fresh=true only when WE minted — the on-demand
+        // checkout-abandon endpoint may have raced us to this same row.
         // eslint-disable-next-line no-await-in-loop
-        const { couponId, promoCode } = await createWinbackCoupon({
-          secretKey,
-          workspaceId: c.workspace_id,
-          percentOff: PERCENT_OFF,
-          durationMonths: DURATION_MONTHS,
-        });
-        const expiresAt = new Date(Date.now() + OFFER_VALID_DAYS * 86_400_000);
-        // The stamp is the idempotency anchor — if the update writes
-        // zero rows (a concurrent cron raced us), we leave the coupon
-        // dangling in Stripe but don't fire the email. Better that than
-        // a double email.
-        // eslint-disable-next-line no-await-in-loop
-        const { rows: stamped } = await sql`
-          UPDATE workspaces SET
-            winback_offer_sent_at = NOW(),
-            winback_coupon_id     = ${couponId},
-            winback_promo_code    = ${promoCode},
-            winback_expires_at    = ${expiresAt}
-          WHERE id = ${c.workspace_id} AND winback_offer_sent_at IS NULL
-          RETURNING id
-        `;
-        if (stamped.length === 0) continue;
+        const offer = await ensureWinbackOffer({ secretKey, workspaceId: c.workspace_id });
+        if (!offer?.fresh) continue;
 
         offered++;
         notifyWinbackOffer({
           workspaceId: c.workspace_id,
-          percentOff: PERCENT_OFF,
-          durationMonths: DURATION_MONTHS,
-          promoCode,
-          expiresAt,
+          percentOff: offer.percentOff,
+          durationMonths: offer.durationMonths,
+          promoCode: offer.promoCode,
+          expiresAt: offer.expiresAt,
         }).catch((e) => console.error('[winback] notify email failed:', e?.message));
         notifyOwnerSafe(c.workspace_id, {
-          title: `${PERCENT_OFF}% off — your THRYVE comeback offer`,
-          body: `Code ${promoCode} · expires ${expiresAt.toISOString().slice(0, 10)}`,
+          title: `${offer.percentOff}% off — your THRYVE comeback offer`,
+          body: `Code ${offer.promoCode} · expires ${new Date(offer.expiresAt).toISOString().slice(0, 10)}`,
           url:  '/account?tab=billing&winback=1',
         }).catch((e) => console.error('[winback] push failed:', e?.message));
       } catch (e) {
         // eslint-disable-next-line no-console
-        console.error('[winback] coupon for workspace failed:', c.workspace_id, e?.message);
+        console.error('[winback] offer for workspace failed:', c.workspace_id, e?.message);
       }
     }
 

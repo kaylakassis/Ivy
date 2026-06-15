@@ -46,8 +46,10 @@ export default function Paywall({ ctx, onRefresh }) {
   const sub = ctx?.subscription || null;
   const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
+  const [winback, setWinback] = useState(null); // {percentOff, durationMonths, promoCode, expiresAt}
   const [params, setParams] = useSearchParams();
   const synced = useRef(false);
+  const winbackTried = useRef(false);
 
   // Owners who are ALSO clients of another business get one labeled link
   // out — the wall stays unskippable from THEIR perspective (they can't
@@ -83,6 +85,19 @@ export default function Paywall({ ctx, onRefresh }) {
   }, [params, onRefresh, setParams]);
 
   const cancelled = params.get('subscribed') === 'cancelled';
+
+  // Abandoned-cart win-back: the moment an owner bails out of Stripe
+  // checkout and returns to the wall, ask the server for their one-time
+  // discount and surface it inline. ensureWinbackOffer is idempotent +
+  // one-per-workspace, so cancelling repeatedly can't farm coupons.
+  // Runs once per mount.
+  useEffect(() => {
+    if (!cancelled || winbackTried.current) return;
+    winbackTried.current = true;
+    api.post('/billing/winback-offer', {})
+      .then((r) => { if (r?.eligible) setWinback(r); })
+      .catch(() => { /* no offer is a fine outcome — fall back to the plain banner */ });
+  }, [cancelled]);
 
   const startTrial = async () => {
     setBusy('trial'); setErr(null);
@@ -269,7 +284,36 @@ export default function Paywall({ ctx, onRefresh }) {
                 </div>
               </div>
 
-              {cancelled && (
+              {/* Abandoned-cart win-back: when checkout was cancelled AND
+                  the server handed us a one-time discount, the plain
+                  "cancelled" note is replaced by the offer. Subscribing
+                  from here is auto-discounted server-side (checkout.js
+                  reads the stamped coupon) — no code entry needed. */}
+              {cancelled && winback && (
+                <div style={{
+                  padding: '12px 14px', borderRadius: 12,
+                  background: 'linear-gradient(160deg, var(--accent-soft), var(--accent-tint))',
+                  border: '1px solid var(--accent)',
+                }}>
+                  <div style={{
+                    fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16,
+                    letterSpacing: '-0.01em', color: 'var(--fg)',
+                  }}>
+                    Wait — {winback.percentOff}% off your first {winback.durationMonths} months
+                  </div>
+                  <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.45 }}>
+                    That's <strong style={{ color: 'var(--fg)' }}>
+                      ${(THRYVE_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo
+                    </strong> for {winback.durationMonths} months. The discount applies automatically at
+                    checkout{winback.promoCode ? <> — or use code <strong>{winback.promoCode}</strong></> : null}.
+                    {winback.expiresAt && (
+                      <span style={{ color: 'var(--muted)' }}> Expires {new Date(winback.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.</span>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {cancelled && !winback && (
                 <div style={{
                   padding: '8px 12px', borderRadius: 8,
                   background: 'var(--surface-2)', border: '1px solid var(--border)',
@@ -289,7 +333,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   One dominant button, like every top-earner. For owners
                   who can still trial, the trial is primary (lowest
                   friction) with subscribe as a quiet secondary. */}
-              {canTrial ? (
+              {canTrial && !winback ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                   <button onClick={startTrial} disabled={busy != null}
                     className="btn btn-primary"
@@ -307,7 +351,9 @@ export default function Paywall({ ctx, onRefresh }) {
                 <button onClick={subscribe} disabled={busy != null}
                   className="btn btn-primary"
                   style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
-                  {busy === 'subscribe' ? 'Redirecting…' : `Subscribe — $${THRYVE_PRICE}/mo`}
+                  {busy === 'subscribe' ? 'Redirecting…'
+                    : winback ? `Claim ${winback.percentOff}% off — $${(THRYVE_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo`
+                    : `Subscribe — $${THRYVE_PRICE}/mo`}
                   {busy !== 'subscribe' && <Icons.Arrow size={14} sw={2.2}/>}
                 </button>
               )}
