@@ -1,30 +1,45 @@
-// Paywall modal — blocks the business app when the workspace's subscription
-// isn't active and the trial has ended (or never started).
+// Paywall modal — UNSKIPPABLE hard wall when the workspace's subscription
+// isn't active. Replaces the previous soft wall that let owners route to
+// /me and keep working in the free client portal.
 //
-// CTAs:
-//   • Start free trial — POSTs /api/billing/start-trial. Idempotent.
-//   • Subscribe        — POSTs /api/billing/checkout, then redirects to
-//                         the returned Stripe Checkout URL.
+// Affordances (always rendered, in this order):
+//   • Subscribe        — POSTs /api/billing/checkout, redirects to Stripe.
+//   • Start free trial — only shown for owners who haven't trialed yet.
+//   • Manage billing   — POSTs /api/billing/portal, opens Stripe Customer
+//                        Portal so a card update or reactivation doesn't
+//                        require a second support touch.
+//   • Export my data   — anchor GET /api/account/export. The portability
+//                        promise: owners can always retrieve their data,
+//                        even when locked out of the app.
+//   • Log out          — escape that doesn't compromise the wall.
+//
+// isClient carve-out: an owner who's ALSO a client of another THRYVE
+// business gets one labeled link "Go to {business} as a client" → /me.
+// Solo owners (isClient === false) get no /me link at all.
 //
 // Post-checkout: Stripe redirects to /?subscribed=1&session_id=cs_...
 // We POST /api/billing/sync to fetch the subscription state directly (so
-// the modal dismisses even before the webhook has landed) and fall back
-// to polling /api/me if that misses.
-//
-// The user can always escape to the free client portal — modal is never
-// a navigation trap.
+// the wall drops even before the webhook has landed) and fall back to
+// polling /api/me if that misses.
 import React, { useEffect, useRef, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
 export default function Paywall({ ctx, onRefresh }) {
   const sub = ctx?.subscription || null;
-  const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'syncing' | null
+  const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
-  const navigate = useNavigate();
   const [params, setParams] = useSearchParams();
   const synced = useRef(false);
+
+  // Owners who are ALSO clients of another business get one labeled link
+  // out — the wall stays unskippable from THEIR perspective (they can't
+  // dodge it for their own workspace), but their access to other
+  // businesses' client portals isn't collateral damage.
+  const clientOnlyBusiness = ctx?.isClient && ctx?.memberships?.length
+    ? ctx.memberships[0]
+    : null;
 
   // After Stripe Checkout success, hit /sync to flip the row before the
   // webhook arrives. Only runs once per mount even if the modal re-renders.
@@ -75,6 +90,30 @@ export default function Paywall({ ctx, onRefresh }) {
       setErr(e.message || 'Could not start checkout');
       setBusy(null);
     }
+  };
+
+  const openBillingPortal = async () => {
+    setBusy('portal'); setErr(null);
+    try {
+      const r = await api.post('/billing/portal', {});
+      if (!r.url) throw new Error('No portal URL returned');
+      window.location.href = r.url;
+    } catch (e) {
+      // Common case: no stripe_customer_id yet (owner never reached
+      // checkout). Surface the helpful message rather than the raw error.
+      setErr(e.message || 'Could not open billing portal');
+      setBusy(null);
+    }
+  };
+
+  const logout = async () => {
+    setBusy('logout'); setErr(null);
+    try {
+      await api.post('/auth/logout', {});
+    } catch {
+      // Best-effort: if the logout call fails, still clear locally.
+    }
+    window.location.href = '/signin';
   };
 
   // Distinguish trial-expired from never-trialed so the copy matches.
@@ -166,19 +205,65 @@ export default function Paywall({ ctx, onRefresh }) {
             )}
             <button onClick={subscribe} disabled={busy != null}
               className="btn btn-primary"
-              style={{ flex: everTrialed ? 1 : 1, justifyContent: 'center', padding: '12px 14px' }}>
+              style={{ flex: 1, justifyContent: 'center', padding: '12px 14px' }}>
               {busy === 'subscribe' ? 'Redirecting…' : 'Subscribe'}
               {busy !== 'subscribe' && <Icons.Arrow size={13} sw={2.2}/>}
             </button>
           </div>
         )}
 
+        {/* Secondary affordances. These are the entire "escape" surface
+            under the hard wall: nothing else lets you sidestep into the
+            business app. Each is conservative — Manage billing only
+            helps if a Stripe customer exists, Export hits an unrelated
+            GET endpoint, Log out clears the session. */}
         {busy !== 'syncing' && (
-          <button onClick={() => navigate('/me')}
+          <div style={{
+            display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
+            gap: 6, marginTop: 6, fontSize: 12.5,
+          }}>
+            {/* Only show "Manage billing" if Stripe has a customer for
+                this workspace — otherwise the endpoint 400s. */}
+            {ctx?.hasBillingRecord && (
+              <>
+                <button onClick={openBillingPortal} disabled={busy != null}
+                  className="btn btn-ghost"
+                  style={{ padding: '6px 10px', color: 'var(--muted)' }}>
+                  {busy === 'portal' ? 'Opening…' : 'Manage billing'}
+                </button>
+                <span aria-hidden="true" style={{ color: 'var(--muted-2)' }}>·</span>
+              </>
+            )}
+            {/* Export is a plain GET so a real <a> with download lets
+                the browser stream the response straight to disk. */}
+            <a href="/api/account/export" download
+              className="btn btn-ghost"
+              style={{ padding: '6px 10px', color: 'var(--muted)', textDecoration: 'none' }}>
+              Export my data
+            </a>
+            <span aria-hidden="true" style={{ color: 'var(--muted-2)' }}>·</span>
+            <button onClick={logout} disabled={busy != null}
+              className="btn btn-ghost"
+              style={{ padding: '6px 10px', color: 'var(--muted)' }}>
+              {busy === 'logout' ? 'Signing out…' : 'Log out'}
+            </button>
+          </div>
+        )}
+
+        {/* isClient carve-out: a single, labeled link to the OTHER
+            business's client portal — never a generic /me link, so the
+            owner can't dodge their own wall by claiming to be a client
+            of themselves. Only renders when /api/me reports memberships
+            elsewhere. */}
+        {busy !== 'syncing' && clientOnlyBusiness && (
+          <a href="/me"
             className="btn btn-ghost"
-            style={{ alignSelf: 'center', fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
-            Use the free client view instead →
-          </button>
+            style={{
+              alignSelf: 'center', fontSize: 12.5, color: 'var(--muted)',
+              marginTop: 2, textDecoration: 'none',
+            }}>
+            Go to {clientOnlyBusiness.businessName} as a client →
+          </a>
         )}
       </div>
     </div>

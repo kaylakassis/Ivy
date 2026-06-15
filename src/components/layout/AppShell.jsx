@@ -90,6 +90,16 @@ function AppShellInner() {
     return () => document.body.classList.remove('has-mobile-nav');
   }, [viewport.isMobile]);
 
+  // Hard paywall body class: tells global.css to (a) scroll-lock the page
+  // behind the wall and (b) hide the floating .view-toggle pill (the
+  // previous escape hatch). The Paywall renders the isClient carve-out
+  // itself when applicable, so removing the global toggle is safe.
+  useEffect(() => {
+    if (needsPaywall) document.body.classList.add('app-walled');
+    else document.body.classList.remove('app-walled');
+    return () => document.body.classList.remove('app-walled');
+  }, [needsPaywall]);
+
   // Close the drawer on route change so nav-tap-to-page just works.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
