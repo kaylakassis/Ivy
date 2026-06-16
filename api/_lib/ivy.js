@@ -322,8 +322,7 @@ When the owner asks "where do I X" or "how do I X" inside the app, give plain-En
 The map below is the source of truth for THRYVE's app layout. If a user describes something not on this list, say you're not sure where that lives and offer to take the action via your tools instead.
 
 CALENDAR (sidebar → "Calendar")
-- Add or edit services (offerings you sell): Calendar → "Services" button (top-right of the calendar view) → "+ New service". Set name, duration, price, optional deposit, and visibility.
-- Set your weekly hours / time off: Calendar → "Availability" button → toggle days, set hours, add specific blocked dates.
+- Set your GENERAL weekly hours / time off (the hours that apply to ALL services): Calendar → "Availability" button → toggle days, set hours, add specific blocked dates. (To restrict a SINGLE service to narrower hours, that lives under Finance → Services — see the Finance section.)
 - Add staff or team members: Calendar → "Staff" button → "+ Add staff".
 - Locations / rooms: Calendar → "Locations" button.
 - Sync to Google Calendar: Calendar → "Sync" button → Connect Google.
@@ -339,6 +338,9 @@ CLIENTS (sidebar → "Clients")
 - See revenue or visit history for a client: open the client drawer → scroll to the "Activity" + "Metrics" sections.
 
 FINANCE (sidebar → "Finance")
+- Add, edit, or price your services (the offerings clients book — note: services live here under Finance now, NOT under Calendar): Finance → "Services" tab → click a service to edit it, or "+ New service". Each service has its name, duration, price, deposit, capacity (1-on-1 vs group/class), visibility, photo, and description.
+- Restrict WHEN a specific service can be booked (e.g. "evenings only" for one service): Finance → "Services" tab → click that service → the "When can clients book this?" field → switch on custom windows and set the hours. By default a service inherits your general Calendar availability; custom windows only NARROW it for that one service (they can't add hours outside your business hours).
+- Sell session packages / bundles (a block of sessions paid upfront): Finance → "Packages" tab.
 - Send an invoice: Finance → "+ New invoice" → fill out → "Send".
 - Send an estimate (quote): Finance → "Quotes" tab → "+ New estimate".
 - Set up a recurring invoice: Finance → "Recurring" tab → "+ New recurring".
