@@ -131,6 +131,83 @@ export async function notifyWinbackOffer({
   }
 }
 
+// Trial-ending reminder sequence. Sent by api/cron/trial-reminders.js
+// while a workspace is still on its live trial, in three stages keyed by
+// how close trial_ends_at is:
+//   '7d'      → ~a week out: soft "no rush, here's when it ends" nudge.
+//   '1d'      → the day before: clearer "subscribe to avoid a lockout".
+//   'expired' → at/just-after expiry: async reach that complements the
+//               in-app hard wall (the owner may not have logged in).
+// One email per stage per workspace — the cron stamps a column so this
+// never repeats. Honors the owner's `billing` email preference: these
+// are conversion nudges, not critical notices, so a muted owner is left
+// alone. ($49/mo is the canonical monthly price — src/lib/pricing.js;
+// inlined here to avoid pulling the frontend module into the API bundle.)
+const TRIAL_REMINDER_COPY = {
+  '7d': {
+    subject:  'Your THRYVE trial ends in a week',
+    heading:  'A week left on your free trial',
+    body: (greeting, endsAt) => `<p>${greeting}</p>
+      <p>Your THRYVE free trial ends on <strong>${fmtDate(endsAt)}</strong>.
+      After that it's <strong>$49/mo</strong> — and everything keeps running:
+      your clients, calendar, invoices, messaging, and booking site, exactly
+      as you've set them up.</p>
+      <p>No action needed today. Whenever you're ready, subscribing takes a
+      few seconds — and you can cancel anytime.</p>`,
+    ctaText:  'Subscribe to keep going',
+    footer:   'Adjust these reminders anytime from your email preferences in /account.',
+  },
+  '1d': {
+    subject:  'Your THRYVE trial ends tomorrow',
+    heading:  'Your free trial ends tomorrow',
+    body: (greeting, endsAt) => `<p>${greeting}</p>
+      <p>Quick heads-up — your THRYVE free trial ends
+      <strong>${fmtDate(endsAt)}</strong>. Subscribe to keep your business
+      app active for <strong>$49/mo</strong>.</p>
+      <p>If you don't, the business app locks, but nothing is lost: your data
+      stays safe, your client portal stays free, and you can pick back up the
+      moment you subscribe.</p>`,
+    ctaText:  'Subscribe — $49/mo',
+    footer:   'Adjust these reminders anytime from your email preferences in /account.',
+  },
+  'expired': {
+    subject:  'Your THRYVE free trial has ended',
+    heading:  'Your free trial has ended',
+    body: (greeting) => `<p>${greeting}</p>
+      <p>Your THRYVE free trial has ended. Subscribe to pick up right where
+      you left off — every client, booking, invoice, and document is exactly
+      as you left it, waiting for you.</p>
+      <p>One plan, <strong>$49/mo</strong>, no per-seat fees. Cancel anytime.</p>`,
+    ctaText:  'Subscribe & pick up where you left off',
+    footer:   'Adjust these reminders anytime from your email preferences in /account.',
+  },
+};
+
+export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt }) {
+  try {
+    const copy = TRIAL_REMINDER_COPY[stage];
+    if (!copy) return;
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const greeting = o.name ? `Hi ${o.name.split(/\s+/)[0]},` : 'Hi,';
+    const html = emailShell({
+      heading: copy.heading,
+      body:    copy.body(greeting, trialEndsAt),
+      ctaText: copy.ctaText,
+      ctaUrl:  `${appUrl()}/account?tab=billing`,
+      footer:  copy.footer,
+    });
+    await sendEmailToUser({
+      userId: o.owner_id,
+      type: 'billing', // conversion nudge — respect the billing opt-out
+      to: o.email, subject: copy.subject, html,
+    });
+  } catch (err) {
+    console.error('[subscriptionNotify.trialReminder] failed:', err.message);
+    reportError(err, { extra: { workspaceId, stage } });
+  }
+}
+
 export async function notifyPaymentFailed({ workspaceId, amountCents, currency, nextAttemptAt }) {
   try {
     const o = await loadOwner(workspaceId);
