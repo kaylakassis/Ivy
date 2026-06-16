@@ -573,6 +573,61 @@ export const IVY_TOOLS = [
       required: ['booking_id', 'date', 'start_min', 'end_min'],
     },
   },
+  {
+    name: 'create_package',
+    description: 'Create a prepaid session package / bundle (e.g. "10 sessions for $500").',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name:          { type: 'string' },
+        session_count: { type: 'integer', description: 'Number of sessions/credits.' },
+        price:         { type: 'number' },
+        description:   { type: 'string' },
+        service_ids:   { type: 'array', items: { type: 'string' }, description: 'Optional service UUIDs this package covers.' },
+        expiry_days:   { type: 'integer', description: 'Credits expire N days after purchase (optional).' },
+      },
+      required: ['name', 'session_count', 'price'],
+    },
+  },
+  {
+    name: 'send_document',
+    description: 'CONFIRMATION-GATED. Send a draft document to a client for e-signature. Returns needs_confirmation unless confirm:true.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        document_id: { type: 'string' },
+        client_id:   { type: 'string', description: 'The signer (must be a client in this workspace).' },
+        confirm:     { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+      required: ['document_id', 'client_id'],
+    },
+  },
+  {
+    name: 'send_review_request',
+    description: 'CONFIRMATION-GATED. Email a client a review request for a past booking. Returns needs_confirmation unless confirm:true.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        booking_id: { type: 'string' },
+        confirm:    { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+      required: ['booking_id'],
+    },
+  },
+  {
+    name: 'refund_invoice',
+    description: 'CONFIRMATION-GATED. Refund a paid invoice (real money out — card refund via the connected processor, or a recorded manual refund). Returns needs_confirmation unless confirm:true.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        invoice_id: { type: 'string' },
+        amount:     { type: 'number', description: 'Optional partial amount. Omit to refund the full remaining balance.' },
+        reason:     { type: 'string', enum: ['duplicate', 'fraudulent', 'requested_by_customer'] },
+        confirm:    { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+      required: ['invoice_id'],
+    },
+  },
 ];
 
 // ── Executors ────────────────────────────────────────────────────────
@@ -629,6 +684,10 @@ export const HANDLERS = {
   send_quote,
   send_campaign,
   reschedule_booking,
+  create_package,
+  send_document,
+  send_review_request,
+  refund_invoice,
 };
 
 // Outbound / hard-to-reverse actions. These never auto-execute: the model
@@ -644,6 +703,9 @@ export const SENSITIVE_TOOLS = new Set([
   'send_quote',
   'send_campaign',
   'reschedule_booking',
+  'send_document',
+  'send_review_request',
+  'refund_invoice',
 ]);
 
 // Async so a few gated actions can resolve real context for the
@@ -663,6 +725,12 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       return `Email quote ${a.quote_id || '(unknown)'}${a.client_id ? ` to client ${a.client_id}` : ''}`;
     case 'reschedule_booking':
       return `Reschedule booking ${a.booking_id || '(unknown)'} to ${a.date || '?'} ${fmtMinAsTime(a.start_min)}-${fmtMinAsTime(a.end_min)}`;
+    case 'send_document':
+      return `Send document ${a.document_id || '(unknown)'} to client ${a.client_id || '(unknown)'} for e-signature`;
+    case 'send_review_request':
+      return `Email a review request for booking ${a.booking_id || '(unknown)'}`;
+    case 'refund_invoice':
+      return `Refund invoice ${a.invoice_id || '(unknown)'}${a.amount != null ? ` ($${Number(a.amount).toFixed(2)})` : ' (full remaining balance)'} — real money out${a.reason ? `, reason: ${a.reason.replace(/_/g, ' ')}` : ''}`;
     case 'send_campaign': {
       // Resolve the real audience size so the owner sees exactly how many
       // people this blast reaches before approving.
@@ -1736,4 +1804,179 @@ async function reschedule_booking({ workspaceId, args }) {
      RETURNING id, date, start_min, end_min, client_name
   `;
   return { booking: rows[0], rescheduled: true };
+}
+
+async function create_package({ workspaceId, args }) {
+  const name = (args?.name || '').toString().trim();
+  if (!name) throw new Error('name is required');
+  const sessionCount = Math.floor(Number(args?.session_count));
+  if (!Number.isFinite(sessionCount) || sessionCount < 1) throw new Error('session_count must be >= 1');
+  const price = Number(args?.price);
+  if (!Number.isFinite(price) || price < 0) throw new Error('price must be a non-negative number');
+  // service_ids is a UUID[] column — validate shape, then confirm ownership.
+  let serviceIds = [];
+  if (args.service_ids != null) {
+    if (!Array.isArray(args.service_ids)) throw new Error('service_ids must be an array');
+    serviceIds = args.service_ids.map((s) => String(s)).filter(Boolean);
+    if (serviceIds.some((idv) => !/^[0-9a-fA-F-]{36}$/.test(idv))) throw new Error('service_ids must be UUIDs');
+    serviceIds = serviceIds.slice(0, 50);
+    if (serviceIds.length > 0) {
+      const { rows: own } = await sql.query(
+        'SELECT id FROM services WHERE workspace_id = $1 AND id = ANY($2)',
+        [workspaceId, serviceIds],
+      );
+      if (own.length !== serviceIds.length) throw new Error('One or more service_ids are not in this workspace');
+    }
+  }
+  const expiryDays = Number.isFinite(Number(args.expiry_days))
+    ? Math.max(1, Math.min(3650, Math.floor(Number(args.expiry_days)))) : null;
+  const { rows } = await sql`
+    INSERT INTO packages (workspace_id, name, description, service_ids, session_count, price, expiry_days, visibility)
+    VALUES (${workspaceId}, ${name.slice(0, 200)},
+            ${args.description ? String(args.description).slice(0, 2000) : null},
+            ${serviceIds}, ${sessionCount}, ${price}, ${expiryDays}, 'public')
+    RETURNING id, name, session_count, price
+  `;
+  return { package: rows[0] };
+}
+
+async function send_document({ workspaceId, args }) {
+  const id = args.document_id ? String(args.document_id) : null;
+  const clientId = args.client_id ? String(args.client_id) : null;
+  if (!id) throw new Error('document_id is required');
+  if (!clientId) throw new Error('client_id is required');
+  const { fetchOwnedDoc } = await import('./documents.js');
+  const { sendEmailToClient } = await import('./email.js');
+  const { fetchBranding } = await import('./branding.js');
+
+  const doc = await fetchOwnedDoc({ id, workspaceId });
+  if (!doc) throw new Error('Document not found');
+  if (doc.status === 'completed') throw new Error('Already completed');
+  if (doc.status === 'voided') throw new Error('Document is voided — restore first');
+  if (doc.status === 'declined') throw new Error('Document was declined — restore to draft first');
+
+  const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
+  if (cl.rows.length === 0) throw new Error('Unknown client');
+  const signerName = cl.rows[0].name || '';
+  const signerEmail = (cl.rows[0].email || '').toLowerCase().trim();
+  if (!signerEmail) throw new Error('Client has no email on file');
+
+  // Single-signer send: reset signer rows, mint one token, mark 'sent'.
+  // (Multi-signer flows stay in the documents UI.)
+  const rawToken = generateRawToken(32);
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  await sql`
+    DELETE FROM document_signers
+     WHERE document_id = ${id}
+       AND document_id IN (SELECT id FROM documents WHERE id = ${id} AND workspace_id = ${workspaceId})
+  `;
+  await sql`
+    INSERT INTO document_signers (document_id, order_index, client_id, name, email, sign_token_hash, status)
+    VALUES (${id}, ${0}, ${clientId}, ${signerName}, ${signerEmail}, ${tokenHash}, 'awaiting')
+  `;
+  const newActivity = [
+    ...(Array.isArray(doc.activity) ? doc.activity : []),
+    { ts: new Date().toISOString(), kind: 'sent', text: `Sent to ${signerName || signerEmail}` },
+  ];
+  const cleanedFields = (Array.isArray(doc.fields) ? doc.fields : []).map((f) => ({ ...f, value: '' }));
+  await sql`
+    UPDATE documents SET
+      recipient_client_id = ${clientId}, recipient_name = ${signerName}, recipient_email = ${signerEmail},
+      status = 'sent', sign_token_hash = ${tokenHash}, sent_at = NOW(),
+      activity = ${JSON.stringify(newActivity)}::jsonb, fields = ${JSON.stringify(cleanedFields)}::jsonb,
+      completion_hash = NULL, decline_reason = NULL, declined_at = NULL,
+      final_pdf_url = NULL, final_pdf_blob_pathname = NULL, updated_at = NOW()
+    WHERE id = ${id} AND workspace_id = ${workspaceId}
+  `;
+
+  const link = `${appUrl()}/sign/${encodeURIComponent(rawToken)}`;
+  const branding = await fetchBranding(workspaceId).catch(() => ({}));
+  try {
+    await sendEmailToClient({
+      clientId, type: 'documents', to: signerEmail,
+      subject: `Action needed: sign "${doc.name}"`,
+      replyTo: branding.replyTo,
+      html: emailShell({
+        heading: 'A document needs your signature',
+        body: `<p>Hi ${escapeHtml(signerName)},</p>
+               <p>You've been sent a document to review and sign: <b>${escapeHtml(doc.name)}</b>.</p>
+               <p>Click the button to open and sign it.</p>`,
+        ctaText: 'Open and sign', ctaUrl: link,
+        footer: "If you weren't expecting this, you can safely ignore this email.", branding,
+      }),
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[ivy.send_document] email failed:', e?.message);
+  }
+  return { ok: true, document_id: id, sent_to: signerEmail };
+}
+
+async function send_review_request({ workspaceId, args }) {
+  const id = args.booking_id ? String(args.booking_id) : null;
+  if (!id) throw new Error('booking_id is required');
+  const { sendEmailToClient } = await import('./email.js');
+  const { fetchBranding } = await import('./branding.js');
+
+  const b = await sql`
+    SELECT b.id, b.client_id, b.client_name, b.client_email, b.date, b.review_requested_at,
+           s.name AS service_name, cs.biz_name
+      FROM bookings b
+      LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+      LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+     WHERE b.id = ${id} AND b.workspace_id = ${workspaceId}
+       AND b.cancelled_at IS NULL AND b.no_show_at IS NULL
+  `;
+  if (b.rows.length === 0) throw new Error('Booking not found (or cancelled / no-show)');
+  const row = b.rows[0];
+  if (!row.client_email) throw new Error('That booking has no client email on file');
+  const existing = await sql`SELECT 1 FROM reviews WHERE booking_id = ${id} LIMIT 1`;
+  if (existing.rows.length > 0) throw new Error('This booking already has a review');
+
+  const rawToken = generateRawToken(32);
+  const hash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const branding = await fetchBranding(workspaceId).catch(() => ({}));
+  const business = branding.businessName || row.biz_name || 'Your business';
+  const link = `${appUrl()}/review/${encodeURIComponent(rawToken)}`;
+  const firstName = (row.client_name || '').split(/\s+/)[0] || 'there';
+
+  try {
+    await sendEmailToClient({
+      clientId: row.client_id, type: 'marketing', to: row.client_email,
+      subject: `How was your ${row.service_name || 'session'}?`,
+      replyTo: branding.replyTo,
+      html: emailShell({
+        heading: `How was your ${row.service_name || 'session'}?`,
+        body: `<p>Hi ${escapeHtml(firstName)},</p>
+          <p>Hope your <strong>${escapeHtml(row.service_name || 'session')}</strong> with
+          <strong>${escapeHtml(business)}</strong> went well.</p>
+          <p>Would you mind sharing how it went? Reviews help small businesses like ${escapeHtml(business)} thrive.</p>
+          <p style="text-align:center;line-height:1.7;">
+            <a href="${link}?rating=5" style="text-decoration:none;font-size:30px;letter-spacing:4px;color:#E0B645;">★ ★ ★ ★ ★</a>
+          </p>`,
+        ctaText: 'Leave a review', ctaUrl: link,
+        footer: `One-time link. Your review is published to ${escapeHtml(business)}'s public profile.`,
+        branding,
+      }),
+    });
+  } catch (e) {
+    throw new Error('Could not send the review request email');
+  }
+  await sql`
+    UPDATE bookings SET review_request_token_hash = ${hash}, review_requested_at = NOW(), updated_at = NOW()
+     WHERE id = ${id} AND workspace_id = ${workspaceId}
+  `;
+  return { ok: true, booking_id: id, sent_to: row.client_email };
+}
+
+async function refund_invoice({ workspaceId, args }) {
+  const id = args.invoice_id ? String(args.invoice_id) : null;
+  if (!id) throw new Error('invoice_id is required');
+  const { refundInvoice } = await import('./refunds.js');
+  // No `audit` context: Ivy has no HTTP request object. The refund still
+  // records to the invoice activity log; the IP-scoped audit row is skipped.
+  const result = await refundInvoice({
+    workspaceId, id, amount: args.amount, reason: args.reason,
+  });
+  return { ok: true, invoice_id: id, refund: result.refund };
 }
