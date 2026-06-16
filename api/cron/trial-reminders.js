@@ -108,11 +108,14 @@ async function handler(req, res) {
       byStage[cfg.stage] = r.sent;
     }
     const sent = Object.values(byStage).reduce((a, b) => a + b, 0);
-    await trackCron('trial-reminders', { scanned, sent, ...byStage });
-    return ok(res, { scanned, sent, byStage });
+    // Metrics get captured by the trackCron wrapper from this response
+    // body. extractMetrics keeps top-level scalars and drops nested
+    // objects, so we spread byStage's per-stage counts into the top level
+    // instead of nesting them under a `byStage` key.
+    return ok(res, { scanned, sent, ...byStage });
   } catch (err) {
     return serverError(res, err);
   }
 }
 
-export default handler;
+export default trackCron('trial-reminders', handler);
