@@ -30,3 +30,16 @@ export const THRYVE_PRICE = 49;
 // when this expires. Marketing copy reads from here so a future change
 // in the trial length only happens in one place.
 export const TRIAL_DAYS = 28;
+
+// Annual plan ("THRYVING, billed yearly"). Priced at 10× the monthly
+// rate so a year of THRYVE costs the same as ten months paid monthly —
+// i.e. "2 months free" versus 12 × $49 = $588. Surfaced as the
+// highlighted LTV option on the paywall + pricing page; monthly stays
+// the honest default.
+export const THRYVE_PRICE_ANNUAL = 490;
+
+// Derived once so copy never hardcodes the math (same discipline as
+// STACK_TOTAL): the yearly saving vs paying monthly, and the effective
+// monthly rate when billed annually.
+export const ANNUAL_SAVINGS = THRYVE_PRICE * 12 - THRYVE_PRICE_ANNUAL;          // $98
+export const ANNUAL_MONTHLY_EQUIV = Math.round((THRYVE_PRICE_ANNUAL / 12) * 100) / 100; // $40.83

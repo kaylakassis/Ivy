@@ -10,6 +10,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { readBody } from '../_lib/body.js';
 import { createSubscriptionCheckoutSession, platformStripeSecret } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -19,10 +20,22 @@ export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
     const secretKey = platformStripeSecret();
-    const priceId   = process.env.THRYVE_STRIPE_PRICE_ID;
-    if (!secretKey || !priceId) {
+    const monthlyPriceId = process.env.THRYVE_STRIPE_PRICE_ID;
+    if (!secretKey || !monthlyPriceId) {
       return badRequest(res, 'Subscription billing is not configured yet — set STRIPE_SECRET_KEY (the Vercel Stripe integration provides this) and THRYVE_STRIPE_PRICE_ID.');
     }
+
+    // Plan selection. Monthly is the default and the always-available
+    // honest baseline; annual is the highlighted LTV option. We require
+    // its own Stripe price id — if annual is requested but unconfigured
+    // we reject rather than silently charging the monthly price.
+    const body = await readBody(req).catch(() => ({}));
+    const plan = body?.plan === 'annual' ? 'annual' : 'monthly';
+    const annualPriceId = process.env.THRYVE_STRIPE_PRICE_ID_ANNUAL;
+    if (plan === 'annual' && !annualPriceId) {
+      return badRequest(res, 'Annual billing is not configured yet — set THRYVE_STRIPE_PRICE_ID_ANNUAL.');
+    }
+    const priceId = plan === 'annual' ? annualPriceId : monthlyPriceId;
 
     const user = await requireUser(req, res);
     if (!user) return;
@@ -43,8 +56,14 @@ export default async function handler(req, res) {
     // automatically when a coupon is passed (Stripe rejects both at
     // once); the offer is single-use by construction (a 1-redemption
     // promotion code paired with the coupon).
+    //
+    // Monthly only: the win-back coupon is "30% off, repeating 3 months",
+    // which maps cleanly onto monthly invoices but discounts a yearly
+    // invoice oddly. Annual is already the discounted plan, so we don't
+    // stack the win-back on top — the coupon waits for a monthly checkout.
     const winbackCoupon = (
-      w?.winback_coupon_id
+      plan === 'monthly'
+      && w?.winback_coupon_id
       && w?.winback_expires_at
       && new Date(w.winback_expires_at).getTime() > Date.now()
     ) ? w.winback_coupon_id : null;

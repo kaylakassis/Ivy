@@ -165,6 +165,23 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_coupon_id     TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_promo_code    TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_expires_at    TIMESTAMPTZ;
 
+-- Trial-ending reminder drip. One-shot stamps so each nudge in the
+-- trial-ending sequence sends at most once per workspace: ~7 days out,
+-- ~1 day out, and at expiry. The trial-reminders cron sweeps trialing
+-- workspaces by trial_ends_at and stamps the matching column after
+-- sending. Distinct from the win-back columns above: these fire DURING
+-- the live trial; win-back fires only AFTER it lapses.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_7d_sent_at    TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_1d_sent_at    TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_expired_notice_sent_at TIMESTAMPTZ;
+
+-- Powers the trial-reminders cron's daily scan: trialing workspaces
+-- ordered by when the trial ends. Partial on the status so it stays
+-- cheap as workspaces grows.
+CREATE INDEX IF NOT EXISTS idx_workspaces_trial_reminders
+  ON workspaces(trial_ends_at)
+  WHERE subscription_status = 'trialing';
+
 -- Partial index that powers the win-back cron's daily scan: candidates
 -- are workspaces that have hit the wall, haven't been offered yet, and
 -- aren't sponsored. Kept tight so the scan stays cheap as workspaces

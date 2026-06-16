@@ -15,7 +15,7 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import RoiCalculator from './RoiCalculator.jsx';
-import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
+import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE, TRIAL_DAYS, THRYVE_PRICE_ANNUAL, ANNUAL_SAVINGS } from '../../lib/pricing.js';
 
 // One plan, two states: a free trial while we're in beta, then a
 // single paid subscription ("THRYVING") at $49/mo. We deliberately
@@ -51,7 +51,7 @@ const PLAN = {
 const FAQ = [
   {
     q: 'How much does THRYVE cost?',
-    a: `One simple subscription: $${THRYVE_PRICE}/mo after your ${TRIAL_DAYS}-day free trial. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
+    a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${THRYVE_PRICE}/mo, or $${THRYVE_PRICE_ANNUAL}/yr billed annually (2 months free — save $${ANNUAL_SAVINGS}). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
   },
   {
     q: 'Do you take a cut of my payments?',
@@ -151,6 +151,9 @@ export default function PricingPage() {
               </div>
               <div style={{ fontSize: 12.5, opacity: 0.75, marginTop: 6 }}>
                 then {PLAN.priceGA} when you're THRYVING. No per-seat math, no transaction fees.
+              </div>
+              <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
+                Or save with annual — <strong>${THRYVE_PRICE_ANNUAL}/yr</strong> (2 months free, save ${ANNUAL_SAVINGS}).
               </div>
             </div>
             <Link to={PLAN.ctaTo} className="btn btn-primary"

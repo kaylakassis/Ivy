@@ -25,7 +25,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
-import { THRYVE_PRICE, STACK_TOTAL } from '../../lib/pricing.js';
+import { THRYVE_PRICE, STACK_TOTAL, THRYVE_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof — mirrors the marketing pricing page.
 // We deliberately do NOT fabricate star ratings or user counts (THRYVE
@@ -47,6 +47,9 @@ export default function Paywall({ ctx, onRefresh }) {
   const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
   const [winback, setWinback] = useState(null); // {percentOff, durationMonths, promoCode, expiresAt}
+  // Billing period. Monthly is the honest default; annual is the
+  // highlighted LTV option (2 months free). Flows into the checkout call.
+  const [plan, setPlan]   = useState('monthly'); // 'monthly' | 'annual'
   const [params, setParams] = useSearchParams();
   const synced = useRef(false);
   const winbackTried = useRef(false);
@@ -123,7 +126,10 @@ export default function Paywall({ ctx, onRefresh }) {
   const subscribe = async () => {
     setBusy('subscribe'); setErr(null);
     try {
-      const r = await api.post('/billing/checkout', {});
+      // winback is a monthly-only offer (checkout.js scopes the coupon to
+      // monthly), so the toggle is hidden while it's showing — `plan`
+      // stays 'monthly' in that case.
+      const r = await api.post('/billing/checkout', { plan });
       if (!r.url) throw new Error('No checkout URL returned');
       window.location.href = r.url;
     } catch (e) {
@@ -167,6 +173,8 @@ export default function Paywall({ ctx, onRefresh }) {
   // everyone else the wall leads straight to Subscribe.
   const canTrial = !everTrialed;
   const syncing  = busy === 'syncing';
+  // Price string for the subscribe CTAs, reflecting the selected period.
+  const priceLabel = plan === 'annual' ? `$${THRYVE_PRICE_ANNUAL}/yr` : `$${THRYVE_PRICE}/mo`;
 
   const heading = syncing      ? 'Confirming your subscription…'
                 : wasPaid       ? 'Pick up where you left off'
@@ -265,10 +273,47 @@ export default function Paywall({ ctx, onRefresh }) {
                 ))}
               </ul>
 
+              {/* ─── BILLING PERIOD TOGGLE ───────────────────────────
+                  Monthly (honest default) vs Annual (highlighted LTV
+                  option — 2 months free). Hidden while a monthly-only
+                  win-back offer is showing. */}
+              {!winback && (
+                <div role="tablist" aria-label="Billing period" style={{
+                  display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 2,
+                }}>
+                  {[
+                    { key: 'monthly', label: 'Monthly', sub: `$${THRYVE_PRICE}/mo` },
+                    { key: 'annual',  label: 'Annual',  sub: `$${THRYVE_PRICE_ANNUAL}/yr`, tag: '2 months free' },
+                  ].map((opt) => {
+                    const active = plan === opt.key;
+                    return (
+                      <button key={opt.key} type="button" role="tab" aria-selected={active}
+                        onClick={() => setPlan(opt.key)} disabled={busy != null}
+                        style={{
+                          position: 'relative', textAlign: 'left', cursor: 'pointer',
+                          padding: '10px 12px', borderRadius: 12,
+                          border: `2px solid ${active ? 'var(--accent)' : 'var(--border)'}`,
+                          background: active ? 'var(--accent-soft)' : 'var(--surface)',
+                        }}>
+                        <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>{opt.label}</div>
+                        <div style={{ fontSize: 12, color: 'var(--muted)' }}>{opt.sub}</div>
+                        {opt.tag && (
+                          <span style={{
+                            position: 'absolute', top: -9, right: 8,
+                            padding: '1px 7px', borderRadius: 99,
+                            background: 'var(--ok)', color: '#fff',
+                            fontSize: 9.5, fontWeight: 700, letterSpacing: '0.03em', textTransform: 'uppercase',
+                          }}>{opt.tag}</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {/* ─── PLAN CARD (highlighted "best offer" style) ──────
-                  Single real plan — no fabricated Monthly/Annual toggle.
-                  The badge + accent border match the refs' featured-plan
-                  treatment. */}
+                  Reflects the selected billing period. The badge + accent
+                  border match the refs' featured-plan treatment. */}
               <div style={{
                 position: 'relative', marginTop: 2,
                 padding: '16px 16px 14px', borderRadius: 14,
@@ -279,20 +324,24 @@ export default function Paywall({ ctx, onRefresh }) {
                   padding: '2px 10px', borderRadius: 99,
                   background: 'var(--accent)', color: 'var(--accent-ink)',
                   fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
-                }}>{canTrial ? '28 days free' : 'Full access'}</div>
+                }}>{canTrial ? '28 days free' : (plan === 'annual' ? '2 months free' : 'Full access')}</div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>THRYVING</span>
                   <span style={{
                     fontFamily: 'var(--font-num)', fontSize: 28, fontWeight: 600,
                     color: 'var(--fg)', letterSpacing: '-0.02em',
-                  }}>${THRYVE_PRICE}</span>
-                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>/mo</span>
+                  }}>${plan === 'annual' ? THRYVE_PRICE_ANNUAL : THRYVE_PRICE}</span>
+                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plan === 'annual' ? '/yr' : '/mo'}</span>
                 </div>
                 <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
-                  {canTrial
-                    ? `Free for 28 days, then $${THRYVE_PRICE}/mo. Cancel anytime.`
-                    : `$${THRYVE_PRICE}/mo · one plan, no per-seat fees. Cancel anytime.`}
+                  {plan === 'annual'
+                    ? (canTrial
+                        ? `Free for 28 days, then $${THRYVE_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) — save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
+                        : `$${THRYVE_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) · save $${ANNUAL_SAVINGS}/yr vs monthly. Cancel anytime.`)
+                    : (canTrial
+                        ? `Free for 28 days, then $${THRYVE_PRICE}/mo. Cancel anytime.`
+                        : `$${THRYVE_PRICE}/mo · one plan, no per-seat fees. Cancel anytime.`)}
                 </div>
               </div>
 
@@ -356,7 +405,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   <button onClick={subscribe} disabled={busy != null}
                     className="btn btn-ghost"
                     style={{ justifyContent: 'center', fontSize: 13, color: 'var(--muted)' }}>
-                    {busy === 'subscribe' ? 'Redirecting…' : `or subscribe now — $${THRYVE_PRICE}/mo`}
+                    {busy === 'subscribe' ? 'Redirecting…' : `or subscribe now — ${priceLabel}`}
                   </button>
                 </div>
               ) : (
@@ -365,7 +414,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
                   {busy === 'subscribe' ? 'Redirecting…'
                     : winback ? `Claim ${winback.percentOff}% off — $${(THRYVE_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo`
-                    : `Subscribe — $${THRYVE_PRICE}/mo`}
+                    : `Subscribe — ${priceLabel}`}
                   {busy !== 'subscribe' && <Icons.Arrow size={14} sw={2.2}/>}
                 </button>
               )}

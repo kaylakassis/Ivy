@@ -28,8 +28,10 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useAuth } from '../../lib/auth.jsx';
+import { useUserContext } from '../../lib/userContext.jsx';
 import { publicOrigin } from '../../lib/publicUrl.js';
 import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
+import { TRIAL_DAYS, THRYVE_PRICE } from '../../lib/pricing.js';
 
 // Step set per business type. 'both' keeps every step so existing
 // workspaces aren't affected; 'service' removes the first_product
@@ -101,6 +103,7 @@ function prettifyError(e) {
 export default function OnboardingPage() {
   const [tweaks] = useTweaks();
   const { user } = useAuth();
+  const { ctx } = useUserContext();
   const nav = useNavigate();
   const location = useLocation();
 
@@ -527,7 +530,8 @@ export default function OnboardingPage() {
           clientsCount={clientsCount}/>}
         {currentStep === 'website'      && <WebsiteStep websiteStatus={websiteStatus}/>}
         {currentStep === 'tour'         && <TourStep/>}
-        {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}/>}
+        {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}
+          trialEndsAt={ctx?.subscription?.trialEndsAt || null}/>}
 
         {err && (
           <div style={{
@@ -1198,7 +1202,7 @@ function TourStep() {
   );
 }
 
-function DoneStep({ skippedCount }) {
+function DoneStep({ skippedCount, trialEndsAt }) {
   return (
     <div style={{ textAlign: 'center', padding: '14px 0' }}>
       <div style={{
@@ -1211,7 +1215,8 @@ function DoneStep({ skippedCount }) {
         You're ready.
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 480, margin: '0 auto' }}>
-        Everything's wired up. Hit Finish to land on your dashboard.
+        Everything's wired up. Here's how your free trial works — then hit
+        Finish to land on your dashboard.
         {skippedCount > 0 && (
           <>
             <br/><br/>
@@ -1221,6 +1226,73 @@ function DoneStep({ skippedCount }) {
           </>
         )}
       </p>
+
+      <TrialTimeline trialEndsAt={trialEndsAt}/>
+    </div>
+  );
+}
+
+// Trial-priming timeline shown on the final onboarding step — sets
+// expectations (and pre-sells the reminder emails) at the moment trust is
+// highest, the way top funnels prime the paywall before it ever appears.
+// Dates are derived from the workspace's real trial_ends_at; if it isn't
+// loaded yet we fall back to TRIAL_DAYS from today so the screen never
+// renders empty.
+function TrialTimeline({ trialEndsAt }) {
+  const fmt = (d) => d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+  const ends = trialEndsAt ? new Date(trialEndsAt) : new Date(Date.now() + TRIAL_DAYS * 86_400_000);
+  const remind = new Date(ends.getTime() - 7 * 86_400_000);
+  const today = new Date();
+
+  const rows = [
+    { when: `Today, ${fmt(today)}`, icon: 'Spark',
+      text: 'Full access to everything — clients, calendar, invoices, messaging, your booking site. No card required.' },
+    { when: fmt(remind), icon: 'Bell',
+      text: "We'll email you a friendly heads-up that your trial is ending — no surprises." },
+    { when: fmt(ends), icon: 'Clock',
+      text: `Your ${TRIAL_DAYS}-day trial ends. Keep everything running for $${THRYVE_PRICE}/mo, or cancel anytime — your data's always yours.` },
+  ];
+
+  return (
+    <div style={{
+      maxWidth: 460, margin: '22px auto 0', textAlign: 'left',
+      border: '1px solid var(--border)', borderRadius: 14,
+      background: 'var(--surface-2)', padding: '18px 18px 8px',
+    }}>
+      {rows.map((r, i) => {
+        const Icon = Icons[r.icon] || Icons.Check;
+        const last = i === rows.length - 1;
+        return (
+          <div key={i} style={{ display: 'flex', gap: 12, position: 'relative', paddingBottom: last ? 10 : 16 }}>
+            {/* Connector line down the rail between markers */}
+            {!last && (
+              <span style={{
+                position: 'absolute', left: 15, top: 30, bottom: 0, width: 2,
+                background: 'var(--border)',
+              }}/>
+            )}
+            <div style={{
+              flex: '0 0 auto', width: 32, height: 32, borderRadius: 99, zIndex: 1,
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <Icon size={15} sw={1.8}/>
+            </div>
+            <div style={{ paddingTop: 1 }}>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)' }}>{r.when}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, marginTop: 2 }}>{r.text}</div>
+            </div>
+          </div>
+        );
+      })}
+      <div style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        fontSize: 11.5, color: 'var(--muted)', padding: '8px 0 4px',
+        borderTop: '1px solid var(--border)', marginTop: 4,
+      }}>
+        <Icons.Check size={12} sw={2.4} stroke="var(--ok)"/>
+        No card required · Cancel anytime
+      </div>
     </div>
   );
 }
