@@ -11,6 +11,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { VERTICALS } from './verticalsData.js';
+import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 const VERTICAL_LIST = Object.entries(VERTICALS);
 
@@ -74,7 +75,7 @@ export default function VerticalPage() {
         <div style={{ display: 'flex', gap: 12, marginTop: 28, flexWrap: 'wrap' }}>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '13px 22px', fontSize: 14.5, gap: 10 }}>
-            Start free <Icons.Arrow size={13} sw={2}/>
+            Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={13} sw={2}/>
           </Link>
           <Link to="/" className="btn btn-outline"
             style={{ padding: '13px 22px', fontSize: 14.5 }}>
@@ -82,7 +83,7 @@ export default function VerticalPage() {
           </Link>
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
-          No credit card · Free trial
+          No credit card required · Cancel anytime
         </div>
       </section>
 

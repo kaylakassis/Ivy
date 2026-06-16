@@ -24,3 +24,9 @@ export const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
 
 // The single paid subscription ("THRYVING").
 export const THRYVE_PRICE = 49;
+
+// Trial length granted at signup. Matches the workspaces.trial_ends_at
+// default (api/_lib/schema.js) — the hard paywall flips the wall on
+// when this expires. Marketing copy reads from here so a future change
+// in the trial length only happens in one place.
+export const TRIAL_DAYS = 28;
