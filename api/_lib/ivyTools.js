@@ -397,6 +397,182 @@ export const IVY_TOOLS = [
       required: ['workflow_id', 'enabled'],
     },
   },
+
+  // ── Expanded actions (creates + gated sends) ───────────────────────
+  {
+    name: 'create_quote',
+    description: 'Create a DRAFT estimate/quote with line items. Does NOT send — use send_quote after the owner approves.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        client_id: { type: 'string', description: 'Optional client this quote is for.' },
+        items: {
+          type: 'array',
+          description: 'Line items.',
+          items: {
+            type: 'object',
+            properties: {
+              description: { type: 'string' },
+              quantity:    { type: 'number' },
+              rate:        { type: 'number' },
+            },
+          },
+        },
+        tax_rate:    { type: 'number', description: 'Percent, e.g. 8.5. Defaults to 0.' },
+        discount:    { type: 'number', description: 'Flat amount off. Defaults to 0.' },
+        expiry_date: { type: 'string', description: 'YYYY-MM-DD.' },
+        notes:       { type: 'string' },
+      },
+      required: ['items'],
+    },
+  },
+  {
+    name: 'create_product',
+    description: 'Create a product for sale (retail / goods).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name:        { type: 'string' },
+        price:       { type: 'number' },
+        cost:        { type: 'number' },
+        sku:         { type: 'string' },
+        category:    { type: 'string' },
+        track_stock: { type: 'boolean' },
+        stock_qty:   { type: 'integer' },
+      },
+      required: ['name', 'price'],
+    },
+  },
+  {
+    name: 'create_expense',
+    description: 'Log a business expense (for bookkeeping / Schedule-C).',
+    input_schema: {
+      type: 'object',
+      properties: {
+        amount:         { type: 'number' },
+        date:           { type: 'string', description: 'YYYY-MM-DD. Defaults to today.' },
+        category:       { type: 'string' },
+        vendor:         { type: 'string' },
+        notes:          { type: 'string' },
+        payment_method: { type: 'string' },
+        is_deductible:  { type: 'boolean', description: 'Defaults to true.' },
+      },
+      required: ['amount', 'category'],
+    },
+  },
+  {
+    name: 'create_goal',
+    description: 'Create a business goal the dashboard tracks against real data.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        title:    { type: 'string' },
+        type:     { type: 'string', enum: ['revenue', 'bookings', 'clients', 'custom'] },
+        target:   { type: 'number' },
+        deadline: { type: 'string', description: 'YYYY-MM-DD.' },
+        notes:    { type: 'string' },
+      },
+      required: ['title', 'type', 'target'],
+    },
+  },
+  {
+    name: 'create_time_entry',
+    description: 'Start a billable time entry / timer for work done.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        description: { type: 'string' },
+        client_id:   { type: 'string' },
+        service_id:  { type: 'string' },
+        hourly_rate: { type: 'number' },
+        billable:    { type: 'boolean', description: 'Defaults to true.' },
+      },
+      required: ['description'],
+    },
+  },
+  {
+    name: 'create_recurring_invoice',
+    description: 'Set up a recurring invoice schedule (e.g. monthly retainer) that auto-generates invoices.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        name:        { type: 'string' },
+        client_id:   { type: 'string' },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              description: { type: 'string' },
+              quantity:    { type: 'number' },
+              rate:        { type: 'number' },
+            },
+          },
+        },
+        cadence:     { type: 'string', description: 'weekly | biweekly | monthly | quarterly | yearly.' },
+        next_run_at: { type: 'string', description: 'YYYY-MM-DD — first run date.' },
+        tax_rate:    { type: 'number' },
+        discount:    { type: 'number' },
+        end_date:    { type: 'string', description: 'YYYY-MM-DD (optional).' },
+        auto_send:   { type: 'boolean', description: 'Email each generated invoice automatically. Defaults to true.' },
+        notes:       { type: 'string' },
+      },
+      required: ['name', 'items', 'cadence', 'next_run_at'],
+    },
+  },
+  {
+    name: 'create_campaign',
+    description: 'Create a DRAFT email campaign / blast to a segment. Does NOT send — use send_campaign after the owner approves.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        subject:  { type: 'string' },
+        body:     { type: 'string', description: 'Plain text. Newlines become paragraphs.' },
+        audience: { type: 'string', description: "'all-clients', 'newsletter', or 'tag:TagName'." },
+      },
+      required: ['subject', 'body'],
+    },
+  },
+  {
+    name: 'send_quote',
+    description: 'CONFIRMATION-GATED. Email a draft quote to the client. Returns needs_confirmation unless confirm:true.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        quote_id:  { type: 'string' },
+        client_id: { type: 'string', description: 'Optional recipient override.' },
+        confirm:   { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+      required: ['quote_id'],
+    },
+  },
+  {
+    name: 'send_campaign',
+    description: 'CONFIRMATION-GATED. Send a draft campaign to its whole audience (mass email). Returns needs_confirmation with the audience size unless confirm:true.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        campaign_id: { type: 'string' },
+        confirm:     { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+      required: ['campaign_id'],
+    },
+  },
+  {
+    name: 'reschedule_booking',
+    description: 'CONFIRMATION-GATED. Move a booking to a new date/time. Returns needs_confirmation unless confirm:true.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        booking_id: { type: 'string' },
+        date:       { type: 'string', description: 'YYYY-MM-DD.' },
+        start_min:  { type: 'integer', description: 'Minutes from midnight.' },
+        end_min:    { type: 'integer', description: 'Minutes from midnight.' },
+        confirm:    { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+      required: ['booking_id', 'date', 'start_min', 'end_min'],
+    },
+  },
 ];
 
 // ── Executors ────────────────────────────────────────────────────────
@@ -405,7 +581,7 @@ export const IVY_TOOLS = [
 // and returns a JSON-serializable result. Errors bubble — the loop
 // surfaces them to Claude as a `tool_result` with `is_error: true` so
 // Claude can decide whether to retry or explain.
-const HANDLERS = {
+export const HANDLERS = {
   // Reads — existing
   list_quiet_clients,
   list_overdue_invoices,
@@ -441,6 +617,18 @@ const HANDLERS = {
   cancel_booking,
   void_invoice,
   toggle_workflow,
+  // Writes — expanded creates
+  create_quote,
+  create_product,
+  create_expense,
+  create_goal,
+  create_time_entry,
+  create_recurring_invoice,
+  create_campaign,
+  // Writes — expanded gated sends
+  send_quote,
+  send_campaign,
+  reschedule_booking,
 };
 
 // Outbound / hard-to-reverse actions. These never auto-execute: the model
@@ -448,14 +636,20 @@ const HANDLERS = {
 // `confirm: true` AFTER the owner approves in their own message. This is a
 // guardrail against prompt-injection hidden in client data, uploaded files,
 // or earlier tool results silently triggering a send / cancel / void.
-const SENSITIVE_TOOLS = new Set([
+export const SENSITIVE_TOOLS = new Set([
   'send_message_to_client',
   'send_invoice',
   'cancel_booking',
   'void_invoice',
+  'send_quote',
+  'send_campaign',
+  'reschedule_booking',
 ]);
 
-function describeSensitiveAction(name, a) {
+// Async so a few gated actions can resolve real context for the
+// confirmation card (e.g. how many clients a campaign will email). Scoped
+// to the workspace via ctx; never trusts caller-supplied workspace ids.
+async function describeSensitiveAction(name, a, ctx = {}) {
   switch (name) {
     case 'send_message_to_client':
       return `Send a portal message to client ${a.client_id || '(unknown)'}: "${String(a.text || '').slice(0, 160)}"`;
@@ -465,9 +659,35 @@ function describeSensitiveAction(name, a) {
       return `Cancel booking ${a.booking_id || '(unknown)'}${a.notify ? ' and notify the client' : ''}`;
     case 'void_invoice':
       return `Void invoice ${a.invoice_id || '(unknown)'}`;
+    case 'send_quote':
+      return `Email quote ${a.quote_id || '(unknown)'}${a.client_id ? ` to client ${a.client_id}` : ''}`;
+    case 'reschedule_booking':
+      return `Reschedule booking ${a.booking_id || '(unknown)'} to ${a.date || '?'} ${fmtMinAsTime(a.start_min)}-${fmtMinAsTime(a.end_min)}`;
+    case 'send_campaign': {
+      // Resolve the real audience size so the owner sees exactly how many
+      // people this blast reaches before approving.
+      try {
+        const c = await sql`SELECT subject, audience FROM email_campaigns WHERE id = ${a.campaign_id} AND workspace_id = ${ctx.workspaceId}`;
+        if (c.rows.length) {
+          const { resolveAudience } = await import('./campaigns.js');
+          const aud = await resolveAudience(ctx.workspaceId, c.rows[0].audience);
+          return `Send campaign "${c.rows[0].subject || '(no subject)'}" to ${aud.length} client${aud.length === 1 ? '' : 's'} (${c.rows[0].audience})`;
+        }
+      } catch { /* fall through to the generic summary */ }
+      return `Send campaign ${a.campaign_id || '(unknown)'} to its full audience`;
+    }
     default:
       return `Run ${name}`;
   }
+}
+
+function fmtMinAsTime(m) {
+  const n = Number(m);
+  if (!Number.isFinite(n)) return '?';
+  const h = Math.floor(n / 60), mm = n % 60;
+  const period = h >= 12 ? 'PM' : 'AM';
+  const h12 = h === 0 ? 12 : (h > 12 ? h - 12 : h);
+  return `${h12}:${String(mm).padStart(2, '0')} ${period}`;
 }
 
 export async function executeIvyTool(name, args, ctx) {
@@ -479,7 +699,7 @@ export async function executeIvyTool(name, args, ctx) {
     return {
       needs_confirmation: true,
       action: name,
-      summary: describeSensitiveAction(name, a),
+      summary: await describeSensitiveAction(name, a, ctx),
       instruction:
         'Do NOT treat this as done. Show the owner exactly what will happen and ask them to confirm. ' +
         'Only call this tool again with "confirm": true after the owner explicitly approves this specific action in their own reply. ' +
@@ -1247,4 +1467,273 @@ async function toggle_workflow({ workspaceId, args }) {
   `;
   if (rows.length === 0) throw new Error('Workflow not found');
   return { workflow: rows[0] };
+}
+
+// ── Expanded creates ─────────────────────────────────────────────────
+
+async function create_quote({ workspaceId, args }) {
+  if (!Array.isArray(args?.items) || args.items.length === 0) {
+    throw new Error('At least one line item is required');
+  }
+  const { cleanQuoteItems, nextQuoteNumber } = await import('./quotes.js');
+  let clientId = args.client_id ? String(args.client_id) : null;
+  let clientName = null, clientEmail = null;
+  if (clientId) {
+    const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
+    if (cl.rows.length === 0) throw new Error('Unknown client');
+    clientName = cl.rows[0].name; clientEmail = cl.rows[0].email;
+  }
+  const items = cleanQuoteItems(args.items);
+  const taxRate = args.tax_rate != null && Number.isFinite(Number(args.tax_rate)) ? Number(args.tax_rate) : 0;
+  const discount = args.discount != null && Number.isFinite(Number(args.discount)) ? Number(args.discount) : 0;
+  const number = await nextQuoteNumber(workspaceId);
+  const issueDate = new Date().toISOString().slice(0, 10);
+  const expiryDate = args.expiry_date && /^\d{4}-\d{2}-\d{2}$/.test(args.expiry_date) ? args.expiry_date : null;
+  const { rows } = await sql`
+    INSERT INTO quotes (
+      workspace_id, number, client_id, client_name, client_email,
+      issue_date, expiry_date, items, tax_rate, discount, notes, status
+    ) VALUES (
+      ${workspaceId}, ${number}, ${clientId}, ${clientName}, ${clientEmail},
+      ${issueDate}, ${expiryDate}, ${JSON.stringify(items)}::jsonb, ${taxRate}, ${discount},
+      ${args.notes ? String(args.notes).slice(0, 4000) : null}, 'draft'
+    )
+    RETURNING id, number, status
+  `;
+  return { quote: rows[0] };
+}
+
+async function create_product({ workspaceId, args }) {
+  const name = (args?.name || '').toString().trim();
+  if (!name) throw new Error('name is required');
+  const price = Number(args?.price);
+  if (!Number.isFinite(price) || price < 0) throw new Error('price must be a non-negative number');
+  const cost = args.cost != null && Number.isFinite(Number(args.cost)) ? Number(args.cost) : null;
+  const trackStock = !!args.track_stock;
+  const stockQty = trackStock && Number.isFinite(Number(args.stock_qty)) ? Math.max(0, Math.floor(Number(args.stock_qty))) : 0;
+  const { rows } = await sql`
+    INSERT INTO products (workspace_id, name, sku, price, cost, track_stock, stock_qty, category)
+    VALUES (${workspaceId}, ${name.slice(0, 200)}, ${args.sku ? String(args.sku).slice(0, 80) : null},
+            ${price}, ${cost}, ${trackStock}, ${stockQty},
+            ${args.category ? String(args.category).slice(0, 80) : null})
+    RETURNING id, name, price
+  `;
+  return { product: rows[0] };
+}
+
+async function create_expense({ workspaceId, args }) {
+  const amount = Number(args?.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('amount must be a positive number');
+  const date = args?.date && /^\d{4}-\d{2}-\d{2}$/.test(args.date) ? args.date : new Date().toISOString().slice(0, 10);
+  const category = (args?.category || '').toString().slice(0, 80) || 'other';
+  const { rows } = await sql`
+    INSERT INTO expenses (
+      workspace_id, amount, date, category, vendor, notes,
+      receipt_url, payment_method, is_deductible
+    ) VALUES (
+      ${workspaceId}, ${amount}, ${date}, ${category},
+      ${args.vendor ? String(args.vendor).slice(0, 200) : null},
+      ${args.notes ? String(args.notes).slice(0, 2000) : null},
+      ${null}, ${args.payment_method ? String(args.payment_method).slice(0, 40) : null},
+      ${args.is_deductible !== false}
+    )
+    RETURNING id, amount, category, date
+  `;
+  return { expense: rows[0] };
+}
+
+async function create_goal({ workspaceId, args }) {
+  const title = (args?.title || '').toString().trim();
+  if (!title) throw new Error('title is required');
+  const type = ['revenue', 'bookings', 'clients', 'custom'].includes(args?.type) ? args.type : 'revenue';
+  const target = Number(args?.target);
+  if (!Number.isFinite(target) || target <= 0) throw new Error('target must be a positive number');
+  const currentManual = type === 'custom' && Number.isFinite(Number(args.current)) ? Number(args.current) : 0;
+  const deadline = args.deadline && /^\d{4}-\d{2}-\d{2}$/.test(args.deadline) ? args.deadline : null;
+  const { rows } = await sql`
+    INSERT INTO goals (workspace_id, title, type, target, current_manual, deadline, notes)
+    VALUES (${workspaceId}, ${title.slice(0, 200)}, ${type}, ${target}, ${currentManual}, ${deadline},
+            ${args.notes ? String(args.notes).slice(0, 2000) : null})
+    RETURNING id, title, type, target
+  `;
+  return { goal: rows[0] };
+}
+
+async function create_time_entry({ workspaceId, args }) {
+  const description = (args?.description || '').toString().trim();
+  if (!description) throw new Error('description is required');
+  let clientId = null;
+  if (args.client_id) {
+    const cl = await sql`SELECT id FROM clients WHERE id = ${args.client_id} AND workspace_id = ${workspaceId}`;
+    if (cl.rows.length === 0) throw new Error('Unknown client');
+    clientId = String(args.client_id);
+  }
+  let serviceId = null;
+  if (args.service_id) {
+    const sv = await sql`SELECT id FROM services WHERE id = ${args.service_id} AND workspace_id = ${workspaceId}`;
+    if (sv.rows.length === 0) throw new Error('Unknown service');
+    serviceId = String(args.service_id);
+  }
+  const hourlyRate = Number.isFinite(Number(args.hourly_rate)) ? Number(args.hourly_rate) : null;
+  const billable = args.billable !== false;
+  const { rows } = await sql`
+    INSERT INTO time_entries (workspace_id, client_id, service_id, description, hourly_rate, billable, status)
+    VALUES (${workspaceId}, ${clientId}, ${serviceId}, ${description.slice(0, 500)}, ${hourlyRate}, ${billable}, 'running')
+    RETURNING id, description, status
+  `;
+  return { time_entry: rows[0] };
+}
+
+async function create_recurring_invoice({ workspaceId, args }) {
+  const { cleanRecurringInput } = await import('./recurring.js');
+  const v = cleanRecurringInput({
+    name:      args?.name,
+    clientId:  args?.client_id,
+    items:     args?.items,
+    taxRate:   args?.tax_rate,
+    discount:  args?.discount,
+    notes:     args?.notes,
+    cadence:   args?.cadence,
+    nextRunAt: args?.next_run_at,
+    endDate:   args?.end_date,
+    autoSend:  args?.auto_send,
+  }, { partial: false });
+  if (!v.ok) throw new Error(v.error);
+  const s = v.sanitized;
+  let clientName = null, clientEmail = null;
+  if (s.clientId) {
+    const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${s.clientId} AND workspace_id = ${workspaceId}`;
+    if (cl.rows.length === 0) throw new Error('Unknown client');
+    clientName = cl.rows[0].name; clientEmail = cl.rows[0].email;
+  }
+  const { rows } = await sql`
+    INSERT INTO recurring_invoices (
+      workspace_id, name, client_id, client_name, client_email,
+      items, tax_rate, discount, notes,
+      cadence, next_run_at, end_date, status, auto_send
+    ) VALUES (
+      ${workspaceId}, ${s.name}, ${s.clientId || null}, ${clientName}, ${clientEmail},
+      ${JSON.stringify(s.items || [])}::jsonb,
+      ${s.taxRate ?? 0}, ${s.discount ?? 0}, ${s.notes || null},
+      ${s.cadence}, ${s.nextRunAt}::date,
+      ${s.endDate ? `${s.endDate}` : null}::date,
+      'active', ${s.autoSend !== false}
+    )
+    RETURNING id, name, cadence, next_run_at
+  `;
+  return { recurring_invoice: rows[0] };
+}
+
+async function create_campaign({ workspaceId, args }) {
+  const { VALID_AUDIENCE } = await import('./campaigns.js');
+  const subject = (args?.subject || '').toString().slice(0, 300).trim();
+  const bodyText = (args?.body || '').toString().slice(0, 20000);
+  if (!subject) throw new Error('subject is required');
+  if (!bodyText.trim()) throw new Error('body is required');
+  const audience = VALID_AUDIENCE(args?.audience) ? args.audience : 'all-clients';
+  const { rows } = await sql`
+    INSERT INTO email_campaigns (workspace_id, subject, body, audience)
+    VALUES (${workspaceId}, ${subject}, ${bodyText}, ${audience})
+    RETURNING id, subject, audience, status
+  `;
+  return { campaign: rows[0] };
+}
+
+// ── Expanded gated sends ─────────────────────────────────────────────
+
+async function send_quote({ workspaceId, args }) {
+  const id = args.quote_id ? String(args.quote_id) : null;
+  if (!id) throw new Error('quote_id is required');
+  const { fetchOwnedQuote } = await import('./quotes.js');
+  const { computeTotals } = await import('./finance.js');
+  const { sendEmailToClient } = await import('./email.js');
+  const { fetchBranding } = await import('./branding.js');
+
+  const q = await fetchOwnedQuote({ id, workspaceId });
+  if (!q) throw new Error('Quote not found');
+  if (q.status === 'accepted') throw new Error('Already accepted');
+  if (q.status === 'voided') throw new Error('Voided — restore first');
+
+  let clientId = args.client_id ? String(args.client_id) : q.client_id;
+  let recipientName = q.client_name, recipientEmail = q.client_email;
+  if (clientId) {
+    const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
+    if (cl.rows.length === 0) throw new Error('Unknown client');
+    recipientName = cl.rows[0].name; recipientEmail = cl.rows[0].email;
+  }
+  if (!recipientEmail) throw new Error('Recipient has no email on file');
+
+  const rawToken = generateRawToken(32);
+  const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
+  const totals = computeTotals(q.items, q.tax_rate, q.discount);
+  const newActivity = [
+    ...(Array.isArray(q.activity) ? q.activity : []),
+    { ts: new Date().toISOString(), kind: 'sent', text: `Sent to ${recipientName}` },
+  ];
+  await sql`
+    UPDATE quotes SET
+      client_id = ${clientId}, client_name = ${recipientName}, client_email = ${recipientEmail},
+      view_token_hash = ${tokenHash}, status = 'sent', sent_at = NOW(),
+      activity = ${JSON.stringify(newActivity)}::jsonb, updated_at = NOW()
+    WHERE id = ${id} AND workspace_id = ${workspaceId}
+  `;
+  const link = `${appUrl()}/quote/${encodeURIComponent(rawToken)}`;
+  const branding = await fetchBranding(workspaceId).catch(() => ({}));
+  const business = branding.businessName;
+  try {
+    await sendEmailToClient({
+      clientId, type: 'invoices', to: recipientEmail,
+      subject: `Estimate ${q.number}${business ? ' from ' + business : ''}`,
+      replyTo: branding.replyTo,
+      html: emailShell({
+        heading: `Estimate ${q.number}`,
+        body: `<p>Hi ${escapeHtml(recipientName || '')},</p>
+               <p>${business ? escapeHtml(business) + ' has' : "You've"} sent you an estimate. Open it to review and accept or decline.</p>`,
+        ctaText: 'View estimate', ctaUrl: link,
+        footer: 'Reply to this email if anything looks off.', branding,
+      }),
+    });
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[ivy.send_quote] email failed:', e?.message);
+  }
+  return { ok: true, quote_id: id, sent_to: recipientEmail, total: totals.total };
+}
+
+async function send_campaign({ workspaceId, args }) {
+  const id = args.campaign_id ? String(args.campaign_id) : null;
+  if (!id) throw new Error('campaign_id is required');
+  const { sendCampaign, serializeCampaign } = await import('./campaigns.js');
+  const c = await sql`SELECT * FROM email_campaigns WHERE id = ${id} AND workspace_id = ${workspaceId}`;
+  if (c.rows.length === 0) throw new Error('Campaign not found');
+  const row = c.rows[0];
+  if (row.status === 'sent' || row.status === 'sending') throw new Error('Campaign already sent');
+  const campaign = serializeCampaign(row);
+  const result = await sendCampaign({ workspaceId, campaign });
+  await sql`
+    UPDATE email_campaigns SET
+      status = 'sent', sent_at = NOW(),
+      recipient_count = ${result.recipientCount}, sent_count = ${result.sent}, failed_count = ${result.failed},
+      updated_at = NOW()
+    WHERE id = ${id} AND workspace_id = ${workspaceId}
+  `;
+  return { ok: true, campaign_id: id, recipients: result.recipientCount, sent: result.sent, failed: result.failed, skipped: result.skipped };
+}
+
+async function reschedule_booking({ workspaceId, args }) {
+  const id = args.booking_id ? String(args.booking_id) : null;
+  if (!id) throw new Error('booking_id is required');
+  const dateStr = String(args.date || '');
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) throw new Error('date must be YYYY-MM-DD');
+  const startMin = clampInt(args.start_min, 0, 0, 24 * 60 - 1);
+  const endMin = clampInt(args.end_min, 0, 1, 24 * 60);
+  if (endMin <= startMin) throw new Error('end_min must be > start_min');
+  const b = await sql`SELECT id FROM bookings WHERE id = ${id} AND workspace_id = ${workspaceId} AND cancelled_at IS NULL`;
+  if (b.rows.length === 0) throw new Error('Booking not found or cancelled');
+  const { rows } = await sql`
+    UPDATE bookings SET date = ${dateStr}, start_min = ${startMin}, end_min = ${endMin}, updated_at = NOW()
+     WHERE id = ${id} AND workspace_id = ${workspaceId}
+     RETURNING id, date, start_min, end_min, client_name
+  `;
+  return { booking: rows[0], rescheduled: true };
 }

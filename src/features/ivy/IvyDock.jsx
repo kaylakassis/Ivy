@@ -21,6 +21,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { useIvy } from './state.jsx';
+import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 
 const HIDE_PREFIXES = [
   // Don't render in places where the bubble would be noise / out of
@@ -463,9 +464,9 @@ function Bubble({ role, text }) {
         color: mine ? 'var(--accent-ink)' : 'var(--fg)',
         border: mine ? 'none' : '1px solid var(--border)',
         fontSize: 13.5, lineHeight: 1.5,
-        whiteSpace: 'pre-wrap', wordBreak: 'break-word',
+        whiteSpace: mine ? 'pre-wrap' : 'normal', wordBreak: 'break-word',
       }}>
-        {text}
+        {mine ? text : <MiniMarkdown text={text}/>}
       </div>
     </div>
   );
