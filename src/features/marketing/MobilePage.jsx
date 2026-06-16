@@ -7,6 +7,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
+import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 export default function MobilePage() {
   useEffect(() => {
@@ -87,7 +88,7 @@ export default function MobilePage() {
         <section style={{ textAlign: 'center', marginTop: 48 }}>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '14px 26px', fontSize: 15, fontWeight: 600 }}>
-            Start free <Icons.Arrow size={14} sw={2}/>
+            Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={14} sw={2}/>
           </Link>
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
             Works on iOS, Android, and every modern browser - desktop included.

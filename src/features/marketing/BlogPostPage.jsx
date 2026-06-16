@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { POST_MAP, POSTS } from './blogData.js';
+import { TRIAL_DAYS } from '../../lib/pricing.js';
 import { Icons } from '../../components/Icons.jsx';
 
 export default function BlogPostPage() {
@@ -77,11 +78,11 @@ export default function BlogPostPage() {
             Want THRYVE to handle this for you?
           </div>
           <p style={{ margin: '8px 0 14px', fontSize: 14, lineHeight: 1.55, color: 'var(--fg-2)' }}>
-            Pricing, intake, no-shows, invoicing - every problem in this post is one tab in THRYVE. Start with a free trial.
+            Pricing, intake, no-shows, invoicing — every problem in this post is one tab in THRYVE. {TRIAL_DAYS} days free, no card.
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600 }}>
-            Start free <Icons.Arrow size={12} sw={2}/>
+            Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={12} sw={2}/>
           </Link>
         </section>
 

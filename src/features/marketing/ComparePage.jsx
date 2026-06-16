@@ -8,7 +8,7 @@ import { Link, useParams, Navigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { COMPETITORS, FEATURE_ROWS, COMPETITOR_LIST } from './compareData.js';
-import { THRYVE_PRICE } from './RoiCalculator.jsx';
+import { THRYVE_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
 
 const SYMBOL = { y: '✓', n: '-', l: '~' };
 const SYMBOL_COLOR = { y: 'var(--accent)', n: 'var(--muted)', l: 'var(--fg-2)' };
@@ -58,7 +58,7 @@ export default function ComparePage() {
           <div style={{ marginTop: 24, display: 'flex', gap: 12, flexWrap: 'wrap' }}>
             <Link to="/signup" className="btn btn-primary"
               style={{ padding: '12px 22px', fontSize: 14, fontWeight: 600 }}>
-              Start free <Icons.Arrow size={13} sw={2}/>
+              Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={13} sw={2}/>
             </Link>
             <Link to="/pricing" className="btn btn-outline"
               style={{ padding: '12px 18px', fontSize: 14 }}>

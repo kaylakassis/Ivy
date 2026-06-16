@@ -14,7 +14,8 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
-import RoiCalculator, { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from './RoiCalculator.jsx';
+import RoiCalculator from './RoiCalculator.jsx';
+import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // One plan, two states: a free trial while we're in beta, then a
 // single paid subscription ("THRYVING") at $49/mo. We deliberately
@@ -23,16 +24,17 @@ import RoiCalculator, { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from './RoiCalcu
 const PLAN = {
   name: 'THRYVE',
   sub: 'Everything to run your business, in one place.',
-  priceBeta: 'Free trial',
+  priceBeta: `${TRIAL_DAYS} days free`,
   priceGA: `$${THRYVE_PRICE} / month`,
-  cta: 'Start free',
+  cta: `Start your ${TRIAL_DAYS}-day free trial`,
   ctaTo: '/signup',
   features: [
     'Unlimited clients + pipeline',
     'Online booking + calendar sync',
     'Branded invoices + recurring billing',
     'Card on file + auto-charges',
-    'Memberships + packages',
+    'Memberships, packages & gift cards',
+    'In-person sales — Tap to Pay on iPhone/Android',
     'Documents + e-signature',
     'Two-way client messaging',
     'Free client portal',
@@ -40,7 +42,7 @@ const PLAN = {
     'Workflows + automated reminders',
     'Goals + finance dashboard',
     'Reviews + rewards',
-    'Ivy AI coach (chat + actions)',
+    'Ivy AI coach (chat + actions, personalized to you)',
     'Stripe payments (no transaction fee)',
     'Email support',
   ],
@@ -49,7 +51,7 @@ const PLAN = {
 const FAQ = [
   {
     q: 'How much does THRYVE cost?',
-    a: `One simple subscription: $${THRYVE_PRICE}/mo after your free trial. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
+    a: `One simple subscription: $${THRYVE_PRICE}/mo after your ${TRIAL_DAYS}-day free trial. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
   },
   {
     q: 'Do you take a cut of my payments?',
@@ -65,7 +67,7 @@ const FAQ = [
   },
   {
     q: 'Is there a free trial?',
-    a: 'Yes. You start on a free trial with the whole product unlocked, no card required. You only pay once you decide to keep THRYVING.',
+    a: `Yes. ${TRIAL_DAYS} days, the whole product unlocked, no credit card required. We won't ask for payment until you decide to keep THRYVING — and even then, you can subscribe at a discount that's locked in for life.`,
   },
   {
     q: "What if I'm switching from another tool?",
@@ -81,7 +83,7 @@ export default function PricingPage() {
   useEffect(() => {
     document.title = 'Pricing - THRYVE';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. Start with a free trial, then $${THRYVE_PRICE}/mo.`);
+    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, no credit card. Then $${THRYVE_PRICE}/mo.`);
   }, []);
 
   return (
@@ -111,8 +113,8 @@ export default function PricingPage() {
             fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
           }}>
             Replace your full stack - CRM, scheduler, invoicing, contracts, website,
-            email, AI - with one subscription. Start with a free trial; simple
-            ${THRYVE_PRICE}/mo when you're ready.
+            email, AI — with one subscription. {TRIAL_DAYS}-day free trial, no credit card.
+            Then a simple ${THRYVE_PRICE}/mo when you're ready.
           </p>
         </section>
 
@@ -121,7 +123,7 @@ export default function PricingPage() {
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           gap: 12, marginBottom: 28, flexWrap: 'wrap',
         }}>
-          <StateChip label="Free trial" sub="the whole product, no card" active/>
+          <StateChip label={`${TRIAL_DAYS} days free`} sub="the whole product, no card" active/>
           <Icons.Arrow size={16} sw={2} style={{ color: 'var(--muted)' }}/>
           <StateChip label="THRYVING" sub={`$${THRYVE_PRICE}/mo when subscribed`}/>
         </section>
@@ -278,10 +280,10 @@ export default function PricingPage() {
         <section style={{ textAlign: 'center', marginTop: 64 }}>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '14px 28px', fontSize: 15, fontWeight: 600 }}>
-            Start free <Icons.Arrow size={14} sw={2}/>
+            Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={14} sw={2}/>
           </Link>
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
-            No credit card required · Free trial
+            No credit card required · Cancel anytime
           </div>
         </section>
 
