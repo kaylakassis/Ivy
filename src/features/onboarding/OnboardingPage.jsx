@@ -36,10 +36,16 @@ import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
 // step (irrelevant to pure-service); 'product' removes services +
 // availability (they don't take appointments) and inserts a
 // lightweight first_product step in their place.
+// UI sentinel for "Other" on a preset question — kept in the same state
+// slot as a preset id. The server's allowlist maps it to null and keeps
+// the free-text answer, so no special handling is needed at save time.
+const OTHER = '__other__';
+
 function stepsFor(businessType) {
   const base = [
     { id: 'welcome',      label: 'Welcome',         optional: false },
     { id: 'business',     label: 'Business',        optional: false },
+    { id: 'about',        label: 'About you',       optional: false },
   ];
   if (businessType === 'product') {
     base.push({ id: 'first_product', label: 'First product', optional: false });
@@ -126,6 +132,12 @@ export default function OnboardingPage() {
   const [clientDraft, setClientDraft] = useState({ name: '', email: '', phone: '' });
   const [clientsCount, setClientsCount] = useState(0);
   const [websiteStatus, setWebsiteStatus] = useState(null);
+  // "About you" answers — preset ids + free text. Persisted to
+  // workspace_profile; feeds Ivy personalization + admin aggregates.
+  const [about, setAbout] = useState({
+    goal: null, goalOther: '', challenge: null, challengeOther: '',
+    idealClient: '', heardFrom: null, heardFromOther: '', stage: null,
+  });
 
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
@@ -140,7 +152,8 @@ export default function OnboardingPage() {
       api.get('/clients?limit=1').catch(() => ({ clients: [] })),
       api.get('/finance/stripe-status').catch(() => null),
       api.get('/website').catch(() => null),
-    ]).then(([stateRes, calRes, clientsRes, stripeRes, webRes]) => {
+      api.get('/onboarding/profile').catch(() => ({ profile: null })),
+    ]).then(([stateRes, calRes, clientsRes, stripeRes, webRes, profileRes]) => {
       if (!live) return;
       const st = stateRes?.state;
       if (st) {
@@ -166,6 +179,19 @@ export default function OnboardingPage() {
       setClientsCount((clientsRes?.clients || []).length);
       setStripeStatus(stripeRes);
       setWebsiteStatus(webRes);
+      const p = profileRes?.profile;
+      if (p) {
+        // Reconstruct the OTHER sentinel when a free-text answer was
+        // stored without a preset (the server stores them as preset=null
+        // + *_other text).
+        setAbout({
+          goal: p.goal || (p.goalOther ? OTHER : null), goalOther: p.goalOther || '',
+          challenge: p.challenge || (p.challengeOther ? OTHER : null), challengeOther: p.challengeOther || '',
+          idealClient: p.idealClient || '',
+          heardFrom: p.heardFrom || (p.heardFromOther ? OTHER : null), heardFromOther: p.heardFromOther || '',
+          stage: p.stage || null,
+        });
+      }
       setStateLoaded(true);
     });
     return () => { live = false; };
@@ -358,6 +384,24 @@ export default function OnboardingPage() {
     finally { setBusy(false); }
   };
 
+  // "About you" step. All questions are optional (we never want this to
+  // block finishing setup) — whatever's answered is persisted to the
+  // workspace_profile and then we advance.
+  const saveAbout = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await api.patch('/onboarding/profile', {
+        goal: about.goal, goalOther: about.goalOther,
+        challenge: about.challenge, challengeOther: about.challengeOther,
+        idealClient: about.idealClient,
+        heardFrom: about.heardFrom, heardFromOther: about.heardFromOther,
+        stage: about.stage,
+      });
+      await goNext();
+    } catch (e) { setErr(prettifyError(e)); }
+    finally { setBusy(false); }
+  };
+
   const saveServices = async () => {
     setBusy(true); setErr(null);
     try {
@@ -468,6 +512,7 @@ export default function OnboardingPage() {
           slug={slug} setSlug={setSlug} setSlugTouched={setSlugTouched}
           tagline={tagline} setTagline={setTagline}
           category={category} setCategory={setCategory}/>}
+        {currentStep === 'about'        && <AboutStep about={about} setAbout={setAbout}/>}
         {currentStep === 'services'     && <ServicesStep
           services={services} setServices={setServices}
           draft={draft} setDraft={setDraft} category={category}/>}
@@ -517,6 +562,7 @@ export default function OnboardingPage() {
             onContinue={() => {
               if (currentStep === 'welcome')      return goNext();
               if (currentStep === 'business')     return saveBusiness();
+              if (currentStep === 'about')        return saveAbout();
               if (currentStep === 'services')     return saveServices();
               if (currentStep === 'first_product') return saveFirstProduct();
               if (currentStep === 'availability') return saveAvailability();
@@ -1220,6 +1266,117 @@ function ProgressRow({ steps, currentStep, completed, skipped, onJump }) {
         );
       })}
     </div>
+  );
+}
+
+// "About you" — marketing + intent questions. Every answer is optional;
+// we never block finishing setup on them. Preset answers roll up into
+// admin aggregates; the free-text + answers feed Ivy's personalization.
+function AboutStep({ about, setAbout }) {
+  const set = (patch) => setAbout((a) => ({ ...a, ...patch }));
+  return (
+    <>
+      <StepHeader
+        title="A little about you"
+        subtitle="This tailors your dashboard and lets Ivy — your built-in AI assistant — give advice that actually fits your business. All optional."
+      />
+
+      <ChoiceField
+        label="What's your #1 goal with THRYVE?"
+        options={[
+          { id: 'grow_revenue', label: 'Grow revenue' },
+          { id: 'more_clients', label: 'Get more clients' },
+          { id: 'save_time',    label: 'Save time on admin' },
+          { id: 'look_pro',     label: 'Look more professional' },
+        ]}
+        value={about.goal} other={about.goalOther}
+        onPick={(id) => set({ goal: id, goalOther: '' })}
+        onOther={() => set({ goal: OTHER })}
+        onOtherText={(v) => set({ goalOther: v })}
+      />
+
+      <ChoiceField
+        label="What's your biggest challenge right now?"
+        options={[
+          { id: 'leads',        label: 'Not enough leads' },
+          { id: 'no_shows',     label: 'No-shows & cancellations' },
+          { id: 'getting_paid', label: 'Getting paid on time' },
+          { id: 'organized',    label: 'Staying organized' },
+          { id: 'marketing',    label: 'Marketing myself' },
+        ]}
+        value={about.challenge} other={about.challengeOther}
+        onPick={(id) => set({ challenge: id, challengeOther: '' })}
+        onOther={() => set({ challenge: OTHER })}
+        onOtherText={(v) => set({ challengeOther: v })}
+      />
+
+      <Field
+        label="Who's your ideal client?"
+        hint="Ivy uses this to tailor advice — e.g. “busy professionals who want monthly massages.”">
+        <input className="input" style={inputStyle} value={about.idealClient}
+          onChange={(e) => set({ idealClient: e.target.value.slice(0, 500) })}
+          placeholder="Describe your dream customer…"/>
+      </Field>
+
+      <ChoiceField
+        label="How did you hear about us?"
+        options={[
+          { id: 'instagram', label: 'Instagram' },
+          { id: 'tiktok',    label: 'TikTok' },
+          { id: 'google',    label: 'Google' },
+          { id: 'referral',  label: 'Friend / referral' },
+        ]}
+        value={about.heardFrom} other={about.heardFromOther}
+        onPick={(id) => set({ heardFrom: id, heardFromOther: '' })}
+        onOther={() => set({ heardFrom: OTHER })}
+        onOtherText={(v) => set({ heardFromOther: v })}
+      />
+
+      <ChoiceField
+        label="Where's your business at?"
+        options={[
+          { id: 'starting',    label: 'Just starting out' },
+          { id: 'side_hustle', label: 'Side hustle' },
+          { id: 'established', label: 'Established & steady' },
+          { id: 'scaling',     label: 'Ready to scale' },
+        ]}
+        value={about.stage}
+        onPick={(id) => set({ stage: id })}
+      />
+    </>
+  );
+}
+
+// Preset chips with an optional "Other" free-text. When onOther is
+// provided, an "Other" chip toggles a text input; selecting it parks the
+// OTHER sentinel in `value` so exactly one choice is ever active.
+function ChoiceField({ label, hint, options, value, other, onPick, onOther, onOtherText }) {
+  const otherActive = value === OTHER;
+  return (
+    <Field label={label} hint={hint}>
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
+        {options.map((o) => (
+          <button key={o.id} type="button" onClick={() => onPick(o.id)}
+            className={`btn ${value === o.id ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '7px 13px', fontSize: 12.5 }}>
+            {o.label}
+          </button>
+        ))}
+        {onOther && (
+          <button type="button" onClick={onOther}
+            className={`btn ${otherActive ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '7px 13px', fontSize: 12.5 }}>
+            Other
+          </button>
+        )}
+      </div>
+      {onOther && otherActive && (
+        <input className="input" autoFocus style={{ ...inputStyle, marginTop: 8 }}
+          value={other || ''}
+          onChange={(e) => onOtherText(e.target.value.slice(0, 500))}
+          placeholder="Tell us…"/>
+      )}
+    </Field>
   );
 }
 

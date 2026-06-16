@@ -65,7 +65,7 @@ export async function workspaceContext(workspaceId) {
   // instead of re-expanding jsonb_array_elements per invoice — same
   // number everywhere, far cheaper at scale.
   const [
-    { rows: r1 }, { rows: r2 }, { rows: r3 }, { rows: r4 }, { rows: r5 },
+    { rows: r1 }, { rows: r2 }, { rows: r3 }, { rows: r4 }, { rows: r5 }, { rows: r6 },
   ] = await Promise.all([
     sql`
       SELECT COALESCE(SUM(total), 0)::numeric AS revenue
@@ -103,16 +103,55 @@ export async function workspaceContext(workspaceId) {
             AND m.created_at >= NOW() - INTERVAL '21 days'
         )
     `,
+    // Business identity + owner-stated profile (onboarding "About you").
+    // Lets Ivy address the business by name and tailor coaching to the
+    // owner's actual goal, challenge, ideal client, and stage.
+    sql`
+      SELECT cs.biz_name,
+             wp.goal, wp.goal_other, wp.challenge, wp.challenge_other,
+             wp.ideal_client, wp.stage
+        FROM workspaces w
+        LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
+        LEFT JOIN workspace_profile wp ON wp.workspace_id = w.id
+       WHERE w.id = ${workspaceId}
+    `,
   ]);
 
+  const p = r6[0] || {};
   return {
     revenueThisMonth: Number(r1[0].revenue || 0),
     openInvoices:     Number(r2[0].open_invoices || 0),
     activeClients:    Number(r3[0].active_clients || 0),
     upcomingSessions: Number(r4[0].upcoming || 0),
     quietClients:     Number(r5[0].quiet || 0),
+    bizName:          p.biz_name || null,
+    profile: {
+      goal:        IVY_PROFILE_LABELS.goal[p.goal] || p.goal_other || null,
+      challenge:   IVY_PROFILE_LABELS.challenge[p.challenge] || p.challenge_other || null,
+      idealClient: p.ideal_client || null,
+      stage:       IVY_PROFILE_LABELS.stage[p.stage] || null,
+    },
   };
 }
+
+// Human-readable phrasings for the preset profile ids so Ivy reads
+// natural language, not raw enum keys. Free-text "_other" answers are
+// passed through verbatim.
+const IVY_PROFILE_LABELS = {
+  goal: {
+    grow_revenue: 'grow revenue', more_clients: 'get more clients',
+    save_time: 'save time on admin', look_pro: 'look more professional',
+  },
+  challenge: {
+    leads: 'not enough leads', no_shows: 'no-shows & cancellations',
+    getting_paid: 'getting paid on time', organized: 'staying organized',
+    marketing: 'marketing themselves',
+  },
+  stage: {
+    starting: 'just starting out', side_hustle: 'running a side hustle',
+    established: 'established & steady', scaling: 'ready to scale',
+  },
+};
 
 // Tries Claude first, falls back to the deterministic mock on any error,
 // missing API key, or exceeded daily cap. `history` is the prior conversation
@@ -561,14 +600,30 @@ export function sanitizeUserText(s) {
 function fmtCtx(ctx) {
   const c = ctx || {};
   const fmt$ = (n) => '$' + Number(n || 0).toLocaleString('en-US', { maximumFractionDigits: 0 });
-  return [
+  const lines = [
     `Workspace snapshot (current):`,
     `- Revenue this month (paid invoices): ${fmt$(c.revenueThisMonth)}`,
     `- Active clients: ${c.activeClients ?? 0}`,
     `- Open invoices (sent or overdue): ${c.openInvoices ?? 0}`,
     `- Sessions booked next 7 days: ${c.upcomingSessions ?? 0}`,
     `- Quiet clients (no message in 3+ weeks): ${c.quietClients ?? 0}`,
-  ].join('\n');
+  ];
+
+  // Owner-stated profile (from onboarding). Only emit the block when at
+  // least one field is set, so a workspace that skipped the questions
+  // reads exactly as before. Use this to make coaching specific to THIS
+  // owner — their goal, challenge, who they serve, and their stage.
+  const p = c.profile || {};
+  const profileLines = [];
+  if (c.bizName)      profileLines.push(`- Business name: ${c.bizName}`);
+  if (p.goal)         profileLines.push(`- Their #1 goal: ${p.goal}`);
+  if (p.challenge)    profileLines.push(`- Their biggest challenge: ${p.challenge}`);
+  if (p.idealClient)  profileLines.push(`- Their ideal client: ${p.idealClient}`);
+  if (p.stage)        profileLines.push(`- Business stage: ${p.stage}`);
+  if (profileLines.length) {
+    lines.push('', 'About this business (owner-stated during onboarding — tailor your advice to it):', ...profileLines);
+  }
+  return lines.join('\n');
 }
 
 function buildMessages(text, ctx, history, attachment) {
