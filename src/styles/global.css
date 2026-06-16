@@ -209,6 +209,12 @@ img, svg, video { max-width: 100%; height: auto; }
    value is owned by CSS (NOT inline) so the media-query override can
    actually apply. */
 .view-toggle { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); }
+/* On chat-style routes (messages, groups, DMs, Ivy), the composer sits
+   at the bottom edge of the conversation pane and the default pill
+   position lands on top of it. Lift the pill above the composer (~80px
+   for the composer + 12px breathing room) so it stays accessible
+   without blocking the Send button or textarea. */
+.view-toggle.view-toggle-raised { bottom: calc(env(safe-area-inset-bottom, 0px) + 92px); }
 
 /* Reserve space for the mobile bottom nav. Pages opt in by adding the
    `has-mobile-nav` class to their root container, OR the body class is
