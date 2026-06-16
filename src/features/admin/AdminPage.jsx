@@ -467,6 +467,7 @@ function Overview() {
               hint={`${data.churn.cancelledInWindow} cancelled / ${data.churn.activeAtWindowStart} active at window start`}/>
           </div>
           {data.funnel && <FunnelCard funnel={data.funnel}/>}
+          {data.onboarding && <OnboardingInsightsCard onboarding={data.onboarding}/>}
           {data.platformImpact && <PlatformImpactCard impact={data.platformImpact}/>}
           <SystemCard/>
         </>
@@ -572,6 +573,95 @@ function FunnelCard({ funnel }) {
             those two steps. Recent windows are accurate.
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// Onboarding "About you" answer distributions for the signup cohort in
+// the selected window. Marketing + product intel: goal mix, top
+// challenges, acquisition channels, business stage. PRIVACY: aggregate
+// only — counts per preset option, never per-workspace rows or the
+// free-text answers (those feed Ivy, not this surface).
+const ONB_LABELS = {
+  goal: {
+    grow_revenue: 'Grow revenue', more_clients: 'Get more clients',
+    save_time: 'Save time on admin', look_pro: 'Look more professional', other: 'Other',
+  },
+  challenge: {
+    leads: 'Not enough leads', no_shows: 'No-shows & cancellations',
+    getting_paid: 'Getting paid on time', organized: 'Staying organized',
+    marketing: 'Marketing themselves', other: 'Other',
+  },
+  heardFrom: {
+    instagram: 'Instagram', tiktok: 'TikTok', google: 'Google',
+    referral: 'Friend / referral', other: 'Other',
+  },
+  stage: {
+    starting: 'Just starting out', side_hustle: 'Side hustle',
+    established: 'Established & steady', scaling: 'Ready to scale',
+  },
+};
+
+function OnboardingInsightsCard({ onboarding }) {
+  const { cohort, answered } = onboarding;
+  const answerRate = cohort > 0 ? Math.round((answered / cohort) * 1000) / 10 : 0;
+  const groups = [
+    { key: 'goal',      title: '#1 goal' },
+    { key: 'challenge', title: 'Biggest challenge' },
+    { key: 'heardFrom', title: 'How they heard about us' },
+    { key: 'stage',     title: 'Business stage' },
+  ];
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, marginBottom: 4 }}>
+        <div style={{ flex: 1, fontSize: 15, fontWeight: 600 }}>Onboarding insights</div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+          {fmtN(answered)} of {fmtN(cohort)} signups answered · {answerRate}%
+        </div>
+      </div>
+
+      {answered === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--muted)', padding: '10px 0' }}>
+          No onboarding answers in this window yet.
+        </div>
+      ) : (
+        <div style={{ display: 'grid', gap: 18, gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginTop: 12 }}>
+          {groups.map((g) => (
+            <DistList key={g.key} title={g.title} rows={onboarding[g.key] || []} labels={ONB_LABELS[g.key]}/>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// A single labelled distribution: option rows with a bar sized to the
+// share of the group's total, sorted by frequency (server already sorts).
+function DistList({ title, rows, labels }) {
+  const total = rows.reduce((s, r) => s + r.n, 0);
+  return (
+    <div>
+      <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8 }}>{title}</div>
+      {total === 0 ? (
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>—</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
+          {rows.map((r) => {
+            const pct = Math.round((r.n / total) * 1000) / 10;
+            return (
+              <div key={r.k}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, fontSize: 12.5, marginBottom: 3 }}>
+                  <span style={{ flex: 1 }}>{labels[r.k] || r.k}</span>
+                  <span style={{ color: 'var(--muted)', fontVariantNumeric: 'tabular-nums' }}>{pct}%</span>
+                </div>
+                <div style={{ height: 6, borderRadius: 99, background: 'var(--surface-2)', overflow: 'hidden' }}>
+                  <div style={{ width: `${pct}%`, height: '100%', background: 'var(--accent)', borderRadius: 99 }}/>
+                </div>
+              </div>
+            );
+          })}
+        </div>
       )}
     </div>
   );

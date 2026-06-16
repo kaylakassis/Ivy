@@ -74,6 +74,11 @@ export default async function handler(req, res) {
       reviewsRow,               // count + avg rating
       activationRow,            // workspaces that took their first booking within 7d of signup
       funnelRow,                // acquisition funnel cohort counts (signup→converted)
+      onbCountsRow,             // onboarding "About you": cohort + answered counts
+      onbGoalRows,              // goal distribution
+      onbChallengeRows,         // challenge distribution
+      onbHeardRows,             // acquisition-channel distribution
+      onbStageRows,             // business-stage distribution
     ] = await Promise.all([
       sql`SELECT COUNT(*)::int AS n FROM users`,
       sql.query(
@@ -292,6 +297,30 @@ export default async function handler(req, res) {
            FROM cohort`,
         [fromIso, toIso],
       ),
+      // ─── Onboarding "About you" aggregates (cohort = signups in window) ──
+      // Aggregate-only by design: we GROUP over the preset option ids and
+      // never return per-workspace rows or the free-text answers. The
+      // "other" bucket counts preset-null-with-free-text so the channel /
+      // goal mix stays honest.
+      sql.query(
+        `SELECT
+           COUNT(*)::int AS cohort,
+           COUNT(*) FILTER (
+             WHERE wp.goal IS NOT NULL OR wp.goal_other IS NOT NULL
+                OR wp.challenge IS NOT NULL OR wp.challenge_other IS NOT NULL
+                OR wp.ideal_client IS NOT NULL
+                OR wp.heard_from IS NOT NULL OR wp.heard_from_other IS NOT NULL
+                OR wp.stage IS NOT NULL
+           )::int AS answered
+           FROM workspaces w
+           LEFT JOIN workspace_profile wp ON wp.workspace_id = w.id
+          WHERE w.created_at >= $1 AND w.created_at < $2`,
+        [fromIso, toIso],
+      ),
+      onbDist('goal', 'goal_other', fromIso, toIso),
+      onbDist('challenge', 'challenge_other', fromIso, toIso),
+      onbDist('heard_from', 'heard_from_other', fromIso, toIso),
+      onbDist('stage', null, fromIso, toIso),
     ]);
 
     const cancelled = churnCancelledRow.rows[0]?.n || 0;
@@ -408,10 +437,49 @@ export default async function handler(req, res) {
         paywallSeen:       fn.paywall_seen || 0,
         converted:         fn.converted || 0,
       },
+      // Onboarding "About you" answer distributions (aggregate only —
+      // no per-workspace data, no free text). Each list is [{k, n}]
+      // sorted by frequency; the UI maps option ids → labels + bars.
+      onboarding: {
+        cohort:    onbCountsRow.rows[0]?.cohort || 0,
+        answered:  onbCountsRow.rows[0]?.answered || 0,
+        goal:      onbGoalRows.rows.map((r) => ({ k: r.k, n: r.n })),
+        challenge: onbChallengeRows.rows.map((r) => ({ k: r.k, n: r.n })),
+        heardFrom: onbHeardRows.rows.map((r) => ({ k: r.k, n: r.n })),
+        stage:     onbStageRows.rows.map((r) => ({ k: r.k, n: r.n })),
+      },
     });
   } catch (err) {
     return serverError(res, err);
   }
+}
+
+// Distribution query for one onboarding preset field. `field` /
+// `otherField` are internal literals (allowlisted below — never user
+// input), so interpolating them as column names is safe. When otherField
+// is given, preset-null-with-free-text rows collapse into an 'other'
+// bucket so the mix stays honest.
+function onbDist(field, otherField, fromIso, toIso) {
+  const ALLOWED = new Set([
+    'goal', 'challenge', 'heard_from', 'stage',
+    'goal_other', 'challenge_other', 'heard_from_other',
+  ]);
+  if (!ALLOWED.has(field) || (otherField && !ALLOWED.has(otherField))) {
+    throw new Error('onbDist: unrecognized field');
+  }
+  const keyExpr = otherField
+    ? `COALESCE(wp.${field}, CASE WHEN wp.${otherField} IS NOT NULL THEN 'other' END)`
+    : `wp.${field}`;
+  return sql.query(
+    `SELECT ${keyExpr} AS k, COUNT(*)::int AS n
+       FROM workspace_profile wp
+       JOIN workspaces w ON w.id = wp.workspace_id
+      WHERE w.created_at >= $1 AND w.created_at < $2
+        AND ${keyExpr} IS NOT NULL
+      GROUP BY 1
+      ORDER BY n DESC`,
+    [fromIso, toIso],
+  );
 }
 
 function parseDate(raw, fallback) {

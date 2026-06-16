@@ -44,7 +44,7 @@ async function healColumn() {
 // Whitelist of step ids the client can claim it's on. Keeps the JSONB
 // blob from being filled with arbitrary keys.
 const VALID_STEPS = new Set([
-  'welcome', 'business', 'services', 'availability',
+  'welcome', 'business', 'about', 'services', 'availability',
   'first_product',                              // product-only flow replaces 'services' with this
   'payments', 'branding', 'first_client', 'website',
   'tour', 'done',
