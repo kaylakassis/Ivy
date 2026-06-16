@@ -5,6 +5,7 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
+import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 export default function SecurityPage() {
   useEffect(() => {
@@ -84,7 +85,7 @@ export default function SecurityPage() {
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '8px 14px', fontSize: 13 }}>
-            Start free <Icons.Arrow size={12} sw={2}/>
+            Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={12} sw={2}/>
           </Link>
         </div>
       </main>

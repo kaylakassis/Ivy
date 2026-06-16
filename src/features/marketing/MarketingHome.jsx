@@ -15,7 +15,7 @@ import { useTweaks } from '../../lib/tweaks.js';
 import { MarketingMobileMenu, AudienceToggle } from './MarketingShell.jsx';
 import { api } from '../../lib/api.js';
 import { VERTICALS as VERTICAL_DATA } from './verticalsData.js';
-import { THRYVE_PRICE } from './RoiCalculator.jsx';
+import { THRYVE_PRICE, STACK_TOTAL, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // Feature showcase, grouped the way an owner actually thinks about the
 // day: get booked → get paid → keep clients → grow. Each band maps a
@@ -41,7 +41,8 @@ const CATEGORIES = [
     items: [
       { icon: 'Receipt', title: 'Invoices, quotes & recurring', body: 'Branded invoices and estimates that convert on accept, plus recurring billing on autopilot.' },
       { icon: 'Lock',    title: 'Card on file & auto-charge', body: 'With Stripe, clients save a card once — auto-charge deposits, late-cancel & no-show fees, and tips.' },
-      { icon: 'Heart',   title: 'Memberships & packages', body: 'Sell monthly tiers and prepaid session packs; credits draw down automatically as clients book.' },
+      { icon: 'Phone',   title: 'In-person & Tap to Pay', body: 'Run an in-person sale right from your phone — Tap to Pay on iPhone & Android, or any Stripe reader. No extra hardware required.' },
+      { icon: 'Heart',   title: 'Memberships & packages', body: 'Sell monthly tiers and prepaid session packs; credits draw down automatically — and clients can self-book the whole pack as a recurring series from their portal.' },
       { icon: 'Gift',    title: 'Gift cards', body: 'Sell gift cards that redeem against bookings and invoices, with a full balance + redemption log.' },
       { icon: 'Clock',   title: 'Time tracking & expenses', body: 'Run a timer, bill it straight into an invoice, and log Schedule-C expenses with receipts.' },
       { icon: 'Bank',    title: 'Tax & accounting exports', body: 'One-click Schedule-C summary and QuickBooks / Xero CSV when it’s time to file.' },
@@ -67,7 +68,7 @@ const CATEGORIES = [
     items: [
       { icon: 'Globe',    title: 'Website builder', body: '35+ section types, 15 designs, custom domain, SEO, and version history — your booking site, no separate tool.' },
       { icon: 'Repeat',   title: 'Workflows & automation', body: 'Welcome sequences, win-backs, birthdays — fire emails, texts, tasks, and docs from no-code rules.' },
-      { icon: 'Spark',    title: 'Ivy, your AI operator', body: 'Grounded in your real numbers, Ivy answers and acts — send an invoice, message a quiet client, book a slot.' },
+      { icon: 'Spark',    title: 'Ivy, your AI operator', body: 'Grounded in your real numbers AND your stated goal, ideal client, and challenges — Ivy answers and acts: send an invoice, message a quiet client, book a slot.' },
       { icon: 'Trending', title: 'Goals & dashboard', body: 'Track revenue, clients, and sessions against goals on a dashboard that surfaces what needs you.' },
       { icon: 'FileIcon', title: 'Projects', body: 'Group bookings, invoices, quotes, and documents into one engagement for bigger pieces of work.' },
       { icon: 'Users',    title: 'Team & staff', body: 'Add staff with their own colors, rates, and commissions; assign bookings and filter the calendar per person.' },
@@ -117,7 +118,7 @@ const FAQ = [
   },
   {
     q: "What's pricing going to look like?",
-    a: `Start with a free trial, then one simple subscription at $${THRYVE_PRICE}/mo - no per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use THRYVE.`,
+    a: `Start with a ${TRIAL_DAYS}-day free trial — no credit card required — then one simple subscription at $${THRYVE_PRICE}/mo. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients — they never pay to use THRYVE.`,
   },
   {
     q: 'Is there a mobile app?',
@@ -202,7 +203,11 @@ export default function MarketingHome() {
           <Features/>
           <BuiltFor/>
           <UserCounter/>
-          <Testimonials/>
+          {/* Testimonials section removed until we have real attributed
+              quotes — placeholder copy was beta-feedback paraphrasing
+              and shouldn't ship as social proof. The TESTIMONIALS array
+              and the Testimonials component are intentionally kept in
+              this file so a single import + re-mount restores them. */}
           <Comparison/>
           <MobileBand/>
           <FAQSection/>
@@ -391,23 +396,24 @@ function Hero() {
         fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
         textTransform: 'uppercase', marginBottom: 24,
       }}>
-        <Icons.Spark size={12} sw={2}/> Now with Ivy — AI that runs the busywork
+        <Icons.Spark size={12} sw={2}/> Native AI · only on THRYVE
       </div>
 
       <h1 className="page-title" style={{
         margin: 0, fontSize: 'clamp(34px, 6vw, 56px)',
-        lineHeight: 1.05, maxWidth: 740, marginInline: 'auto',
+        lineHeight: 1.05, maxWidth: 760, marginInline: 'auto',
       }}>
-        Run your whole business<br/>from one place.
+        The business OS with an AI<br/>that <em style={{ fontStyle: 'italic' }}>does</em> the work.
       </h1>
 
       <p style={{
-        margin: '20px auto 0', maxWidth: 600,
+        margin: '20px auto 0', maxWidth: 620,
         fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
       }}>
-        Booking, payments, a real website, client messaging, documents, automations,
-        and an AI that acts on your numbers — all in one workspace that stays yours.
-        No bouncing between five apps, no per-tool subscriptions.
+        Meet Ivy. She knows your clients, your numbers, and your calendar — and she
+        actually <em>does the busywork</em>: drafts invoices, books sessions, messages
+        quiet clients, sends contracts. All inside one workspace that replaces
+        ${STACK_TOTAL}/mo of stitched-together tools.
       </p>
 
       <div style={{
@@ -416,7 +422,7 @@ function Hero() {
       }}>
         <Link to="/signup" className="btn btn-primary"
           style={{ padding: '14px 24px', fontSize: 15, gap: 10 }}>
-          Start free <Icons.Arrow size={14} sw={2}/>
+          Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={14} sw={2}/>
         </Link>
         <Link to="/signup?mode=client" className="btn btn-outline"
           style={{ padding: '14px 24px', fontSize: 15 }}>
@@ -424,7 +430,7 @@ function Hero() {
         </Link>
       </div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14 }}>
-        No credit card required · Free trial
+        No credit card required · Cancel anytime
       </div>
     </section>
   );
@@ -735,7 +741,7 @@ function TrustStrip() {
     'Stripe-verified · no transaction fees',
     'Cancel anytime · no contract',
     'Export your data any time',
-    `Start with a free trial · simple $${THRYVE_PRICE}/mo when you subscribe`,
+    `${TRIAL_DAYS}-day free trial · no card · then $${THRYVE_PRICE}/mo`,
   ];
   return (
     <section style={{
@@ -1285,12 +1291,12 @@ function Pricing() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <div className="metric-label" style={{ color: 'var(--accent)' }}>Pricing</div>
           <h3 className="page-title" style={{ margin: '6px 0 8px', fontSize: 24 }}>
-            Start with a free trial.
+            {TRIAL_DAYS} days. No credit card.
           </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            Use everything free on a trial, then a simple ${THRYVE_PRICE}/mo when you subscribe -
-            no per-seat math, no surprise bills. Early users get a discount locked in
-            for life. The client portal stays free forever for clients.
+            Use everything free for {TRIAL_DAYS} days — no card required — then a simple ${THRYVE_PRICE}/mo
+            when you subscribe. No per-seat math, no surprise bills. Early users get a
+            discount locked in for life. The client portal stays free forever for clients.
           </p>
         </div>
         <Link to="/signup" className="btn btn-primary"
@@ -1324,7 +1330,7 @@ function CTA() {
       </p>
       <Link to="/signup" className="btn btn-primary"
         style={{ padding: '14px 26px', fontSize: 15 }}>
-        Get started - free
+        Start your {TRIAL_DAYS}-day free trial
       </Link>
     </section>
   );

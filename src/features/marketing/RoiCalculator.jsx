@@ -12,7 +12,7 @@ import React, { useMemo, useState } from 'react';
 // page + this calculator can't drift. Re-exported below to preserve the
 // existing `import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from
 // './RoiCalculator.jsx'` call sites.
-import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE } from '../../lib/pricing.js';
+import { TOOL_STACK, STACK_TOTAL, THRYVE_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // Tunable assumptions, all deliberately conservative + cited in the
 // footnote so the calculator never feels like fantasy math.
@@ -89,7 +89,7 @@ export default function RoiCalculator() {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        THRYVE is <strong>${THRYVE_PRICE}/mo</strong>, and you start with a free trial. The
+        THRYVE is <strong>${THRYVE_PRICE}/mo</strong>, and you start with a {TRIAL_DAYS}-day free trial (no credit card). The
         math is deliberately conservative: a $75/hr billable rate, THRYVE automating
         60% of your admin time, and an 8% no-show rate that reminders + card-on-file
         recover. Your real numbers are usually higher.

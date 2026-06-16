@@ -9,6 +9,7 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
+import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 const BLOCKS = [
   {
@@ -32,7 +33,7 @@ const BLOCKS = [
     heading: 'Built so the client portal is free, forever.',
     paragraphs: [
       "Your clients shouldn't have to pay to interact with you. The portal - where they see their bookings, invoices, signed forms, and messages - is free for them and always will be. They sign up once and use the same portal across every business they work with on THRYVE.",
-      "When THRYVE charges, it charges the business owner only - one simple subscription after a free trial. Early users get a meaningful discount locked in for life. No surprise bills, no rugpulls.",
+      `When THRYVE charges, it charges the business owner only — one simple subscription after a ${TRIAL_DAYS}-day free trial. Early users get a meaningful discount locked in for life. No surprise bills, no rugpulls.`,
     ],
   },
   {
@@ -117,13 +118,13 @@ export default function AboutPage() {
             Try it.
           </h3>
           <p style={{ margin: '0 0 18px', fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            Free trial, three minutes to set up, no credit card.
+            {TRIAL_DAYS} days free, no credit card, three minutes to set up.
             Bring one client in. See if it feels different.
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <Link to="/signup" className="btn btn-primary"
               style={{ padding: '12px 20px', fontSize: 14 }}>
-              Start free <Icons.Arrow size={13} sw={2}/>
+              Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={13} sw={2}/>
             </Link>
             <Link to="/pricing" className="btn btn-outline"
               style={{ padding: '12px 20px', fontSize: 14 }}>

@@ -6,9 +6,11 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { FLAGS } from '../../lib/featureFlags.js';
+import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 const LIVE = [
   { name: 'Stripe',           icon: 'Dollar',   sub: 'The full toolkit: card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
+  { name: 'Tap to Pay',       icon: 'Phone',    sub: 'Take in-person card payments straight from your phone (iPhone & Android). No reader required — and Stripe Terminal hardware works too.' },
   ...(FLAGS.squarePaypal ? [
     { name: 'Square',         icon: 'Receipt',  sub: 'Connect via OAuth for hosted checkout + refunds, paid into your Square account.' },
     { name: 'PayPal',         icon: 'Dollar',   sub: 'Hosted checkout (incl. Venmo) + refunds, paid into your PayPal account.' },
@@ -84,7 +86,7 @@ export default function IntegrationsPage() {
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ marginTop: 16, padding: '12px 22px', fontSize: 14, fontWeight: 600 }}>
-            Start free <Icons.Arrow size={13} sw={2}/>
+            Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={13} sw={2}/>
           </Link>
         </section>
       </main>
