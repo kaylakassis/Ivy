@@ -8,6 +8,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { useIvy } from './state.jsx';
+import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 
 export default function IvyPro() {
   const [tweaks] = useTweaks();
@@ -458,8 +459,8 @@ function ChatBubble({ msg }) {
         background: isMe ? 'var(--accent)' : 'var(--surface)',
         color: isMe ? 'var(--accent-ink)' : 'var(--fg)',
         border: isMe ? 'none' : '1px solid var(--border)',
-        whiteSpace: 'pre-wrap',
-      }}>{msg.text}</div>
+        whiteSpace: isMe ? 'pre-wrap' : 'normal',
+      }}>{isMe ? msg.text : <MiniMarkdown text={msg.text}/>}</div>
     </div>
   );
 }

@@ -12,7 +12,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import {
   serializeSession, serializeMessage, workspaceContext,
   generateReply, fetchOwnedSession, getDailyUsage, sanitizeUserText,
-  IVY_MODEL,
+  stripInlineMarkdown, IVY_MODEL,
 } from '../_lib/ivy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
         RETURNING *
       `;
 
-      const preview = replyText.slice(0, 120);
+      const preview = stripInlineMarkdown(replyText).slice(0, 120);
       const upd = await sql`
         UPDATE ivy_sessions
         SET last_message_at = NOW(), last_message_preview = ${preview}, updated_at = NOW()
