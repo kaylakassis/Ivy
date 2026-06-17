@@ -115,7 +115,12 @@ async function run() {
   assert(slot11(30) && slot11(30).available === false, '30-min buffer: 11:00 (15 min after a 10:45 end) is NOT bookable');
   assert(slot11(0) && slot11(0).available === true, 'no buffer: that same 11:00 slot IS bookable');
 
-  // Server enforces the buffer on the public POST.
+  // Server enforces the buffer on the public POST. Reset the rate limiter
+  // first — sections [1]–[3] above have already spent this IP's hourly
+  // booking quota, and a stale rate_limits table (this DB persists across
+  // suites/runs) would otherwise make these POSTs 429 instead of hitting
+  // the real 400 buffer/horizon paths. Same guard section [5] uses below.
+  await sql`TRUNCATE rate_limits`;
   await sql`UPDATE calendar_settings SET slot_fit_service = FALSE, slot_minutes = 30, buffer_minutes = 30, min_notice_hours = 0 WHERE workspace_id = ${wid}`;
   const bufDate = iso(new Date(Date.now() + 12 * 24 * 3600 * 1000));
   await sql.query(
