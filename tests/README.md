@@ -9,8 +9,8 @@ instead of Neon. The handlers are unchanged — a loader hook redirects
 1. Local Postgres 14+ running on `localhost:5432`
 2. A test database + role:
    ```sql
-   CREATE ROLE thryve_test WITH LOGIN PASSWORD 'test' CREATEDB;
-   CREATE DATABASE thryve_test OWNER thryve_test;
+   CREATE ROLE ivy_test WITH LOGIN PASSWORD 'test' CREATEDB;
+   CREATE DATABASE ivy_test OWNER ivy_test;
    ```
 3. `pg` installed: `npm install pg --no-save` (or add to devDependencies)
 

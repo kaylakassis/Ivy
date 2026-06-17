@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     // Top-level navigation: if there's no session cookie, bounce to
     // /signin so the user lands somewhere useful instead of seeing
     // requireUser's raw 401 JSON.
-    if (!req.headers.cookie || !/(?:^|;\s*)thryve_session=/.test(req.headers.cookie)) {
+    if (!req.headers.cookie || !/(?:^|;\s*)ivy_session=/.test(req.headers.cookie)) {
       const dest = encodeURIComponent('/finance');
       res.writeHead(302, { Location: `/signin?next=${dest}` });
       res.end();

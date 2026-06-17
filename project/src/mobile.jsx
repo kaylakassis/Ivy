@@ -20,7 +20,7 @@ function MobileDashboard({ direction }) {
           {greet}
         </h1>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.45 }}>
-          Welcome to THRYVE.
+          Welcome to Ivy OS.
         </p>
       </div>
 

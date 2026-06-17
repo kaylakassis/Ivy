@@ -1,6 +1,6 @@
 // Google OAuth + Calendar API client. Just the methods we need to
 // connect a workspace (exchange code → refresh token), create a
-// dedicated "THRYVE Bookings" calendar, and push event CRUD on
+// dedicated "Ivy OS Bookings" calendar, and push event CRUD on
 // booking lifecycle. No SDK — direct fetch keeps the bundle slim.
 //
 // Required env vars:
@@ -132,22 +132,22 @@ async function calApi(path, { method = 'GET', accessToken, body }) {
   return json;
 }
 
-// Creates a dedicated "THRYVE Bookings" calendar in the user's account
+// Creates a dedicated "Ivy OS Bookings" calendar in the user's account
 // so our events live in their own colour-coded layer rather than mixing
 // with personal events. Returns the calendar id.
-export async function createThryveCalendar({ accessToken, summary = 'THRYVE Bookings' }) {
+export async function createIvyCalendar({ accessToken, summary = 'Ivy OS Bookings' }) {
   const cal = await calApi('/calendars', {
     method: 'POST', accessToken,
     body: {
       summary,
-      description: 'Bookings from your THRYVE workspace. Manage them in the THRYVE app — edits made here will not sync back.',
+      description: 'Bookings from your Ivy OS workspace. Manage them in the Ivy OS app — edits made here will not sync back.',
       timeZone: 'UTC',
     },
   });
   return cal.id;
 }
 
-// Convert a THRYVE booking into a Google Calendar event payload. Times
+// Convert an Ivy OS booking into a Google Calendar event payload. Times
 // are emitted as floating local-time (no Z) since we don't track the
 // owner's timezone yet — Google interprets them in the calendar's tz.
 function bookingToEvent({ booking, serviceName }) {
@@ -155,13 +155,13 @@ function bookingToEvent({ booking, serviceName }) {
   const dtend   = `${booking.date}T${pad2(Math.floor(booking.end_min   / 60))}:${pad2(booking.end_min   % 60)}:00`;
   const event = {
     summary: `${serviceName || 'Appointment'} — ${firstName(booking.client_name)}`,
-    description: 'Manage in THRYVE. Edits made in this calendar app will not sync back.',
+    description: 'Manage in Ivy OS. Edits made in this calendar app will not sync back.',
     start: { dateTime: dtstart },
     end:   { dateTime: dtend },
     transparency: 'opaque',
     extendedProperties: {
       private: {
-        thryve_booking_id: booking.id,
+        ivy_booking_id: booking.id,
       },
     },
   };

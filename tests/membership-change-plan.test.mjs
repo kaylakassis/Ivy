@@ -64,7 +64,7 @@ async function run() {
     const cm = (await sql`INSERT INTO client_memberships (workspace_id, client_id, membership_id,
       membership_name, price_cents, interval, stripe_subscription_id, status)
       VALUES (${wid}, ${cid}, ${tierA}, 'A', 1000, 'month', ${`sub_${tag}`}, 'active') RETURNING id`).rows[0].id;
-    const cookie = `thryve_session=${signSession(uid)}`;
+    const cookie = `ivy_session=${signSession(uid)}`;
 
     // Capture Stripe calls.
     const seen = [];

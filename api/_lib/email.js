@@ -10,7 +10,7 @@
 // Production setup once you have a domain:
 //   1. Add your domain in https://resend.com/domains and finish the DNS
 //      records they list (SPF, DKIM, DMARC). Status must read "Verified".
-//   2. Set EMAIL_FROM='THRYVE <noreply@your-domain.com>' in Vercel envs.
+//   2. Set EMAIL_FROM='Ivy OS <noreply@your-domain.com>' in Vercel envs.
 //   3. Set EMAIL_REPLY_TO='support@your-domain.com'.
 //   4. Hit /account → Admin → "Check email-domain status" to confirm
 //      Resend reports the domain as verified.
@@ -21,7 +21,7 @@ import { sql } from './db.js';
 const RESEND_URL = 'https://api.resend.com/emails';
 
 function fromAddress() {
-  return process.env.EMAIL_FROM || 'THRYVE <onboarding@resend.dev>';
+  return process.env.EMAIL_FROM || 'Ivy OS <onboarding@resend.dev>';
 }
 
 function replyToAddress() {
@@ -85,7 +85,7 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, tim
   // native "Unsubscribe" link in the inbox header. Callers can override
   // by passing their own `headers` object.
   const defaultHeaders = {
-    'List-Unsubscribe': `<mailto:${replyToAddress() || 'hello@getthryve.ai'}?subject=unsubscribe>, <${process.env.APP_URL || 'https://getthryve.ai'}/account?tab=notifications>`,
+    'List-Unsubscribe': `<mailto:${replyToAddress() || 'hello@getivyos.com'}?subject=unsubscribe>, <${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
   };
   body.headers = { ...defaultHeaders, ...(headers && typeof headers === 'object' ? headers : {}) };
@@ -122,7 +122,7 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, tim
     // can act on directly. Surfaces in /admin → Send test email.
     if (res.status === 403 && /domain.*not.*verified|verify.*domain/i.test(detail)) {
       throw new Error(
-        `Resend rejected: domain not verified. Add ${fromDomain()} at https://resend.com/domains and finish the DNS records. Until then, EMAIL_FROM='THRYVE <onboarding@resend.dev>' will only deliver to your own verified Resend-account address.`,
+        `Resend rejected: domain not verified. Add ${fromDomain()} at https://resend.com/domains and finish the DNS records. Until then, EMAIL_FROM='Ivy OS <onboarding@resend.dev>' will only deliver to your own verified Resend-account address.`,
       );
     }
     if (res.status === 422) {
@@ -141,7 +141,7 @@ function stripHtml(s = '') {
 // Branded email shell
 // ─────────────────────────────────────────────────────────────────────
 //
-// Visual goal: match the THRYVE app's "bold" (dark) theme so every
+// Visual goal: match the Ivy OS app's "bold" (dark) theme so every
 // transactional email — verification, password reset, invoice, booking
 // confirmation, doc signing, message reply — feels native to the
 // product. Uses the same palette as src/styles/tokens.css `.dir-bold`:
@@ -189,7 +189,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
   const fontDisplay = `'Fraunces','Iowan Old Style',Georgia,serif`;
   const fontSans    = `-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,Arial,sans-serif`;
 
-  // Letterhead: logo > business name > THRYVE wordmark. The "Business
+  // Letterhead: logo > business name > Ivy OS wordmark. The "Business
   // OS" tag is dropped when a workspace is branded so the recipient
   // sees the actual business as the sender.
   const headerLeft = logoUrl
@@ -197,7 +197,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
          style="max-height:36px;max-width:180px;width:auto;height:auto;display:block;border:0;"/>`
     : (businessName
        ? `<div style="font-family:${fontDisplay};font-size:22px;letter-spacing:-0.02em;font-weight:500;color:${C.fg};line-height:1;">${escapeText(businessName)}</div>`
-       : `<div style="font-family:${fontDisplay};font-size:21px;letter-spacing:-0.02em;font-weight:600;color:${accent};line-height:1;">THRYVE</div>`);
+       : `<div style="font-family:${fontDisplay};font-size:21px;letter-spacing:-0.02em;font-weight:600;color:${accent};line-height:1;">Ivy OS</div>`);
 
   const headerRight = businessName
     ? '' // workspaces don't show "Business OS" tag; their name IS the brand
@@ -230,15 +230,15 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
     : '';
 
   const footerByline = businessName
-    ? `Sent by <strong style="color:${C.fg2};">${escapeText(businessName)}</strong> via THRYVE`
-    : `Made with care · <a href="https://getthryve.ai" style="color:${C.muted};text-decoration:none;">getthryve.ai</a>`;
+    ? `Sent by <strong style="color:${C.fg2};">${escapeText(businessName)}</strong> via Ivy OS`
+    : `Made with care · <a href="https://getivyos.com" style="color:${C.muted};text-decoration:none;">getivyos.com</a>`;
 
   // CAN-SPAM postal address. Only shown on unbranded sends (i.e.
-  // THRYVE itself as the sender — admin blasts, magic links, account
+  // Ivy OS itself as the sender — admin blasts, magic links, account
   // emails). Per-workspace transactional emails (booking confirmations,
   // invoices, etc.) carry the owner's branding and are exempt.
   const postalAddress = !businessName
-    ? (process.env.THRYVE_POSTAL_ADDRESS || 'THRYVE · 1209 Orange St, Wilmington, DE 19801, USA')
+    ? (process.env.IVY_POSTAL_ADDRESS || 'Ivy OS · 1209 Orange St, Wilmington, DE 19801, USA')
     : '';
   const postalBlock = postalAddress
     ? `<div style="margin-top:6px;font-size:10.5px;color:${C.muted2};letter-spacing:0.02em;">${escapeText(postalAddress)}</div>`
@@ -251,7 +251,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <meta name="color-scheme" content="dark only"/>
   <meta name="supported-color-schemes" content="dark only"/>
-  <title>${escapeText(heading || 'THRYVE')}</title>
+  <title>${escapeText(heading || 'Ivy OS')}</title>
 </head>
 <body style="margin:0;padding:0;background:${C.page};font-family:${fontSans};color:${C.fg};-webkit-font-smoothing:antialiased;mso-line-height-rule:exactly;">
   <!-- Hidden preheader: shows as the inbox-list preview text. -->
@@ -314,7 +314,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
 
         <!-- Tagline below the card. Tiny, no boilerplate. -->
         <div style="margin-top:16px;font-size:11px;color:${C.muted2};line-height:1.5;max-width:600px;">
-          THRYVE is the all-in-one business OS for solo entrepreneurs.<br/>
+          Ivy OS is the all-in-one business OS for solo entrepreneurs.<br/>
           One workspace · clients, calendar, invoices, messages, docs.
         </div>
       </td>

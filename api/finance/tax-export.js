@@ -106,7 +106,7 @@ export default async function handler(req, res) {
 
     // Build CSV.
     const lines = [];
-    lines.push(row(`THRYVE — Tax export for ${bizName} — ${year}`));
+    lines.push(row(`Ivy OS — Tax export for ${bizName} — ${year}`));
     lines.push(row('Generated', new Date().toISOString()));
     lines.push('');
     lines.push(row('SUMMARY'));
@@ -146,7 +146,7 @@ export default async function handler(req, res) {
 
     const csv = lines.join('\r\n') + '\r\n';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="thryve-tax-${year}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="ivy-tax-${year}.csv"`);
     return res.status(200).send(csv);
   } catch (err) {
     return serverError(res, err);

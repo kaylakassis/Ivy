@@ -75,9 +75,9 @@ async function run() {
     const cOther = (await sql`INSERT INTO clients (workspace_id, name, email, stage)
       VALUES (${ws2}, 'Eve', ${`${tag}-eve@example.com`}, 'active') RETURNING id`).rows[0].id;
 
-    const cookie1 = `thryve_session=${signSession(owner1)}`;
-    const cookie2 = `thryve_session=${signSession(owner2)}`;
-    const cookieClient = `thryve_session=${signSession(portalUser)}`;
+    const cookie1 = `ivy_session=${signSession(owner1)}`;
+    const cookie2 = `ivy_session=${signSession(owner2)}`;
+    const cookieClient = `ivy_session=${signSession(portalUser)}`;
 
     // ─── 1. Create ───────────────────────────────────────────────
     console.log('\n[1] owner creates a cohort group');
@@ -282,7 +282,7 @@ async function run() {
     // New user signs up + accepts.
     const newUser = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}-nu@example.com`}, 'x', 'New', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
-    const newCookie = `thryve_session=${signSession(newUser)}`;
+    const newCookie = `ivy_session=${signSession(newUser)}`;
     const acc = mkRes();
     await acceptInvite(ownerReq({
       method: 'POST', cookie: newCookie, body: { token: plaintext },

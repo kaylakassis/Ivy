@@ -1,4 +1,4 @@
-// Server-side HTML renderer for published THRYVE sites.
+// Server-side HTML renderer for published Ivy OS sites.
 //
 // What this gets us:
 //   1. <title> + <meta name="description"> + OG tags appear in the
@@ -79,12 +79,12 @@ function styleVal(s) {
 function renderHero(s) {
   const d = s.data || {};
   const cta = d.cta
-    ? `<p class="thryve-cta"><a href="${attr(d.ctaLink || '#book')}">${esc(d.cta)} →</a></p>`
+    ? `<p class="ivy-cta"><a href="${attr(d.ctaLink || '#book')}">${esc(d.cta)} →</a></p>`
     : '';
   const img = d.imgUrl
     ? `<img src="${attr(d.imgUrl)}" alt="${attr(d.headline || '')}" loading="lazy"/>`
     : '';
-  return `<section class="thryve-hero">
+  return `<section class="ivy-hero">
     <h1>${esc(d.headline || '')}</h1>
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     ${cta}
@@ -98,9 +98,9 @@ function renderServices(s) {
     <li>
       <h3>${esc(it.name || '')}</h3>
       ${it.desc ? `<p>${esc(it.desc)}</p>` : ''}
-      ${it.price ? `<p class="thryve-price">${esc(it.price)}${it.duration ? ` · ${esc(it.duration)}` : ''}</p>` : ''}
+      ${it.price ? `<p class="ivy-price">${esc(it.price)}${it.duration ? ` · ${esc(it.duration)}` : ''}</p>` : ''}
     </li>`).join('');
-  return `<section class="thryve-services">
+  return `<section class="ivy-services">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <ul>${items}</ul>
@@ -109,7 +109,7 @@ function renderServices(s) {
 
 function renderAbout(s) {
   const d = s.data || {};
-  return `<section class="thryve-about">
+  return `<section class="ivy-about">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.body ? `<p>${esc(d.body)}</p>` : ''}
     ${d.imgUrl ? `<img src="${attr(d.imgUrl)}" alt="${attr(d.headline || '')}" loading="lazy"/>` : ''}
@@ -118,7 +118,7 @@ function renderAbout(s) {
 
 function renderBooking(s, handle) {
   const d = s.data || {};
-  return `<section class="thryve-booking">
+  return `<section class="ivy-booking">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <p><a href="/book/${attr(d.handle || handle || '')}">Open booking calendar</a></p>
@@ -132,7 +132,7 @@ function renderTestimonials(s) {
       <p>${esc(t.text || '')}</p>
       <footer>${esc(t.name || '')}${t.role ? ` — ${esc(t.role)}` : ''}</footer>
     </blockquote>`).join('');
-  return `<section class="thryve-testimonials">
+  return `<section class="ivy-testimonials">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${items}
   </section>`;
@@ -141,11 +141,11 @@ function renderTestimonials(s) {
 function renderFAQ(s) {
   const d = s.data || {};
   const items = (d.items || []).map((q) => `
-    <div class="thryve-faq-item">
+    <div class="ivy-faq-item">
       <h3>${esc(q.q || '')}</h3>
       <p>${esc(q.a || '')}</p>
     </div>`).join('');
-  return `<section class="thryve-faq">
+  return `<section class="ivy-faq">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${items}
   </section>`;
@@ -158,7 +158,7 @@ function renderGallery(s) {
     if (!url) return '';
     return `<img src="${attr(url)}" alt="${attr(d.headline || 'Gallery image')}" loading="lazy"/>`;
   }).join('');
-  return `<section class="thryve-gallery">
+  return `<section class="ivy-gallery">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${photos}
   </section>`;
@@ -166,7 +166,7 @@ function renderGallery(s) {
 
 function renderContact(s) {
   const d = s.data || {};
-  return `<section class="thryve-contact">
+  return `<section class="ivy-contact">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     ${d.email ? `<p>Email: <a href="mailto:${attr(d.email)}">${esc(d.email)}</a></p>` : ''}
@@ -176,7 +176,7 @@ function renderContact(s) {
 
 function renderFooter(s) {
   const d = s.data || {};
-  return `<footer class="thryve-footer">
+  return `<footer class="ivy-footer">
     <p>© ${esc(d.year || new Date().getFullYear())} ${esc(d.businessName || '')}${d.tagline ? ` · ${esc(d.tagline)}` : ''}</p>
   </footer>`;
 }
@@ -185,7 +185,7 @@ function renderStats(s) {
   const d = s.data || {};
   const items = (d.items || []).map((it) => `
     <li><strong>${esc(it.value || '')}</strong> <span>${esc(it.label || '')}</span></li>`).join('');
-  return `<section class="thryve-stats">
+  return `<section class="ivy-stats">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <ul>${items}</ul>
@@ -194,7 +194,7 @@ function renderStats(s) {
 
 function renderCtaBanner(s) {
   const d = s.data || {};
-  return `<section class="thryve-cta-banner">
+  return `<section class="ivy-cta-banner">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     ${d.cta ? `<p><a href="${attr(d.ctaLink || '#')}">${esc(d.cta)} →</a></p>` : ''}
@@ -207,10 +207,10 @@ function renderTeam(s) {
     <li>
       ${m.imgUrl ? `<img src="${attr(m.imgUrl)}" alt="${attr(m.name || '')}" loading="lazy"/>` : ''}
       <h3>${esc(m.name || '')}</h3>
-      ${m.role ? `<p class="thryve-role">${esc(m.role)}</p>` : ''}
+      ${m.role ? `<p class="ivy-role">${esc(m.role)}</p>` : ''}
       ${m.bio ? `<p>${esc(m.bio)}</p>` : ''}
     </li>`).join('');
-  return `<section class="thryve-team">
+  return `<section class="ivy-team">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     <ul>${members}</ul>
   </section>`;
@@ -221,12 +221,12 @@ function renderPricing(s) {
   const tiers = (d.tiers || []).map((t) => `
     <li>
       <h3>${esc(t.name || '')}</h3>
-      ${t.price ? `<p class="thryve-price">${esc(t.price)}</p>` : ''}
+      ${t.price ? `<p class="ivy-price">${esc(t.price)}</p>` : ''}
       ${t.description ? `<p>${esc(t.description)}</p>` : ''}
       <ul>${(t.features || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
       ${t.ctaText ? `<p><a href="${attr(t.ctaLink || '#')}">${esc(t.ctaText)} →</a></p>` : ''}
     </li>`).join('');
-  return `<section class="thryve-pricing">
+  return `<section class="ivy-pricing">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <ul>${tiers}</ul>
@@ -235,7 +235,7 @@ function renderPricing(s) {
 
 function renderNewsletter(s) {
   const d = s.data || {};
-  return `<section class="thryve-newsletter">
+  return `<section class="ivy-newsletter">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
   </section>`;
@@ -243,7 +243,7 @@ function renderNewsletter(s) {
 
 function renderVideo(s) {
   const d = s.data || {};
-  return `<section class="thryve-video">
+  return `<section class="ivy-video">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     ${d.videoUrl ? `<p><a href="${attr(d.videoUrl)}">Watch video</a></p>` : ''}
@@ -253,7 +253,7 @@ function renderVideo(s) {
 function renderLogos(s) {
   const d = s.data || {};
   const logos = (d.logos || []).map((l) => `<li>${esc(l.name || '')}</li>`).join('');
-  return `<section class="thryve-logos">
+  return `<section class="ivy-logos">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     <ul>${logos}</ul>
   </section>`;
@@ -264,7 +264,7 @@ function renderPricingTable(s) {
   const head = `<tr><th></th>${(d.tiers || []).map((t) => `<th>${esc(t)}</th>`).join('')}</tr>`;
   const body = (d.rows || []).map((r) => `
     <tr><th scope="row">${esc(r.label || '')}</th>${(r.values || []).map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('');
-  return `<section class="thryve-pricing-table">
+  return `<section class="ivy-pricing-table">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <table><thead>${head}</thead><tbody>${body}</tbody></table>
@@ -277,9 +277,9 @@ function renderBlog(s) {
     <article>
       <h3><a href="${attr(p.url || '#')}">${esc(p.title || '')}</a></h3>
       ${p.excerpt ? `<p>${esc(p.excerpt)}</p>` : ''}
-      ${p.date ? `<p class="thryve-date">${esc(p.date)}</p>` : ''}
+      ${p.date ? `<p class="ivy-date">${esc(p.date)}</p>` : ''}
     </article>`).join('');
-  return `<section class="thryve-blog">
+  return `<section class="ivy-blog">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     ${posts}
@@ -288,7 +288,7 @@ function renderBlog(s) {
 
 function renderInstagram(s) {
   const d = s.data || {};
-  return `<section class="thryve-instagram">
+  return `<section class="ivy-instagram">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     ${d.url ? `<p><a href="${attr(d.url)}">View on Instagram</a></p>` : ''}
@@ -297,7 +297,7 @@ function renderInstagram(s) {
 
 function renderCode(s) {
   const d = s.data || {};
-  return `<section class="thryve-code">
+  return `<section class="ivy-code">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     <pre><code>${esc(d.code || '')}</code></pre>
   </section>`;
@@ -308,7 +308,7 @@ function renderCountdown(s) {
   // We don't run a JS clock server-side; emit the target date as text +
   // a data attribute so the SPA's countdown can hydrate over it.
   const end = d.endDate ? new Date(d.endDate).toUTCString() : '';
-  return `<section class="thryve-countdown" data-end="${attr(end)}">
+  return `<section class="ivy-countdown" data-end="${attr(end)}">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <p>${end ? `Ends ${esc(end)}` : ''}</p>
@@ -319,7 +319,7 @@ function renderCountdown(s) {
 function renderHours(s) {
   const d = s.data || {};
   const rows = (d.days || []).map((r) => `<tr><th scope="row">${esc(r.label || '')}</th><td>${esc(r.hours || '')}</td></tr>`).join('');
-  return `<section class="thryve-hours">
+  return `<section class="ivy-hours">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.timezone ? `<p>${esc(d.timezone)}</p>` : ''}
     <table><tbody>${rows}</tbody></table>
@@ -328,7 +328,7 @@ function renderHours(s) {
 
 function renderMap(s) {
   const d = s.data || {};
-  return `<section class="thryve-map">
+  return `<section class="ivy-map">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.address ? `<p>${esc(d.address)}</p>` : ''}
   </section>`;
@@ -341,7 +341,7 @@ function renderAccordion(s) {
       <summary>${esc(q.q || '')}</summary>
       <p>${esc(q.a || '')}</p>
     </details>`).join('');
-  return `<section class="thryve-accordion">
+  return `<section class="ivy-accordion">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${items}
   </section>`;
@@ -355,7 +355,7 @@ function renderProcess(s) {
       <h3>${esc(st.title || '')}</h3>
       ${st.desc ? `<p>${esc(st.desc)}</p>` : ''}
     </li>`).join('');
-  return `<section class="thryve-process">
+  return `<section class="ivy-process">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <ol>${steps}</ol>
@@ -364,7 +364,7 @@ function renderProcess(s) {
 
 function renderBeforeAfter(s) {
   const d = s.data || {};
-  return `<section class="thryve-before-after">
+  return `<section class="ivy-before-after">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <figure>
@@ -380,7 +380,7 @@ function renderBeforeAfter(s) {
 
 function renderSocialFeed(s) {
   const d = s.data || {};
-  return `<section class="thryve-social-feed">
+  return `<section class="ivy-social-feed">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     ${d.url ? `<p><a href="${attr(d.url)}">View on ${esc(d.platform || 'social')}</a></p>` : ''}
@@ -394,7 +394,7 @@ function renderCustomHtml(s) {
   // an attribute so the sandbox=""'s rules apply.
   const safe = String(d.html || '').replace(/"/g, '&quot;');
   const height = Math.max(80, Math.min(2000, Number(d.height) || 280));
-  return `<section class="thryve-custom-html"><iframe srcdoc="<!doctype html><html><body style='margin:0'>${safe}</body></html>" sandbox="" style="width:100%;height:${height}px;border:0;display:block" title="Custom embed"></iframe></section>`;
+  return `<section class="ivy-custom-html"><iframe srcdoc="<!doctype html><html><body style='margin:0'>${safe}</body></html>" sandbox="" style="width:100%;height:${height}px;border:0;display:block" title="Custom embed"></iframe></section>`;
 }
 
 const RENDERERS = {
@@ -457,20 +457,20 @@ function renderBaseCss(vars) {
     .map(([k, v]) => `${k}:${styleVal(v)}`)
     .join(';');
   return `
-    .thryve-root { ${cssVars}; background: var(--site-bg); color: var(--site-fg); font-family: var(--site-font-body, system-ui, sans-serif); min-height: 100vh; }
-    .thryve-root section, .thryve-root footer { padding: 64px 32px; max-width: 1200px; margin: 0 auto; }
-    .thryve-root h1, .thryve-root h2, .thryve-root h3 { font-family: var(--site-font-display, serif); letter-spacing: -0.02em; }
-    .thryve-root h1 { font-size: clamp(36px, 5vw, 56px); margin: 0 0 16px; }
-    .thryve-root h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 12px; }
-    .thryve-root h3 { font-size: clamp(18px, 2vw, 22px); margin: 0 0 8px; }
-    .thryve-root p { color: var(--site-fg-2, inherit); line-height: 1.6; margin: 0 0 12px; }
-    .thryve-root a { color: var(--site-accent, inherit); text-decoration: none; }
-    .thryve-root ul { list-style: none; padding: 0; }
-    .thryve-cta a { display: inline-block; padding: 12px 22px; background: var(--site-accent); color: var(--site-accent-ink); border-radius: var(--site-radius, 10px); margin-top: 16px; font-weight: 550; }
-    .thryve-nav { padding: 14px 32px; display: flex; gap: 18px; align-items: center; border-bottom: 1px solid var(--site-border); }
-    .thryve-nav a { color: var(--site-fg-2); font-weight: 500; }
-    .thryve-nav a.active { color: var(--site-accent); }
-    .thryve-nav .thryve-brand { font-family: var(--site-font-display); font-size: 18px; color: var(--site-fg); font-weight: 600; flex: 1; }
+    .ivy-root { ${cssVars}; background: var(--site-bg); color: var(--site-fg); font-family: var(--site-font-body, system-ui, sans-serif); min-height: 100vh; }
+    .ivy-root section, .ivy-root footer { padding: 64px 32px; max-width: 1200px; margin: 0 auto; }
+    .ivy-root h1, .ivy-root h2, .ivy-root h3 { font-family: var(--site-font-display, serif); letter-spacing: -0.02em; }
+    .ivy-root h1 { font-size: clamp(36px, 5vw, 56px); margin: 0 0 16px; }
+    .ivy-root h2 { font-size: clamp(26px, 3vw, 36px); margin: 0 0 12px; }
+    .ivy-root h3 { font-size: clamp(18px, 2vw, 22px); margin: 0 0 8px; }
+    .ivy-root p { color: var(--site-fg-2, inherit); line-height: 1.6; margin: 0 0 12px; }
+    .ivy-root a { color: var(--site-accent, inherit); text-decoration: none; }
+    .ivy-root ul { list-style: none; padding: 0; }
+    .ivy-cta a { display: inline-block; padding: 12px 22px; background: var(--site-accent); color: var(--site-accent-ink); border-radius: var(--site-radius, 10px); margin-top: 16px; font-weight: 550; }
+    .ivy-nav { padding: 14px 32px; display: flex; gap: 18px; align-items: center; border-bottom: 1px solid var(--site-border); }
+    .ivy-nav a { color: var(--site-fg-2); font-weight: 500; }
+    .ivy-nav a.active { color: var(--site-accent); }
+    .ivy-nav .ivy-brand { font-family: var(--site-font-display); font-size: 18px; color: var(--site-fg); font-weight: 600; flex: 1; }
   `.replace(/\s+/g, ' ').trim();
 }
 
@@ -483,8 +483,8 @@ function renderNav({ handle, nav, currentSlug, businessName }) {
     const active = (p.slug || '') === (currentSlug || '') ? ' active' : '';
     return `<a class="${active.trim()}" href="${attr(href)}">${esc(p.title || (p.slug ? p.slug : 'Home'))}</a>`;
   }).join('');
-  return `<nav class="thryve-nav">
-    <a class="thryve-brand" href="/site/${attr(handle)}">${esc(businessName || handle)}</a>
+  return `<nav class="ivy-nav">
+    <a class="ivy-brand" href="/site/${attr(handle)}">${esc(businessName || handle)}</a>
     ${links}
   </nav>`;
 }
@@ -536,15 +536,15 @@ function renderExitIntent(cfg) {
   // handler to the document and reveals on first exit. Stored in
   // sessionStorage so we don't re-pop on every internal nav.
   return `
-    <div id="thryve-exit-intent" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:24px;font-family:var(--site-font-body)">
+    <div id="ivy-exit-intent" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:24px;font-family:var(--site-font-body)">
       <div style="max-width:480px;background:var(--site-bg);color:var(--site-fg);padding:32px;border-radius:var(--site-radius);border:1px solid var(--site-border);position:relative">
-        <button onclick="document.getElementById('thryve-exit-intent').style.display='none'" style="position:absolute;top:10px;right:14px;background:transparent;border:0;font-size:20px;color:var(--site-muted);cursor:pointer">×</button>
+        <button onclick="document.getElementById('ivy-exit-intent').style.display='none'" style="position:absolute;top:10px;right:14px;background:transparent;border:0;font-size:20px;color:var(--site-muted);cursor:pointer">×</button>
         <h3 style="margin:0;font-family:var(--site-font-display);font-size:24px">${esc(cfg.headline)}</h3>
         ${cfg.sub ? `<p style="margin:10px 0 0;color:var(--site-fg-2);line-height:1.55">${esc(cfg.sub)}</p>` : ''}
         ${cfg.cta ? `<p style="margin:20px 0 0"><a href="${attr(cfg.ctaLink || '#')}" style="display:inline-block;padding:12px 22px;background:var(--site-accent);color:var(--site-accent-ink);border-radius:var(--site-radius);text-decoration:none;font-weight:600">${esc(cfg.cta)} →</a></p>` : ''}
       </div>
     </div>
-    <script>(function(){try{var el=document.getElementById('thryve-exit-intent');if(!el)return;if(sessionStorage.getItem('thryve-exit-shown'))return;document.addEventListener('mouseleave',function(e){if(e.clientY<10){el.style.display='flex';sessionStorage.setItem('thryve-exit-shown','1')}})}catch(_){}})();</script>
+    <script>(function(){try{var el=document.getElementById('ivy-exit-intent');if(!el)return;if(sessionStorage.getItem('ivy-exit-shown'))return;document.addEventListener('mouseleave',function(e){if(e.clientY<10){el.style.display='flex';sessionStorage.setItem('ivy-exit-shown','1')}})}catch(_){}})();</script>
   `;
 }
 
@@ -621,7 +621,7 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host }) {
   // they survive page transitions inside the SPA.
   const popupHtml   = renderExitIntent(site.exitIntentPopup);
   const stickyHtml  = renderStickyCta(site.stickyCta);
-  const bodyContent = `<div class="thryve-root">${navHtml}${sectionsHtml}${stickyHtml}${popupHtml}</div>${pvScript}`;
+  const bodyContent = `<div class="ivy-root">${navHtml}${sectionsHtml}${stickyHtml}${popupHtml}</div>${pvScript}`;
 
   // Splice into the SPA shell.
   let shell = loadShell();

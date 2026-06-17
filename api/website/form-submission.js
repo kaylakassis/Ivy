@@ -1,7 +1,7 @@
 // POST /api/website/form-submission
 //
 // Public — no auth. Accepts contact form / newsletter submissions from
-// a published THRYVE site, finds the owner's matching form destination
+// a published Ivy OS site, finds the owner's matching form destination
 // (email or webhook), and delivers. Every submission is also persisted
 // in `website_form_submissions` so owners see inbound traffic even when
 // the destination temporarily fails.
@@ -137,7 +137,7 @@ async function deliverByEmail({ to, site, formId, payload }) {
   const html = emailShell({
     heading: 'New form submission',
     body: `Someone submitted your <strong>${escapeHtml(formId)}</strong> form on
-      <a href="https://getthryve.ai/site/${escapeHtml(site.handle)}">${escapeHtml(site.business_name || site.handle)}</a>.
+      <a href="https://getivyos.com/site/${escapeHtml(site.handle)}">${escapeHtml(site.business_name || site.handle)}</a>.
       <table style="margin-top:18px;border-collapse:collapse;width:100%">${rows}</table>`,
     footer: 'You can change where these go in Editor → Forms.',
   });

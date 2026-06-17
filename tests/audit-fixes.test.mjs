@@ -97,7 +97,7 @@ async function run() {
       const r = mockRes();
       const req = {
         method: 'POST',
-        headers: { cookie: `thryve_session=${signSession(suspended.ownerId)}`, 'content-type': 'application/json' },
+        headers: { cookie: `ivy_session=${signSession(suspended.ownerId)}`, 'content-type': 'application/json' },
         url: `/api/${name}`, query: {}, body: {},
       };
       r.req = req;
@@ -113,7 +113,7 @@ async function run() {
       const r = mockRes();
       const req = {
         method: 'POST',
-        headers: { cookie: `thryve_session=${signSession(okOwner.ownerId)}`, 'content-type': 'application/json' },
+        headers: { cookie: `ivy_session=${signSession(okOwner.ownerId)}`, 'content-type': 'application/json' },
         url: '/api/clients', query: {}, body: { name: 'Gate Test', email: `gt-${Date.now()}@example.com` },
       };
       r.req = req;

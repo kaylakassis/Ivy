@@ -1,5 +1,5 @@
 // POST /api/billing/checkout
-// Creates a Stripe Checkout Session for the THRYVE subscription and returns
+// Creates a Stripe Checkout Session for the Ivy OS subscription and returns
 // its URL. Frontend redirects there; on success Stripe redirects back to
 // /?subscribed=1 and the webhook + sync endpoint together flip the
 // workspace's subscription_status to active.
@@ -20,9 +20,9 @@ export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
     const secretKey = platformStripeSecret();
-    const monthlyPriceId = process.env.THRYVE_STRIPE_PRICE_ID;
+    const monthlyPriceId = process.env.IVY_STRIPE_PRICE_ID;
     if (!secretKey || !monthlyPriceId) {
-      return badRequest(res, 'Subscription billing is not configured yet — set STRIPE_SECRET_KEY (the Vercel Stripe integration provides this) and THRYVE_STRIPE_PRICE_ID.');
+      return badRequest(res, 'Subscription billing is not configured yet — set STRIPE_SECRET_KEY (the Vercel Stripe integration provides this) and IVY_STRIPE_PRICE_ID.');
     }
 
     // Plan selection. Monthly is the default and the always-available
@@ -31,9 +31,9 @@ export default async function handler(req, res) {
     // we reject rather than silently charging the monthly price.
     const body = await readBody(req).catch(() => ({}));
     const plan = body?.plan === 'annual' ? 'annual' : 'monthly';
-    const annualPriceId = process.env.THRYVE_STRIPE_PRICE_ID_ANNUAL;
+    const annualPriceId = process.env.IVY_STRIPE_PRICE_ID_ANNUAL;
     if (plan === 'annual' && !annualPriceId) {
-      return badRequest(res, 'Annual billing is not configured yet — set THRYVE_STRIPE_PRICE_ID_ANNUAL.');
+      return badRequest(res, 'Annual billing is not configured yet — set IVY_STRIPE_PRICE_ID_ANNUAL.');
     }
     const priceId = plan === 'annual' ? annualPriceId : monthlyPriceId;
 

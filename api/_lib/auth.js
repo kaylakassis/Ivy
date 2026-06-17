@@ -6,11 +6,11 @@ import jwt from 'jsonwebtoken';
 import cookie from 'cookie';
 import { sql } from './db.js';
 
-const COOKIE = 'thryve_session';
+const COOKIE = 'ivy_session';
 // Stashed admin session while impersonating. Restored by the
 // /api/admin/impersonate/stop endpoint. HttpOnly so the impersonated UI
 // can't read it.
-const IMPERSONATION_BACKUP = 'thryve_admin_session';
+const IMPERSONATION_BACKUP = 'ivy_admin_session';
 const MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
 function secret() {

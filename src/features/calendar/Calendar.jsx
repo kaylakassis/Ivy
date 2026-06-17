@@ -20,10 +20,10 @@ import AddBookingModal from './AddBookingModal.jsx';
 import DayView from './DayView.jsx';
 import MonthView from './MonthView.jsx';
 
-const VIEW_KEY = 'thryve:calendar:view';
+const VIEW_KEY = 'Ivy OS:calendar:view';
 
 // Calendar sync (Google + iCal) is TABLED for now — we want owners using the
-// THRYVE calendar as the source of truth. The drawer, endpoints, and adapter
+// Ivy OS calendar as the source of truth. The drawer, endpoints, and adapter
 // code are all kept intact; this flag just hides the entry points. Flip to
 // true to bring the feature back.
 const CALENDAR_SYNC_ENABLED = false;

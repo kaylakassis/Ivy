@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       return res.end('Not Found');
     }
     const r = rows[0];
-    const host = req.headers['x-forwarded-host'] || req.headers.host || 'getthryve.ai';
+    const host = req.headers['x-forwarded-host'] || req.headers.host || 'getivyos.com';
     const base = `https://${host}/site/${r.handle}`;
     const pages = Array.isArray(r.pages) && r.pages.length > 0
       ? r.pages

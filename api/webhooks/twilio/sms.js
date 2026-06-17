@@ -8,7 +8,7 @@
 //   2. Any other text is routed by the sender's phone (last 10 digits) into
 //      that client's message thread + notifies the owner.
 //
-// Configure THRYVE_TWILIO_AUTH_TOKEN so we can verify the signature.
+// Configure IVY_TWILIO_AUTH_TOKEN so we can verify the signature.
 import crypto from 'node:crypto';
 import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';

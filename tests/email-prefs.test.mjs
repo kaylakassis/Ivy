@@ -207,7 +207,7 @@ async function testRedaction(clientEmail) {
   // the JWT-minting helper used by the real auth flow.
   const { signSession } = await import('../api/_lib/auth.js');
   const sessionToken = signSession(clientUser.rows[0].id);
-  const cookieHeader = `thryve_session=${sessionToken}`;
+  const cookieHeader = `ivy_session=${sessionToken}`;
 
   const req = {
     method: 'GET', url: '/me/bookings',

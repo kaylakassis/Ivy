@@ -127,7 +127,7 @@ export async function syncOnBookingUpdated({ workspaceId, bookingId }) {
 }
 
 // Express an absolute instant as wall-clock { date, minutes } in the
-// workspace's IANA timezone. THRYVE bookings/slots use floating LOCAL
+// workspace's IANA timezone. Ivy OS bookings/slots use floating LOCAL
 // time, so a Google event at 2pm Pacific must block the 2pm slot — not
 // 9pm (its UTC hour). When no workspace timezone is configured we fall
 // back to the event's own wall-clock (the time as written before the
@@ -158,7 +158,7 @@ function eventLocalParts(rfc3339, timeZone) {
 
 // Pull busy times from the owner's primary Google calendar over the
 // next `daysAhead` days and mirror them into external_busy_blocks. The
-// dedicated THRYVE Bookings calendar (where we PUSH) is excluded so
+// dedicated Ivy OS Bookings calendar (where we PUSH) is excluded so
 // pushed bookings don't double-count.
 //
 // Diff strategy: list events, upsert each by source_event_id, then
@@ -201,7 +201,7 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     return { ok: false, reason: `list failed: ${err.message}` };
   }
 
-  const thryveCalId = r.google_calendar_id;
+  const ivyCalId = r.google_calendar_id;
   const seenIds = [];
   let kept = 0, skipped = 0;
 
@@ -209,17 +209,17 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     if (ev.status === 'cancelled') continue;
     // Don't block on events the user already marked as available.
     if (ev.transparency === 'transparent') { skipped++; continue; }
-    // Skip events from our own dedicated THRYVE calendar — those are
+    // Skip events from our own dedicated Ivy OS calendar — those are
     // bookings we pushed; double-counting them would block our own
     // future slots from existing bookings.
-    if (ev.organizer?.email === r.google_email && ev.calendarId === thryveCalId) continue;
+    if (ev.organizer?.email === r.google_email && ev.calendarId === ivyCalId) continue;
     // FreeBusy-style: only need start + end.
     const start = ev.start?.dateTime;
     const end = ev.end?.dateTime;
     if (!start || !end) { skipped++; continue; }   // all-day, skip
 
     // Convert to the workspace's local wall-clock so busy blocks line up
-    // with THRYVE's local-time slot model (see eventLocalParts above).
+    // with Ivy OS's local-time slot model (see eventLocalParts above).
     const sp = eventLocalParts(start, r.timezone);
     const ep = eventLocalParts(end, r.timezone);
     const dateA = sp.date;

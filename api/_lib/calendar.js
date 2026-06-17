@@ -213,7 +213,7 @@ export function serializeBooking(row, opts = {}) {
 
 // Mint a unique meeting URL for a virtual booking. Jitsi Meet's
 // public instance accepts arbitrary room names — we prefix with
-// 'thryve-' so the room is namespaced to us, and append a 24-char
+// 'ivy-' so the room is namespaced to us, and append a 24-char
 // random suffix so the link is unguessable. No API key, no setup.
 //
 // Owners who want their own conferencing tool can paste a custom
@@ -222,7 +222,7 @@ export function serializeBooking(row, opts = {}) {
 import crypto from 'node:crypto';
 export function mintVideoRoomUrl() {
   const token = crypto.randomBytes(18).toString('base64url');
-  return `https://meet.jit.si/thryve-${token}`;
+  return `https://meet.jit.si/ivy-${token}`;
 }
 
 export const VALID_RECURRENCE = new Set([null, 'weekly', 'biweekly', 'monthly']);

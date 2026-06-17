@@ -125,7 +125,7 @@ function Brand() {
         <Icons.Logo size={22} color="currentColor" />
       </div>
       <div>
-        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>thryve</div>
+        <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>Ivy OS</div>
         <div className="metric-label" style={{ fontSize: 10, marginTop: 2 }}>Business OS</div>
       </div>
     </div>

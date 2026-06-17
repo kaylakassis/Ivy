@@ -43,7 +43,7 @@ async function run() {
     await sql`INSERT INTO websites (workspace_id, handle, business_name, template, sections, pages, visibility)
       VALUES (${wid}, ${handle}, 'Biz', 'clean', ${JSON.stringify(sect('A'))}::jsonb, '[]'::jsonb, 'public')`;
 
-    const cookie = `thryve_session=${signSession(uid)}`;
+    const cookie = `ivy_session=${signSession(uid)}`;
     const pubReq = () => ({ method: 'POST', headers: { cookie }, url: '/api/website/publish', query: {} });
 
     // Not published yet → public reader returns not_found.

@@ -15,7 +15,7 @@
 import { sql } from './db.js';
 
 const PLAN_FALLBACK_CENTS = parseInt(
-  process.env.THRYVE_PLAN_MONTHLY_CENTS || '2900',  // $29/mo default
+  process.env.IVY_PLAN_MONTHLY_CENTS || '2900',  // $29/mo default
   10,
 );
 

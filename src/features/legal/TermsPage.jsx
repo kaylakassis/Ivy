@@ -1,7 +1,7 @@
 // /terms — public Terms of Service.
 //
 // This is template language drafted to err on the side of broad
-// disclaimers and limit THRYVE's liability for AI output, business
+// disclaimers and limit Ivy OS's liability for AI output, business
 // outcomes, and third-party integrations. **It is not a substitute for
 // review by a qualified attorney in your jurisdiction.** Have a real
 // lawyer adapt this for your business before you charge anyone or
@@ -19,8 +19,8 @@ export default function TermsPage() {
   return (
     <LegalPage title="Terms of Service" lastUpdated="May 5, 2026">
       <P><strong>Effective version: {TERMS_VERSION}.</strong> These Terms
-        of Service ("Terms") govern your access to and use of THRYVE (the
-        "Service"), operated by THRYVE Business OS ("THRYVE", "we",
+        of Service ("Terms") govern your access to and use of Ivy OS (the
+        "Service"), operated by Ivy OS ("Ivy OS", "we",
         "us"). By creating an account or using the Service, you confirm
         you have read, understood, and agree to be bound by these
         Terms. If you do not agree, do not use the Service.</P>
@@ -31,11 +31,11 @@ export default function TermsPage() {
         contract. You're responsible for keeping your credentials safe
         and for everything that happens under your account. Notify us
         immediately at{' '}
-        <a href="mailto:support@getthryve.ai" style={{ color: 'var(--accent)' }}>support@getthryve.ai</a>{' '}
+        <a href="mailto:support@getivyos.com" style={{ color: 'var(--accent)' }}>support@getivyos.com</a>{' '}
         if you suspect unauthorized access.</P>
 
       <H2>2. The Service is informational, not professional advice</H2>
-      <P><strong>THRYVE — including the Ivy AI coach, every dashboard
+      <P><strong>Ivy OS — including the Ivy AI coach, every dashboard
         metric, every suggested action, every email, every report
         export, and every integration — provides informational tools
         only. Nothing in the Service constitutes financial, legal, tax,
@@ -70,7 +70,7 @@ export default function TermsPage() {
       </UL>
 
       <H2>4. Business outcomes — no guarantees</H2>
-      <P><strong>THRYVE does not guarantee any specific business
+      <P><strong>Ivy OS does not guarantee any specific business
         outcome.</strong> We make no representation that using the
         Service will increase your revenue, reduce churn, attract
         clients, prevent no-shows, improve your tax position, ensure
@@ -92,7 +92,7 @@ export default function TermsPage() {
         <li><strong>Neon</strong> / <strong>Postgres</strong> (database)</li>
       </UL>
       <P>Your use of these third-party services is governed by their
-        own terms and privacy policies. <strong>THRYVE is not
+        own terms and privacy policies. <strong>Ivy OS is not
         responsible for the availability, accuracy, security, or
         behavior of any third-party service, nor for any loss arising
         from their outages, errors, breaches, fee changes, or terms of
@@ -122,7 +122,7 @@ export default function TermsPage() {
         liability.</P>
 
       <H2>7. Your content &amp; data</H2>
-      <P>You retain ownership of everything you put into THRYVE —
+      <P>You retain ownership of everything you put into Ivy OS —
         clients, invoices, documents, messages, files, and any other
         content you create or upload ("Customer Data"). You grant us
         a worldwide, non-exclusive, royalty-free license to host,
@@ -152,7 +152,7 @@ export default function TermsPage() {
         who handle data only to operate the Service on our behalf.</P>
 
       <H2>8. Service availability</H2>
-      <P>We aim to keep THRYVE available but make no uptime guarantee.
+      <P>We aim to keep Ivy OS available but make no uptime guarantee.
         Maintenance, updates, and force-majeure events may disrupt
         access. <strong>You are responsible for keeping your own
         backups of anything irreplaceable.</strong> The Account
@@ -168,7 +168,7 @@ export default function TermsPage() {
       <P>We may change prices with at least 30 days' notice via email.
         Price changes take effect at your next renewal. Stripe
         processing fees are charged separately by Stripe and are not
-        part of THRYVE's pricing.</P>
+        part of Ivy OS's pricing.</P>
 
       <H2>10. Termination</H2>
       <P>You may delete your account at any time from Account
@@ -191,7 +191,7 @@ export default function TermsPage() {
 
       <H2>12. Limitation of liability</H2>
       <P>TO THE MAXIMUM EXTENT PERMITTED BY LAW, IN NO EVENT WILL
-        THRYVE, ITS OFFICERS, EMPLOYEES, CONTRACTORS, OR LICENSORS BE
+        Ivy OS, ITS OFFICERS, EMPLOYEES, CONTRACTORS, OR LICENSORS BE
         LIABLE FOR ANY INDIRECT, INCIDENTAL, SPECIAL, CONSEQUENTIAL,
         OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUES,
         DATA, USE, GOODWILL, BUSINESS OPPORTUNITIES, CLIENTS, OR
@@ -202,7 +202,7 @@ export default function TermsPage() {
         DAMAGES.</P>
       <P>OUR TOTAL CUMULATIVE LIABILITY ARISING OUT OF OR RELATED TO
         THESE TERMS OR THE SERVICE WILL NOT EXCEED THE GREATER OF
-        (a) THE AMOUNT YOU PAID THRYVE IN THE TWELVE (12) MONTHS
+        (a) THE AMOUNT YOU PAID Ivy OS IN THE TWELVE (12) MONTHS
         IMMEDIATELY PRECEDING THE EVENT GIVING RISE TO THE CLAIM, OR
         (b) ONE HUNDRED U.S. DOLLARS (USD $100.00).</P>
       <P>The exclusions and limitations in this section apply
@@ -214,7 +214,7 @@ export default function TermsPage() {
 
       <H2>13. Release of liability</H2>
       <P><strong>You acknowledge that you use the Service at your own
-        risk and release THRYVE from any and all claims, damages,
+        risk and release Ivy OS from any and all claims, damages,
         losses, costs, and expenses (including reasonable attorneys'
         fees) arising from or related to:</strong></P>
       <UL>
@@ -235,7 +235,7 @@ export default function TermsPage() {
       </UL>
 
       <H2>14. Indemnification</H2>
-      <P>You agree to defend, indemnify, and hold harmless THRYVE,
+      <P>You agree to defend, indemnify, and hold harmless Ivy OS,
         its officers, employees, contractors, and licensors from and
         against any claim, demand, loss, liability, cost, or expense
         (including reasonable attorneys' fees) arising out of: (a)
@@ -270,12 +270,12 @@ export default function TermsPage() {
         and effect, and the invalid provision is replaced with one
         that comes closest to the original intent. These Terms,
         together with the Privacy Policy, constitute the entire
-        agreement between you and THRYVE regarding the Service and
+        agreement between you and Ivy OS regarding the Service and
         supersede any prior agreements.</P>
 
       <H2>18. Contact</H2>
       <P>Questions about these Terms:{' '}
-        <a href="mailto:support@getthryve.ai" style={{ color: 'var(--accent)' }}>support@getthryve.ai</a>.
+        <a href="mailto:support@getivyos.com" style={{ color: 'var(--accent)' }}>support@getivyos.com</a>.
       </P>
     </LegalPage>
   );

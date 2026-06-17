@@ -1,4 +1,4 @@
-// THRYVE service worker — offline app shell + push notifications.
+// Ivy OS service worker — offline app shell + push notifications.
 //
 // Two responsibilities:
 //   1. Offline: precache the app shell on install and serve cached
@@ -12,8 +12,8 @@
 // subscription flow in src/lib/push.js — same /sw.js, same scope.
 
 const VERSION = 'v2';
-const SHELL_CACHE = `thryve-shell-${VERSION}`;
-const RUNTIME_CACHE = `thryve-runtime-${VERSION}`;
+const SHELL_CACHE = `ivy-shell-${VERSION}`;
+const RUNTIME_CACHE = `ivy-runtime-${VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
 // Static files that always exist — precached so the PWA boots offline.
@@ -38,7 +38,7 @@ self.addEventListener('activate', (event) => {
     const keys = await caches.keys();
     await Promise.all(
       keys
-        .filter((k) => k.startsWith('thryve-') && k !== SHELL_CACHE && k !== RUNTIME_CACHE)
+        .filter((k) => k.startsWith('ivy-') && k !== SHELL_CACHE && k !== RUNTIME_CACHE)
         .map((k) => caches.delete(k)),
     );
     await self.clients.claim();
@@ -113,9 +113,9 @@ async function staleWhileRevalidate(request) {
 self.addEventListener('push', (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; }
-  catch { payload = { title: 'THRYVE', body: event.data ? event.data.text() : '' }; }
+  catch { payload = { title: 'Ivy OS', body: event.data ? event.data.text() : '' }; }
 
-  const title = payload.title || 'THRYVE';
+  const title = payload.title || 'Ivy OS';
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon.svg',
@@ -132,7 +132,7 @@ self.addEventListener('notificationclick', (event) => {
   const target = event.notification.data?.url || '/';
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // If THRYVE is already open, focus that tab and navigate it.
+    // If Ivy OS is already open, focus that tab and navigate it.
     for (const client of all) {
       const url = new URL(client.url);
       if (url.origin === self.location.origin) {

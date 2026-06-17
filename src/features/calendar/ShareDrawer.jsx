@@ -194,7 +194,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
             </div>
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
               {isPublished
-                ? "Show your business in the THRYVE directory. Any signed-in user can find you and book through your public link."
+                ? "Show your business in the Ivy OS directory. Any signed-in user can find you and book through your public link."
                 : "Save a handle above first — Discover entries link to your public booking page."}
             </div>
             {discoverable && isPublished && (
@@ -403,15 +403,15 @@ function LinkTest({ slug }) {
 }
 
 // Embed snippets — copyable <script> tags owners drop onto their own
-// website to render a THRYVE booking widget or contact form. The
+// website to render an Ivy OS booking widget or contact form. The
 // script's loader lives at /embed.js (in public/); the inner page is
 // our /embed/book/:slug or /embed/contact/:slug route. Auto-sized via
 // postMessage so the host never has to set a fixed iframe height.
 function EmbedSnippets({ slug }) {
   const origin = (typeof window !== 'undefined' && window.location)
-    ? window.location.origin : 'https://getthryve.ai';
-  const bookSnippet = `<script async src="${origin}/embed.js" data-thryve="book" data-slug="${slug}"></script>`;
-  const contactSnippet = `<script async src="${origin}/embed.js" data-thryve="contact" data-slug="${slug}"></script>`;
+    ? window.location.origin : 'https://getivyos.com';
+  const bookSnippet = `<script async src="${origin}/embed.js" data-Ivy OS="book" data-slug="${slug}"></script>`;
+  const contactSnippet = `<script async src="${origin}/embed.js" data-Ivy OS="contact" data-slug="${slug}"></script>`;
   const [tab, setTab] = useState('book'); // 'book' | 'contact'
   const [copied, setCopied] = useState(false);
 

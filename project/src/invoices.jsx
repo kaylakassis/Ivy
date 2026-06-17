@@ -165,7 +165,7 @@ function InvoiceCreator({ onClose, store, update, editing, isRecurring, onSaveRe
   const [clients, setClients] = React.useState([]);
   React.useEffect(() => {
     try {
-      const m = JSON.parse(localStorage.getItem('thryve:messages'));
+      const m = JSON.parse(localStorage.getItem('Ivy OS:messages'));
       setClients(m?.clients || []);
     } catch { setClients([]); }
   }, []);
@@ -665,7 +665,7 @@ function InvoiceDetailDrawer({ invoiceId, onClose, store, update }) {
 /* ============ MESSAGES INTEGRATION ============ */
 function postInvoiceMessage(inv, opts = {}) {
   try {
-    const raw = localStorage.getItem('thryve:messages');
+    const raw = localStorage.getItem('Ivy OS:messages');
     if (!raw) return;
     const m = JSON.parse(raw);
     const thread = m.threads[inv.clientId] || { mode: m.defaultMode || 'two-way', unreadBiz: 0, unreadClient: 0, messages: [] };
@@ -682,8 +682,8 @@ function postInvoiceMessage(inv, opts = {}) {
     }];
     thread.unreadClient = (thread.unreadClient || 0) + 1;
     m.threads[inv.clientId] = thread;
-    localStorage.setItem('thryve:messages', JSON.stringify(m));
-    try { window.dispatchEvent(new StorageEvent('storage', { key: 'thryve:messages' })); } catch {}
+    localStorage.setItem('Ivy OS:messages', JSON.stringify(m));
+    try { window.dispatchEvent(new StorageEvent('storage', { key: 'Ivy OS:messages' })); } catch {}
   } catch {}
 }
 
@@ -925,7 +925,7 @@ function RecurringList() {
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 15 }}>Recurring invoices</div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-            Set it once. THRYVE auto-generates and sends invoices on schedule.
+            Set it once. Ivy OS auto-generates and sends invoices on schedule.
           </div>
         </div>
         <button className="btn btn-primary" onClick={() => { setEditing(null); setCreatorOpen(true); }}>

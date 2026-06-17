@@ -54,7 +54,7 @@ async function setup() {
   workspaceId = w.rows[0].id;
   await sql`INSERT INTO finance_settings (workspace_id, currency) VALUES (${workspaceId}, 'USD')`;
   const token = signSession({ id: ownerId, email });
-  cookieHeader = `thryve_session=${token}`;
+  cookieHeader = `ivy_session=${token}`;
 }
 
 function authReq({ method = 'POST', body = {}, query = {}, ip = '203.0.113.99' } = {}) {

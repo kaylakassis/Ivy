@@ -91,7 +91,7 @@ function RouteFallback() {
         width: 12, height: 12, borderRadius: 99,
         border: '2px solid var(--border)',
         borderTopColor: 'var(--accent)',
-        animation: 'thryve-spin 0.7s linear infinite',
+        animation: 'ivy-spin 0.7s linear infinite',
       }}/>
     </div>
   );
@@ -116,7 +116,7 @@ function RouteCrash({ resetError, error }) {
       // If the user has a stale onboarding-skip flag from a prior session
       // it could be sending them through a broken redirect chain. Clear
       // it on hard recovery.
-      localStorage.removeItem('thryve_skip_onboarding_until');
+      localStorage.removeItem('ivy_skip_onboarding_until');
     } catch { /* private mode */ }
     window.location.href = '/';
   };
@@ -125,7 +125,7 @@ function RouteCrash({ resetError, error }) {
     try { localStorage.clear(); } catch {}
     window.location.href = '/';
   };
-  const mail = `mailto:hello@getthryve.ai?subject=${encodeURIComponent('Error on THRYVE')}&body=${encodeURIComponent(`I hit an error: ${msg}\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\n\n`)}`;
+  const mail = `mailto:hello@getivyos.com?subject=${encodeURIComponent('Error on Ivy OS')}&body=${encodeURIComponent(`I hit an error: ${msg}\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\n\n`)}`;
   return (
     <div style={{
       minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',

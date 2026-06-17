@@ -10,7 +10,7 @@ export default async function handler(req, res) {
     return res.end('Method Not Allowed');
   }
   const { handle } = req.query;
-  const host = req.headers['x-forwarded-host'] || req.headers.host || 'getthryve.ai';
+  const host = req.headers['x-forwarded-host'] || req.headers.host || 'getivyos.com';
   const body = `User-agent: *
 Allow: /
 

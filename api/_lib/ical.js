@@ -1,5 +1,5 @@
 // iCalendar (RFC 5545) serializer. Just enough of the spec to emit a
-// subscribable feed of THRYVE bookings — VCALENDAR + VEVENT, with RRULE
+// subscribable feed of Ivy OS bookings — VCALENDAR + VEVENT, with RRULE
 // for recurring bookings and EXDATE for cancelled occurrences.
 //
 // Privacy: SUMMARY uses the service name + the client's first name only.
@@ -45,7 +45,7 @@ function escText(s) {
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
-// "20260101T140000Z" — UTC, basic format. We treat THRYVE booking
+// "20260101T140000Z" — UTC, basic format. We treat Ivy OS booking
 // times as the workspace's local time, but since we don't have per-
 // workspace tz wired through the schema yet, emit floating local time
 // (no Z suffix). Calendar apps will treat that as the user's local
@@ -100,11 +100,11 @@ export function buildICalFeed({ bizName, bookings, services }) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//THRYVE//Booking feed//EN',
+    'PRODID:-//Ivy OS//Booking feed//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    fold(`X-WR-CALNAME:${escText(`Bookings · ${bizName || 'THRYVE'}`)}`),
-    fold(`X-WR-CALDESC:${escText('Read-only mirror of bookings managed in THRYVE. Edits, reschedules, and cancellations happen in the THRYVE app — this feed updates automatically.')}`),
+    fold(`X-WR-CALNAME:${escText(`Bookings · ${bizName || 'Ivy OS'}`)}`),
+    fold(`X-WR-CALDESC:${escText('Read-only mirror of bookings managed in Ivy OS. Edits, reschedules, and cancellations happen in the Ivy OS app — this feed updates automatically.')}`),
     'X-PUBLISHED-TTL:PT15M',
   ];
 
@@ -114,7 +114,7 @@ export function buildICalFeed({ bizName, bookings, services }) {
     const summary = `${svc?.name || 'Appointment'} — ${firstName(b.client_name)}`;
     const dtstart = fmtLocal(b.date, b.start_min);
     const dtend   = fmtLocal(b.date, b.end_min);
-    const uid     = `${b.id}@getthryve.ai`;
+    const uid     = `${b.id}@getivyos.com`;
     const rrule   = rruleFor(b.recurrence_rule, b.recurrence_until);
     const ex      = exDates(b.cancelled_occurrences);
 
@@ -126,7 +126,7 @@ export function buildICalFeed({ bizName, bookings, services }) {
     lines.push(fold(`SUMMARY:${escText(summary)}`));
     lines.push('STATUS:CONFIRMED');
     lines.push('TRANSP:OPAQUE');
-    lines.push(fold(`DESCRIPTION:${escText('Manage in THRYVE. Edits made in your calendar app will not sync back.')}`));
+    lines.push(fold(`DESCRIPTION:${escText('Manage in Ivy OS. Edits made in your calendar app will not sync back.')}`));
     if (rrule) lines.push(fold(`RRULE:${rrule}`));
     if (ex.length) lines.push(fold(`EXDATE;VALUE=DATE:${ex.join(',')}`));
     lines.push('END:VEVENT');

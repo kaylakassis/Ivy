@@ -1,9 +1,9 @@
-// DOCUMENTS — DocuSign-style flow for THRYVE.
+// DOCUMENTS — DocuSign-style flow for Ivy OS.
 // Features: upload-PDF / write-in-app / from-template, drag-drop fields,
 // send to registered clients, in-app signing, reminders, vault, Drive mock.
 
 /* ============ STORE ============ */
-const DOC_KEY = 'thryve:docs';
+const DOC_KEY = 'Ivy OS:docs';
 
 function loadDocs() {
   try { return JSON.parse(localStorage.getItem(DOC_KEY)) || defaultDocs(); }
@@ -118,7 +118,7 @@ const useToast = () => React.useContext(ToastCtx) || (() => {});
 function pushDocMessage(clientId, payload) {
   // payload = { kind: 'doc-sent'|'doc-completed'|'doc-reminder', docId, docName, from: 'biz'|'system' }
   let store;
-  try { store = JSON.parse(localStorage.getItem('thryve:messages')) || null; } catch { store = null; }
+  try { store = JSON.parse(localStorage.getItem('Ivy OS:messages')) || null; } catch { store = null; }
   if (!store) return;
   const existing = store.threads[clientId] || { mode: store.defaultMode || 'two-way', messages: [], unreadBiz: 0, unreadClient: 0 };
   const msg = { ts: Date.now(), ...payload };
@@ -127,8 +127,8 @@ function pushDocMessage(clientId, payload) {
   if (payload.from === 'biz' || payload.from === 'system') updated.unreadClient = (existing.unreadClient || 0) + 1;
   if (payload.from === 'client') updated.unreadBiz = (existing.unreadBiz || 0) + 1;
   store.threads = { ...store.threads, [clientId]: updated };
-  localStorage.setItem('thryve:messages', JSON.stringify(store));
-  try { window.dispatchEvent(new StorageEvent('storage', { key: 'thryve:messages' })); } catch {}
+  localStorage.setItem('Ivy OS:messages', JSON.stringify(store));
+  try { window.dispatchEvent(new StorageEvent('storage', { key: 'Ivy OS:messages' })); } catch {}
 }
 
 /* ============ BUSINESS DOCUMENTS VIEW ============ */
@@ -407,7 +407,7 @@ function VaultView({ store, onOpen }) {
           fontSize: 12.5,
         }}>
           <DriveIcon connected/>
-          <div style={{ flex:1 }}>Google Drive is connected. Completed documents auto-save to <b>THRYVE / Signed documents</b>.</div>
+          <div style={{ flex:1 }}>Google Drive is connected. Completed documents auto-save to <b>Ivy OS / Signed documents</b>.</div>
           <span style={{ fontSize:11, color:'var(--muted)' }}>{completed.length} synced</span>
         </div>
       )}
@@ -526,7 +526,7 @@ function DocumentEditor({ docId, store, update, onClose, onRequestSend }) {
   // Drag from toolbar: use HTML5 DnD
   const onPageDrop = (pageIdx, e) => {
     e.preventDefault();
-    const typeId = e.dataTransfer.getData('application/x-thryve-field');
+    const typeId = e.dataTransfer.getData('application/x-ivy-field');
     if (!typeId) return;
     const type = FIELD_TYPES.find(t => t.id === typeId);
     const rect = e.currentTarget.getBoundingClientRect();
@@ -591,7 +591,7 @@ function DocumentEditor({ docId, store, update, onClose, onRequestSend }) {
             {FIELD_TYPES.map(ft => (
               <div key={ft.id}
                 draggable
-                onDragStart={e => e.dataTransfer.setData('application/x-thryve-field', ft.id)}
+                onDragStart={e => e.dataTransfer.setData('application/x-ivy-field', ft.id)}
                 onTouchStart={() => { /* simple add-on-tap fallback */
                   const id = 'f' + Date.now();
                   patch({ fields: [...doc.fields, { id, page: activePage, x: 10, y: 30, w: ft.defaultSize.w, h: ft.defaultSize.h, type: ft.id, label: ft.label, value:'' }] });
@@ -798,7 +798,7 @@ function SendDialog({ docId, store, update, toast, onClose }) {
 
   // pull clients from messages store
   const msgsStore = (() => {
-    try { return JSON.parse(localStorage.getItem('thryve:messages')) || { clients: [] }; }
+    try { return JSON.parse(localStorage.getItem('Ivy OS:messages')) || { clients: [] }; }
     catch { return { clients: [] }; }
   })();
   const registered = (msgsStore.clients || []).filter(c => c.registered);

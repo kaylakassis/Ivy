@@ -25,7 +25,7 @@ export default function VerticalPage() {
   useEffect(() => {
     if (!v) return;
     const dom = typeof window !== 'undefined' ? window.location.origin : '';
-    document.title = `THRYVE - ${capFirst(v.angle)} run their business in one place`;
+    document.title = `Ivy OS - ${capFirst(v.angle)} run their business in one place`;
     const upsert = (attr, key, value) => {
       let el = document.querySelector(`meta[${attr}="${key}"]`);
       if (!el) {
@@ -36,7 +36,7 @@ export default function VerticalPage() {
       el.setAttribute('content', value);
     };
     upsert('name', 'description', `${v.headline} ${v.sub}`);
-    upsert('property', 'og:title', `THRYVE for ${v.angle}`);
+    upsert('property', 'og:title', `Ivy OS for ${v.angle}`);
     upsert('property', 'og:description', v.headline);
     upsert('property', 'og:url', dom + '/for/' + slug);
     upsert('property', 'og:type', 'website');
@@ -58,7 +58,7 @@ export default function VerticalPage() {
           fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
           textTransform: 'uppercase', marginBottom: 20,
         }}>
-          <Icon size={12} sw={2}/> THRYVE for {v.angle}
+          <Icon size={12} sw={2}/> Ivy OS for {v.angle}
         </div>
         <h1 className="page-title" style={{
           margin: 0, fontSize: 'clamp(30px, 5vw, 46px)',
@@ -79,7 +79,7 @@ export default function VerticalPage() {
           </Link>
           <Link to="/" className="btn btn-outline"
             style={{ padding: '13px 22px', fontSize: 14.5 }}>
-            See everything THRYVE does
+            See everything Ivy OS does
           </Link>
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
@@ -126,7 +126,7 @@ export default function VerticalPage() {
         <div style={{ textAlign: 'center', marginBottom: 18 }}>
           <div className="metric-label">Built for more</div>
           <h2 className="page-title" style={{ margin: '8px 0 0', fontSize: 22 }}>
-            Different business? THRYVE fits.
+            Different business? Ivy OS fits.
           </h2>
         </div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>

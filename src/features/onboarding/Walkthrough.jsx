@@ -28,7 +28,7 @@ import { api } from '../../lib/api.js';
 const STEPS = [
   {
     id: 'welcome',
-    title: 'Welcome to THRYVE',
+    title: 'Welcome to Ivy OS',
     body: "This is your business OS — every booking, client, invoice, and document in one place. The tour takes about a minute. You can replay it any time from your Account page.",
   },
   {
@@ -269,7 +269,7 @@ function BackdropMask({ target }) {
       zIndex: 218, pointerEvents: 'none',
     }}>
       <defs>
-        <mask id="thryve-tour-mask">
+        <mask id="ivy-tour-mask">
           <rect width="100%" height="100%" fill="white"/>
           {box && (
             <rect x={box.x} y={box.y} width={box.w} height={box.h}
@@ -278,7 +278,7 @@ function BackdropMask({ target }) {
         </mask>
       </defs>
       <rect width="100%" height="100%" fill="rgba(10,12,8,0.62)"
-        mask="url(#thryve-tour-mask)"
+        mask="url(#ivy-tour-mask)"
         style={{ transition: 'opacity 0.2s ease' }}/>
     </svg>
   );
@@ -315,7 +315,7 @@ function SpotlightRing({ target }) {
       borderRadius: 14,
       border: '2px solid var(--accent)',
       boxShadow: '0 0 0 0 var(--accent), 0 12px 40px rgba(0,0,0,0.25)',
-      animation: 'thryve-tour-pulse 2.2s ease-out infinite',
+      animation: 'ivy-tour-pulse 2.2s ease-out infinite',
     }}/>
   );
 }
@@ -468,7 +468,7 @@ function StepCard({ step, stepIdx, isLast, onSkip, onBack, onNext, embedded }) {
 function IvyHello({ onDismiss, onBack }) {
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages]   = useState([
-    { role: 'ivy', text: "Welcome to THRYVE! I'm Ivy, your AI business coach. I'll be here in the app to help you understand your numbers, spot patterns, and figure out what to focus on next. Is there anything you'd like to ask before you dive in?" },
+    { role: 'ivy', text: "Welcome to Ivy OS! I'm Ivy, your AI business coach. I'll be here in the app to help you understand your numbers, spot patterns, and figure out what to focus on next. Is there anything you'd like to ask before you dive in?" },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy]   = useState(false);

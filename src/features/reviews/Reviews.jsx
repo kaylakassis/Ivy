@@ -1,6 +1,6 @@
 // Owner Reviews tab. Reviews AUTO-PUBLISH the moment a client leaves them.
 // Owners can respond publicly to any review, or appeal one for removal —
-// appeals go to the THRYVE support team, who approve (remove) or deny. Owners
+// appeals go to the Ivy OS support team, who approve (remove) or deny. Owners
 // can't hide reviews themselves.
 // Backed by GET /api/reviews (list + summary) and PATCH /api/reviews/:id
 // ({ ownerResponse } or { appealReason }).
@@ -159,7 +159,7 @@ export default function Reviews() {
       {reviews.length === 0 ? (
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Heart" title="No reviews yet"
-            hint="After a completed appointment, THRYVE automatically asks clients for a review. New reviews publish here right away — you can respond to any of them." />
+            hint="After a completed appointment, Ivy OS automatically asks clients for a review. New reviews publish here right away — you can respond to any of them." />
         </div>
       ) : (
         <>

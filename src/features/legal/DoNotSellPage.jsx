@@ -14,7 +14,7 @@ export default function DoNotSellPage() {
         California's privacy laws (CCPA + CPRA) give residents the right to
         opt out of the "sale" or "sharing" of their personal information.
         This page explains what we do and how to exercise that right with
-        THRYVE.
+        Ivy OS.
       </P>
 
       <H2>What we do today</H2>
@@ -23,7 +23,7 @@ export default function DoNotSellPage() {
         We do not share personal information for cross-context behavioral
         advertising. We have no advertising business, no data-broker
         relationships, and no third-party trackers on the application
-        surface where you sign in and use THRYVE.
+        surface where you sign in and use Ivy OS.
       </P>
       <P>
         Personal information you provide (your name, email, business data,
@@ -42,8 +42,8 @@ export default function DoNotSellPage() {
         To do so, or to file any other CCPA/CPRA request (access, deletion,
         correction, portability, limit use of sensitive personal
         information), email us at{' '}
-        <a href="mailto:privacy@getthryve.ai" style={{ color: 'var(--accent)' }}>privacy@getthryve.ai</a>{' '}
-        from the email address tied to your THRYVE account. We will respond
+        <a href="mailto:privacy@getivyos.com" style={{ color: 'var(--accent)' }}>privacy@getivyos.com</a>{' '}
+        from the email address tied to your Ivy OS account. We will respond
         within 45 days as the law requires.
       </P>
       <P>
@@ -75,7 +75,7 @@ export default function DoNotSellPage() {
       <H2>Non-retaliation</H2>
       <P>
         Exercising any of these rights does not affect the price you pay
-        for THRYVE or the service you receive. We don't run different
+        for Ivy OS or the service you receive. We don't run different
         pricing tiers based on whether you opt out — there are no opt-out
         penalties because we don't have an ad-tech model to penalize.
       </P>

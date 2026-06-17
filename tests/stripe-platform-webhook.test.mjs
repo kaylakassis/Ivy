@@ -9,7 +9,7 @@
 //       when checkout.session.completed never lands.
 //   [2] customer.subscription.created arriving FIRST (race) — handler
 //       materializes client_memberships from sub.metadata.
-//   [3] customer.subscription.created with NO THRYVE metadata at all
+//   [3] customer.subscription.created with NO Ivy OS metadata at all
 //       (a sub created in the Stripe Dashboard) — matched by
 //       sub.customer ↔ clients.stripe_customer_id and
 //       sub.items[0].price.id ↔ memberships.stripe_price_id.

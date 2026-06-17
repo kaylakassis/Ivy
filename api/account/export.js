@@ -118,7 +118,7 @@ export default async function handler(req, res) {
     }
 
     const payload = {
-      thryve_export_version: 1,
+      ivy_export_version: 1,
       exported_at: new Date().toISOString(),
       user:               stripSensitive(profile.rows[0] || null),
       workspace:          stripSensitive(workspace.rows[0] || null),
@@ -144,7 +144,7 @@ export default async function handler(req, res) {
       client_portal:      clientPortal,
     };
 
-    const filename = `thryve-export-${new Date().toISOString().slice(0, 10)}.json`;
+    const filename = `ivy-export-${new Date().toISOString().slice(0, 10)}.json`;
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     res.setHeader('Cache-Control', 'no-store');
@@ -162,9 +162,9 @@ export default async function handler(req, res) {
     // streaming isn't worth the code complexity.
     res.status(200);
     res.write('{\n');
-    res.write(`  "thryve_export_version": 1,\n`);
+    res.write(`  "ivy_export_version": 1,\n`);
     res.write(`  "exported_at": ${JSON.stringify(payload.exported_at)},\n`);
-    const keys = Object.keys(payload).filter((k) => k !== 'thryve_export_version' && k !== 'exported_at');
+    const keys = Object.keys(payload).filter((k) => k !== 'ivy_export_version' && k !== 'exported_at');
     keys.forEach((k, i) => {
       res.write(`  ${JSON.stringify(k)}: ${JSON.stringify(payload[k], null, 2)}`);
       res.write(i === keys.length - 1 ? '\n' : ',\n');

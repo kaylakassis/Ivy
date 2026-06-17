@@ -101,7 +101,7 @@ export async function buildOnboardingUrl({ workspaceId, returnUrl, trackingId })
     legal_consents: [{ type: 'SHARE_DATA_CONSENT', granted: true }],
     partner_config_override: {
       return_url: returnUrl,
-      return_url_description: 'Return to THRYVE',
+      return_url_description: 'Return to Ivy OS',
     },
   };
   const res = await fetch(`${paypalApiBase(env)}/v2/customer/partner-referrals`, {
@@ -191,7 +191,7 @@ export async function createCheckoutSession({
       cancel_url: cancelUrl,
       shipping_preference: 'NO_SHIPPING',
       user_action: 'PAY_NOW',
-      brand_name: fs.paypalAccountLabel || 'THRYVE',
+      brand_name: fs.paypalAccountLabel || 'Ivy OS',
     },
     payer: customerEmail ? { email_address: customerEmail } : undefined,
   };
@@ -358,12 +358,12 @@ export async function verifyWebhook({ rawBody, headers }) {
 //                                  PayPal reversals are functionally a
 //                                  forced refund (typically due to a
 //                                  dispute) — we treat them as refunds
-//                                  in THRYVE's bookkeeping so the
+//                                  in Ivy OS's bookkeeping so the
 //                                  invoice flips out of 'paid'.
 //
 // Why bother with refunds here: PayPal owners can issue refunds from
-// the PayPal Merchant Center, not just THRYVE. Without this branch the
-// invoice stays marked 'paid' in THRYVE forever after the money
+// the PayPal Merchant Center, not just Ivy OS. Without this branch the
+// invoice stays marked 'paid' in Ivy OS forever after the money
 // reverses, and revenue reports lie.
 export function parseWebhookEvent(event) {
   if (!event) return null;

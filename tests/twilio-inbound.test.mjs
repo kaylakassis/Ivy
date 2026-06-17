@@ -6,7 +6,7 @@
 // Run with:
 //   node --import ./tests/bootstrap.mjs ./tests/twilio-inbound.test.mjs
 
-process.env.THRYVE_TWILIO_AUTH_TOKEN ||= 'test-twilio-token';
+process.env.IVY_TWILIO_AUTH_TOKEN ||= 'test-twilio-token';
 
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
@@ -19,7 +19,7 @@ const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fa
 const URL = 'http://localhost:5173/api/webhooks/twilio/sms';
 function sign(params) {
   const data = Object.keys(params).sort().reduce((d, k) => d + k + (params[k] ?? ''), URL);
-  return crypto.createHmac('sha1', process.env.THRYVE_TWILIO_AUTH_TOKEN).update(data).digest('base64');
+  return crypto.createHmac('sha1', process.env.IVY_TWILIO_AUTH_TOKEN).update(data).digest('base64');
 }
 function mockRes() {
   return { statusCode: 200, body: '', headers: {}, setHeader(k, v) { this.headers[k] = v; }, end(s) { this.body = s || ''; return this; } };

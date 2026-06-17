@@ -14,7 +14,7 @@
 // imported — keeps the web bundle from pulling the Capacitor SDK.
 import { isNative } from './platform.js';
 
-const KEY = 'thryve_session_token';
+const KEY = 'ivy_session_token';
 
 let memoryToken = null;
 let primed = false;

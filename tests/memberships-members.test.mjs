@@ -75,7 +75,7 @@ async function run() {
     assert(r0.statusCode === 401, `no cookie → 401 (got ${r0.statusCode})`);
 
     console.log('\n[2] authenticated returns this workspace only');
-    const cookie = `thryve_session=${signSession(uid)}`;
+    const cookie = `ivy_session=${signSession(uid)}`;
     const r1 = mkRes(); await handler(authReq(cookie), r1);
     assert(r1.statusCode === 200, `200 (got ${r1.statusCode})`);
     const members = r1.body?.members || [];

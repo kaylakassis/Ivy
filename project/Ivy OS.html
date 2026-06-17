@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<title>THRYVE — Business OS</title>
+<title>Ivy OS — Business Platform</title>
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -44,28 +44,28 @@ const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
 }/*EDITMODE-END*/;
 
 function loadTweaks() {
-  try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('thryve:tweaks') || '{}') }; }
+  try { return { ...TWEAK_DEFAULTS, ...JSON.parse(localStorage.getItem('Ivy OS:tweaks') || '{}') }; }
   catch { return TWEAK_DEFAULTS; }
 }
 
 function App() {
   // Public booking page route (?book=slug)
   if (typeof location !== 'undefined' && new URLSearchParams(location.search).get('book')) {
-    const tweaks = (()=>{ try { return JSON.parse(localStorage.getItem('thryve:tweaks')||'{}'); } catch { return {}; } })();
+    const tweaks = (()=>{ try { return JSON.parse(localStorage.getItem('Ivy OS:tweaks')||'{}'); } catch { return {}; } })();
     const dir = tweaks.direction || 'bold';
     return <div className={`app-root dir-${dir}`}><PublicBookingPage /></div>;
   }
 
   const [tweaks, setTweaks] = React.useState(loadTweaks);
-  const [current, setCurrent] = React.useState(() => localStorage.getItem('thryve:nav') || 'dashboard');
+  const [current, setCurrent] = React.useState(() => localStorage.getItem('Ivy OS:nav') || 'dashboard');
   const [ivyOpen, setIvyOpen] = React.useState(false);
   const [editMode, setEditMode] = React.useState(false);
 
   React.useEffect(() => {
-    localStorage.setItem('thryve:tweaks', JSON.stringify(tweaks));
+    localStorage.setItem('Ivy OS:tweaks', JSON.stringify(tweaks));
   }, [tweaks]);
   React.useEffect(() => {
-    localStorage.setItem('thryve:nav', current);
+    localStorage.setItem('Ivy OS:nav', current);
   }, [current]);
 
   // Edit mode wiring
@@ -182,7 +182,7 @@ function App() {
       <Paywall open={paywallOpen} expired={trial.expired}
         onClose={() => setPaywallOpen(false)}
         onSubscribe={() => {
-          localStorage.setItem('thryve:trial-paid','1');
+          localStorage.setItem('Ivy OS:trial-paid','1');
           setKey('trialState','paid');
           setPaywallOpen(false);
         }}

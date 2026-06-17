@@ -67,7 +67,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'send_message_to_client',
-    description: "Send a chat message to a specific client through their portal. Use after the user has approved a draft, or when they've explicitly said 'send X to Y'. The message lands in the client's THRYVE inbox immediately.",
+    description: "Send a chat message to a specific client through their portal. Use after the user has approved a draft, or when they've explicitly said 'send X to Y'. The message lands in the client's Ivy OS inbox immediately.",
     input_schema: {
       type: 'object',
       properties: {

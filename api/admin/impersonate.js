@@ -1,7 +1,7 @@
 // POST /api/admin/impersonate  { userId }
 //
 // Swaps the current admin session for a session impersonating the
-// target user. Stashes the original token in `thryve_admin_session`
+// target user. Stashes the original token in `ivy_admin_session`
 // (httpOnly) so the admin can call /api/admin/impersonate/stop to
 // return to themselves without re-authenticating.
 //
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     // what the browser had — re-signing would reset the expiry clock and
     // accidentally extend the session by 30 days each time.
     const cur = req.headers.cookie || '';
-    const m = cur.match(/(?:^|;\s*)thryve_session=([^;]+)/);
+    const m = cur.match(/(?:^|;\s*)ivy_session=([^;]+)/);
     const backupToken = m ? decodeURIComponent(m[1]) : signSession(actor.id);
 
     const targetToken = signSession(target.id, { imp: actor.id });

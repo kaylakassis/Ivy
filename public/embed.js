@@ -1,5 +1,5 @@
 /**
- * THRYVE embeddable widget loader.
+ * Ivy OS embeddable widget loader.
  *
  * Owners drop this <script> on their website to embed a booking widget
  * or contact (lead-capture) form. The script reads the data-* attrs,
@@ -9,14 +9,14 @@
  * Usage:
  *
  *   <!-- Booking widget -->
- *   <script async src="https://getthryve.ai/embed.js"
- *     data-thryve="book"
+ *   <script async src="https://getivyos.com/embed.js"
+ *     data-Ivy OS="book"
  *     data-slug="your-handle"
  *     data-accent="#C7BFA8"></script>
  *
  *   <!-- Lead-capture / contact form -->
- *   <script async src="https://getthryve.ai/embed.js"
- *     data-thryve="contact"
+ *   <script async src="https://getivyos.com/embed.js"
+ *     data-Ivy OS="contact"
  *     data-slug="your-handle"></script>
  *
  * The iframe inserts inline at the script tag's location. Owners can
@@ -37,17 +37,17 @@
   }
   if (!script) return;
 
-  var kind = (script.getAttribute('data-thryve') || 'book').toLowerCase();
+  var kind = (script.getAttribute('data-Ivy OS') || 'book').toLowerCase();
   var slug = (script.getAttribute('data-slug') || '').toLowerCase().replace(/[^a-z0-9-]/g, '');
   var accent = script.getAttribute('data-accent') || '';
 
   if (!slug) {
     // Don't litter the page with a broken iframe — log and bail.
-    if (window.console) console.warn('[thryve] embed missing data-slug');
+    if (window.console) console.warn('[Ivy OS] embed missing data-slug');
     return;
   }
   if (kind !== 'book' && kind !== 'contact') {
-    if (window.console) console.warn('[thryve] embed data-thryve must be "book" or "contact"');
+    if (window.console) console.warn('[Ivy OS] embed data-Ivy OS must be "book" or "contact"');
     return;
   }
 
@@ -81,14 +81,14 @@
   ].join(';');
 
   // Auto-resize listener. The inner /embed/* page posts
-  // { type: 'thryve:resize', height: <px>, slug: <slug> } whenever its
+  // { type: 'Ivy OS:resize', height: <px>, slug: <slug> } whenever its
   // body height changes. We only honor messages whose origin matches
   // the iframe's src origin to avoid sites postMessage-DDoSing the
   // host page.
   function onMessage(ev) {
     if (origin && ev.origin !== origin) return;
     var d = ev.data;
-    if (!d || d.type !== 'thryve:resize') return;
+    if (!d || d.type !== 'Ivy OS:resize') return;
     if (typeof d.height !== 'number') return;
     if (d.slug && d.slug !== slug) return;
     iframe.style.height = Math.max(220, Math.min(4000, d.height)) + 'px';

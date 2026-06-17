@@ -52,7 +52,7 @@ async function run() {
     await restoreStock({ workspaceId: wid, productId: p1, qty: 1 });
     assert((await stockOf(p1)) === 2, 'restoreStock puts it back to 2');
 
-    const cookie = `thryve_session=${signSession(uid)}`;
+    const cookie = `ivy_session=${signSession(uid)}`;
     const sale = async (b) => { const r = mockRes(); await saleHandler({ method: 'POST', headers: { cookie }, query: {}, body: b }, r); return r; };
 
     console.log('\n[e2e] cash sale marks paid + decrements stock');

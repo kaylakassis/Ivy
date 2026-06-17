@@ -267,7 +267,7 @@ async function generateUniqueCode() {
   }
   // Improbable: 8 collisions on 8 random 8-char codes from 36^8 space.
   // Fall back with a timestamp suffix.
-  return `THRYVE-${Date.now().toString(36).toUpperCase()}`;
+  return `Ivy OS-${Date.now().toString(36).toUpperCase()}`;
 }
 
 function randomCode() {
@@ -279,11 +279,11 @@ function randomCode() {
 
 function subjectFor(type) {
   switch (type) {
-    case 'sponsored':       return "You've got a sponsored THRYVE account";
-    case 'affiliate':       return "Welcome to the THRYVE affiliate program";
-    case 'business-trial':  return "Your THRYVE account is ready — 28-day trial activated";
-    case 'business-active': return "Your THRYVE account is ready";
-    default:                return 'Welcome to THRYVE';
+    case 'sponsored':       return "You've got a sponsored Ivy OS account";
+    case 'affiliate':       return "Welcome to the Ivy OS affiliate program";
+    case 'business-trial':  return "Your Ivy OS account is ready — 28-day trial activated";
+    case 'business-active': return "Your Ivy OS account is ready";
+    default:                return 'Welcome to Ivy OS';
   }
 }
 function headingFor(type, name) {
@@ -293,24 +293,24 @@ function headingFor(type, name) {
 function bodyFor(type, name) {
   switch (type) {
     case 'sponsored':
-      return `<p>You've been given full access to THRYVE — no subscription
+      return `<p>You've been given full access to Ivy OS — no subscription
         needed. Treat it like the paid version: the calendar, clients,
         invoicing, AI coach, all of it. Set your password below and
         you're in.</p>`;
     case 'affiliate':
-      return `<p>Welcome to the THRYVE affiliate program. You've got a
+      return `<p>Welcome to the Ivy OS affiliate program. You've got a
         referral code that earns you credit on every business that signs
         up through it. Set your password and the code will be waiting for
         you in your account.</p>`;
     case 'business-trial':
-      return `<p>Your THRYVE account is set up. You're on a 28-day full-
+      return `<p>Your Ivy OS account is set up. You're on a 28-day full-
         access trial — long enough to actually run a month of bookings
         and see if the numbers move. Set your password to get in.</p>`;
     case 'business-active':
-      return `<p>Your THRYVE account is set up and active. Pick a
+      return `<p>Your Ivy OS account is set up and active. Pick a
         password below and you're ready to use the app.</p>`;
     default:
-      return `<p>Welcome to THRYVE. Set your password to start using the
+      return `<p>Welcome to Ivy OS. Set your password to start using the
         app.</p>`;
   }
 }

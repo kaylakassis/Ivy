@@ -43,10 +43,10 @@ function renderFooter(appUrl) {
                       <a href="${appUrl}/account?tab=notifications" style="color:#9ca3af;text-decoration:underline" target="_blank">Email preferences</a>
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:10px">
-                      ${process.env.THRYVE_POSTAL_ADDRESS || 'THRYVE · 1209 Orange St, Wilmington, DE 19801, USA'}
+                      ${process.env.IVY_POSTAL_ADDRESS || 'Ivy OS · 1209 Orange St, Wilmington, DE 19801, USA'}
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:6px">
-                      © ${year} THRYVE. All rights reserved.
+                      © ${year} Ivy OS. All rights reserved.
                     </p>
                     <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>`;
 }
@@ -54,24 +54,24 @@ function renderFooter(appUrl) {
 export function renderWelcome({ name, appUrl, variant }) {
   if (variant === 'client') {
     return {
-      subject: name ? `Welcome to THRYVE, ${name}` : 'Welcome to THRYVE',
+      subject: name ? `Welcome to Ivy OS, ${name}` : 'Welcome to Ivy OS',
       html: renderClientWelcome({ name, appUrl }),
     };
   }
   return {
-    subject: name ? `Welcome to THRYVE, ${name}` : 'Welcome to THRYVE',
+    subject: name ? `Welcome to Ivy OS, ${name}` : 'Welcome to Ivy OS',
     html: renderOwnerWelcome({ name, appUrl }),
   };
 }
 
-// Owner welcome — dark THRYVE-branded onboarding template (designed in
+// Owner welcome — dark Ivy OS-branded onboarding template (designed in
 // Resend, exported as raw HTML). Returned as a complete document; no
 // emailShell wrapper. Adds the trial / pricing line and the shared
 // compliance footer.
 //
 // Variables resolved server-side:
 //   {{{first_name}}}    → escapeHtml(name) with empty-string fallback
-//   https://getthryve.ai → ${appUrl}/<route> so dev/preview deploys
+//   https://getivyos.com → ${appUrl}/<route> so dev/preview deploys
 //                          point at themselves
 function renderOwnerWelcome({ name, appUrl }) {
   const greetSuffix = name ? `, ${escapeHtml(name)}` : '';
@@ -88,7 +88,7 @@ function renderOwnerWelcome({ name, appUrl }) {
   </head>
   <body style="background-color:#0D0E0C">
     <div style="display:none;overflow:hidden;line-height:1px;opacity:0;max-height:0;max-width:0" data-skip-in-text="true">
-      Welcome to THRYVE!
+      Welcome to Ivy OS!
     </div>
     <table border="0" width="100%" cellpadding="0" cellspacing="0" role="presentation" align="center">
       <tbody>
@@ -100,10 +100,10 @@ function renderOwnerWelcome({ name, appUrl }) {
                   <td>
                     <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
                     <h3 style="margin:0;padding:0;font-size:1.4em;line-height:1.08em;padding-top:0.389em;font-weight:600">
-                      <span style="color:#CFFF50">THRYVE</span>
+                      <span style="color:#CFFF50">Ivy OS</span>
                     </h3>
                     <h1 style="margin:0;padding:0;font-size:2.25em;line-height:1.44em;padding-top:0.389em;font-weight:600">
-                      <span style="color:#F3F3EE">Welcome to THRYVE${greetSuffix}.</span>
+                      <span style="color:#F3F3EE">Welcome to Ivy OS${greetSuffix}.</span>
                     </h1>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:24px">
                       You just joined the ultimate AI-driven platform built for ambitious solo-preneurs. We're excited to help you grow faster, consolidate your back and front ends into one platform, and focus on what actually moves the needle.
@@ -149,7 +149,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                       <span style="color:#F3F3EE">Start with a 60-second win</span>
                     </h2>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:32px">
-                      Most founders feel the magic on their very first task. Pick one and let THRYVE show you what it can do.
+                      Most founders feel the magic on their very first task. Pick one and let Ivy OS show you what it can do.
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:12px">
                       → <a href="${appUrl}/onboarding" rel="noopener noreferrer nofollow" style="color:#F3F3EE;text-decoration:underline" target="_blank">Set up your booking link</a>
@@ -171,7 +171,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                         <tr style="width:100%">
                           <td align="center">
                             <a href="${appUrl}/dashboard" style="line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px;margin:0;padding:12px 50px;background-color:#CFFF50;color:#000000;border-radius:4px;font-weight:500;font-size:15px;text-align:center;margin-bottom:8px" target="_blank">
-                              <span style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px">Open THRYVE</span>
+                              <span style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px">Open Ivy OS</span>
                             </a>
                           </td>
                         </tr>
@@ -181,7 +181,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                       Welcome to the future of business OS,
                     </p>
                     <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;font-weight:600;margin-top:0;margin-bottom:24px">
-                      Kayla Kassis, Founder of THRYVE.
+                      Kayla Kassis, Founder of Ivy OS.
                     </p>
                     <p style="margin:0;padding:0;font-size:13px;color:#9ca3af;line-height:1.55;font-style:italic;margin-top:8px">
                       You're on a 28-day free trial — after that it's $49/month. Cancel anytime from your account.
@@ -229,10 +229,10 @@ function renderClientWelcome({ name, appUrl }) {
                   <td>
                     <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
                     <h3 style="margin:0;padding:0;font-size:1.4em;line-height:1.08em;padding-top:0.389em;font-weight:600">
-                      <span style="color:#CFFF50">THRYVE</span>
+                      <span style="color:#CFFF50">Ivy OS</span>
                     </h3>
                     <h1 style="margin:0;padding:0;font-size:2.25em;line-height:1.44em;padding-top:0.389em;font-weight:600">
-                      <span style="color:#F3F3EE">Welcome to THRYVE${greetSuffix}.</span>
+                      <span style="color:#F3F3EE">Welcome to Ivy OS${greetSuffix}.</span>
                     </h1>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:24px">
                       Every service provider you book with — your stylist, your trainer, your therapist, your contractor, your tutor — now lives in one place. Bills, bookings, memberships, messages. No more hunting through ten different texts and inboxes.
@@ -271,13 +271,13 @@ function renderClientWelcome({ name, appUrl }) {
                       03 Message your providers directly
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:24px">
-                      Every reply lands in your THRYVE inbox — not buried in your texts. Voice memos, photos, signed documents, all in one thread.
+                      Every reply lands in your Ivy OS inbox — not buried in your texts. Voice memos, photos, signed documents, all in one thread.
                     </p>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#F3F3EE;margin-top:0;margin-bottom:6px">
                       04 Find new providers near you
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:40px">
-                      Browse the Discover tab — filter by category, price, distance, or rating — and book in two taps. The whole experience, from finding to paying, never leaves THRYVE.
+                      Browse the Discover tab — filter by category, price, distance, or rating — and book in two taps. The whole experience, from finding to paying, never leaves Ivy OS.
                     </p>
                     <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #e8e8e4;padding-bottom:1em;border-style:solid;border-width:2px;margin-top:0;margin-bottom:40px" />
                     <h2 style="margin:0;padding:0;font-size:35px;line-height:1.44em;padding-top:0.389em;font-weight:600;letter-spacing:-0.4px;margin-top:0;margin-bottom:12px;text-align:center">
@@ -288,7 +288,7 @@ function renderClientWelcome({ name, appUrl }) {
                         <tr style="width:100%">
                           <td align="center">
                             <a href="${appUrl}/me" style="line-height:100%;text-decoration:none;display:inline-block;max-width:100%;mso-padding-alt:0px;margin:0;padding:12px 50px;background-color:#CFFF50;color:#000000;border-radius:4px;font-weight:500;font-size:15px;text-align:center;margin-bottom:8px" target="_blank">
-                              <span style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px">Open THRYVE</span>
+                              <span style="max-width:100%;display:inline-block;line-height:120%;mso-padding-alt:0px;mso-text-raise:9px">Open Ivy OS</span>
                             </a>
                           </td>
                         </tr>
@@ -298,7 +298,7 @@ function renderClientWelcome({ name, appUrl }) {
                       Glad you're here,
                     </p>
                     <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;font-weight:600;margin-top:0;margin-bottom:0">
-                      Kayla Kassis, Founder of THRYVE.
+                      Kayla Kassis, Founder of Ivy OS.
                     </p>
                     ${renderFooter(appUrl)}
                   </td>

@@ -176,7 +176,7 @@ export default function IvyPro() {
               </button>
             </div>
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
-              Ivy reads your real THRYVE data — clients, finance, calendar — and stays inside this workspace.
+              Ivy reads your real Ivy OS data — clients, finance, calendar — and stays inside this workspace.
             </div>
           </div>
         </div>
@@ -633,7 +633,7 @@ function DataContext({ context }) {
         fontSize: 11, lineHeight: 1.5, display: 'flex', gap: 6,
       }}>
         <Icons.Spark size={12} sw={2}/>
-        <div>Ivy auto-syncs with THRYVE. No data leaves your workspace.</div>
+        <div>Ivy auto-syncs with Ivy OS. No data leaves your workspace.</div>
       </div>
     </div>
   );

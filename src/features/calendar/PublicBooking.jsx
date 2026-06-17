@@ -106,7 +106,7 @@ export default function PublicBooking({ embedded = false }) {
     };
 
     const biz = cal.settings.bizName || slug;
-    const tagline = cal.settings.tagline || `Book a session with ${biz} on THRYVE.`;
+    const tagline = cal.settings.tagline || `Book a session with ${biz} on Ivy OS.`;
     const url = window.location.href;
     upsertMeta('name', 'description', tagline);
     upsertMeta('property', 'og:title', biz);

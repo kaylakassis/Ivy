@@ -53,7 +53,7 @@ async function run() {
   const uid = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
     VALUES (${email}, 'x', '2026-05-05', NOW()) RETURNING id`).rows[0].id;
   const wid = (await sql`INSERT INTO workspaces (owner_id) VALUES (${uid}) RETURNING id`).rows[0].id;
-  const cookie = `thryve_session=${signSession(uid)}`;
+  const cookie = `ivy_session=${signSession(uid)}`;
   const headers = { ...sameOrigin, cookie };
 
   console.log('\n[2] bulk client import — batched, validated, de-duped');

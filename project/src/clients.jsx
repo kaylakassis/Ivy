@@ -2,7 +2,7 @@
 // Source of truth for identity = messages.jsx `clients` list.
 // Additional CRM metadata (stage, joinedAt, lastSeen, ltv, notes) stored here.
 
-const CLIENTS_KEY = 'thryve:clients-meta';
+const CLIENTS_KEY = 'Ivy OS:clients-meta';
 
 function defaultClientsMeta() {
   const now = Date.now(), D = 86400e3;
@@ -42,7 +42,7 @@ function useClientsMeta() {
 }
 
 function loadMessagesClients() {
-  try { return (JSON.parse(localStorage.getItem('thryve:messages'))?.clients) || []; }
+  try { return (JSON.parse(localStorage.getItem('Ivy OS:messages'))?.clients) || []; }
   catch { return []; }
 }
 
@@ -67,14 +67,14 @@ function ClientsView() {
   const [meta, updateMeta] = useClientsMeta();
   const all = composeClients(meta);
 
-  const [tab, setTab] = React.useState(() => localStorage.getItem('thryve:clients:tab') || 'all');
+  const [tab, setTab] = React.useState(() => localStorage.getItem('Ivy OS:clients:tab') || 'all');
   const [query, setQuery] = React.useState('');
-  const [leadWindow, setLeadWindow] = React.useState(() => Number(localStorage.getItem('thryve:clients:leadWindow')) || 30);
+  const [leadWindow, setLeadWindow] = React.useState(() => Number(localStorage.getItem('Ivy OS:clients:leadWindow')) || 30);
   const [openId, setOpenId] = React.useState(null);
   const [addOpen, setAddOpen] = React.useState(false);
 
-  const setTabPers = (t) => { setTab(t); localStorage.setItem('thryve:clients:tab', t); };
-  const setLeadWindowPers = (n) => { setLeadWindow(n); localStorage.setItem('thryve:clients:leadWindow', n); };
+  const setTabPers = (t) => { setTab(t); localStorage.setItem('Ivy OS:clients:tab', t); };
+  const setLeadWindowPers = (n) => { setLeadWindow(n); localStorage.setItem('Ivy OS:clients:leadWindow', n); };
 
   /* -- Analytics -- */
   const now = Date.now();
@@ -116,11 +116,11 @@ function ClientsView() {
       // promote lead to active: move them into messages.jsx clients + attach meta
       const lead = (meta._leads || []).find(l => l.id === id);
       try {
-        const m = JSON.parse(localStorage.getItem('thryve:messages') || '{}');
+        const m = JSON.parse(localStorage.getItem('Ivy OS:messages') || '{}');
         m.clients = m.clients || [];
         m.clients.push({ id: lead.id, name: lead.name, email: lead.email, registered: true, accent: '#D8E8D8' });
-        localStorage.setItem('thryve:messages', JSON.stringify(m));
-        window.dispatchEvent(new StorageEvent('storage', { key: 'thryve:messages' }));
+        localStorage.setItem('Ivy OS:messages', JSON.stringify(m));
+        window.dispatchEvent(new StorageEvent('storage', { key: 'Ivy OS:messages' }));
       } catch {}
       const nextMeta = { ...meta, _leads: (meta._leads||[]).filter(l => l.id !== id) };
       nextMeta[id] = { stage, joinedAt: Date.now(), lastSeen: Date.now(), ltv: 0, tags: [], note: '' };
@@ -408,11 +408,11 @@ function ClientDetail({ client, onClose, onStage, onUpdate }) {
   const [recentMessages, setRecentMessages] = React.useState([]);
   React.useEffect(() => {
     try {
-      const fin = JSON.parse(localStorage.getItem('thryve:finance') || '{}');
+      const fin = JSON.parse(localStorage.getItem('Ivy OS:finance') || '{}');
       setRecentInvoices((fin.invoices || []).filter(i => i.clientId === client.id).slice(0, 3));
     } catch {}
     try {
-      const m = JSON.parse(localStorage.getItem('thryve:messages') || '{}');
+      const m = JSON.parse(localStorage.getItem('Ivy OS:messages') || '{}');
       setRecentMessages((m.threads?.[client.id]?.messages || []).slice(-3).reverse());
     } catch {}
   }, [client.id]);

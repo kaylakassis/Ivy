@@ -2,7 +2,7 @@
 //   body: { reason? }
 //
 // Flags a DM message as reported (reported_at + reported_by_client_id) AND
-// posts into the reporter's support_thread with kind='report' so THRYVE
+// posts into the reporter's support_thread with kind='report' so Ivy OS
 // admin sees it in their support inbox tagged as a report. The
 // support_messages row carries metadata (offending text snippet, the
 // other client's name, the DM thread id) so admin can act without

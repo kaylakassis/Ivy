@@ -5,7 +5,7 @@
 import React, { useEffect, useState } from 'react';
 import { applyUpdate, promptInstall, canInstall, isStandalone } from '../lib/pwa.js';
 
-const SNOOZE_KEY = 'thryve_pwa_install_snooze';
+const SNOOZE_KEY = 'ivy_pwa_install_snooze';
 const SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
 
 function installSnoozed() {
@@ -51,14 +51,14 @@ export default function PWAPrompts() {
     <div style={wrap}>
       {updateReg ? (
         <div className="card" style={banner} role="status">
-          <span style={text}>A new version of THRYVE is ready.</span>
+          <span style={text}>A new version of Ivy OS is ready.</span>
           <button className="btn btn-primary" style={btn} onClick={() => applyUpdate(updateReg)}>
             Reload
           </button>
         </div>
       ) : showInstall ? (
         <div className="card" style={banner}>
-          <span style={text}>Install THRYVE for a faster, full-screen app.</span>
+          <span style={text}>Install Ivy OS for a faster, full-screen app.</span>
           <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button className="btn btn-outline" style={btn} onClick={dismissInstall}>Not now</button>
             <button className="btn btn-primary" style={btn} onClick={doInstall}>Install</button>

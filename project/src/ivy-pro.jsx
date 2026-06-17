@@ -155,7 +155,7 @@ function IvyProView({ direction }) {
               </button>
             </div>
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
-              Ivy draws on your real THRYVE data — clients, finance, calendar.
+              Ivy draws on your real Ivy OS data — clients, finance, calendar.
             </div>
           </div>
         </div>
@@ -174,7 +174,7 @@ function IvyProView({ direction }) {
 }
 
 /* ============ SESSIONS STORE ============ */
-const IVY_KEY = 'thryve:ivy';
+const IVY_KEY = 'Ivy OS:ivy';
 function loadIvy() {
   try { return JSON.parse(localStorage.getItem(IVY_KEY)) || []; } catch { return []; }
 }
@@ -190,14 +190,14 @@ function ivyReply(text) {
   // Pull context
   let revenue = 0, openInv = 0, clientCount = 0;
   try {
-    const fin = JSON.parse(localStorage.getItem('thryve:finance') || '{}');
+    const fin = JSON.parse(localStorage.getItem('Ivy OS:finance') || '{}');
     const start = new Date(); start.setDate(1); start.setHours(0,0,0,0);
     revenue = (fin.invoices || []).filter(i => i.status === 'paid' && (i.paidAt||0) >= start.getTime())
       .reduce((s, i) => s + (i.items||[]).reduce((a, it) => a + (it.qty||0)*(it.rate||0), 0), 0);
     openInv = (fin.invoices || []).filter(i => ['sent','overdue'].includes(i.status)).length;
   } catch {}
   try {
-    const m = JSON.parse(localStorage.getItem('thryve:messages') || '{}');
+    const m = JSON.parse(localStorage.getItem('Ivy OS:messages') || '{}');
     clientCount = (m.clients || []).filter(c => c.registered).length;
   } catch {}
 
@@ -461,18 +461,18 @@ function DataContext({ direction }) {
     const read = () => {
       let revenue = 0, clients = 0, openInvoices = 0, upcomingSessions = 0;
       try {
-        const fin = JSON.parse(localStorage.getItem('thryve:finance') || '{}');
+        const fin = JSON.parse(localStorage.getItem('Ivy OS:finance') || '{}');
         const start = new Date(); start.setDate(1); start.setHours(0,0,0,0);
         revenue = (fin.invoices || []).filter(i => i.status === 'paid' && (i.paidAt||0) >= start.getTime())
           .reduce((s, i) => s + (i.items||[]).reduce((a, it) => a + (it.qty||0)*(it.rate||0), 0), 0);
         openInvoices = (fin.invoices || []).filter(i => ['sent','overdue'].includes(i.status)).length;
       } catch {}
       try {
-        const m = JSON.parse(localStorage.getItem('thryve:messages') || '{}');
+        const m = JSON.parse(localStorage.getItem('Ivy OS:messages') || '{}');
         clients = (m.clients || []).filter(c => c.registered).length;
       } catch {}
       try {
-        const cal = JSON.parse(localStorage.getItem('thryve:calendar') || '{}');
+        const cal = JSON.parse(localStorage.getItem('Ivy OS:calendar') || '{}');
         upcomingSessions = (cal.events || []).filter(e => (e.start||0) > Date.now() && (e.start||0) < Date.now() + 7*86400e3).length;
       } catch {}
       setStats({ revenue, clients, openInvoices, upcomingSessions });
@@ -500,7 +500,7 @@ function DataContext({ direction }) {
         fontSize: 11, lineHeight: 1.5, display: 'flex', gap: 6,
       }}>
         <Icons.Spark size={12} sw={2}/>
-        <div>Ivy auto-syncs with THRYVE. No data leaves your workspace.</div>
+        <div>Ivy auto-syncs with Ivy OS. No data leaves your workspace.</div>
       </div>
     </div>
   );

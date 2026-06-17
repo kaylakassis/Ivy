@@ -78,7 +78,7 @@ export default function Wizard({ onLaunch }) {
         <Field label="Your handle" hint="Your public URL. Letters, numbers, and hyphens only.">
           <div style={{ display: 'flex', alignItems: 'stretch', gap: 0, border: '1px solid var(--border-strong)', borderRadius: 10, overflow: 'hidden', background: 'var(--surface)' }}>
             <span style={{ padding: '10px 12px', color: 'var(--muted)', fontSize: 13, background: 'var(--surface-2)', borderRight: '1px solid var(--border)' }}>
-              getthryve.ai/site/
+              getivyos.com/site/
             </span>
             <input
               value={effectiveHandle}

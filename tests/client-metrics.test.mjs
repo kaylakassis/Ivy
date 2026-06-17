@@ -62,7 +62,7 @@ async function setup() {
   `;
   serviceId = s.rows[0].id;
 
-  cookieHeader = `thryve_session=${signSession(ownerId)}`;
+  cookieHeader = `ivy_session=${signSession(ownerId)}`;
 }
 
 async function teardown() {
@@ -244,7 +244,7 @@ async function testMetricsEndpointAuthScopes() {
     RETURNING id
   `;
   await sql`INSERT INTO workspaces (owner_id, name) VALUES (${otherOwner.rows[0].id}, 'Other WS')`;
-  const otherCookie = `thryve_session=${signSession(otherOwner.rows[0].id)}`;
+  const otherCookie = `ivy_session=${signSession(otherOwner.rows[0].id)}`;
 
   const { default: handler } = await import('../api/clients/metrics.js');
   const req = {

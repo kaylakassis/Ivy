@@ -83,7 +83,7 @@ function shouldSampleToSentry(err) {
 // can be traced to every log line of the request that produced it.
 export function requestId(req) {
   if (!req) return null;
-  if (req._thryveRequestId) return req._thryveRequestId;
+  if (req._ivyRequestId) return req._ivyRequestId;
   const incoming = req.headers?.['x-request-id'];
   // Trust the upstream ID if it's a sensible shape (alphanumeric +
   // dashes, ≤ 64 chars), otherwise mint our own. Prevents header
@@ -91,7 +91,7 @@ export function requestId(req) {
   const id = (incoming && /^[A-Za-z0-9_-]{1,64}$/.test(incoming))
     ? incoming
     : crypto.randomBytes(8).toString('hex');
-  req._thryveRequestId = id;
+  req._ivyRequestId = id;
   return id;
 }
 

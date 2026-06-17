@@ -11,9 +11,9 @@ import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 export default function MobilePage() {
   useEffect(() => {
-    document.title = 'On your phone - THRYVE';
+    document.title = 'On your phone - Ivy OS';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'THRYVE installs as a phone app in two taps. Add clients between sessions, send invoices on the go, message clients from anywhere.');
+    if (desc) desc.setAttribute('content', 'Ivy OS installs as a phone app in two taps. Add clients between sessions, send invoices on the go, message clients from anywhere.');
   }, []);
   return (
     <MarketingShell>
@@ -27,14 +27,14 @@ export default function MobilePage() {
             fontSize: 'clamp(32px, 4.5vw, 48px)', fontWeight: 500,
             letterSpacing: '-0.025em', lineHeight: 1.1,
           }}>
-            THRYVE works on every device - starting with the one in your pocket.
+            Ivy OS works on every device - starting with the one in your pocket.
           </h1>
           <p style={{
             margin: '14px auto 0', maxWidth: 600,
             fontSize: 16, lineHeight: 1.6, color: 'var(--fg-2)',
           }}>
             Add clients between massages. Send invoices from a shoot. Message
-            clients from the car. Install THRYVE as a phone app in two taps -
+            clients from the car. Install Ivy OS as a phone app in two taps -
             no app-store download, no separate app to maintain.
           </p>
         </header>
@@ -79,9 +79,9 @@ export default function MobilePage() {
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18,
           }}>
-            <Step n={1} title="Open getthryve.ai on your phone" body="Any modern browser - Safari, Chrome, Firefox, Edge." />
+            <Step n={1} title="Open getivyos.com on your phone" body="Any modern browser - Safari, Chrome, Firefox, Edge." />
             <Step n={2} title="Tap Share, then Add to Home Screen" body="iOS: the Share icon at the bottom. Android: the three-dot menu at the top." />
-            <Step n={3} title="Done" body='THRYVE shows up as an app icon. Opens full-screen, no browser chrome - looks and feels like a native app.' />
+            <Step n={3} title="Done" body='Ivy OS shows up as an app icon. Opens full-screen, no browser chrome - looks and feels like a native app.' />
           </div>
         </section>
 

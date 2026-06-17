@@ -657,7 +657,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_user_endpoint
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
   ON push_subscriptions(user_id);
 
--- Client portal: when an end-customer signs up to THRYVE, we link their user
+-- Client portal: when an end-customer signs up to Ivy OS, we link their user
 -- account to every existing 'clients' row that matches their email so they
 -- can see their data across multiple businesses they book with. user_id
 -- nullable because most rows are created by owners before the client signs up.
@@ -739,14 +739,14 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS max_advance_days INT NOT 
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS discoverable BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
 -- iCal subscription feed. Owner generates a token and pastes the resulting
--- URL into Google Cal / Apple Cal / Outlook to mirror their THRYVE bookings
+-- URL into Google Cal / Apple Cal / Outlook to mirror their Ivy OS bookings
 -- into their personal calendar. We store the sha256 of the token so leaked
 -- DB rows can't be replayed; the raw token only lives in the URL the owner
 -- shares with their own calendar app.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS ical_feed_token_hash TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS ical_feed_token_created_at TIMESTAMPTZ;
 -- Google Calendar OAuth: refresh_token encrypted at rest (uses _lib/secrets).
--- google_calendar_id is the dedicated "THRYVE Bookings" calendar we create
+-- google_calendar_id is the dedicated "Ivy OS Bookings" calendar we create
 -- on connect; google_email is for display on the Sync drawer ("connected
 -- as kayla@gmail.com"). Disconnecting clears all four.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_refresh_token_encrypted TEXT;
@@ -756,7 +756,7 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_connected_at TIMES
 -- Inbound busy-block sync: when enabled, the cron pulls busy times from
 -- the owner's connected Google calendar and stores them as opaque
 -- external_busy_blocks. The slot-conflict check on the public booking
--- page consults those blocks so a personal event blocks the THRYVE slot
+-- page consults those blocks so a personal event blocks the Ivy OS slot
 -- automatically.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_block_inbound BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_inbound_last_sync_at TIMESTAMPTZ;
@@ -839,7 +839,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_user
 
 -- Mirror of busy times from the owner's connected external calendar
 -- (Google for now). Treated as opaque blockers in slot availability
--- — never editable from THRYVE. Refreshed by api/cron/google-busy-sync;
+-- — never editable from Ivy OS. Refreshed by api/cron/google-busy-sync;
 -- rows the most-recent sync didn't include are deleted, so cancellations
 -- in the upstream calendar free the slot back up automatically.
 CREATE TABLE IF NOT EXISTS external_busy_blocks (
@@ -945,7 +945,7 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_workspace_status
 -- Email branding. Owners can upload a logo, pick an accent color
 -- for buttons, and set a multi-line signature/footer that goes at
 -- the bottom of every client-facing email (invoices, documents,
--- booking reminders, etc.). All optional — fall back to "thryve"
+-- booking reminders, etc.). All optional — fall back to "Ivy OS"
 -- defaults when unset so existing workspaces don't change behavior
 -- until the owner customizes.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_url TEXT;
@@ -1154,7 +1154,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DE
 -- insert when the underlying service.location_type = 'virtual'.
 -- One unique room per booking so links can't be reused after the
 -- session ends. Currently we mint a Jitsi Meet room
--- (https://meet.jit.si/thryve-<token>) — zero-config, no API key
+-- (https://meet.jit.si/ivy-<token>) — zero-config, no API key
 -- needed, works in every modern browser. Owners can override per
 -- booking by setting their own URL (e.g. their Zoom personal room).
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS video_room_url TEXT;
@@ -2656,7 +2656,7 @@ CREATE TABLE IF NOT EXISTS client_dm_mutes (
   PRIMARY KEY (muter_client_id, muted_client_id)
 );
 
--- Report kind on support_messages so DM-reports route to THRYVE admin's
+-- Report kind on support_messages so DM-reports route to Ivy OS admin's
 -- support tab tagged 'report' (separate from normal user-↔-admin chat).
 ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS kind TEXT;
 ALTER TABLE support_messages ADD COLUMN IF NOT EXISTS meta JSONB NOT NULL DEFAULT '{}'::jsonb;

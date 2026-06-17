@@ -46,7 +46,7 @@ async function run() {
               'public', NOW(), TRUE)`;
     assert((await liveIds(handle)).includes('OLD'), 'live site serves OLD');
 
-    const cookie = `thryve_session=${signSession(uid)}`;
+    const cookie = `ivy_session=${signSession(uid)}`;
     const put = async (body) => { const r = mockRes(); await websiteHandler({ method: 'PUT', headers: { cookie }, url: '/api/website', query: {}, body }, r); return r; };
 
     // SET a schedule (future) with NEW content staged.

@@ -10,7 +10,7 @@
 // asset URLs and everything continues. Gated by sessionStorage so a
 // genuinely-broken deploy can't reload-loop forever.
 
-const CHUNK_RELOAD_KEY = '__thryve_chunk_reload_at';
+const CHUNK_RELOAD_KEY = '__ivy_chunk_reload_at';
 const RELOAD_COOLDOWN_MS = 10_000;
 
 export function isStaleChunkError(err) {

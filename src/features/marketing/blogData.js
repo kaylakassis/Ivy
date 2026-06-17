@@ -23,7 +23,7 @@ export const POSTS = [
       { type: 'h', text: 'Find your ceiling by asking your best clients' },
       { type: 'p', text: "Your top 10% of clients - the ones who refer, rebook on time, and never haggle - will tell you the truth. \"At what price would you stop coming?\" The answer is usually 30-50% above what you currently charge." },
       { type: 'h', text: 'Land in the upper third of the band' },
-      { type: 'p', text: "Don't price at your ceiling - leave room for raises. Pricing in the upper third of your floor-to-ceiling range gives you space to raise prices yearly without losing your best clients. THRYVE makes the math easy: open Finance → Reports → average session value and you've got your current number." },
+      { type: 'p', text: "Don't price at your ceiling - leave room for raises. Pricing in the upper third of your floor-to-ceiling range gives you space to raise prices yearly without losing your best clients. Ivy OS makes the math easy: open Finance → Reports → average session value and you've got your current number." },
       { type: 'h', text: 'Raise prices the right way' },
       { type: 'p', text: "Once a year, ideally on Jan 1 or your business anniversary. Announce 60 days ahead. Honor old pricing for active package balances. Existing clients on month-to-month get one month of legacy pricing. Done well, you lose 0-5% of clients and gain 20-35% revenue." },
     ],
@@ -41,7 +41,7 @@ export const POSTS = [
       { type: 'p', text: "2. \"What's the one thing I should know before we meet?\" - Catches allergies, anxieties, accommodations, etc., without you having to ask 12 separate questions." },
       { type: 'p', text: "3. \"How did you find me?\" - Long-term marketing signal. Worth its weight." },
       { type: 'h', text: 'Get the templates' },
-      { type: 'p', text: 'In THRYVE: Documents → New from template. Three intakes are pre-loaded. Customize, attach to your service, and the form auto-sends on every booking.' },
+      { type: 'p', text: 'In Ivy OS: Documents → New from template. Three intakes are pre-loaded. Customize, attach to your service, and the form auto-sends on every booking.' },
     ],
   },
   {
@@ -69,7 +69,7 @@ export const POSTS = [
     body: [
       { type: 'p', text: "We asked twelve solo owners - coaches, photographers, trainers, therapists - to track every minute of a working week. The 38% of working hours that weren't billable broke down like this:" },
       { type: 'p', text: "11% scheduling (\"can we move 4pm to 5?\"), 9% invoicing (drafting, chasing, reconciling), 6% client follow-ups (\"just checking in\"), 5% intake/onboarding, 4% bookkeeping/expenses, 3% website + content." },
-      { type: 'h', text: 'Where THRYVE recovers each one' },
+      { type: 'h', text: 'Where Ivy OS recovers each one' },
       { type: 'p', text: "Scheduling → public booking page. Invoicing → recurring + auto-send + Stripe direct-pay. Follow-ups → Ivy spots quiet clients and drafts the message. Intake → auto-attach forms to services. Bookkeeping → live P&L. Website → builder + custom domain." },
       { type: 'h', text: 'The compounding part' },
       { type: 'p', text: "The 38% admin tax isn't just lost revenue. It's the reason solo founders burn out. Get it to 20% and you'll have evenings again." },
@@ -84,13 +84,13 @@ export const POSTS = [
     body: [
       { type: 'p', text: "If you're running a solo service business, the payment processor you choose determines what software you can use, what reporting you get, and how much of every dollar you keep." },
       { type: 'h', text: 'Stripe: the default for service businesses' },
-      { type: 'p', text: "Standard rate ~2.9%+30¢. Money lands in your bank in 2 business days. Integrates with everything (THRYVE included). No physical card reader hardware - but you can use Stripe Terminal for that. Best for: any solo who books online." },
+      { type: 'p', text: "Standard rate ~2.9%+30¢. Money lands in your bank in 2 business days. Integrates with everything (Ivy OS included). No physical card reader hardware - but you can use Stripe Terminal for that. Best for: any solo who books online." },
       { type: 'h', text: 'Square: best for cash-and-card retail/walk-in' },
       { type: 'p', text: "Same processing fee. Their advantage is the free physical reader + integrated POS. Their disadvantage is their software ecosystem assumes retail; service-business integrations are weaker." },
       { type: 'h', text: 'Toast: restaurant-only. Skip.' },
       { type: 'p', text: "Toast is for restaurants. If you're a solo service business, ignore." },
       { type: 'h', text: 'Recommendation' },
-      { type: 'p', text: "If you're 100% in-person walk-in: Square. Everyone else: Stripe. THRYVE connects to your existing Stripe - we never take a cut of your sales." },
+      { type: 'p', text: "If you're 100% in-person walk-in: Square. Everyone else: Stripe. Ivy OS connects to your existing Stripe - we never take a cut of your sales." },
     ],
   },
   {
@@ -108,8 +108,8 @@ export const POSTS = [
       { type: 'p', text: "5. Import historical bookings second. Spot-check 10 random bookings." },
       { type: 'p', text: "6. Import open invoices last. These are the ones that affect money flow - get them right." },
       { type: 'p', text: "7. Keep the old tool for 60 days, read-only, just in case. Then cancel." },
-      { type: 'h', text: 'THRYVE handles all of this for free' },
-      { type: 'p', text: "We'll take your CSV exports or read-only access to your current tool and import everything inside one business day. No charge. Email hello@getthryve.ai or sign up and our team reaches out." },
+      { type: 'h', text: 'Ivy OS handles all of this for free' },
+      { type: 'p', text: "We'll take your CSV exports or read-only access to your current tool and import everything inside one business day. No charge. Email hello@getivyos.com or sign up and our team reaches out." },
     ],
   },
 ];

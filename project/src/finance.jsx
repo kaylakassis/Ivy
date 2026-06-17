@@ -1,9 +1,9 @@
-// FINANCE — QuickBooks-lite for THRYVE
+// FINANCE — QuickBooks-lite for Ivy OS
 // Store + FinanceView shell + Dashboard + Bank/Card accounts.
 // Invoicing, templates, recurring → src/invoices.jsx
 
 /* ============ STORE ============ */
-const FIN_KEY = 'thryve:finance';
+const FIN_KEY = 'Ivy OS:finance';
 
 function defaultFinance() {
   const now = Date.now();
@@ -294,8 +294,8 @@ window.FinanceToast = { useToast };
 
 /* ============ MAIN VIEW ============ */
 function FinanceView({ direction }) {
-  const [tab, setTab] = React.useState(() => localStorage.getItem('thryve:finance:tab') || 'dashboard');
-  const switchTab = (t) => { setTab(t); localStorage.setItem('thryve:finance:tab', t); };
+  const [tab, setTab] = React.useState(() => localStorage.getItem('Ivy OS:finance:tab') || 'dashboard');
+  const switchTab = (t) => { setTab(t); localStorage.setItem('Ivy OS:finance:tab', t); };
 
   return (
     <ToastProvider>
@@ -819,7 +819,7 @@ function ConnectBankModal({ store, update, onClose }) {
         {step === 'pick' && (
           <>
             <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
-              We use bank-level encryption. Your login is sent securely to your institution — THRYVE never stores it.
+              We use bank-level encryption. Your login is sent securely to your institution — Ivy OS never stores it.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               {banks.map(b => (

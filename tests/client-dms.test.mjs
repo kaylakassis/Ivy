@@ -66,8 +66,8 @@ async function run() {
       VALUES (${`${tag}-c@example.com`}, 'x', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
     const cC = (await sql`INSERT INTO clients (workspace_id, name, email, stage, user_id)
       VALUES (${ws}, 'Carol', ${`${tag}-c@example.com`}, 'active', ${uC}) RETURNING id`).rows[0].id;
-    const cookieA = `thryve_session=${signSession(uA)}`;
-    const cookieB = `thryve_session=${signSession(uB)}`;
+    const cookieA = `ivy_session=${signSession(uA)}`;
+    const cookieB = `ivy_session=${signSession(uB)}`;
 
     console.log('\n[1] cannot DM without a shared group');
     const noShared = mkRes();
@@ -76,7 +76,7 @@ async function run() {
 
     // Provision a group containing A and B (NOT C).
     const createR = mkRes();
-    const ownerCookie = `thryve_session=${signSession(owner)}`;
+    const ownerCookie = `ivy_session=${signSession(owner)}`;
     await ownerGroupsList(authReq({
       method: 'POST', cookie: ownerCookie,
       body: { name: 'Cohort', mode: 'open', clientIds: [cA, cB] },

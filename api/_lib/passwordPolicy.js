@@ -14,7 +14,7 @@
 //
 // This is intentionally MORE permissive than NIST-2024 recommends for
 // high-security apps (which want 15+ chars or known-breach lookups via
-// HIBP). v1 of THRYVE's policy aims to block the obvious failure modes
+// HIBP). v1 of Ivy OS's policy aims to block the obvious failure modes
 // without driving users away with friction. The HIBP integration is a
 // follow-up — it needs a stable outbound HTTPS budget.
 
@@ -33,7 +33,7 @@ const COMMON_PASSWORDS = new Set([
   'iloveyou', 'sunshine', 'princess', 'monkey', 'dragon',
   'football', 'baseball', 'shadow', 'master', 'superman',
   'trustno1', 'starwars', 'whatever', 'passw0rd', 'p@ssw0rd',
-  '11111111', '00000000', 'aaaaaaaa', 'thryve', 'thryve123',
+  '11111111', '00000000', 'aaaaaaaa', 'Ivy OS', 'Ivy OS123',
 ]);
 
 export function validatePassword(pw) {

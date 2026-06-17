@@ -72,7 +72,7 @@ export default async function handler(req, res) {
     // Subscribed clients should re-fetch frequently. 15 minutes balances
     // freshness with load.
     res.setHeader('Cache-Control', 'public, max-age=900, s-maxage=900');
-    res.setHeader('Content-Disposition', 'inline; filename="thryve-bookings.ics"');
+    res.setHeader('Content-Disposition', 'inline; filename="ivy-bookings.ics"');
     return res.status(200).send(ics);
   } catch (err) {
     return serverError(res, err);

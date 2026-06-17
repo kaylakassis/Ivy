@@ -91,7 +91,7 @@ export default function AuthPage({ mode = 'signin' }) {
             <Icons.Logo size={22} color="currentColor" />
           </div>
           <div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>thryve</div>
+            <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, letterSpacing: '-0.01em' }}>Ivy OS</div>
             <div className="metric-label" style={{ fontSize: 10, marginTop: 2 }}>Business OS</div>
           </div>
         </div>
@@ -172,7 +172,7 @@ export default function AuthPage({ mode = 'signin' }) {
               I have read and agree to the{' '}
               <Link to="/terms"   target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Terms of Service</Link>{' '}and{' '}
               <Link to="/privacy" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Privacy Policy</Link>,
-              and I understand that THRYVE — including the Ivy AI coach
+              and I understand that Ivy OS — including the Ivy AI coach
               and every integrated third-party service — provides
               informational tools only, not financial, legal, tax, or
               other professional advice. I am responsible for my own
@@ -262,7 +262,7 @@ function Field({ label, children }) {
 function RoleToggle({ value, onChange }) {
   const options = [
     { id: 'owner',  label: 'Business owner',  hint: 'I run a business and want to manage it.' },
-    { id: 'client', label: 'Client / customer', hint: 'I book with a business that uses THRYVE.' },
+    { id: 'client', label: 'Client / customer', hint: 'I book with a business that uses Ivy OS.' },
   ];
   return (
     <div className="form-2col" style={{ gap: 8 }}>

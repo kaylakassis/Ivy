@@ -1,4 +1,4 @@
-// THRYVE — clean-slate data. No demo content.
+// Ivy OS — clean-slate data. No demo content.
 // Arrays are empty; static config (nav, metric labels) remains.
 
 const CLIENTS = [];
@@ -30,7 +30,7 @@ const NAV = [
   { id: 'ivy',       label: 'Ivy Pro',   icon: 'Spark',    badge: null, accent: true },
 ];
 
-window.THRYVE_DATA = {
+window.IVY_DATA = {
   CLIENTS, APPOINTMENTS, REVENUE_SERIES, EXPENSE_SERIES,
   METRICS, ACTIVITY, IVY_INSIGHTS, TASKS, NAV,
 };

@@ -63,7 +63,7 @@ export default function QRCodeModal({ url, label, sublabel, onClose }) {
     const blob = new Blob([svg], { type: 'image/svg+xml' });
     const link = document.createElement('a');
     link.href = URL.createObjectURL(blob);
-    link.download = `${slugify(label || 'thryve-qr')}.svg`;
+    link.download = `${slugify(label || 'ivy-qr')}.svg`;
     link.click();
     setTimeout(() => URL.revokeObjectURL(link.href), 1000);
   };
@@ -88,7 +88,7 @@ export default function QRCodeModal({ url, label, sublabel, onClose }) {
       }
       const link = document.createElement('a');
       link.href = data;
-      link.download = `${slugify(label || 'thryve-qr')}.png`;
+      link.download = `${slugify(label || 'ivy-qr')}.png`;
       link.click();
     } catch (e) {
       setErr(e.message || 'Could not export PNG');
@@ -214,5 +214,5 @@ function slugify(s) {
   return String(s || '').toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '')
-    .slice(0, 60) || 'thryve-qr';
+    .slice(0, 60) || 'ivy-qr';
 }

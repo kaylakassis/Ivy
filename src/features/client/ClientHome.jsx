@@ -48,7 +48,7 @@ export default function ClientHome() {
         </h2>
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
           {isClient
-            ? `${memberships.length} business${memberships.length === 1 ? '' : 'es'} on THRYVE.`
+            ? `${memberships.length} business${memberships.length === 1 ? '' : 'es'} on Ivy OS.`
             : "You're not yet linked to any businesses."}
         </div>
       </div>
@@ -57,11 +57,11 @@ export default function ClientHome() {
         <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <EmptyNote icon="Users" title="No businesses yet"
             hint={user?.email_verified_at
-              ? `Once a business owner adds you as a client (or you book through their THRYVE link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`
+              ? `Once a business owner adds you as a client (or you book through their Ivy OS link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`
               : `If a business already added you, verify your email (${user?.email}) to link your account — businesses are matched to you by your verified email address. Check your inbox for the confirmation link, then refresh.`}/>
           <Link to="/me/discover" className="btn btn-primary"
             style={{ alignSelf: 'flex-start' }}>
-            <Icons.Globe size={13} sw={1.7}/> Browse businesses on THRYVE
+            <Icons.Globe size={13} sw={1.7}/> Browse businesses on Ivy OS
           </Link>
         </div>
       )}
@@ -126,7 +126,7 @@ export default function ClientHome() {
 // click, and never reappears (flag in localStorage). Mirrors the friendly
 // tone of the owner walkthrough's Ivy step but stays compact — clients
 // don't need a multi-step tour.
-const WELCOME_KEY = 'thryve.client.welcomed.v1';
+const WELCOME_KEY = 'ivy.client.welcomed.v1';
 function FirstVisitWelcome() {
   const [visible, setVisible] = useState(false);
 
@@ -159,7 +159,7 @@ function FirstVisitWelcome() {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
-          Welcome to your THRYVE portal
+          Welcome to your Ivy OS portal
         </div>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           This is your one place for everything across the businesses you

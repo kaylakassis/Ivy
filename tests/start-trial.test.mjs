@@ -1,6 +1,6 @@
 // Tests the one-trial-per-workspace guard on /api/billing/start-trial.
 // Before the fix, a lapsed/cancelled workspace could re-POST start-trial
-// to grant itself a fresh 28-day trial indefinitely and use THRYVE free.
+// to grant itself a fresh 28-day trial indefinitely and use Ivy OS free.
 //
 // Run with:
 //   node --import ./tests/bootstrap.mjs ./tests/start-trial.test.mjs
@@ -34,7 +34,7 @@ function makeReq(token) {
       'content-type': 'application/json',
       origin: 'http://localhost:3000',
       host: 'localhost:3000',
-      cookie: `thryve_session=${token}`,
+      cookie: `ivy_session=${token}`,
     },
   };
 }

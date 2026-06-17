@@ -1,6 +1,6 @@
 {
-  "name": "THRYVE",
-  "short_name": "THRYVE",
+  "name": "Ivy OS",
+  "short_name": "Ivy OS",
   "description": "Business OS — bookings, clients, invoices, and AI coaching in one place.",
   "start_url": "/dashboard",
   "scope": "/",

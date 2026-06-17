@@ -21,7 +21,7 @@
 // Required env:
 //   STRIPE_SECRET_KEY  sk_xxx — your platform secret (Vercel Stripe
 //                      integration sets this automatically; falls back to
-//                      THRYVE_STRIPE_SECRET / STRIPE_PLATFORM_SECRET).
+//                      IVY_STRIPE_SECRET / STRIPE_PLATFORM_SECRET).
 //   APP_URL            used to build refresh + return URLs.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
     // would just appear in the address bar. Sniff the cookie first;
     // if there's no session, redirect to /signin so the user lands
     // somewhere useful.
-    if (!req.headers.cookie || !/(?:^|;\s*)thryve_session=/.test(req.headers.cookie)) {
+    if (!req.headers.cookie || !/(?:^|;\s*)ivy_session=/.test(req.headers.cookie)) {
       const dest = encodeURIComponent('/finance');
       res.writeHead(302, { Location: `/signin?next=${dest}` });
       res.end();

@@ -307,7 +307,7 @@ export function verifyWebhook({ rawBody, headers, notificationUrl }) {
 //                                          the refund's COMPLETED/PENDING/FAILED state
 //
 // Why include refund events: Square owners can issue refunds from the
-// Square dashboard, not just from THRYVE. Without normalizing those
+// Square dashboard, not just from Ivy OS. Without normalizing those
 // events the per-workspace webhook would silently drop them and our
 // invoice rows would stay marked 'paid' even after the money came back.
 export function parseWebhookEvent(event) {

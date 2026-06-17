@@ -1,7 +1,7 @@
 // Real calendar: business view (manage) + public booking page (read/book).
 // Shared state lives in localStorage so edits in the business view instantly reflect in the public link.
 
-const CAL_STATE_KEY = 'thryve:calendar';
+const CAL_STATE_KEY = 'Ivy OS:calendar';
 
 function loadCal() {
   try { return JSON.parse(localStorage.getItem(CAL_STATE_KEY)) || defaultCal(); }
@@ -464,7 +464,7 @@ function ShareDrawer({ cal, shareUrl, onChangeSlug, onChangeName, onClose }) {
           overflow: 'hidden',
         }}>
           <span style={{ padding: '10px 12px', background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 13 }}>
-            thryve.co/
+            ivy.co/
           </span>
           <input value={cal.slug} onChange={e=>onChangeSlug(e.target.value.replace(/[^a-z0-9-]/gi,'').toLowerCase())}
             style={{ flex: 1, padding: '10px 12px', background: 'transparent', border: 0, outline: 'none', color: 'var(--fg)', fontSize: 14 }}/>

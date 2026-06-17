@@ -13,7 +13,7 @@ export const VERTICALS = {
     headline: 'Bookings, intake forms, and reminders in one place.',
     sub: "One workspace for booking, intake forms, payments, and the client portal - instead of stitching together three or four separate tools.",
     bullets: [
-      { title: 'Auto-send intake forms', body: 'Attach a SOAP-note intake form to each service. THRYVE sends it the moment a client books - no more "did you fill out the form?" texts.' },
+      { title: 'Auto-send intake forms', body: 'Attach a SOAP-note intake form to each service. Ivy OS sends it the moment a client books - no more "did you fill out the form?" texts.' },
       { title: 'No-show reduction', body: 'Email + SMS reminders ship 24h and 2h before the session. Clients can confirm or reschedule from the link without calling.' },
       { title: 'Built-in deposits', body: 'Charge a deposit on booking via your own Stripe. Walk-outs become non-issues.' },
       { title: 'Client portal', body: 'Past sessions, signed waivers, invoices, package balances - all in their pocket. Free for clients, forever.' },
@@ -28,7 +28,7 @@ export const VERTICALS = {
     sub: "We don't take a cut of your sales - Stripe's standard processing fee is the only fee, and it goes straight to your account. One subscription covers booking, payments, and the client CRM.",
     bullets: [
       { title: 'Deposits on every booking', body: "Set a deposit per service. Stripe collects on confirm; the rest at the chair." },
-      { title: 'Service packages', body: '5-pack of cut-and-color, 10-pack of trims. Sell the bundle; THRYVE consumes a credit per booking automatically.' },
+      { title: 'Service packages', body: '5-pack of cut-and-color, 10-pack of trims. Sell the bundle; Ivy OS consumes a credit per booking automatically.' },
       { title: 'Rebooking nudges', body: "Ivy spots clients who haven't rebooked since their last cut and drafts a check-in you can send in one tap." },
       { title: 'Reviews where it matters', body: 'Auto-prompt for a review after the appointment. Highlights show up on your /book/your-name page.' },
     ],
@@ -42,8 +42,8 @@ export const VERTICALS = {
     sub: 'Schedule 1-on-1s and group classes. Sell session packs. Collect on booking. Let your AI coach (Ivy) help you spot at-risk clients before they ghost.',
     bullets: [
       { title: 'Group classes with capacity', body: 'Set a service to "capacity 12". Clients book individual seats; the slot fills up like a real class roster.' },
-      { title: 'Recurring sessions', body: 'Tuesday + Thursday 6 AM, every week, until canceled. THRYVE creates the booking series and reminders fire for each.' },
-      { title: 'Session packs', body: '10-pack of training, $850. THRYVE bills upfront and consumes one credit per session - refunds the credit if you cancel.' },
+      { title: 'Recurring sessions', body: 'Tuesday + Thursday 6 AM, every week, until canceled. Ivy OS creates the booking series and reminders fire for each.' },
+      { title: 'Session packs', body: '10-pack of training, $850. Ivy OS bills upfront and consumes one credit per session - refunds the credit if you cancel.' },
       { title: 'Quiet-client alerts', body: "Ivy lists who hasn't booked in 3+ weeks and drafts personalized check-ins. Two-tap to send." },
     ],
     use: 'Set up your services (1-on-1, group HIIT, nutrition consult) with capacities, build packages, share the booking link, and Ivy starts watching.',
@@ -55,7 +55,7 @@ export const VERTICALS = {
     headline: 'Discovery calls, retainers, signed agreements - same thread.',
     sub: "One link replaces a stack of separate scheduling, contracting, and e-signing tools. Drop your booking link, attach the agreement to the engagement service, get e-signed automatically.",
     bullets: [
-      { title: 'E-signing built in', body: 'Build your own agreement template once. Attach it to your "Strategy engagement" service. THRYVE sends it the moment they book and tracks signatures.' },
+      { title: 'E-signing built in', body: 'Build your own agreement template once. Attach it to your "Strategy engagement" service. Ivy OS sends it the moment they book and tracks signatures.' },
       { title: 'Retainer invoices', body: "Recurring monthly invoices via Stripe. Auto-payment if their card's on file; reminders if not." },
       { title: 'Discovery → engagement', body: '15-min discovery → if they convert, the agreement, deposit invoice, and follow-up cadence all chain off the same client record.' },
       { title: 'Ivy as your prep assistant', body: 'Ask "Pull up everything on Sarah before our 3pm call" - Ivy summarizes their notes, last session, and open work.' },
@@ -67,11 +67,11 @@ export const VERTICALS = {
     angle: 'cleaners & home-service pros',
     homeLine: 'Recurring jobs, upfront deposits, automatic invoices on completion.',
     headline: 'Recurring jobs, upfront deposits, automatic invoices.',
-    sub: 'Field service software is overkill. Spreadsheets are underkill. THRYVE sits in between - one place for recurring bookings, deposits, post-job invoices, and follow-up.',
+    sub: 'Field service software is overkill. Spreadsheets are underkill. Ivy OS sits in between - one place for recurring bookings, deposits, post-job invoices, and follow-up.',
     bullets: [
-      { title: 'Recurring jobs', body: '"Every other Tuesday at 10" - set the recurrence once, THRYVE creates each booking and reminders fire automatically.' },
+      { title: 'Recurring jobs', body: '"Every other Tuesday at 10" - set the recurrence once, Ivy OS creates each booking and reminders fire automatically.' },
       { title: 'Deposit on booking', body: 'Charge 50% on confirm via Stripe; balance after the job. Cancellations under 24h forfeit the deposit if you set it that way.' },
-      { title: 'Invoice on completion', body: 'Mark the booking complete → THRYVE drafts the invoice with your standard line items. Edit, send, paid in 2 minutes.' },
+      { title: 'Invoice on completion', body: 'Mark the booking complete → Ivy OS drafts the invoice with your standard line items. Edit, send, paid in 2 minutes.' },
       { title: 'Client portal for repeat work', body: 'Long-time clients book recurring jobs themselves through their portal. No more "can you come Thursday?" texts.' },
     ],
     use: 'Add services (deep clean, weekly clean, move-out), set deposit %, build a recurring service for your standing customers, share the link.',
@@ -80,10 +80,10 @@ export const VERTICALS = {
     icon: 'Image', angle: 'photographers',
     homeLine: 'Galleries, contracts, deposits - without the SaaS sprawl.',
     headline: 'Galleries, contracts, deposits - one workspace.',
-    sub: "Replace your shoot-day toolchain. THRYVE handles inquiry → contract → deposit → shoot → gallery delivery → final invoice, all in one place.",
+    sub: "Replace your shoot-day toolchain. Ivy OS handles inquiry → contract → deposit → shoot → gallery delivery → final invoice, all in one place.",
     bullets: [
       { title: 'Multi-signer contracts', body: 'Send the contract from a template; client e-signs, you countersign. Stored beside their booking forever.' },
-      { title: 'Deposit + balance flow', body: '50% on contract, balance after delivery. Stripe handles both; THRYVE chases the balance automatically.' },
+      { title: 'Deposit + balance flow', body: '50% on contract, balance after delivery. Stripe handles both; Ivy OS chases the balance automatically.' },
       { title: 'Branded gallery page', body: 'Build a gallery page on your own custom domain that mirrors your brand - clients see your name, not ours.' },
       { title: 'Lead capture from your site', body: 'Embed an inquiry form on any site; new leads land in your CRM with their wedding date already populated.' },
     ],
@@ -93,7 +93,7 @@ export const VERTICALS = {
     icon: 'Image', angle: 'videographers',
     homeLine: 'Contracts, deliverables, project timelines - without 4 tools.',
     headline: 'From inquiry to final cut, one workspace.',
-    sub: 'Manage shoots, contracts, deposits, and revisions inside THRYVE. Clients see one branded portal - not five email threads.',
+    sub: 'Manage shoots, contracts, deposits, and revisions inside Ivy OS. Clients see one branded portal - not five email threads.',
     bullets: [
       { title: 'Project tracking', body: 'Group each shoot’s bookings, invoices, and files under one project and move it through your stages.' },
       { title: 'Deliver in the portal', body: 'Share the final cut through the client’s portal once their invoice is paid.' },
@@ -119,10 +119,10 @@ export const VERTICALS = {
     icon: 'Heart', angle: 'nail techs',
     homeLine: 'Rebooking nudges, packages, no-show deposits.',
     headline: 'Built for the rebooking habit.',
-    sub: 'Half your clients should be on a 4-week rotation. THRYVE keeps them on track without you doing the work.',
+    sub: 'Half your clients should be on a 4-week rotation. Ivy OS keeps them on track without you doing the work.',
     bullets: [
       { title: 'Smart rebook reminders', body: 'Set rotation (3wk, 4wk, 6wk); Ivy nudges clients before their slot lapses.' },
-      { title: 'Service packages', body: '5-pack of fills, 10-pack of full sets. Clients buy ahead; THRYVE consumes a credit per booking.' },
+      { title: 'Service packages', body: '5-pack of fills, 10-pack of full sets. Clients buy ahead; Ivy OS consumes a credit per booking.' },
       { title: 'Deposit-or-card-on-file', body: 'Either charge a small deposit on booking, or save card-on-file to auto-charge no-shows.' },
       { title: 'Memberships', body: 'Monthly nails plan for $X. Auto-renew, auto-book, no-thinking-required.' },
     ],
@@ -184,7 +184,7 @@ export const VERTICALS = {
     icon: 'Edit', angle: 'tattoo artists',
     homeLine: 'Consults → deposits → sessions, all attached to one record.',
     headline: 'From consult to final session, one continuous record.',
-    sub: "A tattoo project takes weeks. THRYVE keeps the consult, deposit, design files, and every session on one client record - no more searching DMs.",
+    sub: "A tattoo project takes weeks. Ivy OS keeps the consult, deposit, design files, and every session on one client record - no more searching DMs.",
     bullets: [
       { title: 'Project-based bookings', body: 'Group all sessions for one tattoo under a single project so the client and you see the full arc.' },
       { title: 'Reference uploads', body: 'Client uploads inspo to their booking; you see everything when you start the design.' },
@@ -200,7 +200,7 @@ export const VERTICALS = {
     sub: 'New-patient intake forms, multi-session care plans, and itemized insurance-ready receipts for cash-pay practices.',
     bullets: [
       { title: 'New-patient intake', body: "Allergies, history, current pain - all collected before they walk in." },
-      { title: 'Care plans', body: 'Sell a 12-session adjustment plan up front; THRYVE consumes a session per visit.' },
+      { title: 'Care plans', body: 'Sell a 12-session adjustment plan up front; Ivy OS consumes a session per visit.' },
       { title: 'Insurance-ready receipts', body: 'Send itemized, branded invoices and receipts your cash-pay patients can submit to their insurer.' },
       { title: 'Recall reminders', body: '6-month wellness check-in nudges go out automatically.' },
     ],
@@ -225,7 +225,7 @@ export const VERTICALS = {
     headline: 'From prenatal to postpartum, on one plan.',
     sub: 'Sell birth-support packages, schedule prenatals, log on-call hours, run postpartum follow-ups - all in one client record.',
     bullets: [
-      { title: 'Birth package bundle', body: 'Three prenatals + birth-on-call + two postpartums. One price; THRYVE tracks what\'s used.' },
+      { title: 'Birth package bundle', body: 'Three prenatals + birth-on-call + two postpartums. One price; Ivy OS tracks what\'s used.' },
       { title: 'On-call blocks', body: 'Block out on-call date ranges on your calendar so new bookings respect them.' },
       { title: 'Everything on one record', body: 'Keep every client’s key info, documents, and history on one record you can reference fast.' },
       { title: 'Postpartum follow-up', body: 'Auto-schedule the postpartum visits within X weeks of due date.' },
@@ -264,7 +264,7 @@ export const VERTICALS = {
     headline: 'Discovery → retainer → outcome, in one cadence.',
     sub: 'Free discovery call, signed coaching agreement, weekly cadence, and outcome tracking - all in one continuous client record.',
     bullets: [
-      { title: 'Discovery → onboard flow', body: 'Free 20-min call confirms; THRYVE auto-sends the coaching agreement on conversion.' },
+      { title: 'Discovery → onboard flow', body: 'Free 20-min call confirms; Ivy OS auto-sends the coaching agreement on conversion.' },
       { title: 'Recurring retainers', body: 'Monthly retainer auto-charges. Auto-book the standing weekly slot.' },
       { title: 'Notes & history', body: 'Keep private notes and a full session history on every client so progress is always in context.' },
       { title: 'Inter-session prompts', body: 'Auto-message between sessions with reflection prompts you design once.' },
@@ -290,7 +290,7 @@ export const VERTICALS = {
     headline: 'The full consulting practice in one workspace.',
     sub: 'Discovery calls, signed proposals, recurring retainers, time tracking, expense logs, and tax-ready exports - all in one app.',
     bullets: [
-      { title: 'Proposal generation', body: 'Build a templated proposal; client e-signs; THRYVE creates the recurring invoice.' },
+      { title: 'Proposal generation', body: 'Build a templated proposal; client e-signs; Ivy OS creates the recurring invoice.' },
       { title: 'Retainer billing', body: 'Monthly retainer auto-charges. Optional time tracking surfaces unbilled hours.' },
       { title: 'Time + expenses', body: 'Track billable hours + reimbursable expenses. They flow onto the next invoice automatically.' },
       { title: 'Tax-ready exports', body: 'Schedule-C summary plus QuickBooks/Xero CSV exports, ready to hand your CPA.' },

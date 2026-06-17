@@ -78,7 +78,7 @@ function MetricCard({ label, value, kind, currency, loading, to }) {
 // so the card disappears for that period and the user isn't nagged on
 // every page load. Re-shows automatically once the TTL expires OR a new
 // item flips back to incomplete.
-const DISMISS_KEY = 'thryve.setupChecklist.hideUntil';
+const DISMISS_KEY = 'ivy.setupChecklist.hideUntil';
 const DISMISS_DAYS = 7;
 
 function isDismissed() {
@@ -320,7 +320,7 @@ function HeroBand() {
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, letterSpacing: '0.04em' }}>{dateStr}</div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 36 }}>{greet}.</h2>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 560 }}>
-          Welcome to THRYVE. Add a client or open Ivy — she'll walk you through setup.
+          Welcome to Ivy OS. Add a client or open Ivy — she'll walk you through setup.
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

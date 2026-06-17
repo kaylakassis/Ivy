@@ -2,27 +2,27 @@
 // so the official SDK isn't worth the bundle weight.
 //
 // Env:
-//   THRYVE_TWILIO_ACCOUNT_SID  AC…
-//   THRYVE_TWILIO_AUTH_TOKEN   <token>
-//   THRYVE_TWILIO_FROM_NUMBER  +15551234567   (Twilio-verified)
+//   IVY_TWILIO_ACCOUNT_SID  AC…
+//   IVY_TWILIO_AUTH_TOKEN   <token>
+//   IVY_TWILIO_FROM_NUMBER  +15551234567   (Twilio-verified)
 
 import { fetchWithTimeout } from './fetchTimeout.js';
 
 const TWILIO_BASE = 'https://api.twilio.com/2010-04-01';
 
 export function isTwilioConfigured() {
-  return !!(process.env.THRYVE_TWILIO_ACCOUNT_SID
-    && process.env.THRYVE_TWILIO_AUTH_TOKEN
-    && process.env.THRYVE_TWILIO_FROM_NUMBER);
+  return !!(process.env.IVY_TWILIO_ACCOUNT_SID
+    && process.env.IVY_TWILIO_AUTH_TOKEN
+    && process.env.IVY_TWILIO_FROM_NUMBER);
 }
 
 // POST /Accounts/{SID}/Messages.json. Returns the Twilio response (sid,
 // status, etc.) on success. Throws on non-2xx with the Twilio error
 // message attached for log surfacing.
 export async function sendSms({ to, body }) {
-  const sid    = process.env.THRYVE_TWILIO_ACCOUNT_SID;
-  const token  = process.env.THRYVE_TWILIO_AUTH_TOKEN;
-  const from   = process.env.THRYVE_TWILIO_FROM_NUMBER;
+  const sid    = process.env.IVY_TWILIO_ACCOUNT_SID;
+  const token  = process.env.IVY_TWILIO_AUTH_TOKEN;
+  const from   = process.env.IVY_TWILIO_FROM_NUMBER;
   if (!sid || !token || !from) {
     throw new Error('Twilio not configured');
   }
@@ -60,7 +60,7 @@ export async function sendSms({ to, body }) {
 import crypto from 'node:crypto';
 
 export function verifyTwilioSignature({ url, params, signature }) {
-  const token = process.env.THRYVE_TWILIO_AUTH_TOKEN;
+  const token = process.env.IVY_TWILIO_AUTH_TOKEN;
   if (!token || !signature) return false;
   const sortedKeys = Object.keys(params || {}).sort();
   let data = url;

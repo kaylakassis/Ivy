@@ -52,11 +52,11 @@ export default async function handler(req, res) {
 
     await sendEmail({
       to: emailKey,
-      subject: 'Reset your THRYVE password',
+      subject: 'Reset your Ivy OS password',
       html: emailShell({
         heading: 'Reset your password',
         body: `<p>${user.name ? `Hi ${escapeHtml(user.name)},` : 'Hi,'}</p>
-               <p>We got a request to reset your THRYVE password. Click the button below and you'll be taken to a page where you can pick a new one.</p>
+               <p>We got a request to reset your Ivy OS password. Click the button below and you'll be taken to a page where you can pick a new one.</p>
                <p>This link expires in ${TTL_MINUTES} minutes.</p>`,
         ctaText: 'Reset my password',
         ctaUrl: link,

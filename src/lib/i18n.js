@@ -1,4 +1,4 @@
-// Lightweight i18n for THRYVE.
+// Lightweight i18n for Ivy OS.
 //
 // Why not react-intl / i18next / formatjs:
 //   • react-intl bundles ~80 KB for features (ICU MessageFormat,
@@ -25,13 +25,13 @@
 //
 // Locale resolution:
 //   1. URL ?lang=fr override (highest priority)
-//   2. localStorage 'thryve:lang'
+//   2. localStorage 'Ivy OS:lang'
 //   3. navigator.language matched to a supported code
 //   4. 'en' fallback
 import { useEffect, useState, useCallback } from 'react';
 import en from './locales/en.js';
 
-const LOCALE_KEY = 'thryve:lang';
+const LOCALE_KEY = 'Ivy OS:lang';
 
 // Static-import 'en' for cold-start speed. Other locales lazy-load
 // via the dynamic import() in setLocale below. Bundle splitter

@@ -38,7 +38,7 @@ async function run() {
     await sql`INSERT INTO bookings (workspace_id, client_name, client_email, date, start_min, end_min) VALUES (${wid}, 'Today Client', 'tc@example.com', CURRENT_DATE, 600, 660)`;
     await sql`INSERT INTO expenses (workspace_id, amount, date, category) VALUES (${wid}, 40, CURRENT_DATE, 'Supplies')`;
 
-    const req = { method: 'GET', headers: { cookie: `thryve_session=${signSession(uid)}` }, url: '/api/dashboard', query: {} };
+    const req = { method: 'GET', headers: { cookie: `ivy_session=${signSession(uid)}` }, url: '/api/dashboard', query: {} };
     const res = mockRes();
     await dashboard(req, res);
 

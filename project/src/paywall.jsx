@@ -1,8 +1,8 @@
 // Trial banner + paywall modal for the Business view.
 // Billing: $39 every 28 days after a 28-day free trial.
 
-const TRIAL_START_KEY = 'thryve:trial-start';
-const TRIAL_PAID_KEY  = 'thryve:trial-paid';
+const TRIAL_START_KEY = 'Ivy OS:trial-start';
+const TRIAL_PAID_KEY  = 'Ivy OS:trial-paid';
 
 function getTrialStart() {
   let s = localStorage.getItem(TRIAL_START_KEY);
@@ -57,7 +57,7 @@ function TrialBanner({ trialState, onUpgrade }) {
         ) : (
           <>
             <b>{t.daysLeft} {t.daysLeft === 1 ? 'day' : 'days'} left</b> in your free trial.
-            {' '}After that, THRYVE is <b>$39 every 28 days</b>. Cancel anytime.
+            {' '}After that, Ivy OS is <b>$39 every 28 days</b>. Cancel anytime.
           </>
         )}
       </div>
@@ -80,7 +80,7 @@ function Paywall({ open, onClose, onSubscribe, expired }) {
     'Ivy Pro — AI insights surfaced every morning',
     'Accept card payments (2.9% + 30¢, standard)',
     'Documents, e-signatures, and client portal',
-    'Your public booking page on thryve.co/yourname',
+    'Your public booking page on ivy.co/yourname',
     'Email + SMS reminders sent automatically',
   ];
   return (
@@ -102,7 +102,7 @@ function Paywall({ open, onClose, onSubscribe, expired }) {
         }}>
           <div>
             <div style={{ fontSize: 11, letterSpacing: '0.12em', textTransform: 'uppercase', fontWeight: 600, opacity: 0.7 }}>
-              THRYVE · Business
+              Ivy OS · Business
             </div>
             <div style={{ marginTop: 30 }}>
               <div style={{

@@ -6,7 +6,7 @@
 //     a non-essential message, full stop. Booking-confirmation /
 //     reminder paths must check consent before calling sendBookingSms.
 //
-// THRYVE pays for SMS as part of subscription so owners don't have to
+// Ivy OS pays for SMS as part of subscription so owners don't have to
 // wire up Twilio themselves. Switching to per-workspace BYO Twilio is
 // a future option — keep the API of this module shaped so callers
 // only pass workspaceId + recipient details, no token plumbing.
@@ -84,7 +84,7 @@ export function withOptOutSuffix(body) {
 //
 // workspaceId is optional for legacy callers; without it, the daily
 // cap is skipped. Every NEW caller should pass it so an abusive
-// workspace cannot burn through THRYVE-paid Twilio credits in a
+// workspace cannot burn through Ivy OS-paid Twilio credits in a
 // single afternoon.
 export async function sendClientSms({ phone, consentAt, body, workspaceId, respectQuietHours = false }) {
   if (!isTwilioConfigured()) return { ok: false, reason: 'twilio not configured' };

@@ -405,7 +405,7 @@ export default async function handler(req, res) {
       },
       // Marketing-friendly platform aggregates. All values are means
       // or ratios across active workspaces — no per-workspace data
-      // leaves this endpoint. Safe to drop into landing copy ("THRYVE
+      // leaves this endpoint. Safe to drop into landing copy ("Ivy OS
       // users see an average no-show rate of X%"). Window: 90d rolling.
       platformImpact: {
         lookbackDays:    PLATFORM_LOOKBACK_DAYS,

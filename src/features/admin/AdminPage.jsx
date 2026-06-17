@@ -685,45 +685,45 @@ function PlatformImpactCard({ impact }) {
   const snippets = [
     {
       key: 'noshow', label: 'Average no-show rate', value: `${impact.noShowRatePct}%`,
-      copy: `THRYVE business owners see an average no-show rate of ${impact.noShowRatePct}% across the last ${impact.lookbackDays} days.`,
+      copy: `Ivy OS business owners see an average no-show rate of ${impact.noShowRatePct}% across the last ${impact.lookbackDays} days.`,
     },
     {
       key: 'completion', label: 'Booking completion rate', value: `${impact.completionRatePct}%`,
-      copy: `${impact.completionRatePct}% of bookings on THRYVE complete successfully (last ${impact.lookbackDays} days).`,
+      copy: `${impact.completionRatePct}% of bookings on Ivy OS complete successfully (last ${impact.lookbackDays} days).`,
     },
     {
       key: 'cancellation', label: 'Cancellation rate', value: `${impact.cancellationRatePct}%`,
-      copy: `Cancellation rate across THRYVE businesses: ${impact.cancellationRatePct}% (last ${impact.lookbackDays} days).`,
+      copy: `Cancellation rate across Ivy OS businesses: ${impact.cancellationRatePct}% (last ${impact.lookbackDays} days).`,
     },
     {
       key: 'avg-monthly-rev', label: 'Avg monthly revenue per active workspace',
       value: fmtMoney(impact.avgMonthlyRevenuePerActive),
-      copy: `Active THRYVE business owners earn an average of ${fmtMoney(impact.avgMonthlyRevenuePerActive)} per month through the platform.`,
+      copy: `Active Ivy OS business owners earn an average of ${fmtMoney(impact.avgMonthlyRevenuePerActive)} per month through the platform.`,
     },
     {
       key: 'avg-clients', label: 'Avg clients per workspace',
       value: fmtN(impact.avgClientsPerActive),
-      copy: `The average THRYVE business manages ${fmtN(impact.avgClientsPerActive)} clients.`,
+      copy: `The average Ivy OS business manages ${fmtN(impact.avgClientsPerActive)} clients.`,
     },
     {
       key: 'avg-bookings-90d', label: 'Avg bookings per workspace (90 days)',
       value: fmtN(impact.avgBookingsPerActive90d),
-      copy: `Active THRYVE businesses run an average of ${fmtN(impact.avgBookingsPerActive90d)} bookings every 90 days.`,
+      copy: `Active Ivy OS businesses run an average of ${fmtN(impact.avgBookingsPerActive90d)} bookings every 90 days.`,
     },
     {
       key: 'workflows', label: 'Workflow automation adoption',
       value: `${impact.workflowAdoptionPct}%`,
-      copy: `${impact.workflowAdoptionPct}% of active THRYVE businesses have at least one automation running.`,
+      copy: `${impact.workflowAdoptionPct}% of active Ivy OS businesses have at least one automation running.`,
     },
     {
       key: 'ivy', label: 'Ivy AI assistant adoption',
       value: `${impact.ivyAdoptionPct}%`,
-      copy: `${impact.ivyAdoptionPct}% of active THRYVE businesses use Ivy, our built-in AI operator.`,
+      copy: `${impact.ivyAdoptionPct}% of active Ivy OS businesses use Ivy, our built-in AI operator.`,
     },
     {
       key: 'activation', label: 'Activation rate (signup → first booking in 7d)',
       value: `${impact.activationPct}%`,
-      copy: `${impact.activationPct}% of THRYVE signups take their first booking within 7 days.`,
+      copy: `${impact.activationPct}% of Ivy OS signups take their first booking within 7 days.`,
     },
     {
       key: 'rating', label: 'Avg published review rating',
@@ -731,7 +731,7 @@ function PlatformImpactCard({ impact }) {
         ? `${impact.reviews.avgRating.toFixed(2)}★`
         : '—',
       copy: impact.reviews.count > 0
-        ? `Customers leave THRYVE businesses an average rating of ${impact.reviews.avgRating.toFixed(2)}★ across ${fmtN(impact.reviews.count)} published reviews.`
+        ? `Customers leave Ivy OS businesses an average rating of ${impact.reviews.avgRating.toFixed(2)}★ across ${fmtN(impact.reviews.count)} published reviews.`
         : '',
     },
   ];
@@ -913,7 +913,7 @@ function EmailHealthBanner() {
           </li>
           <li>Wait for Resend to mark the domain <strong>verified</strong> (usually &lt;30 min).</li>
           <li>
-            Set <code>EMAIL_FROM='THRYVE &lt;noreply@your-domain.com&gt;'</code> in
+            Set <code>EMAIL_FROM='Ivy OS &lt;noreply@your-domain.com&gt;'</code> in
             Vercel project settings (and optionally <code>EMAIL_REPLY_TO</code>).
           </li>
           <li>Redeploy. This banner disappears when everything checks out.</li>

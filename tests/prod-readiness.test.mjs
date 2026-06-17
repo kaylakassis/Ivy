@@ -72,7 +72,7 @@ async function run() {
       `localhost APP_URL → fail (got '${url.level}')`);
 
     console.log('\n[6] https APP_URL marked ok');
-    process.env.APP_URL = 'https://getthryve.ai';
+    process.env.APP_URL = 'https://getivyos.com';
     const r3 = mkRes();
     await handler(adminReq(), r3);
     const url3 = r3.body.checks.find((c) => c.key === 'app_url');

@@ -16,7 +16,7 @@ import { platformStripeSecret, applyCustomerCredit } from './stripe.js';
 
 // One month's credit, in cents. Mirrors the affiliate fallback +
 // pricing ($49/mo). Override via env if pricing changes.
-const REWARD_CENTS = parseInt(process.env.THRYVE_PLAN_MONTHLY_CENTS || '4900', 10);
+const REWARD_CENTS = parseInt(process.env.IVY_PLAN_MONTHLY_CENTS || '4900', 10);
 
 // Codes are uppercased, alphanumeric + dashes, 3-40 chars. Returns the
 // normalized code or null if it can't be made valid.
@@ -30,7 +30,7 @@ export function normalizeCode(raw) {
 // Reserved-ish words that would collide with admin affiliate codes or
 // look like system values. Cheap denylist; uniqueness index does the
 // real enforcement.
-const BLOCKED = new Set(['THRYVE', 'ADMIN', 'SUPPORT', 'NULL', 'NONE', 'TEST']);
+const BLOCKED = new Set(['Ivy OS', 'ADMIN', 'SUPPORT', 'NULL', 'NONE', 'TEST']);
 
 // Read the owner's current referral code (or null).
 export async function getCode(userId) {
@@ -163,7 +163,7 @@ export async function grantPendingReferralCredits(referrerUserId) {
         secretKey,
         customerId: ws.stripe_customer_id,
         amountCents: REWARD_CENTS,
-        description: 'THRYVE referral reward (refer one, get one)',
+        description: 'Ivy OS referral reward (refer one, get one)',
       });
       granted++;
     } catch (err) {

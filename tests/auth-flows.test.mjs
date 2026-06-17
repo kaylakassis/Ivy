@@ -77,8 +77,8 @@ function makeReq({ method = 'POST', body = {}, headers = {}, ip } = {}) {
 function extractSessionCookie(res) {
   const setCookie = res.headers['set-cookie'] || [];
   for (const c of setCookie) {
-    const m = String(c).match(/thryve_session=([^;]+)/);
-    if (m) return `thryve_session=${m[1]}`;
+    const m = String(c).match(/ivy_session=([^;]+)/);
+    if (m) return `ivy_session=${m[1]}`;
   }
   return null;
 }
@@ -153,7 +153,7 @@ async function testLogoutClearsSession() {
   // stateless and don't have server-side revocation. If that
   // becomes a requirement, we'd add a session blacklist table.
   const clearSet = logoutRes.headers['set-cookie'] || [];
-  const cleared = clearSet.some((c) => /thryve_session=;?/.test(c) || /Max-Age=0/.test(c) || /Expires=Thu, 01 Jan 1970/.test(c));
+  const cleared = clearSet.some((c) => /ivy_session=;?/.test(c) || /Max-Age=0/.test(c) || /Expires=Thu, 01 Jan 1970/.test(c));
   assert(cleared, 'logout response clears the session cookie');
 }
 

@@ -1,6 +1,6 @@
-# THRYVE — Business OS
+# Ivy OS
 
-All-in-one business OS for solo owners and small teams. Vite + React frontend, Vercel serverless backend, Vercel Postgres for persistence.
+All-in-one business platform for solo owners and small teams. Vite + React frontend, Vercel serverless backend, Vercel Postgres for persistence.
 
 ## Stack
 
@@ -53,7 +53,7 @@ All-in-one business OS for solo owners and small teams. Vite + React frontend, V
 │       ├── website/              # + PublicSite.jsx (route /site/:handle)
 │       └── ivy/
 ├── project/                      # original HTML/Babel prototype (reference only)
-│   ├── THRYVE Business OS.html
+│   ├── Ivy OS.html
 │   └── src/                      # feature source used by the prototype
 └── chats/                        # design chat transcripts
 ```
@@ -90,7 +90,7 @@ to Vercel) — plain `vite dev` serves only the frontend.
 - `workspaces` — 1 per user (ownership)
 - `websites`   — 1 per workspace; `{ handle, business_name, template, sections (jsonb), launched, published_at }`
 
-Session is a JWT in an httpOnly cookie (`thryve_session`, 30-day expiry). Routes under
+Session is a JWT in an httpOnly cookie (`ivy_session`, 30-day expiry). Routes under
 `/api/auth/*` handle signup/login/logout/me. All other `/api/*` routes call `requireUser()`
 to authenticate, except `/api/website/public/:handle` which serves published sites.
 
@@ -121,4 +121,4 @@ migrate endpoint once after first deploy to create tables.
 
 ## Reference: the prototype
 
-`project/THRYVE Business OS.html` is the original design prototype (React + Babel in-browser). Every feature was designed and iterated there — treat it as the source of truth for visuals and UX. The feature stubs in `src/features/*` will be fleshed out to match, then wired to the Postgres-backed API.
+`project/Ivy OS.html` is the original design prototype (React + Babel in-browser). Every feature was designed and iterated there — treat it as the source of truth for visuals and UX. The feature stubs in `src/features/*` will be fleshed out to match, then wired to the Postgres-backed API.

@@ -1,4 +1,4 @@
-# THRYVE — Go-Live Runbook
+# Ivy OS — Go-Live Runbook
 
 The code is launch-ready. This document is the operator checklist to flip
 the app from staging to public. Every step is real; none is optional
@@ -37,16 +37,16 @@ Preview + Development.
 | `CRON_SECRET` | `openssl rand -hex 32` output | **Vercel cron jobs reject without this** |
 | `SECRETS_KEY` | `openssl rand -hex 32` output | At-rest encryption of provider tokens |
 | `DATABASE_URL` | From Vercel → Storage → Neon | Auto-injected when Neon is linked |
-| `APP_URL` | `https://getthryve.ai` (or your domain) | Used in email links — **must be HTTPS** |
+| `APP_URL` | `https://getivyos.com` (or your domain) | Used in email links — **must be HTTPS** |
 | `VITE_APP_URL` | Same as `APP_URL` | Frontend mirror |
 | `STRIPE_SECRET_KEY` | `sk_live_…` | TEST mode shows as a WARN |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4) | Connect platform webhook signing |
-| `THRYVE_BILLING_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4a) | Subscription billing webhook signing |
+| `IVY_BILLING_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4a) | Subscription billing webhook signing |
 | `STRIPE_CONNECT_CLIENT_ID` | Stripe → Settings → Connect → "Connect platform" | OAuth |
-| `THRYVE_STRIPE_PRICE_ID` | The Price for THRYVE's $49/mo subscription (see §4a) | |
+| `IVY_STRIPE_PRICE_ID` | The Price for Ivy OS's $49/mo subscription (see §4a) | |
 | `RESEND_API_KEY` | From Resend dashboard | Outbound email |
-| `EMAIL_FROM` | `THRYVE <hello@getthryve.ai>` | **Domain must be verified in Resend** |
-| `EMAIL_REPLY_TO` | `hello@getthryve.ai` | |
+| `EMAIL_FROM` | `Ivy OS <hello@getivyos.com>` | **Domain must be verified in Resend** |
+| `EMAIL_REPLY_TO` | `hello@getivyos.com` | |
 | `SUPER_ADMIN_EMAIL` | Your account email | Auto-promotes you to super-admin on sign-in |
 
 **Recommended** (the probe shows `WARN`, app works without):
@@ -60,7 +60,7 @@ Preview + Development.
 
 **Optional providers** (skip if not using):
 
-`THRYVE_TWILIO_*` (SMS) · `GOOGLE_OAUTH_*` (Calendar busy-sync)
+`IVY_TWILIO_*` (SMS) · `GOOGLE_OAUTH_*` (Calendar busy-sync)
 
 > Square + PayPal: tabled for the initial launch. Backend code remains
 > intact; the UI surface is hidden behind `VITE_FLAG_SQUARE_PAYPAL=true`.
@@ -99,19 +99,19 @@ After saving, click the endpoint and copy the **Signing secret** into
 ## 4a · Subscription billing setup ($49/mo)
 
 The webhook in §4 handles owner-facing payments (the money clients send
-to owners via Stripe Connect). THRYVE's own subscription — the $49/mo
+to owners via Stripe Connect). Ivy OS's own subscription — the $49/mo
 that owners pay us — is a separate Product, separate webhook endpoint,
 separate signing secret.
 
-### Create the THRYVE subscription Product
+### Create the Ivy OS subscription Product
 
 In **Stripe Dashboard → Products → Add product**:
 
-- **Name:** `THRYVE Business Platform`
+- **Name:** `Ivy OS Business Platform`
 - **Description:** `All-in-one platform for service businesses — bookings, clients, payments, marketing, Ivy AI.`
 - **Pricing:** Recurring · **$49.00 USD** · billed **monthly**.
 - Save. Open the product, copy the `price_…` id from the Pricing
-  section, paste it into `THRYVE_STRIPE_PRICE_ID` in Vercel.
+  section, paste it into `IVY_STRIPE_PRICE_ID` in Vercel.
 
 ### Enable the Customer Portal
 
@@ -136,7 +136,7 @@ a *second* endpoint, separate from the §4 one.
   - `invoice.payment_failed`
 
 Save. Copy the new endpoint's **Signing secret** into
-`THRYVE_BILLING_WEBHOOK_SECRET` in Vercel (mark Sensitive). This is a
+`IVY_BILLING_WEBHOOK_SECRET` in Vercel (mark Sensitive). This is a
 **different** secret than `STRIPE_WEBHOOK_SECRET` from §4 — Stripe
 issues one signing secret per endpoint URL, so the two webhook handlers
 each need their own. If you reuse the §4 secret here, the subscription

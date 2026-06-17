@@ -2,7 +2,7 @@
 // Sends a test email through the same code path the rest of the app uses,
 // so you can confirm From / Reply-To / DNS auth all work end-to-end.
 //
-//   curl -X POST https://getthryve.ai/api/admin/email-test \
+//   curl -X POST https://getivyos.com/api/admin/email-test \
 //     -H "x-admin-secret: $ADMIN_SECRET" \
 //     -H "Content-Type: application/json" \
 //     -d '{"to":"you@example.com"}'
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     await recordAudit(req, { actor, action: 'admin.email_test', meta: { to } });
 
     const html = emailShell({
-      heading: 'Test email from THRYVE',
+      heading: 'Test email from Ivy OS',
       body: `<p>If you're reading this in an inbox (not spam), your sending
         domain is configured correctly.</p>
         <p>Open the email's source / "show original" and confirm the
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
 
     const result = await sendEmail({
       to,
-      subject: 'THRYVE deliverability test',
+      subject: 'Ivy OS deliverability test',
       html,
     });
     return ok(res, { ok: true, id: result?.id || null });

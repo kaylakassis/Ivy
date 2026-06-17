@@ -19,9 +19,9 @@ import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import dns from 'node:dns/promises';
 
 // The platform-level CNAME owners point their domain at. Owners type
-// "rivers.com" → CNAME rivers.com → cname.getthryve.ai. Set via env so
+// "rivers.com" → CNAME rivers.com → cname.getivyos.com. Set via env so
 // staging + prod can differ.
-const TARGET_CNAME = process.env.WEBSITE_CNAME_TARGET || 'cname.getthryve.ai';
+const TARGET_CNAME = process.env.WEBSITE_CNAME_TARGET || 'cname.getivyos.com';
 
 // Trim trailing dots and lowercase everything so the comparison is
 // deterministic regardless of how the resolver returns the record.

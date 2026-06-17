@@ -1,10 +1,10 @@
 // Shared messaging: business owner ↔ registered clients.
 // - localStorage-backed so both views share state on the same device
 // - Per-thread setting: one-way (broadcast) or two-way
-// - Only shows registered users (clients or business owners on THRYVE)
+// - Only shows registered users (clients or business owners on Ivy OS)
 
-const MSG_KEY = 'thryve:messages';
-const REG_KEY = 'thryve:registered-clients';
+const MSG_KEY = 'Ivy OS:messages';
+const REG_KEY = 'Ivy OS:registered-clients';
 
 function loadMsgs() {
   try { return JSON.parse(localStorage.getItem(MSG_KEY)) || defaultMsgs(); }
@@ -716,7 +716,7 @@ function MessagingSettings({ store, update, onClose }) {
           padding: 12, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)',
           fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginTop: 8,
         }}>
-          <b style={{ color: 'var(--fg-2)' }}>Registered users only.</b> Messaging works only between THRYVE accounts —
+          <b style={{ color: 'var(--fg-2)' }}>Registered users only.</b> Messaging works only between Ivy OS accounts —
           your registered clients and other business owners. Unregistered contacts won't appear here.
         </div>
 
@@ -823,7 +823,7 @@ function NewMessageModal({ store, onPick, onClose }) {
             background: 'var(--surface-2)', border: '1px solid var(--border)',
             fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5,
           }}>
-            {unregisteredCount} other {unregisteredCount === 1 ? 'contact isn’t' : 'contacts aren’t'} on THRYVE yet.
+            {unregisteredCount} other {unregisteredCount === 1 ? 'contact isn’t' : 'contacts aren’t'} on Ivy OS yet.
             Invite them from the Clients tab to message them.
           </div>
         )}

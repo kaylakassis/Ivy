@@ -13,7 +13,7 @@
 //                        even when locked out of the app.
 //   • Log out          — escape that doesn't compromise the wall.
 //
-// isClient carve-out: an owner who's ALSO a client of another THRYVE
+// isClient carve-out: an owner who's ALSO a client of another Ivy OS
 // business gets one labeled link "Go to {business} as a client" → /me.
 // Solo owners (isClient === false) get no /me link at all.
 //
@@ -27,13 +27,13 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos } from '../../lib/platform.js';
 import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
-import { THRYVE_PRICE, STACK_TOTAL, THRYVE_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV } from '../../lib/pricing.js';
+import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof — mirrors the marketing pricing page.
-// We deliberately do NOT fabricate star ratings or user counts (THRYVE
+// We deliberately do NOT fabricate star ratings or user counts (Ivy OS
 // has no review corpus to quote); the stack-replacement savings is a
 // concrete claim we can stand behind.
-const MONTHLY_SAVINGS = Math.max(0, STACK_TOTAL - THRYVE_PRICE);
+const MONTHLY_SAVINGS = Math.max(0, STACK_TOTAL - IVY_PRICE);
 
 // The benefit list — each row is a real capability gated behind the wall.
 const PERKS = [
@@ -185,7 +185,7 @@ export default function Paywall({ ctx, onRefresh }) {
   };
 
   // Apple-required affordance: "Restore purchases" so a user who
-  // re-installs THRYVE on a new device can recover their entitlements
+  // re-installs Ivy OS on a new device can recover their entitlements
   // without contacting support. Only shown in the iOS build.
   const restorePurchases = async () => {
     setBusy('restore'); setErr(null);
@@ -240,7 +240,7 @@ export default function Paywall({ ctx, onRefresh }) {
   const canTrial = !everTrialed;
   const syncing  = busy === 'syncing';
   // Price string for the subscribe CTAs, reflecting the selected period.
-  const priceLabel = plan === 'annual' ? `$${THRYVE_PRICE_ANNUAL}/yr` : `$${THRYVE_PRICE}/mo`;
+  const priceLabel = plan === 'annual' ? `$${IVY_PRICE_ANNUAL}/yr` : `$${IVY_PRICE}/mo`;
 
   const heading = syncing      ? 'Confirming your subscription…'
                 : wasPaid       ? 'Pick up where you left off'
@@ -263,7 +263,7 @@ export default function Paywall({ ctx, onRefresh }) {
       }}>
         {/* ─── HERO BAND ─────────────────────────────────────────────
             Mirrors the top-earner format (bold icon + benefit headline
-            over a colored band) but uses THRYVE's accent tint, so it
+            over a colored band) but uses Ivy OS's accent tint, so it
             reads on-brand in both Calm + Bold themes. */}
         <div style={{
           padding: '26px 28px 22px',
@@ -348,8 +348,8 @@ export default function Paywall({ ctx, onRefresh }) {
                   display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 2,
                 }}>
                   {[
-                    { key: 'monthly', label: 'Monthly', sub: `$${THRYVE_PRICE}/mo` },
-                    { key: 'annual',  label: 'Annual',  sub: `$${THRYVE_PRICE_ANNUAL}/yr`, tag: '2 months free' },
+                    { key: 'monthly', label: 'Monthly', sub: `$${IVY_PRICE}/mo` },
+                    { key: 'annual',  label: 'Annual',  sub: `$${IVY_PRICE_ANNUAL}/yr`, tag: '2 months free' },
                   ].map((opt) => {
                     const active = plan === opt.key;
                     return (
@@ -397,17 +397,17 @@ export default function Paywall({ ctx, onRefresh }) {
                   <span style={{
                     fontFamily: 'var(--font-num)', fontSize: 28, fontWeight: 600,
                     color: 'var(--fg)', letterSpacing: '-0.02em',
-                  }}>${plan === 'annual' ? THRYVE_PRICE_ANNUAL : THRYVE_PRICE}</span>
+                  }}>${plan === 'annual' ? IVY_PRICE_ANNUAL : IVY_PRICE}</span>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plan === 'annual' ? '/yr' : '/mo'}</span>
                 </div>
                 <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
                   {plan === 'annual'
                     ? (canTrial
-                        ? `Free for 28 days, then $${THRYVE_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) — save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
-                        : `$${THRYVE_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) · save $${ANNUAL_SAVINGS}/yr vs monthly. Cancel anytime.`)
+                        ? `Free for 28 days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) — save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
+                        : `$${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) · save $${ANNUAL_SAVINGS}/yr vs monthly. Cancel anytime.`)
                     : (canTrial
-                        ? `Free for 28 days, then $${THRYVE_PRICE}/mo. Cancel anytime.`
-                        : `$${THRYVE_PRICE}/mo · one plan, no per-seat fees. Cancel anytime.`)}
+                        ? `Free for 28 days, then $${IVY_PRICE}/mo. Cancel anytime.`
+                        : `$${IVY_PRICE}/mo · one plan, no per-seat fees. Cancel anytime.`)}
                 </div>
               </div>
 
@@ -430,7 +430,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   </div>
                   <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.45 }}>
                     That's <strong style={{ color: 'var(--fg)' }}>
-                      ${(THRYVE_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo
+                      ${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo
                     </strong> for {winback.durationMonths} months. The discount applies automatically at
                     checkout{winback.promoCode ? <> — or use code <strong>{winback.promoCode}</strong></> : null}.
                     {winback.expiresAt && (
@@ -479,7 +479,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   className="btn btn-primary"
                   style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
                   {busy === 'subscribe' ? 'Redirecting…'
-                    : winback ? `Claim ${winback.percentOff}% off — $${(THRYVE_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo`
+                    : winback ? `Claim ${winback.percentOff}% off — $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo`
                     : `Subscribe — ${priceLabel}`}
                   {busy !== 'subscribe' && <Icons.Arrow size={14} sw={2.2}/>}
                 </button>

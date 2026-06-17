@@ -47,7 +47,7 @@ and uses that workspace_id in every read and write.
 - **Password hashing.** `bcryptjs` with cost factor 10. Plain passwords never
   reach the DB.
 - **Session.** A 30-day JWT signed with `JWT_SECRET`, kept in a single httpOnly
-  cookie (`thryve_session`). Cookie flags: `httpOnly: true`, `secure: true`,
+  cookie (`ivy_session`). Cookie flags: `httpOnly: true`, `secure: true`,
   `sameSite: 'lax'`, `path: '/'`. Cleared on logout.
 - **Email verification.** Signup auto-logs the user in but stamps
   `email_verified_at = NULL`. The user can dismiss the in-app banner; the
@@ -70,9 +70,9 @@ Two layers:
    state-changing endpoint and rejects with 403 if the request's `Origin` or
    `Referer` doesn't match the request's own host.
 
-If you embed any THRYVE asset in another domain (e.g. an iframe of the public
+If you embed any Ivy OS asset in another domain (e.g. an iframe of the public
 booking page), the booking POST still works because the form lives inside an
-iframe served from THRYVE's origin. A third-party page POSTing directly to
+iframe served from Ivy OS's origin. A third-party page POSTing directly to
 `/api/calendar/public/:slug` from its own origin will be blocked.
 
 ## Rate limiting

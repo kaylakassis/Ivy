@@ -314,7 +314,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
       body: `<p>${escapeHtml(bodyText).replace(/\n\n+/g, '</p><p>').replace(/\n/g, '<br/>')}</p>`,
       ctaText: cfg.ctaText ? renderTokens(cfg.ctaText, tokens) : null,
       ctaUrl: cfg.ctaUrl ? renderTokens(cfg.ctaUrl, tokens) : null,
-      footer: `Sent by ${escapeHtml(tokens.businessName)} via THRYVE.`,
+      footer: `Sent by ${escapeHtml(tokens.businessName)} via Ivy OS.`,
       branding,
     });
     // Workflow emails default to the `marketing` opt-out bucket since

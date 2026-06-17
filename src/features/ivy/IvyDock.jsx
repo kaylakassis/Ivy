@@ -149,7 +149,7 @@ function FabButton({ onClick, notify, isMobile }) {
 }
 
 // Lightweight wordmark — accent-colored badge with a serif lowercase t.
-// Mirrors the marketing-site logotype so the FAB feels native to THRYVE.
+// Mirrors the marketing-site logotype so the FAB feels native to Ivy OS.
 function IvyMark({ size = 22 }) {
   return (
     <span style={{

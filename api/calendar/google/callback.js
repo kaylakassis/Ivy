@@ -1,14 +1,14 @@
 // GET /api/calendar/google/callback?code=...&state=...
 // OAuth redirect target. Verifies state against the cookie set by /connect,
 // exchanges the code for tokens, encrypts the refresh_token, creates a
-// dedicated "THRYVE Bookings" calendar in the user's account, stores
+// dedicated "Ivy OS Bookings" calendar in the user's account, stores
 // everything on calendar_settings, and redirects back to /calendar with
 // a success/error flag.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { encrypt } from '../../_lib/secrets.js';
-import { exchangeCode, fetchUserEmail, createThryveCalendar, isGoogleConfigured } from '../../_lib/google.js';
+import { exchangeCode, fetchUserEmail, createIvyCalendar, isGoogleConfigured } from '../../_lib/google.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { methodNotAllowed, serverError } from '../../_lib/json.js';
 
@@ -64,12 +64,12 @@ export default async function handler(req, res) {
     const email = await fetchUserEmail(tokens.access_token);
     let calendarId;
     try {
-      calendarId = await createThryveCalendar({ accessToken: tokens.access_token });
+      calendarId = await createIvyCalendar({ accessToken: tokens.access_token });
     } catch (err) {
       // If we can't create the dedicated calendar, fall back to the
       // user's primary so events still flow somewhere visible.
       // eslint-disable-next-line no-console
-      console.warn('[google] could not create THRYVE calendar:', err.message);
+      console.warn('[google] could not create Ivy OS calendar:', err.message);
       calendarId = 'primary';
     }
 

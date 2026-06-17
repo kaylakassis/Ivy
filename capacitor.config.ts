@@ -10,14 +10,14 @@
 // Why we don't use server.hostname to host the bundle from our real
 // domain: Capacitor's URL-scheme handler intercepts ALL requests under
 // the configured hostname and tries to serve from the bundle, so a
-// bundled `getthryve.ai` would 404 every `/api/*` call. Instead the
+// bundled `getivyos.com` would 404 every `/api/*` call. Instead the
 // WebView lives at the default capacitor:// origin and the API client
 // (src/lib/api.js) prepends an absolute base URL on native (VITE_API_BASE_URL).
 // Cross-origin XHR is handled with CORS headers (vercel.json) +
 // Authorization: Bearer auth (api/_lib/auth.js readSession).
 const config = {
   appId: 'ai.getthryve.app',
-  appName: 'THRYVE',
+  appName: 'Ivy OS',
   webDir: 'dist',
   ios: {
     // Standard WebKit content inset behavior — prevents iOS bouncing

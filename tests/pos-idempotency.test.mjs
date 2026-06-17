@@ -32,7 +32,7 @@ async function run() {
   const pid = (await sql`INSERT INTO products (workspace_id, name, price, track_stock, stock_qty)
     VALUES (${wid}, 'Serum', 10, TRUE, 5) RETURNING id`).rows[0].id;
 
-  const cookie = `thryve_session=${signSession(uid)}`;
+  const cookie = `ivy_session=${signSession(uid)}`;
   const stockOf = async () => (await sql`SELECT stock_qty FROM products WHERE id = ${pid}`).rows[0].stock_qty;
   const invCount = async () => (await sql`SELECT COUNT(*)::int n FROM invoices WHERE workspace_id = ${wid}`).rows[0].n;
   const sale = async (key) => {

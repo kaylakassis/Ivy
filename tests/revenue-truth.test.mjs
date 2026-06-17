@@ -31,7 +31,7 @@ async function run() {
     VALUES (${`rev-${Date.now()}@example.com`}, 'x', '2026-05-05', NOW()) RETURNING id`).rows[0].id;
   const wid = (await sql`INSERT INTO workspaces (owner_id) VALUES (${uid}) RETURNING id`).rows[0].id;
   await sql`INSERT INTO finance_settings (workspace_id, currency) VALUES (${wid}, 'USD') ON CONFLICT (workspace_id) DO NOTHING`;
-  const cookie = `thryve_session=${signSession(uid)}`;
+  const cookie = `ivy_session=${signSession(uid)}`;
   const today = new Date().toISOString().slice(0, 10);
 
   const mkInvoice = async ({ status, total, refunded, paidNow }) => sql.query(

@@ -1,4 +1,4 @@
-# Shipping THRYVE to the iOS App Store
+# Shipping Ivy OS to the iOS App Store
 
 End-to-end checklist for taking a release from `main` to the App Store.
 Everything past the "Generate the iOS project" step has to happen on a
@@ -13,9 +13,9 @@ Mac — Xcode is required.
 - **CocoaPods 1.15+** (`sudo gem install cocoapods`). Capacitor pulls
   native dependencies via Pods.
 - **RevenueCat account** (free up to $2.5K MRR). Create a project named
-  "THRYVE" with one iOS app entry.
+  "Ivy OS" with one iOS app entry.
 - The repo's `VITE_API_BASE_URL` env var set in Vercel for production
-  (e.g. `https://getthryve.ai`). The native build uses this as the
+  (e.g. `https://getivyos.com`). The native build uses this as the
   cross-origin API base — without it, every API call from the device
   resolves to `https://localhost/api/…` and 404s.
 - The repo's `VITE_REVENUECAT_PUBLIC_KEY_IOS` env var set (it ships in
@@ -30,7 +30,7 @@ Mac — Xcode is required.
 2. **App record:** create under "My Apps" → primary language English,
    bundle ID matching above.
 3. **In-app purchases:**
-   - Create a **Subscription Group** called `thryve`.
+   - Create a **Subscription Group** called `Ivy OS`.
    - Add two auto-renewable subscriptions in that group:
      - Product ID `thryve_monthly`, price $49.99 / month
      - Product ID `thryve_yearly`, price $499.99 / year
@@ -66,7 +66,7 @@ Mac — Xcode is required.
    the App-Specific Shared Secret + the in-app purchase key (`.p8`).
    Without these RC can't validate Apple receipts.
 6. **Webhook:**
-   - URL: `https://getthryve.ai/api/billing/revenuecat-webhook`
+   - URL: `https://getivyos.com/api/billing/revenuecat-webhook`
    - Authorization header: paste the same string as
      `REVENUECAT_WEBHOOK_SECRET` above (RC sends it verbatim, we
      constant-time compare).
@@ -101,13 +101,13 @@ In Xcode, with the `App` target selected:
    - Add capability: **Associated Domains** if/when we want universal
      links — not required for v1.
 2. **Info → Custom iOS Target Properties:**
-   - `NSCameraUsageDescription`: "THRYVE uses your camera so you can
+   - `NSCameraUsageDescription`: "Ivy OS uses your camera so you can
      attach photos to client notes and upload service images."
-   - `NSPhotoLibraryUsageDescription`: "THRYVE accesses your photo
+   - `NSPhotoLibraryUsageDescription`: "Ivy OS accesses your photo
      library so you can attach images to client notes and services."
-   - `NSMicrophoneUsageDescription`: "THRYVE uses the microphone so
+   - `NSMicrophoneUsageDescription`: "Ivy OS uses the microphone so
      you can send voice messages from the inbox."
-   - `NSLocationWhenInUseUsageDescription`: "THRYVE uses your location
+   - `NSLocationWhenInUseUsageDescription`: "Ivy OS uses your location
      to autofill your business address when setting up your booking
      site."
 3. **General → Minimum Deployments:** iOS 16.0.
@@ -131,7 +131,7 @@ After upload, in App Store Connect:
    - Demo account credentials — REQUIRED. Create a fresh demo workspace
      with at least one client, one booking, one invoice, one document.
      Reviewers will sign in as this user.
-   - **App Review notes:** explain that THRYVE is a business-management
+   - **App Review notes:** explain that Ivy OS is a business-management
      SaaS, that the iOS app uses the same backend as the web app, and
      that the StoreKit subscription unlocks the same workspace the web
      app does (i.e. it's not a separate product).
@@ -148,7 +148,7 @@ After upload, in App Store Connect:
   `/account` → Delete account (`api/account/delete.js`).
 - **2.1 — Demo account.** Provide a working demo workspace in App
   Review Notes (see Submission step 2).
-- **4.0 — Spam / minimum functionality.** THRYVE is a full SaaS —
+- **4.0 — Spam / minimum functionality.** Ivy OS is a full SaaS —
   bookings, invoices, messaging, documents — so this shouldn't fire.
   Make sure screenshots cover at least 4 distinct features.
 

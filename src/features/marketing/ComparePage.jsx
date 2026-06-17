@@ -8,7 +8,7 @@ import { Link, useParams, Navigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { COMPETITORS, FEATURE_ROWS, COMPETITOR_LIST } from './compareData.js';
-import { THRYVE_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
+import { IVY_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
 
 const SYMBOL = { y: '✓', n: '-', l: '~' };
 const SYMBOL_COLOR = { y: 'var(--accent)', n: 'var(--muted)', l: 'var(--fg-2)' };
@@ -20,9 +20,9 @@ export default function ComparePage() {
 
   useEffect(() => {
     if (!c) return;
-    document.title = `THRYVE vs ${c.name} - switching guide`;
+    document.title = `Ivy OS vs ${c.name} - switching guide`;
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `Switching from ${c.name} to THRYVE? Side-by-side comparison, why solo owners switch, and a free data import. From $${THRYVE_PRICE}/mo, AI included.`);
+    if (desc) desc.setAttribute('content', `Switching from ${c.name} to Ivy OS? Side-by-side comparison, why solo owners switch, and a free data import. From $${IVY_PRICE}/mo, AI included.`);
   }, [c]);
 
   if (!c) return <Navigate to="/pricing" replace/>;
@@ -40,7 +40,7 @@ export default function ComparePage() {
             fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
             textTransform: 'uppercase', marginBottom: 16,
           }}>
-            THRYVE vs {c.name}
+            Ivy OS vs {c.name}
           </div>
           <h1 style={{
             margin: 0, fontFamily: 'var(--font-display)',
@@ -110,7 +110,7 @@ export default function ComparePage() {
               <thead>
                 <tr style={{ background: 'var(--surface-2)' }}>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: 'var(--muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Capability</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--accent)' }}>THRYVE</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--accent)' }}>Ivy OS</th>
                   <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>{c.name}</th>
                 </tr>
               </thead>
@@ -128,7 +128,7 @@ export default function ComparePage() {
                 })}
                 <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)' }}>
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>Price</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--accent)' }}>${THRYVE_PRICE}/mo</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--accent)' }}>${IVY_PRICE}/mo</td>
                   <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600 }}>{c.theirPrice}</td>
                 </tr>
               </tbody>
@@ -156,10 +156,10 @@ export default function ComparePage() {
           </h2>
           <p style={{ margin: '10px 0 16px', color: 'var(--fg-2)', fontSize: 14.5, lineHeight: 1.6 }}>
             Export your client list, booking history, and invoices from {c.name} (or share read-only access),
-            and our team will import everything into your new THRYVE workspace within a business day. No charge,
+            and our team will import everything into your new Ivy OS workspace within a business day. No charge,
             no catch.
           </p>
-          <a href={`mailto:hello@getthryve.ai?subject=${encodeURIComponent(`Switching from ${c.name}`)}`}
+          <a href={`mailto:hello@getivyos.com?subject=${encodeURIComponent(`Switching from ${c.name}`)}`}
             className="btn btn-primary"
             style={{ padding: '10px 18px', fontSize: 13, fontWeight: 600 }}>
             Get migration help →

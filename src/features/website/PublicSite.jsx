@@ -33,7 +33,7 @@ export default function PublicSite() {
       const pageTitle = site.page?.title;
       document.title = pageTitle && pageTitle !== 'Home'
         ? `${pageTitle} · ${site.businessName || handle}`
-        : (site.businessName || `${handle} · thryve`);
+        : (site.businessName || `${handle} · Ivy OS`);
     }
   }, [site, handle]);
 
@@ -134,11 +134,11 @@ function ExitIntent({ cfg }) {
   const [show, setShow] = useState(false);
   useEffect(() => {
     if (!cfg || !cfg.enabled || !cfg.headline) return undefined;
-    try { if (sessionStorage.getItem('thryve-exit-shown')) return undefined; } catch { /* ignore */ }
+    try { if (sessionStorage.getItem('ivy-exit-shown')) return undefined; } catch { /* ignore */ }
     const onLeave = (e) => {
       if (e.clientY < 10) {
         setShow(true);
-        try { sessionStorage.setItem('thryve-exit-shown', '1'); } catch { /* ignore */ }
+        try { sessionStorage.setItem('ivy-exit-shown', '1'); } catch { /* ignore */ }
         document.removeEventListener('mouseleave', onLeave);
       }
     };

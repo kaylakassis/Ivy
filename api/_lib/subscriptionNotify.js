@@ -50,7 +50,7 @@ export async function notifySubscriptionStarted({ workspaceId, periodEnd, amount
     const html = emailShell({
       heading: 'You\'re subscribed',
       body: `<p>${greeting}</p>
-        <p>Thanks for subscribing to THRYVE. Your account is fully unlocked${o.biz_name ? ` for <strong>${o.biz_name}</strong>` : ''}.</p>
+        <p>Thanks for subscribing to Ivy OS. Your account is fully unlocked${o.biz_name ? ` for <strong>${o.biz_name}</strong>` : ''}.</p>
         ${renewLine}
         <p>You can manage your subscription anytime from your account.</p>`,
       ctaText: 'Manage subscription',
@@ -59,7 +59,7 @@ export async function notifySubscriptionStarted({ workspaceId, periodEnd, amount
     });
     await sendEmailToUser({
       userId: o.owner_id, type: 'billing',
-      to: o.email, subject: 'Welcome to THRYVE — subscription confirmed', html,
+      to: o.email, subject: 'Welcome to Ivy OS — subscription confirmed', html,
     });
   } catch (err) {
     console.error('[subscriptionNotify.started] failed:', err.message);
@@ -75,7 +75,7 @@ export async function notifyUpcomingRenewal({ workspaceId, periodEnd, amountCent
     const html = emailShell({
       heading: 'Your subscription renews soon',
       body: `<p>${greeting}</p>
-        <p>This is a heads-up that your THRYVE subscription renews on
+        <p>This is a heads-up that your Ivy OS subscription renews on
         <strong>${fmtDate(periodEnd)}</strong>${amountCents ? ` for <strong>${fmtMoneyCents(amountCents, currency)}</strong>` : ''}.</p>
         <p>No action needed if everything's still good — we'll bill the card on file. To change your plan or update your payment method, head to your billing page.</p>`,
       ctaText: 'Manage billing',
@@ -108,7 +108,7 @@ export async function notifyWinbackOffer({
     const html = emailShell({
       heading: `${percentOff}% off your first ${durationMonths} months — just for you`,
       body: `<p>${greeting}</p>
-        <p>We noticed you didn't pick up a THRYVE subscription after your trial.
+        <p>We noticed you didn't pick up an Ivy OS subscription after your trial.
         We'd love to have you back, so here's a one-time offer:
         <strong>${percentOff}% off your first ${durationMonths} months</strong>.</p>
         <p>Click below and the discount is already applied at checkout.
@@ -122,7 +122,7 @@ export async function notifyWinbackOffer({
       userId: o.owner_id,
       type: 'billing', // honor billing-prefs opt-out for a marketing-style nudge
       to: o.email,
-      subject: `${percentOff}% off — your THRYVE comeback offer`,
+      subject: `${percentOff}% off — your Ivy OS comeback offer`,
       html,
     });
   } catch (err) {
@@ -145,10 +145,10 @@ export async function notifyWinbackOffer({
 // inlined here to avoid pulling the frontend module into the API bundle.)
 const TRIAL_REMINDER_COPY = {
   '7d': {
-    subject:  'Your THRYVE trial ends in a week',
+    subject:  'Your Ivy OS trial ends in a week',
     heading:  'A week left on your free trial',
     body: (greeting, endsAt) => `<p>${greeting}</p>
-      <p>Your THRYVE free trial ends on <strong>${fmtDate(endsAt)}</strong>.
+      <p>Your Ivy OS free trial ends on <strong>${fmtDate(endsAt)}</strong>.
       After that it's <strong>$49/mo</strong> — and everything keeps running:
       your clients, calendar, invoices, messaging, and booking site, exactly
       as you've set them up.</p>
@@ -158,10 +158,10 @@ const TRIAL_REMINDER_COPY = {
     footer:   'Adjust these reminders anytime from your email preferences in /account.',
   },
   '1d': {
-    subject:  'Your THRYVE trial ends tomorrow',
+    subject:  'Your Ivy OS trial ends tomorrow',
     heading:  'Your free trial ends tomorrow',
     body: (greeting, endsAt) => `<p>${greeting}</p>
-      <p>Quick heads-up — your THRYVE free trial ends
+      <p>Quick heads-up — your Ivy OS free trial ends
       <strong>${fmtDate(endsAt)}</strong>. Subscribe to keep your business
       app active for <strong>$49/mo</strong>.</p>
       <p>If you don't, the business app locks, but nothing is lost: your data
@@ -171,10 +171,10 @@ const TRIAL_REMINDER_COPY = {
     footer:   'Adjust these reminders anytime from your email preferences in /account.',
   },
   'expired': {
-    subject:  'Your THRYVE free trial has ended',
+    subject:  'Your Ivy OS free trial has ended',
     heading:  'Your free trial has ended',
     body: (greeting) => `<p>${greeting}</p>
-      <p>Your THRYVE free trial has ended. Subscribe to pick up right where
+      <p>Your Ivy OS free trial has ended. Subscribe to pick up right where
       you left off — every client, booking, invoice, and document is exactly
       as you left it, waiting for you.</p>
       <p>One plan, <strong>$49/mo</strong>, no per-seat fees. Cancel anytime.</p>`,
@@ -217,7 +217,7 @@ export async function notifyPaymentFailed({ workspaceId, amountCents, currency, 
     const html = emailShell({
       heading: 'Your subscription payment failed',
       body: `<p>${greeting}</p>
-        <p>We couldn't charge your card for your THRYVE subscription${amountCents ? ` (${fmtMoneyCents(amountCents, currency)})` : ''}.
+        <p>We couldn't charge your card for your Ivy OS subscription${amountCents ? ` (${fmtMoneyCents(amountCents, currency)})` : ''}.
         Your account is now <strong>past due</strong> — please update your payment method to keep things running.</p>
         ${next}`,
       ctaText: 'Update payment method',
@@ -231,7 +231,7 @@ export async function notifyPaymentFailed({ workspaceId, amountCents, currency, 
     await sendEmailToUser({
       userId: o.owner_id,
       type: undefined, // bypass prefs — too important to skip
-      to: o.email, subject: 'Action needed: your THRYVE subscription payment failed', html,
+      to: o.email, subject: 'Action needed: your Ivy OS subscription payment failed', html,
     });
   } catch (err) {
     console.error('[subscriptionNotify.failed] failed:', err.message);
@@ -250,7 +250,7 @@ export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {
     const html = emailShell({
       heading: 'Your subscription was cancelled',
       body: `<p>${greeting}</p>
-        <p>We've cancelled your THRYVE subscription. No further charges.</p>
+        <p>We've cancelled your Ivy OS subscription. No further charges.</p>
         ${endLine}
         <p>Changed your mind? You can resubscribe anytime — your data is still here.</p>`,
       ctaText: 'Resubscribe',
@@ -259,7 +259,7 @@ export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {
     });
     await sendEmailToUser({
       userId: o.owner_id, type: 'billing',
-      to: o.email, subject: 'Your THRYVE subscription was cancelled', html,
+      to: o.email, subject: 'Your Ivy OS subscription was cancelled', html,
     });
   } catch (err) {
     console.error('[subscriptionNotify.cancelled] failed:', err.message);

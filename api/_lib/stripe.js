@@ -6,7 +6,7 @@
 // keeps the door open for per-workspace keys without surprises.
 //
 // `platformStripeSecret()` and `platformWebhookSecret()` resolve the
-// "THRYVE's own Stripe account" credentials with a fallback chain so a
+// "Ivy OS's own Stripe account" credentials with a fallback chain so a
 // single Vercel-injected STRIPE_SECRET_KEY (from the Vercel Stripe
 // integration) covers every legacy variable name we used to read.
 import crypto from 'node:crypto';
@@ -17,7 +17,7 @@ const STRIPE_BASE = 'https://api.stripe.com/v1';
 // Preference order: the Vercel Stripe integration auto-injects
 // STRIPE_SECRET_KEY / STRIPE_WEBHOOK_SECRET / STRIPE_PUBLISHABLE_KEY
 // when you connect Stripe in Vercel → Storage. The legacy
-// THRYVE_STRIPE_* and STRIPE_PLATFORM_SECRET names from earlier setups
+// IVY_STRIPE_* and STRIPE_PLATFORM_SECRET names from earlier setups
 // remain as fallbacks so existing deployments don't have to migrate.
 //
 // We warn (once per cold start) when BOTH the Vercel-injected name
@@ -28,11 +28,11 @@ function warnIfLegacyShadowed() {
   if (_legacyWarned) return;
   _legacyWarned = true;
   const dupes = [];
-  if (process.env.STRIPE_SECRET_KEY && (process.env.THRYVE_STRIPE_SECRET || process.env.STRIPE_PLATFORM_SECRET)) {
-    dupes.push('STRIPE_SECRET_KEY (Vercel) is set alongside legacy THRYVE_STRIPE_SECRET/STRIPE_PLATFORM_SECRET — delete the legacy ones.');
+  if (process.env.STRIPE_SECRET_KEY && (process.env.IVY_STRIPE_SECRET || process.env.STRIPE_PLATFORM_SECRET)) {
+    dupes.push('STRIPE_SECRET_KEY (Vercel) is set alongside legacy IVY_STRIPE_SECRET/STRIPE_PLATFORM_SECRET — delete the legacy ones.');
   }
-  if (process.env.STRIPE_WEBHOOK_SECRET && process.env.THRYVE_STRIPE_WEBHOOK_SECRET) {
-    dupes.push('STRIPE_WEBHOOK_SECRET (Vercel) is set alongside legacy THRYVE_STRIPE_WEBHOOK_SECRET — delete the legacy one.');
+  if (process.env.STRIPE_WEBHOOK_SECRET && process.env.IVY_STRIPE_WEBHOOK_SECRET) {
+    dupes.push('STRIPE_WEBHOOK_SECRET (Vercel) is set alongside legacy IVY_STRIPE_WEBHOOK_SECRET — delete the legacy one.');
   }
   if (dupes.length) {
     // eslint-disable-next-line no-console
@@ -43,29 +43,29 @@ function warnIfLegacyShadowed() {
 export function platformStripeSecret() {
   warnIfLegacyShadowed();
   return process.env.STRIPE_SECRET_KEY
-    || process.env.THRYVE_STRIPE_SECRET
+    || process.env.IVY_STRIPE_SECRET
     || process.env.STRIPE_PLATFORM_SECRET
     || null;
 }
 export function platformWebhookSecret() {
   warnIfLegacyShadowed();
   return process.env.STRIPE_WEBHOOK_SECRET
-    || process.env.THRYVE_STRIPE_WEBHOOK_SECRET
+    || process.env.IVY_STRIPE_WEBHOOK_SECRET
     || null;
 }
-// THRYVE's own subscription webhook (/api/webhooks/billing) lives at a
+// Ivy OS's own subscription webhook (/api/webhooks/billing) lives at a
 // different Stripe endpoint URL than the Connect platform webhook
 // (/api/webhooks/stripe-platform). Stripe issues a separate signing
 // secret per endpoint, so the two cannot share STRIPE_WEBHOOK_SECRET.
 // Falls back to the platform secret only when the dedicated var is
 // unset — useful for single-endpoint dev setups.
 export function billingWebhookSecret() {
-  return process.env.THRYVE_BILLING_WEBHOOK_SECRET
+  return process.env.IVY_BILLING_WEBHOOK_SECRET
     || platformWebhookSecret();
 }
 export function platformPublishableKey() {
   return process.env.STRIPE_PUBLISHABLE_KEY
-    || process.env.THRYVE_STRIPE_PUBLISHABLE_KEY
+    || process.env.IVY_STRIPE_PUBLISHABLE_KEY
     || null;
 }
 
@@ -297,9 +297,9 @@ export function verifyWebhookSignature({ payload, header, secret, tolerance = 30
   }
 }
 
-// ─── Subscription billing (THRYVE itself charging workspace owners) ──
+// ─── Subscription billing (Ivy OS itself charging workspace owners) ──
 // These talk to *our* Stripe account, not the per-workspace one. Pass the
-// platform secret (process.env.THRYVE_STRIPE_SECRET).
+// platform secret (process.env.IVY_STRIPE_SECRET).
 
 export async function createSubscriptionCheckoutSession({
   secretKey, priceId, customerId, customerEmail,
@@ -344,7 +344,7 @@ export async function createWinbackCoupon({
     duration: 'repeating',
     duration_in_months: String(durationMonths),
     percent_off: String(percentOff),
-    name: `THRYVE win-back ${percentOff}% / ${durationMonths}mo`,
+    name: `Ivy OS win-back ${percentOff}% / ${durationMonths}mo`,
     'metadata[workspace_id]': workspaceId,
     'metadata[kind]': 'winback',
   };
@@ -414,7 +414,7 @@ export async function applyCustomerCredit({ secretKey, customerId, amountCents, 
     body: {
       amount: -cents,            // negative = credit toward future invoices
       currency,
-      description: description || 'THRYVE referral reward',
+      description: description || 'Ivy OS referral reward',
     },
   });
 }
@@ -629,7 +629,7 @@ export async function cancelSubscription({ secretKey, stripeAccount, subscriptio
 
 // Fetches a customer by id. Used by applySubscriptionState's reconcile
 // path to auto-provision a clients row when a Dashboard-originated
-// subscription arrives before the client has been seen in THRYVE.
+// subscription arrives before the client has been seen in Ivy OS.
 export async function fetchStripeCustomer({ secretKey, stripeAccount, customerId }) {
   if (!customerId) throw new Error('customerId is required');
   return stripeFetch(`/customers/${encodeURIComponent(customerId)}`, { secretKey, stripeAccount });

@@ -1,7 +1,7 @@
 // Persisted UI preferences (visual direction, layout).
 import { useEffect, useState } from 'react';
 
-const KEY = 'thryve:tweaks';
+const KEY = 'Ivy OS:tweaks';
 const DEFAULTS = { direction: 'bold', layout: 'desktop' };
 
 function load() {

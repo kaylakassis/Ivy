@@ -16,7 +16,7 @@
 //     Connect. See docs/IOS_SUBMISSION.md for the exact strings:
 //       thryve_monthly  → $49.99 / month
 //       thryve_yearly   → $499.99 / year
-//   • Both products live in the "thryve" subscription group so users
+//   • Both products live in the "Ivy OS" subscription group so users
 //     can upgrade/downgrade between them and Apple proration applies.
 import { isIos } from './platform.js';
 

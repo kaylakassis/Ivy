@@ -1,6 +1,6 @@
 // Rewards — landing pitch + full program manager once launched.
 
-const REWARDS_LAUNCHED_KEY = 'thryve:rewards-launched';
+const REWARDS_LAUNCHED_KEY = 'Ivy OS:rewards-launched';
 
 function RewardsView({ direction }) {
   const [launched, setLaunched] = React.useState(() => localStorage.getItem(REWARDS_LAUNCHED_KEY) === '1');

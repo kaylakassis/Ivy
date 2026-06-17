@@ -310,7 +310,7 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
             <input className="input" style={inputStyle}
               value={action.config.ctaUrl || ''}
               onChange={(e) => onUpdate({ ctaUrl: e.target.value })}
-              placeholder="https://getthryve.ai/book/your-handle"/>
+              placeholder="https://getivyos.com/book/your-handle"/>
           </Sub>
         </>
       )}

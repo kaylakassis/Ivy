@@ -100,7 +100,7 @@ async function handler(req, res) {
           expiresAt: offer.expiresAt,
         }).catch((e) => console.error('[winback] notify email failed:', e?.message));
         notifyOwnerSafe(c.workspace_id, {
-          title: `${offer.percentOff}% off — your THRYVE comeback offer`,
+          title: `${offer.percentOff}% off — your Ivy OS comeback offer`,
           body: `Code ${offer.promoCode} · expires ${new Date(offer.expiresAt).toISOString().slice(0, 10)}`,
           url:  '/account?tab=billing&winback=1',
         }).catch((e) => console.error('[winback] push failed:', e?.message));

@@ -1,9 +1,9 @@
-// Client-side app: people who BOOK WITH businesses that use THRYVE.
+// Client-side app: people who BOOK WITH businesses that use Ivy OS.
 // Free. Browse businesses, manage appointments, view payments, complete documents.
 
 function ClientApp({ direction }) {
-  const [tab, setTab] = React.useState(() => localStorage.getItem('thryve:client-tab') || 'home');
-  React.useEffect(() => { localStorage.setItem('thryve:client-tab', tab); }, [tab]);
+  const [tab, setTab] = React.useState(() => localStorage.getItem('Ivy OS:client-tab') || 'home');
+  React.useEffect(() => { localStorage.setItem('Ivy OS:client-tab', tab); }, [tab]);
 
   const tabs = [
     { id: 'home',     label: 'Discover',    icon: 'Search' },
@@ -52,7 +52,7 @@ function ClientSidebar({ tabs, current, onNav, direction }) {
           <span style={{
             fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18,
             letterSpacing: '-0.01em', color: 'var(--sidebar-fg)',
-          }}>thryve</span>
+          }}>Ivy OS</span>
           <span style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             for clients
           </span>
@@ -84,10 +84,10 @@ function ClientSidebar({ tabs, current, onNav, direction }) {
         fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5,
       }}>
         <div style={{ fontWeight: 600, color: 'var(--fg)', marginBottom: 4 }}>Run a business?</div>
-        THRYVE is free for clients. If you serve clients, try the Business workspace — 28-day free trial.
+        Ivy OS is free for clients. If you serve clients, try the Business workspace — 28-day free trial.
         <button className="btn btn-outline" style={{ marginTop: 10, width: '100%', justifyContent: 'center' }}
           onClick={() => {
-            localStorage.setItem('thryve:view', 'business');
+            localStorage.setItem('Ivy OS:view', 'business');
             location.reload();
           }}>
           Switch to Business
@@ -106,7 +106,7 @@ function ClientTopbar({ direction }) {
       background: 'var(--page)', position: 'sticky', top: 0, zIndex: 40,
     }}>
       <div style={{ flex: 1 }}>
-        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Your THRYVE account</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 4 }}>Your Ivy OS account</div>
         <div style={{ fontSize: 20, fontFamily: 'var(--font-display)', fontWeight: 500, letterSpacing: '-0.02em' }}>
           Welcome back
         </div>
@@ -158,7 +158,7 @@ function ClientDiscover({ direction, onOpenBooking }) {
           <span style={{ color: 'var(--muted)' }}>Book in two taps.</span>
         </h2>
         <p style={{ color: 'var(--fg-2)', fontSize: 15, maxWidth: 560, margin: 0 }}>
-          Every business here runs on THRYVE, so your appointments, payments, and paperwork are all in one place.
+          Every business here runs on Ivy OS, so your appointments, payments, and paperwork are all in one place.
         </p>
       </div>
 

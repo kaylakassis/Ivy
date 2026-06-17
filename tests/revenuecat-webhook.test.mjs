@@ -145,7 +145,7 @@ async function run() {
     const token = signSession(ownerId);
     const bearerSession = readSession({ headers: { authorization: `Bearer ${token}` } });
     assert(bearerSession?.sub === ownerId, 'readSession reads JWT from Authorization: Bearer');
-    const cookieSession = readSession({ headers: { cookie: `thryve_session=${token}` } });
+    const cookieSession = readSession({ headers: { cookie: `ivy_session=${token}` } });
     assert(cookieSession?.sub === ownerId, 'readSession still reads the cookie (web path unchanged)');
     const noSession = readSession({ headers: {} });
     assert(noSession === null, 'no token → null');

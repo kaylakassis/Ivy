@@ -1,6 +1,6 @@
 // Dashboard — clean slate. All sections render empty states.
 
-const { METRICS } = window.THRYVE_DATA;
+const { METRICS } = window.IVY_DATA;
 
 function fmtMoney(n, { compact } = {}) {
   if (n == null) return '—';
@@ -183,7 +183,7 @@ function HeroBand({ direction }) {
           {greet}.
         </h2>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 560 }}>
-          Welcome to THRYVE. Add a client or open Ivy &mdash; she&rsquo;ll walk you through setup.
+          Welcome to Ivy OS. Add a client or open Ivy &mdash; she&rsquo;ll walk you through setup.
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8 }}>

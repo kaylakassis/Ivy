@@ -22,13 +22,13 @@ export default function RoleRouter({ children }) {
         if (!live) return;
         // Fresh owner who hasn't completed onboarding → wizard.
         // Exception: the user explicitly clicked "Save & exit" (which
-        // sets thryve_skip_onboarding_until to a future timestamp).
+        // sets ivy_skip_onboarding_until to a future timestamp).
         // That bypass keeps the dashboard reachable even when
         // /api/onboarding/complete has failed server-side — we don't
         // want owners stuck on the welcome screen because of a server
         // hiccup. The flag self-expires after 24h.
         let skipUntil = 0;
-        try { skipUntil = Number(localStorage.getItem('thryve_skip_onboarding_until')) || 0; }
+        try { skipUntil = Number(localStorage.getItem('ivy_skip_onboarding_until')) || 0; }
         catch { /* private mode */ }
         const skipping = skipUntil > Date.now();
         if (r.isOwner && !r.onboardedAt && !skipping) { setDecision('onboarding'); return; }

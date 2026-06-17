@@ -130,7 +130,7 @@ export default function ClientInvoices() {
           letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05,
         }}>Payments</h2>
         <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>
-          Every invoice across every business that's billed you on THRYVE.
+          Every invoice across every business that's billed you on Ivy OS.
         </p>
         {data?.joinedAt && (
           <p style={{

@@ -1,6 +1,6 @@
 // Sidebar + Topbar
 
-const { NAV } = window.THRYVE_DATA;
+const { NAV } = window.IVY_DATA;
 
 function Sidebar({ current, onNav, direction }) {
   return (
@@ -27,7 +27,7 @@ function Sidebar({ current, onNav, direction }) {
             fontFamily: 'var(--font-display)',
             fontWeight: 500, fontSize: 18, letterSpacing: '-0.01em',
             color: 'var(--sidebar-fg)',
-          }}>thryve</span>
+          }}>Ivy OS</span>
           <span style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
             {direction === 'bold' ? 'OS v2' : 'Business OS'}
           </span>

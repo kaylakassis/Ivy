@@ -20,7 +20,7 @@ import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 // Hashed once at module load — one ~100ms cost per cold lambda, then
 // the same comparison cost as real logins on subsequent requests. Cost
 // factor 10 matches hashPassword() in api/_lib/auth.js so timing aligns.
-const DECOY_PASSWORD_HASH = bcrypt.hashSync('thryve-decoy-not-a-real-password', 10);
+const DECOY_PASSWORD_HASH = bcrypt.hashSync('ivy-decoy-not-a-real-password', 10);
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);

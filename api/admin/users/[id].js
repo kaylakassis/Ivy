@@ -123,11 +123,11 @@ async function patchUser(u, req, res) {
       const link = `${appUrl()}/reset-password?token=${encodeURIComponent(raw)}`;
       await sendEmail({
         to: u.email,
-        subject: 'Reset your THRYVE password',
+        subject: 'Reset your Ivy OS password',
         html: emailShell({
           heading: 'Reset your password',
           body: `<p>${u.name ? `Hi ${escapeHtml(u.name)},` : 'Hi,'}</p>
-                 <p>An admin sent you a fresh link to reset your THRYVE
+                 <p>An admin sent you a fresh link to reset your Ivy OS
                  password. Click below and pick a new one.</p>
                  <p>This link is good for 24 hours.</p>`,
           ctaText: 'Reset my password',
@@ -160,11 +160,11 @@ async function patchUser(u, req, res) {
       const link = `${appUrl()}/verify-email?token=${encodeURIComponent(raw)}`;
       await sendEmail({
         to: u.email,
-        subject: 'Confirm your email for THRYVE',
+        subject: 'Confirm your email for Ivy OS',
         html: emailShell({
           heading: 'Confirm your email',
           body: `<p>${u.name ? `Hi ${escapeHtml(u.name)},` : 'Hi,'}</p>
-                 <p>An admin sent you a fresh link to confirm your THRYVE
+                 <p>An admin sent you a fresh link to confirm your Ivy OS
                  email. Click below to activate notifications and finish
                  setting up your account.</p>
                  <p>This link is good for 24 hours.</p>`,
@@ -330,7 +330,7 @@ async function uniqueAffiliateCode() {
     const r = await sql`SELECT 1 FROM affiliates WHERE code = ${s}`;
     if (r.rows.length === 0) return s;
   }
-  return `THRYVE-${Date.now().toString(36).toUpperCase()}`;
+  return `Ivy OS-${Date.now().toString(36).toUpperCase()}`;
 }
 
 function escapeHtml(s) {

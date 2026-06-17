@@ -31,7 +31,7 @@ async function call(modPath, opts = {}) {
   if (sc) {
     const arr = Array.isArray(sc) ? sc : [sc];
     for (const c of arr) {
-      const m = c.match(/^(thryve_session)=([^;]+)/);
+      const m = c.match(/^(ivy_session)=([^;]+)/);
       if (m) cookie = `${m[1]}=${m[2]}`;
     }
   }

@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     // checkout completes; updated handles renewals/past_due; deleted
     // marks cancelled. We require metadata.purpose='membership' so an
     // owner's other Stripe subscriptions (if any) don't get mis-routed
-    // into THRYVE's membership table.
+    // into Ivy OS's membership table.
     if (event.type === 'customer.subscription.created'
      || event.type === 'customer.subscription.updated'
      || event.type === 'customer.subscription.deleted') {
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'workspace mismatch' });
       }
       // No metadata.purpose gate: applySubscriptionState handles both
-      // THRYVE-originated subs (metadata.purpose='membership') AND
+      // Ivy OS-originated subs (metadata.purpose='membership') AND
       // Stripe-Dashboard-originated subs (matched via customer +
       // price lookups). Returns 'race' / 'mismatch' for anything that
       // doesn't resolve to a known client + tier in this workspace.

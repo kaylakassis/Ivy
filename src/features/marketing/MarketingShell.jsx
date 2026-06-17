@@ -84,7 +84,7 @@ export function MarketingMobileMenu({ extra = [] }) {
               <span style={{
                 fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18,
                 letterSpacing: '-0.015em', flex: 1,
-              }}>thryve</span>
+              }}>Ivy OS</span>
               <button type="button" aria-label="Close menu" className="btn btn-ghost"
                 onClick={() => setOpen(false)} style={{ padding: 6 }}>
                 <Icons.X size={18}/>
@@ -193,7 +193,7 @@ export function SimpleNav() {
           <span style={{
             fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 19,
             letterSpacing: '-0.015em',
-          }}>thryve</span>
+          }}>Ivy OS</span>
         </Link>
         <div style={{ flex: 1 }}/>
         <Link to="/pricing" className="btn btn-ghost marketing-nav-secondary"
@@ -229,7 +229,7 @@ export function SimpleFooter() {
         display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',
       }}>
         <Link to="/" style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg-2)', textDecoration: 'none' }}>
-          THRYVE
+          Ivy OS
         </Link>
         <div style={{ flex: 1 }}/>
         <div style={{ display: 'flex', gap: 18, fontSize: 12.5, color: 'var(--muted)', flexWrap: 'wrap' }}>
@@ -249,7 +249,7 @@ export function SimpleFooter() {
         maxWidth: 1100, margin: '12px auto 0',
         fontSize: 11, color: 'var(--muted-2)', textAlign: 'center',
       }}>
-        © {new Date().getFullYear()} THRYVE Business OS.
+        © {new Date().getFullYear()} Ivy OS.
       </div>
     </footer>
   );

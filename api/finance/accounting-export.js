@@ -217,13 +217,13 @@ export default async function handler(req, res) {
     }
 
     const csv = lines.join('\r\n') + '\r\n';
-    const filename = `thryve-${type}-${format}-${range.from}_to_${range.to}.csv`;
+    const filename = `ivy-${type}-${format}-${range.from}_to_${range.to}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
     // Diagnostic header — sanitize CRLF + non-ASCII so an owner with a
     // multi-line or unicode biz name doesn't blow up the response with
     // a Node header-validation throw.
-    res.setHeader('X-Thryve-Workspace',
+    res.setHeader('X-Ivy-Workspace',
       String(bizName).replace(/[\r\n]/g, ' ').replace(/[^\x20-\x7E]/g, '?').slice(0, 200));
     return res.status(200).send(csv);
   } catch (err) {

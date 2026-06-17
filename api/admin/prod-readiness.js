@@ -124,12 +124,12 @@ export default async function handler(req, res) {
 
     // ── Stripe (BLOCKER for payments + subscription) ────────────────
     const stripeKey = process.env.STRIPE_SECRET_KEY
-      || process.env.THRYVE_STRIPE_SECRET || process.env.STRIPE_PLATFORM_SECRET || '';
+      || process.env.IVY_STRIPE_SECRET || process.env.STRIPE_PLATFORM_SECRET || '';
     const stripeWebhook = process.env.STRIPE_WEBHOOK_SECRET
-      || process.env.THRYVE_STRIPE_WEBHOOK_SECRET || '';
+      || process.env.IVY_STRIPE_WEBHOOK_SECRET || '';
     if (!stripeKey) {
       checks.push(check('stripe_key', 'STRIPE_SECRET_KEY', 'fail',
-        'Required: THRYVE billing + Connect won\'t work without it.'));
+        'Required: Ivy OS billing + Connect won\'t work without it.'));
     } else {
       const mode = stripeKey.startsWith('sk_live_') ? 'LIVE' : 'TEST';
       checks.push(check('stripe_key', 'STRIPE_SECRET_KEY', mode === 'TEST' ? 'warn' : 'ok',
@@ -148,11 +148,11 @@ export default async function handler(req, res) {
     // — which the LAUNCH.md runbook does not recommend. Warn the
     // operator when the dedicated var is missing so a misrouted secret
     // doesn't silently break the subscription flow.
-    if (!process.env.THRYVE_BILLING_WEBHOOK_SECRET) {
-      checks.push(check('billing_webhook', 'THRYVE_BILLING_WEBHOOK_SECRET', 'warn',
+    if (!process.env.IVY_BILLING_WEBHOOK_SECRET) {
+      checks.push(check('billing_webhook', 'IVY_BILLING_WEBHOOK_SECRET', 'warn',
         "Subscription webhook (/api/webhooks/billing) will fall back to STRIPE_WEBHOOK_SECRET. If you configured separate Stripe endpoints per LAUNCH.md §4a, the subscription endpoint will reject events."));
     } else {
-      checks.push(check('billing_webhook', 'THRYVE_BILLING_WEBHOOK_SECRET', 'ok'));
+      checks.push(check('billing_webhook', 'IVY_BILLING_WEBHOOK_SECRET', 'ok'));
     }
     if (!process.env.STRIPE_CONNECT_CLIENT_ID) {
       checks.push(check('stripe_connect', 'STRIPE_CONNECT_CLIENT_ID', 'warn',
@@ -160,11 +160,11 @@ export default async function handler(req, res) {
     } else {
       checks.push(check('stripe_connect', 'STRIPE_CONNECT_CLIENT_ID', 'ok'));
     }
-    if (!process.env.THRYVE_STRIPE_PRICE_ID) {
-      checks.push(check('stripe_price', 'THRYVE_STRIPE_PRICE_ID', 'warn',
-        "No subscription Price configured — owners can\'t pay THRYVE."));
+    if (!process.env.IVY_STRIPE_PRICE_ID) {
+      checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'warn',
+        "No subscription Price configured — owners can\'t pay Ivy OS."));
     } else {
-      checks.push(check('stripe_price', 'THRYVE_STRIPE_PRICE_ID', 'ok'));
+      checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'ok'));
     }
 
     // ── Email (BLOCKER for password reset + verification) ───────────
@@ -223,9 +223,9 @@ export default async function handler(req, res) {
     }
 
     // ── Optional providers (informational) ──────────────────────────
-    const twilio = !!(process.env.THRYVE_TWILIO_ACCOUNT_SID
-      && process.env.THRYVE_TWILIO_AUTH_TOKEN
-      && process.env.THRYVE_TWILIO_FROM_NUMBER);
+    const twilio = !!(process.env.IVY_TWILIO_ACCOUNT_SID
+      && process.env.IVY_TWILIO_AUTH_TOKEN
+      && process.env.IVY_TWILIO_FROM_NUMBER);
     checks.push(check('twilio', 'Twilio (SMS)', twilio ? 'ok' : 'warn',
       twilio ? 'Configured' : 'Optional — SMS features no-op gracefully without it.'));
     const square = !!(process.env.SQUARE_APPLICATION_ID && process.env.SQUARE_APPLICATION_SECRET);

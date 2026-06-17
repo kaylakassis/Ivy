@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     // 1. Key present
     const key = platformStripeSecret();
     if (!key) {
-      fail('STRIPE_SECRET_KEY present', 'Not set in any of: STRIPE_SECRET_KEY, THRYVE_STRIPE_SECRET, STRIPE_PLATFORM_SECRET');
+      fail('STRIPE_SECRET_KEY present', 'Not set in any of: STRIPE_SECRET_KEY, IVY_STRIPE_SECRET, STRIPE_PLATFORM_SECRET');
       return ok(res, { checks });
     }
     pass('STRIPE_SECRET_KEY present', `Length ${key.length}, prefix ${key.slice(0, 7)}…`);

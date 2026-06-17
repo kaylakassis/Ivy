@@ -159,7 +159,7 @@ export default async function handler(req, res) {
               <p>This conversation is now in your Messages inbox under <strong>${escapeHtml(name)}</strong> — replying there sends them an email.</p>`,
             ctaText: 'Open conversation',
             ctaUrl: `${appUrl()}/messages?threadId=${threadId}`,
-            footer: `Replying to this email goes straight to ${escapeHtml(name)}. The conversation is also tracked in your THRYVE Messages inbox.`,
+            footer: `Replying to this email goes straight to ${escapeHtml(name)}. The conversation is also tracked in your Ivy OS Messages inbox.`,
             branding,
           }),
         });

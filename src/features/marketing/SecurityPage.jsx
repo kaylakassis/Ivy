@@ -9,9 +9,9 @@ import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 export default function SecurityPage() {
   useEffect(() => {
-    document.title = 'Security & data - THRYVE';
+    document.title = 'Security & data - Ivy OS';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'How THRYVE protects your data: Stripe-handled payments, encryption at rest + in transit, exportable data, US-based SOC2 vendors.');
+    if (desc) desc.setAttribute('content', 'How Ivy OS protects your data: Stripe-handled payments, encryption at rest + in transit, exportable data, US-based SOC2 vendors.');
   }, []);
   return (
     <MarketingShell>
@@ -47,13 +47,13 @@ export default function SecurityPage() {
         </Section>
 
         <Section title="Your data, exportable any time">
-          <p>From your account page, download a complete export of everything you've put into THRYVE: client list, booking history, invoices, documents, messages. Standard CSV + JSON formats - usable in any other tool.</p>
+          <p>From your account page, download a complete export of everything you've put into Ivy OS: client list, booking history, invoices, documents, messages. Standard CSV + JSON formats - usable in any other tool.</p>
           <p>If you cancel, your data stays available for 60 days for export. After that it's deleted from active and backup systems within a further 30 days.</p>
         </Section>
 
         <Section title="Who sees your data">
           <p>The short list: you, your invited staff, your clients (in the limited views they're shown), and Anthropic (when Ivy generates a response - see below).</p>
-          <p>THRYVE staff access is logged and only happens when you explicitly request support help on a specific record. No automated mining of customer data, ever.</p>
+          <p>Ivy OS staff access is logged and only happens when you explicitly request support help on a specific record. No automated mining of customer data, ever.</p>
         </Section>
 
         <Section title="AI (Ivy) data handling">
@@ -70,7 +70,7 @@ export default function SecurityPage() {
         </Section>
 
         <Section title="Reporting a security issue">
-          <p>If you find a vulnerability, please email <a href="mailto:security@getthryve.ai" style={{ color: 'var(--accent)' }}>security@getthryve.ai</a> with details. We respond within one business day and won't pursue legal action against good-faith research.</p>
+          <p>If you find a vulnerability, please email <a href="mailto:security@getivyos.com" style={{ color: 'var(--accent)' }}>security@getivyos.com</a> with details. We respond within one business day and won't pursue legal action against good-faith research.</p>
         </Section>
 
         <div style={{
@@ -80,7 +80,7 @@ export default function SecurityPage() {
           <div style={{ fontSize: 14, fontWeight: 600 }}>Questions?</div>
           <p style={{ margin: '6px 0 12px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
             For specific contractual or compliance questions (DPA, vendor
-            review forms, etc.), email <a href="mailto:hello@getthryve.ai" style={{ color: 'var(--accent)' }}>hello@getthryve.ai</a>.
+            review forms, etc.), email <a href="mailto:hello@getivyos.com" style={{ color: 'var(--accent)' }}>hello@getivyos.com</a>.
             We respond personally - small team, founder included.
           </p>
           <Link to="/signup" className="btn btn-primary"

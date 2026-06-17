@@ -2,7 +2,7 @@
 // - Tasks: generic to-dos + "smart" tasks that auto-complete from app activity
 // - Goals: target-based with progress pulled from finance / clients / sessions
 
-const GOALS_KEY = 'thryve:goals';
+const GOALS_KEY = 'Ivy OS:goals';
 
 function defaultGoals() {
   const now = Date.now(), D = 86400e3;
@@ -63,8 +63,8 @@ function syncGoalsWithApp() {
 
   // --- Tasks auto-complete from app activity
   try {
-    const msgs = JSON.parse(localStorage.getItem('thryve:messages') || '{}');
-    const fin  = JSON.parse(localStorage.getItem('thryve:finance')  || '{}');
+    const msgs = JSON.parse(localStorage.getItem('Ivy OS:messages') || '{}');
+    const fin  = JSON.parse(localStorage.getItem('Ivy OS:finance')  || '{}');
 
     store.tasks = store.tasks.map(t => {
       if (t.done || t.autoUnchecked) return t;
@@ -109,7 +109,7 @@ function syncGoalsWithApp() {
       }
       if (g.type === 'sessions') {
         try {
-          const cal = JSON.parse(localStorage.getItem('thryve:calendar') || '{}');
+          const cal = JSON.parse(localStorage.getItem('Ivy OS:calendar') || '{}');
           const start = new Date(); start.setDate(1); start.setHours(0,0,0,0);
           const count = (cal.events || []).filter(e => (e.start||0) >= start.getTime()).length;
           if (g.current !== count) { changed = true; return { ...g, current: count }; }
@@ -125,7 +125,7 @@ function syncGoalsWithApp() {
 }
 
 /* ============ NOTIFICATIONS BUS ============ */
-const NOTIF_KEY = 'thryve:notifications';
+const NOTIF_KEY = 'Ivy OS:notifications';
 function pushNotification(n) {
   try {
     const list = JSON.parse(localStorage.getItem(NOTIF_KEY) || '[]');
@@ -138,9 +138,9 @@ function pushNotification(n) {
 /* ============ VIEW ============ */
 function GoalsView() {
   const [store, update] = useGoalsStore();
-  const [tab, setTab] = React.useState(() => localStorage.getItem('thryve:goals:tab') || 'tasks');
+  const [tab, setTab] = React.useState(() => localStorage.getItem('Ivy OS:goals:tab') || 'tasks');
   const [syncTick, setSyncTick] = React.useState(0);
-  const setTabPers = (t) => { setTab(t); localStorage.setItem('thryve:goals:tab', t); };
+  const setTabPers = (t) => { setTab(t); localStorage.setItem('Ivy OS:goals:tab', t); };
 
   // Run sync on mount + every time the underlying stores change
   React.useEffect(() => {
@@ -151,7 +151,7 @@ function GoalsView() {
     };
     doSync();
     const h = (e) => {
-      if (!e.key || ['thryve:messages','thryve:finance','thryve:calendar',GOALS_KEY].includes(e.key)) doSync();
+      if (!e.key || ['Ivy OS:messages','Ivy OS:finance','Ivy OS:calendar',GOALS_KEY].includes(e.key)) doSync();
     };
     window.addEventListener('storage', h);
     return () => window.removeEventListener('storage', h);
@@ -165,7 +165,7 @@ function GoalsView() {
             Goals & Tasks
           </h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Your to-do list and targets — synced with what's happening in THRYVE.
+            Your to-do list and targets — synced with what's happening in Ivy OS.
           </div>
         </div>
       </div>
@@ -339,7 +339,7 @@ function TaskForm({ onSave, onCancel, initial }) {
 
   const [clients, setClients] = React.useState([]);
   React.useEffect(() => {
-    try { setClients((JSON.parse(localStorage.getItem('thryve:messages'))?.clients) || []); } catch {}
+    try { setClients((JSON.parse(localStorage.getItem('Ivy OS:messages'))?.clients) || []); } catch {}
   }, []);
 
   const save = () => {

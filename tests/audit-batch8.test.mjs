@@ -48,7 +48,7 @@ async function run() {
     await sql`INSERT INTO invoices (workspace_id, number, client_id, client_name, items, status)
       VALUES (${wid}, 'INV-B8', ${cid}, 'Customer', ${JSON.stringify([{ description: 'x', quantity: 1, rate: 50 }])}::jsonb, 'sent')`;
 
-    const req = { method: 'GET', headers: { cookie: `thryve_session=${signSession(custUid)}` }, url: '/api/account/export', query: {} };
+    const req = { method: 'GET', headers: { cookie: `ivy_session=${signSession(custUid)}` }, url: '/api/account/export', query: {} };
     const res = mockRes();
     await exportHandler(req, res);
 

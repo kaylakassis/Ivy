@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
     const stamp = new Date().toISOString().slice(0, 10);
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="thryve-${kind}-${stamp}.csv"`);
+    res.setHeader('Content-Disposition', `attachment; filename="ivy-${kind}-${stamp}.csv"`);
 
     if (kind === 'users') return writeUsers(res);
     if (kind === 'affiliates') return writeAffiliates(res);

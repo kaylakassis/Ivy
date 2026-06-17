@@ -1,4 +1,4 @@
-// /integrations - what THRYVE talks to. Keep the list honest: only
+// /integrations - what Ivy OS talks to. Keep the list honest: only
 // list integrations that work today; "planned" ones live in a separate
 // section so we don't over-promise.
 import React, { useEffect } from 'react';
@@ -16,12 +16,12 @@ const LIVE = [
     { name: 'PayPal',         icon: 'Dollar',   sub: 'Hosted checkout (incl. Venmo) + refunds, paid into your PayPal account.' },
   ] : []),
   { name: 'Video meetings',   icon: 'Camera',   sub: 'Virtual bookings auto-mint a private video room - or drop in your own link.' },
-  { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in THRYVE.' },
-  { name: 'Apple Calendar',   icon: 'Calendar', sub: 'CalDAV subscription. Read-only view of your THRYVE schedule.' },
-  { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Subscribe to your THRYVE schedule via iCal feed (read-only view in Outlook).' },
+  { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in Ivy OS.' },
+  { name: 'Apple Calendar',   icon: 'Calendar', sub: 'CalDAV subscription. Read-only view of your Ivy OS schedule.' },
+  { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Subscribe to your Ivy OS schedule via iCal feed (read-only view in Outlook).' },
   { name: 'Webhooks',         icon: 'Globe',    sub: 'POST events on booking, payment, message - wire it to anywhere.' },
   { name: 'Embeddable widget', icon: 'Doc',     sub: 'One-line script to embed booking on any external site.' },
-  { name: 'Custom domain',    icon: 'Globe',    sub: 'Point your domain at THRYVE; DNS verification built-in.' },
+  { name: 'Custom domain',    icon: 'Globe',    sub: 'Point your domain at Ivy OS; DNS verification built-in.' },
   { name: 'CSV import',       icon: 'FileIcon', sub: 'Bring clients, bookings, invoices from any other tool.' },
   { name: 'Email (Resend)',   icon: 'Mail',     sub: 'Transactional + reminder email sent from your branded domain when configured.' },
   { name: 'SMS (Twilio)',     icon: 'Phone',    sub: 'Booking reminders + automated SMS steps in your workflows.' },
@@ -29,12 +29,12 @@ const LIVE = [
 
 export default function IntegrationsPage() {
   useEffect(() => {
-    document.title = 'Integrations - THRYVE';
+    document.title = 'Integrations - Ivy OS';
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content',
       FLAGS.squarePaypal
-        ? 'THRYVE connects to Stripe, Square & PayPal payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.'
-        : 'THRYVE connects to Stripe payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.');
+        ? 'Ivy OS connects to Stripe, Square & PayPal payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.'
+        : 'Ivy OS connects to Stripe payments, Google/Apple/Outlook calendars, Twilio SMS, webhooks, and your custom domain. Plus a one-line embeddable booking widget for any external site.');
   }, []);
   return (
     <MarketingShell>
@@ -82,7 +82,7 @@ export default function IntegrationsPage() {
 
         <section style={{ textAlign: 'center' }}>
           <p style={{ fontSize: 14.5, color: 'var(--fg-2)' }}>
-            Need a specific integration? Email <a href="mailto:hello@getthryve.ai" style={{ color: 'var(--accent)' }}>hello@getthryve.ai</a> - we prioritize integrations that owners actually ask for.
+            Need a specific integration? Email <a href="mailto:hello@getivyos.com" style={{ color: 'var(--accent)' }}>hello@getivyos.com</a> - we prioritize integrations that owners actually ask for.
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ marginTop: 16, padding: '12px 22px', fontSize: 14, fontWeight: 600 }}>

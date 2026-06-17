@@ -34,9 +34,9 @@ function jsonRes() {
 const createdUsers = [];
 async function run() {
   try {
-    process.env.THRYVE_TWILIO_ACCOUNT_SID = 'ACtest';
-    process.env.THRYVE_TWILIO_AUTH_TOKEN = 'twilio-test-token';
-    process.env.THRYVE_TWILIO_FROM_NUMBER = '+15550000000';
+    process.env.IVY_TWILIO_ACCOUNT_SID = 'ACtest';
+    process.env.IVY_TWILIO_AUTH_TOKEN = 'twilio-test-token';
+    process.env.IVY_TWILIO_FROM_NUMBER = '+15550000000';
     const url = `${appUrl()}/api/webhooks/twilio/sms`;
 
     const u = await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
@@ -59,7 +59,7 @@ async function run() {
 
     // Valid signature → routed.
     r = webhookRes();
-    await inbound({ method: 'POST', headers: { 'x-twilio-signature': sigFor(process.env.THRYVE_TWILIO_AUTH_TOKEN, url, params) }, body: rawBody }, r);
+    await inbound({ method: 'POST', headers: { 'x-twilio-signature': sigFor(process.env.IVY_TWILIO_AUTH_TOKEN, url, params) }, body: rawBody }, r);
     assert(r.statusCode === 200 && r.body.includes('<Response>'), 'valid inbound returns 200 TwiML');
 
     const thr = (await sql`SELECT * FROM message_threads WHERE workspace_id = ${wid} AND client_id = ${cid}`).rows[0];
@@ -77,7 +77,7 @@ async function run() {
     try {
       or = jsonRes();
       await threadHandler({
-        method: 'POST', headers: { cookie: `thryve_session=${signSession(uid)}` },
+        method: 'POST', headers: { cookie: `ivy_session=${signSession(uid)}` },
         query: { id: thr.id }, body: { text: 'replying by text', channel: 'sms' },
       }, or);
     } finally { globalThis.fetch = realFetch; }

@@ -2,18 +2,18 @@
 // Returns Resend's verification status for every domain in your account.
 // Use after adding DNS records to confirm SPF / DKIM / DMARC are healthy.
 //
-//   curl https://getthryve.ai/api/admin/email-status \
+//   curl https://getivyos.com/api/admin/email-status \
 //     -H "x-admin-secret: $ADMIN_SECRET"
 //
 // Sample response:
 //   {
 //     "ok": true,
-//     "from": "THRYVE <noreply@getthryve.ai>",
-//     "replyTo": "support@getthryve.ai",
+//     "from": "Ivy OS <noreply@getivyos.com>",
+//     "replyTo": "support@getivyos.com",
 //     "domains": [
 //       {
 //         "id": "...",
-//         "name": "getthryve.ai",
+//         "name": "getivyos.com",
 //         "status": "verified",
 //         "region": "us-east-1",
 //         "createdAt": "2026-...",
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
     }));
     return ok(res, {
       ok: true,
-      from: process.env.EMAIL_FROM || 'THRYVE <onboarding@resend.dev>',
+      from: process.env.EMAIL_FROM || 'Ivy OS <onboarding@resend.dev>',
       replyTo: process.env.EMAIL_REPLY_TO || null,
       domains,
     });

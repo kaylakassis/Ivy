@@ -37,7 +37,7 @@ export default async function handler(req, res) {
 
     await sendEmail({
       to: user.email,
-      subject: 'Confirm your email for THRYVE',
+      subject: 'Confirm your email for Ivy OS',
       html: emailShell({
         heading: 'Confirm your email',
         body: `<p>Hi${user.name ? ` ${escapeHtml(user.name)}` : ''},</p>

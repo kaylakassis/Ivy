@@ -644,7 +644,7 @@ function Footer({ data }) {
         </div>
         <div style={{ flex: 1 }} />
         <div style={{ fontSize: 12, color: 'var(--site-muted)' }}>
-          © {data.year} {data.businessName}. Built with THRYVE.
+          © {data.year} {data.businessName}. Built with Ivy OS.
         </div>
       </div>
     </footer>
@@ -1414,7 +1414,7 @@ function Shop({ section, handle }) {
   const [busy, setBusy]         = React.useState(false);
   const [customerName, setName] = React.useState('');
   const [customerEmail, setEmail] = React.useState('');
-  const cartKey = `thryve:cart:${handle || 'preview'}`;
+  const cartKey = `Ivy OS:cart:${handle || 'preview'}`;
 
   React.useEffect(() => {
     if (!handle) return;

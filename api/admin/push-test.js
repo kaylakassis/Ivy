@@ -102,14 +102,14 @@ export default async function handler(req, res) {
     // push.js: admin-side sends are intentionally unconditional).
     const payload = target.isSelf
       ? {
-          title: 'THRYVE · test notification',
+          title: 'Ivy OS · test notification',
           body:  'If you can read this, push notifications are working on this device.',
           url:   '/admin?tab=settings',
           tag:   'admin-push-test',
         }
       : {
-          title: 'THRYVE · test from your admin',
-          body:  'This is a test notification sent by your THRYVE administrator.',
+          title: 'Ivy OS · test from your admin',
+          body:  'This is a test notification sent by your Ivy OS administrator.',
           url:   '/',
           tag:   'admin-push-test',
         };

@@ -1,7 +1,7 @@
 // Tests applySubscriptionState() handles the customer.subscription.created
 // arriving BEFORE checkout.session.completed (Stripe doesn't guarantee
 // event ordering). Previously the handler returned 'race' and skipped,
-// leaving a live Stripe subscription with no THRYVE client_memberships
+// leaving a live Stripe subscription with no Ivy OS client_memberships
 // row. Now it upserts from sub.metadata (workspace_id/membership_id/
 // client_id/purpose stamped by createMembershipCheckoutSession).
 //
@@ -88,11 +88,11 @@ async function run() {
   });
   assert(r6 === 'race', `unknown membership id → race (got '${r6}')`);
 
-  console.log('\n[6] Stripe-Dashboard-originated sub (no THRYVE metadata) matches via customer + price');
+  console.log('\n[6] Stripe-Dashboard-originated sub (no Ivy OS metadata) matches via customer + price');
   // Stamp the client with a stripe_customer_id + provision a Stripe
   // price on the tier — this is the state for a workspace where the
   // owner set up recurring billing in the Stripe Dashboard, not via
-  // THRYVE's checkout flow.
+  // Ivy OS's checkout flow.
   await sql`UPDATE clients SET stripe_customer_id = 'cus_dash_match' WHERE id = ${cid}`;
   await sql`UPDATE memberships SET stripe_price_id = 'price_dash_silver' WHERE id = ${mid}`;
   const dashSub = {

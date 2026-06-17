@@ -7,7 +7,7 @@ import { POSTS } from './blogData.js';
 
 export default function BlogIndex() {
   useEffect(() => {
-    document.title = 'Blog - THRYVE';
+    document.title = 'Blog - Ivy OS';
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content', 'Working notes for solo service businesses - pricing, intake forms, no-shows, payments, and the admin tax.');
   }, []);

@@ -10,7 +10,7 @@ _Started 2026-04-20 18:21 UTC_
 
 ## Assistant
 
-I'll start by exploring the attached THRYVE folder and the design system to understand what we're working with.
+I'll start by exploring the attached Ivy OS folder and the design system to understand what we're working with.
 
 _[tool: local_ls]_
 
@@ -30,7 +30,7 @@ _[tool: local_read]_
 
 _[tool: local_read]_
 
-The local folder only shows top-level files — the actual source (src/, components/, etc.) isn't mounted. Let me check the key config files and ask the user a few focused questions since I don't have visual context on what THRYVE currently looks like or what screen they want me to design.
+The local folder only shows top-level files — the actual source (src/, components/, etc.) isn't mounted. Let me check the key config files and ask the user a few focused questions since I don't have visual context on what Ivy OS currently looks like or what screen they want me to design.
 
 _[tool: local_read]_
 
@@ -38,7 +38,7 @@ _[tool: local_read]_
 
 _[tool: local_read]_
 
-I have strong context on THRYVE (React + Vite + shadcn/ui, Tailwind with HSL CSS variables, sidebar layout, business SaaS: clients, calendar, finance, Ivy Pro AI coach, comms, analytics, docs, website builder). The actual `src/` isn't exposed and the design system project is empty, so I'll need the user to tell me what to design — and I'll need to make style decisions since I can't see existing screens.
+I have strong context on Ivy OS (React + Vite + shadcn/ui, Tailwind with HSL CSS variables, sidebar layout, business SaaS: clients, calendar, finance, Ivy Pro AI coach, comms, analytics, docs, website builder). The actual `src/` isn't exposed and the design system project is empty, so I'll need the user to tell me what to design — and I'll need to make style decisions since I can't see existing screens.
 
 Let me ask focused questions before building.
 
@@ -118,7 +118,7 @@ _[tool: snip]_
 
 _[tool: fork_verifier_agent]_
 
-**THRYVE Business OS** — full app shell with two directions (Calm & Bold), populated/empty states, and a mobile PWA view.
+**Ivy OS** — full app shell with two directions (Calm & Bold), populated/empty states, and a mobile PWA view.
 
 **Hero screen**: Dashboard — greeting band, 4 metric cards with sparklines, revenue vs expenses chart, today's schedule, activity feed, task list.
 
@@ -436,7 +436,7 @@ Built out the full calendar:
 - Upcoming bookings list below the grid
 
 **Share booking link**:
-- Editable business name + handle (thryve.co/your-slug)
+- Editable business name + handle (ivy.co/your-slug)
 - Copy link + Preview button opens the public page in a browser-chrome frame
 - Real URL with `?book=<slug>` routes straight to the public page
 
@@ -474,7 +474,7 @@ _[tool: list_files]_
 Let me build the Messages feature. Design:
 - Three-pane chat layout: thread list | conversation | (optional) context panel
 - Gear icon opens settings modal: one-way vs two-way toggle
-- Registered users only: show a "Find registered clients" search; only surface users who are on THRYVE
+- Registered users only: show a "Find registered clients" search; only surface users who are on Ivy OS
 - Persist to localStorage so messages survive reloads, and the client view's messages tab should see them too
 
 Current client-view.jsx has a mock `ClientMessages` — let me hook both sides into the same shared state so messages flow between Business and Client views on the same device.
@@ -482,7 +482,7 @@ Current client-view.jsx has a mock `ClientMessages` — let me hook both sides i
 Plan:
 1. Create `src/messages.jsx` with shared state (localStorage), a BusinessMessagesView component, and a ClientMessagesView that replaces the existing mock.
 2. Settings gear with "One-way (broadcast only)" vs "Two-way (clients can reply)".
-3. Registered-users-only: only show threads/contacts that are "registered on THRYVE".
+3. Registered-users-only: only show threads/contacts that are "registered on Ivy OS".
 
 Let me code it.
 </think>
@@ -551,7 +551,7 @@ Messages are now functional:
   - **Two-way messaging** — client can reply
   - **Broadcast only** — owner sends, client can read but can't reply
   - Sets the default for all new threads
-- **+ icon** → "New conversation" picker that *only* lists registered THRYVE users (unregistered contacts are filtered out with a note to invite them via Clients)
+- **+ icon** → "New conversation" picker that *only* lists registered Ivy OS users (unregistered contacts are filtered out with a note to invite them via Clients)
 - Per-thread override toggle in the conversation header (Two-way / Broadcast)
 - Compact broadcast banner appears above the composer when a thread is set to one-way
 
@@ -631,7 +631,7 @@ Let me build this. I'll make one big module. The doc editor needs:
 - Field toolbox that drags onto the page
 - Position stored as {page, x%, y%, w%, h%}
 
-State lives in localStorage key `thryve:docs`:
+State lives in localStorage key `Ivy OS:docs`:
 - documents: [{id, name, pages (array of pages with text for written, or placeholder PDF pages), fields: [...], recipient, status, sentAt, completedAt, reminders: []}]
 - templates: [...]
 
@@ -657,7 +657,7 @@ Keep under 1000 lines if possible. May need to split: let me just keep it in one
 Let me design the types and state:
 
 ```js
-const DOC_KEY = 'thryve:docs';
+const DOC_KEY = 'Ivy OS:docs';
 {
   documents: [
     {
@@ -710,7 +710,7 @@ Actually let me just do one file and keep it tight.
 
 State shape:
 ```
-DOC_KEY = 'thryve:docs'
+DOC_KEY = 'Ivy OS:docs'
 {
   toasts: [], // transient, not persisted
   driveConnected: false,

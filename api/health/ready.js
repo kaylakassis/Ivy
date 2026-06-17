@@ -5,7 +5,7 @@
 //   - db        DB connectivity (the hard requirement)
 //   - resend    transactional email key present + domain not on sandbox
 //   - stripe    platform secret key present (one-of: STRIPE_SECRET_KEY /
-//                 THRYVE_STRIPE_SECRET / STRIPE_PLATFORM_SECRET)
+//                 IVY_STRIPE_SECRET / STRIPE_PLATFORM_SECRET)
 //   - twilio    SMS creds present (graceful degrade — SMS is opt-in)
 //   - vapid     web-push keys present (graceful degrade)
 //   - anthropic Ivy key present (graceful degrade)
@@ -43,12 +43,12 @@ export default async function handler(req, res) {
   // Stripe has a few legacy env names; any one is enough for the
   // platform path to work.
   const stripe = (process.env.STRIPE_SECRET_KEY
-    || process.env.THRYVE_STRIPE_SECRET
+    || process.env.IVY_STRIPE_SECRET
     || process.env.STRIPE_PLATFORM_SECRET) ? 'ok' : 'unconfigured';
 
-  const twilio = (process.env.THRYVE_TWILIO_ACCOUNT_SID
-    && process.env.THRYVE_TWILIO_AUTH_TOKEN
-    && process.env.THRYVE_TWILIO_FROM_NUMBER) ? 'ok' : 'unconfigured';
+  const twilio = (process.env.IVY_TWILIO_ACCOUNT_SID
+    && process.env.IVY_TWILIO_AUTH_TOKEN
+    && process.env.IVY_TWILIO_FROM_NUMBER) ? 'ok' : 'unconfigured';
 
   const vapid = (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) ? 'ok' : 'unconfigured';
 
@@ -67,7 +67,7 @@ export default async function handler(req, res) {
 
   return res.status(healthy ? 200 : 503).json({
     status: healthy ? 'ok' : 'degraded',
-    service: 'thryve-business-os',
+    service: 'ivy-business-os',
     time: new Date().toISOString(),
     db,
     resend,    // ok | sandbox | unconfigured
