@@ -26,7 +26,7 @@ Mac — Xcode is required.
 
 ## App Store Connect setup
 
-1. **Bundle ID:** `ai.getthryve.app` — must match `capacitor.config.ts`.
+1. **Bundle ID:** `com.getivyos.app` — must match `capacitor.config.ts`.
 2. **App record:** create under "My Apps" → primary language English,
    bundle ID matching above.
 3. **In-app purchases:**
