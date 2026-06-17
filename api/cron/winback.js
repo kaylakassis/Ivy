@@ -110,11 +110,12 @@ async function handler(req, res) {
       }
     }
 
-    await trackCron('winback', { scanned: candidates.length, offered });
+    // Metrics get captured by the trackCron wrapper from the response
+    // body below — scanned + offered land in cron_runs.metrics.
     return ok(res, { scanned: candidates.length, offered });
   } catch (err) {
     return serverError(res, err);
   }
 }
 
-export default handler;
+export default trackCron('winback', handler);

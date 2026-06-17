@@ -1019,13 +1019,19 @@ async function send_invoice({ workspaceId, args }) {
   `;
   const bizName = cs.rows[0]?.biz_name || 'Your provider';
   const link = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
+  // Re-read the invoice number after the UPDATE so the email reflects the
+  // freshest value. Defensive: if the row vanished between the UPDATE and
+  // here (a workspace-internal delete racing the send) we throw with a
+  // useful message rather than crashing on undefined.
   const inv2 = await sql`SELECT number FROM invoices WHERE id = ${id}`;
+  const invoiceNumber = inv2.rows[0]?.number;
+  if (!invoiceNumber) throw new Error('Invoice disappeared mid-send');
 
   await sendEmail({
     to: recipientEmail,
-    subject: `Invoice ${inv2.rows[0].number} from ${bizName}`,
+    subject: `Invoice ${invoiceNumber} from ${bizName}`,
     html: emailShell({
-      heading: `Invoice ${inv2.rows[0].number}`,
+      heading: `Invoice ${invoiceNumber}`,
       body: `<p>Hi ${escapeHtml(recipientName || '')},</p>
              <p>Here's your invoice from ${escapeHtml(bizName)}. Tap below to view it and pay.</p>`,
       ctaText: 'View invoice',

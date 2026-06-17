@@ -91,6 +91,14 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
     setErr(null);
     try {
       await onSave(items.map((s, i) => ({
+        // The inline mount on /finance → Services has no concept of
+        // "close" (it's a permanent page section, not an overlay), so
+        // FinanceServices.jsx renders the drawer WITHOUT onClose. The
+        // overlay mount in Calendar still passes one. Calling
+        // `onClose()` unconditionally below threw a minified
+        // "r is not a function" the moment an inline-mode Save
+        // succeeded — which is every Save from Finance. Hence the
+        // `?.` below.
         id: s.id,
         name: s.name.trim() || 'Untitled',
         durationMinutes: Number(s.durationMinutes) || 60,
@@ -127,7 +135,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
         color: s.color || null,
         availability: s.availability || null,
       })));
-      onClose();
+      onClose?.();
     } catch (e) {
       setErr(e.message || 'Could not save');
     } finally {
