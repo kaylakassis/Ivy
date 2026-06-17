@@ -52,7 +52,7 @@ function mkEvent(type, workspaceId, extra = {}) {
     id: `rc_evt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
     type,
     app_user_id: workspaceId,
-    product_id: 'thryve_monthly',
+    product_id: 'ivyos_monthly',
     original_transaction_id: 'apple_txn_123',
     ...extra,
   };
@@ -99,7 +99,7 @@ async function run() {
     let s = await statusOf(wid);
     assert(s.subscription_status === 'active', 'subscription_status = active');
     assert(s.subscription_source === 'apple', "subscription_source = 'apple'");
-    assert(s.apple_product_id === 'thryve_monthly', 'apple_product_id recorded');
+    assert(s.apple_product_id === 'ivyos_monthly', 'apple_product_id recorded');
     assert(s.revenuecat_user_id === wid, 'revenuecat_user_id = workspace id');
     assert(s.converted_at != null, 'converted_at stamped on first purchase');
 

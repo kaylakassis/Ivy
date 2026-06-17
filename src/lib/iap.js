@@ -14,8 +14,8 @@
 //     identify with after sign-in, so RC's customer = our workspace.
 //   • RC product identifiers must match what we register in App Store
 //     Connect. See docs/IOS_SUBMISSION.md for the exact strings:
-//       thryve_monthly  → $49.99 / month
-//       thryve_yearly   → $499.99 / year
+//       ivyos_monthly  → $49.99 / month
+//       ivyos_yearly   → $499.99 / year
 //   • Both products live in the "Ivy OS" subscription group so users
 //     can upgrade/downgrade between them and Apple proration applies.
 import { isIos } from './platform.js';

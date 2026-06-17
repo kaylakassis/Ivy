@@ -32,8 +32,8 @@ Mac — Xcode is required.
 3. **In-app purchases:**
    - Create a **Subscription Group** called `Ivy OS`.
    - Add two auto-renewable subscriptions in that group:
-     - Product ID `thryve_monthly`, price $49.99 / month
-     - Product ID `thryve_yearly`, price $499.99 / year
+     - Product ID `ivyos_monthly`, price $49.99 / month
+     - Product ID `ivyos_yearly`, price $499.99 / year
    - Both must be in the same group so Apple offers proration when
      users upgrade/downgrade between them.
    - Submit at least one introductory screenshot per product, plus
@@ -52,15 +52,15 @@ Mac — Xcode is required.
 
 1. **Project → API keys:** copy the **iOS app public SDK key** into
    `VITE_REVENUECAT_PUBLIC_KEY_IOS` in Vercel.
-2. **Products:** add `thryve_monthly` and `thryve_yearly` exactly as in
+2. **Products:** add `ivyos_monthly` and `ivyos_yearly` exactly as in
    App Store Connect.
 3. **Entitlement:** create a single entitlement called `pro`. Attach
    both products to it. (We don't check entitlement name server-side
    — RC tells us *which* product was bought and we route on that — but
    the SDK needs an entitlement to surface the offering.)
 4. **Offering:** create the default offering, add a "Monthly" package
-   (linked to `thryve_monthly`) and an "Annual" package (linked to
-   `thryve_yearly`). Order them Annual first so it's the highlighted
+   (linked to `ivyos_monthly`) and an "Annual" package (linked to
+   `ivyos_yearly`). Order them Annual first so it's the highlighted
    default in the paywall.
 5. **App Store Connect integration:** RC walks you through generating
    the App-Specific Shared Secret + the in-app purchase key (`.p8`).
