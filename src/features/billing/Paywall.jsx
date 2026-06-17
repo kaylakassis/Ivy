@@ -25,6 +25,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { isIos } from '../../lib/platform.js';
+import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
 import { THRYVE_PRICE, STACK_TOTAL, THRYVE_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof — mirrors the marketing pricing page.
@@ -125,6 +127,50 @@ export default function Paywall({ ctx, onRefresh }) {
 
   const subscribe = async () => {
     setBusy('subscribe'); setErr(null);
+    // iOS in-app purchase branch. Apple requires that subscriptions sold
+    // INSIDE the app go through StoreKit — we can't redirect to a Stripe
+    // checkout URL from within the WebView without violating App Store
+    // Review Guideline 3.1.1. So on iOS we run the StoreKit purchase
+    // sheet via RevenueCat instead; on success, RC's webhook
+    // (/api/billing/revenuecat-webhook) flips subscription_status to
+    // 'active', and we poll /api/me to pick up the change — same
+    // pattern as Stripe post-checkout.
+    if (isIos()) {
+      try {
+        // Tie the RC customer to this workspace BEFORE buying so the
+        // resulting webhook carries our workspace id as app_user_id.
+        if (ctx?.workspace?.id) await identifyIapUser(ctx.workspace.id);
+        const offerings = await getIapOfferings();
+        // Match by package type so the user's toggle (monthly vs annual)
+        // picks the right Apple product.
+        const wantedType = plan === 'annual' ? 'ANNUAL' : 'MONTHLY';
+        const pkg = offerings.find((o) => o.period === wantedType) || offerings[0];
+        if (!pkg) {
+          setErr('In-app purchase isn\'t available right now. Please try again in a moment.');
+          setBusy(null);
+          return;
+        }
+        const result = await purchaseIapPackage(pkg);
+        if (result.userCancelled) { setBusy(null); return; }
+        if (!result.ok) { setErr(result.error || 'Purchase failed'); setBusy(null); return; }
+        // Webhook → DB flip takes a beat. Poll /api/me up to ~6s; same
+        // pattern as the Stripe post-checkout sync. onRefresh re-fetches
+        // /api/me, which drops the wall once subscription_status is active.
+        setBusy('syncing');
+        let active = false;
+        for (let i = 0; i < 6 && !active; i++) {
+          await new Promise((r) => setTimeout(r, 1000));
+          const me = await api.get('/me').catch(() => null);
+          if (me?.subscription?.isActive) active = true;
+        }
+        await onRefresh?.();
+        setBusy(null);
+      } catch (e) {
+        setErr(e?.message || 'Could not start purchase');
+        setBusy(null);
+      }
+      return;
+    }
     try {
       // winback is a monthly-only offer (checkout.js scopes the coupon to
       // monthly), so the toggle is hidden while it's showing — `plan`
@@ -134,6 +180,26 @@ export default function Paywall({ ctx, onRefresh }) {
       window.location.href = r.url;
     } catch (e) {
       setErr(e.message || 'Could not start checkout');
+      setBusy(null);
+    }
+  };
+
+  // Apple-required affordance: "Restore purchases" so a user who
+  // re-installs THRYVE on a new device can recover their entitlements
+  // without contacting support. Only shown in the iOS build.
+  const restorePurchases = async () => {
+    setBusy('restore'); setErr(null);
+    try {
+      if (ctx?.workspace?.id) await identifyIapUser(ctx.workspace.id);
+      const r = await restoreIapPurchases();
+      if (!r.ok) { setErr(r.error || 'Restore failed'); setBusy(null); return; }
+      // Give RC's webhook a moment to land, then refresh.
+      await new Promise((res) => setTimeout(res, 1500));
+      await onRefresh?.();
+      setBusy(null);
+      if (!r.hasActive) setErr('No active purchases found on this Apple ID.');
+    } catch (e) {
+      setErr(e?.message || 'Restore failed');
       setBusy(null);
     }
   };
@@ -439,12 +505,25 @@ export default function Paywall({ ctx, onRefresh }) {
                 gap: 4, marginTop: 2, paddingTop: 12, borderTop: '1px solid var(--border)',
                 fontSize: 12.5,
               }}>
-                {ctx?.hasBillingRecord && (
+                {ctx?.hasBillingRecord && !isIos() && (
                   <>
                     <button onClick={openBillingPortal} disabled={busy != null}
                       className="btn btn-ghost"
                       style={{ padding: '5px 9px', color: 'var(--muted)' }}>
                       {busy === 'portal' ? 'Opening…' : 'Manage billing'}
+                    </button>
+                    <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
+                  </>
+                )}
+                {/* App Store Review Guideline 3.1.1 requires a visible
+                    Restore Purchases affordance on every IAP-using screen.
+                    Only rendered in the iOS build. */}
+                {isIos() && (
+                  <>
+                    <button onClick={restorePurchases} disabled={busy != null}
+                      className="btn btn-ghost"
+                      style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                      {busy === 'restore' ? 'Restoring…' : 'Restore purchases'}
                     </button>
                     <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
                   </>

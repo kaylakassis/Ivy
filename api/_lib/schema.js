@@ -133,6 +133,28 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_period_end TIMESTAM
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 
+-- RevenueCat (Apple In-App Purchase) state. Apple requires that
+-- subscriptions sold inside the iOS app go through StoreKit, not
+-- Stripe — so an iOS customer's source-of-truth subscription lives at
+-- Apple / RevenueCat, and the same workspace may have NEITHER a
+-- Stripe customer nor a Stripe subscription. We discriminate with
+-- subscription_source so dunning / portal / cancel flows route to the
+-- right provider:
+--
+--   'stripe' (default): web purchaser. Stripe webhooks own state.
+--   'apple':            iOS in-app purchaser. RevenueCat webhook
+--                       (api/billing/revenuecat-webhook.js) owns state.
+--                       Cancel happens in Apple's subscriptions UI;
+--                       our Cancel button on iOS deep-links there.
+--
+-- revenuecat_user_id is RC's customer id (we use the workspace id as
+-- their appUserID, so it's just the same workspace id round-tripped —
+-- but we store what RC sends back in case they ever alias it).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_source TEXT NOT NULL DEFAULT 'stripe';
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS revenuecat_user_id  TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS apple_product_id    TEXT;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS apple_original_transaction_id TEXT;
+
 -- Dunning state. subscription_past_due_since is stamped on the first
 -- invoice.payment_failed webhook; cleared on payment_succeeded. The
 -- subscription-dunning cron uses it to find workspaces past the

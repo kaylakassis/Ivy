@@ -6,7 +6,7 @@
 // proof-of-acceptance is bound to the same transaction as the account
 // itself.
 import { sql } from '../_lib/db.js';
-import { hashPassword, signSession, setSessionCookie, validEmail } from '../_lib/auth.js';
+import { hashPassword, signSession, setSessionCookie, validEmail, isNativeClient } from '../_lib/auth.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -186,7 +186,8 @@ export default async function handler(req, res) {
       }
     }
 
-    setSessionCookie(res, signSession(user.id));
+    const sessionToken = signSession(user.id);
+    setSessionCookie(res, sessionToken);
 
     // Send the verification + welcome emails in parallel so we wait
     // ~max(t1, t2) instead of t1 + t2 — Resend's API can take 1-3s
@@ -238,7 +239,7 @@ export default async function handler(req, res) {
       emailErrors.welcome = welcomeResult.reason?.message || 'send failed';
     }
 
-    return created(res, {
+    const responsePayload = {
       // Decorate with isSuperAdmin so the sidebar shows the Admin tab on
       // first paint when the signing-up email matches SUPER_ADMIN_EMAIL.
       user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) || user.user_type === 'super_admin' },
@@ -248,7 +249,11 @@ export default async function handler(req, res) {
       // from your account page") instead of pretending everything
       // worked. Empty object means both succeeded.
       emailErrors: Object.keys(emailErrors).length ? emailErrors : undefined,
-    });
+    };
+    // Native shells get the JWT in the body — see auth/login.js for the
+    // explanation; same constraint applies here.
+    if (isNativeClient(req)) responsePayload.token = sessionToken;
+    return created(res, responsePayload);
   } catch (err) {
     return serverError(res, err);
   }

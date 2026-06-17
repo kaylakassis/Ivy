@@ -91,16 +91,39 @@ export function restoreFromImpersonation(res, originalToken) {
   );
 }
 
-export function readSession(req) {
+// Source the bearer token from `Authorization: Bearer <jwt>` first, then
+// fall back to the HttpOnly session cookie. Native iOS (Capacitor) uses
+// the header path because its cross-origin XHR drops SameSite=Lax cookies;
+// the web continues to use cookies and never sends Authorization.
+function readToken(req) {
+  const auth = req.headers.authorization || req.headers.Authorization;
+  if (auth && /^Bearer\s+/i.test(auth)) {
+    const t = auth.replace(/^Bearer\s+/i, '').trim();
+    if (t) return t;
+  }
   const header = req.headers.cookie || '';
   const parsed = cookie.parse(header);
-  const token = parsed[COOKIE];
+  return parsed[COOKIE] || null;
+}
+
+export function readSession(req) {
+  const token = readToken(req);
   if (!token) return null;
   try {
     return jwt.verify(token, secret(), { algorithms: ['HS256'] });
   } catch {
     return null;
   }
+}
+
+// True when the request was made by the native iOS/Android Capacitor
+// shell, which sets X-Client-Platform on every fetch. Used by login /
+// signup / OAuth-callback endpoints to also include the raw JWT in the
+// response body so the client can stash it in iOS Keychain — the cookie
+// they'd otherwise rely on doesn't cross the WebView↔API origin gap.
+export function isNativeClient(req) {
+  const v = req.headers['x-client-platform'] || req.headers['X-Client-Platform'];
+  return v === 'ios' || v === 'android';
 }
 
 // Returns the current user row, or sends 401 and returns null.

@@ -48,6 +48,19 @@ export function requireSameOrigin(req, res) {
   // Allow only if at least one of origin/referer matches the request host.
   if (origin === host || referer === host) return true;
 
+  // Native iOS/Android Capacitor shell. The WebView origin is
+  // `https://localhost` (iOS) / `https://localhost` or `http://localhost`
+  // (Android) — those can never match our API host, but the request is
+  // legitimate. We gate on the X-Client-Platform marker AND on Capacitor's
+  // fixed localhost origin together: a malicious page on a real
+  // localhost-bound dev server can't spoof the platform header from
+  // browser JS (custom headers trigger CORS preflight, which our
+  // vercel.json only ack's for the Capacitor origins).
+  const platform = req.headers['x-client-platform'] || req.headers['X-Client-Platform'];
+  if ((platform === 'ios' || platform === 'android') && (origin === 'localhost' || referer === 'localhost')) {
+    return true;
+  }
+
   res.status(403).json({ error: 'Forbidden: cross-site request blocked' });
   return false;
 }
