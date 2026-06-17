@@ -17,11 +17,16 @@
     "test:metrics": "node --import ./tests/bootstrap.mjs ./tests/client-metrics.test.mjs",
     "test:tpls": "node --import ./tests/bootstrap.mjs ./tests/workflow-templates.test.mjs",
     "test:smoke": "node --import ./tests/bootstrap.mjs ./tests/smoke-runner.mjs",
-    "test": "node tests/run-all.mjs"
+    "test": "node tests/run-all.mjs",
+    "ios:sync": "npm run build && npx cap sync ios",
+    "ios:open": "npx cap open ios"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/preferences": "^6.0.2",
     "@neondatabase/serverless": "^1.1.0",
+    "@revenuecat/purchases-capacitor": "^9.2.0",
     "@sentry/node": "^10.51.0",
     "@sentry/react": "^10.51.0",
     "@vercel/blob": "^2.3.3",
@@ -37,6 +42,8 @@
     "web-push": "^3.6.7"
   },
   "devDependencies": {
+    "@capacitor/cli": "^6.1.2",
+    "@capacitor/ios": "^6.1.2",
     "@types/react": "^18.3.3",
     "@types/react-dom": "^18.3.0",
     "@vitejs/plugin-react": "^4.3.1",

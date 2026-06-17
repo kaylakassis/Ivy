@@ -10,15 +10,41 @@
 // migration); the second request typically lands cleanly. We only
 // retry GET / safe methods automatically, and only on 500-class errors
 // or network failures — never on 4xx (those are deterministic).
+//
+// Native iOS (Capacitor) twist:
+//   • The WebView origin is `https://localhost`, so a relative `/api/…`
+//     URL resolves to the wrong place. We prepend VITE_API_BASE_URL
+//     (e.g. https://getthryve.ai) on native.
+//   • Cross-origin XHR drops the SameSite=Lax session cookie. We attach
+//     `Authorization: Bearer <jwt>` (token stored in iOS Keychain via
+//     src/lib/nativeAuth.js) and `X-Client-Platform: ios` so the server
+//     knows to look at the header instead of the cookie.
+import { isNative, getPlatform } from './platform.js';
+import { getNativeAuthToken } from './nativeAuth.js';
+
 const RETRY_METHODS = new Set(['GET']);
+
+// Empty on web (relative `/api/…` is same-origin), absolute on native
+// builds. Vite inlines this at build time — at runtime it's a constant
+// string per bundle.
+const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
 async function req(method, path, body, opts = {}) {
   // Only set Content-Type when there's an actual body. Sending json content-type
   // on a bodiless DELETE/GET makes some serverless routing layers cranky.
   const headers = {};
   if (body !== undefined && body !== null) headers['Content-Type'] = 'application/json';
+  // Native auth — Bearer token + platform marker. The server's readSession
+  // (api/_lib/auth.js) checks Authorization first, falls back to cookie.
+  if (isNative()) {
+    headers['X-Client-Platform'] = getPlatform();
+    const tok = getNativeAuthToken();
+    if (tok) headers['Authorization'] = `Bearer ${tok}`;
+  }
   // Caller-supplied headers (e.g. Idempotency-Key on mutating POSTs).
   if (opts.headers) Object.assign(headers, opts.headers);
+
+  const url = `${API_BASE}/api${path}`;
 
   const doFetch = async () => {
     let res;
@@ -29,7 +55,7 @@ async function req(method, path, body, opts = {}) {
     const ctrl = opts.timeoutMs ? new AbortController() : null;
     const timer = ctrl ? setTimeout(() => ctrl.abort(), opts.timeoutMs) : null;
     try {
-      res = await fetch(`/api${path}`, {
+      res = await fetch(url, {
         method,
         headers,
         credentials: 'include',
