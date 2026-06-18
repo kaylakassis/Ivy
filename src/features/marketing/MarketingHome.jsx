@@ -1266,7 +1266,7 @@ function FounderNote() {
           context-switching between booking, invoicing, messaging, and
           follow-up - and pay for the privilege. Or even worse, they didn't
           know what tools to use to grow. The goal is one well-made tool that
-          respects your data and your time. Your business, THRYVING.
+          respects your data and your time.
         </p>
         <div style={{ marginTop: 18, fontSize: 13, color: 'var(--fg-2)' }}>
           - Kayla, founder of Ivy OS

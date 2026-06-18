@@ -22,7 +22,7 @@ export const TOOL_STACK = [
 
 export const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
 
-// The single paid subscription ("THRYVING").
+// The single paid subscription ("Active").
 export const IVY_PRICE = 49;
 
 // Trial length granted at signup. Matches the workspaces.trial_ends_at
@@ -31,7 +31,7 @@ export const IVY_PRICE = 49;
 // in the trial length only happens in one place.
 export const TRIAL_DAYS = 28;
 
-// Annual plan ("THRYVING, billed yearly"). Priced at 10× the monthly
+// Annual plan ("Active, billed yearly"). Priced at 10× the monthly
 // rate so a year of Ivy OS costs the same as ten months paid monthly —
 // i.e. "2 months free" versus 12 × $49 = $588. Surfaced as the
 // highlighted LTV option on the paywall + pricing page; monthly stays

@@ -393,7 +393,7 @@ export default function Paywall({ ctx, onRefresh }) {
                 }}>{canTrial ? '28 days free' : (plan === 'annual' ? '2 months free' : 'Full access')}</div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>THRYVING</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>Active</span>
                   <span style={{
                     fontFamily: 'var(--font-num)', fontSize: 28, fontWeight: 600,
                     color: 'var(--fg)', letterSpacing: '-0.02em',

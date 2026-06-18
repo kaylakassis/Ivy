@@ -2,7 +2,7 @@
 // owner." Every competitor publishes prices; without one we lose people
 // to comparison-shop bounce. Sections:
 //   1. single plan card - one subscription, two states (free trial now,
-//      "THRYVING" once paid). We don't sell team/multi-location tiers
+//      "Active" once paid). We don't sell team/multi-location tiers
 //      yet because they aren't supported.
 //   2. ROI calculator - show the savings live (RoiCalculator.jsx)
 //   3. comparison vs the stack - visual reinforcement
@@ -18,7 +18,7 @@ import RoiCalculator from './RoiCalculator.jsx';
 import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS } from '../../lib/pricing.js';
 
 // One plan, two states: a free trial while we're in beta, then a
-// single paid subscription ("THRYVING") at $49/mo. We deliberately
+// single paid subscription ("Active") at $49/mo. We deliberately
 // don't sell team / multi-location tiers yet because they aren't
 // supported — one honest plan beats three aspirational ones.
 const PLAN = {
@@ -67,7 +67,7 @@ const FAQ = [
   },
   {
     q: 'Is there a free trial?',
-    a: `Yes. ${TRIAL_DAYS} days, the whole product unlocked, no credit card required. We won't ask for payment until you decide to keep THRYVING — and even then, you can subscribe at a discount that's locked in for life.`,
+    a: `Yes. ${TRIAL_DAYS} days, the whole product unlocked, no credit card required. We won't ask for payment until you decide to subscribe — and even then, you can subscribe at a discount that's locked in for life.`,
   },
   {
     q: "What if I'm switching from another tool?",
@@ -118,14 +118,14 @@ export default function PricingPage() {
           </p>
         </section>
 
-        {/* Two states: free trial, then "THRYVING" (paid subscriber). */}
+        {/* Two states: free trial, then "Active" (paid subscriber). */}
         <section style={{
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           gap: 12, marginBottom: 28, flexWrap: 'wrap',
         }}>
           <StateChip label={`${TRIAL_DAYS} days free`} sub="the whole product, no card" active/>
           <Icons.Arrow size={16} sw={2} style={{ color: 'var(--muted)' }}/>
-          <StateChip label="THRYVING" sub={`$${IVY_PRICE}/mo when subscribed`}/>
+          <StateChip label="Active" sub={`$${IVY_PRICE}/mo when subscribed`}/>
         </section>
 
         {/* Single plan card */}
@@ -150,7 +150,7 @@ export default function PricingPage() {
                 {PLAN.priceBeta}
               </div>
               <div style={{ fontSize: 12.5, opacity: 0.75, marginTop: 6 }}>
-                then {PLAN.priceGA} when you're THRYVING. No per-seat math, no transaction fees.
+                then {PLAN.priceGA} once you subscribe. No per-seat math, no transaction fees.
               </div>
               <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
                 Or save with annual — <strong>${IVY_PRICE_ANNUAL}/yr</strong> (2 months free, save ${ANNUAL_SAVINGS}).
@@ -297,7 +297,7 @@ export default function PricingPage() {
 }
 
 // Pill showing the two account states: a free trial during beta, then
-// "THRYVING" (a paid subscriber). The active one gets the accent fill.
+// "Active" (a paid subscriber). The active one gets the accent fill.
 function StateChip({ label, sub, active }) {
   return (
     <div style={{

@@ -613,10 +613,9 @@ function SubscriptionCard() {
     }
   };
 
-  // Paid subscribers are "THRYVING" (the brand term for an active plan);
-  // everyone else gets the plain state label.
+  // Paid subscribers show "Active"; everyone else gets the plain state label.
   const statusLabel = {
-    active:   'THRYVING',
+    active:   'Active',
     trialing: 'Free trial',
     past_due: 'Past due',
     suspended:'Suspended',
