@@ -1,4 +1,4 @@
-// In-app walkthrough — spotlight overlay edition.
+// In-app walkthrough - spotlight overlay edition.
 //
 // Each step optionally targets a CSS selector and an app route. When a
 // step's route differs from the current location we navigate first, then
@@ -9,27 +9,27 @@
 //
 // Survives navigation by living at the AppShell level (the modal isn't
 // dismissed when the user moves to another page). Old design dismissed
-// on "Take me there" — that's why the walkthrough cut off at the
+// on "Take me there" - that's why the walkthrough cut off at the
 // calendar step.
 //
 // Final step is the Ivy hello: a friendly "I'm Ivy, ask me anything"
 // panel with an inline chat composer that POSTs to /api/ivy and shows
 // the reply in-place. After Ivy's first reply, the user can keep
-// chatting or click "Done — let me explore" to dismiss.
+// chatting or click "Done - let me explore" to dismiss.
 import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
 // Each step:
-//   selector?  — query string. If absent, step renders as a centered card.
-//   route?     — navigate here before painting (only if not already there).
-//   placement? — 'right' | 'bottom' | 'top' | 'left' | 'auto' (default auto).
+//   selector?  - query string. If absent, step renders as a centered card.
+//   route?     - navigate here before painting (only if not already there).
+//   placement? - 'right' | 'bottom' | 'top' | 'left' | 'auto' (default auto).
 const STEPS = [
   {
     id: 'welcome',
     title: 'Welcome to Ivy OS',
-    body: "This is your business OS — every booking, client, invoice, and document in one place. The tour takes about a minute. You can replay it any time from your Account page.",
+    body: "This is your business OS - every booking, client, invoice, and document in one place. The tour takes about a minute. You can replay it any time from your Account page.",
   },
   {
     id: 'dashboard',
@@ -50,7 +50,7 @@ const STEPS = [
   {
     id: 'finance-packages',
     title: 'Sell session packages',
-    body: "Bundle multiple sessions into one upfront purchase — '5-pack of massage', 'monthly retainer'. Sell to a client from their drawer; credits get consumed as they book.",
+    body: "Bundle multiple sessions into one upfront purchase - '5-pack of massage', 'monthly retainer'. Sell to a client from their drawer; credits get consumed as they book.",
     route: '/finance?section=packages',
     selector: '[data-section="packages"]',
     placement: 'bottom',
@@ -65,7 +65,7 @@ const STEPS = [
   },
   {
     id: 'clients',
-    title: 'Clients — your CRM',
+    title: 'Clients - your CRM',
     body: "Tag clients, take notes, track lifetime value, sell packages, manage SMS consent. Bulk-import from CSV or let them onboard themselves through your booking link.",
     route: '/clients',
     selector: '[data-tour="nav-clients"]',
@@ -73,7 +73,7 @@ const STEPS = [
   },
   {
     id: 'finance',
-    title: 'Finance — invoices + Stripe',
+    title: 'Finance - invoices + Stripe',
     body: "Send invoices, accept card payments through your own Stripe account, refund (full or partial), track expenses, and export Schedule C-ready CSVs at tax time.",
     route: '/finance',
     selector: '[data-tour="nav-finance"]',
@@ -82,14 +82,14 @@ const STEPS = [
   {
     id: 'docs',
     title: 'Documents + intake forms',
-    body: "Build reusable form templates (waivers, intakes), then attach them to a service so they auto-send when that service is booked. Clients sign in their portal — you get the completed PDF.",
+    body: "Build reusable form templates (waivers, intakes), then attach them to a service so they auto-send when that service is booked. Clients sign in their portal - you get the completed PDF.",
     route: '/documents',
     selector: '[data-tour="nav-docs"]',
     placement: 'right',
   },
   {
     id: 'comms',
-    title: 'Messages — chat with clients',
+    title: 'Messages - chat with clients',
     body: "Native two-way chat per client. Booking confirmations, intake forms, paid invoices, and cancellations all surface as system notes in the thread, so context never goes missing.",
     route: '/messages',
     selector: '[data-tour="nav-comms"]',
@@ -98,7 +98,7 @@ const STEPS = [
   {
     id: 'rewards',
     title: 'Rewards & referrals',
-    body: "Loyalty points, referral codes, and birthday perks — stand up programs that bring repeat clients back and give them a reason to bring friends.",
+    body: "Loyalty points, referral codes, and birthday perks - stand up programs that bring repeat clients back and give them a reason to bring friends.",
     route: '/rewards',
     selector: '[data-tour="nav-rewards"]',
     placement: 'right',
@@ -106,7 +106,7 @@ const STEPS = [
   {
     id: 'website',
     title: 'Your public website',
-    body: "A polished, hosted site you can spin up in minutes — services, pricing, gallery, contact. Linked to your booking flow so visitors can book without leaving.",
+    body: "A polished, hosted site you can spin up in minutes - services, pricing, gallery, contact. Linked to your booking flow so visitors can book without leaving.",
     route: '/website',
     selector: '[data-tour="nav-website"]',
     placement: 'right',
@@ -203,7 +203,7 @@ export default function Walkthrough({ onClose }) {
           changes don't flash an undimmed page mid-transition. */}
       <BackdropMask target={showSpotlight ? target : null}/>
 
-      {/* Spotlight ring (purely decorative — sits over the cutout). */}
+      {/* Spotlight ring (purely decorative - sits over the cutout). */}
       {showSpotlight && <SpotlightRing target={target}/>}
 
       {/* Step UI: either a tooltip pinned near the target, an Ivy card,
@@ -580,7 +580,7 @@ function IvyHello({ onDismiss, onBack }) {
           </button>
           <button onClick={onDismiss} className="btn btn-primary"
             style={{ padding: '7px 14px', fontSize: 12.5 }}>
-            <Icons.Check size={11} sw={2.4}/> Done — let me explore
+            <Icons.Check size={11} sw={2.4}/> Done - let me explore
           </button>
         </div>
       </div>

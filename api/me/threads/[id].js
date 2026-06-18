@@ -3,7 +3,7 @@
 //   POST → append a new message from the client. Body { text }.
 //
 // Authorization: the thread's client_id must be in the user's myClientIds().
-// Owners can NOT use this endpoint — they have /api/messages/:id.
+// Owners can NOT use this endpoint - they have /api/messages/:id.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
       //
       // Pagination: hard cap at 500 most-recent messages. Long-running
       // threads with thousands of messages used to load every one on
-      // every open — slow + memory-heavy on phones. Owners on the
+      // every open - slow + memory-heavy on phones. Owners on the
       // /messages/:id surface get the same cap via api/messages/[id].js.
       // We return chronological order client-expected, so the LIMIT is
       // applied via a sub-select on DESC then re-ORDER'd ASC.
@@ -143,7 +143,7 @@ export default async function handler(req, res) {
          WHERE id = $2 AND client_id = ANY($3)`,
         [preview, id, myIds],
       );
-      // Notify the workspace owner — push + email. Push alone leaves
+      // Notify the workspace owner - push + email. Push alone leaves
       // owners with push-disabled (most do, frankly) totally blind to
       // inbound client messages. Owner→client direction at
       // api/messages/[id].js:141-172 already sends both; we mirror it.

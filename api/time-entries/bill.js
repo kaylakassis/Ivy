@@ -8,7 +8,7 @@
 // it can't be billed again.
 //
 // Constraints:
-//   • All entries must belong to the same client (or none — owner can
+//   • All entries must belong to the same client (or none - owner can
 //     bill orphan entries against a chosen clientId).
 //   • Invoice number is auto-allocated via the same sequence the
 //     manual New Invoice flow uses, so numbering stays continuous.
@@ -59,10 +59,10 @@ export default async function handler(req, res) {
     let clientId = overrideClientId;
     if (!clientId) {
       if (distinctClients.length === 0) {
-        return badRequest(res, 'Entries have no client — pick one to bill against');
+        return badRequest(res, 'Entries have no client - pick one to bill against');
       }
       if (distinctClients.length > 1) {
-        return badRequest(res, 'Entries are for different clients — bill them separately or pick one');
+        return badRequest(res, 'Entries are for different clients - bill them separately or pick one');
       }
       clientId = distinctClients[0];
     }
@@ -74,7 +74,7 @@ export default async function handler(req, res) {
       const hours = Math.max(0, Math.round((Number(e.duration_seconds || 0) / 3600) * 100) / 100);
       const desc  = [
         e.service_name || 'Hours',
-        e.description ? `— ${e.description}` : null,
+        e.description ? `- ${e.description}` : null,
         ` · ${(e.started_at instanceof Date ? e.started_at : new Date(e.started_at))
               .toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`,
       ].filter(Boolean).join(' ');
@@ -129,7 +129,7 @@ export default async function handler(req, res) {
     );
     if (upd.rows.length !== ids.length) {
       await sql`DELETE FROM invoices WHERE id = ${invoice.id} AND workspace_id = ${workspaceId}`;
-      return badRequest(res, 'Some entries were billed by another request — refresh and try again.');
+      return badRequest(res, 'Some entries were billed by another request - refresh and try again.');
     }
 
     return created(res, { invoice: serializeInvoice(invoice) });

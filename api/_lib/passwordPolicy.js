@@ -5,7 +5,7 @@
 //   • Hard maximum 200 (bcrypt only consumes the first 72 bytes anyway;
 //     this cap is to keep a malicious 50KB password from DoS-ing bcrypt
 //     and from inflating the audit log)
-//   • Reject the top common-password list — these get tried in every
+//   • Reject the top common-password list - these get tried in every
 //     credential-stuffing dictionary and are not safe regardless of
 //     length rules
 //
@@ -16,13 +16,13 @@
 // high-security apps (which want 15+ chars or known-breach lookups via
 // HIBP). v1 of Ivy OS's policy aims to block the obvious failure modes
 // without driving users away with friction. The HIBP integration is a
-// follow-up — it needs a stable outbound HTTPS budget.
+// follow-up - it needs a stable outbound HTTPS budget.
 
 const MIN_LEN_SOFT = 8;   // accepted IF mixed letter+digit
 const MIN_LEN_STRONG = 10; // accepted on its own
 const MAX_LEN = 200;
 
-// Lowercased single-token common passwords. Kept short on purpose —
+// Lowercased single-token common passwords. Kept short on purpose -
 // every entry is one of the top brute-force candidates. The full
 // SecLists rockyou top-100 would balloon this file; the highest-yield
 // 30 here catch >90% of credential-stuffing attempts in the wild.
@@ -47,7 +47,7 @@ export function validatePassword(pw) {
     return { ok: false, error: `Password must be at most ${MAX_LEN} characters` };
   }
   if (COMMON_PASSWORDS.has(pw.toLowerCase())) {
-    return { ok: false, error: 'This password is too common — pick a different one' };
+    return { ok: false, error: 'This password is too common - pick a different one' };
   }
   if (pw.length < MIN_LEN_STRONG) {
     const hasLetter = /[A-Za-z]/.test(pw);

@@ -1,4 +1,4 @@
-// POST /api/clients/import — bulk-create clients from a parsed CSV.
+// POST /api/clients/import - bulk-create clients from a parsed CSV.
 // Body: { rows: [{ name, email?, stage?, notes?, source?, tags? }, ...] }
 // Behavior:
 //   • De-dupes by email within the workspace. Existing rows are SKIPPED
@@ -6,7 +6,7 @@
 //   • Without an email, every row is treated as a new client (no dedupe).
 //   • Returns a summary: { created, skipped, invalid, errors[] }.
 //
-// All inserts are scoped to the authenticated user's workspace — nothing
+// All inserts are scoped to the authenticated user's workspace - nothing
 // in the request body can override that.
 import { sql } from '../_lib/db.js';
 import { requireUser, validEmail } from '../_lib/auth.js';
@@ -33,12 +33,12 @@ export default async function handler(req, res) {
     if (!Array.isArray(body.rows)) return badRequest(res, 'rows[] is required');
     if (body.rows.length === 0) return badRequest(res, 'No rows to import');
     if (body.rows.length > MAX_ROWS) {
-      return badRequest(res, `Too many rows — split into batches of ${MAX_ROWS}`);
+      return badRequest(res, `Too many rows - split into batches of ${MAX_ROWS}`);
     }
 
     // Pre-fetch existing emails in this workspace so the dedupe check is
     // O(N) instead of O(N) round-trips. Lower-cased for case-insensitive
-    // match — same convention the auth code uses.
+    // match - same convention the auth code uses.
     const existing = await sql`
       SELECT LOWER(email) AS email FROM clients
       WHERE workspace_id = ${workspaceId} AND email IS NOT NULL
@@ -110,7 +110,7 @@ export default async function handler(req, res) {
         created += result.rows.length;
         for (const cr of result.rows) {
           if (inserted.length < 50) inserted.push(serializeClient(cr));
-          // Fire invite email — best-effort, idempotent via invite_sent_at.
+          // Fire invite email - best-effort, idempotent via invite_sent_at.
           if (cr.email) {
             sendClientInvite({ workspaceId, clientId: cr.id })
               .catch((e) => console.error('[import] sendClientInvite failed:', e?.message));

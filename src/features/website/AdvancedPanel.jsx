@@ -1,10 +1,10 @@
 // Editor-toolbar modal that surfaces the "advanced" site features:
-//   • Domain — set a custom domain + verify the DNS
-//   • Forms  — wire contact/newsletter forms to email or webhook
-//   • Redirects — owner-defined 301s
-//   • Popups — exit-intent + sticky CTA
-//   • History — list / restore previous publishes
-//   • Traffic — 30-day pageview rollup
+//   • Domain - set a custom domain + verify the DNS
+//   • Forms  - wire contact/newsletter forms to email or webhook
+//   • Redirects - owner-defined 301s
+//   • Popups - exit-intent + sticky CTA
+//   • History - list / restore previous publishes
+//   • Traffic - 30-day pageview rollup
 //
 // One panel keeps the toolbar uncluttered while giving owners a single
 // place to find every "make my live site behave differently" knob.
@@ -97,7 +97,7 @@ function DomainTab({ site, set }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Add your own domain. Once DNS propagates, your site is reachable at https://yourdomain.com — search engines re-index the new URL automatically.
+        Add your own domain. Once DNS propagates, your site is reachable at https://yourdomain.com - search engines re-index the new URL automatically.
       </div>
       <Field label="Custom domain (no http://)">
         <input type="text" value={site.customDomain || ''}
@@ -234,7 +234,7 @@ function PopupsTab({ site, set }) {
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 8 }}>Shows once per session when the cursor leaves the page upward.</div>
         <Field label="Headline">
           <input value={popup.headline} onChange={(e) => set({ exitIntentPopup: { ...popup, headline: e.target.value } })}
-            placeholder="Wait — before you go" style={inputS}/>
+            placeholder="Wait - before you go" style={inputS}/>
         </Field>
         <Field label="Subtext">
           <input value={popup.sub} onChange={(e) => set({ exitIntentPopup: { ...popup, sub: e.target.value } })}
@@ -256,7 +256,7 @@ function PopupsTab({ site, set }) {
         </div>
         <Field label="Text">
           <input value={sticky.text} onChange={(e) => set({ stickyCta: { ...sticky, text: e.target.value } })}
-            placeholder="Spring schedule open — book before April 1" style={inputS}/>
+            placeholder="Spring schedule open - book before April 1" style={inputS}/>
         </Field>
         <Field label="Link">
           <input value={sticky.link} onChange={(e) => set({ stickyCta: { ...sticky, link: e.target.value } })}
@@ -302,7 +302,7 @@ function HistoryTab() {
           <div style={{ flex: 1 }}>
             <div style={{ fontSize: 13, fontWeight: 550 }}>{new Date(v.created_at).toLocaleString()}</div>
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
-              Template <strong>{v.template || '—'}</strong> · {v.page_count} page{Number(v.page_count) === 1 ? '' : 's'}
+              Template <strong>{v.template || '-'}</strong> · {v.page_count} page{Number(v.page_count) === 1 ? '' : 's'}
             </div>
           </div>
           <button className="btn btn-outline" onClick={() => restore(v.id)} disabled={busy} style={{ padding: '6px 10px', fontSize: 12 }}>
@@ -356,7 +356,7 @@ function Group({ title, rows }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         {rows.slice(0, 10).map((r, i) => (
           <div key={i} style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12.5 }}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{r.k || '—'}</span>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 160 }}>{r.k || '-'}</span>
             <span style={{ color: 'var(--muted)' }}>{r.v}</span>
           </div>
         ))}

@@ -3,14 +3,14 @@
 // any infra to render the app correctly.
 //
 // Public surface stays the same as the shim era:
-//   initMonitoring()      — call once at app boot
-//   captureException(err) — fire-and-forget log
-//   <ErrorBoundary fallback={...}> — React error boundary
+//   initMonitoring()      - call once at app boot
+//   captureException(err) - fire-and-forget log
+//   <ErrorBoundary fallback={...}> - React error boundary
 //
 // Activate by setting in Vercel:
 //   VITE_SENTRY_DSN          (required)
 //   VITE_SENTRY_ENVIRONMENT  (optional, defaults to import.meta.env.MODE)
-//   VITE_SENTRY_TRACES_RATE  (optional, defaults to 0 — perf off)
+//   VITE_SENTRY_TRACES_RATE  (optional, defaults to 0 - perf off)
 //
 // VITE_-prefixed vars are exposed to the browser bundle by Vite. Anything
 // else stays server-side.
@@ -30,7 +30,7 @@ export function initMonitoring() {
         || import.meta.env.MODE
         || 'production',
       tracesSampleRate: Number(import.meta.env.VITE_SENTRY_TRACES_RATE || '0'),
-      // Drop common noise — chunk-load failures during deploys, browser
+      // Drop common noise - chunk-load failures during deploys, browser
       // extensions, transient network errors. Real bugs still surface.
       ignoreErrors: [
         'Network request failed',
@@ -50,7 +50,7 @@ export function initMonitoring() {
 }
 
 export function captureException(err, ctx) {
-  // Always log to console first — useful in dev, also a backstop if
+  // Always log to console first - useful in dev, also a backstop if
   // Sentry is wedged or hasn't initialized yet.
   // eslint-disable-next-line no-console
   console.error('[monitoring]', err, ctx || '');
@@ -61,7 +61,7 @@ export function captureException(err, ctx) {
       Sentry.captureException(err);
     });
   } catch {
-    // Swallow — already logged above.
+    // Swallow - already logged above.
   }
 }
 

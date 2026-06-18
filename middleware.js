@@ -1,10 +1,10 @@
-// Vercel edge middleware — runs in front of every /api/* request.
+// Vercel edge middleware - runs in front of every /api/* request.
 //
 // Sole purpose: enable CORS for the Capacitor (native iOS/Android) shell.
 //
 // The native WebView origin is `https://localhost` (Capacitor's default
 // HTTPS scheme handler) or `capacitor://localhost` on older configs. Our
-// API lives at the production domain — so every native API call is
+// API lives at the production domain - so every native API call is
 // cross-origin from the browser's POV and needs:
 //
 //   • Access-Control-Allow-Origin: <the exact native origin>
@@ -16,7 +16,7 @@
 // Web requests are same-origin, so this middleware is a no-op for them
 // (no Origin header that matches Capacitor → no CORS headers added).
 //
-// Security: pairing with api/_lib/security.js requireSameOrigin —
+// Security: pairing with api/_lib/security.js requireSameOrigin -
 // state-changing endpoints additionally check `X-Client-Platform`
 // matches the Capacitor origin. So even if a hostile page somehow
 // claimed `Origin: https://localhost`, it would still need to send the

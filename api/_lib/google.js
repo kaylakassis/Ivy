@@ -1,7 +1,7 @@
 // Google OAuth + Calendar API client. Just the methods we need to
 // connect a workspace (exchange code → refresh token), create a
 // dedicated "Ivy OS Bookings" calendar, and push event CRUD on
-// booking lifecycle. No SDK — direct fetch keeps the bundle slim.
+// booking lifecycle. No SDK - direct fetch keeps the bundle slim.
 //
 // Required env vars:
 //   GOOGLE_OAUTH_CLIENT_ID
@@ -76,7 +76,7 @@ export async function exchangeCode({ code, redirectUri }) {
 }
 
 // Trade a long-lived refresh_token for a fresh access_token. Cached
-// per request — if you need the same access_token across multiple API
+// per request - if you need the same access_token across multiple API
 // calls in one handler, refresh once and pass it around.
 export async function refreshAccessToken(refreshToken) {
   if (!refreshToken) throw new Error('refresh token is required');
@@ -94,10 +94,10 @@ export async function revokeToken(token) {
   if (!token) return;
   try {
     await fetch(`${REVOKE_URL}?token=${encodeURIComponent(token)}`, { method: 'POST' });
-  } catch { /* ignore — revoke is best-effort */ }
+  } catch { /* ignore - revoke is best-effort */ }
 }
 
-// /userinfo via the OIDC discovery endpoint — used after first connect
+// /userinfo via the OIDC discovery endpoint - used after first connect
 // so the UI can show "connected as kayla@gmail.com". Lightweight.
 export async function fetchUserEmail(accessToken) {
   const res = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
@@ -140,7 +140,7 @@ export async function createIvyCalendar({ accessToken, summary = 'Ivy OS Booking
     method: 'POST', accessToken,
     body: {
       summary,
-      description: 'Bookings from your Ivy OS workspace. Manage them in the Ivy OS app — edits made here will not sync back.',
+      description: 'Bookings from your Ivy OS workspace. Manage them in the Ivy OS app - edits made here will not sync back.',
       timeZone: 'UTC',
     },
   });
@@ -149,12 +149,12 @@ export async function createIvyCalendar({ accessToken, summary = 'Ivy OS Booking
 
 // Convert an Ivy OS booking into a Google Calendar event payload. Times
 // are emitted as floating local-time (no Z) since we don't track the
-// owner's timezone yet — Google interprets them in the calendar's tz.
+// owner's timezone yet - Google interprets them in the calendar's tz.
 function bookingToEvent({ booking, serviceName }) {
   const dtstart = `${booking.date}T${pad2(Math.floor(booking.start_min / 60))}:${pad2(booking.start_min % 60)}:00`;
   const dtend   = `${booking.date}T${pad2(Math.floor(booking.end_min   / 60))}:${pad2(booking.end_min   % 60)}:00`;
   const event = {
-    summary: `${serviceName || 'Appointment'} — ${firstName(booking.client_name)}`,
+    summary: `${serviceName || 'Appointment'} - ${firstName(booking.client_name)}`,
     description: 'Manage in Ivy OS. Edits made in this calendar app will not sync back.',
     start: { dateTime: dtstart },
     end:   { dateTime: dtend },
@@ -208,7 +208,7 @@ export async function deleteEvent({ accessToken, calendarId, eventId }) {
   });
 }
 
-// FreeBusy query — fast endpoint that returns just `{ start, end }` busy
+// FreeBusy query - fast endpoint that returns just `{ start, end }` busy
 // windows without per-event detail. Used by the inbound sync to mirror
 // the owner's personal calendar as opaque busy blocks, no titles or
 // attendees fetched.
@@ -236,7 +236,7 @@ export async function fetchFreeBusy({ accessToken, calendarIds = ['primary'], ti
 }
 
 // Lists future events from a calendar so we can pull a stable per-event
-// id (FreeBusy doesn't return ids — we'd lose track of which busy block
+// id (FreeBusy doesn't return ids - we'd lose track of which busy block
 // to update vs delete on the next sync). Pulls only the fields needed:
 // id, start, end, summary. Calendar API's /events endpoint with
 // timeMin / singleEvents / maxResults.

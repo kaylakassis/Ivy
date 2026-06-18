@@ -1,4 +1,4 @@
-// IVY PRO — full-page AI business coach.
+// IVY PRO - full-page AI business coach.
 // Layout: left sidebar (history + new chat), center (chat or welcome), right sidebar (upload + insights).
 
 function IvyProView({ direction }) {
@@ -155,7 +155,7 @@ function IvyProView({ direction }) {
               </button>
             </div>
             <div style={{ marginTop: 8, fontSize: 11, color: 'var(--muted)', textAlign: 'center' }}>
-              Ivy draws on your real Ivy OS data — clients, finance, calendar.
+              Ivy draws on your real Ivy OS data - clients, finance, calendar.
             </div>
           </div>
         </div>
@@ -202,27 +202,27 @@ function ivyReply(text) {
   } catch {}
 
   if (t.includes('revenue') || t.includes('money') || t.includes('income')) {
-    return `You're at $${revenue.toLocaleString()} in paid revenue this month. ${openInv > 0 ? `There are ${openInv} open invoices — chasing those could unlock a quick boost.` : 'No open invoices right now.'} Want me to draft a follow-up message for unpaid invoices?`;
+    return `You're at $${revenue.toLocaleString()} in paid revenue this month. ${openInv > 0 ? `There are ${openInv} open invoices - chasing those could unlock a quick boost.` : 'No open invoices right now.'} Want me to draft a follow-up message for unpaid invoices?`;
   }
   if (t.includes('retention') || t.includes('churn')) {
-    return `Retention is about rhythm. Clients who go 3+ weeks without a touchpoint are 4× more likely to churn. Of your ${clientCount} active clients, a few haven't heard from you in a while — I can draft a light check-in to the ones most at risk.`;
+    return `Retention is about rhythm. Clients who go 3+ weeks without a touchpoint are 4× more likely to churn. Of your ${clientCount} active clients, a few haven't heard from you in a while - I can draft a light check-in to the ones most at risk.`;
   }
   if (t.includes('pricing') || t.includes('rates')) {
     return `A good rule: raise rates when you're >70% booked for 4 weeks straight. I can look at your calendar and last 60 days of bookings to see if you're there. Want me to pull the numbers?`;
   }
   if (t.includes('client acquisition') || t.includes('leads') || t.includes('grow')) {
-    return `Three high-leverage moves this week:\n\n1. Post a short case study of a client win on your socials.\n2. Email your 10 most engaged past clients asking for a referral.\n3. Add a clear CTA on your homepage — right now it's doing too much.\n\nWant me to draft any of these?`;
+    return `Three high-leverage moves this week:\n\n1. Post a short case study of a client win on your socials.\n2. Email your 10 most engaged past clients asking for a referral.\n3. Add a clear CTA on your homepage - right now it's doing too much.\n\nWant me to draft any of these?`;
   }
   if (t.includes('content')) {
-    return `Your highest-performing content tends to be 'before/after' formats and short FAQs. I can sketch a 4-week content calendar in that vein — want it framed around a single theme, or a mix?`;
+    return `Your highest-performing content tends to be 'before/after' formats and short FAQs. I can sketch a 4-week content calendar in that vein - want it framed around a single theme, or a mix?`;
   }
   if (t.includes('analyze') && t.includes('report')) {
-    return `Got it — I'll treat the upload as your source of truth. Give me a moment... At a glance I'd focus on (1) top 3 revenue sources, (2) any segment with > 15% drop, (3) any cost line growing faster than revenue. Want me to dig into any of those?`;
+    return `Got it - I'll treat the upload as your source of truth. Give me a moment... At a glance I'd focus on (1) top 3 revenue sources, (2) any segment with > 15% drop, (3) any cost line growing faster than revenue. Want me to dig into any of those?`;
   }
   if (t.length < 30) {
-    return `Happy to dig in. A little more context would help — what's the outcome you're after?`;
+    return `Happy to dig in. A little more context would help - what's the outcome you're after?`;
   }
-  return `Here's how I'd think about this: start by naming the single number that would move most if this worked. From your data, revenue is $${revenue.toLocaleString()} this month with ${clientCount} active clients. I'll sketch a plan rooted in those — want 3 options or one sharp recommendation?`;
+  return `Here's how I'd think about this: start by naming the single number that would move most if this worked. From your data, revenue is $${revenue.toLocaleString()} this month with ${clientCount} active clients. I'll sketch a plan rooted in those - want 3 options or one sharp recommendation?`;
 }
 
 /* ============ BANNER ============ */

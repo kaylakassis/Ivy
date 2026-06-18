@@ -9,7 +9,7 @@
 // bootstrap (especially when ensureSchemaApplied() is running the full
 // migration); the second request typically lands cleanly. We only
 // retry GET / safe methods automatically, and only on 500-class errors
-// or network failures — never on 4xx (those are deterministic).
+// or network failures - never on 4xx (those are deterministic).
 //
 // Native iOS (Capacitor) twist:
 //   • The WebView origin is `https://localhost`, so a relative `/api/…`
@@ -25,7 +25,7 @@ import { getNativeAuthToken } from './nativeAuth.js';
 const RETRY_METHODS = new Set(['GET']);
 
 // Empty on web (relative `/api/…` is same-origin), absolute on native
-// builds. Vite inlines this at build time — at runtime it's a constant
+// builds. Vite inlines this at build time - at runtime it's a constant
 // string per bundle.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
@@ -34,7 +34,7 @@ async function req(method, path, body, opts = {}) {
   // on a bodiless DELETE/GET makes some serverless routing layers cranky.
   const headers = {};
   if (body !== undefined && body !== null) headers['Content-Type'] = 'application/json';
-  // Native auth — Bearer token + platform marker. The server's readSession
+  // Native auth - Bearer token + platform marker. The server's readSession
   // (api/_lib/auth.js) checks Authorization first, falls back to cookie.
   if (isNative()) {
     headers['X-Client-Platform'] = getPlatform();
@@ -65,7 +65,7 @@ async function req(method, path, body, opts = {}) {
     } catch (networkErr) {
       const aborted = networkErr.name === 'AbortError';
       throw Object.assign(
-        new Error(aborted ? 'Request timed out — please try again.' : (networkErr.message || 'Network error')),
+        new Error(aborted ? 'Request timed out - please try again.' : (networkErr.message || 'Network error')),
         { status: 0 },
       );
     } finally {

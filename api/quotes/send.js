@@ -30,7 +30,7 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
-    // Idempotent wrap — same rationale as invoices/send. A double-click
+    // Idempotent wrap - same rationale as invoices/send. A double-click
     // on the owner's "Send estimate" button used to mint two tokens +
     // fire two emails; only the second was visible to the recipient.
     const idemp = await withIdempotency(req, user.id, async () => doSend());
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
     const q = await fetchOwnedQuote({ id, workspaceId });
     if (!q) return { status: 400, body: { error: 'Quote not found' } };
     if (q.status === 'accepted') return { status: 400, body: { error: 'Already accepted' } };
-    if (q.status === 'voided')   return { status: 400, body: { error: 'Voided — restore first' } };
+    if (q.status === 'voided')   return { status: 400, body: { error: 'Voided - restore first' } };
 
     let clientId = body.clientId ? String(body.clientId) : q.client_id;
     let recipientName  = q.client_name;

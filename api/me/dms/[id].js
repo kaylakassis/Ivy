@@ -41,7 +41,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       const myClientId = thread.my_client_id;
-      // Messages — exclude any from a client the viewer has blocked
+      // Messages - exclude any from a client the viewer has blocked
       // (blocker_client_id = me, blocked = sender).
       const msgs = await sql.query(
         `SELECT m.*
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      // Archive (leave) for my side only — the other side keeps history.
+      // Archive (leave) for my side only - the other side keeps history.
       const meIsA = thread.client_a_id === thread.my_client_id;
       const col = meIsA ? 'archived_a' : 'archived_b';
       await sql.query(

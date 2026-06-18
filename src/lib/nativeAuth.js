@@ -3,7 +3,7 @@
 // On the web the session lives in an HttpOnly cookie (set by /api/auth/login
 // etc.) and the browser sends it automatically. On native (Capacitor),
 // the WebView origin is `https://localhost` while the API lives at our
-// production domain — cross-origin XHR drops the SameSite=Lax cookie,
+// production domain - cross-origin XHR drops the SameSite=Lax cookie,
 // so we instead store the raw JWT in iOS Keychain via @capacitor/preferences
 // and attach it as `Authorization: Bearer <token>` on every request.
 //
@@ -11,7 +11,7 @@
 // header is set (so web responses keep the cookie-only shape).
 //
 // All exports are async because @capacitor/preferences is dynamically
-// imported — keeps the web bundle from pulling the Capacitor SDK.
+// imported - keeps the web bundle from pulling the Capacitor SDK.
 import { isNative } from './platform.js';
 
 const KEY = 'ivy_session_token';
@@ -27,7 +27,7 @@ async function prefs() {
 }
 
 // Load the token once on app boot so subsequent reads are sync from
-// memory. Safe to call repeatedly — returns the same in-flight promise.
+// memory. Safe to call repeatedly - returns the same in-flight promise.
 export function primeNativeAuth() {
   if (primed) return Promise.resolve(memoryToken);
   if (primePromise) return primePromise;

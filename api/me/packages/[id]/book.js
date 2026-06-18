@@ -17,7 +17,7 @@
 //   • workspace timezone (so notice/horizon math matches what the
 //     visitor sees in the slot grid)
 //
-// Credit consumption is upfront — all N at once, or none. A later
+// Credit consumption is upfront - all N at once, or none. A later
 // cancellation refunds 1 credit per occurrence (existing restoreCredit
 // path on api/me/bookings/[id].js).
 import { sql } from '../../../_lib/db.js';
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
         if (!Number.isInteger(endMin) || endMin <= startMin || endMin > 1440) return badRequest(res, 'Each slot needs endMin > startMin.');
         slots.push({ date, startMin, endMin });
       }
-      // Detect intra-request duplicates (same date+start) — they'd
+      // Detect intra-request duplicates (same date+start) - they'd
       // both try to insert against the same conflict-window.
       const seen = new Set();
       for (const s of slots) {
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
     const serviceAvail = sv.rows[0].availability || null;
     const travelBuffer = Math.max(0, Number(sv.rows[0].travel_buffer_minutes ?? 0));
 
-    // Validate every slot before consuming credits — atomic all-or-nothing.
+    // Validate every slot before consuming credits - atomic all-or-nothing.
     const now = Date.now();
     for (const s of slots) {
       const weekday = new Date(s.date + 'T00:00:00Z').getUTCDay();
@@ -175,7 +175,7 @@ export default async function handler(req, res) {
       }
     }
 
-    // Atomically debit N credits. All-or-nothing — gating in the WHERE
+    // Atomically debit N credits. All-or-nothing - gating in the WHERE
     // clause means a concurrent booking flow that took the last credit
     // wins, and we refuse cleanly.
     const debit = await sql`
@@ -191,7 +191,7 @@ export default async function handler(req, res) {
       RETURNING credits_remaining, status
     `;
     if (debit.rows.length === 0) {
-      return badRequest(res, 'Could not consume credits — try refreshing your packages.');
+      return badRequest(res, 'Could not consume credits - try refreshing your packages.');
     }
 
     // Insert the bookings. Each gets client_package_id so a future
@@ -242,7 +242,7 @@ export default async function handler(req, res) {
       throw insertErr;
     }
 
-    // Post-insert side-effects — match the public booking endpoint so
+    // Post-insert side-effects - match the public booking endpoint so
     // package-credit bookings aren't silent in the rest of the system.
     // All fire-and-forget; per-booking failures get logged and surface
     // separately from the 200 OK to the client. This is the same pattern
@@ -277,7 +277,7 @@ export default async function handler(req, res) {
 }
 
 // Expand a recurrence rule from a first ISO date into N ISO dates.
-// Uses UTC arithmetic — the wall-clock TIME is constant across
+// Uses UTC arithmetic - the wall-clock TIME is constant across
 // occurrences, only the DATE changes, so DST shifts don't matter for
 // the date math itself.
 //

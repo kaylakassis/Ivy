@@ -1,6 +1,6 @@
 // Shared helpers for the waitlist_entries table. Two consumers:
-//   • Public booking flow — clients join the waitlist when a slot is full
-//   • Cancellation paths — promote the oldest waiting entry into a real
+//   • Public booking flow - clients join the waitlist when a slot is full
+//   • Cancellation paths - promote the oldest waiting entry into a real
 //     booking + notify the client they're in
 import { sql } from './db.js';
 import { sendEmailToClient, emailShell } from './email.js';
@@ -37,7 +37,7 @@ export function serializeWaitlistEntry(row) {
 //
 // Picks by oldest created_at among waiting entries for this exact
 // (workspace, service, date, start_min, end_min). Only one promotion
-// per cancellation — if the cancelled booking freed a single seat in a
+// per cancellation - if the cancelled booking freed a single seat in a
 // group class with ≥2 spots open, only one waiter advances; the next
 // cancel promotes the next one.
 export async function promoteWaitlistOnCancel({ workspaceId, serviceId, dateISO, startMin, endMin }) {
@@ -59,7 +59,7 @@ export async function promoteWaitlistOnCancel({ workspaceId, serviceId, dateISO,
   if (next.rows.length === 0) return null;
   const w = next.rows[0];
 
-  // Atomically claim the entry — switch its status before inserting the
+  // Atomically claim the entry - switch its status before inserting the
   // booking so a concurrent cancel can't double-promote the same entry.
   const claim = await sql`
     UPDATE waitlist_entries SET status = 'promoted', promoted_at = NOW()
@@ -90,7 +90,7 @@ export async function promoteWaitlistOnCancel({ workspaceId, serviceId, dateISO,
     serviceId, capacity: serviceCapacity, travelBufferMin, bufferMin,
   });
   if (slotFull) {
-    // Release the claim — the waiter keeps their place for the next opening.
+    // Release the claim - the waiter keeps their place for the next opening.
     await sql`
       UPDATE waitlist_entries SET status = 'waiting', promoted_at = NULL
       WHERE id = ${w.id} AND status = 'promoted' AND promoted_booking_id IS NULL
@@ -167,9 +167,9 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
   if (entry.client_email) {
     const branding = await fetchBranding(workspaceId);
     const html = emailShell({
-      heading: 'Good news — a spot just opened up!',
+      heading: 'Good news - a spot just opened up!',
       body: `<p>Hi ${escapeHtml(firstName(entry.client_name))},</p>
-        <p>You're off the waitlist — your <strong>${escapeHtml(serviceName)}</strong>
+        <p>You're off the waitlist - your <strong>${escapeHtml(serviceName)}</strong>
         with <strong>${escapeHtml(bizName)}</strong> is confirmed for
         <strong>${escapeHtml(dateLabel)}</strong> at <strong>${escapeHtml(timeLabel)}</strong>.</p>
         <p>If this no longer works, you can cancel from your portal.</p>`,
@@ -180,19 +180,19 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
     await sendEmailToClient({
       clientId: entry.client_id, type: 'bookings',
       to: entry.client_email,
-      subject: `You're in — ${serviceName} on ${dateLabel}`,
+      subject: `You're in - ${serviceName} on ${dateLabel}`,
       html,
       replyTo: branding.replyTo,
     });
   }
 
   if (entry.client_phone) {
-    // Lookup consent — same one-number-one-consent pattern as reminders.
+    // Lookup consent - same one-number-one-consent pattern as reminders.
     const c = await sql`SELECT sms_consent_at FROM clients WHERE phone = ${entry.client_phone} LIMIT 1`;
     await sendClientSms({
       phone:       entry.client_phone,
       consentAt:   c.rows[0]?.sms_consent_at || null,
-      body:        `${bizName}: a spot opened up — your ${serviceName} on ${dateLabel} at ${timeLabel} is confirmed.`,
+      body:        `${bizName}: a spot opened up - your ${serviceName} on ${dateLabel} at ${timeLabel} is confirmed.`,
       workspaceId: entry.workspace_id,
     });
   }

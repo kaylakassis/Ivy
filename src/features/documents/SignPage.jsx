@@ -183,10 +183,10 @@ export default function SignPage() {
           <h1 className="page-title" style={{ margin: 0, fontSize: 28 }}>You're signed.</h1>
           <p style={{ color: 'var(--muted)', marginTop: 10, fontSize: 14, lineHeight: 1.55, maxWidth: 460, marginInline: 'auto' }}>
             {handedOff ? (
-              <>Thanks — your part of <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is in.
+              <>Thanks - your part of <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is in.
               We've passed it to <b style={{ color: 'var(--fg-2)' }}>{nextSignerName}</b> to sign next.</>
             ) : (
-              <>Thanks — <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is complete and the sender has been notified.</>
+              <>Thanks - <b style={{ color: 'var(--fg-2)' }}>{doc.name}</b> is complete and the sender has been notified.</>
             )}
           </p>
           {finalPdfUrl && (
@@ -214,7 +214,7 @@ export default function SignPage() {
         </div>
       </div>
 
-      {/* Multi-signer position banner — only shows when we have signer
+      {/* Multi-signer position banner - only shows when we have signer
           context, which only happens for documents sent through the
           new multi-signer flow. */}
       {signerInfo && signerInfo.total > 1 && (
@@ -230,7 +230,7 @@ export default function SignPage() {
             of <strong style={{ color: 'var(--fg)' }}>{signerInfo.total}</strong>.
             {signerInfo.position < signerInfo.total
               ? ' The next signer will get their link after you finish.'
-              : " You're the last signer — the document finalizes when you submit."}
+              : " You're the last signer - the document finalizes when you submit."}
           </span>
         </div>
       )}
@@ -317,7 +317,7 @@ export default function SignPage() {
             </div>
             <p style={{ margin: '4px 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
               The sender will be notified that you declined. You can include
-              a brief reason — it'll go in the audit log so they understand
+              a brief reason - it'll go in the audit log so they understand
               why.
             </p>
             <textarea value={declineReason} onChange={(e) => setDeclineReason(e.target.value)}
@@ -373,7 +373,7 @@ function PdfFieldsSummary({ fields, values }) {
       <Icons.Check size={14} sw={2.4} stroke={filled === total ? 'var(--ok)' : 'var(--muted)'}/>
       <span style={{ color: filled === total ? 'var(--ok)' : 'var(--fg-2)' }}>
         <strong>{filled}</strong> of <strong>{total}</strong> fields completed
-        {filled < total && ' — click each highlighted box on the PDF above'}
+        {filled < total && ' - click each highlighted box on the PDF above'}
       </span>
     </div>
   );
@@ -415,7 +415,7 @@ function PageWrap({ tweaks, children }) {
 }
 
 // Allow only a tight set of tags (h1/h2/h3, p, br, strong, em, ul/ol/li).
-// Strip everything else. This is a safety net — content_html came from the
+// Strip everything else. This is a safety net - content_html came from the
 // owner of the document, but we still don't want script tags in there.
 function sanitize(html) {
   if (typeof html !== 'string') return '';

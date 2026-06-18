@@ -3,7 +3,7 @@
 // sees this screen first. Children render only after the visitor
 // supplies the right password (and gets the ea_pass cookie set).
 //
-// When the gate is OFF, this component is invisible — it just renders
+// When the gate is OFF, this component is invisible - it just renders
 // children directly. Removal plan: delete this file + the import in
 // AuthPage.jsx; no other code references it.
 import React, { useEffect, useState } from 'react';
@@ -27,7 +27,7 @@ export default function EarlyAccessGate({ children }) {
   }, []);
 
   if (status === null) {
-    // Don't flash the children — show nothing while we figure out
+    // Don't flash the children - show nothing while we figure out
     // whether the gate is on. The check is fast (single SELECT).
     return null;
   }

@@ -5,7 +5,7 @@ export const VALID_STATUS = new Set(['running', 'stopped', 'billed']);
 
 export function serializeEntry(row) {
   if (!row) return null;
-  // Live duration for running entries — the UI animates a counter,
+  // Live duration for running entries - the UI animates a counter,
   // but this snapshot is enough for list rendering between renders.
   let seconds = row.duration_seconds;
   if (seconds == null && row.started_at && !row.ended_at) {

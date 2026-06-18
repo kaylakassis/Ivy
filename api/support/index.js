@@ -1,7 +1,7 @@
 // User-facing support chat.
-//   GET  /api/support — fetch (or implicitly create) the caller's thread
+//   GET  /api/support - fetch (or implicitly create) the caller's thread
 //                       + last 100 messages. Marks unread_user = 0.
-//   POST /api/support  { text } — append a user message.
+//   POST /api/support  { text } - append a user message.
 //
 // Admins use /api/admin/support (separate file) so we can keep the
 // auth + index conventions clean.

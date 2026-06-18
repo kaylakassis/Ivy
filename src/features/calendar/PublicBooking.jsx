@@ -1,4 +1,4 @@
-// /book/:slug — public booking page. Reads sanitized state from /api/calendar/public/:slug,
+// /book/:slug - public booking page. Reads sanitized state from /api/calendar/public/:slug,
 // posts to /api/calendar/public/:slug/book to confirm.
 //
 // Also rendered as /embed/book/:slug with embedded=true. In embed mode
@@ -56,7 +56,7 @@ export default function PublicBooking({ embedded = false }) {
   // "Have a question?" prospect-message modal state. Lets a visitor
   // talk to the business before committing to a slot.
   const [contactOpen, setContactOpen] = useState(false);
-  // Membership subscribe modal — separate from the booking flow.
+  // Membership subscribe modal - separate from the booking flow.
   const [joiningMembership, setJoiningMembership] = useState(null);
   const [buyingPackage, setBuyingPackage] = useState(null);
   // Gift card buy modal.
@@ -81,7 +81,7 @@ export default function PublicBooking({ embedded = false }) {
   }, [slug]);
 
   // SEO: structured data + Open Graph / Twitter card meta. Injected
-  // dynamically because we're a SPA — Vite ships a single index.html.
+  // dynamically because we're a SPA - Vite ships a single index.html.
   // Crawlers that execute JS (Google, Bing, Twitterbot, Slackbot,
   // Facebook's link previewer) all see these tags and use the
   // aggregateRating + reviews block to render rich snippets in the SERP.
@@ -237,7 +237,7 @@ export default function PublicBooking({ embedded = false }) {
         clientName: name,
         clientEmail: email,
         clientPhone: phone.trim() || null,
-        // Mobile services need an address — only forwarded when the
+        // Mobile services need an address - only forwarded when the
         // service is mobile so the server can validate it's there.
         locationAddress: svc?.locationType === 'mobile' ? address.trim() : null,
         addOnIds: Array.from(selectedAddOns),
@@ -248,7 +248,7 @@ export default function PublicBooking({ embedded = false }) {
         joinWaitlist,
       });
       // If the service requires a deposit AND the workspace has Stripe
-      // connected, the server returned a Checkout URL — redirect there.
+      // connected, the server returned a Checkout URL - redirect there.
       // The slot is already held by the booking, so a cancelled deposit
       // payment doesn't release it (owner can still chase the deposit).
       if (r.depositCheckoutUrl) {
@@ -258,7 +258,7 @@ export default function PublicBooking({ embedded = false }) {
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
     } catch (e) {
-      setBookErr(e.message || 'Could not confirm — try another slot.');
+      setBookErr(e.message || 'Could not confirm - try another slot.');
     } finally {
       setBusy(false);
     }
@@ -270,10 +270,10 @@ export default function PublicBooking({ embedded = false }) {
         <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
       )}
 
-      {/* "Have a question?" CTA — pinned just under the header on the
+      {/* "Have a question?" CTA - pinned just under the header on the
           slot picker step. We hide it on the success/confirmed/details
           steps to avoid distracting from the active booking flow.
-          Also hidden in embed mode — the embed is meant for one job
+          Also hidden in embed mode - the embed is meant for one job
           (booking); the contact form has its own embed. */}
       {step === 'pick' && !embedded && (
         <div style={{
@@ -301,7 +301,7 @@ export default function PublicBooking({ embedded = false }) {
         />
       )}
 
-      {/* Memberships card — only when the business has at least one
+      {/* Memberships card - only when the business has at least one
           active tier with a Stripe price. Visitors click a tier to
           open the join modal. Hidden in embed mode to keep the widget
           focused on the booking flow. */}
@@ -313,7 +313,7 @@ export default function PublicBooking({ embedded = false }) {
         />
       )}
 
-      {/* Packages card — bundles of sessions sold up-front. Same
+      {/* Packages card - bundles of sessions sold up-front. Same
           gating as memberships (hidden in embed). Clicking a card
           opens the purchase modal which POSTs to /api/packages/checkout. */}
       {step === 'pick' && cal.packages?.length > 0 && !embedded && (
@@ -325,7 +325,7 @@ export default function PublicBooking({ embedded = false }) {
         />
       )}
 
-      {/* Gift card CTA — same step as the slot picker so it doesn't
+      {/* Gift card CTA - same step as the slot picker so it doesn't
           get in the way of someone who's actively trying to book. */}
       {step === 'pick' && (
         <div style={{
@@ -336,7 +336,7 @@ export default function PublicBooking({ embedded = false }) {
         }}>
           <Icons.Gift size={14} stroke="var(--accent)"/>
           <span style={{ flex: 1, minWidth: 200 }}>
-            Send a gift card to a friend — they'll get it in their inbox right away.
+            Send a gift card to a friend - they'll get it in their inbox right away.
           </span>
           <button onClick={() => setGiftCardOpen(true)}
             className="btn btn-outline" style={{ fontSize: 12.5, padding: '6px 12px' }}>
@@ -386,7 +386,7 @@ export default function PublicBooking({ embedded = false }) {
               <b style={{ color: 'var(--fg-2)' }}>
                 {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </b>{' '}at <b style={{ color: 'var(--fg-2)' }}>{minToHM(slot.start)}</b>.
-              You'll be auto-booked — no action needed on your end.
+              You'll be auto-booked - no action needed on your end.
             </p>
           </div>
         </div>
@@ -415,7 +415,7 @@ export default function PublicBooking({ embedded = false }) {
                 Your meeting link
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginBottom: 10, lineHeight: 1.5 }}>
-                Save this — it's also in the confirmation email. Open it at the start of your session.
+                Save this - it's also in the confirmation email. Open it at the start of your session.
               </div>
               <a href={confirmedVideoUrl} target="_blank" rel="noopener noreferrer"
                 className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
@@ -452,7 +452,7 @@ export default function PublicBooking({ embedded = false }) {
           {waitlistMode && (
             <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
               Every slot for this day is booked. Drop your details and we'll
-              auto-book you the moment a spot opens up — no action needed
+              auto-book you the moment a spot opens up - no action needed
               on your end.
             </p>
           )}
@@ -462,7 +462,7 @@ export default function PublicBooking({ embedded = false }) {
           <Field label="Email">
             <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} style={inputSty} placeholder="you@email.com"/>
           </Field>
-          <Field label="Mobile" hint="Optional — needed if you'd like text reminders.">
+          <Field label="Mobile" hint="Optional - needed if you'd like text reminders.">
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
               style={inputSty} placeholder="(555) 123-4567" autoComplete="tel"/>
           </Field>
@@ -585,7 +585,7 @@ export default function PublicBooking({ embedded = false }) {
                     <select value={customAnswers[f.id] || ''}
                       onChange={(e) => setCustomAnswers((m) => ({ ...m, [f.id]: e.target.value }))}
                       required={f.required} style={inputSty}>
-                      <option value="">— Choose —</option>
+                      <option value="">- Choose -</option>
                       {(f.options || []).map((o) => <option key={o} value={o}>{o}</option>)}
                     </select>
                   ) : f.type === 'checkbox' ? (
@@ -660,7 +660,7 @@ export default function PublicBooking({ embedded = false }) {
                     This business doesn't take appointments.
                   </div>
                   <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.55 }}>
-                    They sell products — visit their shop to see what's in stock.
+                    They sell products - visit their shop to see what's in stock.
                   </div>
                   {cal.websiteHandle && (
                     <a className="btn btn-primary" href={`/site/${encodeURIComponent(cal.websiteHandle)}`}
@@ -686,7 +686,7 @@ export default function PublicBooking({ embedded = false }) {
                   return (
                     <button key={s.id} onClick={() => {
                       setServiceId(s.id);
-                      // Reset per-service state — picks shouldn't carry
+                      // Reset per-service state - picks shouldn't carry
                       // across services.
                       setSelectedAddOns(new Set());
                       setCustomAnswers({});
@@ -804,11 +804,11 @@ export default function PublicBooking({ embedded = false }) {
                   {isClosed ? (
                     <div style={{ fontSize: 10, color: 'var(--muted-2)', textAlign: 'center', padding: '8px 0' }}>Closed</div>
                   ) : isFullyBooked ? (
-                    /* Hot day — every slot taken. Surface waitlist as
+                    /* Hot day - every slot taken. Surface waitlist as
                        the obvious next step instead of letting the user
                        wander away. */
                     <button onClick={() => {
-                      // Drop into the details step in waitlist mode —
+                      // Drop into the details step in waitlist mode -
                       // the primary button becomes "Join the waitlist"
                       // and the submit goes straight to the queue.
                       const first = allSlots[0];
@@ -909,7 +909,7 @@ function ReviewsBlock({ summary }) {
               </div>
             )}
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
-              — {r.reviewerName}
+              - {r.reviewerName}
             </div>
             {r.ownerResponse && (
               <div style={{
@@ -995,7 +995,7 @@ const inputSty = {
   color: 'var(--fg)', fontSize: 14, outline: 'none',
 };
 
-// Memberships block — listed as cards below the slot picker. Each
+// Memberships block - listed as cards below the slot picker. Each
 // card opens the join modal; the modal POSTs to /api/memberships/checkout
 // and redirects to Stripe Checkout.
 function MembershipsBlock({ memberships, bizName, onJoin }) {
@@ -1046,7 +1046,7 @@ function MembershipsBlock({ memberships, bizName, onJoin }) {
               marginTop: 8, padding: '6px 12px', borderRadius: 8,
               background: 'var(--accent)', color: 'var(--accent-ink)',
               fontSize: 12, fontWeight: 600, textAlign: 'center',
-            }}>Join — secure checkout</div>
+            }}>Join - secure checkout</div>
           </button>
         ))}
       </div>
@@ -1141,14 +1141,14 @@ function JoinMembershipModal({ slug, membership, bizName, onClose }) {
           </button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, textAlign: 'center' }}>
-          Card details are entered on Stripe's secure checkout — never on this page.
+          Card details are entered on Stripe's secure checkout - never on this page.
         </div>
       </form>
     </div>
   );
 }
 
-// Packages block — bundles of sessions sold up-front. Each card opens
+// Packages block - bundles of sessions sold up-front. Each card opens
 // the purchase modal which POSTs to /api/packages/checkout. Visitors
 // pay via Stripe; the webhook provisions a client_packages row tied to
 // their email so they can redeem credits on future bookings.
@@ -1216,7 +1216,7 @@ function PackagesBlock({ packages, services, bizName, onBuy }) {
                 marginTop: 8, padding: '6px 12px', borderRadius: 8,
                 background: 'var(--accent)', color: 'var(--accent-ink)',
                 fontSize: 12, fontWeight: 600, textAlign: 'center',
-              }}>Buy — secure checkout</div>
+              }}>Buy - secure checkout</div>
             </button>
           );
         })}
@@ -1313,7 +1313,7 @@ function BuyPackageModal({ slug, pkg, bizName, onClose }) {
           </button>
         </div>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, textAlign: 'center' }}>
-          Card details are entered on Stripe's secure checkout — never on this page.
+          Card details are entered on Stripe's secure checkout - never on this page.
         </div>
       </form>
     </div>
@@ -1447,7 +1447,7 @@ function BuyGiftCardModal({ slug, bizName, onClose }) {
         <button type="submit" className="btn btn-primary"
           disabled={busy}
           style={{ width: '100%', justifyContent: 'center', padding: '12px' }}>
-          {busy ? 'Opening checkout…' : `Continue — $${(amount / 100).toFixed(2)}`}
+          {busy ? 'Opening checkout…' : `Continue - $${(amount / 100).toFixed(2)}`}
         </button>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 10, textAlign: 'center' }}>
           Recipient gets the code by email immediately after payment.
@@ -1520,7 +1520,7 @@ function ContactModal({ slug, bizName, onClose }) {
             </h3>
             {!done && (
               <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                We'll reply by email — usually within a day.
+                We'll reply by email - usually within a day.
               </div>
             )}
           </div>
@@ -1532,7 +1532,7 @@ function ContactModal({ slug, bizName, onClose }) {
         {done ? (
           <>
             <p style={{ margin: '0 0 18px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-              Got it — your message is on its way to <b>{bizName || 'them'}</b>.
+              Got it - your message is on its way to <b>{bizName || 'them'}</b>.
               Keep an eye on <b>{email}</b> for their reply, usually within a day.
               You can come back here any time to book once you've heard back.
             </p>

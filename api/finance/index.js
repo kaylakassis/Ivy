@@ -1,4 +1,4 @@
-// GET /api/finance — dashboard summary for the current workspace.
+// GET /api/finance - dashboard summary for the current workspace.
 // Returns rolled-up totals computed in SQL so we don't ship every invoice.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     // Read precomputed invoice totals (kept in sync by the
     // invoices_total_trg BEFORE-trigger in schema.js). Before this
     // column existed, the dashboard expanded jsonb_array_elements
-    // over every invoice on every page load — sub-second at 100
+    // over every invoice on every page load - sub-second at 100
     // invoices, multi-second at 10K. Now it's a straight SUM over
     // the indexed (workspace_id, status) and (workspace_id, paid_at)
     // partial indexes.

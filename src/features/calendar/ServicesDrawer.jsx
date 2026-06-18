@@ -1,12 +1,12 @@
-// Services management — list of cards, add/edit modal, preview-as-client toggle.
+// Services management - list of cards, add/edit modal, preview-as-client toggle.
 //
 // Each service supports:
 //   name, duration, price (the basics)
 //   photo URL (Vercel Blob upload coming later)
 //   description (shown to clients on the booking page)
-//   prep_instructions (shown after booking — placeholder for the full
+//   prep_instructions (shown after booking - placeholder for the full
 //     "items needed" doc-flow once Documents ships)
-//   reminder_minutes (array of "minutes before appointment" — defaults to
+//   reminder_minutes (array of "minutes before appointment" - defaults to
 //     7d/2d/1d/2h, fully customizable)
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
@@ -97,7 +97,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
         // overlay mount in Calendar still passes one. Calling
         // `onClose()` unconditionally below threw a minified
         // "r is not a function" the moment an inline-mode Save
-        // succeeded — which is every Save from Finance. Hence the
+        // succeeded - which is every Save from Finance. Hence the
         // `?.` below.
         id: s.id,
         name: s.name.trim() || 'Untitled',
@@ -151,7 +151,7 @@ export default function ServicesDrawer({ initial, onSave, onClose, inline = fals
       width={520}
       inline={inline}
     >
-      {/* Top toolbar — preview toggle + add */}
+      {/* Top toolbar - preview toggle + add */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
         <button className="btn btn-outline"
           onClick={() => setPreviewing((v) => !v)}
@@ -325,8 +325,8 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           <Field label="Capacity"
             hint={
               service.capacity > 1
-                ? `Group / class — up to ${service.capacity} clients can book the same time slot.`
-                : '1-on-1 — only one client can book each slot.'
+                ? `Group / class - up to ${service.capacity} clients can book the same time slot.`
+                : '1-on-1 - only one client can book each slot.'
             }>
             <NumericInput
               value={service.capacity}
@@ -355,7 +355,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
 
         <Field label="When can clients book this?"
           hint={service.availability
-            ? "Custom windows are intersected with your general availability — a service can only narrow the bookable hours, never expand them past your business hours."
+            ? "Custom windows are intersected with your general availability - a service can only narrow the bookable hours, never expand them past your business hours."
             : "Inheriting your general availability. Switch on custom windows to restrict this service to specific hours (e.g. 'Strength training 5–8pm only')."}>
           <ServiceAvailabilityEditor
             value={service.availability}
@@ -363,7 +363,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           />
         </Field>
 
-        {/* Calendar color — owner-only legibility helper. Doesn't
+        {/* Calendar color - owner-only legibility helper. Doesn't
             affect the client-facing booking page; just paints booking
             tiles on the owner's calendar so a yoga class is visually
             distinct from a massage at a glance. */}
@@ -414,12 +414,12 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
         <Field label="What's charged at booking?"
           hint={
             service.depositType === 'full'
-              ? `Clients pay the full $${Number(service.price || 0).toFixed(0)} when they book — nothing owed at the session.`
+              ? `Clients pay the full $${Number(service.price || 0).toFixed(0)} when they book - nothing owed at the session.`
               : service.depositType === 'percent'
-              ? `${service.depositAmount || 0}% deposit at booking ($${(Number(service.price || 0) * Number(service.depositAmount || 0) / 100).toFixed(2)}) — balance owed at the session.`
+              ? `${service.depositAmount || 0}% deposit at booking ($${(Number(service.price || 0) * Number(service.depositAmount || 0) / 100).toFixed(2)}) - balance owed at the session.`
               : service.depositType === 'fixed'
-              ? `Flat $${Number(service.depositAmount || 0).toFixed(2)} deposit at booking — balance owed at the session.`
-              : 'Free to book — pay the full price at the session.'
+              ? `Flat $${Number(service.depositAmount || 0).toFixed(2)} deposit at booking - balance owed at the session.`
+              : 'Free to book - pay the full price at the session.'
           }>
           <DepositPicker
             depositType={service.depositType || 'none'}
@@ -428,7 +428,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           />
         </Field>
 
-        {/* Where does this service happen? — three rows by location type:
+        {/* Where does this service happen? - three rows by location type:
             in_person → text input for the venue/address
             mobile    → number input for travel buffer (the address comes
                         from the client at booking time)
@@ -438,7 +438,7 @@ function ServiceEditModal({ service, onChange, onClose, onRemove }) {
           hint={service.locationType === 'mobile'
             ? 'You travel to the client. They enter their address when they book.'
             : service.locationType === 'virtual'
-            ? 'Online — clients join over video. We generate a meeting link automatically; set your own below to override.'
+            ? 'Online - clients join over video. We generate a meeting link automatically; set your own below to override.'
             : 'At your place. Add the address or room name below so clients know exactly where to come.'}>
           <select value={service.locationType || 'in_person'}
             onChange={(e) => onChange({ locationType: e.target.value })}
@@ -669,10 +669,10 @@ function ClientPreview({ services }) {
   );
 }
 
-// Photo upload — replaces the old "paste a URL" input. Two ways to add
+// Photo upload - replaces the old "paste a URL" input. Two ways to add
 // a photo:
-//   • Choose from library (a regular file picker — desktop and mobile)
-//   • Take photo (mobile only — uses `capture="environment"` to launch
+//   • Choose from library (a regular file picker - desktop and mobile)
+//   • Take photo (mobile only - uses `capture="environment"` to launch
 //     the camera straight into rear-facing capture, the same trick the
 //     iOS App Store uses for product photos)
 //
@@ -838,7 +838,7 @@ function Field({ label, hint, children }) {
 
 // Per-service availability override. value === null means "inherit
 // workspace general availability" (the default). When set, the value is
-// { "0": [{start,end},...], "1": [...], ... } — same shape as the workspace
+// { "0": [{start,end},...], "1": [...], ... } - same shape as the workspace
 // availability, in minutes from midnight, where 0 = Sunday. Per-day arrays
 // can be empty (= service closed that day even if the shop is open).
 const DEFAULT_PER_SERVICE_AVAILABILITY = {
@@ -971,7 +971,7 @@ function TimeMinInput({ value, onChange }) {
   );
 }
 
-// Deposit picker — four options as radio cards: none, percent, fixed, full.
+// Deposit picker - four options as radio cards: none, percent, fixed, full.
 // Picking percent/fixed reveals an inline amount input. Picking 'full' or
 // 'none' hides the input since neither needs an amount.
 const DEPOSIT_OPTIONS = [
@@ -1048,7 +1048,7 @@ function DepositPicker({ depositType, depositAmount, onChange }) {
 // Numeric input that doesn't fight the user. The naïve
 //   <input type="number" value={n} onChange={(e) => set(Number(e.target.value) || 1)} />
 // pattern collapses to its fallback (1, 0, …) the moment the user
-// backspaces the field empty — so changing "1" to "5" requires
+// backspaces the field empty - so changing "1" to "5" requires
 // highlight-and-replace, and capacity / price feel stuck.
 //
 // This wrapper holds a raw string locally and only commits to the
@@ -1082,7 +1082,7 @@ function NumericInput({ value, onChange, min, max, defaultOnBlank = 0, style, ..
         const v = e.target.value;
         setDraft(v);
         // Live-commit only when the value parses cleanly to a number
-        // — the "draft empty" and "draft = '-'" intermediate states
+        // - the "draft empty" and "draft = '-'" intermediate states
         // stay local until blur.
         if (v.trim() === '') return; // wait for blur
         const n = Number(v);
@@ -1097,7 +1097,7 @@ function NumericInput({ value, onChange, min, max, defaultOnBlank = 0, style, ..
   );
 }
 
-// Duration picker — preset chips for the four common appointment lengths
+// Duration picker - preset chips for the four common appointment lengths
 // plus a Custom chip that reveals a free-form number input. The current
 // value drives which chip is highlighted; if it matches one of the
 // presets the input stays hidden, otherwise it shows so the owner can
@@ -1108,7 +1108,7 @@ function DurationPicker({ value, onChange }) {
   const numeric = Number(value) || 0;
   const matchesPreset = DURATION_PRESETS.includes(numeric);
   // Once the user opens Custom, keep it open even if they happen to type
-  // a preset value — they expressed intent to fine-tune. Reset is via
+  // a preset value - they expressed intent to fine-tune. Reset is via
   // tapping a preset chip.
   const [customOpen, setCustomOpen] = useState(!matchesPreset && numeric > 0);
 
@@ -1118,7 +1118,7 @@ function DurationPicker({ value, onChange }) {
   };
   const pickCustom = () => {
     setCustomOpen(true);
-    // Don't reset the value — the owner may have typed a number already
+    // Don't reset the value - the owner may have typed a number already
     // and just want to fine-tune from there. If the current value is a
     // preset, leave it; the input will display it editable.
   };
@@ -1262,7 +1262,7 @@ function AddOnEditor({ value, onChange }) {
   );
 }
 
-// LabeledNumberInput — replaces the stuck-"0" pattern from before.
+// LabeledNumberInput - replaces the stuck-"0" pattern from before.
 //
 // Bugs this fixes:
 //   • value={x || 0}: when the field was empty the input rendered
@@ -1280,7 +1280,7 @@ function AddOnEditor({ value, onChange }) {
 //   • Optional `label` renders as a small caption above the input;
 //     reads cleanly in tight grids and stays visible during typing.
 //   • Optional `prefix` ($) / `suffix` (min) render adjacent to
-//     the input — explicit unit, no ambiguity.
+//     the input - explicit unit, no ambiguity.
 //
 // Stores the raw typed string locally during edit so the user can
 // fully clear the field; emits a parsed Number to the parent on
@@ -1295,7 +1295,7 @@ function LabeledNumberInput({
   // value is null/undefined OR exactly zero (so the placeholder
   // shows and the user can type fresh digits). The `defaultDisplay`
   // override lets cancellation-window-hours show '24' when unset
-  // rather than empty — clearer for that specific field.
+  // rather than empty - clearer for that specific field.
   const display = React.useMemo(() => {
     if (value == null || value === '') {
       return defaultDisplay === '' ? '' : String(defaultDisplay);
@@ -1309,7 +1309,7 @@ function LabeledNumberInput({
   const [draft, setDraft] = React.useState(display);
   // Re-sync from props when the parent's value changes externally
   // (e.g. another field's change re-renders this row). Only override
-  // the draft when the input isn't currently focused — otherwise we'd
+  // the draft when the input isn't currently focused - otherwise we'd
   // yank the user's in-progress typing out from under them.
   const ref = React.useRef(null);
   React.useEffect(() => {
@@ -1479,7 +1479,7 @@ function IntakeFormPicker({ selected, onChange }) {
         fontSize: 12, color: 'var(--muted)', lineHeight: 1.5,
       }}>
         No form templates yet. In the Documents page, create a document and
-        toggle <em>Save as template</em> — then come back here to attach it.
+        toggle <em>Save as template</em> - then come back here to attach it.
       </div>
     );
   }

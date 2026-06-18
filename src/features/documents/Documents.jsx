@@ -93,7 +93,7 @@ export default function Documents() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Documents</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Send waivers, agreements, or intake forms — clients sign with one click from their email.
+            Send waivers, agreements, or intake forms - clients sign with one click from their email.
           </div>
         </div>
         <button className="btn btn-primary" onClick={() => setCreating(true)}>
@@ -145,7 +145,7 @@ export default function Documents() {
                 icon="Doc"
                 title={tab === 'all' ? 'No documents yet' : `No ${tab}`}
                 hint={tab === 'all'
-                  ? 'Pick a template or start blank — waivers, agreements, intake forms, NDAs.'
+                  ? 'Pick a template or start blank - waivers, agreements, intake forms, NDAs.'
                   : 'Try a different tab.'}
               />
               {tab === 'all' && (
@@ -247,7 +247,7 @@ function SignerCell({ doc }) {
   if (signers.length === 0) {
     return (
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {doc.recipientName || <span style={{ color: 'var(--muted-2)' }}>—</span>}
+        {doc.recipientName || <span style={{ color: 'var(--muted-2)' }}>-</span>}
       </div>
     );
   }
@@ -257,7 +257,7 @@ function SignerCell({ doc }) {
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
       <div style={{ display: 'flex', gap: 2 }}>
         {signers.map((s, i) => (
-          <span key={s.id || i} title={`${s.name} — ${s.status}`}
+          <span key={s.id || i} title={`${s.name} - ${s.status}`}
             style={{
               width: 9, height: 9, borderRadius: 99,
               background:
@@ -327,7 +327,7 @@ function CreateDocumentModal({ onCreate, onCreateFromTemplate, onClose }) {
     if (!blankName.trim()) { setErr('Name is required'); return; }
     setBusyId('__blank'); setErr(null);
     try {
-      // Empty body — the user writes it in the rich editor that opens
+      // Empty body - the user writes it in the rich editor that opens
       // immediately after creation. Default seeded fields are added by
       // the editor when fields[] is empty (see DocumentEditor.defaultFields).
       await onCreate({

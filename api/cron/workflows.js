@@ -1,22 +1,22 @@
-// /api/cron/workflows — hourly job. Two responsibilities:
+// /api/cron/workflows - hourly job. Two responsibilities:
 //
-//   1. evaluateScheduledWorkflows — walks every enabled time-based
+//   1. evaluateScheduledWorkflows - walks every enabled time-based
 //      workflow (client_inactive, booking_completed) and fires matching
 //      clients/bookings. Once-a-day per match is plenty for these.
 //
-//   2. resumeWaitingWorkflows — picks up workflow_pending_runs rows
+//   2. resumeWaitingWorkflows - picks up workflow_pending_runs rows
 //      whose resume_at has passed (a prior `wait` action queued them)
 //      and resumes execution from the saved action index.
 //
 // Inline triggers (lead_created, client_created) don't run through
-// here — they fire from inside their source endpoints synchronously.
+// here - they fire from inside their source endpoints synchronously.
 //
 // Schedule: hourly so a 1h-precision `wait` step doesn't drift more
 // than 59m. Time-based-trigger evaluation re-runs hourly too but the
 // per-client-per-day dedupe inside the workflow run prevents duplicate
 // fires.
 //
-// Auth: same pattern as the other cron jobs — Authorization: Bearer
+// Auth: same pattern as the other cron jobs - Authorization: Bearer
 // $CRON_SECRET from Vercel cron, x-admin-secret for manual testing,
 // or a super-admin session for the "Run now" button in /admin.
 import { evaluateScheduledWorkflows, resumeWaitingWorkflows } from '../_lib/workflows.js';

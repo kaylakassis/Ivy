@@ -13,7 +13,7 @@
 //
 // DELETE /api/admin/affiliates/:id
 //   Remove the affiliate row. Past attributions stay in affiliate_uses
-//   (FK is ON DELETE CASCADE so they actually go away — fine for v1).
+//   (FK is ON DELETE CASCADE so they actually go away - fine for v1).
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';

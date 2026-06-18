@@ -1,4 +1,4 @@
-// Tests computeBookingPayment — the unified appointment-total summary that
+// Tests computeBookingPayment - the unified appointment-total summary that
 // merges the deposit + the "collect on the spot" balance invoice so owner
 // and client both see whether the whole service has been paid.
 //

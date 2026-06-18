@@ -89,7 +89,7 @@ export default async function handler(req, res) {
     const tax = 0;
     const total = subtotal + tax;
 
-    // Find-or-create a clients row by email — same pattern the
+    // Find-or-create a clients row by email - same pattern the
     // membership checkout uses so the order links to a client profile.
     let clientId = null;
     try {

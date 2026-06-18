@@ -7,7 +7,7 @@
 //
 // Refuses if the document is completed, voided, or has no pending
 // signer (e.g. already declined). For multi-signer flows, only the
-// CURRENT awaiting signer gets the resend — subsequent signers
+// CURRENT awaiting signer gets the resend - subsequent signers
 // receive their links automatically when their turn comes up.
 import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
-    // Idempotent wrap — a Resend retry used to mint a fresh token
+    // Idempotent wrap - a Resend retry used to mint a fresh token
     // every time (invalidating the prior link sent moments earlier),
     // so a double-click would race itself.
     const idemp = await withIdempotency(req, user.id, async () => doResend());
@@ -48,10 +48,10 @@ export default async function handler(req, res) {
 
     const doc = await fetchOwnedDoc({ id, workspaceId });
     if (!doc) return { status: 400, body: { error: 'Document not found' } };
-    if (doc.status === 'completed') return { status: 400, body: { error: 'Already signed — nothing to resend' } };
+    if (doc.status === 'completed') return { status: 400, body: { error: 'Already signed - nothing to resend' } };
     if (doc.status === 'voided')    return { status: 400, body: { error: 'Document is voided' } };
-    if (doc.status === 'draft')     return { status: 400, body: { error: "Draft hasn't been sent — use Send instead" } };
-    if (doc.status === 'declined')  return { status: 400, body: { error: 'Document was declined — revise + resend a new copy' } };
+    if (doc.status === 'draft')     return { status: 400, body: { error: "Draft hasn't been sent - use Send instead" } };
+    if (doc.status === 'declined')  return { status: 400, body: { error: 'Document was declined - revise + resend a new copy' } };
 
     // Find the current awaiting signer. Multi-signer flow records each
     // signer in document_signers ordered by order_index; the one with
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
         html: emailShell({
           heading: 'Document still waiting on you',
           body: `<p>Hi ${escapeHtml(target.name || 'there')},</p>
-                 <p>This is a friendly nudge — <b>${escapeHtml(doc.name)}</b> is still waiting on your signature.</p>
+                 <p>This is a friendly nudge - <b>${escapeHtml(doc.name)}</b> is still waiting on your signature.</p>
                  ${position}`,
           ctaText: 'Open and sign',
           ctaUrl: link,
@@ -129,7 +129,7 @@ export default async function handler(req, res) {
       });
     } catch (mailErr) {
       console.error('[documents/resend] email failed:', mailErr.message);
-      emailWarning = `We refreshed the link but the email to ${target.name || target.email} didn't go through — try again in a moment.`;
+      emailWarning = `We refreshed the link but the email to ${target.name || target.email} didn't go through - try again in a moment.`;
     }
 
     const reloaded = await fetchOwnedDoc({ id, workspaceId });

@@ -1,4 +1,4 @@
-// POST /api/webhooks/twilio/sms — inbound SMS from Twilio.
+// POST /api/webhooks/twilio/sms - inbound SMS from Twilio.
 //
 // THE single inbound webhook to configure in Twilio ("A message comes in").
 // It does BOTH jobs that used to be split across two endpoints (so you no
@@ -20,7 +20,7 @@ import { appUrl } from '../../_lib/tokens.js';
 export const config = { api: { bodyParser: false } };
 
 // Exact-keyword consent words (Twilio matches the same way). A reply like
-// "STOP doing that" is NOT an opt-out — only a bare keyword counts.
+// "STOP doing that" is NOT an opt-out - only a bare keyword counts.
 const STOP_WORDS  = new Set(['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT']);
 const START_WORDS = new Set(['START', 'YES', 'UNSTOP']);
 
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     const text = (params.Body || '').toString().slice(0, 4000);
     const normalized = normalizePhone(from) || from;
     const last10 = (normalized.match(/\d/g) || []).join('').slice(-10);
-    if (!last10 || last10.length < 10) return twiml(res); // can't route — ack + drop
+    if (!last10 || last10.length < 10) return twiml(res); // can't route - ack + drop
 
     // ── Compliance keywords first (STOP / START) ──────────────────────
     // Flip SMS consent for EVERY client row matching this number across
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       return twiml(res);
     }
     if (keyword === 'HELP' || keyword === 'INFO') {
-      return twiml(res); // no state change — carrier/Twilio sends the HELP reply
+      return twiml(res); // no state change - carrier/Twilio sends the HELP reply
     }
 
     // Find the matching client + their most recently active thread.
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
        LIMIT 1
     `;
     const match = rows[0];
-    if (!match) return twiml(res); // unknown sender — ack so Twilio doesn't retry
+    if (!match) return twiml(res); // unknown sender - ack so Twilio doesn't retry
 
     // Ensure a thread exists.
     let threadId = match.thread_id;
@@ -113,6 +113,6 @@ export default async function handler(req, res) {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[twilio/sms] inbound failed:', err.message);
-    return twiml(res); // never 500 to Twilio — avoids retry storms
+    return twiml(res); // never 500 to Twilio - avoids retry storms
   }
 }

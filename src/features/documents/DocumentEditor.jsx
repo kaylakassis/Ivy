@@ -138,9 +138,9 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
             <Icons.Lock size={13}/>
-            {doc.status === 'sent'      && 'Sent — content is locked while awaiting signature. Void to edit again.'}
-            {doc.status === 'completed' && 'Completed — this document is locked.'}
-            {doc.status === 'declined'  && 'Declined — content is locked. Void and resend a new draft if needed.'}
+            {doc.status === 'sent'      && 'Sent - content is locked while awaiting signature. Void to edit again.'}
+            {doc.status === 'completed' && 'Completed - this document is locked.'}
+            {doc.status === 'declined'  && 'Declined - content is locked. Void and resend a new draft if needed.'}
           </div>
         )}
 
@@ -151,7 +151,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
           // Desktop: side-by-side. Mobile flips to column via global.css.
           flexDirection: 'row',
         }}>
-          {/* LEFT — editor controls (rich text + fields). Hidden on
+          {/* LEFT - editor controls (rich text + fields). Hidden on
               mobile when the user is on the "preview" tab.
               minHeight: 0 is load-bearing: flex's implicit
               min-height: auto would otherwise keep the pane at the
@@ -196,7 +196,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
                     value={body}
                     onChange={setBody}
                     disabled={!isEditable}
-                    placeholder="Write the body of your document — headings, paragraphs, lists. The recipient sees this on the right."/>
+                    placeholder="Write the body of your document - headings, paragraphs, lists. The recipient sees this on the right."/>
                 </Section>
 
                 <Section
@@ -264,12 +264,12 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
             {(doc.activity || []).length > 0 && <ActivityPanel activity={doc.activity}/>}
           </div>
 
-          {/* RIGHT — live preview. Hidden on mobile when the user is on
+          {/* RIGHT - live preview. Hidden on mobile when the user is on
               the "edit" tab. PDF docs don't have a separate preview
-              pane — the PdfFieldEditor itself is the preview. */}
+              pane - the PdfFieldEditor itself is the preview. */}
           {!isPdf && (
             <div className="doc-editor-pane-right" data-mobile-tab={mobileTab} style={{
-              // Same minHeight: 0 reasoning as the left pane —
+              // Same minHeight: 0 reasoning as the left pane -
               // without it the inner .doc-preview-shell's
               // overflow-y: auto never engages and the preview
               // page silently extends past the drawer.
@@ -327,7 +327,7 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
               {doc.status === 'sent' && (
                 <>
                   {/* One-click resend to the current pending signer.
-                      No recipient picker — uses the already-stored
+                      No recipient picker - uses the already-stored
                       target. The Resend endpoint mints a fresh sign
                       link so older emails stop working. */}
                   {onResend && (
@@ -624,7 +624,7 @@ function SignersPanel({ doc }) {
           <div style={{ marginTop: 6, color: 'var(--muted)', lineHeight: 1.5 }}>
             SHA-256 over the document body and every signer's name, email,
             field values, and timestamps. If anything changes after this
-            point, recomputing won't match — store this hash for any
+            point, recomputing won't match - store this hash for any
             future dispute.
           </div>
         </div>

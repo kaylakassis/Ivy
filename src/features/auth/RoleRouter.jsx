@@ -3,7 +3,7 @@
 // Both → business view by default (they can switch via the menu).
 //
 // Wraps the auth-gated children so we don't have to re-fetch /api/me on
-// every page load — the AppShell stays the cache.
+// every page load - the AppShell stays the cache.
 import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
@@ -24,7 +24,7 @@ export default function RoleRouter({ children }) {
         // Exception: the user explicitly clicked "Save & exit" (which
         // sets ivy_skip_onboarding_until to a future timestamp).
         // That bypass keeps the dashboard reachable even when
-        // /api/onboarding/complete has failed server-side — we don't
+        // /api/onboarding/complete has failed server-side - we don't
         // want owners stuck on the welcome screen because of a server
         // hiccup. The flag self-expires after 24h.
         let skipUntil = 0;

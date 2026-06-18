@@ -1,4 +1,4 @@
-// Canonical Ivy OS pricing constants — the single source of truth shared
+// Canonical Ivy OS pricing constants - the single source of truth shared
 // by the marketing ROI calculator, the pricing page, and the in-app
 // paywall. Keeping them here (rather than inside a lazy-loaded marketing
 // component) means the always-loaded paywall can show the same numbers
@@ -26,13 +26,13 @@ export const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
 export const IVY_PRICE = 49;
 
 // Trial length granted at signup. Matches the workspaces.trial_ends_at
-// default (api/_lib/schema.js) — the hard paywall flips the wall on
+// default (api/_lib/schema.js) - the hard paywall flips the wall on
 // when this expires. Marketing copy reads from here so a future change
 // in the trial length only happens in one place.
 export const TRIAL_DAYS = 28;
 
 // Annual plan ("Active, billed yearly"). Priced at 10× the monthly
-// rate so a year of Ivy OS costs the same as ten months paid monthly —
+// rate so a year of Ivy OS costs the same as ten months paid monthly -
 // i.e. "2 months free" versus 12 × $49 = $588. Surfaced as the
 // highlighted LTV option on the paywall + pricing page; monthly stays
 // the honest default.

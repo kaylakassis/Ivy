@@ -26,11 +26,11 @@ export default [
       // dependency-array check is advisory (the code uses targeted disables).
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
-      // Automatic JSX runtime (Vite) — no need to import React for JSX.
+      // Automatic JSX runtime (Vite) - no need to import React for JSX.
       'react/react-in-jsx-scope': 'off',
       // We don't use prop-types.
       'react/prop-types': 'off',
-      // Apostrophes/quotes in JSX text are fine — purely stylistic.
+      // Apostrophes/quotes in JSX text are fine - purely stylistic.
       'react/no-unescaped-entities': 'off',
       // Surface, don't block, on dead vars and intentional empty catches.
       'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],

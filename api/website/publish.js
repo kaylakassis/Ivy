@@ -1,4 +1,4 @@
-// POST /api/website/publish — marks the current user's website as published.
+// POST /api/website/publish - marks the current user's website as published.
 // Requires a handle to be set. Also flips launched=true.
 
 import { sql } from '../_lib/db.js';
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
       INSERT INTO website_versions (website_id, snapshot, created_by)
       VALUES (${site.id}, ${JSON.stringify(snapshot)}::jsonb, ${user.id})
     `;
-    // Prune to the most recent 50 — cheap, infrequent, keeps storage flat.
+    // Prune to the most recent 50 - cheap, infrequent, keeps storage flat.
     await sql`
       DELETE FROM website_versions
       WHERE website_id = ${site.id}

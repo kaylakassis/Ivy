@@ -1,4 +1,4 @@
-// /api/cron/doc-reminders — daily job that pings the owner about
+// /api/cron/doc-reminders - daily job that pings the owner about
 // documents the client still hasn't signed.
 //
 // Trigger conditions per document:
@@ -8,7 +8,7 @@
 //
 // Each surviving document gets:
 //   - a push to the workspace owner ("X hasn't signed Y yet")
-//   - a push to the client (gentle nudge — only if they've claimed
+//   - a push to the client (gentle nudge - only if they've claimed
 //     their portal account; otherwise silent)
 // and stamps last_overdue_reminder_at = NOW() so we don't re-nag for
 // another week.
@@ -71,7 +71,7 @@ async function handler(req, res) {
           type: 'documents',
           payload: {
             title: 'Document still unsigned',
-            body: `${recipient} hasn't signed "${d.name}" — ${days} day${days === 1 ? '' : 's'} now.`,
+            body: `${recipient} hasn't signed "${d.name}" - ${days} day${days === 1 ? '' : 's'} now.`,
             url: `/documents`,
             tag: `doc-overdue-${d.id}`,
           },
@@ -91,7 +91,7 @@ async function handler(req, res) {
         }
 
         // Email path. Mint a fresh sign link for the CURRENT pending
-        // signer — for multi-signer docs that's whoever has status =
+        // signer - for multi-signer docs that's whoever has status =
         // 'awaiting' in document_signers (not necessarily the original
         // recipient_email/name). For legacy single-signer docs there's
         // no document_signers row and we fall back to the documents
@@ -142,7 +142,7 @@ async function handler(req, res) {
               html: emailShell({
                 heading: 'Document still waiting on you',
                 body: `<p>Hi ${escapeHtml(target.name || 'there')},</p>
-                  <p>This is a gentle nudge — <strong>${escapeHtml(d.name)}</strong> is still waiting on your signature. It's been ${days} day${days === 1 ? '' : 's'}.</p>
+                  <p>This is a gentle nudge - <strong>${escapeHtml(d.name)}</strong> is still waiting on your signature. It's been ${days} day${days === 1 ? '' : 's'}.</p>
                   <p>If you've already signed, you can ignore this.</p>`,
                 ctaText: 'Open and sign',
                 ctaUrl: link,

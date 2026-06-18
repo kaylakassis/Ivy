@@ -5,7 +5,7 @@
 //
 // Storage: daily_usage_counters table (see schema.js). One row per
 // (workspace_id, counter_key, day). The INSERT ... ON CONFLICT DO
-// UPDATE pattern increments atomically — no race when two parallel
+// UPDATE pattern increments atomically - no race when two parallel
 // requests from the same workspace hit at once.
 //
 // Caps are hard ceilings, not soft warnings. A workspace that hits
@@ -20,12 +20,12 @@ import { sql } from './db.js';
 export const DEFAULT_EMAIL_CAP_PER_DAY = 1000;
 export const DEFAULT_SMS_CAP_PER_DAY   = 200;
 
-// tryConsumeQuota — atomically increments the counter and returns
+// tryConsumeQuota - atomically increments the counter and returns
 //   { ok: true,  count, cap }  → quota available, proceed
 //   { ok: false, count, cap }  → cap reached, do NOT send
 //
 // workspaceId can be null/undefined for system-wide sends (e.g.
-// the platform notifying us about a failed payment) — those skip
+// the platform notifying us about a failed payment) - those skip
 // the cap entirely. counterKey is short stable identifier
 // ('email', 'sms', maybe 'email-marketing' later).
 //
@@ -48,7 +48,7 @@ export async function tryConsumeQuota(workspaceId, counterKey, cap) {
     const count = rows[0]?.count ?? 1;
     return { ok: count <= cap, count, cap };
   } catch (err) {
-    // Counter-table failure should never block real sends — log + allow.
+    // Counter-table failure should never block real sends - log + allow.
     // (Worst case under partial-schema: cap is silently disabled until
     // the migrator catches up. Better than dropping every email.)
     // eslint-disable-next-line no-console

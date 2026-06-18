@@ -19,10 +19,10 @@
 // signal that doesn't depend on Stripe's retry cadence.
 //
 // Tunables:
-//   GRACE_DAYS — how many days past_due before suspension. 14 days
+//   GRACE_DAYS - how many days past_due before suspension. 14 days
 //                matches Stripe's default smart-retry window so by
 //                the time we suspend, every retry has been tried.
-//   DUNNING_EMAIL_EVERY_HOURS — re-email cadence during grace.
+//   DUNNING_EMAIL_EVERY_HOURS - re-email cadence during grace.
 import { sql } from '../_lib/db.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyPaymentFailed } from '../_lib/subscriptionNotify.js';
@@ -47,7 +47,7 @@ async function handler(req, res) {
     let scanned = 0;
 
     // 1. Suspend anyone past_due >= GRACE_DAYS and not yet
-    //    suspended. Conditional UPDATE so the cron is idempotent —
+    //    suspended. Conditional UPDATE so the cron is idempotent -
     //    a re-run only touches rows that meet the threshold and
     //    haven't already been suspended.
     const suspendResult = await sql`
@@ -61,14 +61,14 @@ async function handler(req, res) {
       RETURNING id
     `;
     suspended = suspendResult.rowCount ?? 0;
-    // Push the owner of every just-suspended workspace — this is the
+    // Push the owner of every just-suspended workspace - this is the
     // moment write-actions start failing, so silence here is dangerous.
     for (const w of suspendResult.rows || []) {
       notifyOwnerSafe({
         workspaceId: w.id, type: 'payments',
         payload: {
           title: 'Subscription suspended',
-          body: 'Card retries exhausted — update payment to restore access.',
+          body: 'Card retries exhausted - update payment to restore access.',
           url: '/account?tab=billing',
           tag: `subscription-suspended-${w.id}`,
         },
@@ -94,7 +94,7 @@ async function handler(req, res) {
       scanned++;
       try {
         // We don't have the original amount/currency on the workspace
-        // row — that lives on the Stripe invoice. The notify helper
+        // row - that lives on the Stripe invoice. The notify helper
         // already handles a minimal call (no nextAttemptAt is fine,
         // it just omits that line). Owner gets a reminder; if they
         // want detail they click into Billing.

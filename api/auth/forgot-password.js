@@ -1,5 +1,5 @@
 // POST /api/auth/forgot-password  { email }
-// Always returns 200 — we never reveal whether an email exists.
+// Always returns 200 - we never reveal whether an email exists.
 import { sql } from '../_lib/db.js';
 import { validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     // (don't leak whether the email is registered). We also pad the
     // response time with a small randomized delay so the no-user branch
     // doesn't return ~instantly while the user-exists branch awaits
-    // createToken + sendEmail (~500-2000ms) — that latency gap is a
+    // createToken + sendEmail (~500-2000ms) - that latency gap is a
     // timing oracle for registration status.
     if (!validEmail(emailKey)) {
       await timingDecoy();
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
                <p>This link expires in ${TTL_MINUTES} minutes.</p>`,
         ctaText: 'Reset my password',
         ctaUrl: link,
-        footer: `If you didn't ask to reset your password, you can ignore this email — your account stays as is.`,
+        footer: `If you didn't ask to reset your password, you can ignore this email - your account stays as is.`,
       }),
     });
 

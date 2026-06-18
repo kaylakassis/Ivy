@@ -1,4 +1,4 @@
-// Build-time feature flags. Use sparingly — these are for hiding
+// Build-time feature flags. Use sparingly - these are for hiding
 // product surfaces from users while keeping the backend code intact
 // so a flip-on is a one-line change.
 //
@@ -19,7 +19,7 @@ function envFlag(name, fallback) {
 export const FLAGS = {
   // Show the Square + PayPal connect cards in Finance → Provider, the
   // Square/PayPal columns on the marketing comparison pages, and any
-  // other surface that offers them as options. Tabled for launch —
+  // other surface that offers them as options. Tabled for launch -
   // Stripe is the only payment provider we surface for now. The
   // backend code remains intact; flipping this back to true re-exposes
   // them everywhere.

@@ -19,15 +19,15 @@ import { IVY_PRICE, STACK_TOTAL, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // Feature showcase, grouped the way an owner actually thinks about the
 // day: get booked → get paid → keep clients → grow. Each band maps a
-// real, shipped capability — keep these honest against the app.
+// real, shipped capability - keep these honest against the app.
 const CATEGORIES = [
   {
     kicker: 'Get booked',
     title: 'A booking page that fills itself.',
-    blurb: 'Share one link. Clients self-book around your real availability while you sleep — no back-and-forth, no double-bookings.',
+    blurb: 'Share one link. Clients self-book around your real availability while you sleep - no back-and-forth, no double-bookings.',
     items: [
       { icon: 'Calendar', title: 'Online booking page', body: 'Your own link with services, durations, prices, add-ons, deposits, and custom intake questions.' },
-      { icon: 'Repeat',   title: 'Smart calendar', body: 'Day/week/month views, recurring sessions, configurable buffers, and a shareable booking link — all in one place.' },
+      { icon: 'Repeat',   title: 'Smart calendar', body: 'Day/week/month views, recurring sessions, configurable buffers, and a shareable booking link - all in one place.' },
       { icon: 'Users',    title: 'Group classes & capacity', body: 'Sell 1:1s or set a class size and let a single slot book up to capacity.' },
       { icon: 'Bell',     title: 'Email + SMS reminders', body: 'Automatic multi-step reminders over email and text, so no-shows quietly disappear.' },
       { icon: 'Clock',    title: 'Waitlists', body: 'Slot full? Clients join a waitlist and get auto-promoted the moment someone cancels.' },
@@ -36,13 +36,13 @@ const CATEGORIES = [
   },
   {
     kicker: 'Get paid',
-    title: 'Money in, money out — handled.',
+    title: 'Money in, money out - handled.',
     blurb: 'Invoices, subscriptions, deposits, and tips in one place. Connect Stripe and stop chasing payments.',
     items: [
       { icon: 'Receipt', title: 'Invoices, quotes & recurring', body: 'Branded invoices and estimates that convert on accept, plus recurring billing on autopilot.' },
-      { icon: 'Lock',    title: 'Card on file & auto-charge', body: 'With Stripe, clients save a card once — auto-charge deposits, late-cancel & no-show fees, and tips.' },
-      { icon: 'Phone',   title: 'In-person & Tap to Pay', body: 'Run an in-person sale right from your phone — Tap to Pay on iPhone & Android, or any Stripe reader. No extra hardware required.' },
-      { icon: 'Heart',   title: 'Memberships & packages', body: 'Sell monthly tiers and prepaid session packs; credits draw down automatically — and clients can self-book the whole pack as a recurring series from their portal.' },
+      { icon: 'Lock',    title: 'Card on file & auto-charge', body: 'With Stripe, clients save a card once - auto-charge deposits, late-cancel & no-show fees, and tips.' },
+      { icon: 'Phone',   title: 'In-person & Tap to Pay', body: 'Run an in-person sale right from your phone - Tap to Pay on iPhone & Android, or any Stripe reader. No extra hardware required.' },
+      { icon: 'Heart',   title: 'Memberships & packages', body: 'Sell monthly tiers and prepaid session packs; credits draw down automatically - and clients can self-book the whole pack as a recurring series from their portal.' },
       { icon: 'Gift',    title: 'Gift cards', body: 'Sell gift cards that redeem against bookings and invoices, with a full balance + redemption log.' },
       { icon: 'Clock',   title: 'Time tracking & expenses', body: 'Run a timer, bill it straight into an invoice, and log Schedule-C expenses with receipts.' },
       { icon: 'Bank',    title: 'Tax & accounting exports', body: 'One-click Schedule-C summary and QuickBooks / Xero CSV when it’s time to file.' },
@@ -54,21 +54,21 @@ const CATEGORIES = [
     blurb: 'Every client gets a free portal, a private thread, and a history that makes them feel known.',
     items: [
       { icon: 'Users',  title: 'CRM & pipeline', body: 'Stages, tags, notes, lifetime value, attachments, and before/after galleries on every client.' },
-      { icon: 'Home',   title: 'Free client portal', body: 'One login across every business they book with — appointments, invoices, documents, messages.' },
+      { icon: 'Home',   title: 'Free client portal', body: 'One login across every business they book with - appointments, invoices, documents, messages.' },
       { icon: 'Chat',   title: 'Two-way messaging', body: 'A private thread with each client. Prospects ask before they book; you keep the whole history.' },
       { icon: 'Doc',    title: 'Documents & e-sign', body: 'Waivers, agreements, and intake forms with multi-signer e-signatures and tamper-evident PDFs.' },
       { icon: 'Trophy', title: 'Verified reviews', body: 'Booking-tied reviews requested automatically. Reply publicly and feed your directory rating.' },
-      { icon: 'Gift',   title: 'Rewards & referrals', body: 'Loyalty rules for visits, spend, and referrals — clients earn and redeem automatically.' },
+      { icon: 'Gift',   title: 'Rewards & referrals', body: 'Loyalty rules for visits, spend, and referrals - clients earn and redeem automatically.' },
     ],
   },
   {
     kicker: 'Grow on autopilot',
     title: 'The parts that run while you work.',
-    blurb: 'A real website, automations that follow up for you, and an AI that acts on your business — not just chats.',
+    blurb: 'A real website, automations that follow up for you, and an AI that acts on your business - not just chats.',
     items: [
-      { icon: 'Globe',    title: 'Website builder', body: '35+ section types, 15 designs, custom domain, SEO, and version history — your booking site, no separate tool.' },
-      { icon: 'Repeat',   title: 'Workflows & automation', body: 'Welcome sequences, win-backs, birthdays — fire emails, texts, tasks, and docs from no-code rules.' },
-      { icon: 'Spark',    title: 'Ivy, your AI operator', body: 'Grounded in your real numbers AND your stated goal, ideal client, and challenges — Ivy answers and acts: send an invoice, message a quiet client, book a slot.' },
+      { icon: 'Globe',    title: 'Website builder', body: '35+ section types, 15 designs, custom domain, SEO, and version history - your booking site, no separate tool.' },
+      { icon: 'Repeat',   title: 'Workflows & automation', body: 'Welcome sequences, win-backs, birthdays - fire emails, texts, tasks, and docs from no-code rules.' },
+      { icon: 'Spark',    title: 'Ivy, your AI operator', body: 'Grounded in your real numbers AND your stated goal, ideal client, and challenges - Ivy answers and acts: send an invoice, message a quiet client, book a slot.' },
       { icon: 'Trending', title: 'Goals & dashboard', body: 'Track revenue, clients, and sessions against goals on a dashboard that surfaces what needs you.' },
       { icon: 'FileIcon', title: 'Projects', body: 'Group bookings, invoices, quotes, and documents into one engagement for bigger pieces of work.' },
       { icon: 'Users',    title: 'Team & staff', body: 'Add staff with their own colors, rates, and commissions; assign bookings and filter the calendar per person.' },
@@ -118,7 +118,7 @@ const FAQ = [
   },
   {
     q: "What's pricing going to look like?",
-    a: `Start with a ${TRIAL_DAYS}-day free trial — no credit card required — then one simple subscription at $${IVY_PRICE}/mo. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients — they never pay to use Ivy OS.`,
+    a: `Start with a ${TRIAL_DAYS}-day free trial - no credit card required - then one simple subscription at $${IVY_PRICE}/mo. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use Ivy OS.`,
   },
   {
     q: 'Is there a mobile app?',
@@ -204,7 +204,7 @@ export default function MarketingHome() {
           <BuiltFor/>
           <UserCounter/>
           {/* Testimonials section removed until we have real attributed
-              quotes — placeholder copy was beta-feedback paraphrasing
+              quotes - placeholder copy was beta-feedback paraphrasing
               and shouldn't ship as social proof. The TESTIMONIALS array
               and the Testimonials component are intentionally kept in
               this file so a single import + re-mount restores them. */}
@@ -222,7 +222,7 @@ export default function MarketingHome() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Client audience view — what Ivy OS looks like for a client (the people
+// Client audience view - what Ivy OS looks like for a client (the people
 // who book with / pay / message a business that runs on Ivy OS). Always
 // free for them; one portal across every business they work with.
 // ──────────────────────────────────────────────────────────────────────
@@ -230,10 +230,10 @@ export default function MarketingHome() {
 const CLIENT_BENEFITS = [
   { icon: 'Calendar', title: 'All your bookings in one place', body: "Every appointment with every business you work with on Ivy OS, on one calendar. Reschedule or cancel in a tap." },
   { icon: 'Dollar',   title: 'Pay + see every invoice',        body: 'Open invoices, paid receipts, and saved cards in one portal. No more digging through email for what you owe.' },
-  { icon: 'Doc',      title: 'Sign documents fast',            body: 'Intake forms, waivers, agreements — review and e-sign from your phone, no printer required.' },
+  { icon: 'Doc',      title: 'Sign documents fast',            body: 'Intake forms, waivers, agreements - review and e-sign from your phone, no printer required.' },
   { icon: 'Chat',     title: 'Message your providers',         body: 'A direct two-way thread with each business. Ask a question before you book, get reminders, keep the history.' },
   { icon: 'Bell',     title: 'Reminders so you never miss',    body: 'Automatic appointment reminders by email or text, set up by the businesses you book with.' },
-  { icon: 'Heart',    title: 'Always free for you',            body: 'Clients never pay to use Ivy OS. One login works across every business you visit — no per-business account.' },
+  { icon: 'Heart',    title: 'Always free for you',            body: 'Clients never pay to use Ivy OS. One login works across every business you visit - no per-business account.' },
 ];
 
 function ClientAudienceView() {
@@ -410,7 +410,7 @@ function Hero() {
         margin: '20px auto 0', maxWidth: 620,
         fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
       }}>
-        Meet Ivy. She knows your clients, your numbers, and your calendar — and she
+        Meet Ivy. She knows your clients, your numbers, and your calendar - and she
         actually <em>does the busywork</em>: drafts invoices, books sessions, messages
         quiet clients, sends contracts. All inside one workspace that replaces
         ${STACK_TOTAL}/mo of stitched-together tools.
@@ -887,7 +887,7 @@ function Features() {
           One workspace for every part of running your business.
         </h2>
         <p style={{ margin: '12px auto 0', maxWidth: 560, fontSize: 15, lineHeight: 1.55, color: 'var(--fg-2)' }}>
-          Not a feature checklist bolted together — one system where booking flows
+          Not a feature checklist bolted together - one system where booking flows
           into payment, payment into follow-up, and follow-up into your next booking.
         </p>
       </div>
@@ -1294,7 +1294,7 @@ function Pricing() {
             {TRIAL_DAYS} days. No credit card.
           </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            Use everything free for {TRIAL_DAYS} days — no card required — then a simple ${IVY_PRICE}/mo
+            Use everything free for {TRIAL_DAYS} days - no card required - then a simple ${IVY_PRICE}/mo
             when you subscribe. No per-seat math, no surprise bills. Early users get a
             discount locked in for life. The client portal stays free forever for clients.
           </p>

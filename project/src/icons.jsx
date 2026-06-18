@@ -1,4 +1,4 @@
-// Minimal icon set — stroke-based, 20px default
+// Minimal icon set - stroke-based, 20px default
 const Icon = ({ d, size = 20, stroke = 'currentColor', fill = 'none', sw = 1.6, children, ...rest }) => (
   <svg
     width={size} height={size} viewBox="0 0 24 24"

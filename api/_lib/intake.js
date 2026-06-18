@@ -1,7 +1,7 @@
 // Intake-form auto-attach. When a booking is created for a service that
 // has intake_form_template_ids set, we clone each template into a new
 // document instance addressed to the booking's client and push it to
-// 'sent' status with a fresh sign token. Best-effort — a failure on any
+// 'sent' status with a fresh sign token. Best-effort - a failure on any
 // individual template logs + skips, never blocks the booking.
 //
 // Called from the booking POST paths (owner-side + public-side) right
@@ -102,7 +102,7 @@ async function cloneAndSend({
   await sendEmailToClient({
     clientId: recipientClientId, type: 'documents',
     to: recipientEmail,
-    subject: `Before your appointment — please complete "${template.name}"`,
+    subject: `Before your appointment - please complete "${template.name}"`,
     replyTo: branding.replyTo,
     html: emailShell({
       heading: 'Quick form to complete before your appointment',
@@ -110,7 +110,7 @@ async function cloneAndSend({
         <p>${escapeHtml(businessName)} sent over an intake form to complete
         before your${serviceName ? ` ${escapeHtml(serviceName)}` : ''} appointment:
         <b>${escapeHtml(template.name)}</b>.</p>
-        <p>The link below is private to you — please complete it before your session.</p>`,
+        <p>The link below is private to you - please complete it before your session.</p>`,
       ctaText: 'Open and sign',
       ctaUrl: link,
       branding,

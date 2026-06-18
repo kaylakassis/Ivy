@@ -5,7 +5,7 @@
 //
 // PATCH /api/finance/payment-providers  body { paymentProvider }
 //   Switches the active provider. Owners must have already connected
-//   the target provider — the endpoint refuses to switch to one that
+//   the target provider - the endpoint refuses to switch to one that
 //   isn't connected so we never end up routing checkouts at a dead
 //   adapter.
 import { sql } from '../_lib/db.js';
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       const target = (body.paymentProvider || '').toString();
       if (!VALID.has(target)) return badRequest(res, 'Unknown payment provider');
 
-      // Refuse the switch if the target isn't connected — otherwise the
+      // Refuse the switch if the target isn't connected - otherwise the
       // next checkout hits a 500 instead of a clear "connect first" cue.
       const settings = await fetchFinanceSettings(workspaceId);
       const adapter = target === 'stripe' ? stripe

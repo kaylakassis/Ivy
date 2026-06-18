@@ -1,7 +1,7 @@
 // /api/invoices/:id
 //   GET    → fetch
-//   PATCH  → edit (gated to draft / overdue / sent — paid + voided are locked)
-//   DELETE → remove (drafts only — others must be voided first)
+//   PATCH  → edit (gated to draft / overdue / sent - paid + voided are locked)
+//   DELETE → remove (drafts only - others must be voided first)
 
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

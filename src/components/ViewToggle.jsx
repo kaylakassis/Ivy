@@ -1,18 +1,18 @@
 // Floating Business ↔ Client view switcher. Mounted at the App root so it
 // renders on every route, regardless of which shell is active. Pure URL-based
-// — no /api/me dependency that can hide it on slow/failed fetches.
+// - no /api/me dependency that can hide it on slow/failed fetches.
 //
 // Hidden on:
 //   • Routes where view-switching makes no sense (marketing landing,
 //     sign-in/up, password flows, email verification, public-link pages,
-//     onboarding wizard, legal pages — see HIDE_PREFIXES below).
-//   • Mobile viewport — the floating pill kept covering action sheets
+//     onboarding wizard, legal pages - see HIDE_PREFIXES below).
+//   • Mobile viewport - the floating pill kept covering action sheets
 //     and bottom-row controls. The same Business / Client switch is
 //     surfaced inside the hamburger drawer on phones (see
 //     MobileDrawer.jsx → renderViewSwitch).
 //
 // Going to Business as an unsubscribed user lands them in AppShell, which
-// then renders the Paywall — gating lives in one place.
+// then renders the Paywall - gating lives in one place.
 import React from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
@@ -20,7 +20,7 @@ import { useViewport } from '../lib/viewport.js';
 
 // Routes that put a composer at the bottom edge of the viewport (chat-style
 // surfaces). The default centered-and-anchored-to-bottom pill collides with
-// the composer on these — Send button to the right, textarea in the middle.
+// the composer on these - Send button to the right, textarea in the middle.
 // Bumping `bottom` higher via .view-toggle-raised lifts the pill clear of
 // the composer without changing layout anywhere else.
 const RAISE_PREFIXES = [

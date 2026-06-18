@@ -3,7 +3,7 @@
 // = false) so existing subscribers keep paying until they cancel.
 //
 // Pricing + interval are immutable post-creation because the Stripe
-// Price is also immutable — to change pricing, archive + clone.
+// Price is also immutable - to change pricing, archive + clone.
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
@@ -251,7 +251,7 @@ export default function Memberships() {
 
 function ChangePlanModal({ member, tiers, busy, onClose, onConfirm }) {
   // Only tiers that are active AND have a Stripe price provisioned can
-  // be the destination — the backend rejects either otherwise. Exclude
+  // be the destination - the backend rejects either otherwise. Exclude
   // the member's current tier (they're already on it).
   const candidates = (tiers || []).filter((t) =>
     t.id !== member.membershipId && t.active && t.stripeReady,
@@ -275,7 +275,7 @@ function ChangePlanModal({ member, tiers, busy, onClose, onConfirm }) {
           Change plan for {member.clientName || member.clientEmail}
         </div>
         <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.5 }}>
-          Stripe will prorate the difference automatically — the client gets a credit
+          Stripe will prorate the difference automatically - the client gets a credit
           (or charge) for the rest of the current period on their next invoice.
           Currently on <strong>{member.membershipName}</strong>.
         </div>
@@ -324,7 +324,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
   const [description, setDescription] = useState(tier?.description || '');
   const [priceDollars, setPriceDollars] = useState(tier ? (Number(tier.priceCents) / 100).toFixed(2) : '');
   // Renamed from setInterval to avoid shadowing the global setInterval
-  // — keeps the door closed if anyone later reaches for a window timer
+  // - keeps the door closed if anyone later reaches for a window timer
   // inside this component.
   const [interval, setIntervalValue] = useState(tier?.interval || 'month');
   const [perks, setPerks] = useState((tier?.perks || []).join('\n'));
@@ -392,7 +392,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
               background: 'var(--surface-2)', border: '1px solid var(--border)',
               fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5,
             }}>
-              Price + interval can't be edited after creation — Stripe Prices are immutable. To change pricing, archive this tier and create a new one.
+              Price + interval can't be edited after creation - Stripe Prices are immutable. To change pricing, archive this tier and create a new one.
             </div>
           )}
 
@@ -434,7 +434,7 @@ function TierEditor({ tier, busy, onClose, onCreate, onUpdate, onArchive }) {
           {!isNew && (
             <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: 'var(--fg-2)' }}>
               <input type="checkbox" checked={active} onChange={(e) => setActive(e.target.checked)}/>
-              Active — listed on the public booking page
+              Active - listed on the public booking page
             </label>
           )}
 

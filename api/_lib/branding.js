@@ -5,7 +5,7 @@
 // not from a generic Ivy OS template.
 //
 // Falls back to "Ivy OS" defaults whenever a workspace hasn't
-// customized — meaning existing accounts get the same email shell
+// customized - meaning existing accounts get the same email shell
 // they had pre-branding until they deliberately set values.
 import { sql } from './db.js';
 
@@ -39,9 +39,9 @@ export async function fetchBranding(workspaceId) {
 // Per-invocation memo for crons that loop over many rows belonging to a
 // handful of workspaces (booking-reminders, review-requests, recurring-
 // invoices, doc-reminders). Calling fetchBranding once per row is a 3-
-// table JOIN per row — at 1000 reminders for the same 10 workspaces
+// table JOIN per row - at 1000 reminders for the same 10 workspaces
 // that's 1000 queries instead of 10. Instantiate ONE cache at the top of
-// the cron run (NOT module scope — that would go stale across warm
+// the cron run (NOT module scope - that would go stale across warm
 // invocations) and call it inside the loop.
 export function makeBrandingCache() {
   const cache = new Map();

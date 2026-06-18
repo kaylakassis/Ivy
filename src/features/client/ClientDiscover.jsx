@@ -1,4 +1,4 @@
-// /me/discover — directory of Ivy OS businesses that have opted in to be
+// /me/discover - directory of Ivy OS businesses that have opted in to be
 // listed publicly. Filters compose server-side: category + price range +
 // service-name search + distance from the client's location are all
 // real DB queries (see /api/me/discover) so a search like "botox $10–50"
@@ -114,7 +114,7 @@ export default function ClientDiscover() {
           <span style={{ color: 'var(--muted)' }}>Book in two taps.</span>
         </h2>
         <p style={{ color: 'var(--fg-2)', fontSize: 15, maxWidth: 560, margin: 0, lineHeight: 1.5 }}>
-          Every business here runs on Ivy OS — appointments, payments, and
+          Every business here runs on Ivy OS - appointments, payments, and
           paperwork live in one place.
         </p>
       </div>
@@ -130,7 +130,7 @@ export default function ClientDiscover() {
           }}>
             <Icons.Search size={14} stroke="var(--muted)" sw={1.7}/>
             <input value={q} onChange={(e) => setFilter({ q: e.target.value })}
-              placeholder="Search by service or business — e.g. botox"
+              placeholder="Search by service or business - e.g. botox"
               style={{ flex: 1, border: 0, background: 'transparent', outline: 'none',
                 color: 'var(--fg)', fontSize: 13.5 }}/>
             {q && (
@@ -187,7 +187,7 @@ export default function ClientDiscover() {
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Search" title="No matches"
             hint={anyFiltersActive
-              ? 'Loosen a filter — or clear them all to see everything.'
+              ? 'Loosen a filter - or clear them all to see everything.'
               : 'No public businesses listed yet.'}
             action={anyFiltersActive
               ? <button className="btn btn-outline" onClick={() => setFilter({
@@ -311,7 +311,7 @@ function DistanceFilter({ radiusKm, lat, lng, onChange }) {
         if (e.code === 1) {
           setErr('Permission denied. Allow location for this site in your browser settings, then try again.');
         } else if (e.code === 2) {
-          setErr("Couldn't read your position — try again, or check that location services are on.");
+          setErr("Couldn't read your position - try again, or check that location services are on.");
         } else if (e.code === 3) {
           setErr('Timed out. Try again with a clearer signal.');
         } else {
@@ -514,7 +514,7 @@ function BusinessCard({ biz, q, onOpen }) {
             </div>
           )}
         </div>
-        {/* Logo / initial badge — pinned bottom-left over the cover. */}
+        {/* Logo / initial badge - pinned bottom-left over the cover. */}
         {biz.logoUrl ? (
           <img src={biz.logoUrl} alt={biz.bizName}
             style={{
@@ -563,7 +563,7 @@ function BusinessCard({ biz, q, onOpen }) {
           </div>
         )}
 
-        {/* Matched services only show on filtered queries — clearer signal */}
+        {/* Matched services only show on filtered queries - clearer signal */}
         {q && biz.matchingServices && biz.matchingServices.length > 0 && (
           <div style={{ marginTop: 2, display: 'flex', flexDirection: 'column', gap: 3 }}>
             {biz.matchingServices.slice(0, 2).map((s) => (
@@ -642,7 +642,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
     return () => { live = false; };
   }, [slug, reloadKey]);
 
-  // Esc closes — drawer-style escape hatch.
+  // Esc closes - drawer-style escape hatch.
   useEffect(() => {
     const onKey = (e) => { if (e.key === 'Escape') onClose(); };
     document.addEventListener('keydown', onKey);
@@ -668,7 +668,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
     : fallback;
   const visitHref = biz ? `${publicOrigin()}/book/${biz.slug}` : '#';
 
-  // Message button — starts (or reuses) a thread with this workspace
+  // Message button - starts (or reuses) a thread with this workspace
   // by handing the client_id we already loaded with the eligibility
   // payload. Falls through to /me/messages?threadId=<id> so the
   // existing Messages page does the rest. When the user isn't a
@@ -711,7 +711,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
           overflow: 'hidden',
           boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
         }}>
-        {/* Hero — a full 220px photo when the business uploaded one, but a
+        {/* Hero - a full 220px photo when the business uploaded one, but a
             shorter banner for color-only heroes so a flat accent slab doesn't
             dominate the card. */}
         <div style={{
@@ -732,7 +732,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
           </button>
         </div>
 
-        {/* Header card — overlaps the hero */}
+        {/* Header card - overlaps the hero */}
         <div style={{ padding: '0 22px', marginTop: -38 }}>
           <div style={{
             display: 'flex', alignItems: 'center', gap: 14,
@@ -795,7 +795,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
             </div>
           )}
 
-          {/* Three big CTAs — Google-Business-style action row.
+          {/* Three big CTAs - Google-Business-style action row.
               Always-visible. Disabled states explain themselves. */}
           <div className="discover-ctas" style={{ marginTop: 20 }}>
             <ActionButton
@@ -845,7 +845,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
           </div>
         )}
 
-        {/* Snapshot sections — Google Business shape: photos, hours,
+        {/* Snapshot sections - Google Business shape: photos, hours,
             services, reviews. Iframe of the workspace's published
             site is gone (it took up too much real estate and was
             blocked from many of the page's interactive controls
@@ -1102,7 +1102,7 @@ function ReviewSection({ slug, summary, recent, eligibility, accent, onPosted })
         </div>
       )}
 
-      {/* Review form — only when the signed-in user is eligible AND
+      {/* Review form - only when the signed-in user is eligible AND
           hasn't already reviewed this workspace. */}
       {eligibility && (
         eligibility.canReview ? (
@@ -1115,7 +1115,7 @@ function ReviewSection({ slug, summary, recent, eligibility, accent, onPosted })
             fontSize: 12.5, color: 'var(--ok)',
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
-            <Icons.Check size={14}/> You've already reviewed this business — thanks!
+            <Icons.Check size={14}/> You've already reviewed this business - thanks!
           </div>
         ) : eligibility.reason === 'no-booking-or-message' || eligibility.reason === 'not-a-client' ? (
           <div style={{

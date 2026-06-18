@@ -1,6 +1,6 @@
 // Tests the review lifecycle: reviews AUTO-PUBLISH ('visible') immediately.
 // Owners can respond and can APPEAL a review for removal, but cannot hide it
-// themselves — only the support team (super-admin) resolves an appeal:
+// themselves - only the support team (super-admin) resolves an appeal:
 // approve hides the review, deny leaves it visible.
 //
 // Run with:
@@ -47,13 +47,13 @@ async function run() {
 
   console.log('\n[2] owner can respond to a review');
   let res = mockRes();
-  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev.id }, body: { ownerResponse: 'Thanks for the feedback — we hear you!' } }, res);
-  assert(res.body?.review?.ownerResponse === 'Thanks for the feedback — we hear you!', 'owner response is saved + returned');
+  await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev.id }, body: { ownerResponse: 'Thanks for the feedback - we hear you!' } }, res);
+  assert(res.body?.review?.ownerResponse === 'Thanks for the feedback - we hear you!', 'owner response is saved + returned');
 
   console.log('\n[3] owner CANNOT hide/publish a review directly');
   res = mockRes();
   await reviewIdHandler({ method: 'PATCH', headers: hdr(cookie), query: { id: rev.id }, body: { status: 'hidden' } }, res);
-  assert((await statusOf(rev.id)) === 'visible', "owner's status change is ignored — review stays visible");
+  assert((await statusOf(rev.id)) === 'visible', "owner's status change is ignored - review stays visible");
   assert((await publicVisible()) === 1, 'review remains public after the owner attempts to hide it');
 
   console.log('\n[4] owner can appeal a review for removal');

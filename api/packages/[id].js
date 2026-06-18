@@ -106,7 +106,7 @@ export default async function handler(req, res) {
       //             still join nicely.
       //   ?hard=1 → hard delete. Outstanding client_packages keep working
       //             because client_packages.package_id is ON DELETE SET
-      //             NULL — they retain credits, name, and service ids
+      //             NULL - they retain credits, name, and service ids
       //             from when the package was sold. Caller is expected
       //             to confirm with the owner first when there are
       //             still-active client packages.

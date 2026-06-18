@@ -1,4 +1,4 @@
-// /api/cron/recurring-invoices — daily at 08:00 UTC.
+// /api/cron/recurring-invoices - daily at 08:00 UTC.
 //
 // Walks every recurring schedule whose next_run_at is on or before
 // today and that's still 'active', mints a fresh invoice from the
@@ -62,7 +62,7 @@ async function handler(req, res) {
         materialized++;
 
         const { schedule, invoice } = result;
-        // Owner-side push: a new invoice just dropped into Finance —
+        // Owner-side push: a new invoice just dropped into Finance -
         // worth a heads-up even when auto_send delivered it to the
         // client. Type 'payments' so it inherits the same per-user
         // opt-out as paid-invoice pushes.
@@ -92,7 +92,7 @@ async function handler(req, res) {
           // sees it as undelivered (autoSendInvoice flips status + mints
           // a token before sending). Without this, a Resend outage
           // leaves a forever-pending "sent" invoice that the owner thinks
-          // landed in the client's inbox. Best-effort — if the rollback
+          // landed in the client's inbox. Best-effort - if the rollback
           // itself fails we've still logged the original send error.
           try {
             await sql`
@@ -130,7 +130,7 @@ async function handler(req, res) {
 
 // Mirror of /api/invoices/send.js but called server-side. Stamps a
 // view token on the invoice, emails the client, drops a thread
-// message — same flow the owner would trigger by hand.
+// message - same flow the owner would trigger by hand.
 async function autoSendInvoice({ schedule, invoice, getBranding = fetchBranding }) {
   if (!invoice.client_email) return;
   const rawToken = generateRawToken(32);
@@ -145,7 +145,7 @@ async function autoSendInvoice({ schedule, invoice, getBranding = fetchBranding 
   // email throws, REVERT to 'draft' + clear the token so the owner
   // can re-send by hand from the Finance page. Without this, a
   // Postmark hiccup leaves the schedule advanced and the invoice
-  // marked sent — but the client never received anything and the
+  // marked sent - but the client never received anything and the
   // owner has no idea anything went wrong.
   await sql`
     UPDATE invoices SET

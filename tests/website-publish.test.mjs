@@ -1,4 +1,4 @@
-// Test for #7 — website draft/publish separation.
+// Test for #7 - website draft/publish separation.
 //   • Draft edits do NOT leak to the live site until Publish.
 //   • Publish snapshots the draft into published_sections/_pages.
 //   • Already-published sites (NULL published_*) fall back to live.
@@ -28,7 +28,7 @@ const createdUsers = [];
 async function run() {
   try {
     // Columns may not exist in the already-migrated test DB (probe passes,
-    // so the full migration won't re-run) — apply them idempotently.
+    // so the full migration won't re-run) - apply them idempotently.
     await sql`ALTER TABLE websites ADD COLUMN IF NOT EXISTS published_sections JSONB`;
     await sql`ALTER TABLE websites ADD COLUMN IF NOT EXISTS published_pages JSONB`;
 
@@ -57,7 +57,7 @@ async function run() {
     // Edit the DRAFT to B (what the editor auto-save does).
     await sql`UPDATE websites SET sections = ${JSON.stringify(sect('B'))}::jsonb WHERE workspace_id = ${wid}`;
 
-    // The live site must STILL show A — the draft edit must not leak.
+    // The live site must STILL show A - the draft edit must not leak.
     const liveAfterEdit = ids(await loadPublicSite({ handle }));
     assert(liveAfterEdit.includes('A') && !liveAfterEdit.includes('B'),
       'draft edit (B) does NOT leak to the live site (still A)');

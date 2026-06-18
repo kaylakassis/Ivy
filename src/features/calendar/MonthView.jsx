@@ -40,7 +40,7 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
           crush to unreadable ~50px columns on a phone (matches WeekGrid). */}
       <div className="table-scroll">
         <div style={{ minWidth: 680 }}>
-      {/* Header row — weekday labels */}
+      {/* Header row - weekday labels */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)',
         background: 'var(--surface-2)', borderBottom: '1px solid var(--border)',
@@ -109,7 +109,7 @@ export default function MonthView({ anchor, cal, onPickDay, onOpenEvent }) {
                 return (
                   <button key={j}
                     onClick={(e) => { e.stopPropagation(); onOpenEvent(ev); }}
-                    title={ev.kind === 'block' && ev.blocksBookings === false ? 'Reminder only — slot still bookable' : undefined}
+                    title={ev.kind === 'block' && ev.blocksBookings === false ? 'Reminder only - slot still bookable' : undefined}
                     style={{
                       width: '100%', textAlign: 'left',
                       padding: '3px 6px', borderRadius: 4, border: 0,

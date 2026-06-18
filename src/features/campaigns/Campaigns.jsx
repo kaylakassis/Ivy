@@ -41,7 +41,7 @@ export default function Campaigns() {
 
       {error && (
         <div className="card" style={{ padding: 14, color: 'var(--danger)', fontSize: 13 }}>
-          Couldn’t load campaigns — {error.message}
+          Couldn’t load campaigns - {error.message}
         </div>
       )}
 
@@ -186,7 +186,7 @@ function CampaignEditor({ campaign, onClose, onSave, onDelete, onSend, onTest, p
 
         <label style={lbl}>Message</label>
         <textarea value={body} onChange={(e) => setBody(e.target.value)} disabled={sent} rows={9}
-          placeholder="Write your update. Plain text — line breaks are kept."
+          placeholder="Write your update. Plain text - line breaks are kept."
           style={{ ...inp, resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.5 }}/>
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: -6, marginBottom: 12 }}>
           We wrap this in your branded email template and add an unsubscribe link automatically.

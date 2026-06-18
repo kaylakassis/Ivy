@@ -78,7 +78,7 @@ export default function BlogPostPage() {
             Want Ivy OS to handle this for you?
           </div>
           <p style={{ margin: '8px 0 14px', fontSize: 14, lineHeight: 1.55, color: 'var(--fg-2)' }}>
-            Pricing, intake, no-shows, invoicing — every problem in this post is one tab in Ivy OS. {TRIAL_DAYS} days free, no card.
+            Pricing, intake, no-shows, invoicing - every problem in this post is one tab in Ivy OS. {TRIAL_DAYS} days free, no card.
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600 }}>

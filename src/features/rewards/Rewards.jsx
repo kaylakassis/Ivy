@@ -30,7 +30,7 @@ export default function Rewards() {
 
 // ---------- LANDING ----------
 function RewardsLanding({ onLaunch }) {
-  // Launch was a fire-and-forget onClick — if the PATCH failed (cold
+  // Launch was a fire-and-forget onClick - if the PATCH failed (cold
   // schema, network), the button did nothing and the owner saw
   // "failed to save program" with no recovery. Now it awaits, shows
   // a busy state, and surfaces the error inline.
@@ -49,7 +49,7 @@ function RewardsLanding({ onLaunch }) {
   const offerings = [
     { title: 'Visit-based rewards', body: 'Book 5, get 1 free.' },
     { title: 'Spend-based rewards', body: 'Spend $300, get $25 credit.' },
-    { title: 'Referral bonuses',    body: 'Refer a friend — both get rewarded.' },
+    { title: 'Referral bonuses',    body: 'Refer a friend - both get rewarded.' },
     { title: 'Custom rules',        body: 'Design your own loyalty program.' },
   ];
 
@@ -72,7 +72,7 @@ function RewardsLanding({ onLaunch }) {
       <div className="card" style={{ padding: 24, marginBottom: 18 }}>
         <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>Why reward programs work</h3>
         <p style={{ margin: '6px 0 18px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Loyalty isn't about giveaways — it's about making your best clients feel seen. The data agrees:
+          Loyalty isn't about giveaways - it's about making your best clients feel seen. The data agrees:
         </p>
         <div className="grid-auto-sm">
           {stats.map((s, i) => <StatTile key={i} {...s}/>)}
@@ -123,7 +123,7 @@ function StatTile({ value, body, src, tone, icon }) {
       <div style={{ color: fg }}>{icon}</div>
       <div className="metric-value" style={{ fontSize: 30, color: fg }}>{value}</div>
       <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.45 }}>{body}</div>
-      <div style={{ fontSize: 10, color: 'var(--muted-2)' }}>— {src}</div>
+      <div style={{ fontSize: 10, color: 'var(--muted-2)' }}>- {src}</div>
     </div>
   );
 }
@@ -167,7 +167,7 @@ function RewardsManager({ r }) {
         <Kpi label="Referrals converted" value={r.kpis.referralsConverted} sub="Redemptions of referral rules" tone="ok"/>
       </div>
 
-      {/* Ready to redeem — auto-detected eligibility */}
+      {/* Ready to redeem - auto-detected eligibility */}
       {pending.length > 0 && (
         <div className="card glow-ready-soft" style={{ overflow: 'hidden', borderColor: 'var(--ok)' }}>
           <div style={{
@@ -436,7 +436,7 @@ function RuleRow({ rule, first, onToggle, onEdit, onDelete }) {
           }}>{RULE_TYPE_LABELS[rule.type]}</span>
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
-          {rule.triggerText || '—'} → <strong style={{ color: 'var(--fg-2)' }}>{rule.rewardText || '—'}</strong>
+          {rule.triggerText || '-'} → <strong style={{ color: 'var(--fg-2)' }}>{rule.rewardText || '-'}</strong>
         </div>
       </div>
       {/* Active toggle */}
@@ -502,7 +502,7 @@ function RedemptionRow({ redemption, rule, first, onDelete, onMarkUsed, onUnmark
           )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
-          {redemption.rewardText || rule?.rewardText || rule?.name || '—'}
+          {redemption.rewardText || rule?.rewardText || rule?.name || '-'}
           {expiryLabel && <> · <span style={{ color: isExpired ? 'var(--danger)' : 'var(--muted)' }}>{expiryLabel}</span></>}
           {redemption.notes && <> · {redemption.notes}</>}
         </div>
@@ -648,13 +648,13 @@ function LogRedemptionModal({ rules, onSubmit, onClose }) {
 
         <Field label="Client">
           <select value={clientId} onChange={(e) => setClientId(e.target.value)} style={inputS} required>
-            <option value="">— Pick a client —</option>
+            <option value="">- Pick a client -</option>
             {clients.map((c) => <option key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ''}</option>)}
           </select>
         </Field>
         <Field label="Rule (optional)">
           <select value={ruleId} onChange={(e) => setRuleId(e.target.value)} style={inputS}>
-            <option value="">— Free-form (no rule) —</option>
+            <option value="">- Free-form (no rule) -</option>
             {rules.map((r) => <option key={r.id} value={r.id}>{r.name}</option>)}
           </select>
         </Field>

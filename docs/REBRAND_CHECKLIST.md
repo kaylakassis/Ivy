@@ -1,22 +1,22 @@
-# Manual rebrand checklist — what needs your hands
+# Manual rebrand checklist - what needs your hands
 
-The codebase rebrand is done. Everything below has to happen **outside the repo** — in dashboards, registrars, or DNS — because the code can't reach in and change them for you. Do these in roughly this order; the deploy step at the bottom depends on most of the rest being done first.
+The codebase rebrand is done. Everything below has to happen **outside the repo** - in dashboards, registrars, or DNS - because the code can't reach in and change them for you. Do these in roughly this order; the deploy step at the bottom depends on most of the rest being done first.
 
-## 1. Domain & DNS (do this first — everything else depends on it)
+## 1. Domain & DNS (do this first - everything else depends on it)
 
-- [ ] **Register `getivyos.com`** (any registrar — Namecheap, Cloudflare, etc.).
-- [ ] **Point `getivyos.com` at Vercel** — in Vercel → Project → Settings → Domains, add `getivyos.com` and `www.getivyos.com`, and copy the A/CNAME records Vercel shows into your registrar's DNS.
+- [ ] **Register `getivyos.com`** (any registrar - Namecheap, Cloudflare, etc.).
+- [ ] **Point `getivyos.com` at Vercel** - in Vercel → Project → Settings → Domains, add `getivyos.com` and `www.getivyos.com`, and copy the A/CNAME records Vercel shows into your registrar's DNS.
 - [ ] **Add the apex CNAME target `cname.getivyos.com`** as a CNAME → `cname.vercel-dns.com` (or whatever Vercel tells you). This is the address customers' custom domains will point at via `WEBSITE_CNAME_TARGET`; without it the in-product "Connect a custom domain" flow can't verify.
-- [ ] **Remove the old `getthryve.ai` domain from the Vercel project** so it stops serving stale content (or set up a redirect from `getthryve.ai` → `getivyos.com` if you want existing inbound links to survive — your call).
+- [ ] **Remove the old `getthryve.ai` domain from the Vercel project** so it stops serving stale content (or set up a redirect from `getthryve.ai` → `getivyos.com` if you want existing inbound links to survive - your call).
 
 ## 2. Email (mailboxes + sender verification)
 
-- [ ] **Create these mailboxes** at `getivyos.com` (in Google Workspace, Fastmail, whatever you use — aliases to one inbox are fine):
-  - `hello@getivyos.com` — sender + main reply-to (used in `EMAIL_FROM` and many templates)
-  - `support@getivyos.com` — Terms / customer support
-  - `privacy@getivyos.com` — Privacy Policy / Do-Not-Sell
-  - `security@getivyos.com` — Security page vulnerability reports
-  - `noreply@getivyos.com` — (optional; only one template references it)
+- [ ] **Create these mailboxes** at `getivyos.com` (in Google Workspace, Fastmail, whatever you use - aliases to one inbox are fine):
+  - `hello@getivyos.com` - sender + main reply-to (used in `EMAIL_FROM` and many templates)
+  - `support@getivyos.com` - Terms / customer support
+  - `privacy@getivyos.com` - Privacy Policy / Do-Not-Sell
+  - `security@getivyos.com` - Security page vulnerability reports
+  - `noreply@getivyos.com` - (optional; only one template references it)
 - [ ] **Verify `getivyos.com` in Resend** (Resend dashboard → Domains → Add domain). Add the DKIM + SPF + return-path records they give you to your registrar's DNS.
 - [ ] **Add a DMARC record** for `getivyos.com` (a permissive `v=DMARC1; p=none; rua=mailto:hello@getivyos.com` is fine to start). Without DMARC, Gmail and Yahoo started rejecting transactional mail in 2024.
 
@@ -48,18 +48,18 @@ In Vercel → Project → Settings → Environment Variables, for **each environ
   - `WEBSITE_CNAME_TARGET` → `cname.getivyos.com` (if you've set it explicitly; otherwise the code default already points here)
   - `SQUARE_REDIRECT_URI` → `https://getivyos.com/api/finance/square-oauth-callback`
 - [ ] **Generate `REVENUECAT_WEBHOOK_SECRET`** if you haven't yet (any long random string; used as the bearer token RC sends to our webhook). Set it in Vercel.
-- [ ] **Generate `VITE_REVENUECAT_PUBLIC_KEY_IOS`** — actually, you'll get this from RevenueCat in step 8. Just remember to come back and set it.
+- [ ] **Generate `VITE_REVENUECAT_PUBLIC_KEY_IOS`** - actually, you'll get this from RevenueCat in step 8. Just remember to come back and set it.
 
 ⚠️ Renaming the env vars takes effect on the **next deploy**, not immediately. Don't delete the old `THRYVE_*` ones until the deploy succeeds with the new names.
 
-## 4. Stripe (platform side — your own billing)
+## 4. Stripe (platform side - your own billing)
 
 In Stripe Dashboard, account-wide:
 
 - [ ] **Account name** → "Ivy OS" (Stripe → Settings → Public details). Shows on receipts and the customer portal.
 - [ ] **Public business name / statement descriptor** → "IVY OS" (≤22 chars, appears on credit-card statements).
-- [ ] **Webhook endpoint URL** (Stripe → Developers → Webhooks → your "billing" endpoint) → `https://getivyos.com/api/webhooks/billing`. If you change the URL Stripe issues a new signing secret — update `IVY_BILLING_WEBHOOK_SECRET` in Vercel to match.
-- [ ] **Stripe Connect** (Stripe → Settings → Connect → Branding) — update the "Connect platform" name, logo, and **redirect URL** to `https://getivyos.com/api/finance/stripe-connect-callback`.
+- [ ] **Webhook endpoint URL** (Stripe → Developers → Webhooks → your "billing" endpoint) → `https://getivyos.com/api/webhooks/billing`. If you change the URL Stripe issues a new signing secret - update `IVY_BILLING_WEBHOOK_SECRET` in Vercel to match.
+- [ ] **Stripe Connect** (Stripe → Settings → Connect → Branding) - update the "Connect platform" name, logo, and **redirect URL** to `https://getivyos.com/api/finance/stripe-connect-callback`.
 
 ## 5. Square (per-merchant Connect)
 
@@ -82,7 +82,7 @@ PayPal Developer Dashboard → your app:
 Twilio Console:
 
 - [ ] **Voice / messaging webhook URLs** (if any) on your phone number → `https://getivyos.com/api/webhooks/twilio/...`.
-- [ ] **A2P 10DLC brand registration** (if you've done one) — update the brand name to "Ivy OS". Required for US SMS deliverability.
+- [ ] **A2P 10DLC brand registration** (if you've done one) - update the brand name to "Ivy OS". Required for US SMS deliverability.
 
 ## 8. RevenueCat (iOS in-app subscriptions)
 
@@ -101,7 +101,7 @@ RevenueCat dashboard:
   - Authorization header: paste the same value you used for `REVENUECAT_WEBHOOK_SECRET`.
 - [ ] **App Store Connect integration**: generate the in-app purchase key (`.p8`) and App-Specific Shared Secret per RC's setup wizard.
 
-## 9. Apple — App Store Connect + Developer
+## 9. Apple - App Store Connect + Developer
 
 - [ ] **Register the bundle id `com.getivyos.app`** (Apple Developer → Identifiers → +).
 - [ ] **Create the App Store Connect app record** with that bundle id, name "Ivy OS".
@@ -120,11 +120,11 @@ Google Cloud Console → APIs & Services → Credentials → your OAuth client:
 ## 11. Sentry
 
 - [ ] **Project name + slug** → "ivy-os" (Sentry → Settings → Projects → Edit). The DSN doesn't change.
-- [ ] (Optional) **Organization name** if it was "thryve" — only if you want to.
+- [ ] (Optional) **Organization name** if it was "thryve" - only if you want to.
 
 ## 12. Vercel Blob
 
-- [ ] No dashboard rename needed — `BLOB_READ_WRITE_TOKEN` is scoped to the project, not the brand. Token value stays the same.
+- [ ] No dashboard rename needed - `BLOB_READ_WRITE_TOKEN` is scoped to the project, not the brand. Token value stays the same.
 
 ## 13. Anthropic / Resend / Neon
 

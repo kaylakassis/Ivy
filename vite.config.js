@@ -22,7 +22,7 @@ export default defineConfig({
     outDir: 'dist',
     sourcemap: true,
     // Group big third-party libs into vendor chunks so they cache long-term
-    // independently of our app code. Pure caching win — when we redeploy a
+    // independently of our app code. Pure caching win - when we redeploy a
     // copy edit, returning users only re-download the small index chunk.
     rollupOptions: {
       output: {

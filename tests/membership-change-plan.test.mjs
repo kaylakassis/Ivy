@@ -1,9 +1,9 @@
-// Tests POST /api/memberships/change-plan — owner-side endpoint that
+// Tests POST /api/memberships/change-plan - owner-side endpoint that
 // switches a client's recurring tier on Stripe. Validates auth gating,
 // input handling, cross-tenant defense, and that the right Stripe call
 // gets made (subscriptions.update with proration_behavior=
 // create_prorations + the new price). The webhook layer is responsible
-// for resyncing the local snapshot — covered by stripe-membership-race.
+// for resyncing the local snapshot - covered by stripe-membership-race.
 //
 // globalThis.fetch is stubbed so this test doesn't hit Stripe.
 //
@@ -98,7 +98,7 @@ async function run() {
       const r2 = mkRes(); await handler(authReq({ clientMembershipId: cm, newMembershipId: tierA }, cookie), r2);
       assert(r2.statusCode === 400 && /already on that tier/i.test(r2.body?.error || ''), 'switching to same tier → 400');
 
-      console.log('\n[3] cross-tenant — different workspace cm id is 404, not switched');
+      console.log('\n[3] cross-tenant - different workspace cm id is 404, not switched');
       const otherU = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
         VALUES (${`${tag}-other@example.com`}, 'x', '2026-05-05', NOW()) RETURNING id`).rows[0].id;
       const otherW = (await sql`INSERT INTO workspaces (owner_id) VALUES (${otherU}) RETURNING id`).rows[0].id;
@@ -110,7 +110,7 @@ async function run() {
       const r3 = mkRes(); await handler(authReq({ clientMembershipId: otherCM, newMembershipId: tierB }, cookie), r3);
       assert(r3.statusCode === 404, `another workspace's cm id → 404 (got ${r3.statusCode})`);
 
-      console.log('\n[4] happy path — Stripe gets called with the right body');
+      console.log('\n[4] happy path - Stripe gets called with the right body');
       seen.length = 0;
       const r4 = mkRes(); await handler(authReq({ clientMembershipId: cm, newMembershipId: tierB }, cookie), r4);
       assert(r4.statusCode === 200, `change-plan → 200 (got ${r4.statusCode}, body=${JSON.stringify(r4.body)})`);

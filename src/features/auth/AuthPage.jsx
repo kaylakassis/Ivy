@@ -54,7 +54,7 @@ export default function AuthPage({ mode = 'signin' }) {
       if (isSignUp) {
         // The signup endpoint returns { user, emailErrors? }. If
         // emailErrors is set, the welcome / verification email didn't
-        // go out — hold the user here with an explicit notice + a
+        // go out - hold the user here with an explicit notice + a
         // continue button so they know to resend from their account,
         // instead of redirecting silently.
         const r = await signUp(email, password, name.trim(), role, refCode);
@@ -66,7 +66,7 @@ export default function AuthPage({ mode = 'signin' }) {
       } else {
         await signIn(email, password);
         // For sign-in we let RoleRouter (in AppShell entry) figure out where
-        // to land — pushing to '/' triggers it.
+        // to land - pushing to '/' triggers it.
         nav('/', { replace: true });
       }
     } catch (ex) {
@@ -172,8 +172,8 @@ export default function AuthPage({ mode = 'signin' }) {
               I have read and agree to the{' '}
               <Link to="/terms"   target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Terms of Service</Link>{' '}and{' '}
               <Link to="/privacy" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Privacy Policy</Link>,
-              and I understand that Ivy OS — including the Ivy AI coach
-              and every integrated third-party service — provides
+              and I understand that Ivy OS - including the Ivy AI coach
+              and every integrated third-party service - provides
               informational tools only, not financial, legal, tax, or
               other professional advice. I am responsible for my own
               business decisions and outcomes, and I will consult a

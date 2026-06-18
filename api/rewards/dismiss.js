@@ -1,4 +1,4 @@
-// /api/rewards/dismiss — POST { ruleId, clientId }
+// /api/rewards/dismiss - POST { ruleId, clientId }
 // Owner waves off an auto-detected eligibility. Stored as a redemption with
 // status='dismissed' so the same milestone won't re-fire (the count of
 // redemptions matches the count of earned reward "stamps").

@@ -1,4 +1,4 @@
-// /terms — public Terms of Service.
+// /terms - public Terms of Service.
 //
 // This is template language drafted to err on the side of broad
 // disclaimers and limit Ivy OS's liability for AI output, business
@@ -35,9 +35,9 @@ export default function TermsPage() {
         if you suspect unauthorized access.</P>
 
       <H2>2. The Service is informational, not professional advice</H2>
-      <P><strong>Ivy OS — including the Ivy AI coach, every dashboard
+      <P><strong>Ivy OS - including the Ivy AI coach, every dashboard
         metric, every suggested action, every email, every report
-        export, and every integration — provides informational tools
+        export, and every integration - provides informational tools
         only. Nothing in the Service constitutes financial, legal, tax,
         accounting, medical, or other professional advice.</strong> Your
         business decisions are yours alone, and you remain solely
@@ -69,14 +69,14 @@ export default function TermsPage() {
           responsible for them and for monitoring Ivy's behavior.</li>
       </UL>
 
-      <H2>4. Business outcomes — no guarantees</H2>
+      <H2>4. Business outcomes - no guarantees</H2>
       <P><strong>Ivy OS does not guarantee any specific business
         outcome.</strong> We make no representation that using the
         Service will increase your revenue, reduce churn, attract
         clients, prevent no-shows, improve your tax position, ensure
         compliance with any law or regulation, or produce any other
         result. Outcomes depend on factors entirely outside our
-        control — your market, your effort, your pricing, your local
+        control - your market, your effort, your pricing, your local
         regulations, and many others.</P>
 
       <H2>5. Third-party integrations</H2>
@@ -122,7 +122,7 @@ export default function TermsPage() {
         liability.</P>
 
       <H2>7. Your content &amp; data</H2>
-      <P>You retain ownership of everything you put into Ivy OS —
+      <P>You retain ownership of everything you put into Ivy OS -
         clients, invoices, documents, messages, files, and any other
         content you create or upload ("Customer Data"). You grant us
         a worldwide, non-exclusive, royalty-free license to host,
@@ -136,10 +136,10 @@ export default function TermsPage() {
         respond to their rights requests as required by applicable law
         (including GDPR/CCPA where applicable).</P>
       <P><strong>Product analytics &amp; aggregate metrics.</strong>
-        We measure how the Service is used at the platform level —
+        We measure how the Service is used at the platform level -
         sign-ups, active accounts, feature adoption, conversion,
         retention, revenue across the platform, and similar usage
-        signals — and we use those metrics to improve the product and
+        signals - and we use those metrics to improve the product and
         inform our marketing and growth efforts. We may publish or
         share aggregate, de-identified statistics ("our customers
         average X bookings per month") that cannot be linked back to
@@ -196,7 +196,7 @@ export default function TermsPage() {
         OR PUNITIVE DAMAGES, OR FOR ANY LOSS OF PROFITS, REVENUES,
         DATA, USE, GOODWILL, BUSINESS OPPORTUNITIES, CLIENTS, OR
         OTHER INTANGIBLE LOSSES, ARISING OUT OF OR RELATED TO YOUR
-        USE OF THE SERVICE — WHETHER BASED ON CONTRACT, TORT,
+        USE OF THE SERVICE - WHETHER BASED ON CONTRACT, TORT,
         STRICT LIABILITY, OR ANY OTHER LEGAL THEORY, AND WHETHER OR
         NOT WE HAVE BEEN ADVISED OF THE POSSIBILITY OF SUCH
         DAMAGES.</P>

@@ -4,9 +4,9 @@
 //
 // Each tutorial is an array of steps. A step is:
 //   {
-//     title:   string  (the H2 of the slide — short, action-oriented)
+//     title:   string  (the H2 of the slide - short, action-oriented)
 //     body:    string  (the paragraph beneath, plain text or simple
-//                       inline HTML — kept short so a step reads in
+//                       inline HTML - kept short so a step reads in
 //                       one breath)
 //     bullets: string[] | undefined
 //                      (optional bullet list under the body)
@@ -22,7 +22,7 @@
 export const TUTORIALS = {
   dashboard: {
     title: 'Your Dashboard',
-    intro: 'The home base. Every metric that matters at a glance — plus shortcuts to whatever needs your attention right now.',
+    intro: 'The home base. Every metric that matters at a glance - plus shortcuts to whatever needs your attention right now.',
     steps: [
       {
         title: 'Read the room in 5 seconds',
@@ -30,7 +30,7 @@ export const TUTORIALS = {
       },
       {
         title: "Today's focus",
-        body: "Your appointments for the day are pinned right under the header — name, time, service, and any notes. Tap one to jump straight into that booking.",
+        body: "Your appointments for the day are pinned right under the header - name, time, service, and any notes. Tap one to jump straight into that booking.",
       },
       {
         title: 'Quiet clients alert',
@@ -42,14 +42,14 @@ export const TUTORIALS = {
       },
       {
         title: 'Ivy is always one tap away',
-        body: 'Tap the "Ivy" bubble in the bottom-right of any page to ask your AI coach anything — from "how should I price my new service?" to "draft a check-in to my 3 quietest clients."',
+        body: 'Tap the "Ivy" bubble in the bottom-right of any page to ask your AI coach anything - from "how should I price my new service?" to "draft a check-in to my 3 quietest clients."',
       },
     ],
   },
 
   clients: {
     title: 'Clients',
-    intro: 'Your book of business. Every lead, every active client, every paused account — all searchable, taggable, and one tap from a message or invoice.',
+    intro: 'Your book of business. Every lead, every active client, every paused account - all searchable, taggable, and one tap from a message or invoice.',
     steps: [
       {
         title: 'Add your first client',
@@ -61,11 +61,11 @@ export const TUTORIALS = {
       },
       {
         title: 'Tags are your superpower',
-        body: 'Tag clients by anything that matters — "VIP", "weekday-only", "referred-by-Sarah", "intro-pricing". Then filter on those tags to send a targeted message blast or pull a quick list.',
+        body: 'Tag clients by anything that matters - "VIP", "weekday-only", "referred-by-Sarah", "intro-pricing". Then filter on those tags to send a targeted message blast or pull a quick list.',
       },
       {
         title: 'The client drawer is the whole picture',
-        body: 'Tap any row → the side drawer shows their bookings, invoices, lifetime value, recent messages, attached documents, and notes — all in one scroll. Edit anything inline.',
+        body: 'Tap any row → the side drawer shows their bookings, invoices, lifetime value, recent messages, attached documents, and notes - all in one scroll. Edit anything inline.',
       },
       {
         title: 'Import from anywhere',
@@ -76,7 +76,7 @@ export const TUTORIALS = {
 
   projects: {
     title: 'Projects',
-    intro: "An engagement view for service work that spans more than a single session. Group every booking, invoice, quote, and signed document under a named project — perfect for photographers, designers, consultants, or anyone running multi-touchpoint work.",
+    intro: "An engagement view for service work that spans more than a single session. Group every booking, invoice, quote, and signed document under a named project - perfect for photographers, designers, consultants, or anyone running multi-touchpoint work.",
     steps: [
       {
         title: 'Group work under one roof',
@@ -88,18 +88,18 @@ export const TUTORIALS = {
       },
       {
         title: 'Linked everything stays linked',
-        body: "Bookings, invoices, quotes, and signed documents tied to a project show up in its drawer — one tap from any of them to open the source.",
+        body: "Bookings, invoices, quotes, and signed documents tied to a project show up in its drawer - one tap from any of them to open the source.",
       },
     ],
   },
 
   calendar: {
     title: 'Calendar',
-    intro: 'Bookings, services, hours, blocks — everything time-related lives here. The public booking link generated from this tab is how new clients book themselves into your schedule.',
+    intro: 'Bookings, services, hours, blocks - everything time-related lives here. The public booking link generated from this tab is how new clients book themselves into your schedule.',
     steps: [
       {
         title: 'Set your services first',
-        body: 'Tap Services (top action menu). Each service is a name + duration + price. You can require a deposit, a full payment, or nothing at booking — your call. Photos here show on your booking page.',
+        body: 'Tap Services (top action menu). Each service is a name + duration + price. You can require a deposit, a full payment, or nothing at booking - your call. Photos here show on your booking page.',
         cta: { label: 'Open Services', to: '/calendar' },
       },
       {
@@ -123,7 +123,7 @@ export const TUTORIALS = {
 
   finance: {
     title: 'Finance',
-    intro: 'Invoices, expenses, recurring billing, time tracking, gift cards, memberships, payment processor — the whole money side of the business.',
+    intro: 'Invoices, expenses, recurring billing, time tracking, gift cards, memberships, payment processor - the whole money side of the business.',
     steps: [
       {
         title: 'Connect a payment processor',
@@ -139,7 +139,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Recurring invoices',
-        body: 'Got a monthly retainer? Set up a recurring invoice once — Ivy OS auto-generates and sends it every cycle. Includes built-in failure handling and dunning if a card declines.',
+        body: 'Got a monthly retainer? Set up a recurring invoice once - Ivy OS auto-generates and sends it every cycle. Includes built-in failure handling and dunning if a card declines.',
       },
       {
         title: 'Track expenses for tax season',
@@ -147,14 +147,14 @@ export const TUTORIALS = {
       },
       {
         title: 'Memberships, gift cards, time-tracking',
-        body: 'Each is its own sub-tab — turn on what fits your business. Memberships = recurring access plans. Gift cards = sellable balances clients can spend on services. Time = bill hourly with one tap.',
+        body: 'Each is its own sub-tab - turn on what fits your business. Memberships = recurring access plans. Gift cards = sellable balances clients can spend on services. Time = bill hourly with one tap.',
       },
     ],
   },
 
   goals: {
     title: 'Goals',
-    intro: "Set the targets that matter and watch progress without spreadsheets. Revenue, bookings, new clients — pick a metric, set a target, see how today's pace stacks up.",
+    intro: "Set the targets that matter and watch progress without spreadsheets. Revenue, bookings, new clients - pick a metric, set a target, see how today's pace stacks up.",
     steps: [
       {
         title: 'Add your first goal',
@@ -181,7 +181,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Stack the actions',
-        body: "Send an email, send an SMS (if the client opted in), create a task in your /goals tab, or send a document for signing. Run them in any sequence — each action is independent, so a failed SMS won't block the email.",
+        body: "Send an email, send an SMS (if the client opted in), create a task in your /goals tab, or send a document for signing. Run them in any sequence - each action is independent, so a failed SMS won't block the email.",
       },
       {
         title: 'Use tokens',
@@ -204,7 +204,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Referrals track themselves',
-        body: 'Each client gets a unique referral link. When a friend books through that link, both sides get the reward you set. You see the chain — who referred who — in their profile.',
+        body: 'Each client gets a unique referral link. When a friend books through that link, both sides get the reward you set. You see the chain - who referred who - in their profile.',
       },
       {
         title: 'Surfaces matter',
@@ -223,7 +223,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Voice memos + dictation',
-        body: 'In the composer: tap the bars icon to dictate (your speech becomes text). Tap the mic to record a voice memo. Both work without typing — great when you\'re between clients.',
+        body: 'In the composer: tap the bars icon to dictate (your speech becomes text). Tap the mic to record a voice memo. Both work without typing - great when you\'re between clients.',
       },
       {
         title: 'Send invoices and docs without leaving',
@@ -231,14 +231,14 @@ export const TUTORIALS = {
       },
       {
         title: 'Broadcast / one-way mode',
-        body: "Some threads are announcements (a class update, a holiday closure). Toggle a thread to one-way and clients can't reply — keeps your inbox clean for actual conversations.",
+        body: "Some threads are announcements (a class update, a holiday closure). Toggle a thread to one-way and clients can't reply - keeps your inbox clean for actual conversations.",
       },
     ],
   },
 
   docs: {
     title: 'Documents',
-    intro: 'Contracts, intake forms, waivers, e-signatures — built in. No DocuSign needed.',
+    intro: 'Contracts, intake forms, waivers, e-signatures - built in. No DocuSign needed.',
     steps: [
       {
         title: 'Build a template once',
@@ -250,7 +250,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Required-before-booking',
-        body: 'Attach a document template to a service (e.g. waiver for a personal-training session). Clients have to sign it before they can book the next session — the booking flow handles the gating.',
+        body: 'Attach a document template to a service (e.g. waiver for a personal-training session). Clients have to sign it before they can book the next session - the booking flow handles the gating.',
       },
       {
         title: 'Audit trail by default',
@@ -265,7 +265,7 @@ export const TUTORIALS = {
     steps: [
       {
         title: 'Pick a template',
-        body: 'Top toolbar → Template selector. Three starting points (Clean, Warm, Bold). They\'re skeletons — you customize sections + colors after picking.',
+        body: 'Top toolbar → Template selector. Three starting points (Clean, Warm, Bold). They\'re skeletons - you customize sections + colors after picking.',
       },
       {
         title: 'Build with sections',
@@ -280,7 +280,7 @@ export const TUTORIALS = {
         body: "Top right has Public / Link only / Only me. Build privately on Only me, share with friends on Link only, then flip to Public when you're ready for traffic.",
       },
       {
-        title: 'Publish — and the booking link comes free',
+        title: 'Publish - and the booking link comes free',
         body: "Hit Publish. Your site is live + indexable. The Book button on every section automatically routes to your booking page. One mini-site, one URL, one place to send everyone.",
       },
     ],
@@ -288,7 +288,7 @@ export const TUTORIALS = {
 
   account: {
     title: 'Account',
-    intro: 'Your subscription, branding, team, integrations — everything that\'s about Ivy OS itself rather than your day-to-day work.',
+    intro: 'Your subscription, branding, team, integrations - everything that\'s about Ivy OS itself rather than your day-to-day work.',
     steps: [
       {
         title: 'Brand the experience',
@@ -296,7 +296,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Manage your subscription',
-        body: 'See your plan, your next charge, your card on file. Cancel any time — your data stays accessible for 30 days after cancellation in case you change your mind.',
+        body: 'See your plan, your next charge, your card on file. Cancel any time - your data stays accessible for 30 days after cancellation in case you change your mind.',
       },
       {
         title: 'Notification preferences',

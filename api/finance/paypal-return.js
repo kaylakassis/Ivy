@@ -1,7 +1,7 @@
 // GET /api/finance/paypal-return?ws=<workspaceId>&next=<successUrl>
 // PayPal redirects the buyer here after they approve an order (we set
 // this as the order's return_url in createCheckoutSession). PayPal appends
-// ?token=<orderId>&PayerID=... — we CAPTURE the order (this is what
+// ?token=<orderId>&PayerID=... - we CAPTURE the order (this is what
 // actually charges the buyer in the redirect flow) and then forward to the
 // original success page. The PAYMENT.CAPTURE.COMPLETED webhook then marks
 // the invoice/booking paid, exactly like Square.
@@ -13,7 +13,7 @@ import { captureOrder } from '../_lib/payments/paypal.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
 
-// Only forward to a same-origin destination — never an attacker-supplied
+// Only forward to a same-origin destination - never an attacker-supplied
 // external URL (open-redirect guard). Falls back to the app root.
 function safeNext(next) {
   const base = appUrl();

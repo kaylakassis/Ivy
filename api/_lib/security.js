@@ -26,12 +26,12 @@ function originHost(headerValue) {
 // Returns true if the request's origin/referer matches the request's own host.
 // Returns 403 (and false) if the origin/referer is set and doesn't match.
 // If neither is present (e.g. server-to-server, curl, native fetch from same
-// origin without origin header), we allow it — the SameSite cookie is still in
+// origin without origin header), we allow it - the SameSite cookie is still in
 // place to block hostile contexts.
 export function requireSameOrigin(req, res) {
   // Every authenticated handler routes through here, so it's the right
   // place to stamp the request ID + echo it on the response. Idempotent
-  // — repeated calls return the existing ID.
+  // - repeated calls return the existing ID.
   stampRequestId(req, res);
 
   if (SAFE_METHODS.has(req.method)) return true;
@@ -50,7 +50,7 @@ export function requireSameOrigin(req, res) {
 
   // Native iOS/Android Capacitor shell. The WebView origin is
   // `https://localhost` (iOS) / `https://localhost` or `http://localhost`
-  // (Android) — those can never match our API host, but the request is
+  // (Android) - those can never match our API host, but the request is
   // legitimate. We gate on the X-Client-Platform marker AND on Capacitor's
   // fixed localhost origin together: a malicious page on a real
   // localhost-bound dev server can't spoof the platform header from
@@ -70,7 +70,7 @@ export function requireSameOrigin(req, res) {
 // we keep the original message so debugging stays easy.
 export function safeErrorMessage(err) {
   if (process.env.NODE_ENV === 'production') {
-    // Allow our own short, intentional messages through — anything that looks
+    // Allow our own short, intentional messages through - anything that looks
     // like a stack trace or DB error gets replaced.
     const msg = err?.message || '';
     if (msg && msg.length < 200 && !/(at |stack|postgres|neon|pg_|sql|relation)/i.test(msg)) {

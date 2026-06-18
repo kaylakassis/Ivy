@@ -20,7 +20,7 @@ import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS, IVY_PRICE_ANNUAL, ANNUA
 // One plan, two states: a free trial while we're in beta, then a
 // single paid subscription ("Active") at $49/mo. We deliberately
 // don't sell team / multi-location tiers yet because they aren't
-// supported — one honest plan beats three aspirational ones.
+// supported - one honest plan beats three aspirational ones.
 const PLAN = {
   name: 'Ivy OS',
   sub: 'Everything to run your business, in one place.',
@@ -34,7 +34,7 @@ const PLAN = {
     'Branded invoices + recurring billing',
     'Card on file + auto-charges',
     'Memberships, packages & gift cards',
-    'In-person sales — Tap to Pay on iPhone/Android',
+    'In-person sales - Tap to Pay on iPhone/Android',
     'Documents + e-signature',
     'Two-way client messaging',
     'Free client portal',
@@ -51,7 +51,7 @@ const PLAN = {
 const FAQ = [
   {
     q: 'How much does Ivy OS cost?',
-    a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${IVY_PRICE}/mo, or $${IVY_PRICE_ANNUAL}/yr billed annually (2 months free — save $${ANNUAL_SAVINGS}). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
+    a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${IVY_PRICE}/mo, or $${IVY_PRICE_ANNUAL}/yr billed annually (2 months free - save $${ANNUAL_SAVINGS}). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
   },
   {
     q: 'Do you take a cut of my payments?',
@@ -67,7 +67,7 @@ const FAQ = [
   },
   {
     q: 'Is there a free trial?',
-    a: `Yes. ${TRIAL_DAYS} days, the whole product unlocked, no credit card required. We won't ask for payment until you decide to subscribe — and even then, you can subscribe at a discount that's locked in for life.`,
+    a: `Yes. ${TRIAL_DAYS} days, the whole product unlocked, no credit card required. We won't ask for payment until you decide to subscribe - and even then, you can subscribe at a discount that's locked in for life.`,
   },
   {
     q: "What if I'm switching from another tool?",
@@ -113,7 +113,7 @@ export default function PricingPage() {
             fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
           }}>
             Replace your full stack - CRM, scheduler, invoicing, contracts, website,
-            email, AI — with one subscription. {TRIAL_DAYS}-day free trial, no credit card.
+            email, AI - with one subscription. {TRIAL_DAYS}-day free trial, no credit card.
             Then a simple ${IVY_PRICE}/mo when you're ready.
           </p>
         </section>
@@ -153,7 +153,7 @@ export default function PricingPage() {
                 then {PLAN.priceGA} once you subscribe. No per-seat math, no transaction fees.
               </div>
               <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
-                Or save with annual — <strong>${IVY_PRICE_ANNUAL}/yr</strong> (2 months free, save ${ANNUAL_SAVINGS}).
+                Or save with annual - <strong>${IVY_PRICE_ANNUAL}/yr</strong> (2 months free, save ${ANNUAL_SAVINGS}).
               </div>
             </div>
             <Link to={PLAN.ctaTo} className="btn btn-primary"

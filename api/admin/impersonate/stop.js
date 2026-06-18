@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     if (!backup) return badRequest(res, 'No impersonation backup found.');
 
     // Verify the backup token is signed by us and belongs to the actor
-    // recorded in the imp claim. If not, refuse — something's tampered.
+    // recorded in the imp claim. If not, refuse - something's tampered.
     let backupClaims;
     try {
       backupClaims = jwt.verify(backup, process.env.JWT_SECRET, { algorithms: ['HS256'] });

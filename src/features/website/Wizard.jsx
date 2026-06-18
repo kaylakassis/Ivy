@@ -3,7 +3,7 @@
 // Four quick decisions:
 //   1. Business name
 //   2. Public handle (slug)
-//   3. Starter pack — picks a multi-page section layout + a sensible
+//   3. Starter pack - picks a multi-page section layout + a sensible
 //      template + font pair as a coherent starting point
 //   4. (Optional) Override the template the pack suggests
 //
@@ -60,7 +60,7 @@ export default function Wizard({ onLaunch }) {
           <div className="metric-label" style={{ marginBottom: 8 }}>Website builder</div>
           <h1 className="page-title" style={{ margin: 0, fontSize: 32 }}>Let&rsquo;s build your site.</h1>
           <p style={{ margin: '8px 0 0', color: 'var(--fg-2)', fontSize: 14, maxWidth: 540 }}>
-            Pick a starter that fits your business — multi-page, animated, with the
+            Pick a starter that fits your business - multi-page, animated, with the
             section types you actually need. Customize anything from there.
           </p>
         </div>
@@ -89,7 +89,7 @@ export default function Wizard({ onLaunch }) {
           </div>
         </Field>
 
-        <Field label="Starter pack" hint="Each pack is a curated multi-page layout. Switching packs replaces the suggested template + font pair too — you can override below.">
+        <Field label="Starter pack" hint="Each pack is a curated multi-page layout. Switching packs replaces the suggested template + font pair too - you can override below.">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 12 }}>
             {STARTER_PACK_LIST.map((p) => {
               const Icon = Icons[p.icon] || Icons.Globe;
@@ -138,7 +138,7 @@ export default function Wizard({ onLaunch }) {
           </div>
         </Field>
 
-        {/* Template override — collapsed by default since the pack
+        {/* Template override - collapsed by default since the pack
             already nominates one. Owners can expand to switch. */}
         <div>
           <button
@@ -202,7 +202,7 @@ export default function Wizard({ onLaunch }) {
           )}
         </div>
 
-        {/* Page preview — shows how many pages + the layout the pack
+        {/* Page preview - shows how many pages + the layout the pack
             will produce so the owner doesn't get a surprise. */}
         <div style={{
           padding: 14, borderRadius: 10,
@@ -217,7 +217,7 @@ export default function Wizard({ onLaunch }) {
               <span style={{ color: 'var(--muted)', minWidth: 14 }}>{i + 1}.</span>
               <span style={{ fontWeight: 500 }}>{p.title}</span>
               <span style={{ color: 'var(--muted)' }}>
-                — {p.sections.length} section{p.sections.length === 1 ? '' : 's'}
+                - {p.sections.length} section{p.sections.length === 1 ? '' : 's'}
                 {p.slug ? ` · /${p.slug}` : ''}
               </span>
             </div>

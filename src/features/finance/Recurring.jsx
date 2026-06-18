@@ -65,7 +65,7 @@ export default function Recurring() {
           <EmptyNote
             icon="Repeat"
             title="No recurring invoices yet"
-            hint="Set up a monthly retainer or weekly billing — invoices will be generated and (optionally) sent for you."
+            hint="Set up a monthly retainer or weekly billing - invoices will be generated and (optionally) sent for you."
           />
         </div>
       ) : (
@@ -134,7 +134,7 @@ function ScheduleRow({ schedule, first, onOpen, onRunNow, busy }) {
         {CADENCE_LABEL[schedule.cadence] || schedule.cadence}
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-        {schedule.nextRunAt ? new Date(schedule.nextRunAt).toLocaleDateString() : '—'}
+        {schedule.nextRunAt ? new Date(schedule.nextRunAt).toLocaleDateString() : '-'}
       </div>
       <div className="mono-num" style={{ fontSize: 13.5, fontWeight: 600 }}>
         {fmtMoney(schedule.total)}
@@ -236,7 +236,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
           <div style={{ flex: 1, minWidth: 0 }}>
             <div className="metric-label">{isNew ? 'New schedule' : 'Edit schedule'}</div>
             <input value={name} onChange={(e) => setName(e.target.value)}
-              placeholder="e.g., Monthly retainer — Jane"
+              placeholder="e.g., Monthly retainer - Jane"
               style={{
                 background: 'transparent', border: 0, outline: 'none',
                 fontSize: 20, fontWeight: 600, color: 'var(--fg)', width: '100%',
@@ -252,7 +252,7 @@ function ScheduleEditor({ schedule, onClose, onSave, onDelete }) {
           {/* Client */}
           <Field label="Client">
             <select value={clientId} onChange={(e) => setClientId(e.target.value)} style={inputS}>
-              <option value="">— Select a client —</option>
+              <option value="">- Select a client -</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}{c.email ? ` · ${c.email}` : ''}

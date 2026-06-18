@@ -90,7 +90,7 @@ async function run() {
 
   console.log('\n[6] Stripe-Dashboard-originated sub (no Ivy OS metadata) matches via customer + price');
   // Stamp the client with a stripe_customer_id + provision a Stripe
-  // price on the tier — this is the state for a workspace where the
+  // price on the tier - this is the state for a workspace where the
   // owner set up recurring billing in the Stripe Dashboard, not via
   // Ivy OS's checkout flow.
   await sql`UPDATE clients SET stripe_customer_id = 'cus_dash_match' WHERE id = ${cid}`;
@@ -101,7 +101,7 @@ async function run() {
     customer: 'cus_dash_match',
     items: { data: [{ price: { id: 'price_dash_silver' } }] },
     current_period_end: 1893456000,
-    // No metadata at all — that's the whole point.
+    // No metadata at all - that's the whole point.
   };
   const r7 = await applySubscriptionState({ workspaceId: wid, sub: dashSub });
   assert(r7 === 'created', `dashboard sub matched + materialized (got '${r7}')`);

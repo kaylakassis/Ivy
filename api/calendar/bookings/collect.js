@@ -12,7 +12,7 @@
 // already counts the revenue. One source of truth, zero new surface
 // area on the public side.
 //
-// Re-clicks reuse the same invoice via bookings.collect_invoice_id —
+// Re-clicks reuse the same invoice via bookings.collect_invoice_id -
 // minting a new token invalidates the previous one (last-link-wins).
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     const total       = Number(bk.booking_total || bk.service_price || 0);
     const depositPaid = Number(bk.deposit_paid || 0);
     const balance     = Math.max(0, Math.round((total - depositPaid) * 100) / 100);
-    if (balance <= 0) return badRequest(res, 'No balance to collect — already paid in full');
+    if (balance <= 0) return badRequest(res, 'No balance to collect - already paid in full');
 
     const serviceName = bk.service_name || 'Booking';
     const dateStr     = bk.date instanceof Date ? bk.date.toISOString().slice(0, 10) : bk.date;

@@ -1,4 +1,4 @@
-// POST /api/messages/groups/:id/read — owner clears unread_biz.
+// POST /api/messages/groups/:id/read - owner clears unread_biz.
 import { sql } from '../../../_lib/db.js';
 import { requireUser } from '../../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../../_lib/workspaceGate.js';

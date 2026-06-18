@@ -12,7 +12,7 @@
 //   affiliate        | user_type = 'affiliate'
 //   client-only      | claimed clients-row but no workspace
 //
-// `dryRun: true` returns the recipient count without sending — use it
+// `dryRun: true` returns the recipient count without sending - use it
 // before pulling the trigger.
 //
 // IMPORTANT: this hits Resend with one request per email. For >500
@@ -73,10 +73,10 @@ export default async function handler(req, res) {
           if (recent.rows[0]) {
             const sinceMs = Date.now() - new Date(recent.rows[0].created_at).getTime();
             const waitS = Math.max(1, Math.ceil((BLAST_COOLDOWN_MS - sinceMs) / 1000));
-            return badRequest(res, `Cooldown — wait ${waitS}s before sending another blast (you sent one ${Math.floor(sinceMs / 1000)}s ago).`);
+            return badRequest(res, `Cooldown - wait ${waitS}s before sending another blast (you sent one ${Math.floor(sinceMs / 1000)}s ago).`);
           }
         } catch (e) {
-          // audit_events absent on older deploys — skip the cooldown
+          // audit_events absent on older deploys - skip the cooldown
           // check rather than fail-closed. Logged for visibility.
           console.warn('[email-blast] cooldown check skipped:', e.message);
         }
@@ -85,7 +85,7 @@ export default async function handler(req, res) {
 
     const recipients = await loadSegment(segment);
     if (recipients.length > MAX_BLAST) {
-      return badRequest(res, `Segment has ${recipients.length} recipients — over the per-blast cap of ${MAX_BLAST}.`);
+      return badRequest(res, `Segment has ${recipients.length} recipients - over the per-blast cap of ${MAX_BLAST}.`);
     }
     if (dryRun) {
       return ok(res, { dryRun: true, recipients: recipients.length });
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
 }
 
 async function loadSegment(segment) {
-  // Always require a verified email — we never want to blast unverified
+  // Always require a verified email - we never want to blast unverified
   // addresses (high bounce rate hurts deliverability).
   if (segment === 'all') {
     const r = await sql`

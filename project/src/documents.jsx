@@ -1,4 +1,4 @@
-// DOCUMENTS — DocuSign-style flow for Ivy OS.
+// DOCUMENTS - DocuSign-style flow for Ivy OS.
 // Features: upload-PDF / write-in-app / from-template, drag-drop fields,
 // send to registered clients, in-app signing, reminders, vault, Drive mock.
 
@@ -362,7 +362,7 @@ function DocList({ docs, empty, actions, onOpen }) {
                 background: meta.bg, color: meta.fg,
               }}>{meta.label}</span>
             </div>
-            <div style={{ fontSize:12, color:'var(--muted)' }}>{ts ? relTime(ts) : '—'}</div>
+            <div style={{ fontSize:12, color:'var(--muted)' }}>{ts ? relTime(ts) : '-'}</div>
             <div style={{ display:'flex', gap:4, justifyContent:'flex-end', flexWrap:'nowrap' }}>
               {actions(d)}
             </div>
@@ -826,7 +826,7 @@ function SendDialog({ docId, store, update, toast, onClose }) {
         <div style={{ fontSize:11, color:'var(--muted)', letterSpacing:'0.1em', textTransform:'uppercase', fontWeight:600 }}>Prepare & send</div>
         <h3 style={{ margin:'4px 0 18px', fontSize:20, fontWeight:600, letterSpacing:'-0.02em' }}>{doc.name}</h3>
 
-        <div style={{ fontSize: 12, color:'var(--muted)', marginBottom: 8, fontWeight: 500 }}>Recipient — registered clients only</div>
+        <div style={{ fontSize: 12, color:'var(--muted)', marginBottom: 8, fontWeight: 500 }}>Recipient - registered clients only</div>
         <div style={{
           border:'1px solid var(--border)', borderRadius: 10, maxHeight: 180, overflow:'auto', marginBottom: 14,
         }}>
@@ -1071,7 +1071,7 @@ function SigningModal({ docId, onClose }) {
   );
 }
 
-/* Global opener — called from Messages when client taps "Open document" */
+/* Global opener - called from Messages when client taps "Open document" */
 function SigningPortal() {
   const [openId, setOpenId] = React.useState(null);
   React.useEffect(() => {

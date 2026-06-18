@@ -6,7 +6,7 @@
 // Required env (otherwise sends silently no-op):
 //   VAPID_PUBLIC_KEY    base64url-encoded P-256 public key
 //   VAPID_PRIVATE_KEY   base64url-encoded P-256 private key
-//   VAPID_SUBJECT       mailto: or https: contact URL — used by push
+//   VAPID_SUBJECT       mailto: or https: contact URL - used by push
 //                       providers to reach a human on issues
 //
 // Generate a key pair with:
@@ -38,7 +38,7 @@ export function publicVapidKey() {
   return process.env.VAPID_PUBLIC_KEY || null;
 }
 
-// Notification types — keep in sync with the toggle list in the
+// Notification types - keep in sync with the toggle list in the
 // /account → Notifications card and /api/me/notifications. Each
 // sendPushToUser call passes one of these so the user's per-type
 // opt-out is honored.
@@ -65,7 +65,7 @@ async function userAllowsType(userId, type) {
 // but don't fail the caller.
 //
 // `type` (optional but strongly recommended) gates the send on the
-// user's notification_prefs. Pass one of NOTIFY_TYPES — calls that
+// user's notification_prefs. Pass one of NOTIFY_TYPES - calls that
 // don't pass a type send unconditionally (admin-side, system-critical).
 //
 // `payload`:
@@ -74,7 +74,7 @@ async function userAllowsType(userId, type) {
 //   tag   → coalesces multiple notifications into one
 //   data  → arbitrary JSON the SW can read
 // Resolve the workspace owner's user id (the only push target on the
-// owner side — staff/team isn't a thing yet).
+// owner side - staff/team isn't a thing yet).
 export async function ownerUserIdForWorkspace(workspaceId) {
   if (!workspaceId) return null;
   const { rows } = await sql`SELECT owner_id FROM workspaces WHERE id = ${workspaceId}`;
@@ -83,7 +83,7 @@ export async function ownerUserIdForWorkspace(workspaceId) {
 
 // Resolve the user id sitting behind a clients row, if the client has
 // claimed their portal account. Returns null when the client never
-// signed up — push isn't possible without a registered user.
+// signed up - push isn't possible without a registered user.
 export async function clientUserId(clientId) {
   if (!clientId) return null;
   const { rows } = await sql`SELECT user_id FROM clients WHERE id = ${clientId}`;
@@ -93,7 +93,7 @@ export async function clientUserId(clientId) {
 // In-app notification feed. The bell icon + dropdown read from this
 // table. We INSERT before the push fanout (even if the user has no
 // push subscription, the bell still surfaces the event) so push is
-// purely additive — disabling push doesn't lose alerts.
+// purely additive - disabling push doesn't lose alerts.
 //
 // tag coalesces: 5 messages from the same client should land as ONE
 // feed row that updates the title/body to the latest, not 5 rows.
@@ -146,7 +146,7 @@ export async function notifyOwner({ workspaceId, payload, type }) {
 export async function notifyClient({ clientId, payload, type }) {
   const userId = await clientUserId(clientId);
   if (!userId) return { ok: false, reason: 'unclaimed', sent: 0 };
-  // workspace_id intentionally null on the client side — the
+  // workspace_id intentionally null on the client side - the
   // notification is about a business they engage with, not their own
   // workspace. The URL points into /me/* which is workspace-agnostic.
   await recordNotificationRow({ userId, workspaceId: null, type, payload });
@@ -154,7 +154,7 @@ export async function notifyClient({ clientId, payload, type }) {
 }
 
 // Fire-and-forget wrapper. Swallows everything so callers never have to
-// guard with try/catch — push failures must never break the primary
+// guard with try/catch - push failures must never break the primary
 // action (sending a message, marking an invoice paid, etc.).
 export function notifyOwnerSafe(args)  { return notifyOwner(args).catch((e) => console.warn('[push] notifyOwner', e.message)); }
 export function notifyClientSafe(args) { return notifyClient(args).catch((e) => console.warn('[push] notifyClient', e.message)); }
@@ -180,7 +180,7 @@ export async function sendPushToUser({ userId, payload, type }) {
   // awaiting one at a time. A user with 5 devices used to wait for
   // 5 sequential webpush round-trips (each ~150-400ms to the push
   // service); now they go together. Web Push providers tolerate
-  // parallel requests fine — we're well under the 100/sec/origin
+  // parallel requests fine - we're well under the 100/sec/origin
   // soft limits at any plausible per-user fanout.
   const results = await Promise.allSettled(rows.map((r) =>
     webpush.sendNotification(

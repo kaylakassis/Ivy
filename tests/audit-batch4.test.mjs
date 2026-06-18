@@ -1,5 +1,5 @@
 // Test for Batch-4 (#4): the dashboard endpoint returns real workspace
-// numbers (was hardcoded "—"). Seeds a paid invoice, active client,
+// numbers (was hardcoded "-"). Seeds a paid invoice, active client,
 // booking today, and an expense, then asserts the rollup.
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/audit-batch4.test.mjs

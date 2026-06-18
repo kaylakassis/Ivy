@@ -1,4 +1,4 @@
-// GET /api/me/discover — public directory of businesses that have opted
+// GET /api/me/discover - public directory of businesses that have opted
 // in to be listed (calendar_settings.discoverable = TRUE) AND have
 // published a slug.
 //
@@ -12,7 +12,7 @@
 //
 // Service search and price filter compose: priceMin/priceMax bound the
 // SAME service that matches q, so "botox at $10–100" returns businesses
-// whose botox is in that range — not businesses with botox AND something
+// whose botox is in that range - not businesses with botox AND something
 // else in the range.
 //
 // Distance is computed in SQL via the haversine formula. Businesses
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
     // The service filter only fires when the request actually scopes by
     // service-name OR price. Without either, we don't need to JOIN
-    // services at all — every discoverable workspace passes.
+    // services at all - every discoverable workspace passes.
     const needsServiceFilter = qPattern || priceMin != null || priceMax != null;
 
     // The text q can match the business itself (biz name / tagline) OR
@@ -98,7 +98,7 @@ export default async function handler(req, res) {
 
     if (needsServiceFilter) {
       // Build the inner predicate piecewise so absent filters drop out.
-      // Only public services may satisfy a Discover match — otherwise a
+      // Only public services may satisfy a Discover match - otherwise a
       // private/only_me service leaks its existence + price band into
       // search and renders a confusing empty card (matching_services
       // already filters visibility='public').

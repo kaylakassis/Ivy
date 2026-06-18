@@ -94,7 +94,7 @@ export default function PackagesDrawer({ services, onClose, inline = false }) {
 
 // Warns the owner before hard-deleting a package template that still
 // has active client_packages tied to it. Existing buyers keep their
-// credits (FK is ON DELETE SET NULL) — the consequence is purely that
+// credits (FK is ON DELETE SET NULL) - the consequence is purely that
 // the template disappears from the templates list and can no longer be
 // resold under that name.
 function DeleteWarning({ pkg, outstanding, onCancel, onConfirm }) {
@@ -125,7 +125,7 @@ function DeleteWarning({ pkg, outstanding, onCancel, onConfirm }) {
           {' '}<strong>{credits}</strong> credit{credits === 1 ? '' : 's'} remaining.
         </p>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          They'll keep being able to redeem those sessions — their package
+          They'll keep being able to redeem those sessions - their package
           stays linked to their account. You just won't be able to sell
           this template again. (If you'd rather keep it around but hide
           it from the sale picker, use <strong>Hide</strong> instead.)
@@ -211,7 +211,7 @@ function PackageList({ packages, services, onNew, onEdit, onHide, onDelete }) {
               <button onClick={() => onDelete(p)} className="btn btn-ghost"
                 style={{ padding: '4px 8px', fontSize: 12, color: 'var(--danger)' }}
                 title={p.outstandingClients > 0
-                  ? `${p.outstandingClients} client${p.outstandingClients === 1 ? '' : 's'} still using this — you'll get a confirmation`
+                  ? `${p.outstandingClients} client${p.outstandingClients === 1 ? '' : 's'} still using this - you'll get a confirmation`
                   : 'Delete this template'}>
                 <Icons.Trash size={12}/>
               </button>
@@ -297,7 +297,7 @@ function PackageEditor({ pkg, services, onCancel, onSaved }) {
 
       <Field label="Description">
         <textarea value={description} onChange={(e) => setDescription(e.target.value.slice(0, 1000))}
-          rows={3} placeholder="Optional — what's included, who it's for…"
+          rows={3} placeholder="Optional - what's included, who it's for…"
           style={{ ...inputSty, resize: 'vertical', fontFamily: 'inherit' }}/>
       </Field>
 

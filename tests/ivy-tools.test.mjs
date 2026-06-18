@@ -1,4 +1,4 @@
-// Static wiring test for Ivy's tool registry. Runs without a database —
+// Static wiring test for Ivy's tool registry. Runs without a database -
 // it only loads module-level metadata, never executes a tool. Catches the
 // classic mistakes when adding a tool: a schema with no handler, an orphan
 // handler with no schema, a duplicate name, or a sensitive tool that isn't

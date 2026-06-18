@@ -8,7 +8,7 @@
 //
 // Onboarding endpoints are EXEMPT from the subscription gate (an owner
 // must be able to finish setup before/regardless of billing), so this
-// uses ensureWorkspace, not ensureActiveWorkspace — same as the rest of
+// uses ensureWorkspace, not ensureActiveWorkspace - same as the rest of
 // api/onboarding/*.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';

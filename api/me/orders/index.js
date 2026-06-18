@@ -1,4 +1,4 @@
-// GET /api/me/orders — the user's order history across every workspace
+// GET /api/me/orders - the user's order history across every workspace
 // they're a client of. Mirrors /api/me/bookings + /api/me/invoices.
 //
 // Only paid + refunded orders surface here (pending = a Stripe Checkout

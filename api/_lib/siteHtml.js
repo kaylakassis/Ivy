@@ -4,14 +4,14 @@
 //   1. <title> + <meta name="description"> + OG tags appear in the
 //      initial response, so Facebook/Twitter/Slack/LinkedIn previews
 //      work (these crawlers do NOT execute JS).
-//   2. Google's crawler — which does run JS but prefers pre-rendered
-//      HTML — gets a fully populated <h1>, headings, body copy, and a
+//   2. Google's crawler - which does run JS but prefers pre-rendered
+//      HTML - gets a fully populated <h1>, headings, body copy, and a
 //      JSON-LD LocalBusiness block on the first paint. Indexes faster
 //      and ranks better than the SPA-only equivalent.
 //   3. The Vite-built bundle still mounts on top, so once JS runs the
 //      site is fully interactive (booking widget, IG embeds, custom
 //      nav transitions, etc.). React's createRoot replaces the static
-//      content under #root with the live tree — no hydration mismatch
+//      content under #root with the live tree - no hydration mismatch
 //      because we're using render(), not hydrate().
 //
 // Strategy: read dist/index.html once at module load. That file already
@@ -47,7 +47,7 @@ function loadShell() {
       // try next
     }
   }
-  // Fallback shell — minimal but valid. Hit when dist/ isn't bundled
+  // Fallback shell - minimal but valid. Hit when dist/ isn't bundled
   // (e.g. local `vercel dev` without a build). Crawlers still get the
   // SEO bits; JS-enabled users get a "Loading…" until they navigate.
   cachedShell = `<!doctype html><html lang="en"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/></head><body><div id="root"></div></body></html>`;
@@ -72,7 +72,7 @@ function styleVal(s) {
 // ----- Section renderers -------------------------------------------
 //
 // Each returns an HTML string. We intentionally render a simpler
-// representation than the React component — we want semantic, crawler-
+// representation than the React component - we want semantic, crawler-
 // friendly markup (h1/h2/p/ul/li/img with alt text). Once React
 // hydrates, the visually richer version takes over.
 
@@ -130,7 +130,7 @@ function renderTestimonials(s) {
   const items = (d.items || []).map((t) => `
     <blockquote>
       <p>${esc(t.text || '')}</p>
-      <footer>${esc(t.name || '')}${t.role ? ` — ${esc(t.role)}` : ''}</footer>
+      <footer>${esc(t.name || '')}${t.role ? ` - ${esc(t.role)}` : ''}</footer>
     </blockquote>`).join('');
   return `<section class="ivy-testimonials">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
@@ -389,7 +389,7 @@ function renderSocialFeed(s) {
 
 function renderCustomHtml(s) {
   const d = s.data || {};
-  // Sandboxed iframe via srcdoc — crawlers see the iframe element but
+  // Sandboxed iframe via srcdoc - crawlers see the iframe element but
   // can't follow into its content. Owner-supplied HTML is escaped into
   // an attribute so the sandbox=""'s rules apply.
   const safe = String(d.html || '').replace(/"/g, '&quot;');
@@ -613,7 +613,7 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host }) {
 
   const navHtml = renderNav({ handle, nav, currentSlug, businessName: site.businessName });
   const sectionsHtml = visible.map((s) => renderSection(s, handle)).join('\n');
-  // Pageview ping — fires once on initial paint. Crawlers don't run JS
+  // Pageview ping - fires once on initial paint. Crawlers don't run JS
   // so we naturally exclude them; the UA classifier on the API side
   // also tags bots so any that DO run JS get bucketed away.
   const pvScript = `<script>(function(){try{navigator.sendBeacon&&navigator.sendBeacon('/site/${esc(handle)}/pv',new Blob([JSON.stringify({slug:${JSON.stringify(currentSlug || '')},referrer:document.referrer.slice(0,300)})],{type:'application/json'}))||fetch('/site/${esc(handle)}/pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:${JSON.stringify(currentSlug || '')},referrer:document.referrer.slice(0,300)}),keepalive:true})}catch(e){}})();</script>`;

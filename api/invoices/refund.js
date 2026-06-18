@@ -5,7 +5,7 @@
 //     /refunds endpoint with the workspace's secret key. Partial
 //     amounts allowed (omit `amount` for a full refund of what's left).
 //   • Manually-marked-paid invoices: records the refund on our side
-//     only — the owner handles the actual money outside the app.
+//     only - the owner handles the actual money outside the app.
 //     Useful for cash / check / external Venmo refunds.
 //
 // State changes:

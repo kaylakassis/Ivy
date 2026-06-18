@@ -4,7 +4,7 @@
 // Run with: node --import ./tests/bootstrap.mjs ./tests/prod-readiness.test.mjs
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 
-// Auth via x-admin-secret — set BEFORE the module loads.
+// Auth via x-admin-secret - set BEFORE the module loads.
 process.env.ADMIN_SECRET = process.env.ADMIN_SECRET || 'test-admin-secret-at-least-32-chars-long-please';
 
 const { default: handler } = await import('../api/admin/prod-readiness.js');

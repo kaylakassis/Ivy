@@ -6,7 +6,7 @@ export const VALID_PAID_METHOD = new Set(['card', 'ach', 'cash', 'check', 'trans
 
 // Generalized finance_settings fetcher used by the multi-provider
 // payments layer. Returns a normalized object (or null when no row
-// exists yet); never throws on a missing connection — that's a
+// exists yet); never throws on a missing connection - that's a
 // caller-side decision now that more than one processor exists.
 export async function fetchFinanceSettings(workspaceId) {
   const r = await sql`

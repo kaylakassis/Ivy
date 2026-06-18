@@ -3,7 +3,7 @@
 //
 // Owner-side endpoint to switch a client's recurring tier. Calls Stripe
 // subscriptions.update with the new price + proration_behavior=
-// create_prorations — Stripe applies the credit/charge for the
+// create_prorations - Stripe applies the credit/charge for the
 // remainder of the current period to the next invoice. The
 // customer.subscription.updated webhook then carries the new items[]
 // and applySubscriptionState resyncs the local snapshot
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
 
     const creds = await loadStripeCreds(workspaceId);
 
-    // Stripe needs the SubscriptionItem id to swap the price — fetch
+    // Stripe needs the SubscriptionItem id to swap the price - fetch
     // the current sub to get items.data[0].id. Defense: re-confirm
     // the subscription's metadata.workspace_id matches when present,
     // so a stale stripe_subscription_id from a re-onboarded account

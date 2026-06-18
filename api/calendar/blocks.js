@@ -1,4 +1,4 @@
-// POST /api/calendar/blocks — create a calendar block (manual unavailable time).
+// POST /api/calendar/blocks - create a calendar block (manual unavailable time).
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';

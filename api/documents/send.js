@@ -1,5 +1,5 @@
 // POST /api/documents/send  body: { id, recipients }
-//   recipients: [{ clientId, name?, email? }, ...]   — multi-signer.
+//   recipients: [{ clientId, name?, email? }, ...]   - multi-signer.
 //                For backward compat with single-signer callers, also
 //                accepts a single { clientId } shape.
 //
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
-    // Idempotent wrap — sending the same multi-signer document twice
+    // Idempotent wrap - sending the same multi-signer document twice
     // would DELETE + INSERT new signer rows (with new tokens), invalidating
     // the in-flight link the first signer just received. With the
     // Idempotency-Key header, retries collapse to the cached response.
@@ -67,8 +67,8 @@ export default async function handler(req, res) {
     const doc = await fetchOwnedDoc({ id, workspaceId });
     if (!doc) return { status: 400, body: { error: 'Document not found' } };
     if (doc.status === 'completed') return { status: 400, body: { error: 'Already completed' } };
-    if (doc.status === 'voided')    return { status: 400, body: { error: 'Document is voided — restore first' } };
-    if (doc.status === 'declined')  return { status: 400, body: { error: 'Document was declined — restore to draft first' } };
+    if (doc.status === 'voided')    return { status: 400, body: { error: 'Document is voided - restore first' } };
+    if (doc.status === 'declined')  return { status: 400, body: { error: 'Document was declined - restore to draft first' } };
 
     // Resolve each recipient: must belong to this workspace, must have an
     // email. Build the rows we'll insert.
@@ -136,7 +136,7 @@ export default async function handler(req, res) {
     // a reasonable "to whom" label.
     // Wipe any stale field values from a prior signing round before
     // sending again (re-send after void/decline). We keep field
-    // metadata — id/type/page/x/y/w/h/signerIndex/label/required —
+    // metadata - id/type/page/x/y/w/h/signerIndex/label/required -
     // but blank `.value` so the new signers don't see prior inputs.
     const cleanedFields = (doc.fields || []).map((f) => ({ ...f, value: '' }));
     const first = resolved[0];
@@ -168,7 +168,7 @@ export default async function handler(req, res) {
       : '';
     const branding = await fetchBranding(workspaceId);
     // Track email failure so the owner sees a UI banner instead of a
-    // silent success — the document is already in 'sent' state and the
+    // silent success - the document is already in 'sent' state and the
     // token is minted, so the recovery action is the existing Resend
     // button, not a hidden retry. Previously the failure was logged
     // server-side and the API returned success regardless, so the
@@ -195,7 +195,7 @@ export default async function handler(req, res) {
       });
     } catch (mailErr) {
       console.error('[documents/send] email failed:', mailErr.message);
-      emailWarning = `We saved the document but couldn't email ${first.name || first.email} — try Resend in a moment.`;
+      emailWarning = `We saved the document but couldn't email ${first.name || first.email} - try Resend in a moment.`;
     }
 
     try {

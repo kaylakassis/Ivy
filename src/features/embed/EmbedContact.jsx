@@ -1,4 +1,4 @@
-// /embed/contact/:slug — lean lead-capture form embedded on a host
+// /embed/contact/:slug - lean lead-capture form embedded on a host
 // site via the script in /embed.js. Posts to the existing public
 // contact endpoint (no new API surface) and shows a "thanks, we got
 // it" confirmation in place when submitted.
@@ -32,7 +32,7 @@ export default function EmbedContact() {
     if (!message.trim()) { setErr('Please write a message.'); return; }
     setBusy(true);
     try {
-      // Direct fetch (no api.js helper — that prefixes /api and includes
+      // Direct fetch (no api.js helper - that prefixes /api and includes
       // session-auth cookies we don't want flying around on a 3rd-party
       // site). Same-origin since this iframe is served from our domain.
       const r = await fetch('/api/calendar/public/contact?slug=' + encodeURIComponent(slug || ''), {
@@ -72,7 +72,7 @@ export default function EmbedContact() {
           }}>✓</div>
           <h2 style={{ margin: 0, fontSize: 18, fontWeight: 600 }}>Got it.</h2>
           <p style={{ margin: '8px 0 0', fontSize: 13.5, color: 'var(--muted, #807C73)', lineHeight: 1.5 }}>
-            Thanks {name.split(/\s+/)[0]} — we'll get back to you shortly at <strong>{email}</strong>.
+            Thanks {name.split(/\s+/)[0]} - we'll get back to you shortly at <strong>{email}</strong>.
           </p>
         </div>
       ) : (

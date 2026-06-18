@@ -54,7 +54,7 @@ async function run() {
     await ensureSchemaApplied();
 
     const tag = `gc-${Date.now()}`;
-    // Two owners/workspaces — cross-tenant isolation fixture.
+    // Two owners/workspaces - cross-tenant isolation fixture.
     const owner1 = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}-o1@example.com`}, 'x', 'Owner1', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
     const ws1 = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end) VALUES (${owner1}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
@@ -62,7 +62,7 @@ async function run() {
       VALUES (${`${tag}-o2@example.com`}, 'x', 'Owner2', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
     const ws2 = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end) VALUES (${owner2}, 'active', NOW() + INTERVAL '30 days') RETURNING id`).rows[0].id;
 
-    // Three clients in ws1 — first one will also be a portal user.
+    // Three clients in ws1 - first one will also be a portal user.
     const portalUser = (await sql`INSERT INTO users (email, password_hash, email_verified_at, terms_version, terms_accepted_at)
       VALUES (${`${tag}-pu@example.com`}, 'x', NOW(), '2026-05-05', NOW()) RETURNING id`).rows[0].id;
     const c1 = (await sql`INSERT INTO clients (workspace_id, name, email, stage, user_id)
@@ -71,7 +71,7 @@ async function run() {
       VALUES (${ws1}, 'Bob', ${`${tag}-b@example.com`}, 'active') RETURNING id`).rows[0].id;
     const c3 = (await sql`INSERT INTO clients (workspace_id, name, email, stage)
       VALUES (${ws1}, 'Carol', ${`${tag}-c@example.com`}, 'active') RETURNING id`).rows[0].id;
-    // Client in ws2 — cross-tenant target.
+    // Client in ws2 - cross-tenant target.
     const cOther = (await sql`INSERT INTO clients (workspace_id, name, email, stage)
       VALUES (${ws2}, 'Eve', ${`${tag}-eve@example.com`}, 'active') RETURNING id`).rows[0].id;
 
@@ -196,7 +196,7 @@ async function run() {
     assert(listAll.body?.groups?.length === 1, 'includeArchived=1 brings it back');
 
     // ─── 13. Threading + reactions + mentions + invites ──────────
-    // Fresh group for these — the previous one is archived.
+    // Fresh group for these - the previous one is archived.
     console.log('\n[13] threading + reactions + mentions + invite-by-link');
     const createR = mkRes();
     await groupsList(ownerReq({
@@ -255,7 +255,7 @@ async function run() {
     }), reactClient);
     assert(reactClient.statusCode === 200, 'client reacted');
 
-    // Fetch via owner — should see count=2 with mine=true.
+    // Fetch via owner - should see count=2 with mine=true.
     const fetchOwner = mkRes();
     await groupOne(ownerReq({ method: 'GET', cookie: cookie1, query: { id: gid2 } }), fetchOwner);
     const replyMsg = fetchOwner.body.messages.find((m) => m.id === replyId);

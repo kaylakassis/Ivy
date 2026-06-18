@@ -38,7 +38,7 @@ export default async function handler(req, res) {
 
       // Optional date-range filter. Without it (legacy callers) we
       // return the whole table; with from/to we narrow to the
-      // requested window — backs the calendar view-mode loads so a
+      // requested window - backs the calendar view-mode loads so a
       // long-tenured owner with 10K+ past bookings doesn't download
       // their full history on every navigation. Validates ISO dates
       // (YYYY-MM-DD); anything malformed falls back to no-filter
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       const isIsoDate = (s) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s);
       // Always bound the query window. Without an explicit range, default to a
       // generous window around today (90 days back, 540 forward) instead of
-      // returning a tenant's ENTIRE history — an unbounded fetch melts the
+      // returning a tenant's ENTIRE history - an unbounded fetch melts the
       // calendar load for long-tenured / high-volume workspaces.
       const isoDay = (d) => d.toISOString().slice(0, 10);
       const dFrom = new Date(); dFrom.setUTCDate(dFrom.getUTCDate() - 90);

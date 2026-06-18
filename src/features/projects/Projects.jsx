@@ -1,4 +1,4 @@
-// /projects — list view of engagements that group bookings + invoices
+// /projects - list view of engagements that group bookings + invoices
 // + quotes + documents under a named project. Useful for project-based
 // service providers (photographers, designers, consultants); session-
 // based providers can ignore the surface.
@@ -41,7 +41,7 @@ export default function Projects() {
 
   // ?id=<projectId> deep-link consumed from ClientDrawer's project rows.
   // Strip after consumption so a refresh doesn't re-open. We wait for
-  // projects to land first — opening the drawer before the list is
+  // projects to land first - opening the drawer before the list is
   // loaded would show an empty drawer (openProject lookup would miss).
   const location = useLocation();
   const navigate = useNavigate();

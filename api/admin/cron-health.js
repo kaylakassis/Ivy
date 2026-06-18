@@ -1,4 +1,4 @@
-// GET /api/admin/cron-health — observability dashboard for cron jobs.
+// GET /api/admin/cron-health - observability dashboard for cron jobs.
 // Returns per-cron summary stats over the last 24h and 7d plus the
 // last 20 runs of each, so operators can spot regressions:
 //   - sudden drop in success rate
@@ -6,7 +6,7 @@
 //   - "items processed" trending down (signals upstream breakage)
 //
 // Backed by the cron_runs table (every cron is wrapped with
-// trackCron() — see api/_lib/cronMetrics.js).
+// trackCron() - see api/_lib/cronMetrics.js).
 //
 // Super-admin only.
 import { sql } from '../_lib/db.js';
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
       ORDER BY name
     `;
 
-    // Recent run details — last 20 per cron.
+    // Recent run details - last 20 per cron.
     const { rows: recent } = await sql`
       SELECT name, started_at, finished_at, duration_ms, ok, metrics, error_message
       FROM (

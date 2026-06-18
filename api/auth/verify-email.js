@@ -1,7 +1,7 @@
 // POST /api/auth/verify-email  { token }
 // Marks the user's email_verified_at and burns the token.
 //
-// Idempotent — email security scanners (Gmail / Outlook / Apple Mail
+// Idempotent - email security scanners (Gmail / Outlook / Apple Mail
 // link-preview) often prefetch the link and trigger one verification
 // silently. If a SECOND click finds the token already consumed but the
 // user IS verified, we return 200 instead of 401 so the user doesn't
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   try {
-    // Heavy per-IP cap. Token guessing is the abuse vector — without
+    // Heavy per-IP cap. Token guessing is the abuse vector - without
     // a limit, a bot can iterate through token-space looking for
     // bad-token oracle behavior. 30/hr/IP is generous for any
     // real user (they typically click the link 1-3 times).
@@ -41,8 +41,8 @@ export default async function handler(req, res) {
 
     if (valid.alreadyUsed) {
       // Idempotent path. If the user is already verified, this is just
-      // a duplicate click — return success. If they're somehow NOT
-      // verified (token used but user.email_verified_at is still null —
+      // a duplicate click - return success. If they're somehow NOT
+      // verified (token used but user.email_verified_at is still null -
       // shouldn't happen but worth handling), we don't trust the stale
       // token and reject. The user can sign in and hit "Resend".
       if (user.email_verified_at) {

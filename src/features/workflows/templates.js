@@ -1,6 +1,6 @@
 // Workflow template catalog. Each entry is a complete preset that
 // produces a `workflows` row when accepted. Picking a template just
-// pre-fills the WorkflowEditor — every field stays editable, including
+// pre-fills the WorkflowEditor - every field stays editable, including
 // trigger type and action ordering, so owners can tweak the defaults
 // to match their voice / cadence before saving.
 //
@@ -8,14 +8,14 @@
 //   {{firstName}}  {{clientName}}  {{businessName}}  {{ownerName}}
 //
 // Shape of each template:
-//   id           — stable id for analytics + "you already imported X"
-//   category     — UI grouping
-//   name         — pre-fills the workflow name (editable)
-//   description  — pre-fills the workflow description (editable)
-//   summary      — one-liner shown in the picker (NOT saved)
-//   triggerType  — lead_created | client_created | client_inactive | booking_completed
-//   triggerConfig — JSONB
-//   actions      — same shape the editor produces
+//   id           - stable id for analytics + "you already imported X"
+//   category     - UI grouping
+//   name         - pre-fills the workflow name (editable)
+//   description  - pre-fills the workflow description (editable)
+//   summary      - one-liner shown in the picker (NOT saved)
+//   triggerType  - lead_created | client_created | client_inactive | booking_completed
+//   triggerConfig - JSONB
+//   actions      - same shape the editor produces
 
 export const WORKFLOW_TEMPLATES = [
   // ──────────────────────────────────────────────────────────────
@@ -34,14 +34,14 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'Welcome to {{businessName}}, {{firstName}}!',
-          body: `Hi {{firstName}},\n\nWe're so glad to have you. Quick note from {{ownerName}} — if you have any questions before your first appointment, just reply to this email.\n\nA few things you might find useful:\n  • Book / reschedule any time from your portal\n  • All your invoices + documents live there too\n  • We send a reminder 24 hours before each visit\n\nLooking forward to working with you.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nWe're so glad to have you. Quick note from {{ownerName}} - if you have any questions before your first appointment, just reply to this email.\n\nA few things you might find useful:\n  • Book / reschedule any time from your portal\n  • All your invoices + documents live there too\n  • We send a reminder 24 hours before each visit\n\nLooking forward to working with you.\n\n{{ownerName}}`,
         },
       },
       {
         type: 'create_task',
         config: {
           title: 'Welcome call: {{clientName}}',
-          notes: 'Quick check-in — anything they want us to know before their first session?',
+          notes: 'Quick check-in - anything they want us to know before their first session?',
           dueInDays: 1,
         },
       },
@@ -66,7 +66,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'create_task',
         config: {
           title: 'Chase intake form from {{clientName}}',
-          notes: 'They were sent the intake form 3 days ago — check if it\'s back.',
+          notes: 'They were sent the intake form 3 days ago - check if it\'s back.',
           dueInDays: 0,
         },
       },
@@ -109,7 +109,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'Hi from {{businessName}}',
-          body: `Hi {{firstName}},\n\nNice to meet you. I'm {{ownerName}} — I run {{businessName}}.\n\nI'll be honest, I'm not going to spam you. Just wanted to introduce myself and let you know what to expect if you decide to book.\n\nMore from me in a couple of days. In the meantime, if you have a question, just reply.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nNice to meet you. I'm {{ownerName}} - I run {{businessName}}.\n\nI'll be honest, I'm not going to spam you. Just wanted to introduce myself and let you know what to expect if you decide to book.\n\nMore from me in a couple of days. In the meantime, if you have a question, just reply.\n\n{{ownerName}}`,
         },
       },
       { type: 'wait', config: { days: 2, hours: 0 } },
@@ -121,7 +121,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'A quick story, {{firstName}}',
-          body: `Hi {{firstName}},\n\nHonestly, the best way to know if we're a fit is to hear from the people I already work with.\n\nA client said this recently: "I came in skeptical — it turned out to be the easiest decision I made all year."\n\nIf you want, you can book a session straight from the calendar link in my replies.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nHonestly, the best way to know if we're a fit is to hear from the people I already work with.\n\nA client said this recently: "I came in skeptical - it turned out to be the easiest decision I made all year."\n\nIf you want, you can book a session straight from the calendar link in my replies.\n\n{{ownerName}}`,
         },
       },
       { type: 'wait', config: { days: 3, hours: 0 } },
@@ -133,7 +133,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'Last note from me, {{firstName}}',
-          body: `Hi {{firstName}},\n\nI won't keep emailing you — promise. Just wanted to leave one more invitation.\n\nIf you'd like to try a session, hit reply and we'll find a time. If not, no hard feelings — wishing you well.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nI won't keep emailing you - promise. Just wanted to leave one more invitation.\n\nIf you'd like to try a session, hit reply and we'll find a time. If not, no hard feelings - wishing you well.\n\n{{ownerName}}`,
         },
       },
       {
@@ -183,7 +183,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'Miss seeing you, {{firstName}}',
-          body: `Hi {{firstName}},\n\nIt's been a couple of months. No agenda — just wanted to say hi and leave the door open if you'd like to come back in.\n\nReply with a couple of times that work and I'll pencil you in.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nIt's been a couple of months. No agenda - just wanted to say hi and leave the door open if you'd like to come back in.\n\nReply with a couple of times that work and I'll pencil you in.\n\n{{ownerName}}`,
         },
       },
     ],
@@ -192,7 +192,7 @@ export const WORKFLOW_TEMPLATES = [
   {
     id: 'winback-90-day-task',
     category: 'Retention & win-back',
-    name: 'Win back after 90 days — with task',
+    name: 'Win back after 90 days - with task',
     description: 'Email + an internal task so you remember to personally check in.',
     summary: '90-day silence → email + a "personal check-in" task.',
     triggerType: 'client_inactive',
@@ -202,14 +202,14 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'Quick hello, {{firstName}}',
-          body: `Hi {{firstName}},\n\nIt's been about three months since we last connected. Not chasing — just wanted to make sure everything's okay and let you know I'd love to see you again whenever you're ready.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nIt's been about three months since we last connected. Not chasing - just wanted to make sure everything's okay and let you know I'd love to see you again whenever you're ready.\n\n{{ownerName}}`,
         },
       },
       {
         type: 'create_task',
         config: {
           title: 'Personal follow-up: {{clientName}} (90d silent)',
-          notes: 'Long-time client gone quiet — worth a personal text or call.',
+          notes: 'Long-time client gone quiet - worth a personal text or call.',
           dueInDays: 2,
         },
       },
@@ -220,7 +220,7 @@ export const WORKFLOW_TEMPLATES = [
     id: 'vip-quick-winback',
     category: 'Retention & win-back',
     name: 'VIP-only fast win-back (30 days)',
-    description: 'Only fires for clients tagged "vip" — faster cadence for your best clients.',
+    description: 'Only fires for clients tagged "vip" - faster cadence for your best clients.',
     summary: '30-day silence + tagged "vip" → personal email + a task.',
     triggerType: 'client_inactive',
     triggerConfig: { daysInactive: 30 },
@@ -282,7 +282,7 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'A favour, {{firstName}}?',
-          body: `Hi {{firstName}},\n\nIf you enjoyed our last session, would you mind leaving a short review? It genuinely helps new people find me — and one sentence is plenty.\n\nNo pressure if it's not for you. Either way, thank you for trusting me.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nIf you enjoyed our last session, would you mind leaving a short review? It genuinely helps new people find me - and one sentence is plenty.\n\nNo pressure if it's not for you. Either way, thank you for trusting me.\n\n{{ownerName}}`,
           ctaUrl: '',
         },
       },
@@ -302,13 +302,13 @@ export const WORKFLOW_TEMPLATES = [
         type: 'send_email',
         config: {
           subject: 'Time to book your next session, {{firstName}}?',
-          body: `Hi {{firstName}},\n\nIt's been about four weeks since we last met — usually a good moment to lock in the next one before the calendar fills up.\n\nReply with a couple of times that work and I'll hold a slot for you.\n\n{{ownerName}}`,
+          body: `Hi {{firstName}},\n\nIt's been about four weeks since we last met - usually a good moment to lock in the next one before the calendar fills up.\n\nReply with a couple of times that work and I'll hold a slot for you.\n\n{{ownerName}}`,
         },
       },
       {
         type: 'send_sms',
         config: {
-          body: 'Hi {{firstName}} — it\'s {{ownerName}}. Want to lock in your next session? Reply with a couple of times that work.',
+          body: 'Hi {{firstName}} - it\'s {{ownerName}}. Want to lock in your next session? Reply with a couple of times that work.',
         },
       },
     ],
@@ -318,7 +318,7 @@ export const WORKFLOW_TEMPLATES = [
     id: 'post-booking-followup-task',
     category: 'Post-booking follow-up',
     name: 'Internal follow-up task',
-    description: 'Adds a task to personally check in after a session — no automated email.',
+    description: 'Adds a task to personally check in after a session - no automated email.',
     summary: 'Adds a task to your list 2 days after a session.',
     triggerType: 'booking_completed',
     triggerConfig: { daysAfter: 2 },
@@ -335,7 +335,7 @@ export const WORKFLOW_TEMPLATES = [
   },
 ];
 
-// Sorted unique list of categories — used by the picker for grouping.
+// Sorted unique list of categories - used by the picker for grouping.
 export const TEMPLATE_CATEGORIES = Array.from(
   new Set(WORKFLOW_TEMPLATES.map((t) => t.category))
 );

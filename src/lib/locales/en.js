@@ -1,11 +1,11 @@
-// English strings. The canonical source — every other locale
+// English strings. The canonical source - every other locale
 // inherits the schema from this file. Keys are dotted by surface:
-//   marketing.*  — public marketing site
-//   auth.*       — sign-in / sign-up flows
-//   nav.*        — top + side navigation
-//   common.*     — shared UI bits (Save, Cancel, etc.)
-//   billing.*    — subscription / past_due / suspended UI
-//   inbox.*      — messages UI
+//   marketing.*  - public marketing site
+//   auth.*       - sign-in / sign-up flows
+//   nav.*        - top + side navigation
+//   common.*     - shared UI bits (Save, Cancel, etc.)
+//   billing.*    - subscription / past_due / suspended UI
+//   inbox.*      - messages UI
 //
 // Add keys here first; translations go in es.js / fr.js / etc.
 //
@@ -69,7 +69,7 @@ export default {
   'inbox.new_message':      'New message',
 
   // Errors
-  'error.network':       'Network error — check your connection and try again.',
+  'error.network':       'Network error - check your connection and try again.',
   'error.unauthorized':  'You need to sign in.',
   'error.server':        'Something went wrong on our end. We were notified.',
 };

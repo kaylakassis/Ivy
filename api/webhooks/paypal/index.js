@@ -1,4 +1,4 @@
-// POST /api/webhooks/paypal — platform-level PayPal webhook.
+// POST /api/webhooks/paypal - platform-level PayPal webhook.
 //
 // THIS is the URL to configure in the PayPal app (developer.paypal.com →
 // Apps → your platform app → Webhooks). PayPal Commerce delivers ALL
@@ -32,7 +32,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: e.message });
     }
 
-    // Dedup BEFORE processing — PayPal retries for ~25h on non-2xx.
+    // Dedup BEFORE processing - PayPal retries for ~25h on non-2xx.
     // event.id is unique + stable across retransmits. Platform-scoped
     // (null workspace) since we haven't resolved the workspace yet.
     if (!await markProcessed('paypal', event?.id, null)) {
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
 
     const workspaceId = await resolveWorkspaceForPaypalEvent(parsed);
     if (!workspaceId) {
-      // No connected workspace for this merchant / capture — accept so
+      // No connected workspace for this merchant / capture - accept so
       // PayPal stops retrying, but do nothing.
       return ok(res, { handled: false, reason: 'no-workspace' });
     }

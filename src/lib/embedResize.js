@@ -1,4 +1,4 @@
-// useEmbedResize — posts the document height to the parent window
+// useEmbedResize - posts the document height to the parent window
 // whenever the embed body's content changes. The host site's embed.js
 // listens for { type: 'Ivy OS:resize', height, slug } and resizes the
 // iframe to match. Without this, the iframe would either need a fixed
@@ -22,7 +22,7 @@ export function useEmbedResize(slug) {
 
     // Initial paint + a debounce for fast-changing layouts (mounting
     // steps, fetching reviews, etc.). ResizeObserver fires on every
-    // mutation that changes layout — perfect for our case.
+    // mutation that changes layout - perfect for our case.
     post();
     let timer = null;
     const schedule = () => {

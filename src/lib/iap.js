@@ -61,7 +61,7 @@ export async function identifyIapUser(workspaceId) {
 
 // Fetch the current offering's packages (monthly + yearly). Returns an
 // array of normalized objects the UI can render. Empty array on any
-// failure — the paywall falls back to its disabled state.
+// failure - the paywall falls back to its disabled state.
 export async function getIapOfferings() {
   if (!isIos()) return [];
   await initIAP();
@@ -76,7 +76,7 @@ export async function getIapOfferings() {
       // priceString (e.g. "$49.99") so we don't have to format it.
       priceString: pkg.product?.priceString || '',
       title: pkg.product?.title || '',
-      // Period: 'MONTHLY' | 'ANNUAL' | … — RC exposes this on the
+      // Period: 'MONTHLY' | 'ANNUAL' | … - RC exposes this on the
       // package, simpler than parsing the Apple subscriptionPeriod.
       period: pkg.packageType || '',
       raw: pkg,
@@ -110,14 +110,14 @@ export async function purchaseIapPackage(pkg) {
     };
   } catch (err) {
     // RC throws an Error with `userCancelled` true when the user dismisses
-    // the Apple sheet — that's the most common "failure" and we don't
+    // the Apple sheet - that's the most common "failure" and we don't
     // want to show it as an error.
     if (err?.userCancelled) return { ok: false, userCancelled: true };
     return { ok: false, error: err?.message || 'Purchase failed' };
   }
 }
 
-// "Restore purchases" — Apple requires every IAP-using app to expose this.
+// "Restore purchases" - Apple requires every IAP-using app to expose this.
 // Re-syncs the customer's entitlements from Apple → RevenueCat → our
 // webhook. Used when a user reinstalls the app on a new device.
 export async function restoreIapPurchases() {

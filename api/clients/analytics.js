@@ -3,7 +3,7 @@
 // Per-client analytics computed on the fly. Used by ClientDrawer to
 // surface show rate, total bookings, signed-document count, etc.
 // Computed at read time so the numbers always reflect the freshest
-// state — no separate stats table to keep in sync.
+// state - no separate stats table to keep in sync.
 //
 // windowDays (optional, default 30, min 1, max 3650). When supplied,
 // every booking-derived metric is restricted to bookings whose date
@@ -109,7 +109,7 @@ export default async function handler(req, res) {
     const showRateDenom = completedBookings + noShowBookings;
     const showRate = showRateDenom >= 2 ? completedBookings / showRateDenom : null;
 
-    // Average days between bookings — proxy for cadence. Only computed
+    // Average days between bookings - proxy for cadence. Only computed
     // with 3+ non-cancelled bookings so a one-off doesn't trick owners
     // into reading too much into a single gap.
     let averageDaysBetweenBookings = null;

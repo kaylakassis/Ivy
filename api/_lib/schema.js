@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS workspaces (
 CREATE INDEX IF NOT EXISTS idx_workspaces_owner ON workspaces(owner_id);
 
 -- password_changed_at lets requireUser invalidate every JWT issued
--- before the timestamp — used by reset-password.js so a compromised
+-- before the timestamp - used by reset-password.js so a compromised
 -- session can't outlive a password change. Stateless JWTs can't be
 -- revoked individually; this stamp is the single source of truth for
 -- "the password is newer than your token, log in again".
@@ -50,7 +50,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS privacy_accepted_at TIMESTAMPTZ;
 -- TOTP / two-factor authentication. Owners opt in from Account ->
 -- Security. The secret is encrypted at rest via api/_lib/secrets.js
 -- (same AES-256-GCM the Stripe/Google credentials use). enrolled_at
--- is NULL until the owner verifies their first code — until then the
+-- is NULL until the owner verifies their first code - until then the
 -- secret is "pending" and login isn't gated. backup_codes_hashed is
 -- a JSONB array of SHA-256 hashes of the 10 single-use recovery codes
 -- shown once at enrollment.
@@ -61,7 +61,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup_codes_hashed JSONB;
 -- In-app notification feed. push.js' notifyOwner / notifyClient INSERT
 -- a row here BEFORE the push fanout so the bell + dropdown surface
 -- every important event regardless of whether the user has push
--- enabled. Web push is opt-in (mobile Safari especially) — without
+-- enabled. Web push is opt-in (mobile Safari especially) - without
 -- the feed, owners closing the tab lose every alert. read_at = NULL
 -- counts as unread for the bell badge. tag is the same coalescing
 -- key push uses so a re-fired notification (e.g. five new messages
@@ -86,7 +86,7 @@ CREATE INDEX IF NOT EXISTS idx_notifications_user_unread
 -- Partial index for the subscription-dunning cron (api/cron/subscription-
 -- dunning.js). It scans for subscription_status = 'past_due' rows every
 -- day; without this index that's a full table scan that gets worse with
--- every new workspace. Partial keeps the index tiny — only past_due rows
+-- every new workspace. Partial keeps the index tiny - only past_due rows
 -- live in it (a small fraction of total workspaces).
 CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
   ON workspaces(subscription_past_due_since)
@@ -97,10 +97,10 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
 -- onboarded so existing users don't get bumped through the wizard.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
 
--- Business type — drives onboarding flow, sidebar (Calendar hidden
+-- Business type - drives onboarding flow, sidebar (Calendar hidden
 -- for product-only), dashboard tiles (orders vs bookings), and the
 -- /book/:slug fallback (product-only workspaces get a "no
--- appointments — visit our shop" empty state). Default 'both' keeps
+-- appointments - visit our shop" empty state). Default 'both' keeps
 -- every existing workspace unaffected.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS business_type TEXT
   NOT NULL DEFAULT 'both';
@@ -123,7 +123,7 @@ WHERE onboarded_at IS NULL
   );
 
 -- Subscription state. Owners need an active sub (or live trial) to use the
--- business app — the client portal is always free. Status mirrors Stripe's:
+-- business app - the client portal is always free. Status mirrors Stripe's:
 --   trialing | active | past_due | cancelled | inactive
 -- New workspaces start trialing for 28 days. Existing workspaces get a
 -- grace window so the rollout doesn't paywall anyone overnight.
@@ -135,7 +135,7 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 
 -- RevenueCat (Apple In-App Purchase) state. Apple requires that
 -- subscriptions sold inside the iOS app go through StoreKit, not
--- Stripe — so an iOS customer's source-of-truth subscription lives at
+-- Stripe - so an iOS customer's source-of-truth subscription lives at
 -- Apple / RevenueCat, and the same workspace may have NEITHER a
 -- Stripe customer nor a Stripe subscription. We discriminate with
 -- subscription_source so dunning / portal / cancel flows route to the
@@ -148,7 +148,7 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
 --                       our Cancel button on iOS deep-links there.
 --
 -- revenuecat_user_id is RC's customer id (we use the workspace id as
--- their appUserID, so it's just the same workspace id round-tripped —
+-- their appUserID, so it's just the same workspace id round-tripped -
 -- but we store what RC sends back in case they ever alias it).
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_source TEXT NOT NULL DEFAULT 'stripe';
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS revenuecat_user_id  TEXT;
@@ -267,18 +267,18 @@ ALTER TABLE websites ADD COLUMN IF NOT EXISTS favicon_url TEXT;
 -- Custom-domain attach status. NULL when no custom domain is set;
 -- otherwise one of unverified / dns_pending / verified / failed.
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS domain_status TEXT;
--- 301 redirects — array of { from, to }. Renderer checks this map
+-- 301 redirects - array of { from, to }. Renderer checks this map
 -- before doing the page-level resolution.
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS redirects JSONB NOT NULL DEFAULT '[]'::jsonb;
--- Form destinations — array of { formId, type: 'email'|'webhook',
+-- Form destinations - array of { formId, type: 'email'|'webhook',
 -- config: {...} }. The public form-submission endpoint routes inbound
 -- submissions through these.
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS form_destinations JSONB NOT NULL DEFAULT '[]'::jsonb;
--- Exit-intent popup + sticky CTA — single config objects each, applied
+-- Exit-intent popup + sticky CTA - single config objects each, applied
 -- site-wide. Empty = disabled.
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS exit_intent_popup JSONB;
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS sticky_cta JSONB;
--- Scheduled publish — when scheduled_publish_at <= NOW(), the cron
+-- Scheduled publish - when scheduled_publish_at <= NOW(), the cron
 -- copies scheduled_pages → pages + clears these fields.
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS scheduled_publish_at TIMESTAMPTZ;
 ALTER TABLE websites ADD COLUMN IF NOT EXISTS scheduled_pages JSONB;
@@ -294,7 +294,7 @@ CREATE TABLE IF NOT EXISTS website_versions (
 );
 CREATE INDEX IF NOT EXISTS idx_website_versions_site_time ON website_versions(website_id, created_at DESC);
 
--- Pageview analytics — one row per visit. UA classified into broad
+-- Pageview analytics - one row per visit. UA classified into broad
 -- buckets (mobile / desktop / bot) instead of stored verbatim to avoid
 -- accidental PII. Referrer is truncated.
 CREATE TABLE IF NOT EXISTS website_pageviews (
@@ -307,7 +307,7 @@ CREATE TABLE IF NOT EXISTS website_pageviews (
 );
 CREATE INDEX IF NOT EXISTS idx_website_pageviews_site_time ON website_pageviews(website_id, viewed_at DESC);
 
--- Form submissions — stored alongside the routed delivery so owners can
+-- Form submissions - stored alongside the routed delivery so owners can
 -- see what came in even when the destination fails.
 CREATE TABLE IF NOT EXISTS website_form_submissions (
   id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -352,10 +352,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS walkthrough_completed_at TIMESTAMPTZ;
 -- so the Topbar info-button can auto-open the walkthrough on a tab's
 -- first visit and stay quiet on subsequent visits. Owners can re-open
 -- any tab's tutorial via the persistent (i) button regardless of the
--- map state — this only drives auto-trigger.
+-- map state - this only drives auto-trigger.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS tutorials_completed JSONB NOT NULL DEFAULT '{}'::jsonb;
 
--- User classification — independent of subscription state.
+-- User classification - independent of subscription state.
 --   'regular'    default. Honors normal billing rules.
 --   'sponsored'  comp account: full app access without a subscription.
 --                Bypasses Paywall via the userContext virtual sub flag.
@@ -433,7 +433,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_referral_codes_code ON referral_codes(UPPE
 -- referrals: one row per referred signup. converted_at stamps when the
 -- referred user first becomes a paying owner; rewarded_at stamps when
 -- the referrer actually received their free month (only granted while
--- the referrer is an active paying owner — see api/_lib/referrals.js).
+-- the referrer is an active paying owner - see api/_lib/referrals.js).
 CREATE TABLE IF NOT EXISTS referrals (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   referrer_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -451,7 +451,7 @@ CREATE INDEX IF NOT EXISTS idx_referrals_pending
   ON referrals(referrer_user_id)
   WHERE converted_at IS NOT NULL AND rewarded_at IS NULL;
 
--- admin replies inline. Polling-based — realtime can come later. Mirrors
+-- admin replies inline. Polling-based - realtime can come later. Mirrors
 -- the message_threads / messages pattern but a separate table so support
 -- traffic doesn't pollute the per-business chat table.
 CREATE TABLE IF NOT EXISTS support_threads (
@@ -510,7 +510,7 @@ CREATE INDEX IF NOT EXISTS idx_audit_events_actor
 
 -- Newsletter signups from the public marketing site. Anonymous
 -- (no auth) so we treat the email as the unique key. source tracks
--- where the form was — 'home', 'changelog', etc. — so we can see
+-- where the form was - 'home', 'changelog', etc. - so we can see
 -- which pages convert.
 CREATE TABLE IF NOT EXISTS newsletter_subscribers (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -627,7 +627,7 @@ CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
 -- Phone + per-client SMS consent. sms_consent_at NULL means "not opted in"
--- — the reminders cron and any future broadcast paths will skip them.
+-- - the reminders cron and any future broadcast paths will skip them.
 -- Phone stored normalized to E.164 (+15551234567); pre-normalize before
 -- write (see _lib/sms.js).
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS phone TEXT;
@@ -668,7 +668,7 @@ CREATE INDEX IF NOT EXISTS idx_clients_user ON clients(user_id);
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS address TEXT;
 -- Saved card on file (Stripe customer + default payment method per
 -- workspace). Workspace-scoped because Stripe Connect accounts are
--- per-workspace — a client can have a card saved with biz A but not
+-- per-workspace - a client can have a card saved with biz A but not
 -- with biz B. We never store full PANs; only the Stripe handles +
 -- display fragments (brand, last 4 digits, exp month/year) so the
 -- portal UI can render "Visa ending in 4242" without an extra round
@@ -686,14 +686,14 @@ CREATE INDEX IF NOT EXISTS idx_clients_stripe_customer
 -- per client (e.g. trainer before/after photos, intake-form scans,
 -- consent forms). Files live in Vercel Blob; we store the public URL +
 -- mime + filename + uploaded-at in a JSONB array. Capped at 100
--- attachments per client by application logic — no DB constraint.
+-- attachments per client by application logic - no DB constraint.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS photo_url TEXT;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
--- Per-client photo gallery — distinct from "attachments" (which carries
+-- Per-client photo gallery - distinct from "attachments" (which carries
 -- arbitrary files like signed PDFs and intake-form scans). Each entry
 -- shape: { id, url, blobPathname, caption?, takenAt?, uploadedAt }.
 -- Personal trainers stash before/after photos here, stylists keep
--- transformation albums, contractors document job-site progress —
+-- transformation albums, contractors document job-site progress -
 -- the surface is the same across verticals.
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS gallery_photos JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Per-(client, workspace) email notification preferences. Same JSONB shape
@@ -764,7 +764,7 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS google_inbound_last_error
 -- Discover filters. Owners set these in the website builder so client
 -- searches on the /me/discover tab can compose them with service queries.
 -- address_label is the human-readable line shown on the card; lat/lng
--- power radius search via haversine. Optional — businesses without
+-- power radius search via haversine. Optional - businesses without
 -- coordinates are excluded from distance-bounded queries but still match
 -- non-distance filters.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS address_label TEXT;
@@ -773,7 +773,7 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
 -- Mobile service area: how far the owner travels from their base
 -- location. Used in the public booking page to gate "where do you
 -- need us?" inputs and (eventually) drive Discover-by-distance for
--- mobile providers. Nullable — owners who don't run mobile services
+-- mobile providers. Nullable - owners who don't run mobile services
 -- leave it untouched.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS service_radius_miles INT
   CHECK (service_radius_miles IS NULL OR (service_radius_miles > 0 AND service_radius_miles <= 500));
@@ -831,7 +831,7 @@ CREATE INDEX IF NOT EXISTS idx_reviews_workspace_recent
   ON reviews(workspace_id, status, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_booking
   ON reviews(booking_id) WHERE booking_id IS NOT NULL;
--- One review per signed-in client per business — prevents a verified
+-- One review per signed-in client per business - prevents a verified
 -- client from spamming. Only fires when reviewer_user_id is set, so
 -- token-issued reviews (no logged-in user) still pass through cleanly.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_user
@@ -839,7 +839,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_reviews_unique_per_user
 
 -- Mirror of busy times from the owner's connected external calendar
 -- (Google for now). Treated as opaque blockers in slot availability
--- — never editable from Ivy OS. Refreshed by api/cron/google-busy-sync;
+-- - never editable from Ivy OS. Refreshed by api/cron/google-busy-sync;
 -- rows the most-recent sync didn't include are deleted, so cancellations
 -- in the upstream calendar free the slot back up automatically.
 CREATE TABLE IF NOT EXISTS external_busy_blocks (
@@ -861,7 +861,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_external_busy_workspace_event
   WHERE source_event_id IS NOT NULL;
 
 -- Packages: owner-defined session bundles (e.g. "10 Cuts for $750"). Two
--- tables — packages is the template, client_packages is the per-client
+-- tables - packages is the template, client_packages is the per-client
 -- purchase / assignment with a remaining-credits counter that decrements
 -- when bookings consume a credit.
 --
@@ -945,7 +945,7 @@ CREATE INDEX IF NOT EXISTS idx_waitlist_workspace_status
 -- Email branding. Owners can upload a logo, pick an accent color
 -- for buttons, and set a multi-line signature/footer that goes at
 -- the bottom of every client-facing email (invoices, documents,
--- booking reminders, etc.). All optional — fall back to "Ivy OS"
+-- booking reminders, etc.). All optional - fall back to "Ivy OS"
 -- defaults when unset so existing workspaces don't change behavior
 -- until the owner customizes.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_url TEXT;
@@ -954,7 +954,7 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_accent_color TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_email_signature TEXT;
 
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
--- Health / Professional). Optional — null means "uncategorized" and the biz
+-- Health / Professional). Optional - null means "uncategorized" and the biz
 -- only matches the All chip.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS category TEXT;
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_discoverable ON calendar_settings(discoverable) WHERE discoverable = TRUE;
@@ -989,7 +989,7 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_type TEXT NOT NULL DEFAULT
   CHECK (deposit_type IN ('none', 'percent', 'fixed', 'full'));
 ALTER TABLE services ADD COLUMN IF NOT EXISTS deposit_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 -- 'full' was added later. The CHECK in the ADD COLUMN above is only
--- applied on first creation — for existing databases the inline check
+-- applied on first creation - for existing databases the inline check
 -- still has the old (none/percent/fixed) values. We drop ANY existing
 -- check constraint that references deposit_type by introspecting
 -- pg_constraint, then add a fresh one. This is name-agnostic so it
@@ -1029,7 +1029,7 @@ ALTER TABLE websites ADD COLUMN IF NOT EXISTS visibility TEXT NOT NULL DEFAULT '
 -- Cancellation + no-show fee policy. When fee_amount > 0 AND a card is
 -- on file for the client, late-cancel/no-show actions auto-charge the
 -- fee against the saved card. cancellation_window_hours is the
--- "free-cancel" buffer — anything inside that window is "late."
+-- "free-cancel" buffer - anything inside that window is "late."
 ALTER TABLE services ADD COLUMN IF NOT EXISTS cancellation_fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS cancellation_window_hours INT NOT NULL DEFAULT 24
   CHECK (cancellation_window_hours >= 0 AND cancellation_window_hours <= 720);
@@ -1065,7 +1065,7 @@ CREATE TABLE IF NOT EXISTS calendar_blocks (
 );
 CREATE INDEX IF NOT EXISTS idx_blocks_workspace_date ON calendar_blocks(workspace_id, date);
 
--- Owners can use the calendar for personal events too — not just
+-- Owners can use the calendar for personal events too - not just
 -- "I'm unavailable" blocks but also things like "Vet appointment 3pm"
 -- that they want to see on their own calendar without forcing clients
 -- around them. blocks_bookings = TRUE keeps the legacy hard-block
@@ -1118,7 +1118,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS reminders_sent JSONB NOT NULL DEFA
 -- Google Calendar event id, set when we successfully push a booking into
 -- the workspace's connected Google Cal. Lets us PUT/DELETE later.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS google_event_id TEXT;
--- SMS reminder tracking — parallel to reminders_sent (which is email).
+-- SMS reminder tracking - parallel to reminders_sent (which is email).
 -- Same key shape: { '120': '<iso>', '1440': '<iso>', ... }. Decoupled
 -- so a Twilio failure doesn't re-fire the email on the next cron tick.
 -- client_phone snapshots clients.phone at booking time, so reminders
@@ -1139,7 +1139,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_charged_kind TEXT
   CHECK (fee_charged_kind IS NULL OR fee_charged_kind IN ('late_cancel', 'no_show'));
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS fee_payment_intent TEXT;
 -- No-show flag: marked by the owner when the client doesn't show up.
--- Distinct from cancellation — the slot is consumed but no service
+-- Distinct from cancellation - the slot is consumed but no service
 -- happened. Surfaced in reports + can trigger a no-show fee charge.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS no_show_at TIMESTAMPTZ;
 -- Tip captured after the session (post-service email link or owner UI).
@@ -1154,7 +1154,7 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS updated_at TIMESTAMPTZ NOT NULL DE
 -- insert when the underlying service.location_type = 'virtual'.
 -- One unique room per booking so links can't be reused after the
 -- session ends. Currently we mint a Jitsi Meet room
--- (https://meet.jit.si/ivy-<token>) — zero-config, no API key
+-- (https://meet.jit.si/ivy-<token>) - zero-config, no API key
 -- needed, works in every modern browser. Owners can override per
 -- booking by setting their own URL (e.g. their Zoom personal room).
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS video_room_url TEXT;
@@ -1172,13 +1172,13 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS video_room_url TEXT;
 -- add_ons shape: [{ id, name, price, durationMinutes }]
 -- Optional extras the client picks at booking ("hot stones +$20",
 -- "deep conditioning +$15"). Extends the slot duration by the sum
--- of selected add-ons' durationMinutes — slot grid recomputes from
+-- of selected add-ons' durationMinutes - slot grid recomputes from
 -- (service.duration + selected add-ons).
 ALTER TABLE services ADD COLUMN IF NOT EXISTS custom_fields JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE services ADD COLUMN IF NOT EXISTS add_ons JSONB NOT NULL DEFAULT '[]'::jsonb;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS custom_field_values JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS add_on_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
--- Snapshot of total at booking time — service.price + sum(add-on prices)
+-- Snapshot of total at booking time - service.price + sum(add-on prices)
 -- minus any gift-card credit applied. Lets reports + invoices reflect
 -- what was actually agreed without re-deriving from possibly-edited
 -- service prices later.
@@ -1270,7 +1270,7 @@ CREATE TABLE IF NOT EXISTS documents (
 CREATE INDEX IF NOT EXISTS idx_documents_workspace ON documents(workspace_id, status);
 -- Multi-signer: one row per signer per document. The legacy single-signer
 -- shape on documents.recipient_* + sign_token_hash stays in place for
--- backward compatibility — new sends populate document_signers and use
+-- backward compatibility - new sends populate document_signers and use
 -- per-signer tokens. Sequential ordering is encoded by order_index;
 -- only the next-in-line signer has a usable sign_token_hash at any time.
 CREATE TABLE IF NOT EXISTS document_signers (
@@ -1325,7 +1325,7 @@ ALTER TABLE documents ADD COLUMN IF NOT EXISTS template_id UUID REFERENCES docum
 CREATE INDEX IF NOT EXISTS idx_documents_templates
   ON documents(workspace_id) WHERE is_template = TRUE;
 -- Stamps the last time the doc-reminders cron pinged the owner about this
--- still-unsigned document. Used to throttle the nag — once a week max.
+-- still-unsigned document. Used to throttle the nag - once a week max.
 ALTER TABLE documents ADD COLUMN IF NOT EXISTS last_overdue_reminder_at TIMESTAMPTZ;
 -- Per-service intake-form attachment. UUID[] of document template ids
 -- to clone + send when a booking against this service is created.
@@ -1351,15 +1351,15 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connected_at TIMEST
 -- VAT / sales tax at checkout from the buyer's address against the
 -- connected account's tax-registration matrix (configured by the
 -- owner via Stripe Dashboard → Tax). Avoids the workspace having to
--- compute jurisdictional tax themselves — Stripe Tax handles every
+-- compute jurisdictional tax themselves - Stripe Tax handles every
 -- US state, EU member, UK, Canada GST/HST/PST, etc.
 --
--- Off by default — owners must explicitly enable + register tax
+-- Off by default - owners must explicitly enable + register tax
 -- jurisdictions in Stripe Dashboard before turning this on.
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_tax_enabled BOOLEAN NOT NULL DEFAULT FALSE;
 -- Optional tax behavior override: 'exclusive' (item amounts are pre-
--- tax, Stripe adds tax on top — typical US) or 'inclusive' (item
--- amounts ARE the tax-inclusive total — typical EU). Stripe defaults
+-- tax, Stripe adds tax on top - typical US) or 'inclusive' (item
+-- amounts ARE the tax-inclusive total - typical EU). Stripe defaults
 -- to exclusive when unset.
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_tax_behavior TEXT;
 ALTER TABLE finance_settings DROP CONSTRAINT IF EXISTS finance_settings_tax_behavior_check;
@@ -1367,7 +1367,7 @@ ALTER TABLE finance_settings ADD CONSTRAINT finance_settings_tax_behavior_check
   CHECK (stripe_tax_behavior IS NULL OR stripe_tax_behavior IN ('inclusive', 'exclusive'));
 -- Stripe Connect (OAuth) support. acct_xxx id from the connect/oauth/token
 -- exchange. When set, charges + customers are scoped to this connected
--- account via Stripe-Account header — no need to store their secret key.
+-- account via Stripe-Account header - no need to store their secret key.
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_user_id TEXT;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS stripe_connect_livemode BOOLEAN;
 -- Onboarding status for the Account Links (Express) flow:
@@ -1464,7 +1464,7 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
 CREATE INDEX IF NOT EXISTS idx_invoices_stripe_session ON invoices(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
 -- Refunds. payment_intent gets captured on checkout.session.completed
 -- so the refund endpoint can target it. refunded_amount tracks partial
--- refunds — when it equals the total, status flips to 'refunded'.
+-- refunds - when it equals the total, status flips to 'refunded'.
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refunded_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
@@ -1500,7 +1500,7 @@ CREATE INDEX IF NOT EXISTS idx_time_entries_workspace
 CREATE INDEX IF NOT EXISTS idx_time_entries_client
   ON time_entries(client_id, status) WHERE client_id IS NOT NULL;
 -- One workspace can only have ONE running entry at a time. Enforced
--- with a partial unique index — keeps the timer UI simple (single
+-- with a partial unique index - keeps the timer UI simple (single
 -- start/stop button) without race-condition surprises.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_time_entries_one_running
   ON time_entries(workspace_id) WHERE status = 'running';
@@ -1512,7 +1512,7 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS default_hourly_rate NUMERI
 -- (line items, tax, discount, notes, public view token) but lives
 -- in its own table because the LIFECYCLE is different: a quote is
 -- proposed, the client accepts or declines, and on accept it
--- becomes an invoice. We never mutate a quote post-acceptance —
+-- becomes an invoice. We never mutate a quote post-acceptance -
 -- the resulting invoice carries the snapshot.
 CREATE TABLE IF NOT EXISTS quotes (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -1575,7 +1575,7 @@ CREATE TABLE IF NOT EXISTS gift_cards (
   recipient_email TEXT,
   message TEXT,
   -- Optional expiry. Many states cap minimum expiry windows for
-  -- gift cards — owners set this per workspace policy. NULL = no
+  -- gift cards - owners set this per workspace policy. NULL = no
   -- expiry (default).
   expires_at TIMESTAMPTZ,
   status TEXT NOT NULL DEFAULT 'active'
@@ -1636,7 +1636,7 @@ CREATE TABLE IF NOT EXISTS memberships (
     CHECK (interval IN ('week', 'month', 'quarter', 'year')),
   -- Stripe handles. Created on the first save against the connected
   -- account; reused on subsequent membership-checkout calls. NULL
-  -- when the workspace hasn't connected Stripe yet — UI gates the
+  -- when the workspace hasn't connected Stripe yet - UI gates the
   -- public sign-up flow accordingly.
   stripe_product_id TEXT,
   stripe_price_id TEXT,
@@ -1651,7 +1651,7 @@ CREATE INDEX IF NOT EXISTS idx_memberships_workspace
   ON memberships(workspace_id, active, display_order);
 
 -- Per-client membership state. One row per (workspace, client,
--- membership) — a client can have multiple historical subscriptions
+-- membership) - a client can have multiple historical subscriptions
 -- to the same tier (cancelled, re-joined). We DON'T enforce uniqueness
 -- on (client, membership) so the audit trail of past tiers is preserved.
 CREATE TABLE IF NOT EXISTS client_memberships (
@@ -1899,7 +1899,7 @@ CREATE TABLE IF NOT EXISTS ivy_usage (
 CREATE INDEX IF NOT EXISTS idx_ivy_usage_workspace ON ivy_usage(workspace_id, day DESC);
 
 -- Global platform settings. Singleton row (id = 1) holds toggles that
--- aren't workspace-scoped — currently just the temporary "early access"
+-- aren't workspace-scoped - currently just the temporary "early access"
 -- password gate that blocks signup/signin until the admin disables it.
 -- When early_access_enabled = TRUE, the auth endpoints require a valid
 -- gate cookie; otherwise normal flow.
@@ -1917,7 +1917,7 @@ INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 -- (photographers, designers, consultants) can see "Smith wedding" as
 -- a single unit rather than three loose artifacts against the Smith
 -- client row. Session-based providers (trainers, stylists) can ignore
--- this surface — every artifact remains workable without a project.
+-- this surface - every artifact remains workable without a project.
 CREATE TABLE IF NOT EXISTS projects (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -1953,10 +1953,10 @@ CREATE INDEX IF NOT EXISTS idx_documents_project ON documents(project_id) WHERE 
 -- Workflows / automation. Owner defines a rule: "when X happens, do Y."
 --
 -- trigger_type values (v1):
---   lead_created      — a client was inserted with stage='lead'
---   client_created    — any new client row
---   client_inactive   — client has not had a booking in trigger_config.daysInactive days
---   booking_completed — a booking's end time has passed and it wasn't cancelled
+--   lead_created      - a client was inserted with stage='lead'
+--   client_created    - any new client row
+--   client_inactive   - client has not had a booking in trigger_config.daysInactive days
+--   booking_completed - a booking's end time has passed and it wasn't cancelled
 --
 -- actions is an array. Each entry shape:
 --   { type: 'send_email' | 'send_sms' | 'create_task' | 'send_document',
@@ -2002,7 +2002,7 @@ CREATE INDEX IF NOT EXISTS idx_workflow_runs_workspace
   ON workflow_runs(workspace_id, triggered_at DESC);
 -- Dedupe: prevent firing the same workflow twice for the same client on
 -- the same calendar day (saves an email storm if a row gets touched
--- multiple times). Soft constraint — the executor checks before insert.
+-- multiple times). Soft constraint - the executor checks before insert.
 -- Anchored to UTC so the date cast is IMMUTABLE (a bare ::date cast
 -- depends on session timezone and Postgres rejects it in index
 -- expressions).
@@ -2025,7 +2025,7 @@ ALTER TABLE workflow_runs ADD CONSTRAINT workflow_runs_status_check
 --
 -- client_snapshot stores name/email/phone/sms_consent_at because the
 -- live clients row may have changed between schedule and resume
--- (renamed, opted-out of SMS, etc.) — we resume against the snapshot
+-- (renamed, opted-out of SMS, etc.) - we resume against the snapshot
 -- so the message reads consistently with what the owner approved.
 CREATE TABLE IF NOT EXISTS workflow_pending_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2046,7 +2046,7 @@ CREATE INDEX IF NOT EXISTS idx_workflow_pending_workflow
 -- Multi-staff / chair rental. Workspace owners who hire (or share
 -- chair space with) other practitioners can model each as a staff_member
 -- row. Bookings get a staff_id so each practitioner's calendar can be
--- filtered independently. user_id is optional — staff who claim a
+-- filtered independently. user_id is optional - staff who claim a
 -- portal account get linked so they can see their own appointments
 -- via /me. owner_managed=TRUE means the workspace owner inputs all
 -- changes (no portal login needed); FALSE means the staff member has
@@ -2083,7 +2083,7 @@ CREATE INDEX IF NOT EXISTS idx_bookings_staff_date
 -- Onboarding progress per user. Tracks which step they're on, which
 -- steps they've finished, and which they explicitly skipped. The actual
 -- form data (business name, services, etc.) lives in its real table
--- (calendar_settings, services, etc.) — this column only tracks the
+-- (calendar_settings, services, etc.) - this column only tracks the
 -- wizard's navigational state so we can resume mid-flow.
 --
 -- Shape:
@@ -2176,7 +2176,7 @@ CREATE INDEX IF NOT EXISTS idx_invoices_workspace_paid_at
 -- ─── Global search (Cmd+K) trigram indexes ──────────────────────────
 -- /api/search runs leading-wildcard ILIKE '%q%' across clients,
 -- invoices, and bookings. Without trigram GIN indexes those are full
--- sequential scans per keystroke per workspace — fine at hundreds of
+-- sequential scans per keystroke per workspace - fine at hundreds of
 -- rows, multi-hundred-ms at thousands. pg_trgm is already enabled
 -- above (idx_services_name_trgm). gin_trgm_ops makes '%foo%' index-
 -- backed. We index the columns search actually filters on.
@@ -2201,19 +2201,19 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_dunning
 -- ─── Multi-currency invoicing ────────────────────────────────────────
 -- Until now every invoice was implicitly USD (the platform shipped
 -- US-first). Going global requires per-invoice currency stamped at
--- creation time — owners might invoice some clients in USD, others
+-- creation time - owners might invoice some clients in USD, others
 -- in EUR. Default copied from workspace's finance_settings.currency
 -- so existing workflows don't change; explicit override per invoice.
 --
 -- Codes are ISO 4217 (USD, EUR, GBP, ...). 3-char check enforces
--- shape; no list-membership check at the DB level — payment
+-- shape; no list-membership check at the DB level - payment
 -- providers will reject anything they don't support.
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
 ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_currency_format;
 ALTER TABLE invoices ADD CONSTRAINT invoices_currency_format
   CHECK (currency ~ '^[A-Z]{3}$');
 
--- Recurring templates and quotes too — same logic, copy from
+-- Recurring templates and quotes too - same logic, copy from
 -- workspace default at creation.
 ALTER TABLE recurring_invoices ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
 ALTER TABLE quotes ADD COLUMN IF NOT EXISTS currency TEXT NOT NULL DEFAULT 'USD';
@@ -2267,7 +2267,7 @@ WHERE total = 0 AND items <> '[]'::jsonb;
 -- write from storing negative money / an out-of-range tax rate.
 -- gift_cards / memberships already carry their own non-negative CHECKs;
 -- invoices did not. Added NOT VALID so a populated table with any
--- legacy out-of-range row can't block the migration — the constraint
+-- legacy out-of-range row can't block the migration - the constraint
 -- still enforces on every INSERT/UPDATE from here on.
 ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_amounts_nonneg;
 ALTER TABLE invoices ADD CONSTRAINT invoices_amounts_nonneg
@@ -2380,7 +2380,7 @@ CREATE INDEX IF NOT EXISTS idx_idempotency_records_created
 -- ─── Cron run history (observability) ────────────────────────────────
 -- Every cron stamps a row here on completion. The admin dashboard
 -- reads from this to chart per-cron runtime, success/failure rate,
--- and "items processed" — without it, the only way to debug a
+-- and "items processed" - without it, the only way to debug a
 -- slow/failing cron at scale is to grep Vercel function logs.
 -- Pruned by the db-prune cron at 30 days (crons fire daily; 30 runs
 -- per cron is enough for trend spotting without ballooning the table).
@@ -2410,7 +2410,7 @@ CREATE INDEX IF NOT EXISTS idx_cron_runs_finished
 --
 -- Bootstrap: this table itself is in the schema, so on a brand-new DB
 -- the migrator can't reference it until after its own statement
--- applies. The migrator handles that — wraps the bookkeeping insert
+-- applies. The migrator handles that - wraps the bookkeeping insert
 -- in try/catch and silently skips if the table doesn't exist yet.
 CREATE TABLE IF NOT EXISTS schema_migrations (
   statement_hash   TEXT PRIMARY KEY,
@@ -2434,7 +2434,7 @@ CREATE INDEX IF NOT EXISTS idx_schema_migrations_applied
 -- discover-refresh cron every 15 min. The discover endpoint now
 -- JOINs this instead of running the subqueries.
 --
--- 15-min staleness window is acceptable for a directory page — when
+-- 15-min staleness window is acceptable for a directory page - when
 -- an owner adds a service, it appears in discover by the next
 -- refresh.
 CREATE TABLE IF NOT EXISTS discover_snapshots (
@@ -2519,7 +2519,7 @@ ALTER TABLE group_messages ADD COLUMN IF NOT EXISTS parent_message_id UUID
 CREATE INDEX IF NOT EXISTS idx_group_messages_parent
   ON group_messages(parent_message_id) WHERE parent_message_id IS NOT NULL;
 
--- Emoji reactions. One row per (message, reactor, emoji) — same client/owner
+-- Emoji reactions. One row per (message, reactor, emoji) - same client/owner
 -- can react with multiple emojis but only once with each. Reactor key is
 -- either a clients.id (sender_client_id) OR the literal string 'biz' meaning
 -- the workspace owner (we don't need user-level identity since there's only
@@ -2558,7 +2558,7 @@ CREATE INDEX IF NOT EXISTS idx_group_message_mentions_client
 
 -- Invite-by-link: owner generates a one-time-use-ish token (configurable
 -- max_uses + expires_at). Accepting joins the user's clients-row to the
--- group. Token is sha256-hashed at rest — we never store the plaintext
+-- group. Token is sha256-hashed at rest - we never store the plaintext
 -- value the URL carries.
 CREATE TABLE IF NOT EXISTS group_invite_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -2577,7 +2577,7 @@ CREATE INDEX IF NOT EXISTS idx_group_invite_tokens_thread
 
 -- Per-user digest preferences. opt_in_groups defaults to TRUE so users
 -- who never touch settings still get the daily group-chat summary
--- (everything else is unaffected — direct messages keep instant push).
+-- (everything else is unaffected - direct messages keep instant push).
 -- Per-thread mute is already in group_thread_members.muted.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_groups_daily BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_last_sent_at TIMESTAMPTZ;
@@ -2587,7 +2587,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_last_sent_at TIMESTAMPTZ;
 -- least one active group_thread_members row in the SAME workspace. The
 -- thread row gates that at start; subsequent sends re-check.
 --
--- Owner cannot see these threads — there is no /api/messages/dms
+-- Owner cannot see these threads - there is no /api/messages/dms
 -- endpoint. The owner-side admin support inbox only ever surfaces a
 -- DM if the recipient explicitly reports a message (which creates a
 -- support_messages row with kind='report').
@@ -2603,7 +2603,7 @@ CREATE TABLE IF NOT EXISTS client_dm_threads (
   last_message_preview TEXT,
   unread_a INT NOT NULL DEFAULT 0,
   unread_b INT NOT NULL DEFAULT 0,
-  -- Per-side archive flag for "leave" semantics — hides the thread from
+  -- Per-side archive flag for "leave" semantics - hides the thread from
   -- that client's list without losing history for the other side. Re-
   -- messaging un-archives automatically.
   archived_a BOOLEAN NOT NULL DEFAULT FALSE,
@@ -2633,7 +2633,7 @@ CREATE INDEX IF NOT EXISTS idx_client_dm_messages_thread
   ON client_dm_messages(thread_id, created_at);
 
 -- Block: prevents the blocked client from sending DMs to the blocker.
--- Asymmetric — a block does not automatically reciprocate, but the
+-- Asymmetric - a block does not automatically reciprocate, but the
 -- blocker also won't see the blocked client's existing messages
 -- (we filter at fetch). Same workspace scope as the underlying group.
 CREATE TABLE IF NOT EXISTS client_dm_blocks (

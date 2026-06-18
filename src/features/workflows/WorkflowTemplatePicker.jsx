@@ -1,7 +1,7 @@
 // Modal that appears when the user clicks "New workflow". Lets them
 // either pick a pre-built template (most owners) or start from a blank
 // editor (current behavior, preserved). Picking a template just
-// pre-fills the editor — every field stays editable before save.
+// pre-fills the editor - every field stays editable before save.
 import React, { useMemo, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { WORKFLOW_TEMPLATES, TEMPLATE_CATEGORIES, getTemplateById } from './templates.js';
@@ -133,7 +133,7 @@ export default function WorkflowTemplatePicker({ onPick, onBlank, onClose }) {
               padding: 40, textAlign: 'center',
               color: 'var(--muted)', fontSize: 13,
             }}>
-              No templates match — try a different search.
+              No templates match - try a different search.
             </div>
           ) : (
             filtered.map((t) => (

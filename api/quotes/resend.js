@@ -32,7 +32,7 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
-    // Idempotent wrap — same rationale as invoices/resend.
+    // Idempotent wrap - same rationale as invoices/resend.
     const idemp = await withIdempotency(req, user.id, async () => doResend());
     if (idemp.replayed) res.setHeader('Idempotent-Replayed', 'true');
     return res.status(idemp.status).json(idemp.body);
@@ -45,8 +45,8 @@ export default async function handler(req, res) {
     const q = await fetchOwnedQuote({ id, workspaceId });
     if (!q) return { status: 400, body: { error: 'Quote not found' } };
     if (q.status === 'accepted') return { status: 400, body: { error: 'Already accepted' } };
-    if (q.status === 'voided')   return { status: 400, body: { error: 'Voided — restore first' } };
-    if (q.status === 'draft')    return { status: 400, body: { error: "Draft hasn't been sent yet — use Send instead" } };
+    if (q.status === 'voided')   return { status: 400, body: { error: 'Voided - restore first' } };
+    if (q.status === 'draft')    return { status: 400, body: { error: "Draft hasn't been sent yet - use Send instead" } };
     if (!q.client_email)         return { status: 400, body: { error: 'No recipient email on file' } };
 
     const rawToken = generateRawToken(32);
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
       });
     } catch (mailErr) {
       console.error('[quotes/resend] email failed:', mailErr.message);
-      emailWarning = `We refreshed the link but the email didn't go through — try again in a moment.`;
+      emailWarning = `We refreshed the link but the email didn't go through - try again in a moment.`;
     }
 
     try {

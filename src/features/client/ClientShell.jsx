@@ -364,7 +364,7 @@ function ClientMobileDrawer({ direction, data, onClose }) {
           <NavLink to="/me/notifications" className="nav-item" style={{ padding: '10px 12px' }}>
             <Icons.Bell size={16} sw={1.6}/> Email preferences
           </NavLink>
-          {/* /account redirects client-only users via RoleRouter — only
+          {/* /account redirects client-only users via RoleRouter - only
               expose the link to owners. */}
           {data?.isOwner && (
             <NavLink to="/account" className="nav-item" style={{ padding: '10px 12px' }}>

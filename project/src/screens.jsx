@@ -1,4 +1,4 @@
-// Other nav screens — clean slate.
+// Other nav screens - clean slate.
 
 /* ============ CLIENTS ============ */
 function ClientsView() {
@@ -33,7 +33,7 @@ function ClientsView() {
   );
 }
 
-/* ============ CALENDAR — moved to src/calendar.jsx ============ */
+/* ============ CALENDAR - moved to src/calendar.jsx ============ */
 
 /* ============ FINANCE ============ */
 function FinanceView({ direction }) {
@@ -49,7 +49,7 @@ function FinanceView({ direction }) {
           <div key={i} className="card" style={{ padding: 20 }}>
             <div className="metric-label">{m.label}</div>
             <div style={{ display:'flex', alignItems:'baseline', gap: 10, marginTop: 10 }}>
-              <span className="metric-value" style={{ fontSize: 34, color: 'var(--muted-2)' }}>—</span>
+              <span className="metric-value" style={{ fontSize: 34, color: 'var(--muted-2)' }}>-</span>
               <span style={{ fontSize: 12, color: 'var(--muted)' }}>No data</span>
             </div>
             <div style={{ marginTop: 12, height: 40, borderTop: '1px dashed var(--border)' }} />

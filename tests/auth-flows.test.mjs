@@ -27,7 +27,7 @@ function makeRes() {
     status(c) { this.statusCode = c; return this; },
     setHeader(k, v) {
       const key = k.toLowerCase();
-      // Set-Cookie can be multi-valued — collect as an array.
+      // Set-Cookie can be multi-valued - collect as an array.
       if (key === 'set-cookie') {
         const arr = this.headers[key] || [];
         arr.push(v);
@@ -100,7 +100,7 @@ async function testSignupAndImmediateAccess() {
   const cookie = extractSessionCookie(res);
   assert(!!cookie, 'session cookie set');
 
-  // Use the cookie to hit /me — should return the same user.
+  // Use the cookie to hit /me - should return the same user.
   const meReq = makeReq({ method: 'GET', headers: { cookie } });
   const meRes = makeRes();
   await meHandler(meReq, meRes);
@@ -148,7 +148,7 @@ async function testLogoutClearsSession() {
   assert(logoutRes.statusCode === 200 || logoutRes.statusCode === 204, 'logout returns success');
 
   // Logout sends back a Set-Cookie clearing the session. Verify the
-  // server's intent (cookie cleared on this response) — not whether
+  // server's intent (cookie cleared on this response) - not whether
   // a leaked old JWT would still verify, since JWT sessions are
   // stateless and don't have server-side revocation. If that
   // becomes a requirement, we'd add a session blacklist table.

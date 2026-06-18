@@ -1,7 +1,7 @@
 // POST /api/billing/portal
 // Returns a Stripe Customer Portal URL where the owner can update their
 // card, view invoices, or cancel. Requires an existing stripe_customer_id
-// — only set after the first successful subscription checkout.
+// - only set after the first successful subscription checkout.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
     `;
     const customerId = rows[0]?.stripe_customer_id;
     if (!customerId) {
-      return badRequest(res, 'No billing record yet — subscribe first to open the portal.');
+      return badRequest(res, 'No billing record yet - subscribe first to open the portal.');
     }
 
     const session = await createBillingPortalSession({

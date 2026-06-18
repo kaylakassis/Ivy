@@ -35,7 +35,7 @@ export function useProjects(initialStatus = '') {
   };
 
   const update = async (id, patch) => {
-    // Optimistic — flip the row's shape immediately for snappy UI.
+    // Optimistic - flip the row's shape immediately for snappy UI.
     setProjects((p) => p.map((x) => x.id === id ? { ...x, ...patch } : x));
     try {
       const r = await api.patch('/projects/' + encodeURIComponent(id), patch);

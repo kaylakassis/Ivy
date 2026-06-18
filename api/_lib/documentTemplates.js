@@ -2,12 +2,12 @@
 // These are STATIC data (not user-editable), live in JS, and clone
 // into a fresh draft when the user picks one. Per-workspace
 // user-defined templates live in the documents table with
-// is_template=TRUE — different feature, different storage.
+// is_template=TRUE - different feature, different storage.
 //
 // Each template includes a body in our minimal HTML subset (h1/h2/h3,
-// p, br, strong, em, ul/ol/li — anything else is stripped by the sign
+// p, br, strong, em, ul/ol/li - anything else is stripped by the sign
 // page sanitizer) and a starter field list. Fields are flat (no
-// PDF coordinates) — owners can swap to a PDF after creation if they
+// PDF coordinates) - owners can swap to a PDF after creation if they
 // want visual placement.
 //
 // IMPORTANT: these are STARTING POINTS, not legal advice. The
@@ -237,7 +237,7 @@ export const DOCUMENT_TEMPLATES = [
     id: 'service-agreement',
     category: 'Professional',
     name: 'Service Agreement (Generic)',
-    description: 'Light-touch service contract — scope, fees, term, IP, termination.',
+    description: 'Light-touch service contract - scope, fees, term, IP, termination.',
     suggestedSigners: 2,
     body: `
 <h2>Service Agreement</h2>
@@ -272,7 +272,7 @@ export const TEMPLATE_CATEGORIES = [
   'General',
 ];
 
-// Public list shape for the gallery (server-safe — no internal fields).
+// Public list shape for the gallery (server-safe - no internal fields).
 export function listTemplatesPublic() {
   return DOCUMENT_TEMPLATES.map((t) => ({
     id: t.id,

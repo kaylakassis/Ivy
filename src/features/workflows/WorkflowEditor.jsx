@@ -1,4 +1,4 @@
-// Modal editor — pick trigger, configure its options, build a sequence
+// Modal editor - pick trigger, configure its options, build a sequence
 // of actions, name + save. Kept linear (no branching) for v1.
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
@@ -13,7 +13,7 @@ const TRIGGERS = [
   {
     id: 'client_created',
     label: 'When a new client is added',
-    hint:  'Fires every time a client row is created — from a booking, manual add, or import.',
+    hint:  'Fires every time a client row is created - from a booking, manual add, or import.',
   },
   {
     id: 'client_inactive',
@@ -54,7 +54,7 @@ export default function WorkflowEditor({ workflow, isNew: isNewProp, onClose, on
 
   const [templates, setTemplates] = useState(null);
   useEffect(() => {
-    // Used by send_document actions. Fetch lazily — most workflows
+    // Used by send_document actions. Fetch lazily - most workflows
     // don't include send_document.
     api.get('/documents?templates=1')
       .then((r) => setTemplates(r.documents || []))
@@ -125,7 +125,7 @@ export default function WorkflowEditor({ workflow, isNew: isNewProp, onClose, on
         }}>
           <Field label="Name">
             <input className="input" value={name} onChange={(e) => setName(e.target.value)}
-              placeholder='e.g. "New lead — send brochure"' autoFocus
+              placeholder='e.g. "New lead - send brochure"' autoFocus
               style={inputStyle}/>
           </Field>
 
@@ -140,7 +140,7 @@ export default function WorkflowEditor({ workflow, isNew: isNewProp, onClose, on
               onChange={(e) => {
                 const next = e.target.value;
                 setTriggerType(next);
-                // Preserve sensible defaults rather than clearing — if
+                // Preserve sensible defaults rather than clearing - if
                 // we set `{}` the displayed default (?? 60 / ?? 1)
                 // never lands in state and Save 400s with "Trigger
                 // needs a daysInactive in [1, 3650]".
@@ -219,7 +219,7 @@ export default function WorkflowEditor({ workflow, isNew: isNewProp, onClose, on
           }}>
             Token tip: drop <code>{'{{firstName}}'}</code>, <code>{'{{clientName}}'}</code>,
             <code> {'{{businessName}}'}</code>, or <code>{'{{ownerName}}'}</code> into any
-            email/SMS body or task title — they're filled in at send time.
+            email/SMS body or task title - they're filled in at send time.
           </div>
 
           {err && <div style={{ color: 'var(--danger)', fontSize: 12.5 }}>{err}</div>}
@@ -304,7 +304,7 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
               style={{ ...inputStyle, minHeight: 110, resize: 'vertical' }}
               value={action.config.body || ''}
               onChange={(e) => onUpdate({ body: e.target.value })}
-              placeholder={`Hi {{firstName}},\n\nIt's been a while — wanted to see how things are. Reply if you'd like to book something in.\n\n{{ownerName}}`}/>
+              placeholder={`Hi {{firstName}},\n\nIt's been a while - wanted to see how things are. Reply if you'd like to book something in.\n\n{{ownerName}}`}/>
           </Sub>
           <Sub label="CTA URL (optional)" hint="Adds a button at the bottom of the email.">
             <input className="input" style={inputStyle}
@@ -322,7 +322,7 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
               style={{ ...inputStyle, minHeight: 80, resize: 'vertical' }}
               value={action.config.body || ''}
               onChange={(e) => onUpdate({ body: e.target.value })}
-              placeholder="Hi {{firstName}}! It's been a while — text me back if you'd like to book."/>
+              placeholder="Hi {{firstName}}! It's been a while - text me back if you'd like to book."/>
           </Sub>
         </>
       )}
@@ -356,7 +356,7 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
             <select className="input" style={inputStyle}
               value={action.config.templateId || ''}
               onChange={(e) => onUpdate({ templateId: e.target.value })}>
-              <option value="">— pick a template —</option>
+              <option value="">- pick a template -</option>
               {(templates || []).map((t) => (
                 <option key={t.id} value={t.id}>{t.name}</option>
               ))}
@@ -372,7 +372,7 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
       {action.type === 'wait' && (
         <>
           <Sub label="Pause for"
-               hint="Workflow continues to the next action after this delay. Resumes hourly via cron — actual fire time may be ±1h.">
+               hint="Workflow continues to the next action after this delay. Resumes hourly via cron - actual fire time may be ±1h.">
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
               <input className="input" type="number" min={0} max={365}
                 style={{ ...inputStyle, width: 80 }}

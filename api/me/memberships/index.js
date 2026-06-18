@@ -1,4 +1,4 @@
-// GET /api/me/memberships — every active subscription the user has
+// GET /api/me/memberships - every active subscription the user has
 // across the businesses they're a client of. Used for the portal's
 // Memberships card.
 import { sql } from '../../_lib/db.js';

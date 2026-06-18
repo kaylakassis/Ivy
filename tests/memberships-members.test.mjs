@@ -1,4 +1,4 @@
-// Tests GET /api/memberships/members — owner-side list of every
+// Tests GET /api/memberships/members - owner-side list of every
 // client_memberships row in the workspace. Validates workspace scoping
 // (no cross-tenant leak), auth gate, and the serialized shape the
 // Memberships UI consumes.

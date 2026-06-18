@@ -67,7 +67,7 @@ function metricsFor({ packages, memberships, invoices, payments30d }) {
     if (!earliestInvoiceDue || d < earliestInvoiceDue) earliestInvoiceDue = d;
   }
 
-  // Pick the soonest of the two — that's what the owner needs to act on first.
+  // Pick the soonest of the two - that's what the owner needs to act on first.
   let dueDate = null;
   let dueDateKind = null; // 'invoice' | 'membership' | null
   if (earliestInvoiceDue && nextMembershipRenewal) {
@@ -197,7 +197,7 @@ export default async function handler(req, res) {
       console.error('[clients/metrics] payments30d query failed (continuing):', e.message);
     }
 
-    // Split per client in JS — one pass each.
+    // Split per client in JS - one pass each.
     const byClient = {};
     for (const cid of clientIds) {
       byClient[cid] = {

@@ -1,6 +1,6 @@
 // POST /api/onboarding/complete
 // Marks the authenticated owner's workspace as onboarded so the wizard
-// never appears again. Idempotent — safe to call from "Skip" buttons too.
+// never appears again. Idempotent - safe to call from "Skip" buttons too.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';

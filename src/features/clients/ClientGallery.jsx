@@ -1,4 +1,4 @@
-// Per-client photo gallery — only rendered for active clients (lead
+// Per-client photo gallery - only rendered for active clients (lead
 // stage doesn't get one per the product spec). Owners upload via file
 // picker or camera capture, see thumbnails in a grid, and can click
 // any thumbnail to open a full-screen lightbox with prev / next nav,
@@ -10,10 +10,10 @@
 //
 // Why a separate gallery instead of folding photos into the existing
 // `attachments` array:
-//   1. Different visual treatment — gallery wants thumbnails + lightbox,
+//   1. Different visual treatment - gallery wants thumbnails + lightbox,
 //      attachments are utility (signed PDFs, intake scans).
-//   2. Different metadata — captions + takenAt are gallery-specific.
-//   3. Per-stage gating — leads see attachments but not the gallery.
+//   2. Different metadata - captions + takenAt are gallery-specific.
+//   3. Per-stage gating - leads see attachments but not the gallery.
 //   4. Clean separation makes future moves (timeline view, before/after
 //      pairs, client-portal share toggles) straightforward to layer on.
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -30,7 +30,7 @@ export default function ClientGallery({ client, onSave }) {
   const fileRef = useRef(null);
   const cameraRef = useRef(null);
 
-  // Same UA detection the service photo uploader uses — Take Photo only
+  // Same UA detection the service photo uploader uses - Take Photo only
   // makes sense on a device with a real camera.
   const isMobile = typeof navigator !== 'undefined'
     && /android|iphone|ipad|ipod|mobile/i.test(navigator.userAgent);
@@ -47,7 +47,7 @@ export default function ClientGallery({ client, onSave }) {
           throw new Error(`${rawFile.name || 'File'} is not an image`);
         }
         if (rawFile.size > 16 * 1024 * 1024) {
-          // Raise the raw cap to 16 MB — modern phones routinely
+          // Raise the raw cap to 16 MB - modern phones routinely
           // produce 8-12 MB photos. processImageForUpload below
           // resizes + strips EXIF so the actual upload is far smaller.
           throw new Error(`${rawFile.name || 'File'} is over 16 MB`);
@@ -75,7 +75,7 @@ export default function ClientGallery({ client, onSave }) {
           uploadedAt: new Date().toISOString(),
         });
       }
-      // Single PATCH with the appended array — never send a partial.
+      // Single PATCH with the appended array - never send a partial.
       await onSave({ galleryPhotos: [...photos, ...additions] });
     } catch (e) {
       setErr(e.message || 'Upload failed');
@@ -307,7 +307,7 @@ function Lightbox({ photos, startIdx, onClose, onCaption, onDelete }) {
         )}
       </div>
 
-      {/* Caption — click to edit. */}
+      {/* Caption - click to edit. */}
       <div onClick={(e) => e.stopPropagation()} style={{
         padding: '14px 18px', color: '#fff', fontSize: 13.5,
         textAlign: 'center', minHeight: 50,
@@ -348,7 +348,7 @@ function Lightbox({ photos, startIdx, onClose, onCaption, onDelete }) {
   );
 }
 
-// Local mirror of the drawer's section heading style — keeps this
+// Local mirror of the drawer's section heading style - keeps this
 // component self-contained so it can move later without dragging
 // styles from ClientDrawer.
 function Section({ label }) {

@@ -48,7 +48,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
       await onUpdate(patch);
       setSaveStatus({ kind: 'ok', text: 'Saved' });
     } catch (e) {
-      setSaveStatus({ kind: 'error', text: e.message || 'Save failed — try again' });
+      setSaveStatus({ kind: 'error', text: e.message || 'Save failed - try again' });
     } finally {
       statusTimer.current = setTimeout(() => setSaveStatus(null), 2400);
     }
@@ -71,7 +71,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
       // Parent closes the drawer on successful delete.
     } catch (e) {
       setBusyDel(false);
-      setSaveStatus({ kind: 'error', text: e.message || 'Delete failed — try again' });
+      setSaveStatus({ kind: 'error', text: e.message || 'Delete failed - try again' });
       setTimeout(() => setSaveStatus(null), 4000);
     }
   };
@@ -86,7 +86,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
         borderLeft: '1px solid var(--border)',
         display: 'flex', flexDirection: 'column',
       }}>
-        {/* Header — name + email inline-editable */}
+        {/* Header - name + email inline-editable */}
         <div style={{
           padding: '20px 24px', borderBottom: '1px solid var(--border)',
           display: 'flex', alignItems: 'flex-start', gap: 14,
@@ -173,18 +173,18 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
             <PortalInviteRow client={client}/>
           )}
 
-          {/* KPIs — lifetime value editable, others read-only */}
+          {/* KPIs - lifetime value editable, others read-only */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
             <EditableMoneyStat
               label="Lifetime"
               value={client.lifetimeValue || 0}
               onSave={(v) => safeUpdate({ lifetimeValue: v })}
             />
-            <MiniStat label="Since"     value={client.joinedAt ? new Date(client.joinedAt).toLocaleDateString([], { month: 'short', year: '2-digit' }) : '—'}/>
-            <MiniStat label="Last seen" value={client.lastSeenAt ? Math.round((Date.now() - new Date(client.lastSeenAt).getTime()) / 86400e3) + 'd ago' : '—'}/>
+            <MiniStat label="Since"     value={client.joinedAt ? new Date(client.joinedAt).toLocaleDateString([], { month: 'short', year: '2-digit' }) : '-'}/>
+            <MiniStat label="Last seen" value={client.lastSeenAt ? Math.round((Date.now() - new Date(client.lastSeenAt).getTime()) / 86400e3) + 'd ago' : '-'}/>
           </div>
 
-          {/* Live health metrics — sessions left, due date, monthly $, 30d revenue */}
+          {/* Live health metrics - sessions left, due date, monthly $, 30d revenue */}
           <ClientHealthMetrics clientId={client.id}/>
 
           {/* Tags */}
@@ -193,19 +193,19 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
           {/* Packages */}
           <ClientPackages client={client}/>
 
-          {/* Projects tied to this client — read-only summary list with
+          {/* Projects tied to this client - read-only summary list with
               a "+ New project" shortcut. Full management lives at the
               /projects tab; this section gives the client-centric view
               for owners who think client-first. */}
           <ClientProjectsBlock client={client}/>
 
-          {/* Per-client analytics — fetched fresh from
+          {/* Per-client analytics - fetched fresh from
               /api/clients/analytics so show rate / cadence / signed-doc
               count reflect the current state every time the drawer
               opens. Skipped for fresh leads (no bookings yet). */}
           <ClientAnalyticsBlock client={client} windowDays={analyticsWindowDays}/>
 
-          {/* Photo gallery — active clients only. Trainers stash
+          {/* Photo gallery - active clients only. Trainers stash
               before/after, stylists keep transformation albums,
               contractors document job-site progress. Leads don't
               get a gallery per the product spec. */}
@@ -213,12 +213,12 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
             <ClientGallery client={client} onSave={safeUpdate}/>
           )}
 
-          {/* Service log — every completion entry across this client's
+          {/* Service log - every completion entry across this client's
               bookings, newest first. Powered by /api/clients/:id/completions
               which unpacks the per-occurrence JSONB on bookings.completion_log. */}
           <ServiceLog clientId={client.id}/>
 
-          {/* Documents — files attached directly to this client. Per-row
+          {/* Documents - files attached directly to this client. Per-row
               shape: { url, type, name, uploadedAt }. Trainers stash
               before/after photos here; intake-form scans, consent
               forms, and similar live here too. */}
@@ -319,7 +319,7 @@ function EditableMoneyStat({ label, value, onSave }) {
         />
       ) : (
         <div className="mono-num" style={{ fontSize: 14, fontWeight: 600, marginTop: 3 }}>
-          {value > 0 ? '$' + Number(value).toLocaleString() : '—'}
+          {value > 0 ? '$' + Number(value).toLocaleString() : '-'}
         </div>
       )}
     </div>
@@ -659,7 +659,7 @@ function SellPackageForm({ templates, busy, onSubmit, onCancel }) {
           }}>
           {templates.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name} — {p.sessionCount} sessions · ${Number(p.price).toFixed(0)}
+              {p.name} - {p.sessionCount} sessions · ${Number(p.price).toFixed(0)}
             </option>
           ))}
         </select>
@@ -716,7 +716,7 @@ function ClientAvatar({ initials, photoUrl, onChange }) {
     setErr(null); setBusy(true);
     try {
       // Resize + strip EXIF (incl. GPS) in the browser before upload.
-      // See src/lib/imagePipeline.js — turns 8-MB phone photos into
+      // See src/lib/imagePipeline.js - turns 8-MB phone photos into
       // 200-KB web-friendly JPEGs without privacy leaks.
       const file = await processImageForUpload(raw);
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase().slice(0, 5);
@@ -822,7 +822,7 @@ function ClientAttachments({ client, onSave }) {
 
         {items.length === 0 ? (
           <div style={{ fontSize: 12.5, color: "var(--muted)", lineHeight: 1.55, marginBottom: 10 }}>
-            No documents yet. Add intake forms, before / after photos, signed agreements — anything you need to keep with this client.
+            No documents yet. Add intake forms, before / after photos, signed agreements - anything you need to keep with this client.
           </div>
         ) : (
           <ul style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 8 }}>
@@ -896,7 +896,7 @@ function ClientAttachments({ client, onSave }) {
 //
 // Lists every completion entry across this client's bookings. Each
 // entry is one completed occurrence; recurring weekly bookings produce
-// one row per completed week. Read-only — edits happen from the
+// one row per completed week. Read-only - edits happen from the
 // calendar's EventDrawer where the booking lives.
 function ServiceLog({ clientId }) {
   const [entries, setEntries] = useState(null);
@@ -1028,7 +1028,7 @@ function PortalInviteRow({ client }) {
       setMsg(r.sent
         ? 'Invite sent.'
         : (r.reason === 'muted'
-            ? 'Client has opted out of these emails — they won\'t receive it.'
+            ? 'Client has opted out of these emails - they won\'t receive it.'
             : 'Could not send the invite.'));
     } catch (e) {
       setMsg(e.message || 'Could not send the invite');
@@ -1106,8 +1106,8 @@ function ClientHealthMetrics({ clientId }) {
             value={metrics.sessionsLeft > 0 ? String(metrics.sessionsLeft) : '0'}
             tone={metrics.sessionsLeft === 0 ? 'danger' : metrics.sessionsLeft <= 1 ? 'warn' : 'default'}
             hint={metrics.sessionsLeft === 0
-              ? 'Active package exhausted — time to offer a renewal'
-              : metrics.sessionsLeft <= 1 ? 'Almost out — good moment to upsell' : null}
+              ? 'Active package exhausted - time to offer a renewal'
+              : metrics.sessionsLeft <= 1 ? 'Almost out - good moment to upsell' : null}
           />
         )}
         {metrics.monthlyPaymentCents > 0 && (
@@ -1179,7 +1179,7 @@ function ClientAnalyticsBlock({ client, windowDays }) {
     return () => { live = false; };
   }, [client.id, windowDays]);
 
-  if (err) return null; // silent — analytics are nice-to-have, never block the drawer
+  if (err) return null; // silent - analytics are nice-to-have, never block the drawer
   if (!data) {
     return (
       <div style={{ marginTop: 18 }}>
@@ -1195,7 +1195,7 @@ function ClientAnalyticsBlock({ client, windowDays }) {
   if (empty) return null;
 
   const showRatePct = data.showRate == null
-    ? '—'
+    ? '-'
     : Math.round(data.showRate * 100) + '%';
 
   return (
@@ -1212,7 +1212,7 @@ function ClientAnalyticsBlock({ client, windowDays }) {
           label="Cadence"
           value={data.averageDaysBetweenBookings != null
             ? `${data.averageDaysBetweenBookings}d`
-            : '—'}
+            : '-'}
         />
       </div>
 
@@ -1267,7 +1267,7 @@ function ClientAnalyticsBlock({ client, windowDays }) {
 // ─── Projects tied to this client ──────────────────────────────────
 // Lightweight summary that lists every project bound to this client_id
 // and a button to create a new one inline. Full project editor lives
-// at /projects — clicking a row jumps there with the row pre-opened
+// at /projects - clicking a row jumps there with the row pre-opened
 // via the same ?id= deep-link pattern the rest of the app uses.
 function ClientProjectsBlock({ client }) {
   const navigate = useNavigate();

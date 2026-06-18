@@ -1,4 +1,4 @@
-// Per-tab tutorial overlay — full-screen modal that walks through the
+// Per-tab tutorial overlay - full-screen modal that walks through the
 // tab's content slide-by-slide. Auto-opens on first visit (driven by
 // the Topbar effect) and re-opens any time the owner taps the (i)
 // button next to the page title.
@@ -8,7 +8,7 @@
 //   ←  / →     → previous / next step
 //   Enter      → next (or "Got it" on the last step)
 //
-// Skip is gated by a short confirmation that names the cost — owners
+// Skip is gated by a short confirmation that names the cost - owners
 // can always skip but they get one chance to reconsider.
 import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -260,7 +260,7 @@ function SkipWarning({ tabTitle, onDismiss, onConfirmSkip }) {
           your business. Skipping risks missing features that could save
           you hours every week or unlock revenue you didn't know was on
           the table. You can always replay this from the (i) icon next
-          to the page title — but most owners say the in-context first-
+          to the page title - but most owners say the in-context first-
           visit walkthrough is what made it click.
         </p>
         <div style={{

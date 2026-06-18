@@ -1,10 +1,10 @@
-// GET /api/website/traffic — owner-facing analytics rollup.
+// GET /api/website/traffic - owner-facing analytics rollup.
 //
 // Returns 30-day aggregate pageviews bucketed by:
 //   • day (for the sparkline chart)
 //   • page slug (for the "most viewed pages" list)
 //   • referrer source (for "top referrers")
-//   • UA class (mobile vs desktop vs bot — useful sanity check)
+//   • UA class (mobile vs desktop vs bot - useful sanity check)
 //
 // All data lives in `website_pageviews`. No PII anywhere.
 

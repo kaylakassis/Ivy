@@ -1,4 +1,4 @@
-// CLIENTS — full CRM view with stages, analytics, and details.
+// CLIENTS - full CRM view with stages, analytics, and details.
 // Source of truth for identity = messages.jsx `clients` list.
 // Additional CRM metadata (stage, joinedAt, lastSeen, ltv, notes) stored here.
 
@@ -13,7 +13,7 @@ function defaultClientsMeta() {
     c3: { stage: 'paused', joinedAt: now - D * 160, lastSeen: now - D * 45, ltv: 3840, tags: ['quarterly'],           note: 'On break until summer.' },
     c4: { stage: 'lead',   joinedAt: now - D * 9,   lastSeen: now - D * 2,  ltv: 0,    tags: ['referral'],            note: "Came from Ana's referral." },
     c5: { stage: 'active', joinedAt: now - D * 124, lastSeen: now - D * 6,  ltv: 2160, tags: ['studio','membership'], note: '' },
-    // sample leads w/o full contact in messages.jsx — will synthesize rows
+    // sample leads w/o full contact in messages.jsx - will synthesize rows
     _leads: [
       { id: 'ld1', name: 'Marcus Thorne', email: 'marcus.t@example.com', createdAt: now - D * 3,  source: 'Instagram' },
       { id: 'ld2', name: 'Sofia Winters', email: 'sofia.w@example.com',  createdAt: now - D * 5,  source: 'Referral' },
@@ -149,7 +149,7 @@ function ClientsView() {
             Clients
           </h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Your book of business — actives, leads, and the ones on pause.
+            Your book of business - actives, leads, and the ones on pause.
           </div>
         </div>
         <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
@@ -268,13 +268,13 @@ function ClientRow({ client, first, onOpen, onStage }) {
       </div>
       <div><StageChip stage={client.stage}/></div>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-        {since != null ? (since === 0 ? 'Today' : since < 30 ? `${since}d ago` : since < 365 ? `${Math.round(since/30)}mo ago` : `${Math.round(since/365)}y ago`) : '—'}
+        {since != null ? (since === 0 ? 'Today' : since < 30 ? `${since}d ago` : since < 365 ? `${Math.round(since/30)}mo ago` : `${Math.round(since/365)}y ago`) : '-'}
       </div>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-        {lastSeen != null ? (lastSeen === 0 ? 'Today' : lastSeen === 1 ? 'Yesterday' : `${lastSeen}d ago`) : '—'}
+        {lastSeen != null ? (lastSeen === 0 ? 'Today' : lastSeen === 1 ? 'Yesterday' : `${lastSeen}d ago`) : '-'}
       </div>
       <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 600, fontFeatureSettings: '"tnum"' }}>
-        {client.ltv > 0 ? '$' + client.ltv.toLocaleString() : '—'}
+        {client.ltv > 0 ? '$' + client.ltv.toLocaleString() : '-'}
       </div>
       <div style={{ textAlign: 'right', color: 'var(--muted)' }} onClick={e => e.stopPropagation()}>
         <RowMenu client={client} onStage={onStage}/>
@@ -474,9 +474,9 @@ function ClientDetail({ client, onClose, onStage, onUpdate }) {
 
           {/* KPIs */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-            <MiniStat label="Lifetime" value={client.ltv > 0 ? '$' + client.ltv.toLocaleString() : '—'}/>
-            <MiniStat label="Since" value={client.joinedAt ? new Date(client.joinedAt).toLocaleDateString([], { month: 'short', year: '2-digit' }) : '—'}/>
-            <MiniStat label="Last seen" value={client.lastSeen ? Math.round((Date.now()-client.lastSeen)/86400e3) + 'd ago' : '—'}/>
+            <MiniStat label="Lifetime" value={client.ltv > 0 ? '$' + client.ltv.toLocaleString() : '-'}/>
+            <MiniStat label="Since" value={client.joinedAt ? new Date(client.joinedAt).toLocaleDateString([], { month: 'short', year: '2-digit' }) : '-'}/>
+            <MiniStat label="Last seen" value={client.lastSeen ? Math.round((Date.now()-client.lastSeen)/86400e3) + 'd ago' : '-'}/>
           </div>
 
           {/* Tags */}

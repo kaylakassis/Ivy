@@ -45,7 +45,7 @@ export default {
   'inbox.no_threads':       'Aucune conversation pour l’instant.',
   'inbox.new_message':      'Nouveau message',
 
-  'error.network':       'Erreur réseau — vérifiez votre connexion et réessayez.',
+  'error.network':       'Erreur réseau - vérifiez votre connexion et réessayez.',
   'error.unauthorized':  'Vous devez vous connecter.',
   'error.server':        'Une erreur est survenue. Nous avons été notifiés.',
 };

@@ -1,4 +1,4 @@
-// /api/ivy/:id  — GET (session + messages) / DELETE
+// /api/ivy/:id  - GET (session + messages) / DELETE
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';

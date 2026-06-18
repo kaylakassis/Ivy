@@ -1,4 +1,4 @@
-// Owner-side "Add booking" modal — service, client, date/time, optional
+// Owner-side "Add booking" modal - service, client, date/time, optional
 // recurrence, optional package-credit consumption when the matching
 // client has an active bundle covering the chosen service.
 import React, { useState, useEffect } from 'react';
@@ -17,7 +17,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   // Optional preset from "Book" quick-action in ClientDrawer. Looks up
   // the client by id and prefills name/email so the owner only needs
   // to pick service + time.
-  // Load active staff for the picker — silent failure since the
+  // Load active staff for the picker - silent failure since the
   // picker is optional and stays hidden if there's no staff list.
   useEffect(() => {
     let cancelled = false;
@@ -155,7 +155,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
 
         {services.length === 0 ? (
           <div style={{ padding: 16, color: 'var(--muted)', fontSize: 13 }}>
-            Add a service first — bookings need to reference one.
+            Add a service first - bookings need to reference one.
           </div>
         ) : (
           <>
@@ -214,10 +214,10 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
                 <select value={clientPackageId || ''}
                   onChange={(e) => setClientPackageId(e.target.value || null)}
                   style={inputSty}>
-                  <option value="">No — bill normally</option>
+                  <option value="">No - bill normally</option>
                   {eligiblePackages.map((p) => (
                     <option key={p.id} value={p.id}>
-                      {p.name} — {p.creditsRemaining} of {p.creditsTotal} left
+                      {p.name} - {p.creditsRemaining} of {p.creditsTotal} left
                       {p.expiresAt ? ` · expires ${new Date(p.expiresAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}` : ''}
                     </option>
                   ))}
@@ -231,7 +231,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
                 <select value={staffId || ''}
                   onChange={(e) => setStaffId(e.target.value || null)}
                   style={inputSty}>
-                  <option value="">— Owner / unassigned —</option>
+                  <option value="">- Owner / unassigned -</option>
                   {staffOptions.map((s) => (
                     <option key={s.id} value={s.id}>
                       {s.name}{s.role ? ` · ${s.role}` : ''}

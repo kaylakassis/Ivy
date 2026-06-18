@@ -1,16 +1,16 @@
-// Refreshes discover_snapshots — precomputes the static-derived fields
+// Refreshes discover_snapshots - precomputes the static-derived fields
 // the /discover page needs (service_count, min/max_price, cover_photo,
 // site_handle, review_count, rating_avg) so the user-facing endpoint
 // runs a single JOIN instead of N×8 subqueries.
 //
 // Runs every 15 min. One single SQL statement does the whole refresh
-// via INSERT ... ON CONFLICT DO UPDATE — atomic per row, idempotent
+// via INSERT ... ON CONFLICT DO UPDATE - atomic per row, idempotent
 // across runs, and short enough to fit comfortably in the function
 // budget even at 50K workspaces.
 //
 // Why we don't precompute the FILTERED `matching_services` aggregation:
 // that depends on the per-request query/price filters and can't be
-// cached. Left as an inline subquery in discover.js — still cheap
+// cached. Left as an inline subquery in discover.js - still cheap
 // because services has (workspace_id, price) covered.
 import { sql } from '../_lib/db.js';
 import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
@@ -22,7 +22,7 @@ async function handler(req, res) {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
   // Auth: Vercel Cron (Bearer CRON_SECRET), admin secret, or super-admin
-  // session — recomputes + deletes discover snapshots; not public.
+  // session - recomputes + deletes discover snapshots; not public.
   const cronAuth = !!process.env.CRON_SECRET
     && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = process.env.ADMIN_SECRET

@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
-    // Same idempotency rationale as invoices/send — double-clicking
+    // Same idempotency rationale as invoices/send - double-clicking
     // Resend used to mint two tokens + send two reminder emails. Now
     // the Idempotency-Key header collapses retries.
     const idemp = await withIdempotency(req, user.id, async () => doResend());
@@ -49,9 +49,9 @@ export default async function handler(req, res) {
 
     const inv = await fetchOwnedInvoice({ id, workspaceId });
     if (!inv) return { status: 400, body: { error: 'Invoice not found' } };
-    if (inv.status === 'paid')   return { status: 400, body: { error: 'Already paid — nothing to resend' } };
-    if (inv.status === 'voided') return { status: 400, body: { error: 'Voided — restore before resending' } };
-    if (inv.status === 'draft')  return { status: 400, body: { error: 'Draft hasn\'t been sent yet — use Send instead' } };
+    if (inv.status === 'paid')   return { status: 400, body: { error: 'Already paid - nothing to resend' } };
+    if (inv.status === 'voided') return { status: 400, body: { error: 'Voided - restore before resending' } };
+    if (inv.status === 'draft')  return { status: 400, body: { error: 'Draft hasn\'t been sent yet - use Send instead' } };
     if (!inv.client_email)       return { status: 400, body: { error: 'No recipient email on file' } };
 
     const rawToken = generateRawToken(32);
@@ -90,7 +90,7 @@ export default async function handler(req, res) {
                  <p>${business ? escapeHtml(business) + ' is following up on' : "We're following up on"}
                     invoice <b>${escapeHtml(inv.number)}</b> for
                     <b>${fmtMoney(totals.total)}</b>${inv.due_date ? ', due ' + escapeHtml(new Date(inv.due_date).toLocaleDateString()) : ''}.</p>
-                 <p>If you've already paid, please ignore — it can take a day or two to clear.</p>`,
+                 <p>If you've already paid, please ignore - it can take a day or two to clear.</p>`,
           ctaText: 'View invoice',
           ctaUrl: link,
           footer: `Reply to this email if anything looks off.`,
@@ -99,7 +99,7 @@ export default async function handler(req, res) {
       });
     } catch (mailErr) {
       console.error('[invoices/resend] email failed:', mailErr.message);
-      emailWarning = `We refreshed the link but the email didn't go through — try again in a moment.`;
+      emailWarning = `We refreshed the link but the email didn't go through - try again in a moment.`;
     }
 
     try {

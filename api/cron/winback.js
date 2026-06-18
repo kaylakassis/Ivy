@@ -5,24 +5,24 @@
 //     non-null) but have NEVER been offered a win-back coupon (the
 //     guard: winback_offer_sent_at IS NULL).
 //   • Waits a configurable dwell window after first-seen before
-//     triggering — the immediate response is the wall itself; if a
+//     triggering - the immediate response is the wall itself; if a
 //     workspace converts within DWELL_DAYS we don't burn the offer.
 //   • Creates a Stripe coupon + single-use promo code per candidate,
 //     stamps the workspaces row (one offer ever, OFFER_VALID_DAYS
 //     expiry), and emails the offer via notifyWinbackOffer.
 //
 // Why a separate cron and not "fire on the deny path": fires once,
-// dwell-gated, idempotent against retries — the gate has none of those
+// dwell-gated, idempotent against retries - the gate has none of those
 // properties.
 //
 // Tunables:
-//   DWELL_DAYS         — days after paywall_first_seen_at before we
+//   DWELL_DAYS         - days after paywall_first_seen_at before we
 //                        offer. Long enough that owners who would
 //                        convert organically have already done so.
-//   OFFER_VALID_DAYS   — how long the coupon remains usable.
-//   PERCENT_OFF        — % off Stripe applies during the discount.
-//   DURATION_MONTHS    — how many monthly invoices the discount covers.
-//   MAX_PER_RUN        — daily ceiling so we don't burst-create coupons
+//   OFFER_VALID_DAYS   - how long the coupon remains usable.
+//   PERCENT_OFF        - % off Stripe applies during the discount.
+//   DURATION_MONTHS    - how many monthly invoices the discount covers.
+//   MAX_PER_RUN        - daily ceiling so we don't burst-create coupons
 //                        if a huge backfill candidate set appears at
 //                        once (e.g. after migration).
 import { sql } from '../_lib/db.js';
@@ -49,7 +49,7 @@ async function handler(req, res) {
     const secretKey = platformStripeSecret();
     if (!secretKey) {
       // Without Stripe configured we can't mint coupons. Treat the run
-      // as a no-op rather than failing — same posture as the other
+      // as a no-op rather than failing - same posture as the other
       // crons that depend on optional integrations.
       return ok(res, { offered: 0, scanned: 0, reason: 'stripe-not-configured' });
     }
@@ -60,7 +60,7 @@ async function handler(req, res) {
     // O(candidates), not O(workspaces).
     //
     // Exclude sponsored accounts (user_type='sponsored' on the owner)
-    // — they're comp'd and don't need a discount nudge.
+    // - they're comp'd and don't need a discount nudge.
     const { rows: candidates } = await sql`
       SELECT w.id AS workspace_id, w.subscription_status, w.owner_id, u.email
         FROM workspaces w
@@ -72,7 +72,7 @@ async function handler(req, res) {
          AND COALESCE(u.user_type, 'regular') <> 'sponsored'
          AND w.subscription_status IN ('inactive', 'cancelled', 'suspended', 'trialing')
          -- ...but never an owner still inside a LIVE trial (they haven't
-         -- lapsed yet — don't burn their one lifetime offer).
+         -- lapsed yet - don't burn their one lifetime offer).
          AND NOT (w.subscription_status = 'trialing'
                   AND w.trial_ends_at IS NOT NULL
                   AND w.trial_ends_at > NOW())
@@ -85,7 +85,7 @@ async function handler(req, res) {
       try {
         // ensureWinbackOffer mints + stamps idempotently (the
         // winback_offer_sent_at IS NULL guard lives inside it). It
-        // returns fresh=true only when WE minted — the on-demand
+        // returns fresh=true only when WE minted - the on-demand
         // checkout-abandon endpoint may have raced us to this same row.
         // eslint-disable-next-line no-await-in-loop
         const offer = await ensureWinbackOffer({ secretKey, workspaceId: c.workspace_id });
@@ -100,7 +100,7 @@ async function handler(req, res) {
           expiresAt: offer.expiresAt,
         }).catch((e) => console.error('[winback] notify email failed:', e?.message));
         notifyOwnerSafe(c.workspace_id, {
-          title: `${offer.percentOff}% off — your Ivy OS comeback offer`,
+          title: `${offer.percentOff}% off - your Ivy OS comeback offer`,
           body: `Code ${offer.promoCode} · expires ${new Date(offer.expiresAt).toISOString().slice(0, 10)}`,
           url:  '/account?tab=billing&winback=1',
         }).catch((e) => console.error('[winback] push failed:', e?.message));
@@ -111,7 +111,7 @@ async function handler(req, res) {
     }
 
     // Metrics get captured by the trackCron wrapper from the response
-    // body below — scanned + offered land in cron_runs.metrics.
+    // body below - scanned + offered land in cron_runs.metrics.
     return ok(res, { scanned: candidates.length, offered });
   } catch (err) {
     return serverError(res, err);

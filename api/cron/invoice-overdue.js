@@ -1,4 +1,4 @@
-// /api/cron/invoice-overdue — daily cron that emails clients about
+// /api/cron/invoice-overdue - daily cron that emails clients about
 // invoices past their due_date. Mirrors the doc-reminders flow:
 //   - status = 'sent'
 //   - due_date is at least 1 day in the past
@@ -33,7 +33,7 @@ async function handler(req, res) {
   try {
     await ensureSchemaApplied();
 
-    // One-shot column add — idempotent.
+    // One-shot column add - idempotent.
     try {
       await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_overdue_reminder_at TIMESTAMPTZ`;
     } catch {}

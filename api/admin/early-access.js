@@ -1,4 +1,4 @@
-// GET/PATCH /api/admin/early-access — super-admin only.
+// GET/PATCH /api/admin/early-access - super-admin only.
 //
 // GET:   returns the current gate state (enabled? has-password? when changed?)
 // PATCH: { enabled?: boolean, password?: string }

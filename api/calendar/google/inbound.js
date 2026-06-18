@@ -3,7 +3,7 @@
 //   POST → toggle inbound busy-block sync on / off (body: { enabled })
 //          Enabling fires an immediate pull so slots reflect right away
 //          instead of waiting up to an hour for the cron.
-//   PATCH → manual "sync now" — owner clicks "Sync now" in the drawer.
+//   PATCH → manual "sync now" - owner clicks "Sync now" in the drawer.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
@@ -53,7 +53,7 @@ export default async function handler(req, res) {
         WHERE workspace_id = ${workspaceId}
       `;
       // Fire-and-forget sync so the slot grid catches up immediately.
-      // Don't await — the 200 returns fast and the cron picks it up
+      // Don't await - the 200 returns fast and the cron picks it up
       // again on the next tick if this best-effort call dies.
       if (enabled) pullBusyTimes({ workspaceId }).catch(() => {});
       else {

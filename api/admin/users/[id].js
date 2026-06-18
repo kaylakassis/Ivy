@@ -1,5 +1,5 @@
 // PATCH  /api/admin/users/:id
-//   Body fields are independent — pass any subset:
+//   Body fields are independent - pass any subset:
 //     role           'regular'|'sponsored'|'affiliate'|'business-trial'|'business-active'
 //                    Single high-level dispatch that knows the side effects:
 //                      regular         → user_type='regular', revert sponsored
@@ -14,7 +14,7 @@
 //                                        'trialing' with a fresh 28-day window
 //                      business-active → workspace.subscription_status =
 //                                        'active' with period_end = NOW() + 1mo
-//                                        (manual flag — Stripe webhook still
+//                                        (manual flag - Stripe webhook still
 //                                         updates real period_end on payment)
 //     userType       legacy alias for role; only accepts the first three
 //                    values. Kept for back-compat with older admin clients.
@@ -29,7 +29,7 @@
 //
 // DELETE /api/admin/users/:id
 //   Hard-delete the user. Cascades through the FK chain (workspaces,
-//   clients, etc.) — see schema. Refuses to delete super-admins.
+//   clients, etc.) - see schema. Refuses to delete super-admins.
 import { sql } from '../../_lib/db.js';
 import { hashPassword } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
@@ -41,7 +41,7 @@ import { recordAudit } from '../../_lib/audit.js';
 import { renderWelcome } from '../../_lib/welcome-content.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
-// Same reason as /api/auth/signup — this PATCH can fire emails
+// Same reason as /api/auth/signup - this PATCH can fire emails
 // (sendVerificationLink, sendResetLink, resendWelcome). Default 10s
 // is tight when Resend is slow.
 export const config = { maxDuration: 30 };
@@ -147,7 +147,7 @@ async function patchUser(u, req, res) {
   }
 
   // Fresh email-verification link. Burns older live verify tokens so only
-  // the latest one works. No-op if the user already verified — return a
+  // the latest one works. No-op if the user already verified - return a
   // soft note so the UI can show "already verified" rather than a generic
   // success.
   if (body.sendVerificationLink === true) {
@@ -184,7 +184,7 @@ async function patchUser(u, req, res) {
     }
   }
 
-  // Resend the welcome email — same content the user gets at signup.
+  // Resend the welcome email - same content the user gets at signup.
   // Owner vs client variant is auto-detected from workspace ownership.
   if (body.resendWelcome === true) {
     const variant = u.is_owner ? 'owner' : 'client';
@@ -279,7 +279,7 @@ async function applyRole(u, role, req, actor) {
     `;
   } else if (u.user_type === 'sponsored' && role !== 'sponsored') {
     // Leaving sponsored back to regular/affiliate without an explicit
-    // billing role — give them a fresh 28-day trial unless they already
+    // billing role - give them a fresh 28-day trial unless they already
     // have a Stripe sub doing the real billing.
     await sql`
       UPDATE workspaces SET
@@ -300,7 +300,7 @@ async function applyRole(u, role, req, actor) {
   }
 
   // Affiliate row provisioning. A user flipped to 'affiliate' should have
-  // a code ready when they log in. Idempotent — re-running is a no-op.
+  // a code ready when they log in. Idempotent - re-running is a no-op.
   if (role === 'affiliate') {
     const dup = await sql`SELECT id, code FROM affiliates WHERE user_id = ${u.id}`;
     if (dup.rows.length === 0) {

@@ -35,7 +35,7 @@ export function useClients() {
     setLoadingMore(true);
     try {
       const r = await api.get(`/clients?offset=${nextOffset}`);
-      // De-dup defensively in case a create/update raced — we never
+      // De-dup defensively in case a create/update raced - we never
       // want a duplicate row appearing twice on the page.
       const existingIds = new Set(clients.map((c) => c.id));
       const fresh = (r.clients || []).filter((c) => !existingIds.has(c.id));
@@ -72,7 +72,7 @@ export function useClients() {
   }, []);
 
   const remove = useCallback(async (id) => {
-    // Wait for the server to confirm BEFORE removing locally — otherwise a
+    // Wait for the server to confirm BEFORE removing locally - otherwise a
     // failure leaves the row hidden in the UI but still in the DB, and the
     // next page load brings it back.
     await api.del('/clients/' + id);

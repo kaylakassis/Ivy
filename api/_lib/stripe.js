@@ -2,7 +2,7 @@
 // (verify the account, create a checkout session, parse a webhook event), so
 // pulling in the official SDK isn't worth it.
 //
-// All calls take an explicit `secretKey` — we never read it from env. This
+// All calls take an explicit `secretKey` - we never read it from env. This
 // keeps the door open for per-workspace keys without surprises.
 //
 // `platformStripeSecret()` and `platformWebhookSecret()` resolve the
@@ -21,7 +21,7 @@ const STRIPE_BASE = 'https://api.stripe.com/v1';
 // remain as fallbacks so existing deployments don't have to migrate.
 //
 // We warn (once per cold start) when BOTH the Vercel-injected name
-// AND a legacy name are set — that's an ambiguity flag, the operator
+// AND a legacy name are set - that's an ambiguity flag, the operator
 // should remove the legacy var to avoid drift.
 let _legacyWarned = false;
 function warnIfLegacyShadowed() {
@@ -29,10 +29,10 @@ function warnIfLegacyShadowed() {
   _legacyWarned = true;
   const dupes = [];
   if (process.env.STRIPE_SECRET_KEY && (process.env.IVY_STRIPE_SECRET || process.env.STRIPE_PLATFORM_SECRET)) {
-    dupes.push('STRIPE_SECRET_KEY (Vercel) is set alongside legacy IVY_STRIPE_SECRET/STRIPE_PLATFORM_SECRET — delete the legacy ones.');
+    dupes.push('STRIPE_SECRET_KEY (Vercel) is set alongside legacy IVY_STRIPE_SECRET/STRIPE_PLATFORM_SECRET - delete the legacy ones.');
   }
   if (process.env.STRIPE_WEBHOOK_SECRET && process.env.IVY_STRIPE_WEBHOOK_SECRET) {
-    dupes.push('STRIPE_WEBHOOK_SECRET (Vercel) is set alongside legacy IVY_STRIPE_WEBHOOK_SECRET — delete the legacy one.');
+    dupes.push('STRIPE_WEBHOOK_SECRET (Vercel) is set alongside legacy IVY_STRIPE_WEBHOOK_SECRET - delete the legacy one.');
   }
   if (dupes.length) {
     // eslint-disable-next-line no-console
@@ -58,7 +58,7 @@ export function platformWebhookSecret() {
 // (/api/webhooks/stripe-platform). Stripe issues a separate signing
 // secret per endpoint, so the two cannot share STRIPE_WEBHOOK_SECRET.
 // Falls back to the platform secret only when the dedicated var is
-// unset — useful for single-endpoint dev setups.
+// unset - useful for single-endpoint dev setups.
 export function billingWebhookSecret() {
   return process.env.IVY_BILLING_WEBHOOK_SECRET
     || platformWebhookSecret();
@@ -100,7 +100,7 @@ async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, bod
     Accept: 'application/json',
   };
   // Stripe-Account header lets us act on behalf of a connected account
-  // using the platform secret key — the auth pattern Account Links
+  // using the platform secret key - the auth pattern Account Links
   // (Express) uses instead of OAuth-issued per-account secret keys.
   if (stripeAccount) headers['Stripe-Account'] = stripeAccount;
   // Stripe-native idempotency: if our function retries (or crashes after
@@ -130,8 +130,8 @@ async function stripeFetch(path, { method = 'GET', secretKey, stripeAccount, bod
 // account id.
 //
 // Two call shapes:
-//   • fetchAccountSummary(secretKey)                       — legacy
-//   • fetchAccountSummary({ secretKey, stripeAccount })    — Account Links
+//   • fetchAccountSummary(secretKey)                       - legacy
+//   • fetchAccountSummary({ secretKey, stripeAccount })    - Account Links
 // In the Account Links shape, secretKey is the platform secret and
 // stripeAccount is the acct_xxx we're inspecting.
 export async function fetchAccountSummary(arg) {
@@ -147,7 +147,7 @@ export async function fetchAccountSummary(arg) {
   return {
     id: acct.id,
     label,
-    // Stripe returns acct.livemode directly — true for live-mode keys,
+    // Stripe returns acct.livemode directly - true for live-mode keys,
     // false for test-mode keys. The previous heuristic (`!startsWith
     // 'acct_test_'`) was wrong: real Stripe IDs always start with
     // `acct_` regardless of mode.
@@ -224,7 +224,7 @@ export async function createCheckoutSession({
   // ('exclusive' default, 'inclusive' for EU-style tax-included
   // pricing). Stripe requires line-item tax_behavior when
   // automatic_tax is enabled and tax_behavior is unset on the
-  // account's default — we set 'exclusive' as the safe default.
+  // account's default - we set 'exclusive' as the safe default.
   automaticTax = false,
   taxBehavior = null,
 }) {
@@ -260,7 +260,7 @@ export async function createCheckoutSession({
 //   Stripe-Signature: t=<timestamp>,v1=<sig>,v1=<sig>...
 // Throws on mismatch / replay. Returns the parsed event on success.
 //
-// `tolerance` is in seconds — Stripe's recommended default is 300.
+// `tolerance` is in seconds - Stripe's recommended default is 300.
 export function verifyWebhookSignature({ payload, header, secret, tolerance = 300 }) {
   if (!header) throw new Error('Missing Stripe-Signature header');
   if (!secret) throw new Error('Webhook secret is not configured');
@@ -304,7 +304,7 @@ export function verifyWebhookSignature({ payload, header, secret, tolerance = 30
 export async function createSubscriptionCheckoutSession({
   secretKey, priceId, customerId, customerEmail,
   workspaceId, successUrl, cancelUrl,
-  couponId, // optional — when set, pre-applies the win-back coupon.
+  couponId, // optional - when set, pre-applies the win-back coupon.
 }) {
   const body = {
     mode: 'subscription',
@@ -319,7 +319,7 @@ export async function createSubscriptionCheckoutSession({
     // Stripe rejects `discounts` together with `allow_promotion_codes`,
     // so the win-back path turns the input box OFF and pre-applies the
     // single offered coupon instead. The user can't stack additional
-    // promo codes on top — by design, win-back is a single-use lever.
+    // promo codes on top - by design, win-back is a single-use lever.
     body['discounts[0][coupon]'] = couponId;
   } else {
     body.allow_promotion_codes = true;
@@ -335,7 +335,7 @@ export async function createSubscriptionCheckoutSession({
 // Create a one-time win-back coupon for a specific workspace. A percent-off
 // coupon that REPEATS for `durationMonths` so the discount survives a
 // renewal cycle (typical win-back offer: 30% off for 3 months). Returns
-// { couponId, promoCode } — the caller persists both on the workspaces row
+// { couponId, promoCode } - the caller persists both on the workspaces row
 // so subsequent checkouts can pre-apply the discount.
 export async function createWinbackCoupon({
   secretKey, workspaceId, percentOff, durationMonths,
@@ -369,7 +369,7 @@ export async function createWinbackCoupon({
   return { couponId: coupon.id, promoCode: promo.code };
 }
 
-// Stripe Customer Portal — self-serve cancel / update card / view invoices.
+// Stripe Customer Portal - self-serve cancel / update card / view invoices.
 // Owner clicks "Manage subscription" on the Account page.
 export async function createBillingPortalSession({
   secretKey, customerId, returnUrl,
@@ -427,7 +427,7 @@ export async function applyCustomerCredit({ secretKey, customerId, amountCents, 
 
 // Find or create a Stripe customer on the connected account for a
 // given client email. We only ever look up by email + check metadata
-// to confirm it's the right tenant — we never trust a client_id that
+// to confirm it's the right tenant - we never trust a client_id that
 // the browser handed us. The returned id is what we save on
 // clients.stripe_customer_id.
 export async function findOrCreateCustomer({ secretKey, stripeAccount, email, name, workspaceId, clientId }) {
@@ -515,7 +515,7 @@ export async function detachPaymentMethod({ secretKey, stripeAccount, paymentMet
 // PaymentIntent so the caller can persist its id for future refunds.
 //
 // Stripe will return a 402 if the card requires authentication
-// (3DS) — the caller should surface that as "couldn't auto-charge,
+// (3DS) - the caller should surface that as "couldn't auto-charge,
 // please ask the client to update their card."
 export async function chargeOffSession({
   secretKey, stripeAccount, customerId, paymentMethodId,
@@ -636,7 +636,7 @@ export async function fetchStripeCustomer({ secretKey, stripeAccount, customerId
 }
 
 // Lists subscriptions on a connected account. Used by the reconcile
-// cron — paginates via starting_after cursor. status=all so we pick
+// cron - paginates via starting_after cursor. status=all so we pick
 // up trialing/past_due/cancelled too (their state may have drifted
 // since the last webhook).
 export async function listStripeSubscriptions({ secretKey, stripeAccount, startingAfter, limit = 100 }) {
@@ -647,7 +647,7 @@ export async function listStripeSubscriptions({ secretKey, stripeAccount, starti
 
 // Switches a subscription's price (plan change). Stripe handles
 // proration automatically when proration_behavior=create_prorations
-// (default) — the next invoice carries the credit/charge for the
+// (default) - the next invoice carries the credit/charge for the
 // remainder of the current period. The customer.subscription.updated
 // webhook then carries the new items[] and applySubscriptionState
 // resyncs the local tier snapshot.

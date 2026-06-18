@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     // Ensure the user is an owner (has a workspace) AND the workspace
-    // has an active subscription — referral is an owner-facing program
+    // has an active subscription - referral is an owner-facing program
     // under the hard paywall.
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;

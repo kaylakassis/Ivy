@@ -5,13 +5,13 @@
 // and returns everything the owner needs to add Ivy OS to their
 // authenticator app: the otpauth:// URI (scan as QR via any client-
 // side QR lib OR paste into 1Password), the base32 secret (for
-// manual entry), and the plaintext backup codes (shown ONCE — the
+// manual entry), and the plaintext backup codes (shown ONCE - the
 // frontend must prompt the user to write them down).
 //
 // Enrollment is two-step: this endpoint provisions the secret;
 // /api/auth/totp/verify confirms the user can actually generate a
 // valid code from it before flipping enrolled_at = NOW(). Until verify
-// succeeds, the login flow is NOT gated by 2FA — so a user who
+// succeeds, the login flow is NOT gated by 2FA - so a user who
 // abandons the setup midway isn't locked out.
 //
 // Re-enrolling (calling this again on an already-enrolled account)
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
        WHERE id = ${user.id}
     `;
 
-    // Audit. We don't include the secret or codes here — the audit
+    // Audit. We don't include the secret or codes here - the audit
     // trail just records that an enrollment was initiated.
     recordAudit(req, {
       actor: user, targetUserId: user.id,
@@ -70,14 +70,14 @@ export default async function handler(req, res) {
     });
 
     return ok(res, {
-      // Display label for the authenticator app — shows up under
+      // Display label for the authenticator app - shows up under
       // 'Ivy OS:' with the user's email.
       secret: secretBase32,
       otpauth: otpauthUrl({ secretBase32, label: user.email }),
       backupCodes,
-      // The frontend MUST surface this prominently — these are the
+      // The frontend MUST surface this prominently - these are the
       // only chance to capture the codes in plaintext.
-      message: 'Save these 10 backup codes somewhere safe — each is single-use, and we cannot show them again.',
+      message: 'Save these 10 backup codes somewhere safe - each is single-use, and we cannot show them again.',
     });
   } catch (err) {
     return serverError(res, err);

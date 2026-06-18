@@ -23,7 +23,7 @@ const createdUsers = [];
 async function run() {
   try {
     // The test DB is already migrated (probe passes), so the new products
-    // table isn't auto-created — ensure it idempotently.
+    // table isn't auto-created - ensure it idempotently.
     await sql`CREATE TABLE IF NOT EXISTS products (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,

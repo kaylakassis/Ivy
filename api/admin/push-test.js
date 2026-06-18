@@ -1,7 +1,7 @@
 // POST /api/admin/push-test  { userId?: string }
 // Fires a test web-push notification, by default to the calling
 // super-admin's own subscriptions. Pass `userId` to target a specific
-// user instead — useful for verifying a customer's device is enrolled,
+// user instead - useful for verifying a customer's device is enrolled,
 // or showing them what a real Ivy nudge looks like in support.
 //
 // Returns:
@@ -17,7 +17,7 @@
 //   }
 //
 // `target` is echoed back so the UI can confirm "sent to alice@…"
-// after the action — no possibility of silently hitting the wrong user.
+// after the action - no possibility of silently hitting the wrong user.
 // `devices` lets the admin see at-a-glance which browser / OS / phone
 // the test reached.
 //
@@ -31,7 +31,7 @@ import { recordAudit } from '../_lib/audit.js';
 import { sendPushToUser } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
-// Tiny user-agent classifier — good enough to label a device
+// Tiny user-agent classifier - good enough to label a device
 // at-a-glance ("Chrome on macOS", "Safari on iOS"). Falls back
 // to the raw UA when nothing matches.
 function labelForUserAgent(ua) {

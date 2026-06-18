@@ -1,7 +1,7 @@
 // /api/me/payment-methods
 //   GET → list saved cards across every business the user is a
 //         client of (one card per (workspace, client) pair).
-//   POST → start a "save a card" flow. Body: { workspaceId } —
+//   POST → start a "save a card" flow. Body: { workspaceId } -
 //         must be a workspace the user has a clients-row in.
 //         Mints a Stripe Checkout in setup mode and returns the
 //         redirect URL. After completion the workspace's webhook
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       // Surface saved cards across every workspace the user is a
-      // client of. We never return Stripe ids — only display
+      // client of. We never return Stripe ids - only display
       // fragments the portal can render.
       const r = await sql.query(
         `SELECT c.id AS client_id, c.workspace_id,
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
           FROM clients WHERE id = ${clientId} LIMIT 1
       `;
       const c = r.rows[0];
-      if (!c?.email) return badRequest(res, 'No email on file — set one with the business first.');
+      if (!c?.email) return badRequest(res, 'No email on file - set one with the business first.');
 
       let creds;
       try { creds = await loadStripeCreds(c.workspace_id); }

@@ -7,7 +7,7 @@
 //   • POST /api/calendar/bookings      (owner manually adds)
 //
 // Everything runs server-side, fire-and-forget. The booking creation
-// succeeds even if email or thread inserts fail — those errors get
+// succeeds even if email or thread inserts fail - those errors get
 // reported to Sentry but don't surface to the caller.
 import { sql } from './db.js';
 import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
@@ -31,7 +31,7 @@ function fmtTime(min) {
 // Fetches everything we need about a booking + workspace in a single
 // round-trip, then dispatches thread + emails in parallel.
 //
-// `source`: 'public' | 'owner' — controls the email copy ("you booked
+// `source`: 'public' | 'owner' - controls the email copy ("you booked
 // with us" vs "a new booking just landed").
 export async function notifyNewBooking({ workspaceId, bookingId, source = 'public' }) {
   try {
@@ -62,13 +62,13 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     const dateLabel    = fmtDate(dateISO);
     const timeLabel    = `${fmtTime(ctx.start_min)} – ${fmtTime(ctx.end_min)}`;
 
-    // Branding wraps both client + owner emails. Cheap fetch — single
-    // SELECT — done once and shared across all recipients.
+    // Branding wraps both client + owner emails. Cheap fetch - single
+    // SELECT - done once and shared across all recipients.
     const branding = await fetchBranding(workspaceId);
 
     const tasks = [];
 
-    // 1. Thread + system message — only if the booking is tied to a client
+    // 1. Thread + system message - only if the booking is tied to a client
     //    record. Walk-ins with no client linkage skip this.
     if (ctx.client_id) {
       tasks.push(upsertThreadAndSystemMessage({
@@ -104,7 +104,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
       }));
     }
 
-    // 3. Notification email to owner — only for public bookings (owner
+    // 3. Notification email to owner - only for public bookings (owner
     //    manually adding a booking already knows it happened).
     if (source === 'public' && ctx.owner_email) {
       tasks.push(sendOwnerNotify({
@@ -121,7 +121,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
       }));
     }
 
-    // 4. Push notification to owner — same gating as the email (public
+    // 4. Push notification to owner - same gating as the email (public
     //    bookings only). Useful when the owner has the app open in
     //    another tab or installed as a PWA.
     if (source === 'public') {
@@ -152,7 +152,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     // eslint-disable-next-line no-console
     console.error('[notifyNewBooking] failed:', err.message);
     reportError(err, { extra: { bookingId, workspaceId, source } });
-    // Swallow — the caller already returned 201 to the user.
+    // Swallow - the caller already returned 201 to the user.
   }
 }
 
@@ -182,7 +182,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
 async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
-  // bookers go to /signup with the email pre-filled — hitting /me
+  // bookers go to /signup with the email pre-filled - hitting /me
   // logged-out bounces to /signin with confusing "no account" friction.
   let hasPortal = false;
   if (clientId) {
@@ -215,7 +215,7 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
       ${videoRoomUrl ? `<p style="margin:18px 0;padding:12px 14px;background:#F6F5F1;border:1px solid #E8E4DC;border-radius:10px;">
         <strong>Meeting link:</strong><br/>
         <a href="${escapeHtml(videoRoomUrl)}" style="color:#2E3168;word-break:break-all;">${escapeHtml(videoRoomUrl)}</a>
-        <br/><span style="font-size:12px;color:#85827B;">Save this — open it at the start of your session.</span>
+        <br/><span style="font-size:12px;color:#85827B;">Save this - open it at the start of your session.</span>
       </p>` : ''}
       <p>Need to reschedule or message ${escapeHtml(businessName)}? ${hasPortal
         ? 'You can view this booking and chat with them through your Ivy OS portal.'
@@ -227,7 +227,7 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
   });
   await sendEmailToClient({
     clientId, type: 'bookings',
-    to, subject: `Booking confirmed — ${dateLabel}`, html, replyTo: branding?.replyTo,
+    to, subject: `Booking confirmed - ${dateLabel}`, html, replyTo: branding?.replyTo,
   });
 }
 
@@ -243,7 +243,7 @@ async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(dateLabel)}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(timeLabel)}</td></tr>
-        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Email</td><td style="padding:6px 0;">${escapeHtml(clientEmail || '—')}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Email</td><td style="padding:6px 0;">${escapeHtml(clientEmail || '-')}</td></tr>
         ${notes ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;vertical-align:top;">Note</td><td style="padding:6px 0;">${escapeHtml(notes)}</td></tr>` : ''}
       </table>
       <p>The booking is on your calendar and a chat thread is ready for ${escapeHtml(clientName || 'them')}
@@ -254,7 +254,7 @@ async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail
   });
   await sendEmailToUser({
     userId: ownerId, type: 'bookings',
-    to, subject: `New booking — ${clientName || 'client'} · ${dateLabel}`, html,
+    to, subject: `New booking - ${clientName || 'client'} · ${dateLabel}`, html,
   });
 }
 
@@ -322,7 +322,7 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
         businessName, serviceName, dateLabel, timeLabel, branding,
       }));
     }
-    // Client-side push when owner cancels — email may sit unread for
+    // Client-side push when owner cancels - email may sit unread for
     // hours; the client needs to know their appointment is off NOW.
     if (source === 'owner' && ctx.client_id) {
       tasks.push(notifyClientSafe({
@@ -422,7 +422,7 @@ async function sendCancellationToOwner({ ownerId, to, ownerName, clientName, cli
   });
   await sendEmailToUser({
     userId: ownerId, type: 'bookings',
-    to, subject: `Cancelled by ${clientName || 'client'} — ${dateLabel}`, html,
+    to, subject: `Cancelled by ${clientName || 'client'} - ${dateLabel}`, html,
   });
 }
 
@@ -560,6 +560,6 @@ async function sendRescheduleToOwner({ ownerId, to, ownerName, clientName, clien
   });
   await sendEmailToUser({
     userId: ownerId, type: 'bookings',
-    to, subject: `Rescheduled by ${clientName || 'client'} — ${newDate}`, html,
+    to, subject: `Rescheduled by ${clientName || 'client'} - ${newDate}`, html,
   });
 }

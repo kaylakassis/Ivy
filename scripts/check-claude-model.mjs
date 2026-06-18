@@ -3,20 +3,20 @@
 // Polls Anthropic's models API for the highest-versioned Claude Opus
 // model and, if it's newer than the IVY_MODEL constant in
 // api/_lib/ivy.js, rewrites the constant in place. Designed to be run
-// by the GHA in .github/workflows/check-claude-model.yml — that
+// by the GHA in .github/workflows/check-claude-model.yml - that
 // workflow handles opening the PR if this script changes the file.
 //
 // Required env:
-//   ANTHROPIC_API_KEY  (read-only key works fine — only hits GET /v1/models)
+//   ANTHROPIC_API_KEY  (read-only key works fine - only hits GET /v1/models)
 //
 // Optional env:
 //   GITHUB_OUTPUT      (the workflow appends key=value pairs for downstream
 //                       steps; if unset, the script just prints to stderr)
 //
 // Exit codes:
-//   0 — ran cleanly. Whether the file changed is in GITHUB_OUTPUT's
+//   0 - ran cleanly. Whether the file changed is in GITHUB_OUTPUT's
 //       `bumped` field (true/false). The workflow keys off that.
-//   1 — script error (network down, API rejected key, file shape changed
+//   1 - script error (network down, API rejected key, file shape changed
 //       and the regex couldn't find IVY_MODEL, etc.). The workflow run
 //       fails loudly so the operator sees it.
 import { readFileSync, writeFileSync, appendFileSync } from 'node:fs';
@@ -25,7 +25,7 @@ import path from 'node:path';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const IVY_FILE = path.join(here, '..', 'api', '_lib', 'ivy.js');
-// IVY_MODEL is the SINGLE source of truth — UI label, billing log, and
+// IVY_MODEL is the SINGLE source of truth - UI label, billing log, and
 // the API call all read from it. Only Opus is in scope: Ivy is
 // deliberately on Anthropic's flagship tier; if the team decides to
 // shift to Sonnet/Haiku that's a manual product decision, not an
@@ -39,7 +39,7 @@ const MODEL_LINE_RE = /(export\s+)?const\s+IVY_MODEL\s*=\s*['"]([^'"]+)['"]/;
 
 // Matches the rolling "marketing name" form like `claude-opus-4-8`.
 // Deliberately excludes date-pinned variants such as
-// `claude-opus-4-8-20251201` — those are for explicit pinning, not the
+// `claude-opus-4-8-20251201` - those are for explicit pinning, not the
 // rolling alias Ivy uses. If Anthropic ever changes the naming scheme,
 // the GHA will fail loudly here and the operator will notice in the
 // scheduled-run failure email.
@@ -124,7 +124,7 @@ async function main() {
 
   const diff = compareVersions(latest, currentVer);
   if (diff <= 0) {
-    // Already on the latest (or somehow ahead — unusual but harmless).
+    // Already on the latest (or somehow ahead - unusual but harmless).
     output('bumped', 'false');
     return;
   }
@@ -133,12 +133,12 @@ async function main() {
   output('is_major_bump', String(isMajorBump));
 
   // Rewrite the file. We only touch the captured string in the IVY_MODEL
-  // line — everything else (export keyword, surrounding whitespace,
+  // line - everything else (export keyword, surrounding whitespace,
   // adjacent comments) is preserved exactly so the diff stays one line.
   const updated = src.replace(MODEL_LINE_RE, (line) =>
     line.replace(currentId, latest.id),
   );
-  if (updated === src) die('Rewrite produced no change — refusing to commit a no-op');
+  if (updated === src) die('Rewrite produced no change - refusing to commit a no-op');
   writeFileSync(IVY_FILE, updated);
   output('bumped', 'true');
 }

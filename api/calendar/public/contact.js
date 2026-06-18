@@ -3,7 +3,7 @@
 // Public, no-auth "message before booking" entry point. Lets a
 // prospect ask a question without committing to a slot:
 //   1. Find the workspace by slug (404 if private/missing).
-//   2. Find or create a clients row for the prospect's email — stage
+//   2. Find or create a clients row for the prospect's email - stage
 //      defaults to 'lead' and source='public-contact' so the owner
 //      sees them in their CRM as an inbound lead.
 //   3. Find or create the (workspace, client) message thread.
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     if (text.length > 4000) return badRequest(res, 'Message is too long (4000 char max).');
 
     // Find or create the lead client row by email within this workspace.
-    // We don't link to user_id here — that happens at signup if the
+    // We don't link to user_id here - that happens at signup if the
     // prospect later claims a portal account using the same email.
     let clientId = null;
     const existing = await sql`
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
       clientId = ins.rows[0].id;
       // Deliberately DO NOT fire lead_created / client_created workflows
       // from the public-contact path. This is a prospect asking a
-      // question, not a confirmed onboarding — letting an auto-responder
+      // question, not a confirmed onboarding - letting an auto-responder
       // (e.g. the "Instant lead reply" template) speak for the owner
       // robs them of the chance to answer personally, which is the
       // entire point of an inbound question. The owner still gets the
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
        WHERE id = ${threadId}
     `;
 
-    // Notify the owner — push (if subscribed) + email (always).
+    // Notify the owner - push (if subscribed) + email (always).
     notifyOwnerSafe({
       workspaceId,
       type: 'messages',
@@ -148,7 +148,7 @@ export default async function handler(req, res) {
         await sendEmail({
           to: ownerEmail,
           subject: `New message from ${name}: question about booking`,
-          // Set replyTo to the prospect — owner can hit Reply in their
+          // Set replyTo to the prospect - owner can hit Reply in their
           // mail client to respond directly without opening the app.
           replyTo: email,
           html: emailShell({
@@ -156,7 +156,7 @@ export default async function handler(req, res) {
             body: `<p>Hi ${escapeHtml((owner.rows[0]?.name || '').split(/\s+/)[0] || '')},</p>
               <p><strong>${escapeHtml(name)}</strong> &lt;${escapeHtml(email)}&gt; sent you a message before booking:</p>
               <blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #C7BFA8;background:#F6F5F1;border-radius:6px;font-size:14px;line-height:1.55;color:#3F3D38;white-space:pre-wrap;">${escapeHtml(text)}</blockquote>
-              <p>This conversation is now in your Messages inbox under <strong>${escapeHtml(name)}</strong> — replying there sends them an email.</p>`,
+              <p>This conversation is now in your Messages inbox under <strong>${escapeHtml(name)}</strong> - replying there sends them an email.</p>`,
             ctaText: 'Open conversation',
             ctaUrl: `${appUrl()}/messages?threadId=${threadId}`,
             footer: `Replying to this email goes straight to ${escapeHtml(name)}. The conversation is also tracked in your Ivy OS Messages inbox.`,

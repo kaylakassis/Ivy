@@ -11,7 +11,7 @@
 //     and fires the matching workflows.
 //
 // Actions are run sequentially. Per-action failure doesn't abort the
-// run — the action_result records 'failed' and the workflow continues.
+// run - the action_result records 'failed' and the workflow continues.
 // Whole-run status is 'succeeded' (all ok), 'partial' (some failed),
 // 'failed' (none succeeded), or 'skipped' (dedupe / no actions).
 //
@@ -141,17 +141,17 @@ export async function triggerWorkflow({ workspaceId, triggerType, client, contex
 // Executes one workflow for one client. Handles dedupe + per-action
 // error trapping + insert of the workflow_runs audit row.
 //
-// startIndex defaults to 0 — when a workflow resumes after a `wait`
+// startIndex defaults to 0 - when a workflow resumes after a `wait`
 // action, the cron passes the index of the next action to execute.
 // isResume tells us to skip the same-day dedupe check (a wait that
 // crosses midnight would otherwise re-trigger dedupe).
 async function runWorkflow({ workflow, client, context = {}, startIndex = 0, isResume = false }) {
   // Dedupe: skip if this workflow already fired for this client today.
-  // Resumed runs bypass dedupe — they're the SAME logical run, just
+  // Resumed runs bypass dedupe - they're the SAME logical run, just
   // continuing across a wait boundary.
   //
   // Both casts MUST go through UTC so this query uses the
-  // idx_workflow_runs_dedupe partial index defined in schema.js — the
+  // idx_workflow_runs_dedupe partial index defined in schema.js - the
   // index is built on `(triggered_at AT TIME ZONE 'UTC')::date`, so
   // a session-tz `triggered_at::date` cast would (a) miss the index
   // and (b) potentially disagree with the index on what "today"
@@ -258,7 +258,7 @@ async function runWorkflow({ workflow, client, context = {}, startIndex = 0, isR
       continue;
     }
 
-    // Regular action — execute, capture pass/fail, continue loop.
+    // Regular action - execute, capture pass/fail, continue loop.
     try {
       // eslint-disable-next-line no-await-in-loop
       const r = await executeAction({
@@ -339,7 +339,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
       phone: client.phone, consentAt: client.sms_consent_at, body,
       workspaceId: workflow.workspace_id,
       // Workflow SMS is marketing-class (nurture / win-back / drip)
-      // — gate to 8am-9pm in the workspace's IANA timezone. The cron
+      // - gate to 8am-9pm in the workspace's IANA timezone. The cron
       // will retry on its next pass; this isn't ideal exactness (a
       // send queued at 7:55am workspace-local for a workflow that
       // ran at 7am will sit until 8am next-pass) but it keeps us
@@ -352,7 +352,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
         // action just no-ops for now and the next cron tick during
         // daylight will retry. (For one-shot workflow runs after a
         // trigger fires once, this means quiet-hour triggers
-        // currently skip the SMS — acceptable for nurture cadence.)
+        // currently skip the SMS - acceptable for nurture cadence.)
         return { to: client.phone, skipped: 'quiet-hours' };
       }
       throw new Error(out.reason || 'SMS send failed');
@@ -390,7 +390,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
     if (!tmplId) throw new Error('No document template selected');
     // Pull the template, clone its content into a new document for this
     // client, set status='draft'. Owner approves + sends from /documents
-    // (we don't auto-fire the send email — that's another action the
+    // (we don't auto-fire the send email - that's another action the
     // owner can add explicitly with send_email after this).
     //
     // documents columns: name, kind, content_html, file_url, fields,
@@ -413,7 +413,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
         is_template
       ) VALUES (
         ${workflow.workspace_id},
-        ${renderTokens(t.name, tokens) + ' — ' + (client?.name || '')},
+        ${renderTokens(t.name, tokens) + ' - ' + (client?.name || '')},
         ${t.kind || 'written'},
         ${t.content_html || null},
         ${t.file_url || null},
@@ -441,7 +441,7 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
 // Resume any waiting workflows whose resume_at has passed. Called by
 // the workflows cron alongside evaluateScheduledWorkflows. Each pending
 // row resumes execution from next_action_index against the captured
-// client_snapshot (not the live client row — see schema comment).
+// client_snapshot (not the live client row - see schema comment).
 export async function resumeWaitingWorkflows({ limit = 200 } = {}) {
   const { rows: pending } = await sql`
     SELECT p.*, w.* FROM workflow_pending_runs p
@@ -453,7 +453,7 @@ export async function resumeWaitingWorkflows({ limit = 200 } = {}) {
   `;
   let resumed = 0;
   for (const row of pending) {
-    // The JOIN aliased some columns — rebuild the workflow object
+    // The JOIN aliased some columns - rebuild the workflow object
     // from the row. workflows columns: id, workspace_id, name, ...,
     // actions, trigger_type, etc.
     const workflow = {
@@ -555,7 +555,7 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
 
   if (wf.trigger_type === 'booking_completed') {
     // Bookings with an occurrence COMPLETED exactly N days ago. We key on
-    // the completion_log entry for the target date — NOT b.date — so a
+    // the completion_log entry for the target date - NOT b.date - so a
     // recurring series fires per completed occurrence. The old
     // `b.date = target AND completion_log ? b.date` form only ever matched
     // the series' first occurrence, so weekly clients never got their
@@ -601,7 +601,7 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
 // Run `fn(item)` over `items` with at most `concurrency` in flight at
 // a time. Returns the total of all numeric resolves (used here to
 // count "fired" actions). Failures inside `fn` are swallowed and
-// counted as zero — workflows should not abort each other.
+// counted as zero - workflows should not abort each other.
 //
 // Concurrency = 10 is a sweet spot for our load: it gives ~10x the
 // throughput of serial without hitting Resend's 2 req/sec free-tier

@@ -1,4 +1,4 @@
-// /reset-password?token=... — submit new password using a one-time token.
+// /reset-password?token=... - submit new password using a one-time token.
 import React, { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';

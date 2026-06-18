@@ -1,4 +1,4 @@
-// Notification preferences — shared layer for push + email.
+// Notification preferences - shared layer for push + email.
 //
 // Two kinds of preferences live alongside each other:
 //
@@ -15,7 +15,7 @@
 // Missing key = enabled by default. Failure to look up = enabled (don't
 // drop a notification because of a transient DB blip).
 //
-// CRITICAL_EMAIL_TYPES bypass preferences entirely — these are sends
+// CRITICAL_EMAIL_TYPES bypass preferences entirely - these are sends
 // the recipient can't opt out of because they're security- or
 // account-critical (verification, password reset, account deletion).
 import { sql } from './db.js';
@@ -29,7 +29,7 @@ export const EMAIL_NOTIFY_TYPES = [
   'billing',     // owner-only: subscription renewal, failure, cancellation
 ];
 
-// Labels shown in the notification settings UI. Keep terse — the
+// Labels shown in the notification settings UI. Keep terse - the
 // per-type help text lives in the UI alongside.
 export const EMAIL_NOTIFY_LABELS = {
   bookings:  'Bookings',
@@ -41,7 +41,7 @@ export const EMAIL_NOTIFY_LABELS = {
 };
 
 // Critical sends bypass preferences. These are tied to account
-// security / identity — disabling them would break the product.
+// security / identity - disabling them would break the product.
 export const CRITICAL_EMAIL_TYPES = new Set([
   'verification',     // signup confirm, email change
   'password_reset',
@@ -84,7 +84,7 @@ export async function clientAllowsEmail(clientId, type) {
 // Look up a client by email + workspace and return whether they allow
 // emails of `type`. Used by send-sites that have an email address but
 // no clients.id (e.g. the public booking flow keeps an email column
-// even when no clients row exists). Workspace scoping is essential —
+// even when no clients row exists). Workspace scoping is essential -
 // a client of business A who opted out of marketing shouldn't suppress
 // business B's marketing.
 export async function clientAllowsEmailByAddress({ email, workspaceId, type }) {

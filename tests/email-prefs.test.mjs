@@ -31,12 +31,12 @@ async function expectThrow(fn, label) {
   catch { pass++; console.log('  ✓', label); }
 }
 
-// Test fixtures — created once at the top, torn down at the bottom.
+// Test fixtures - created once at the top, torn down at the bottom.
 let ownerId, workspaceId, clientId;
 
 async function setup() {
   await ensureSchemaApplied();
-  // Fresh data per run — easier than tracking IDs.
+  // Fresh data per run - easier than tracking IDs.
   await sql.query(
     "DELETE FROM users WHERE email LIKE 'pref-test-%@example.com'",
   );
@@ -79,7 +79,7 @@ async function testHelpers(clientEmail) {
 
   console.log('\n[2] Critical types always allowed');
   for (const t of CRITICAL_EMAIL_TYPES) {
-    // Explicitly mute the user/client — critical should still pass.
+    // Explicitly mute the user/client - critical should still pass.
     await sql`UPDATE users SET notification_prefs = '{"email_bookings": false}'::jsonb WHERE id = ${ownerId}`;
     await sql`UPDATE clients SET notification_prefs = '{"bookings": false}'::jsonb WHERE id = ${clientId}`;
     assert(await userAllowsEmail(ownerId, t),   `user "${t}" bypasses mute`);
@@ -152,7 +152,7 @@ async function testSendWrappers(clientEmail) {
     'opted-out client (by email) marketing → muted');
 
   console.log('\n[9] Critical bypass: empty type sends regardless');
-  // Reset prefs so 'bookings' is allowed, then send with no type — should
+  // Reset prefs so 'bookings' is allowed, then send with no type - should
   // attempt Resend (and fail because we have a fake key, but the path
   // gets through the prefs gate).
   await sql`UPDATE users SET notification_prefs = '{}'::jsonb WHERE id = ${ownerId}`;
@@ -161,7 +161,7 @@ async function testSendWrappers(clientEmail) {
     to: 'noop@example.com', subject: 'critical-no-type', html: '<p>x</p>',
   });
   // RESEND_API_KEY is '__test__' so Resend will reject; sent=false but
-  // reason should NOT be 'muted' — it should be a Resend-shaped error.
+  // reason should NOT be 'muted' - it should be a Resend-shaped error.
   assert(result.sent === false && result.reason !== 'muted',
     'no-type send hits transport (reason ≠ muted)');
 }

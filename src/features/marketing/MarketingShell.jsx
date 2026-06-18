@@ -30,7 +30,7 @@ export default function MarketingShell({ children, style }) {
 // Mobile hamburger menu for the marketing nav. On desktop the inline
 // nav links show and this button is hidden (CSS .marketing-hamburger);
 // on mobile (≤720px) the inline links hide via .marketing-nav-secondary
-// and this is the ONLY way to reach the nav — previously there was no
+// and this is the ONLY way to reach the nav - previously there was no
 // hamburger at all, so the links only appeared in the footer.
 //
 // `extra` is an optional list of { label, href } in-page anchors (the

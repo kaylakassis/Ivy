@@ -226,7 +226,7 @@ async function testConsumeCreditExhaustionSignal() {
   const row = await sql`SELECT status FROM client_packages WHERE id = ${cp.rows[0].id}`;
   assert(row.rows[0].status === 'exhausted', 'DB status = exhausted');
 
-  // Now try to consume again — should fail (no credits left).
+  // Now try to consume again - should fail (no credits left).
   const retry = await consumeCredit({
     workspaceId, clientPackageId: cp.rows[0].id,
     clientId, serviceId,

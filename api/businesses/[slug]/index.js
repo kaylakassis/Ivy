@@ -1,15 +1,15 @@
 // GET /api/businesses/:slug
-// Public, no auth required for the basic info — same surface anyone
+// Public, no auth required for the basic info - same surface anyone
 // browsing the public booking page can read. When called by a signed-in
 // client, also returns review eligibility (has the user booked from
 // or messaged this business → can they leave a review?).
 //
 // Powers the expanded card view in /me/discover. Returns:
-//   • business — name, tagline, category, address, branding (logo +
+//   • business - name, tagline, category, address, branding (logo +
 //     accent), website handle for "Visit site"
-//   • services — full list with name/price/duration/photo (sorted)
-//   • reviews — { summary: { count, avg }, recent: [...] }
-//   • eligibility — { canReview, hasReviewed, reason } when the caller
+//   • services - full list with name/price/duration/photo (sorted)
+//   • reviews - { summary: { count, avg }, recent: [...] }
+//   • eligibility - { canReview, hasReviewed, reason } when the caller
 //     is a signed-in user; null otherwise.
 import { sql } from '../../_lib/db.js';
 import { readSession } from '../../_lib/auth.js';
@@ -19,7 +19,7 @@ import { serializeReview } from '../../_lib/reviews.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 // Non-throwing session reader. requireUser() 401s on missing session,
-// which is wrong here — anonymous browsers should still be able to
+// which is wrong here - anonymous browsers should still be able to
 // load the business detail; we just won't compute eligibility for them.
 async function maybeUser(req) {
   const session = readSession(req);
@@ -31,7 +31,7 @@ async function maybeUser(req) {
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
-    // Public — bypasses requireUser, so bootstrap the schema here on
+    // Public - bypasses requireUser, so bootstrap the schema here on
     // cold-start so columns like websites.visibility / services.visibility
     // exist before the queries below run.
     await ensureSchemaApplied();
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
     const row = cs.rows[0];
     const workspaceId = row.workspace_id;
 
-    // Services — only the publicly-listed ones for the Discover surface.
+    // Services - only the publicly-listed ones for the Discover surface.
     // 'private' services exist but are intentionally not surfaced here
     // (clients with a direct link can still book them on /book/[slug]),
     // and 'only_me' services are hidden everywhere.
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
       ORDER BY created_at DESC LIMIT 10
     `;
 
-    // Eligibility — only computed when the caller is a signed-in user.
+    // Eligibility - only computed when the caller is a signed-in user.
     // A user can review when:
     //   1. They have a `clients` row in this workspace (matched by linked
     //      user_id OR by email), AND
@@ -103,7 +103,7 @@ export default async function handler(req, res) {
       `;
       const clientIds = clientRows.rows.map((r) => r.id);
 
-      // Already-reviewed check — UNIQUE INDEX prevents the insert
+      // Already-reviewed check - UNIQUE INDEX prevents the insert
       // anyway, but checking up-front lets the UI hide the form.
       const existing = await sql`
         SELECT id FROM reviews
@@ -144,7 +144,7 @@ export default async function handler(req, res) {
       };
     }
 
-    // Photo gallery — every distinct photo_url across the workspace's
+    // Photo gallery - every distinct photo_url across the workspace's
     // PUBLIC services, ordered by display_order. The svcRows query
     // already filters visibility='public' so this inherits the cut.
     // Discover surfaces this as a horizontally-scrolling gallery in

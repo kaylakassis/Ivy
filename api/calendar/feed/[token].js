@@ -26,7 +26,7 @@ export default async function handler(req, res) {
   try {
     const ip = getClientIp(req);
     const blocked = await enforce(req, res, [
-      // Calendar apps poll legitimately — generous bucket per IP.
+      // Calendar apps poll legitimately - generous bucket per IP.
       { key: `ical:ip:${ip}`, max: 240, windowSeconds: 60 * 60 },
     ]);
     if (blocked) return;

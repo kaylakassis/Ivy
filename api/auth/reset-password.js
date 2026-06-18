@@ -29,7 +29,7 @@ export default async function handler(req, res) {
 
     const password_hash = await hashPassword(password);
     // Stamp password_changed_at so requireUser invalidates every JWT
-    // issued before this moment — defends against an attacker who
+    // issued before this moment - defends against an attacker who
     // already stole a session cookie (the password reset itself was
     // a proof-of-email-control, not a proof of session uniqueness).
     // Brief 1-second offset to NOW() so the freshly-signed cookie
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     await consumeToken(valid.tokenId);
     await invalidateUserTokens({ userId: valid.userId, kind: KIND_RESET });
 
-    // Sign them in immediately — they just proved control of the email.
+    // Sign them in immediately - they just proved control of the email.
     setSessionCookie(res, signSession(valid.userId));
     const { rows } = await sql`SELECT id, email, name, created_at FROM users WHERE id = ${valid.userId}`;
     recordAudit(req, { actor: rows[0], action: 'auth.password_reset', meta: {} });

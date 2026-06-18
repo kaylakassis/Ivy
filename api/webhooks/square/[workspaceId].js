@@ -5,7 +5,7 @@
 // Dashboard → Webhooks (separate signature key per subscription).
 //
 // Body parsing disabled because the HMAC is computed over the exact
-// raw bytes — re-encoding breaks verification.
+// raw bytes - re-encoding breaks verification.
 import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js';
@@ -29,13 +29,13 @@ export default async function handler(req, res) {
     const rawBody = await readRawBody(req);
     // Square computes the HMAC over (notification_url + body), where
     // notification_url is the EXACT URL registered in its dashboard. That
-    // URL is stable, so we must derive it from the canonical APP_URL —
+    // URL is stable, so we must derive it from the canonical APP_URL -
     // never from VERCEL_URL (changes every deploy → guaranteed signature
     // mismatch → every Square payment webhook silently rejected).
     const canonicalHost = process.env.APP_URL?.replace(/\/$/, '');
     if (!canonicalHost) {
       // eslint-disable-next-line no-console
-      console.error('[square webhook] APP_URL is not set — Square HMAC will not match the registered notification URL. Set APP_URL to your canonical host.');
+      console.error('[square webhook] APP_URL is not set - Square HMAC will not match the registered notification URL. Set APP_URL to your canonical host.');
     }
     const notificationUrl = `${canonicalHost || appUrl()}/api/webhooks/square/${workspaceId}`;
     let event;
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
 //
 // Idempotency: dedupe by Square payment_id stashed in
 // stripe_payment_intent (the column doubles as a generic provider
-// payment-id field — see api/invoices/refund.js which keys off it).
+// payment-id field - see api/invoices/refund.js which keys off it).
 // Without this, a Square webhook retransmission would re-fire activity
 // log entries + nag the owner with duplicate "paid" notifications.
 async function applyPaymentToInvoice({ workspaceId, parsed }) {
@@ -100,7 +100,7 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
   `;
   const inv = invRows[0];
   if (!inv) {
-    console.warn('[webhooks/square] no invoice matches order', orderId, '— ignoring');
+    console.warn('[webhooks/square] no invoice matches order', orderId, '- ignoring');
     return;
   }
   const invoiceId = inv.id;
@@ -108,7 +108,7 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
   // Already-paid + same payment id → silent no-op (webhook retry).
   if (inv.status === 'paid' && inv.stripe_payment_intent === parsed.paymentId) return;
   if (inv.status === 'paid') {
-    console.warn('[webhooks/square] invoice', invoiceId, 'already paid by a different payment id — ignoring');
+    console.warn('[webhooks/square] invoice', invoiceId, 'already paid by a different payment id - ignoring');
     return;
   }
 
@@ -116,7 +116,7 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
   // Don't let a partial/under-capture (or currency mismatch) flip the
   // invoice to fully paid. Only settle when the captured amount covers the
   // invoice total (1¢ tolerance). Square checkout amount is the invoice
-  // total — no Stripe-Tax add-on to expect here.
+  // total - no Stripe-Tax add-on to expect here.
   const expectedTotal = computeTotals(inv.items, inv.tax_rate, inv.discount).total;
   if (paidAmountDollars < expectedTotal - 0.01) {
     const partialActivity = [
@@ -158,12 +158,12 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
     WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
     RETURNING id, number, client_name
   `;
-  // Race guard: a concurrent retry can land here too — if our UPDATE
+  // Race guard: a concurrent retry can land here too - if our UPDATE
   // didn't flip the row, somebody else's already did. Don't double-fire
   // the owner push or the client receipt email.
   if (upd.rows.length === 0) return;
 
-  // Owner push + client receipt — parity with the Stripe path at
+  // Owner push + client receipt - parity with the Stripe path at
   // /api/webhooks/stripe/[workspaceId].js:482-502. Without these,
   // workspaces taking payment through Square saw "paid" land in their
   // dashboard but got no notification and the customer got no receipt.
@@ -195,12 +195,12 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
 //
 // Dedupes by event refund_id stored in the activity log (we already
 // stamp it from the invoices/refund.js path), AND by paid_amount
-// reconciliation — if cumulative refunds match what's already recorded,
+// reconciliation - if cumulative refunds match what's already recorded,
 // skip the write.
 async function applyRefundToInvoice({ workspaceId, parsed }) {
   // Find the invoice via the payment we stored when the original
   // checkout completed. stripe_payment_intent doubles as the generic
-  // provider payment-id field — Square pays us by payment_id, refunds
+  // provider payment-id field - Square pays us by payment_id, refunds
   // reference that same payment_id, so we match on it.
   if (!parsed.paymentId) return;
   const { rows: invRows } = await sql`
@@ -210,7 +210,7 @@ async function applyRefundToInvoice({ workspaceId, parsed }) {
   `;
   const inv = invRows[0];
   if (!inv) {
-    console.warn('[webhooks/square] no invoice matches payment', parsed.paymentId, '— ignoring refund');
+    console.warn('[webhooks/square] no invoice matches payment', parsed.paymentId, '- ignoring refund');
     return;
   }
   const refundAmount = Math.round(Number(parsed.amountCents || 0)) / 100;

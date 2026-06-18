@@ -1,4 +1,4 @@
-// Ivy OS service worker — offline app shell + push notifications.
+// Ivy OS service worker - offline app shell + push notifications.
 //
 // Two responsibilities:
 //   1. Offline: precache the app shell on install and serve cached
@@ -9,14 +9,14 @@
 //   2. Push: show notifications and focus/route the app on click.
 //
 // Registered on every load from src/lib/pwa.js, and re-used by the push
-// subscription flow in src/lib/push.js — same /sw.js, same scope.
+// subscription flow in src/lib/push.js - same /sw.js, same scope.
 
 const VERSION = 'v2';
 const SHELL_CACHE = `ivy-shell-${VERSION}`;
 const RUNTIME_CACHE = `ivy-runtime-${VERSION}`;
 const OFFLINE_URL = '/offline.html';
 
-// Static files that always exist — precached so the PWA boots offline.
+// Static files that always exist - precached so the PWA boots offline.
 const SHELL_ASSETS = [OFFLINE_URL, '/manifest.webmanifest', '/icon.svg', '/icon-maskable.svg'];
 
 self.addEventListener('install', (event) => {
@@ -58,7 +58,7 @@ self.addEventListener('fetch', (event) => {
   const url = new URL(request.url);
   const sameOrigin = url.origin === self.location.origin;
 
-  // Never cache API / dynamic data — always go to the network.
+  // Never cache API / dynamic data - always go to the network.
   if (sameOrigin && url.pathname.startsWith('/api/')) return;
 
   // App navigations: network-first, falling back to the cached shell and

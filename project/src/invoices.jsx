@@ -1,4 +1,4 @@
-// INVOICES, TEMPLATES, RECURRING — mounted inside FinanceView tabs.
+// INVOICES, TEMPLATES, RECURRING - mounted inside FinanceView tabs.
 // Relies on window.Finance helpers from finance.jsx.
 
 const { useFinanceStore, money, moneyShort, invoiceSubtotal, invoiceTotal,
@@ -115,7 +115,7 @@ function InvoicesList() {
             <div>
               <div style={{ fontSize: 13.5, fontWeight: 600 }}>{inv.clientName}</div>
               <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis', maxWidth: 300 }}>
-                {(inv.items||[])[0]?.desc || '—'}
+                {(inv.items||[])[0]?.desc || '-'}
               </div>
             </div>
             <div><InvoiceStatusChip status={inv.status}/></div>
@@ -276,7 +276,7 @@ function InvoiceCreator({ onClose, store, update, editing, isRecurring, onSaveRe
                 <select value={client} onChange={e => setClient(e.target.value)} style={selectStyle}>
                   <option value="">Choose a client…</option>
                   {clients.filter(c => c.registered).map(c => (
-                    <option key={c.id} value={c.id}>{c.name} — {c.email}</option>
+                    <option key={c.id} value={c.id}>{c.name} - {c.email}</option>
                   ))}
                 </select>
               </Field>
@@ -494,7 +494,7 @@ function InvoiceRender({ invoice, template, preview }) {
           <tbody>
             {(invoice.items||[]).map(it => (
               <tr key={it.id} style={{ borderBottom: `1px solid color-mix(in srgb, ${template.primary} 10%, transparent)` }}>
-                <td style={{ padding: '14px 0' }}>{it.desc || <span style={{ color: template.muted, fontStyle: 'italic' }}>—</span>}</td>
+                <td style={{ padding: '14px 0' }}>{it.desc || <span style={{ color: template.muted, fontStyle: 'italic' }}>-</span>}</td>
                 <td style={{ padding: '14px 12px', textAlign: 'right', fontFeatureSettings: '"tnum"' }}>{it.qty}</td>
                 <td style={{ padding: '14px 12px', textAlign: 'right', fontFeatureSettings: '"tnum"' }}>{money(it.rate)}</td>
                 <td style={{ padding: '14px 0', textAlign: 'right', fontFeatureSettings: '"tnum"', fontWeight: 600 }}>{money((it.qty||0) * (it.rate||0))}</td>
@@ -869,7 +869,7 @@ function TemplateEditor({ template, onSave, onDelete, onClose }) {
             { id: 'p2', desc: 'Intake assessment',           qty: 1, rate: 80 },
           ],
           taxRate: 0, discount: 0,
-          notes: "Thanks for the commitment — let's do great work together.",
+          notes: "Thanks for the commitment - let's do great work together.",
         }}/>
       </div>
     </div>

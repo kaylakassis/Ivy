@@ -1,6 +1,6 @@
 // Tests for Batch-3 audit fixes (automation correctness).
 //   #14 smart tasks auto-complete when their triggering activity happens.
-//   #6  completion-gated predicate — only ACTUALLY-completed booking
+//   #6  completion-gated predicate - only ACTUALLY-completed booking
 //       occurrences satisfy jsonb_exists(completion_log, date::text), so
 //       workflows + review requests no longer fire for no-shows.
 //

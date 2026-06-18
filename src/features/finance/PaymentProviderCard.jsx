@@ -1,6 +1,6 @@
 // Multi-processor payment settings card. Replaces the Stripe-only
 // connect card with a row of three providers (Stripe / Square /
-// PayPal) — each with its own Connect button + status. Owners pick
+// PayPal) - each with its own Connect button + status. Owners pick
 // which one is the active processor; only the active one mints the
 // public-pay link on invoices + booking deposits.
 //
@@ -11,7 +11,7 @@
 //     which persists the merchant id + (for Square) tokens.
 //   • This card refetches and shows "Connected" with a Disconnect.
 //
-// "Make active" is the second action — refuses to flip until the
+// "Make active" is the second action - refuses to flip until the
 // target provider is connected. Server enforces the same rule.
 import React, { useEffect, useState, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
@@ -49,8 +49,8 @@ export default function PaymentProviderCard() {
       else {
         const reason = params.get('msg') || params.get('detail') || '';
         setErr(reason
-          ? `Connect failed — ${reason}`
-          : 'Connect failed — try again.');
+          ? `Connect failed - ${reason}`
+          : 'Connect failed - try again.');
       }
       // strip the params so a refresh doesn't re-show the banner
       const u = new URL(window.location.href);
@@ -61,14 +61,14 @@ export default function PaymentProviderCard() {
 
   // While the first fetch is in flight, show a spinner. Once `err` is
   // set, fall through to the main render so the error banner is
-  // visible — earlier versions of this file bailed on `!data` BEFORE
+  // visible - earlier versions of this file bailed on `!data` BEFORE
   // the error display, leaving the card stuck on "Loading…" forever
   // when /api/finance/payment-providers errored.
   if (!data && !err) {
     return <div className="card" style={{ padding: 20, fontSize: 13, color: 'var(--muted)' }}>Loading payment providers…</div>;
   }
 
-  // Error before we ever got data — render a recoverable error card
+  // Error before we ever got data - render a recoverable error card
   // instead of falling through to the (data-less) provider rows.
   if (!data && err) {
     return (
@@ -82,7 +82,7 @@ export default function PaymentProviderCard() {
           background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
           color: 'var(--danger)', fontSize: 12.5, marginBottom: 10,
         }}>
-          Could not load payment settings — {err}
+          Could not load payment settings - {err}
         </div>
         <button className="btn btn-outline" onClick={() => { setErr(null); refresh(); }}
           style={{ fontSize: 12, padding: '6px 12px' }}>
@@ -175,7 +175,7 @@ export default function PaymentProviderCard() {
         }}>
           <strong style={{ color: 'var(--fg-2)' }}>Provider parity:</strong> all three providers accept
           payments + refunds (including refunds you issue directly from
-          the Square/PayPal dashboard — Ivy OS picks them up via webhook).
+          the Square/PayPal dashboard - Ivy OS picks them up via webhook).
           Saved-card auto-charges (no-show / late-cancel fees) and
           recurring invoice subscriptions still only run through Stripe.
         </div>

@@ -1,17 +1,17 @@
-// PayPal Commerce Platform adapter — owners onboard via PayPal Partner
+// PayPal Commerce Platform adapter - owners onboard via PayPal Partner
 // Referrals; we mint hosted PayPal checkout URLs for owner→client
 // charges. PayPal's hosted checkout offers Venmo as a button alongside
 // PayPal balance + cards in supported regions.
 //
 // Required platform env vars (set in Vercel):
-//   PAYPAL_CLIENT_ID       — your platform's PayPal app client ID
-//   PAYPAL_CLIENT_SECRET   — your platform's PayPal app secret
-//   PAYPAL_PARTNER_ID      — your BN_CODE / partner ID (issued by PayPal)
-//   PAYPAL_ENVIRONMENT     — 'sandbox' | 'live' (defaults to sandbox)
-//   PAYPAL_WEBHOOK_ID      — for signature verification
+//   PAYPAL_CLIENT_ID       - your platform's PayPal app client ID
+//   PAYPAL_CLIENT_SECRET   - your platform's PayPal app secret
+//   PAYPAL_PARTNER_ID      - your BN_CODE / partner ID (issued by PayPal)
+//   PAYPAL_ENVIRONMENT     - 'sandbox' | 'live' (defaults to sandbox)
+//   PAYPAL_WEBHOOK_ID      - for signature verification
 //
 // Per-workspace: we do NOT store an OAuth token. PayPal Commerce uses
-// the auth-assertion pattern — the platform mints short-lived bearer
+// the auth-assertion pattern - the platform mints short-lived bearer
 // tokens with its own client_id+secret and includes a base64-encoded
 // header asserting the merchant's id. So per-workspace storage is just
 // the merchant_id and a connection timestamp.
@@ -61,7 +61,7 @@ async function platformAccessToken() {
 }
 
 // PayPal-Auth-Assertion is a JWT-shaped header that lets the platform
-// act on behalf of a connected merchant. Algorithm is "none" — PayPal
+// act on behalf of a connected merchant. Algorithm is "none" - PayPal
 // trusts that the request is authenticated via the platform's bearer
 // token and uses the assertion only to scope the action.
 function authAssertion({ merchantId }) {
@@ -181,7 +181,7 @@ export async function createCheckoutSession({
     }],
     application_context: {
       // CRITICAL: with the redirect (no-SDK) flow, approval only AUTHORIZES
-      // the order — money doesn't move until we POST .../capture. So we
+      // the order - money doesn't move until we POST .../capture. So we
       // return through our own capture endpoint, which captures and then
       // forwards to the real success page (`next`). Without this the buyer
       // "pays" but nothing is charged and the invoice never marks paid.
@@ -218,7 +218,7 @@ export async function createCheckoutSession({
   };
 }
 
-// Capture an approved PayPal order — this is what actually MOVES THE
+// Capture an approved PayPal order - this is what actually MOVES THE
 // MONEY in the redirect flow. Called from /api/finance/paypal-return when
 // the buyer comes back from PayPal's approval page. Idempotent: a repeat
 // capture of an already-captured order is treated as success (so a buyer
@@ -357,7 +357,7 @@ export async function verifyWebhook({ rawBody, headers }) {
 //   PAYMENT.CAPTURE.REVERSED   → 'refund.updated'    (status='succeeded')
 //                                  PayPal reversals are functionally a
 //                                  forced refund (typically due to a
-//                                  dispute) — we treat them as refunds
+//                                  dispute) - we treat them as refunds
 //                                  in Ivy OS's bookkeeping so the
 //                                  invoice flips out of 'paid'.
 //
@@ -379,7 +379,7 @@ export function parseWebhookEvent(event) {
       status:      'paid',
       amountCents: amount,
       currency:    (r.amount?.currency_code || 'USD').toUpperCase(),
-      // Who the funds were paid TO — used by the webhook handler to pin
+      // Who the funds were paid TO - used by the webhook handler to pin
       // the event to the workspace's connected merchant so a (validly-
       // signed) event for a different merchant can't be applied to this
       // workspace's URL.
@@ -393,7 +393,7 @@ export function parseWebhookEvent(event) {
     const r = event.resource || {};
     // For REFUNDED events resource.id is the refund id; the original
     // capture lives in supplementary_data.related_ids.capture_id. For
-    // REVERSED the resource.id is the captureId itself — but PayPal's
+    // REVERSED the resource.id is the captureId itself - but PayPal's
     // own event id is unique per delivery and stable across
     // retransmits, so we use `event.id` as the dedupe key when there's
     // no native refund id (e.g. reversals). Without this, a webhook

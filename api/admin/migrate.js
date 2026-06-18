@@ -1,6 +1,6 @@
-// POST /api/admin/migrate — applies the schema embedded in api/_lib/schema.js.
+// POST /api/admin/migrate - applies the schema embedded in api/_lib/schema.js.
 // Protected: requires either x-admin-secret header OR an authenticated
-// super-admin session (SUPER_ADMIN_EMAIL match). Re-runs are safe — every
+// super-admin session (SUPER_ADMIN_EMAIL match). Re-runs are safe - every
 // statement uses IF NOT EXISTS or idempotent UPDATE/INSERT patterns.
 //
 // Curl:
@@ -9,7 +9,7 @@
 // In-app: a button in /admin runs this with the user's session.
 //
 // Surfaces the actual SQL error + the failing statement back to the
-// admin caller — this endpoint is super-admin-only, so leaking
+// admin caller - this endpoint is super-admin-only, so leaking
 // internals is fine and makes debugging schema drift tractable.
 
 import { sql } from '../_lib/db.js';
@@ -25,7 +25,7 @@ async function loadAlreadyApplied() {
     const { rows } = await sql`SELECT statement_hash FROM schema_migrations WHERE applied = TRUE`;
     return new Set(rows.map((r) => r.statement_hash));
   } catch {
-    // schema_migrations doesn't exist yet on a brand-new DB — caller
+    // schema_migrations doesn't exist yet on a brand-new DB - caller
     // proceeds with all statements (the first pass will create the
     // table itself).
     return new Set();
@@ -47,7 +47,7 @@ async function recordStatement({ hash, statement, applied, errorMessage }) {
         apply_count     = schema_migrations.apply_count + 1
     `;
   } catch {
-    // Bootstrap window — schema_migrations not yet created. Silent
+    // Bootstrap window - schema_migrations not yet created. Silent
     // skip; the table will exist after the first successful pass and
     // subsequent runs will record everything.
   }
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
     // eslint-disable-next-line no-console
     console.error(`[migrate] pass ${pass}: applied ${pending.length - failures.length}/${pending.length}; ${failures.length} pending`);
     if (failures.length === pending.length) {
-      // No progress this pass — record the stuck failures so admin
+      // No progress this pass - record the stuck failures so admin
       // can see WHY they're stuck, then break.
       for (const f of failures) {
         // eslint-disable-next-line no-await-in-loop

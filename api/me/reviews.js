@@ -1,4 +1,4 @@
-// POST /api/me/reviews — body { bookingId, rating, text? }
+// POST /api/me/reviews - body { bookingId, rating, text? }
 // Client leaves a review of a business, tied to a specific past booking
 // they were the recipient of. UNIQUE (booking_id) at the DB layer
 // prevents resubmission; ownership verified through myClientIds().
@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       `;
       return created(res, { review: serializeReview(r.rows[0], { includeBookingId: true }) });
     } catch (err) {
-      // Hit the UNIQUE (booking_id) constraint — reviewed already.
+      // Hit the UNIQUE (booking_id) constraint - reviewed already.
       if (String(err.code) === '23505' || /duplicate key/i.test(err.message || '')) {
         return badRequest(res, 'You already reviewed this booking');
       }

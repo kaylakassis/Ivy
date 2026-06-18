@@ -5,7 +5,7 @@ import Drawer, { TimeInput } from './Drawer.jsx';
 import { WEEKDAYS_LONG, minToHM } from './utils.js';
 
 const NOTICE_OPTIONS = [
-  { v: 0,   label: 'No minimum — same-day OK' },
+  { v: 0,   label: 'No minimum - same-day OK' },
   { v: 1,   label: '1 hour' },
   { v: 2,   label: '2 hours' },
   { v: 4,   label: '4 hours' },
@@ -26,7 +26,7 @@ const START_OPTIONS = [
   { v: '15',      label: 'Every 15 minutes' },
   { v: '10',      label: 'Every 10 minutes' },
   { v: '5',       label: 'Every 5 minutes' },
-  { v: 'service', label: 'Back-to-back — fit each service’s length' },
+  { v: 'service', label: 'Back-to-back - fit each service’s length' },
 ];
 
 // How far ahead clients can book (booking horizon). 0 = no limit.
@@ -43,7 +43,7 @@ const ADVANCE_OPTIONS = [
 
 // Minimum gap forced between appointments (e.g. clean-up / reset time).
 const BUFFER_OPTIONS = [
-  { v: 0,  label: 'No buffer — back-to-back OK' },
+  { v: 0,  label: 'No buffer - back-to-back OK' },
   { v: 5,  label: '5 minutes' },
   { v: 10, label: '10 minutes' },
   { v: 15, label: '15 minutes' },

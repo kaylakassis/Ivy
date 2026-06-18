@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     const encryptedSecret  = encrypt(secretKey);
     const encryptedWebhook = webhookSecret ? encrypt(webhookSecret) : null;
 
-    // Upsert finance_settings — the row may not exist yet for new workspaces.
+    // Upsert finance_settings - the row may not exist yet for new workspaces.
     await sql`
       INSERT INTO finance_settings (
         workspace_id, stripe_publishable_key, stripe_secret_encrypted,

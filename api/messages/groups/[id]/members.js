@@ -1,7 +1,7 @@
 // POST /api/messages/groups/:id/members
 //   body: { clientIds: [...] }
 // Adds clients to the group. Each id must belong to this workspace.
-// Idempotent on (thread, client) — already-present clients are no-ops;
+// Idempotent on (thread, client) - already-present clients are no-ops;
 // previously-left clients get re-activated (left_at NULL'd).
 import { sql } from '../../../_lib/db.js';
 import { requireUser } from '../../../_lib/auth.js';

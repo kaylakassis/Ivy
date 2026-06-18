@@ -1,4 +1,4 @@
-// /onboarding — the universal save-and-resume setup wizard.
+// /onboarding - the universal save-and-resume setup wizard.
 //
 // Ten steps. Each is independent and auto-saves through its real API
 // (PATCH /calendar for business basics, PUT /calendar/services, etc.)
@@ -38,7 +38,7 @@ import { TRIAL_DAYS, IVY_PRICE } from '../../lib/pricing.js';
 // step (irrelevant to pure-service); 'product' removes services +
 // availability (they don't take appointments) and inserts a
 // lightweight first_product step in their place.
-// UI sentinel for "Other" on a preset question — kept in the same state
+// UI sentinel for "Other" on a preset question - kept in the same state
 // slot as a preset id. The server's allowlist maps it to null and keeps
 // the free-text answer, so no special handling is needed at save time.
 const OTHER = '__other__';
@@ -69,7 +69,7 @@ function stepsFor(businessType) {
   return base;
 }
 
-// Legacy export — defaults to the full set so any unrelated import
+// Legacy export - defaults to the full set so any unrelated import
 // (none today, but defense-in-depth) keeps working.
 const STEPS = stepsFor('both');
 
@@ -107,7 +107,7 @@ export default function OnboardingPage() {
   const nav = useNavigate();
   const location = useLocation();
 
-  // Navigational state — synced to /api/onboarding/state. completedSteps
+  // Navigational state - synced to /api/onboarding/state. completedSteps
   // grows as the owner advances; skippedSteps tracks explicit "do this
   // later" actions; currentStep is the step the resume-on-signin path
   // jumps to.
@@ -120,7 +120,7 @@ export default function OnboardingPage() {
   const [productDraft, setProductDraft]     = useState({ name: '', price: '', description: '' });
   const [productCreated, setProductCreated] = useState(false);
 
-  // Form state — pre-filled from existing settings on mount so re-
+  // Form state - pre-filled from existing settings on mount so re-
   // entering doesn't blow away earlier work.
   const [bizName, setBizName]   = useState('');
   const [slug, setSlug]         = useState('');
@@ -135,7 +135,7 @@ export default function OnboardingPage() {
   const [clientDraft, setClientDraft] = useState({ name: '', email: '', phone: '' });
   const [clientsCount, setClientsCount] = useState(0);
   const [websiteStatus, setWebsiteStatus] = useState(null);
-  // "About you" answers — preset ids + free text. Persisted to
+  // "About you" answers - preset ids + free text. Persisted to
   // workspace_profile; feeds Ivy personalization + admin aggregates.
   const [about, setAbout] = useState({
     goal: null, goalOther: '', challenge: null, challengeOther: '',
@@ -208,7 +208,7 @@ export default function OnboardingPage() {
 
   // Backstop debounced save for incidental state changes. The PRIMARY
   // persistence path is the explicit flush inside goNext / skipStep
-  // below — that's the path a click on "Let's go" goes through. This
+  // below - that's the path a click on "Let's go" goes through. This
   // effect catches anything else (e.g. a step change that bypassed
   // those helpers). We log errors so they're not invisible: silent
   // failure here was the original "Let's go" bug.
@@ -227,7 +227,7 @@ export default function OnboardingPage() {
     return () => { if (saveStateTimer.current) clearTimeout(saveStateTimer.current); };
   }, [currentStep, completedSteps, skippedSteps, stateLoaded]);
 
-  // Derived step set — depends on business_type chosen at Welcome.
+  // Derived step set - depends on business_type chosen at Welcome.
   // useMemo so identity is stable across renders even though the
   // array is computed on the fly.
   const steps = useMemo(() => stepsFor(businessType), [businessType]);
@@ -235,11 +235,11 @@ export default function OnboardingPage() {
   const stepSpec = steps[stepIdx] || steps[0];
 
   // Advance the wizard. We try to persist the navigational state to
-  // the server, but we DO NOT block progress on it — the nav state is
+  // the server, but we DO NOT block progress on it - the nav state is
   // metadata for the dashboard checklist; the user being able to move
   // forward is essential. If the PATCH consistently fails (broken
   // schema, etc.) the user still advances and we surface a soft
-  // warning so they know to reach out — but they're never trapped.
+  // warning so they know to reach out - but they're never trapped.
   const flushAndAdvance = async ({ markCompleted, markSkipped }) => {
     const nextCompleted = markCompleted
       ? Array.from(new Set([...completedSteps, currentStep]))
@@ -294,18 +294,18 @@ export default function OnboardingPage() {
     if (prev) setCurrentStep(prev.id);
   };
 
-  // "Save & exit" — get them OUT of the wizard, no matter what.
+  // "Save & exit" - get them OUT of the wizard, no matter what.
   //
   // Old behavior PATCHed /onboarding/state and then nav'd to /dashboard,
   // but if the user wasn't actually marked onboarded the RoleRouter
-  // would bounce them right back to /onboarding — making the button
+  // would bounce them right back to /onboarding - making the button
   // appear broken. And if /onboarding/state itself was 500ing (the
   // exact bug a stuck owner is hitting), the nav still fired but they
   // landed back here.
   //
   // New behavior:
-  //   1. Try /onboarding/state — best-effort progress save.
-  //   2. Try /onboarding/complete — marks workspaces.onboarded_at so
+  //   1. Try /onboarding/state - best-effort progress save.
+  //   2. Try /onboarding/complete - marks workspaces.onboarded_at so
   //      the dashboard gate lets them through. This endpoint has zero
   //      dependency on onboarding_state, so it works even when the
   //      other endpoint is broken.
@@ -315,7 +315,7 @@ export default function OnboardingPage() {
   const saveAndExit = async () => {
     setBusy(true);
     setErr(null);
-    // Best-effort progress save — non-blocking.
+    // Best-effort progress save - non-blocking.
     api.patch('/onboarding/state', {
       currentStep, completedSteps, skippedSteps,
     }).catch((e) => {
@@ -323,7 +323,7 @@ export default function OnboardingPage() {
       console.error('[onboarding] save-state on exit failed (non-blocking):', e);
     });
     // Mark workspace onboarded so the dashboard gate doesn't bounce.
-    // We tolerate failures here too — the localStorage flag below is
+    // We tolerate failures here too - the localStorage flag below is
     // a final fallback.
     try {
       await api.post('/onboarding/complete');
@@ -342,9 +342,9 @@ export default function OnboardingPage() {
     nav('/dashboard?onboarding=resume', { replace: true });
   };
 
-  // "Finish" — marks workspaces.onboarded_at + bounces. Final step CTA.
+  // "Finish" - marks workspaces.onboarded_at + bounces. Final step CTA.
   // Save the navigational state best-effort (it's just metadata for
-  // the dashboard checklist) but DO NOT block on it — the only thing
+  // the dashboard checklist) but DO NOT block on it - the only thing
   // that actually matters is /onboarding/complete flipping onboarded_at.
   const finish = async () => {
     setBusy(true); setErr(null);
@@ -368,7 +368,7 @@ export default function OnboardingPage() {
 
   // ─── Per-step save helpers ──────────────────────────────────────────
   // Each writes to its real API + advances the wizard. Saving is
-  // idempotent — re-clicking Continue doesn't duplicate work.
+  // idempotent - re-clicking Continue doesn't duplicate work.
 
   const saveBusiness = async () => {
     setBusy(true); setErr(null);
@@ -388,7 +388,7 @@ export default function OnboardingPage() {
   };
 
   // "About you" step. All questions are optional (we never want this to
-  // block finishing setup) — whatever's answered is persisted to the
+  // block finishing setup) - whatever's answered is persisted to the
   // workspace_profile and then we advance.
   const saveAbout = async () => {
     setBusy(true); setErr(null);
@@ -414,7 +414,7 @@ export default function OnboardingPage() {
     finally { setBusy(false); }
   };
 
-  // First-product step (product / both flows). Idempotent — if the
+  // First-product step (product / both flows). Idempotent - if the
   // owner already created the product (productCreated=true), skip the
   // POST so re-clicking Next doesn't add a duplicate row. Allows
   // skipping when the form is empty (matches the Services step's
@@ -603,7 +603,7 @@ function WelcomeStep({ user, businessType, setBusinessType }) {
         Welcome, {name}.
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 520, margin: '0 auto 22px' }}>
-        Let's set up Ivy OS for your business. First — what do you sell?
+        Let's set up Ivy OS for your business. First - what do you sell?
         We'll tailor the next steps based on your answer.
       </p>
 
@@ -631,7 +631,7 @@ function WelcomeStep({ user, businessType, setBusinessType }) {
         })}
       </div>
       <p style={{ color: 'var(--muted)', fontSize: 12.5, marginTop: 18, maxWidth: 460, margin: '18px auto 0' }}>
-        Don't worry — you can change this later in your account settings.
+        Don't worry - you can change this later in your account settings.
         <strong> Auto-saves at every step.</strong>
       </p>
     </div>
@@ -681,7 +681,7 @@ function BusinessStep({ bizName, setBizName, slug, setSlug, setSlugTouched, tagl
   return (
     <>
       <StepHeader title="What's your business?"
-        subtitle="The basics — clients see this on your booking page and in any reviews."/>
+        subtitle="The basics - clients see this on your booking page and in any reviews."/>
       <Field label="Business name" required>
         <input className="input" value={bizName} onChange={(e) => setBizName(e.target.value)}
           placeholder="e.g. Maya's Massage Studio" autoFocus
@@ -765,7 +765,7 @@ function ServicesStep({ services, setServices, draft, setDraft, category }) {
           alignItems: 'center', gap: 12,
         }}>
           <div style={{ flex: 1, fontSize: 12.5, color: 'var(--muted)' }}>
-            We've got a starter pack for {category} — load it as a starting point?
+            We've got a starter pack for {category} - load it as a starting point?
           </div>
           <button onClick={applyPack} className="btn btn-outline" style={{ fontSize: 12, padding: '5px 11px' }}>
             Load starter pack
@@ -851,7 +851,7 @@ function AvailabilityStep({ availability, setAvailability }) {
       let { start, end } = cur;
       if (field === 'start') start = val;
       if (field === 'end') end = val;
-      // Auto-fix invalid ranges so a bad pick can't get persisted —
+      // Auto-fix invalid ranges so a bad pick can't get persisted -
       // if the user picks a start after the end, push end forward an hour;
       // if end before start, pull start back.
       if (start >= end) {
@@ -862,7 +862,7 @@ function AvailabilityStep({ availability, setAvailability }) {
     });
   };
 
-  // Quick-set presets — one tap to fill weekdays / every day / weekends.
+  // Quick-set presets - one tap to fill weekdays / every day / weekends.
   const applyPreset = (kind) => {
     const win = { start: 540, end: 1020 }; // 9–5
     if (kind === 'weekdays') {
@@ -1053,14 +1053,14 @@ function PaymentsStep({ stripeStatus }) {
         ) : (
           <>
             <div style={{ fontSize: 14 }}>
-              Stripe handles the cards. Connect once — funds settle to your own bank account.
+              Stripe handles the cards. Connect once - funds settle to your own bank account.
             </div>
             <a href="/api/finance/stripe-oauth-init?from=onboarding" className="btn btn-primary"
               style={{ alignSelf: 'flex-start' }}>
               <Icons.Spark size={13} sw={1.8}/> Connect Stripe
             </a>
             <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-              Takes ~3 minutes. We never see your bank info — it goes direct to Stripe.
+              Takes ~3 minutes. We never see your bank info - it goes direct to Stripe.
             </div>
           </>
         )}
@@ -1073,7 +1073,7 @@ function BrandingStep({ branding, setBranding }) {
   return (
     <>
       <StepHeader title="Make it yours"
-        subtitle="Logo + an accent color so your booking page, invoices, and emails feel branded. Both optional — defaults look great too."/>
+        subtitle="Logo + an accent color so your booking page, invoices, and emails feel branded. Both optional - defaults look great too."/>
       <Field label="Logo URL (optional)" hint="Paste a public URL or upload via Account → Branding. We'll wire upload here in the next pass.">
         <input className="input" type="url" value={branding.logoUrl}
           onChange={(e) => setBranding({ ...branding, logoUrl: e.target.value })}
@@ -1098,7 +1098,7 @@ function FirstClientStep({ clientDraft, setClientDraft, clientsCount }) {
     <>
       <StepHeader title="Add your first client"
         subtitle={clientsCount > 0
-          ? `You already have ${clientsCount} client${clientsCount === 1 ? '' : 's'}! Add another, or skip — we'll keep going.`
+          ? `You already have ${clientsCount} client${clientsCount === 1 ? '' : 's'}! Add another, or skip - we'll keep going.`
           : "Walking through with a real client makes the rest of the setup click. Add one now or skip to add later in bulk via Clients → Import."}/>
       <Field label="Name" required>
         <input className="input" value={clientDraft.name}
@@ -1127,7 +1127,7 @@ function WebsiteStep({ websiteStatus }) {
   return (
     <>
       <StepHeader title="Build your website (optional)"
-        subtitle="Pick a template, drag-edit your sections, and publish in 10 minutes. Skip if you already have a site — you can embed an Ivy OS booking widget onto it instead."/>
+        subtitle="Pick a template, drag-edit your sections, and publish in 10 minutes. Skip if you already have a site - you can embed an Ivy OS booking widget onto it instead."/>
       <div className="card" style={{
         padding: 18, display: 'flex', flexDirection: 'column', gap: 12,
         background: launched ? 'color-mix(in srgb, var(--ok) 8%, transparent)' : 'var(--surface-2)',
@@ -1141,7 +1141,7 @@ function WebsiteStep({ websiteStatus }) {
         ) : (
           <>
             <div style={{ fontSize: 14 }}>
-              Templates included — Clean, Modern, Lush, Lean.
+              Templates included - Clean, Modern, Lush, Lean.
               Build at <code style={{ background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, fontSize: 12.5 }}>/website</code> any time.
             </div>
             <a href="/website" target="_blank" rel="noreferrer" className="btn btn-primary"
@@ -1149,7 +1149,7 @@ function WebsiteStep({ websiteStatus }) {
               <Icons.Arrow size={13} sw={1.8}/> Open Website builder
             </a>
             <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-              Opens in a new tab so you can keep this onboarding open. Hit "Continue" here once you've published — or "Skip for now" if you already have a site.
+              Opens in a new tab so you can keep this onboarding open. Hit "Continue" here once you've published - or "Skip for now" if you already have a site.
             </div>
           </>
         )}
@@ -1160,13 +1160,13 @@ function WebsiteStep({ websiteStatus }) {
 
 function TourStep() {
   const stops = [
-    { tab: 'Dashboard', icon: 'Home',     desc: 'The home page. Today\'s bookings, revenue this month, unread messages — at a glance.' },
+    { tab: 'Dashboard', icon: 'Home',     desc: 'The home page. Today\'s bookings, revenue this month, unread messages - at a glance.' },
     { tab: 'Clients',   icon: 'Users',    desc: 'Every client + lead. Add, search, tag, drop notes. Click into a profile for their bookings + invoices.' },
     { tab: 'Calendar',  icon: 'Calendar', desc: 'Schedule. Click any slot to add a booking. Share drawer copies your booking link + QR.' },
     { tab: 'Finance',   icon: 'Dollar',   desc: 'Invoices, quotes, expenses, time tracking, memberships, gift cards. Year-end CSV export under "Export ▾".' },
     { tab: 'Messages',  icon: 'Chat',     desc: 'Text + email threads with each client. Voice memos auto-transcribe.' },
     { tab: 'Documents', icon: 'Doc',      desc: 'Contracts + intake forms. Send for e-signature, audit trail included.' },
-    { tab: 'Workflows', icon: 'Spark',    desc: 'Automate follow-ups — birthday emails, win-back nudges, new-lead sequences. Build from /workflows.' },
+    { tab: 'Workflows', icon: 'Spark',    desc: 'Automate follow-ups - birthday emails, win-back nudges, new-lead sequences. Build from /workflows.' },
     { tab: 'Ivy Pro',   icon: 'Spark',    desc: 'Your AI business coach. Ask questions grounded in your real data: "why am I losing clients?"' },
   ];
   return (
@@ -1215,12 +1215,12 @@ function DoneStep({ skippedCount, trialEndsAt }) {
         You're ready.
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 480, margin: '0 auto' }}>
-        Everything's wired up. Here's how your free trial works — then hit
+        Everything's wired up. Here's how your free trial works - then hit
         Finish to land on your dashboard.
         {skippedCount > 0 && (
           <>
             <br/><br/>
-            You skipped {skippedCount} step{skippedCount === 1 ? '' : 's'} — they'll
+            You skipped {skippedCount} step{skippedCount === 1 ? '' : 's'} - they'll
             stay in the "Finish setup" checklist on your dashboard so you can come
             back when you're ready.
           </>
@@ -1232,7 +1232,7 @@ function DoneStep({ skippedCount, trialEndsAt }) {
   );
 }
 
-// Trial-priming timeline shown on the final onboarding step — sets
+// Trial-priming timeline shown on the final onboarding step - sets
 // expectations (and pre-sells the reminder emails) at the moment trust is
 // highest, the way top funnels prime the paywall before it ever appears.
 // Dates are derived from the workspace's real trial_ends_at; if it isn't
@@ -1246,11 +1246,11 @@ function TrialTimeline({ trialEndsAt }) {
 
   const rows = [
     { when: `Today, ${fmt(today)}`, icon: 'Spark',
-      text: 'Full access to everything — clients, calendar, invoices, messaging, your booking site. No card required.' },
+      text: 'Full access to everything - clients, calendar, invoices, messaging, your booking site. No card required.' },
     { when: fmt(remind), icon: 'Bell',
-      text: "We'll email you a friendly heads-up that your trial is ending — no surprises." },
+      text: "We'll email you a friendly heads-up that your trial is ending - no surprises." },
     { when: fmt(ends), icon: 'Clock',
-      text: `Your ${TRIAL_DAYS}-day trial ends. Keep everything running for $${IVY_PRICE}/mo, or cancel anytime — your data's always yours.` },
+      text: `Your ${TRIAL_DAYS}-day trial ends. Keep everything running for $${IVY_PRICE}/mo, or cancel anytime - your data's always yours.` },
   ];
 
   return (
@@ -1341,7 +1341,7 @@ function ProgressRow({ steps, currentStep, completed, skipped, onJump }) {
   );
 }
 
-// "About you" — marketing + intent questions. Every answer is optional;
+// "About you" - marketing + intent questions. Every answer is optional;
 // we never block finishing setup on them. Preset answers roll up into
 // admin aggregates; the free-text + answers feed Ivy's personalization.
 function AboutStep({ about, setAbout }) {
@@ -1350,7 +1350,7 @@ function AboutStep({ about, setAbout }) {
     <>
       <StepHeader
         title="A little about you"
-        subtitle="This tailors your dashboard and lets Ivy — your built-in AI assistant — give advice that actually fits your business. All optional."
+        subtitle="This tailors your dashboard and lets Ivy - your built-in AI assistant - give advice that actually fits your business. All optional."
       />
 
       <ChoiceField
@@ -1384,7 +1384,7 @@ function AboutStep({ about, setAbout }) {
 
       <Field
         label="Who's your ideal client?"
-        hint="Ivy uses this to tailor advice — e.g. “busy professionals who want monthly massages.”">
+        hint="Ivy uses this to tailor advice - e.g. “busy professionals who want monthly massages.”">
         <input className="input" style={inputStyle} value={about.idealClient}
           onChange={(e) => set({ idealClient: e.target.value.slice(0, 500) })}
           placeholder="Describe your dream customer…"/>
@@ -1494,14 +1494,14 @@ function Shell({ tweaks, children }) {
 
 // Banner shown at the top of the wizard when a Stripe Connect attempt
 // bounces back here with a status / error param. Success cases are
-// short-and-positive ("You're connected — keep going"); failures point
+// short-and-positive ("You're connected - keep going"); failures point
 // at the env var or Connect activation flow.
 const STRIPE_BOUNCE_MSGS = {
   connected:  { tone: 'ok',   title: 'Stripe is connected.',         body: 'You\'re ready to take cards. You can keep going with onboarding.' },
   pending:    { tone: 'warn', title: 'Stripe is verifying your account', body: 'You can continue setting up Ivy OS. Charges work as soon as Stripe finishes verification.' },
-  incomplete: { tone: 'warn', title: 'Stripe form not finished',     body: 'You left the Stripe form before submitting. Click Connect Stripe again to resume — your account is saved.' },
-  no_key:     { tone: 'err',  title: 'Stripe isn\'t configured yet', body: 'Your STRIPE_SECRET_KEY env var is missing. Skip this step for now — you can connect Stripe later from Finance.' },
-  bad_key:    { tone: 'err',  title: 'Stripe rejected the API key',  body: 'The STRIPE_SECRET_KEY in Vercel isn\'t a valid Stripe secret key. Skip for now — you can connect later.' },
+  incomplete: { tone: 'warn', title: 'Stripe form not finished',     body: 'You left the Stripe form before submitting. Click Connect Stripe again to resume - your account is saved.' },
+  no_key:     { tone: 'err',  title: 'Stripe isn\'t configured yet', body: 'Your STRIPE_SECRET_KEY env var is missing. Skip this step for now - you can connect Stripe later from Finance.' },
+  bad_key:    { tone: 'err',  title: 'Stripe rejected the API key',  body: 'The STRIPE_SECRET_KEY in Vercel isn\'t a valid Stripe secret key. Skip for now - you can connect later.' },
   connect_not_enabled: { tone: 'err', title: 'Stripe Connect isn\'t enabled', body: 'Visit dashboard.stripe.com/connect/accounts/overview and click "Get started", then come back. Skip for now if you want.' },
   wrong_mode: { tone: 'err',  title: 'Stripe mode mismatch',         body: 'A Stripe account from a different mode is saved. Open Finance after onboarding to disconnect + reconnect.' },
   unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'Ivy OS currently only supports US Stripe accounts. Email hello@getivyos.com to enable your region.' },

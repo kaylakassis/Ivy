@@ -1,7 +1,7 @@
 // POST /api/recurring-invoices/run-now  body: { id }
 // Forces immediate materialization of a single schedule (skipping the
 // "wait until next_run_at" guard). Used by the "Run now" button on the
-// Recurring tab — handy for testing, and for one-off cycles the owner
+// Recurring tab - handy for testing, and for one-off cycles the owner
 // wants to issue early.
 //
 // Lives as a static sibling so Vercel's router doesn't send `/run-now`
@@ -51,9 +51,9 @@ export default async function handler(req, res) {
         AND occurrences_run = ${s.occurrences_run}
       RETURNING *
     `;
-    if (claim.rowCount === 0) return badRequest(res, 'This schedule was just run — refresh to see the new invoice.');
+    if (claim.rowCount === 0) return badRequest(res, 'This schedule was just run - refresh to see the new invoice.');
 
-    // Mint the invoice with TODAY as the issue date — distinct from
+    // Mint the invoice with TODAY as the issue date - distinct from
     // the cron path which uses next_run_at. We don't advance through
     // multiple cycles even if the schedule is overdue.
     const num = await nextInvoiceNumber(workspaceId);

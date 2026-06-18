@@ -1,22 +1,22 @@
 // Nightly retention sweep. Trims rows that are operationally useless
-// past a certain age — keeps hot indexes from getting fat at scale.
+// past a certain age - keeps hot indexes from getting fat at scale.
 //
 // What gets pruned, why:
-//   webhook_event_dedup    > 90 days  — providers don't retry past
+//   webhook_event_dedup    > 90 days  - providers don't retry past
 //                                       3 days (Stripe), 24h (Square),
 //                                       25h (PayPal). 90 = wide buffer.
-//   daily_usage_counters   > 90 days  — historical counts useful for
+//   daily_usage_counters   > 90 days  - historical counts useful for
 //                                       admin dashboard charts (~3
 //                                       months) but not forever.
-//   workflow_runs          > 180 days — keeps recent debugging /
+//   workflow_runs          > 180 days - keeps recent debugging /
 //                                       audit context, prunes the
 //                                       long tail. workflow_steps
 //                                       cascade.
-//   rate_limits            > 7 days   — sliding-window rate-limiter
+//   rate_limits            > 7 days   - sliding-window rate-limiter
 //                                       only ever reads the LAST
 //                                       window's worth of rows.
 //
-// Each table is independent — a failure on one shouldn't abort the
+// Each table is independent - a failure on one shouldn't abort the
 // others. Per-table try/catch with reportError on failure.
 //
 // Caps DELETE batches so the cron stays within the function-time
@@ -64,7 +64,7 @@ async function handler(req, res) {
       `finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '30 days'`);
 
     // Idempotency records expire at 24h + grace. Pruning at 48h is
-    // safe — no real client retries arrive that late.
+    // safe - no real client retries arrive that late.
     results.idempotencyRecords = await prune('idempotency_records',
       `created_at < NOW() - INTERVAL '48 hours'`);
 
@@ -86,7 +86,7 @@ async function handler(req, res) {
 // Delete rows matching `whereClause`, capped at BATCH_LIMIT. The
 // DELETE ... USING (SELECT id FROM t WHERE ... LIMIT N) pattern
 // would be more selective but requires every table to have an `id`
-// PK — webhook_event_dedup uses a composite PK. Plain LIMIT in the
+// PK - webhook_event_dedup uses a composite PK. Plain LIMIT in the
 // DELETE itself is non-standard in Postgres; the safe portable
 // pattern is to delete by primary key matches selected via CTE.
 async function prune(tableName, whereClause) {

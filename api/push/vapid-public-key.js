@@ -1,4 +1,4 @@
-// GET /api/push/vapid-public-key — returns the public VAPID key the
+// GET /api/push/vapid-public-key - returns the public VAPID key the
 // browser needs to call PushManager.subscribe(). Public by design;
 // the private key never leaves the server.
 import { publicVapidKey } from '../_lib/push.js';

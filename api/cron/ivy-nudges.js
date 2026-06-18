@@ -1,11 +1,11 @@
-// /api/cron/ivy-nudges — owner-side "things are getting quiet" pings.
+// /api/cron/ivy-nudges - owner-side "things are getting quiet" pings.
 //
 // Two detectors:
-//   1. AWAITING_REPLY — a 1:1 message_threads row with unread_biz > 0
+//   1. AWAITING_REPLY - a 1:1 message_threads row with unread_biz > 0
 //      whose last_message_at is older than NUDGE_REPLY_HOURS. Owner
-//      forgot to respond — Ivy nudges with a deep-link that prompts
+//      forgot to respond - Ivy nudges with a deep-link that prompts
 //      her to draft something.
-//   2. GONE_QUIET — a client who was active in the last 90 days but
+//   2. GONE_QUIET - a client who was active in the last 90 days but
 //      whose latest activity (booking, message, invoice) is older
 //      than NUDGE_QUIET_DAYS. The "check in with X" prompt.
 //
@@ -70,7 +70,7 @@ async function handler(req, res) {
     for (const r of awaiting.rows) {
       try {
         // The deep-link drops the owner into Ivy with a draft prompt
-        // for this thread — turning the nudge into a one-tap action.
+        // for this thread - turning the nudge into a one-tap action.
         const draftPrompt = `Help me draft a warm reply to ${r.client_name || 'this client'} (open thread). They wrote: "${(r.last_message_preview || '').slice(0, 120)}"`;
         notifyOwnerSafe({
           workspaceId: r.workspace_id, type: 'messages',

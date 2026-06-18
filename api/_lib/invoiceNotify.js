@@ -1,9 +1,9 @@
 // Invoice lifecycle emails (paid, overdue). The "sent" email is wired
 // from /api/invoices/send.js (manual) and /api/cron/recurring-invoices.js
 // (auto). This file adds:
-//   • notifyInvoicePaid    — fires from both the Stripe webhook and the
+//   • notifyInvoicePaid    - fires from both the Stripe webhook and the
 //                            owner's manual "Mark paid" endpoint.
-//   • notifyInvoiceOverdue — fires from a daily cron that catches sent
+//   • notifyInvoiceOverdue - fires from a daily cron that catches sent
 //                            invoices past due_date.
 import { sql } from './db.js';
 import { sendEmailToClient, emailShell } from './email.js';
@@ -40,7 +40,7 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
       heading: 'Payment received',
       branding,
       body: `<p>Hi ${escapeHtml((inv.client_name || '').split(/\s+/)[0] || 'there')},</p>
-        <p>Thanks — we received your payment of <strong>${fmtMoney(amount)}</strong> for invoice
+        <p>Thanks - we received your payment of <strong>${fmtMoney(amount)}</strong> for invoice
         <strong>${escapeHtml(inv.number)}</strong>${method && method !== 'other' ? ` (paid by ${escapeHtml(method)})` : ''}.</p>
         <p>This email is your receipt.</p>`,
       footer: `Need anything? Reply to this email to reach ${escapeHtml(business)}.`,
@@ -79,7 +79,7 @@ export async function notifyInvoiceOverdue({ workspaceId, invoiceId, daysOverdue
       body: `<p>Hi ${escapeHtml((inv.client_name || '').split(/\s+/)[0] || 'there')},</p>
         <p>This is a friendly reminder that invoice <strong>${escapeHtml(inv.number)}</strong>
         for <strong>${fmtMoney(totals.total)}</strong> is${inv.due_date ? ` past due (was due ${escapeHtml(fmtDate(inv.due_date))}, ${daysOverdue} day${daysOverdue === 1 ? '' : 's'} overdue)` : ' overdue'}.</p>
-        <p>If you've already paid, please ignore — it can take a day or two to clear.</p>`,
+        <p>If you've already paid, please ignore - it can take a day or two to clear.</p>`,
       ctaText: 'Open invoice',
       ctaUrl: viewUrl || `${appUrl()}`,
       footer: `Reply to this email if there's anything to flag.`,

@@ -35,7 +35,7 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
     // Idempotent wrap. Owners double-clicking Send or hitting a flaky
     // network used to fire the invoice email twice with different
-    // tokens — only the second worked, but both landed in the
+    // tokens - only the second worked, but both landed in the
     // client's inbox + activity log. Now an Idempotency-Key header
     // (api.js sets one on every mutating POST) collapses retries to
     // the cached response without re-sending.
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     const inv = await fetchOwnedInvoice({ id, workspaceId });
     if (!inv) return { status: 400, body: { error: 'Invoice not found' } };
     if (inv.status === 'paid')   return { status: 400, body: { error: 'Already paid' } };
-    if (inv.status === 'voided') return { status: 400, body: { error: 'Voided — restore first' } };
+    if (inv.status === 'voided') return { status: 400, body: { error: 'Voided - restore first' } };
 
     // Resolve recipient. Allow override clientId in body, otherwise use stored.
     let clientId = body.clientId ? String(body.clientId) : inv.client_id;
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName;
 
-    // Email — best-effort; don't fail the call.
+    // Email - best-effort; don't fail the call.
     try {
       await sendEmailToClient({
         clientId, type: 'invoices',
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
     }
 
     // Client-side push so the email isn't the only signal. Helpful for
-    // clients who've claimed their portal — they get the invoice in
+    // clients who've claimed their portal - they get the invoice in
     // their pocket without inbox-fatigue gambling.
     if (clientId) {
       notifyClientSafe({

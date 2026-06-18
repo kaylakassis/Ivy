@@ -104,7 +104,7 @@ export default function Canvas({ site, sections, selectedId, onSelect, onSection
                 />
               ))
             )}
-            {/* Owner-supplied CSS — wraps the rendered tree so styles
+            {/* Owner-supplied CSS - wraps the rendered tree so styles
                 scope naturally to within the site shell. Empty when no
                 customCss is set. */}
             {site.customCss && <style>{site.customCss}</style>}

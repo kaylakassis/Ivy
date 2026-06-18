@@ -1,4 +1,4 @@
-// AppShell — viewport-aware layout.
+// AppShell - viewport-aware layout.
 //   Desktop (≥ 1024px): full sidebar (248px) + topbar + main
 //   Tablet  (721-1024): icon-only sidebar (64px) + topbar + main
 //   Mobile  (≤ 720px):  hamburger button + slide-in drawer + bottom nav + main
@@ -61,13 +61,13 @@ function AppShellInner() {
   const t = TITLES[current.id] || TITLES.dashboard;
 
   // Paywall only applies to owners. Client-only users land here briefly
-  // when the role router is still resolving — never gate them.
+  // when the role router is still resolving - never gate them.
   //
   // Preview hook: a super-admin can force the wall to render via
   // ?previewPaywall=1 to see the live component on any deploy without
   // expiring a real subscription. Gated to isSuperAdmin so it's not a
   // public bypass of anything (the wall blocks, it never grants access),
-  // and it only forces the wall ON — it can't turn a real wall off.
+  // and it only forces the wall ON - it can't turn a real wall off.
   const { user: authUser } = useAuth();
   const previewPaywall = !!authUser?.isSuperAdmin
     && new URLSearchParams(location.search).get('previewPaywall') === '1';
@@ -198,7 +198,7 @@ function AppShellInner() {
 
       <CommandPalette/>
       <TermsAcceptModal/>
-      {/* Ivy bubble — only render once the user is past the paywall and
+      {/* Ivy bubble - only render once the user is past the paywall and
           (when applicable) the walkthrough overlay isn't covering the
           screen. Otherwise the FAB peeks through the modal scrim. */}
       {!needsPaywall && !showWalkthrough && <IvyDock/>}
@@ -217,7 +217,7 @@ function AppShellInner() {
 // support can pinpoint the issue from a screenshot.
 function RouteCrashInline({ error, resetError }) {
   // Auto-reload on stale-chunk error (deploy mid-session). Same as
-  // FatalFallback in main.jsx and RouteCrash in App.jsx — every error
+  // FatalFallback in main.jsx and RouteCrash in App.jsx - every error
   // boundary path checks this so the user never lands on a snag
   // screen because of a content-hashed asset rotation.
   if (tryStaleChunkRecovery(error)) return null;
@@ -230,7 +230,7 @@ function RouteCrashInline({ error, resetError }) {
           letterSpacing: '-0.02em', marginBottom: 8,
         }}>This tab couldn't load.</div>
         <div style={{ color: 'var(--muted)', fontSize: 13.5, lineHeight: 1.55, marginBottom: 12 }}>
-          The rest of your workspace is still working — pick another tab
+          The rest of your workspace is still working - pick another tab
           from the sidebar, or try this one again.
         </div>
         <div style={{

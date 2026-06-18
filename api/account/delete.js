@@ -1,4 +1,4 @@
-// POST /api/account/delete — irreversibly deletes the authenticated user's
+// POST /api/account/delete - irreversibly deletes the authenticated user's
 // account and every row tied to it.
 //
 // Safety:
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
       console.error('[account/delete] subscription cleanup failed:', subErr.message);
     }
 
-    // Audit the deletion BEFORE we mutate the row — the audit_events
+    // Audit the deletion BEFORE we mutate the row - the audit_events
     // row outlives the user (target_user_id is ON DELETE SET NULL),
     // so the trail of who-deleted-when survives even after the cron
     // hard-deletes 30 days from now. Meta carries the original email
@@ -93,7 +93,7 @@ export default async function handler(req, res) {
     // dead immediately (the cookie clear below is belt-and-suspenders).
     //
     // Mangle pattern: 'someone@domain.tld' → 'someone+deleted-<uuid>@domain.tld'
-    // — keeps the address parseable as an email and bounded in length.
+    // - keeps the address parseable as an email and bounded in length.
     const mangledEmail = userEmail
       ? userEmail.replace(/^([^@]+)@(.+)$/, `$1+deleted-${user.id}@$2`)
       : `deleted-${user.id}@invalid.local`;
@@ -108,7 +108,7 @@ export default async function handler(req, res) {
 
     clearSessionCookie(res);
 
-    // Confirmation email — bypasses prefs since the user opted in by
+    // Confirmation email - bypasses prefs since the user opted in by
     // running the destructive action. Best-effort; deletion already
     // succeeded so the API ack doesn't depend on email delivery.
     if (r.rowCount > 0 && userEmail) {
@@ -119,9 +119,9 @@ export default async function handler(req, res) {
           html: emailShell({
             heading: 'Your account is deleted',
             body: `<p>Hi ${userName ? userName.split(/\s+/)[0] : 'there'},</p>
-              <p>Per your request, we've deleted your Ivy OS account and the workspace you owned — your clients, bookings, invoices, documents, and messages. This action can't be reversed. (Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>
-              <p>If you didn't make this request, please email us right away — we still have backups for 30 days that we can restore from in case of unauthorized deletion.</p>`,
-            footer: 'Thanks for trying Ivy OS. We\'re sorry to see you go — if you have a moment, reply with what we could have done better.',
+              <p>Per your request, we've deleted your Ivy OS account and the workspace you owned - your clients, bookings, invoices, documents, and messages. This action can't be reversed. (Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>
+              <p>If you didn't make this request, please email us right away - we still have backups for 30 days that we can restore from in case of unauthorized deletion.</p>`,
+            footer: 'Thanks for trying Ivy OS. We\'re sorry to see you go - if you have a moment, reply with what we could have done better.',
           }),
         });
       } catch (mailErr) {

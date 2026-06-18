@@ -1,4 +1,4 @@
-// /me/notifications — per-workspace email preferences for the
+// /me/notifications - per-workspace email preferences for the
 // authenticated user's client memberships. A user who's a client of
 // three businesses sees three independent toggle blocks.
 import React, { useEffect, useState } from 'react';
@@ -32,7 +32,7 @@ export default function ClientNotifications() {
       .catch((e) => { if (live) setErr(e.message || 'Failed to load'); });
     api.get('/me/notification-prefs')
       .then((r) => { if (live) setPrefs(r.prefs); })
-      .catch(() => { /* silent — defaults */ });
+      .catch(() => { /* silent - defaults */ });
     return () => { live = false; };
   }, []);
 

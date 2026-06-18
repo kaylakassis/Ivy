@@ -1,4 +1,4 @@
-// /api/goals/:id  — GET / PATCH / DELETE
+// /api/goals/:id  - GET / PATCH / DELETE
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';

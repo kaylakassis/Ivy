@@ -52,7 +52,7 @@ async function run() {
     await ivyNudges({ method: 'POST', headers: {} }, noAuth);
     assert(noAuth.statusCode === 401, `no cron secret → 401 (got ${noAuth.statusCode})`);
 
-    console.log('\n[2] AWAITING_REPLY — unanswered client message > 24h');
+    console.log('\n[2] AWAITING_REPLY - unanswered client message > 24h');
     // Create a thread whose last_message_at is 2 days ago with unread_biz=1
     // (= last inbound was from the client).
     const t = (await sql`
@@ -76,7 +76,7 @@ async function run() {
     await ivyNudges(cronReq(), r2);
     assert(r2.body?.awaitingFired === 0, `dedup blocks re-fire (got ${r2.body?.awaitingFired})`);
 
-    console.log('\n[4] GONE_QUIET — client active 30d ago, silent since');
+    console.log('\n[4] GONE_QUIET - client active 30d ago, silent since');
     // Backdate an old booking + zero recent activity for cQuiet.
     await sql`
       INSERT INTO bookings (workspace_id, client_id, client_name, client_email, start_min, end_min, date)
@@ -97,7 +97,7 @@ async function run() {
       VALUES (${ws}, ${cLead}, 'Lead Lou', ${`${tag}-l@example.com`},
               600, 660, (NOW() - INTERVAL '30 days')::date)
     `;
-    // Clear cQuiet's dedup row so we'd otherwise re-fire — proves the
+    // Clear cQuiet's dedup row so we'd otherwise re-fire - proves the
     // lead filter (not the dedup) is what excludes cLead.
     await sql`DELETE FROM ivy_nudges_fired WHERE client_id = ${cQuiet}`;
 
@@ -107,7 +107,7 @@ async function run() {
     assert(noLeadFeed.rows.length === 0, 'no nudge fired for stage=lead client');
 
     console.log('\n[6] thread with no unread is NOT in scope for awaiting_reply');
-    // Owner has already replied (unread_biz=0) — should not fire.
+    // Owner has already replied (unread_biz=0) - should not fire.
     await sql`
       UPDATE message_threads SET unread_biz = 0 WHERE id = ${t}
     `;

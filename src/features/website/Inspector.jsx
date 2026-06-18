@@ -1,4 +1,4 @@
-// Right-panel inspector — edits the currently selected section.
+// Right-panel inspector - edits the currently selected section.
 import React, { useState } from 'react';
 import { upload } from '@vercel/blob/client';
 import { Icons } from '../../components/Icons.jsx';
@@ -6,7 +6,7 @@ import { SECTION_TYPES, ANIMATIONS } from './sections.js';
 
 export default function Inspector({ section, onChange, onMoveUp, onMoveDown, onDuplicate, onDelete, onToggleVisible, mobile = false, currentPage = null, onPageChange = null }) {
   if (!section) {
-    // No section selected — surface the page-level SEO editor instead
+    // No section selected - surface the page-level SEO editor instead
     // of an empty placeholder. This is the spot owners reach for when
     // they want their share previews + search-result snippets to look
     // right.
@@ -88,21 +88,21 @@ function PageSeoPanel({ page, onChange }) {
         How this page looks in Google results + when shared on social.
         Leave blank to inherit the site defaults.
       </div>
-      <FieldBlock label="Title (shown in browser tabs + Google results — ~60 chars)">
+      <FieldBlock label="Title (shown in browser tabs + Google results - ~60 chars)">
         <input type="text" value={page.metaTitle || ''}
           onChange={(e) => onChange({ metaTitle: e.target.value })}
-          placeholder={page.title || 'e.g. Rivers Coaching — 1:1 Career Coaching'}
+          placeholder={page.title || 'e.g. Rivers Coaching - 1:1 Career Coaching'}
           maxLength={200}
           style={inputS}/>
       </FieldBlock>
-      <FieldBlock label="Description (1–2 sentences — ~155 chars)">
+      <FieldBlock label="Description (1–2 sentences - ~155 chars)">
         <textarea rows={3} value={page.metaDescription || ''}
           onChange={(e) => onChange({ metaDescription: e.target.value })}
           placeholder="One sentence that tells visitors (and Google) what this page is about."
           maxLength={400}
           style={{ ...inputS, resize: 'vertical', lineHeight: 1.5 }}/>
       </FieldBlock>
-      <FieldBlock label="Share image (1200×630 works best — shown on Facebook, Twitter, LinkedIn)">
+      <FieldBlock label="Share image (1200×630 works best - shown on Facebook, Twitter, LinkedIn)">
         <ImageInput value={page.ogImage || ''}
           onChange={(url) => onChange({ ogImage: url })}/>
       </FieldBlock>
@@ -120,7 +120,7 @@ function AnimationPicker({ animate, onChange }) {
   const commit = (patch) => {
     const next = { ...cur, ...patch };
     if (!next.type) { onChange(null); return; }
-    // Keep simple strings simple — only upgrade to the object shape if
+    // Keep simple strings simple - only upgrade to the object shape if
     // delay/duration are non-default. Saves bytes on the wire.
     if ((!next.delayMs || next.delayMs === 0) && (!next.durationMs || next.durationMs === 700)) {
       onChange(next.type);
@@ -141,13 +141,13 @@ function AnimationPicker({ animate, onChange }) {
       </FieldBlock>
       {cur.type && (
         <>
-          <FieldBlock label={`Delay (ms) — ${cur.delayMs || 0}`}>
+          <FieldBlock label={`Delay (ms) - ${cur.delayMs || 0}`}>
             <input type="range" min={0} max={2000} step={50}
               value={cur.delayMs || 0}
               onChange={(e) => commit({ delayMs: Number(e.target.value) })}
               style={{ width: '100%' }}/>
           </FieldBlock>
-          <FieldBlock label={`Duration (ms) — ${cur.durationMs || 700}`}>
+          <FieldBlock label={`Duration (ms) - ${cur.durationMs || 700}`}>
             <input type="range" min={150} max={2000} step={50}
               value={cur.durationMs || 700}
               onChange={(e) => commit({ durationMs: Number(e.target.value) })}
@@ -220,7 +220,7 @@ export function ImageInput({ value, onChange, placeholder = 'https://… or uplo
   );
 }
 
-// Per-section style overrides — background color/gradient, padding
+// Per-section style overrides - background color/gradient, padding
 // density, text alignment. Kept inline so they're always available
 // regardless of section type.
 function StyleControls({ style, updateStyle }) {
@@ -229,7 +229,7 @@ function StyleControls({ style, updateStyle }) {
       <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
         Section style
       </div>
-      <FieldBlock label="Background (color or CSS gradient — leaves the template default if empty)">
+      <FieldBlock label="Background (color or CSS gradient - leaves the template default if empty)">
         <input type="text" className="input" value={style.background || ''}
           onChange={(e) => updateStyle({ background: e.target.value || undefined })}
           placeholder="#FFFFFF or linear-gradient(…)"
@@ -534,7 +534,7 @@ const EDITORS = {
         />
       </Row>
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, padding: '8px 10px', background: 'var(--surface-2)', borderRadius: 8, border: '1px dashed var(--border)' }}>
-        The button links to <code style={{ fontSize: 11 }}>/book/:handle</code> — your calendar's public booking page.
+        The button links to <code style={{ fontSize: 11 }}>/book/:handle</code> - your calendar's public booking page.
       </div>
     </>
   ),

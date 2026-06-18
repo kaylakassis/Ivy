@@ -28,8 +28,8 @@ const ALLOWED_CONTENT_TYPES = [
   'application/vnd.ms-excel',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   // Voice memos. Chromium emits audio/webm (opus codec); Safari emits
-  // audio/mp4. Browsers may suffix the codec — `audio/webm;codecs=opus`
-  // — so we accept both the bare type and the codec-tagged variant.
+  // audio/mp4. Browsers may suffix the codec - `audio/webm;codecs=opus`
+  // - so we accept both the bare type and the codec-tagged variant.
   'audio/webm', 'audio/webm;codecs=opus',
   'audio/mp4', 'audio/mp4;codecs=mp4a.40.2',
   'audio/ogg', 'audio/ogg;codecs=opus',

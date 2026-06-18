@@ -1,10 +1,10 @@
-// GET /site/:handle — server-rendered HTML for the published site's
+// GET /site/:handle - server-rendered HTML for the published site's
 // home page. Routed here by vercel.json so crawlers + social cards see
 // the title/meta tags + body content before any JS executes.
 //
 // The React SPA (built into dist/) mounts on top of this HTML once the
 // browser parses our injected <script>. Anything in <div id="root">
-// gets replaced by React on render — that's fine, the static markup is
+// gets replaced by React on render - that's fine, the static markup is
 // only there for crawlers and for the millisecond before JS runs.
 
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';

@@ -11,9 +11,9 @@
 //                       the transcript as the visible text.
 //
 // Both rely on Web APIs that ship with every modern browser:
-//   • SpeechRecognition / webkitSpeechRecognition — Chrome desktop +
+//   • SpeechRecognition / webkitSpeechRecognition - Chrome desktop +
 //     Android, Safari iOS 14.5+, Edge. Firefox doesn't ship it.
-//   • MediaRecorder + getUserMedia — universal in 2026.
+//   • MediaRecorder + getUserMedia - universal in 2026.
 //
 // Running both in parallel works in Chrome and Safari today; I've
 // tested it. If a browser only supports one, the hooks degrade
@@ -52,7 +52,7 @@ function newRecognition() {
   return r;
 }
 
-// ── useDictation — live transcript only ────────────────────────────
+// ── useDictation - live transcript only ────────────────────────────
 //
 //   { supported, listening, error, start, stop, transcript }
 //
@@ -87,7 +87,7 @@ export function useDictation() {
       onTranscript?.(all);
     };
     r.onerror = (ev) => {
-      // 'no-speech' just means quiet — not an error worth surfacing.
+      // 'no-speech' just means quiet - not an error worth surfacing.
       if (ev.error && ev.error !== 'no-speech') setError(ev.error);
     };
     r.onend = () => setListening(false);
@@ -110,7 +110,7 @@ export function useDictation() {
   return { supported: !!SR, listening, error, start, stop, transcript };
 }
 
-// ── useVoiceMemo — audio blob + parallel transcript ─────────────────
+// ── useVoiceMemo - audio blob + parallel transcript ─────────────────
 //
 //   start()  → opens the mic, starts MediaRecorder + SpeechRecognition
 //              against the same input. Both run until stop().
@@ -162,7 +162,7 @@ export function useVoiceMemo() {
       recorder.ondataavailable = (e) => { if (e.data && e.data.size) chunksRef.current.push(e.data); };
       recorder.start();
 
-      // Spin up SpeechRecognition in parallel — it ignores our stream
+      // Spin up SpeechRecognition in parallel - it ignores our stream
       // and opens its own mic capture under the hood, which on every
       // browser I've tested is fine alongside MediaRecorder. If it
       // fails we still get the audio.
@@ -180,7 +180,7 @@ export function useVoiceMemo() {
           transcriptRef.current = all;
           setTranscript(all);
         };
-        // Don't surface SR errors as fatal — the audio recording is
+        // Don't surface SR errors as fatal - the audio recording is
         // the primary artifact; transcription is best-effort.
         rec.onerror = () => {};
         try { rec.start(); recognitionRef.current = rec; } catch {/* ignored */}

@@ -1,5 +1,5 @@
 // Shared helpers for client↔client DMs. Mirrors the cohort group_chat
-// helpers but with stricter permission gating — owners never see these
+// helpers but with stricter permission gating - owners never see these
 // threads; access is controlled by "do these two clients share an
 // active group_thread_members row in the same workspace?"
 import { sql } from './db.js';
@@ -56,7 +56,7 @@ export async function getOrCreateDmThread({ workspaceId, clientAId, clientBId })
 // Is `senderClientId` blocked by `recipientClientId`? Used to silently
 // drop sends from a blocked client (we return success so they can't
 // probe for the block existence, but the message never reaches the
-// recipient's thread fetch — the blocker sees nothing from blocked).
+// recipient's thread fetch - the blocker sees nothing from blocked).
 //
 // Implementation choice: HARD reject the send instead of silent-drop.
 // Probing concern is minor (the recipient's UI showing "blocked" pill

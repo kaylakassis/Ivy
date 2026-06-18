@@ -2,7 +2,7 @@
 // self-heal reconcile. Used by the synchronous return-confirm path and the
 // public-invoice self-heal so a payment lands in the finance tab WITHOUT
 // depending on the per-workspace Stripe webhook (which most owners never
-// configure — Express/Connect owners can't). Idempotent and side-effect-safe.
+// configure - Express/Connect owners can't). Idempotent and side-effect-safe.
 import { sql } from './db.js';
 import { computeTotals } from './finance.js';
 import { notifyOwnerSafe, notifyClientSafe } from './push.js';
@@ -16,7 +16,7 @@ function fmtMoney(n) {
 
 // Idempotent. Marks the invoice paid (status, paid fields, activity) and,
 // only when it actually transitions, fires the owner push + client receipt
-// — matching the webhook so whichever path wins first is the one that
+// - matching the webhook so whichever path wins first is the one that
 // notifies. Returns 'paid' | 'already-paid' | 'invoice-not-found'.
 export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method = 'card' }) {
   const { rows } = await sql`SELECT * FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}`;

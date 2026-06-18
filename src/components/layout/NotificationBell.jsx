@@ -1,11 +1,11 @@
-// Notification bell — top-right of the app shell.
+// Notification bell - top-right of the app shell.
 //
 // Polls /api/me/notification-feed every 30s for the latest list +
 // unread count. Click opens a dropdown panel; clicking a row navigates
 // to its url and marks the row read. "Mark all read" zeroes the badge.
 //
 // Designed to fail open: if the endpoint 401s or 5xxs we just don't
-// show the badge / show an empty panel — never blocks the rest of the
+// show the badge / show an empty panel - never blocks the rest of the
 // topbar.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
@@ -42,7 +42,7 @@ export default function NotificationBell({ isMobile }) {
       setItems(r.notifications || []);
       setUnread(Number(r.unread) || 0);
     } catch {
-      // Auth-failed / endpoint-down — keep last-known state. The bell
+      // Auth-failed / endpoint-down - keep last-known state. The bell
       // stays visible; the dropdown just shows whatever was loaded
       // last (or empty).
     } finally {
@@ -85,7 +85,7 @@ export default function NotificationBell({ isMobile }) {
   }, [open]);
 
   const markAllRead = async () => {
-    // Optimistic — zero locally first, reconcile via server response.
+    // Optimistic - zero locally first, reconcile via server response.
     const had = unread;
     setUnread(0);
     setItems((xs) => xs.map((x) => x.readAt ? x : { ...x, readAt: new Date().toISOString() }));

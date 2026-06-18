@@ -1,4 +1,4 @@
-// /workflows — automation builder. The retention surface: turn manual
+// /workflows - automation builder. The retention surface: turn manual
 // follow-up routines (birthday email, win-back-at-60-days, "thanks for
 // signing up" nudge) into rules that fire automatically.
 //
@@ -35,10 +35,10 @@ const ACTION_LABELS = {
 export default function Workflows() {
   const { workflows, loading, error, create, update, remove } = useWorkflows();
   // Three states for the "create" flow:
-  //   pickerOpen        — template picker modal is up
-  //   editing === 'new' — blank editor (user clicked "Start from scratch")
-  //   editing is a tpl  — editor pre-filled from a template (still creates a new row)
-  //   editing is a wf   — editing an existing workflow
+  //   pickerOpen        - template picker modal is up
+  //   editing === 'new' - blank editor (user clicked "Start from scratch")
+  //   editing is a tpl  - editor pre-filled from a template (still creates a new row)
+  //   editing is a wf   - editing an existing workflow
   const [pickerOpen, setPickerOpen] = useState(false);
   const [editing, setEditing] = useState(null);
   const [busy, setBusy]       = useState(false);
@@ -94,7 +94,7 @@ export default function Workflows() {
       {workflows.length === 0 ? (
         <div className="card" style={{ padding: 48, textAlign: 'center' }}>
           <EmptyNote icon="Spark" title="No workflows yet"
-            hint="Start from a template — or build one from scratch."/>
+            hint="Start from a template - or build one from scratch."/>
           <div style={{ marginTop: 18, display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             <button className="btn btn-primary" onClick={() => setPickerOpen(true)}>
               Browse templates
@@ -220,7 +220,7 @@ function WorkflowCard({ workflow, onToggle, onEdit, onDelete }) {
 }
 
 function timeAgo(ts) {
-  if (!ts) return '—';
+  if (!ts) return '-';
   const d = (Date.now() - new Date(ts).getTime()) / 1000;
   if (d < 60) return 'just now';
   if (d < 3600) return Math.floor(d / 60) + 'm ago';

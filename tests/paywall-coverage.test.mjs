@@ -89,7 +89,7 @@ assert(holes.length === 0,
 
 // Invariant 2: NO exempt file CALLS ensureActiveWorkspace as a gating
 // check. evictWorkspaceGateCache is allowed (billing/sync uses it).
-// Comments are excluded — we match `await ensureActiveWorkspace(`.
+// Comments are excluded - we match `await ensureActiveWorkspace(`.
 const escapeHatchLeaks = [];
 for (const f of apiFiles) {
   // Helper file itself defines the function; allow.

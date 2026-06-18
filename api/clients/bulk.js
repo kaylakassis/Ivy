@@ -1,12 +1,12 @@
 // POST /api/clients/bulk  body: { action, ids, stage? }
 //
 // Bulk operations on clients. Owners managing 100+ clients used to
-// have to tap each row's menu individually — this collapses that into
+// have to tap each row's menu individually - this collapses that into
 // one request. Actions:
 //
-//   archive   — set stage = 'paused' on every id
-//   delete    — DELETE every id; cascades to clients-owned tables
-//   set-stage — set stage = body.stage on every id (validates against
+//   archive   - set stage = 'paused' on every id
+//   delete    - DELETE every id; cascades to clients-owned tables
+//   set-stage - set stage = body.stage on every id (validates against
 //                the allowed set: lead | active | paused)
 //
 // Hard-cap at 200 ids per request: a runaway "select all 10k" click
@@ -43,14 +43,14 @@ export default async function handler(req, res) {
       return badRequest(res, 'ids must be a non-empty array');
     }
     if (idsRaw.length > MAX_IDS) {
-      return badRequest(res, `Too many ids — cap is ${MAX_IDS} per request (got ${idsRaw.length})`);
+      return badRequest(res, `Too many ids - cap is ${MAX_IDS} per request (got ${idsRaw.length})`);
     }
     const ids = idsRaw.map(String);
 
     let affected = 0;
 
     if (action === 'archive') {
-      // 'archive' means stage=paused — we don't actually delete the
+      // 'archive' means stage=paused - we don't actually delete the
       // row, so historical bookings + invoices stay attached and the
       // owner can un-archive later.
       const r = await sql.query(
@@ -71,8 +71,8 @@ export default async function handler(req, res) {
       );
       affected = r.rowCount ?? 0;
     } else if (action === 'delete') {
-      // CASCADE drops anything FK'd to clients(id) — bookings (set
-      // null), invoices (set null), message_threads, etc — but
+      // CASCADE drops anything FK'd to clients(id) - bookings (set
+      // null), invoices (set null), message_threads, etc - but
       // historical financial rows keep the data they need (client
       // name copied at creation). Workspace-scoped WHERE so a
       // crafted id list can't reach across tenants.
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
       affected = r.rowCount ?? 0;
     }
 
-    // Audit ONCE per bulk operation rather than per id — keeps the
+    // Audit ONCE per bulk operation rather than per id - keeps the
     // audit_events table from blowing up on a 200-row delete. meta
     // carries the id list + action for forensic reconstruction.
     recordWorkspaceAudit(req, {
@@ -93,7 +93,7 @@ export default async function handler(req, res) {
       meta: {
         requested: ids.length,
         affected,
-        ids: ids.slice(0, 50), // cap meta payload — first 50 ids is enough for forensics
+        ids: ids.slice(0, 50), // cap meta payload - first 50 ids is enough for forensics
         ...(action === 'set-stage' ? { stage: body.stage } : {}),
       },
     });

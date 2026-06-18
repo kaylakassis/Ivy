@@ -55,7 +55,7 @@ export function useRewards() {
       redemptions: [r.redemption, ...d.redemptions],
       kpis: { ...d.kpis, rewardsRedeemed: d.kpis.rewardsRedeemed + 1 },
     }));
-    // Refresh KPIs in background — they depend on aggregations.
+    // Refresh KPIs in background - they depend on aggregations.
     refresh().catch(() => {});
     return r.redemption;
   }, [refresh]);

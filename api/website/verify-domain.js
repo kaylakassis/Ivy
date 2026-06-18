@@ -36,7 +36,7 @@ export default async function handler(req, res) {
     await ensureSchemaApplied();
     const user = await requireUser(req, res);
     if (!user) return;
-    // 10 lookups per minute per user — DNS is cheap but external.
+    // 10 lookups per minute per user - DNS is cheap but external.
     if (await enforce(req, res, [{ key: `verify-domain:${user.id}`, max: 10, windowSeconds: 60 }])) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
@@ -49,13 +49,13 @@ export default async function handler(req, res) {
     let detail = '';
     try {
       // Match either CNAME or an A-record that aliases to the same host.
-      // Prefer CNAME — it's the path we tell owners to use.
+      // Prefer CNAME - it's the path we tell owners to use.
       const cnames = await dns.resolveCname(domain).catch(() => []);
       if (cnames.some((c) => norm(c) === norm(TARGET_CNAME))) {
         status = 'verified';
       } else if (cnames.length > 0) {
         status = 'dns_pending';
-        detail = `CNAME points to ${cnames.join(', ')} — expected ${TARGET_CNAME}.`;
+        detail = `CNAME points to ${cnames.join(', ')} - expected ${TARGET_CNAME}.`;
       } else {
         // No CNAME records at all → owner probably hasn't added it yet.
         status = 'unverified';

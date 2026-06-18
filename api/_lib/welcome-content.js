@@ -2,7 +2,7 @@
 // and re-sendable from the admin user-detail modal
 // (api/admin/users/[id].js → resendWelcome: true).
 //
-// Owner vs client variant is selected by the caller — owners get the
+// Owner vs client variant is selected by the caller - owners get the
 // "build your business" pitch, clients get the "consolidate every
 // service provider" pitch. Both share a compliance footer with
 // privacy/terms links, postal address, and verification-email nudge.
@@ -16,12 +16,12 @@ function escapeHtml(s) {
 // Shared compliance + housekeeping footer. Slots in identically across
 // both variants so any edits stay consistent.
 //
-//   • Verification-email reminder — every signup gets a separate
+//   • Verification-email reminder - every signup gets a separate
 //     "confirm your email" message in addition to the welcome; mention
 //     it here so people don't miss it in spam.
 //   • Reply-to invitation
 //   • Privacy / Terms links
-//   • Postal address (placeholder until configured — CAN-SPAM /
+//   • Postal address (placeholder until configured - CAN-SPAM /
 //     CASL want a real one)
 //   • Copyright
 function renderFooter(appUrl) {
@@ -30,10 +30,10 @@ function renderFooter(appUrl) {
                     <p style="margin:0;padding:0;font-size:1em;padding-top:0.5em;padding-bottom:0.5em"><br /></p>
                     <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #2a2a2a;padding-bottom:1em;border-style:solid;border-width:2px" />
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55">
-                      <strong style="color:#F3F3EE;font-weight:600">Heads-up:</strong> we also sent you a separate email asking you to confirm your address. If you don't see it, check spam — confirming unlocks notifications.
+                      <strong style="color:#F3F3EE;font-weight:600">Heads-up:</strong> we also sent you a separate email asking you to confirm your address. If you don't see it, check spam - confirming unlocks notifications.
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:10px">
-                      Reply to this email any time — we read everything.
+                      Reply to this email any time - we read everything.
                     </p>
                     <p style="margin:0;padding:0;font-size:12px;color:#9ca3af;line-height:1.55;margin-top:14px">
                       <a href="${appUrl}/privacy" style="color:#9ca3af;text-decoration:underline" target="_blank">Privacy</a>
@@ -64,7 +64,7 @@ export function renderWelcome({ name, appUrl, variant }) {
   };
 }
 
-// Owner welcome — dark Ivy OS-branded onboarding template (designed in
+// Owner welcome - dark Ivy OS-branded onboarding template (designed in
 // Resend, exported as raw HTML). Returned as a complete document; no
 // emailShell wrapper. Adds the trial / pricing line and the shared
 // compliance footer.
@@ -136,13 +136,13 @@ function renderOwnerWelcome({ name, appUrl }) {
                       02 Automate the back end
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:24px">
-                      Payments, CRM, invoicing, analytics — connected on day one.
+                      Payments, CRM, invoicing, analytics - connected on day one.
                     </p>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#F3F3EE;margin-top:0;margin-bottom:6px">
                       03 Let AI run the busywork
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:40px">
-                      Ivy, your AI-assistant and coach, can draft messages, send invoices, follow up with leads, and surface what needs your attention — so you stay focused on the work only you can do.
+                      Ivy, your AI-assistant and coach, can draft messages, send invoices, follow up with leads, and surface what needs your attention - so you stay focused on the work only you can do.
                     </p>
                     <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #e8e8e4;padding-bottom:1em;border-style:solid;border-width:2px;margin-top:0;margin-bottom:40px" />
                     <h2 style="margin:0;padding:0;font-size:35px;line-height:1.44em;font-weight:600;letter-spacing:-0.5px;margin-top:0;margin-bottom:16px">
@@ -184,7 +184,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                       Kayla Kassis, Founder of Ivy OS.
                     </p>
                     <p style="margin:0;padding:0;font-size:13px;color:#9ca3af;line-height:1.55;font-style:italic;margin-top:8px">
-                      You're on a 28-day free trial — after that it's $49/month. Cancel anytime from your account.
+                      You're on a 28-day free trial - after that it's $49/month. Cancel anytime from your account.
                     </p>
                     ${renderFooter(appUrl)}
                   </td>
@@ -199,7 +199,7 @@ function renderOwnerWelcome({ name, appUrl }) {
 </html>`;
 }
 
-// Client welcome — same dark aesthetic as the owner template, value
+// Client welcome - same dark aesthetic as the owner template, value
 // prop reversed: instead of "build your business," it's "consolidate
 // every business you book with into one inbox / wallet / calendar."
 function renderClientWelcome({ name, appUrl }) {
@@ -235,7 +235,7 @@ function renderClientWelcome({ name, appUrl }) {
                       <span style="color:#F3F3EE">Welcome to Ivy OS${greetSuffix}.</span>
                     </h1>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:24px">
-                      Every service provider you book with — your stylist, your trainer, your therapist, your contractor, your tutor — now lives in one place. Bills, bookings, memberships, messages. No more hunting through ten different texts and inboxes.
+                      Every service provider you book with - your stylist, your trainer, your therapist, your contractor, your tutor - now lives in one place. Bills, bookings, memberships, messages. No more hunting through ten different texts and inboxes.
                     </p>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:40px">
                       Your portal's ready. Tap in and you'll feel the difference immediately.
@@ -265,19 +265,19 @@ function renderClientWelcome({ name, appUrl }) {
                       02 Stay ahead of every renewal
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:24px">
-                      Memberships and recurring services in one view. Cancel, pause, or upgrade with one tap — and never get auto-charged for something you forgot about.
+                      Memberships and recurring services in one view. Cancel, pause, or upgrade with one tap - and never get auto-charged for something you forgot about.
                     </p>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#F3F3EE;margin-top:0;margin-bottom:6px">
                       03 Message your providers directly
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:24px">
-                      Every reply lands in your Ivy OS inbox — not buried in your texts. Voice memos, photos, signed documents, all in one thread.
+                      Every reply lands in your Ivy OS inbox - not buried in your texts. Voice memos, photos, signed documents, all in one thread.
                     </p>
                     <p style="margin:0;padding:0;font-size:16px;padding-top:0.5em;padding-bottom:0.5em;font-weight:600;color:#F3F3EE;margin-top:0;margin-bottom:6px">
                       04 Find new providers near you
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:40px">
-                      Browse the Discover tab — filter by category, price, distance, or rating — and book in two taps. The whole experience, from finding to paying, never leaves Ivy OS.
+                      Browse the Discover tab - filter by category, price, distance, or rating - and book in two taps. The whole experience, from finding to paying, never leaves Ivy OS.
                     </p>
                     <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #e8e8e4;padding-bottom:1em;border-style:solid;border-width:2px;margin-top:0;margin-bottom:40px" />
                     <h2 style="margin:0;padding:0;font-size:35px;line-height:1.44em;padding-top:0.389em;font-weight:600;letter-spacing:-0.4px;margin-top:0;margin-bottom:12px;text-align:center">

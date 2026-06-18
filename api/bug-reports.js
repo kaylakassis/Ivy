@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const appVersion = body.appVersion ? String(body.appVersion).slice(0, 64) : null;
     const userAgent = req.headers?.['user-agent']?.toString().slice(0, 500) || null;
 
-    // Best-effort workspace lookup — non-owner users (clients) hit
+    // Best-effort workspace lookup - non-owner users (clients) hit
     // this endpoint too, in which case workspace_id stays null.
     let workspaceId = null;
     try {

@@ -17,7 +17,7 @@ import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 // Without it, attackers can distinguish "registered" vs "not registered"
 // addresses by latency even with a generic error message.
 //
-// Hashed once at module load — one ~100ms cost per cold lambda, then
+// Hashed once at module load - one ~100ms cost per cold lambda, then
 // the same comparison cost as real logins on subsequent requests. Cost
 // factor 10 matches hashPassword() in api/_lib/auth.js so timing aligns.
 const DECOY_PASSWORD_HASH = bcrypt.hashSync('ivy-decoy-not-a-real-password', 10);
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
   if (!(await requireGate(req, res))) return;
   try {
     // Cold-started function with no schema yet would 500 the SELECT
-    // below. Bootstrap explicitly — login is a public endpoint that
+    // below. Bootstrap explicitly - login is a public endpoint that
     // doesn't call requireUser.
     await ensureSchemaApplied();
     const { email, password } = await readBody(req);
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     const ip = getClientIp(req);
     const emailKey = email.toLowerCase();
 
-    // 10/hr per IP and 5/hr per email — same window so an attacker can't burn
+    // 10/hr per IP and 5/hr per email - same window so an attacker can't burn
     // through accounts from one IP, and a victim can't be locked out forever
     // by a distributed attack on their email.
     const blocked = await enforce(req, res, [

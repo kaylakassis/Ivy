@@ -1,4 +1,4 @@
-// Client-portal context — fetches /api/me once, exposes the result to all
+// Client-portal context - fetches /api/me once, exposes the result to all
 // client-portal screens. Memberships, isOwner, isClient, summary are all
 // here so we don't refetch on every route change.
 import { useEffect, useState, useCallback, createContext, useContext } from 'react';

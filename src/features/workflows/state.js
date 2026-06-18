@@ -29,7 +29,7 @@ export function useWorkflows() {
   };
 
   const update = async (id, patch) => {
-    // Optimistic — only toggle enabled is hot-path; full edits do
+    // Optimistic - only toggle enabled is hot-path; full edits do
     // an optimistic flip + refresh to pull the canonical row.
     setWorkflows((p) => p.map((x) => x.id === id ? { ...x, ...patch } : x));
     try {

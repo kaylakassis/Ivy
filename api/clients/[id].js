@@ -56,7 +56,7 @@ export default async function handler(req, res) {
         // intake form). Setting to false also nulls the consent
         // timestamp; setting to true stamps NOW() if not already set.
         if (body.smsConsent) {
-          // Use IS NULL guard via separate path — do it inline:
+          // Use IS NULL guard via separate path - do it inline:
           const cur = existing.sms_consent_at;
           if (!cur) push('sms_consent_at', new Date().toISOString());
         } else {
@@ -101,7 +101,7 @@ export default async function handler(req, res) {
         if (body.attachments.length > 100) {
           return badRequest(res, 'Up to 100 attachments per client');
         }
-        // Sanitize each entry — only the URL/type/name/uploadedAt
+        // Sanitize each entry - only the URL/type/name/uploadedAt
         // shape we control. Strip anything else clients send so a
         // client-side bug can't poison the row with arbitrary JSON.
         const cleaned = body.attachments.map((a) => ({
@@ -123,7 +123,7 @@ export default async function handler(req, res) {
         if (body.galleryPhotos.length > 200) {
           return badRequest(res, 'Up to 200 gallery photos per client');
         }
-        // Same defense-in-depth shape sanitization as attachments —
+        // Same defense-in-depth shape sanitization as attachments -
         // we only persist the keys we render. Caption is optional;
         // takenAt is when the photo was actually taken (per the
         // owner's annotation); uploadedAt is the upload time we set

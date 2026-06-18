@@ -2,18 +2,18 @@
 //
 // CSV exports formatted for direct import into QuickBooks Online or Xero.
 // Distinct from /api/finance/tax-export, which is a Schedule-C summary
-// owners hand to a human CPA — this one lands cleanly in accounting
+// owners hand to a human CPA - this one lands cleanly in accounting
 // software's "Import sales invoices" / "Import bills" file pickers
 // without manual column shuffling.
 //
 // Format reference:
 //
-//   QuickBooks Online — "Sales transactions" import expects:
+//   QuickBooks Online - "Sales transactions" import expects:
 //     InvoiceNo, Customer, InvoiceDate, DueDate, Terms, Memo,
 //     ItemProductService, ItemDescription, ItemQuantity, ItemRate,
 //     ItemAmount, ItemTaxAmount, Currency
 //
-//   Xero — "Sales invoices" import expects:
+//   Xero - "Sales invoices" import expects:
 //     ContactName, EmailAddress, InvoiceNumber, InvoiceDate, DueDate,
 //     Description, Quantity, UnitAmount, AccountCode, TaxType, Currency
 //
@@ -22,7 +22,7 @@
 //     Xero:       Date, Reference, Description, Amount, AccountCode
 //
 // We always emit one row per line item for invoices and one row per
-// expense for purchases — the format the tools' importers natively
+// expense for purchases - the format the tools' importers natively
 // understand. Year-end exports work out of the box.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
@@ -159,7 +159,7 @@ export default async function handler(req, res) {
               n(qty), n(rate), n(amt), n(lineTax), currency,
             ));
           } else {
-            // Xero requires *TaxType — "Tax Exempt" or "Output" depending
+            // Xero requires *TaxType - "Tax Exempt" or "Output" depending
             // on whether tax_rate > 0. Owners with set sales-tax rules
             // will fix this on import; we pick the safer "Tax Exempt"
             // default to avoid double-taxing.
@@ -177,7 +177,7 @@ export default async function handler(req, res) {
         }
       }
     } else {
-      // type === 'expenses' — one row per purchase. Both tools take a
+      // type === 'expenses' - one row per purchase. Both tools take a
       // similar shape, just different column names.
       const exp = await sql.query(
         `SELECT date, vendor, amount, category, payment_method, notes
@@ -209,7 +209,7 @@ export default async function handler(req, res) {
           // We use 400 as the bucket default; owners re-map in Xero.
           lines.push(r(
             e.vendor || 'Unknown vendor', dateISO, dateISO,
-            account + (e.notes ? ' — ' + e.notes : ''),
+            account + (e.notes ? ' - ' + e.notes : ''),
             '1', n(e.amount), '400', 'Tax Exempt', currency,
           ));
         }
@@ -220,7 +220,7 @@ export default async function handler(req, res) {
     const filename = `ivy-${type}-${format}-${range.from}_to_${range.to}.csv`;
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    // Diagnostic header — sanitize CRLF + non-ASCII so an owner with a
+    // Diagnostic header - sanitize CRLF + non-ASCII so an owner with a
     // multi-line or unicode biz name doesn't blow up the response with
     // a Node header-validation throw.
     res.setHeader('X-Ivy-Workspace',

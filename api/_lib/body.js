@@ -5,7 +5,7 @@
 // the function or blowing past Vercel's per-request limits silently.
 // Webhooks that need bigger bodies (none today) should use readRawBody
 // and set their own cap; both helpers reject once the threshold is hit.
-const MAX_BYTES = 4 * 1024 * 1024; // 4MB — matches Vercel's default request limit
+const MAX_BYTES = 4 * 1024 * 1024; // 4MB - matches Vercel's default request limit
 
 class PayloadTooLargeError extends Error {
   constructor(seen) {

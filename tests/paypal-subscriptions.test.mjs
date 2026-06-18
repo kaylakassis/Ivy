@@ -2,7 +2,7 @@
 //   • parseWebhookEvent normalizes BILLING.SUBSCRIPTION.* + PAYMENT.SALE.COMPLETED
 //   • applyPaypalSubscriptionEvent creates/updates/cancels client_memberships
 // The live PayPal-API calls (createBillingPlan / createSubscription) are NOT
-// covered here — they need a PayPal sandbox to validate (deferred by design).
+// covered here - they need a PayPal sandbox to validate (deferred by design).
 //
 // Run with:
 //   node --import ./tests/bootstrap.mjs ./tests/paypal-subscriptions.test.mjs

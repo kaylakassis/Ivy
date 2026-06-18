@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     if (permissionsGranted === 'false') return back('error', 'PayPal permissions were not granted');
 
     // Owner must be logged in. CRITICAL: derive the workspace from the
-    // authenticated session — NEVER from a URL param. Trusting a `wid`
+    // authenticated session - NEVER from a URL param. Trusting a `wid`
     // query value would let anyone attach their own PayPal merchant to a
     // victim's workspace (redirecting that victim's payouts), so the
     // attacker-controllable param is ignored entirely.
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     let sellerStatus = null;
     try { sellerStatus = await fetchSellerStatus({ merchantId: merchantIdInPayPal }); }
-    catch { /* non-fatal — connection still records, payments_enabled stays false */ }
+    catch { /* non-fatal - connection still records, payments_enabled stays false */ }
 
     await persistConnection({
       workspaceId,

@@ -1,4 +1,4 @@
-// GET /site/:handle/:slug — server-rendered HTML for a sub-page of a
+// GET /site/:handle/:slug - server-rendered HTML for a sub-page of a
 // multi-page published site. Same logic as the home-page route, just
 // with a non-empty slug. See api/site/[handle].js for the why.
 
@@ -16,7 +16,7 @@ export default async function handler(req, res) {
     await ensureSchemaApplied();
     const { handle, slug } = req.query;
     // Reserved sub-paths (sitemap.xml, robots.txt) have their own
-    // routes — Vercel will match the more specific file first, but
+    // routes - Vercel will match the more specific file first, but
     // guard anyway in case the rewrite order changes.
     if (slug === 'sitemap.xml' || slug === 'robots.txt') {
       res.statusCode = 404;

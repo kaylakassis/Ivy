@@ -1,4 +1,4 @@
-// /me — overview cards + per-business list. Acts as the landing page for
+// /me - overview cards + per-business list. Acts as the landing page for
 // client-only users and the place owners-who-are-also-clients drop into when
 // they switch views.
 import React, { useEffect, useState } from 'react';
@@ -58,7 +58,7 @@ export default function ClientHome() {
           <EmptyNote icon="Users" title="No businesses yet"
             hint={user?.email_verified_at
               ? `Once a business owner adds you as a client (or you book through their Ivy OS link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`
-              : `If a business already added you, verify your email (${user?.email}) to link your account — businesses are matched to you by your verified email address. Check your inbox for the confirmation link, then refresh.`}/>
+              : `If a business already added you, verify your email (${user?.email}) to link your account - businesses are matched to you by your verified email address. Check your inbox for the confirmation link, then refresh.`}/>
           <Link to="/me/discover" className="btn btn-primary"
             style={{ alignSelf: 'flex-start' }}>
             <Icons.Globe size={13} sw={1.7}/> Browse businesses on Ivy OS
@@ -124,7 +124,7 @@ export default function ClientHome() {
 
 // One-time welcome banner. Shows on first visit to /me, dismisses on
 // click, and never reappears (flag in localStorage). Mirrors the friendly
-// tone of the owner walkthrough's Ivy step but stays compact — clients
+// tone of the owner walkthrough's Ivy step but stays compact - clients
 // don't need a multi-step tour.
 const WELCOME_KEY = 'ivy.client.welcomed.v1';
 function FirstVisitWelcome() {
@@ -133,7 +133,7 @@ function FirstVisitWelcome() {
   useEffect(() => {
     try {
       if (!localStorage.getItem(WELCOME_KEY)) setVisible(true);
-    } catch { /* localStorage blocked — just don't show it */ }
+    } catch { /* localStorage blocked - just don't show it */ }
   }, []);
 
   if (!visible) return null;
@@ -164,7 +164,7 @@ function FirstVisitWelcome() {
         <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           This is your one place for everything across the businesses you
           work with: bookings, invoices, documents to sign, and direct
-          messages. We'll surface what needs your attention up top — quick
+          messages. We'll surface what needs your attention up top - quick
           glance, you're set.
         </p>
         <button onClick={dismiss} className="btn btn-primary"
@@ -183,7 +183,7 @@ function FirstVisitWelcome() {
 // Packages a user has bought from any business they work with. Defaults
 // to active (credits remaining + not expired); a "Show history" toggle
 // loads exhausted/expired/cancelled rows too so clients can see "I've
-// used 3 packs from this business" — useful for taxes + loyalty proof.
+// used 3 packs from this business" - useful for taxes + loyalty proof.
 //
 // Hidden entirely when the user has zero packages of any kind.
 function PackagesCard() {
@@ -323,15 +323,15 @@ function PackagesCard() {
 // max-advance + conflicts, and creates one bookings row per occurrence
 // (each tagged with client_package_id so a cancellation refunds the
 // credit). The form supports two paths:
-//   • One-off — single session against this package
-//   • Recurring — weekly / bi-weekly / monthly for N occurrences
+//   • One-off - single session against this package
+//   • Recurring - weekly / bi-weekly / monthly for N occurrences
 function RedeemPackageModal({ pkg, onClose, onBooked }) {
   const [calendar, setCalendar] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   const [serviceId, setServiceId] = useState(null);
   const [mode, setMode] = useState('once'); // 'once'|'weekly'|'biweekly'|'monthly'
   const [firstDate, setFirstDate] = useState(() => {
-    // Tomorrow as a sensible default — most workspaces require some notice.
+    // Tomorrow as a sensible default - most workspaces require some notice.
     const d = new Date();
     d.setDate(d.getDate() + 1);
     return d.toISOString().slice(0, 10);
@@ -560,7 +560,7 @@ function fmtTimeFromMin(m) {
 }
 
 // Hero card that aggregates the few "you should do this now" items
-// — pending documents, open invoices, reviews to leave — into a
+// - pending documents, open invoices, reviews to leave - into a
 // single bold prompt above the at-a-glance stat grid. Hides itself
 // when there's nothing actionable so the home page stays calm.
 function NeedsAttention({ summary }) {

@@ -11,7 +11,7 @@
 //       { key, level: 'ok'|'warn'|'fail', label, detail? },
 //     ] }
 //
-// `level: 'fail'` is a launch BLOCKER — you cannot go live until every
+// `level: 'fail'` is a launch BLOCKER - you cannot go live until every
 // one of these is green.  `'warn'` means a feature won't work but the
 // app boots fine without it (e.g. Twilio missing → SMS off; everything
 // else still works).
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
         'Not set or still the placeholder. Sessions can be forged. Generate with `openssl rand -hex 32`.'));
     } else if (jwt.length < REQUIRED_LEN) {
       checks.push(check('jwt_secret', 'JWT_SECRET', 'fail',
-        `Only ${jwt.length} chars — must be ≥ ${REQUIRED_LEN}. Regenerate with \`openssl rand -hex 32\`.`));
+        `Only ${jwt.length} chars - must be ≥ ${REQUIRED_LEN}. Regenerate with \`openssl rand -hex 32\`.`));
     } else {
       checks.push(check('jwt_secret', 'JWT_SECRET', 'ok', `${jwt.length} chars`));
     }
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     const cron = process.env.CRON_SECRET || '';
     if (isDefaultish(cron) || cron.length < REQUIRED_LEN) {
       checks.push(check('cron_secret', 'CRON_SECRET', 'fail',
-        "Vercel cron jobs will be rejected with 401 every time. Reminders, dunning, recurring invoices, Stripe reconcile, Ivy nudges — none of them run."));
+        "Vercel cron jobs will be rejected with 401 every time. Reminders, dunning, recurring invoices, Stripe reconcile, Ivy nudges - none of them run."));
     } else {
       checks.push(check('cron_secret', 'CRON_SECRET', 'ok', `${cron.length} chars`));
     }
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
         `Still points at "${appUrl}". Email links will redirect customers to localhost.`));
     } else if (!/^https:\/\//.test(appUrl)) {
       checks.push(check('app_url', 'APP_URL', 'warn',
-        `Not HTTPS: "${appUrl}". Browsers will refuse to set the secure session cookie — sign-in will silently fail.`));
+        `Not HTTPS: "${appUrl}". Browsers will refuse to set the secure session cookie - sign-in will silently fail.`));
     } else {
       checks.push(check('app_url', 'APP_URL', 'ok', appUrl));
     }
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
         const n = t.rows[0]?.n || 0;
         if (n < 6) {
           checks.push(check('database', 'Database migrations', 'fail',
-            `Only ${n}/6 core tables present — run POST /api/admin/migrate with x-admin-secret.`));
+            `Only ${n}/6 core tables present - run POST /api/admin/migrate with x-admin-secret.`));
         } else {
           checks.push(check('database', 'Database connected + migrated', 'ok'));
         }
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
     // signing secret). Falls back to STRIPE_WEBHOOK_SECRET in code, but
     // that only works if you've intentionally configured a single
     // Stripe endpoint listening for both Connect + subscription events
-    // — which the LAUNCH.md runbook does not recommend. Warn the
+    // - which the LAUNCH.md runbook does not recommend. Warn the
     // operator when the dedicated var is missing so a misrouted secret
     // doesn't silently break the subscription flow.
     if (!process.env.IVY_BILLING_WEBHOOK_SECRET) {
@@ -162,7 +162,7 @@ export default async function handler(req, res) {
     }
     if (!process.env.IVY_STRIPE_PRICE_ID) {
       checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'warn',
-        "No subscription Price configured — owners can\'t pay Ivy OS."));
+        "No subscription Price configured - owners can\'t pay Ivy OS."));
     } else {
       checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'ok'));
     }
@@ -170,35 +170,35 @@ export default async function handler(req, res) {
     // ── Email (BLOCKER for password reset + verification) ───────────
     if (!process.env.RESEND_API_KEY) {
       checks.push(check('email', 'RESEND_API_KEY', 'fail',
-        "No outbound email. Password resets, verification emails, invoice emails — all silently fail."));
+        "No outbound email. Password resets, verification emails, invoice emails - all silently fail."));
     } else {
       checks.push(check('email', 'RESEND_API_KEY', 'ok'));
     }
     const from = process.env.EMAIL_FROM || '';
     if (!from) {
       checks.push(check('email_from', 'EMAIL_FROM', 'fail',
-        'Required — Resend rejects sends without a verified From address.'));
+        'Required - Resend rejects sends without a verified From address.'));
     } else if (/noreply@|no-reply@/i.test(from)) {
       checks.push(check('email_from', 'EMAIL_FROM', 'warn',
-        `"${from}" — Gmail/Outlook deprioritize "noreply" senders. Spam fold likely.`));
+        `"${from}" - Gmail/Outlook deprioritize "noreply" senders. Spam fold likely.`));
     } else {
       checks.push(check('email_from', 'EMAIL_FROM', 'ok', from));
     }
 
-    // ── Push (WARN — feature degrades but app works) ────────────────
+    // ── Push (WARN - feature degrades but app works) ────────────────
     const vapidPub  = process.env.VAPID_PUBLIC_KEY  || '';
     const vapidPriv = process.env.VAPID_PRIVATE_KEY || '';
     if (!vapidPub || !vapidPriv) {
       checks.push(check('push', 'VAPID push keys', 'warn',
-        "No web push — Ivy nudges, payment alerts, message notifications etc. go email-only."));
+        "No web push - Ivy nudges, payment alerts, message notifications etc. go email-only."));
     } else if (!process.env.VAPID_SUBJECT) {
       checks.push(check('push', 'VAPID push keys', 'warn',
-        'Keys set but VAPID_SUBJECT missing — some browsers will refuse the subscription. Set to mailto:you@yours.'));
+        'Keys set but VAPID_SUBJECT missing - some browsers will refuse the subscription. Set to mailto:you@yours.'));
     } else {
       checks.push(check('push', 'VAPID push keys', 'ok'));
     }
 
-    // ── Vercel Blob (WARN — docs/attachments degrade) ───────────────
+    // ── Vercel Blob (WARN - docs/attachments degrade) ───────────────
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
       checks.push(check('blob', 'BLOB_READ_WRITE_TOKEN', 'warn',
         "Document uploads + e-signature audit PDFs + message attachments will fail with a 400."));
@@ -206,7 +206,7 @@ export default async function handler(req, res) {
       checks.push(check('blob', 'BLOB_READ_WRITE_TOKEN', 'ok'));
     }
 
-    // ── Ivy (WARN — falls back to deterministic mock) ───────────────
+    // ── Ivy (WARN - falls back to deterministic mock) ───────────────
     if (!process.env.ANTHROPIC_API_KEY) {
       checks.push(check('ivy', 'ANTHROPIC_API_KEY', 'warn',
         "Ivy will return canned mock responses instead of reasoning."));
@@ -227,22 +227,22 @@ export default async function handler(req, res) {
       && process.env.IVY_TWILIO_AUTH_TOKEN
       && process.env.IVY_TWILIO_FROM_NUMBER);
     checks.push(check('twilio', 'Twilio (SMS)', twilio ? 'ok' : 'warn',
-      twilio ? 'Configured' : 'Optional — SMS features no-op gracefully without it.'));
+      twilio ? 'Configured' : 'Optional - SMS features no-op gracefully without it.'));
     const square = !!(process.env.SQUARE_APPLICATION_ID && process.env.SQUARE_APPLICATION_SECRET);
     checks.push(check('square', 'Square', square ? 'ok' : 'warn',
-      square ? 'Configured' : 'Optional — workspaces can\'t pick Square checkout without it.'));
+      square ? 'Configured' : 'Optional - workspaces can\'t pick Square checkout without it.'));
     const paypal = !!(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
     checks.push(check('paypal', 'PayPal', paypal ? 'ok' : 'warn',
-      paypal ? 'Configured' : "Optional — workspaces can't pick PayPal checkout without it."));
+      paypal ? 'Configured' : "Optional - workspaces can't pick PayPal checkout without it."));
     const google = !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET);
     checks.push(check('google', 'Google Calendar OAuth', google ? 'ok' : 'warn',
-      google ? 'Configured' : 'Optional — busy-sync feature degrades to manual entry without it.'));
+      google ? 'Configured' : 'Optional - busy-sync feature degrades to manual entry without it.'));
 
     // ── Process flags ───────────────────────────────────────────────
     const nodeEnv = process.env.NODE_ENV || 'development';
     if (nodeEnv !== 'production') {
       checks.push(check('node_env', 'NODE_ENV', 'warn',
-        `Currently "${nodeEnv}" — production error sanitization is OFF. Stack traces will leak to API responses.`));
+        `Currently "${nodeEnv}" - production error sanitization is OFF. Stack traces will leak to API responses.`));
     } else {
       checks.push(check('node_env', 'NODE_ENV', 'ok', 'production'));
     }
@@ -255,7 +255,7 @@ export default async function handler(req, res) {
       warnings,
       goLive: blockers === 0
         ? 'Ready. All required config present. Run a live smoke test before flipping public.'
-        : `${blockers} blocker(s) remaining — not safe to launch yet.`,
+        : `${blockers} blocker(s) remaining - not safe to launch yet.`,
       checks,
     });
   } catch (err) {

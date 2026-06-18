@@ -1,5 +1,5 @@
 // Shared helpers for Ivy OS-side subscription billing (the platform charging
-// workspace owners). Per-workspace customer Stripe is unrelated — see
+// workspace owners). Per-workspace customer Stripe is unrelated - see
 // api/finance/* for that path.
 
 // Map Stripe's subscription.status enum onto our workspaces.subscription_status

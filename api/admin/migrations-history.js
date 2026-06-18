@@ -1,4 +1,4 @@
-// GET /api/admin/migrations-history — reports the schema_migrations
+// GET /api/admin/migrations-history - reports the schema_migrations
 // table for the operator: which statements have applied, which are
 // stuck, when each was last attempted.
 //

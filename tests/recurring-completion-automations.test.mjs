@@ -37,7 +37,7 @@ async function run() {
   const tenAgo = await dbDate(10);
 
   // Recurring booking: anchor date 120 days ago, with completions logged on
-  // occurrence dates (NOT the anchor) — the exact shape that used to be missed.
+  // occurrence dates (NOT the anchor) - the exact shape that used to be missed.
   const recBooking = (await sql.query(
     `INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min,
                            recurrence_rule, completion_log)
@@ -47,7 +47,7 @@ async function run() {
   )).rows[0].id;
 
   // Control: a recurring booking whose only completion is OUTSIDE the window
-  // (anchor today-ish, completed 1 day ago — too recent for reviews).
+  // (anchor today-ish, completed 1 day ago - too recent for reviews).
   const recentBooking = (await sql.query(
     `INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min, completion_log)
      VALUES ($1,$2,'Reggie Recur',$3,$4,600,660,$5::jsonb) RETURNING id`,
@@ -83,7 +83,7 @@ async function run() {
   console.log('\n[workflows] re-running the cron does NOT double-fire the same occurrence');
   await evaluateScheduledWorkflows({ limit: 500 });
   runs = await runsAfter1();
-  assert(runs.length === 1, 'second cron pass deduped on (booking, occurrence) — still one run');
+  assert(runs.length === 1, 'second cron pass deduped on (booking, occurrence) - still one run');
 
   // Cleanup.
   await sql`DELETE FROM workflow_runs WHERE workflow_id = ${wfId}`;

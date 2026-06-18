@@ -12,7 +12,7 @@ on:
         required: false
 
 # Allow exactly one in-flight run at a time. If a manual dispatch lands
-# while the weekly cron is still running, the new one waits — keeps the
+# while the weekly cron is still running, the new one waits - keeps the
 # PR-open step from racing itself.
 concurrency:
   group: check-claude-model
@@ -43,7 +43,7 @@ jobs:
         if: steps.check.outputs.bumped == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          # Stable branch name keyed by target version — re-running the
+          # Stable branch name keyed by target version - re-running the
           # workflow on the same week updates the same PR instead of
           # opening duplicates. If a newer-still model appears next
           # week, the branch name changes and a new PR opens.
@@ -65,16 +65,16 @@ jobs:
 
             ## Review checklist
 
-            - [ ] CI passes (full test suite runs against the new model name — verifies the API still accepts it and tool-use loops still work)
+            - [ ] CI passes (full test suite runs against the new model name - verifies the API still accepts it and tool-use loops still work)
             - [ ] If `is_major_bump=true`, manually exercise Ivy on `/ivy` against a real workspace. Major version bumps often shift refusal behavior, tool-use compliance, and pricing.
-            - [ ] Check Anthropic's [pricing page](https://www.anthropic.com/pricing) — confirm the new model's cost-per-token doesn't blow the unit economics on our $49/mo plan. Update `ivyDailyRequests` caps in the plans config if it does.
+            - [ ] Check Anthropic's [pricing page](https://www.anthropic.com/pricing) - confirm the new model's cost-per-token doesn't blow the unit economics on our $49/mo plan. Update `ivyDailyRequests` caps in the plans config if it does.
             - [ ] After merge, the Ivy Pro chip auto-updates because the label is sourced from `IVY_MODEL` (no UI change needed).
 
             ## How this works
 
             `scripts/check-claude-model.mjs` queries `GET https://api.anthropic.com/v1/models`, filters for `claude-opus-*-*` (the rolling marketing-name aliases, not date-pinned variants), and picks the highest `(major, minor)` tuple. The workflow only opens a PR when it's strictly newer than the value currently in `api/_lib/ivy.js`.
 
-            To skip this bump, just close the PR without merging — the workflow will re-open it next week if the model is still the latest.
+            To skip this bump, just close the PR without merging - the workflow will re-open it next week if the model is still the latest.
 
             To pause auto-bumps entirely, disable the workflow in the Actions tab.
           labels: |

@@ -1,11 +1,11 @@
-// POST /site/:handle/pv — public analytics ping.
+// POST /site/:handle/pv - public analytics ping.
 //
 // Fires from the rendered site on initial load. Records:
 //   • which page slug the visitor landed on
 //   • a truncated referrer
 //   • a rough UA bucket (mobile / desktop / bot)
 //
-// No IP, no UA string, no cookies — keeps us out of GDPR/cookie-banner
+// No IP, no UA string, no cookies - keeps us out of GDPR/cookie-banner
 // territory entirely. Owners get aggregate counts in the Editor's
 // Traffic panel.
 
@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   }
   try {
     await ensureSchemaApplied();
-    // 60 events per IP per minute — generous, but bots that try to skew
+    // 60 events per IP per minute - generous, but bots that try to skew
     // counts get throttled.
     const ip = getClientIp(req);
     if (await enforce(req, res, [{ key: `pv:${ip}`, max: 60, windowSeconds: 60 }])) return;
@@ -44,7 +44,7 @@ export default async function handler(req, res) {
       return res.end();
     }
 
-    // Coarse UA classification — keeps the table small + analytics
+    // Coarse UA classification - keeps the table small + analytics
     // free of fingerprint-grade data.
     const ua = String(req.headers['user-agent'] || '');
     let uaClass = 'desktop';

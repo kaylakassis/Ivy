@@ -74,7 +74,7 @@ export default async function handler(req, res) {
     const workspaceId = cs.rows[0].workspace_id;
 
     // Gift-card sales are Stripe-only by design (hosted Checkout). Square/
-    // PayPal aren't wired for selling gift cards — surface that plainly
+    // PayPal aren't wired for selling gift cards - surface that plainly
     // rather than a generic "card payments" message.
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
 
     const base = appUrl();
     // Pass everything the webhook needs as metadata. We delay code
-    // generation until payment completes — if Stripe declines, we
+    // generation until payment completes - if Stripe declines, we
     // never issue an unredeemable code.
     const session = await stripeCheckout({
       secretKey:     creds.secretKey,

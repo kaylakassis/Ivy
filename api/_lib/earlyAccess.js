@@ -62,7 +62,7 @@ function parseCookie(req, name) {
 export async function isGateUnlocked(req) {
   const settings = await getGateSettings();
   if (!settings.enabled) return true;
-  if (!settings.passwordHash) return true; // misconfig — fail open rather than lock out
+  if (!settings.passwordHash) return true; // misconfig - fail open rather than lock out
   const cookieVal = parseCookie(req, COOKIE_NAME);
   if (!cookieVal) return false;
   const expected = signCookieValue(settings.passwordHash);
@@ -90,7 +90,7 @@ export async function attemptUnlock(plaintext) {
 }
 
 // Admin: replace the gate password. Pass empty/null to clear it (which
-// also forces enabled=false — a missing password with the gate on
+// also forces enabled=false - a missing password with the gate on
 // would lock out the whole world, so we refuse that combo).
 export async function setGatePassword(plaintext) {
   if (!plaintext) {
@@ -145,14 +145,14 @@ export async function requireGate(req, res) {
 
 // Cookie writer used by /api/early-access/verify. Caller passes the
 // cookieValue from attemptUnlock(). HttpOnly so the value can't be
-// read from JS — the gate is a server-side check anyway.
+// read from JS - the gate is a server-side check anyway.
 export function setGateCookie(res, value) {
   res.setHeader('Set-Cookie',
     `${COOKIE_NAME}=${encodeURIComponent(value)}; Path=/; Max-Age=${COOKIE_MAX_AGE}; HttpOnly; SameSite=Lax; Secure`,
   );
 }
 
-// Used when the password rotates or the gate is disabled — clear the
+// Used when the password rotates or the gate is disabled - clear the
 // cookie so visitors aren't carrying stale credentials.
 export function clearGateCookie(res) {
   res.setHeader('Set-Cookie',

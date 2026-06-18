@@ -1,4 +1,4 @@
-// Client-onboarding emails — owner-side actions (add client, CSV import,
+// Client-onboarding emails - owner-side actions (add client, CSV import,
 // even imports through the public booking flow if you want to wire them
 // later) trigger a one-shot "claim your account" invite. Skip if no
 // email, idempotent via clients.invite_sent_at so rapid edits / re-saves
@@ -13,7 +13,7 @@ function escapeHtml(s) {
 }
 function firstName(s) { return (s || '').trim().split(/\s+/)[0] || ''; }
 
-// Best-effort fire-and-forget invite. Fail silently — never block the
+// Best-effort fire-and-forget invite. Fail silently - never block the
 // owner's create / import call.
 export async function sendClientInvite({ workspaceId, clientId }) {
   try {
@@ -56,7 +56,7 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     try {
     await sendEmailToClient({
       clientId,
-      // Invitations are tied to the bookings vertical — opting out of
+      // Invitations are tied to the bookings vertical - opting out of
       // booking emails also disables the invite reminder. Reasonable
       // since the invite IS about future bookings.
       type: 'bookings',
@@ -85,11 +85,11 @@ export async function sendClientInvite({ workspaceId, clientId }) {
           </p>`,
         ctaText: 'Create my account',
         ctaUrl: signupHref,
-        footer: `Already have an Ivy OS account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> — we'll link you to ${escapeHtml(bizName)} automatically.`,
+        footer: `Already have an Ivy OS account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> - we'll link you to ${escapeHtml(bizName)} automatically.`,
       }),
     });
     } catch (sendErr) {
-      // Send failed — release the claim so a later add/retry can re-invite.
+      // Send failed - release the claim so a later add/retry can re-invite.
       await sql`
         UPDATE clients SET invite_sent_at = NULL
         WHERE id = ${clientId} AND workspace_id = ${workspaceId}

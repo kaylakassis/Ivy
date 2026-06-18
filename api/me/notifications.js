@@ -37,7 +37,7 @@ export default async function handler(req, res) {
         const r = await sql`SELECT notification_prefs FROM users WHERE id = ${user.id}`;
         stored = r.rows[0]?.notification_prefs || {};
       } catch (e) {
-        // notification_prefs column missing — fall back to defaults so
+        // notification_prefs column missing - fall back to defaults so
         // the account page can still render notification settings.
         // eslint-disable-next-line no-console
         console.error('[me/notifications GET] failed (using defaults):', e.message);

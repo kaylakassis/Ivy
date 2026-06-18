@@ -2,7 +2,7 @@
 //
 // Platform-level Stripe webhook for Account-Links / Express-onboarded
 // workspaces. Owners on the modern Connect flow don't paste a
-// per-workspace webhook secret — events for every connected account
+// per-workspace webhook secret - events for every connected account
 // arrive here using the single platform-level STRIPE_WEBHOOK_SECRET.
 //
 // Dispatch:
@@ -13,7 +13,7 @@
 //   • Other event types succeed quietly so Stripe stops retrying.
 //
 // The legacy per-workspace webhook at /api/webhooks/stripe/[workspaceId]
-// stays for backward compatibility — workspaces that pasted keys
+// stays for backward compatibility - workspaces that pasted keys
 // manually still ride that path.
 import { sql } from '../_lib/db.js';
 import { readRawBody } from '../_lib/body.js';
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
 
     // event.account = the connected account id. Platform events
     // (originating from the platform itself, not a connected acct)
-    // have no event.account — we no-op those.
+    // have no event.account - we no-op those.
     const acctId = event.account;
     if (!acctId) {
       return ok(res, { received: true, ignored: 'platform-level event (no connected account)' });
@@ -79,12 +79,12 @@ export default async function handler(req, res) {
     `;
     const workspaceId = rows[0]?.workspace_id;
     if (!workspaceId) {
-      // Unknown connected acct — could be a stale acct from a workspace
+      // Unknown connected acct - could be a stale acct from a workspace
       // that disconnected. Acknowledge so Stripe stops retrying.
       return ok(res, { received: true, ignored: 'unknown connected account' });
     }
 
-    // account.updated — Stripe sends this when charges_enabled / details_submitted
+    // account.updated - Stripe sends this when charges_enabled / details_submitted
     // / payouts_enabled flips. Resync the local row so the owner's
     // /finance page reflects current status without a manual refresh.
     if (event.type === 'account.updated') {
@@ -111,7 +111,7 @@ export default async function handler(req, res) {
     }
 
     // Membership subscription lifecycle. customer.subscription.* events
-    // move client_memberships state — created flips to 'active' when
+    // move client_memberships state - created flips to 'active' when
     // checkout completes; updated handles renewals/past_due; deleted
     // marks cancelled. We require metadata.purpose='membership' so an
     // owner's other Stripe subscriptions (if any) don't get mis-routed
@@ -139,7 +139,7 @@ export default async function handler(req, res) {
       return ok(res, { received: true, applied: 'membership-state', result });
     }
 
-    // checkout.session.completed — payment OR save-card flows. We
+    // checkout.session.completed - payment OR save-card flows. We
     // ignore subscription mode here because the customer.subscription.*
     // events above carry the full subscription state we need.
     if (event.type === 'checkout.session.completed') {
@@ -216,7 +216,7 @@ export default async function handler(req, res) {
 
       // Payment flow: invoice, booking-deposit, or package purchase.
       // Mark the invoice paid + record the payment intent for refunds.
-      // Booking deposits route through the bookings table separately —
+      // Booking deposits route through the bookings table separately -
       // their invoice_id starts with 'bookdep_'. Package purchases have
       // metadata.purpose='package' and no invoice_id.
 
@@ -233,7 +233,7 @@ export default async function handler(req, res) {
         // Idempotency guard: bail out if we've already provisioned for
         // this session id. Looks for any client_packages row stamped
         // with this stripe_session_id in the snapshot's metadata via
-        // the dedup table approach — markProcessed gates the whole
+        // the dedup table approach - markProcessed gates the whole
         // event id earlier, so this is belt-and-suspenders for the
         // double-fire case across function restarts.
         const dup = await sql`
@@ -280,7 +280,7 @@ export default async function handler(req, res) {
           workspaceId, type: 'payments',
           payload: {
             title: 'Package sold 🎟️',
-            body: `${p.name} (${credits} sessions) — $${priceCharged.toFixed(0)}`,
+            body: `${p.name} (${credits} sessions) - $${priceCharged.toFixed(0)}`,
             url: '/clients',
             tag: `package-${sessionId}`,
           },
@@ -358,7 +358,7 @@ export default async function handler(req, res) {
           AND status <> 'paid'
         RETURNING id
       `;
-      // Lost a race with a concurrent duplicate — it already marked paid.
+      // Lost a race with a concurrent duplicate - it already marked paid.
       if (upd.rows.length === 0) {
         return ok(res, { received: true, ignored: 'invoice already paid' });
       }
@@ -375,7 +375,7 @@ export default async function handler(req, res) {
       return ok(res, { received: true, applied: 'invoice-paid' });
     }
 
-    // payment_intent.succeeded — safety net for invoice payments. Stripe
+    // payment_intent.succeeded - safety net for invoice payments. Stripe
     // fans a single Checkout payment into checkout.session.completed +
     // payment_intent.succeeded; if the former never lands (webhook
     // misconfigured, transient delivery failure, payment created outside
@@ -384,7 +384,7 @@ export default async function handler(req, res) {
     // status<>'paid'), so the duplicate from the pair is a no-op.
     //
     // Booking-deposit PIs (metadata.invoice_id starting 'bookdep_') are
-    // skipped here — those flow through checkout.session.completed only.
+    // skipped here - those flow through checkout.session.completed only.
     if (event.type === 'payment_intent.succeeded') {
       const pi = event.data?.object || {};
       const eventWorkspaceId = pi.metadata?.workspace_id;
@@ -411,7 +411,7 @@ export default async function handler(req, res) {
         }
         const o = upd.rows[0];
         // Stock decrement for tracked products. Safe to do
-        // unconditionally — products without track_stock leave
+        // unconditionally - products without track_stock leave
         // stock_qty untouched at the WHERE-level guard.
         const items = Array.isArray(o.items) ? o.items : [];
         for (const it of items) {
@@ -448,10 +448,10 @@ export default async function handler(req, res) {
       return ok(res, { received: true, applied: 'invoice-paid', result });
     }
 
-    // All other event types — quietly accept so Stripe stops retrying.
+    // All other event types - quietly accept so Stripe stops retrying.
     return ok(res, { received: true, ignored: event.type });
   } catch (err) {
-    // Processing threw after we claimed the event — release the claim so
+    // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.
     if (claimedEventId) await releaseProcessed('stripe-platform', claimedEventId);
     return serverError(res, err);

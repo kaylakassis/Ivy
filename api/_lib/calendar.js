@@ -36,7 +36,7 @@ export function serializeSettings(row) {
 }
 
 // Categories for Discover. Owners pick one (or none). The set MUST stay
-// in sync with src/lib/categories.js on the client — the server-side
+// in sync with src/lib/categories.js on the client - the server-side
 // list gates which values can be saved on a workspace.
 export const DISCOVER_CATEGORIES = [
   'Wellness', 'Beauty', 'Fitness', 'Health',
@@ -212,7 +212,7 @@ export function serializeBooking(row, opts = {}) {
 }
 
 // Mint a unique meeting URL for a virtual booking. Jitsi Meet's
-// public instance accepts arbitrary room names — we prefix with
+// public instance accepts arbitrary room names - we prefix with
 // 'ivy-' so the room is namespaced to us, and append a 24-char
 // random suffix so the link is unguessable. No API key, no setup.
 //
@@ -254,15 +254,15 @@ export function effectiveWindows(workspaceAvailability, serviceAvailability, wee
 }
 
 // Returns true if [start, end) sits inside any effective availability window
-// for the given weekday. `serviceAvailability` is optional — when present,
+// for the given weekday. `serviceAvailability` is optional - when present,
 // the workspace windows are intersected with the service override.
 export function withinAvailability(availability, weekday, start, end, serviceAvailability) {
   const windows = effectiveWindows(availability, serviceAvailability, weekday);
   return windows.some((w) => start >= w.start && end <= w.end);
 }
 
-// Resolve a (dateISO, startMin) pair — both in the workspace's wall-clock
-// timezone — to a UTC epoch (ms). Critical for the min-notice / horizon
+// Resolve a (dateISO, startMin) pair - both in the workspace's wall-clock
+// timezone - to a UTC epoch (ms). Critical for the min-notice / horizon
 // checks: previously the server treated the pair as UTC, which meant an
 // owner in PST testing a 3pm slot tomorrow got rejected at 9pm-tonight-
 // PST as "less than 12h" because the server thought "3pm" meant 3pm UTC
@@ -272,8 +272,8 @@ export function withinAvailability(availability, weekday, start, end, serviceAva
 // spring-forward / fall-back boundary depends on the moment, so we
 // refine our guess once.
 //
-// `tz` is an IANA name (e.g. "America/Los_Angeles"). When null/missing —
-// matches the legacy behavior — we treat the inputs as UTC.
+// `tz` is an IANA name (e.g. "America/Los_Angeles"). When null/missing -
+// matches the legacy behavior - we treat the inputs as UTC.
 export function slotEpochMs(dateISO, startMin, tz) {
   if (!dateISO || !Number.isFinite(startMin)) return NaN;
   const [y, m, d] = dateISO.split('-').map(Number);
@@ -309,7 +309,7 @@ function tzOffsetMinutes(epochMs, tz) {
     );
     return Math.round((localAsUtcMs - epochMs) / 60_000);
   } catch {
-    // Unknown tz — fall back to UTC (offset 0). Same legacy behavior.
+    // Unknown tz - fall back to UTC (offset 0). Same legacy behavior.
     return 0;
   }
 }
@@ -363,21 +363,21 @@ async function overlappingRecurringMasters({ workspaceId, dateISO, startBuf, end
 }
 
 // Returns true if the slot collides with any block or active booking on the given date.
-// Slot conflict check. Permits group bookings — if serviceId + capacity
+// Slot conflict check. Permits group bookings - if serviceId + capacity
 // are passed and capacity > 1, multiple bookings of the SAME service in
 // the EXACT same start/end window can co-exist up to `capacity`. Any
 // other overlap (different service, different exact slot, blocks,
 // external busy) still conflicts.
 // `travelBufferMin` (minutes) widens the conflict window symmetrically.
 // When set, a booking at 9:00–10:00 with a 30-min travel buffer treats
-// the slot as effectively reserving 8:30–10:30 of the owner's day —
+// the slot as effectively reserving 8:30–10:30 of the owner's day -
 // keeps mobile providers from accidentally accepting back-to-back
 // bookings across town.
 export async function hasConflict({ workspaceId, dateISO, start, end, serviceId = null, capacity = 1, excludeBookingId = null, travelBufferMin = 0, bufferMin = 0 }) {
   // Widen the proposed booking's window symmetrically by the total required
   // gap: the workspace's minimum buffer between appointments (bufferMin) +
   // any per-service travel time (travelBufferMin). An existing back-to-back
-  // booking/block then counts as a conflict when the gap is too small —
+  // booking/block then counts as a conflict when the gap is too small -
   // this is what bars clients from booking too close to another appointment.
   const buf = Math.max(0, Number(travelBufferMin) || 0) + Math.max(0, Number(bufferMin) || 0);
   const startBuf = Math.max(0, start - buf);
@@ -385,7 +385,7 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
 
   // Only blocks with blocks_bookings = TRUE are real conflicts.
   // Informational personal events (blocks_bookings = FALSE) live on
-  // the owner's calendar but don't gate bookings — clients can still
+  // the owner's calendar but don't gate bookings - clients can still
   // pick that slot, and the owner is responsible for moving their
   // own event if a booking lands there.
   const blocks = await sql`
@@ -397,7 +397,7 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
   `;
   if (blocks.rows.length > 0) return true;
 
-  // Inbound external busy times — same hard-block treatment as
+  // Inbound external busy times - same hard-block treatment as
   // calendar_blocks.
   const external = await sql`
     SELECT 1 FROM external_busy_blocks
@@ -415,7 +415,7 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
   // excludeBookingId lets a reschedule re-validate availability without
   // colliding with itself. The booking we're moving is still in the
   // table at its old slot (we soft-update); ignore it during the check.
-  // Note: buffered window applies to OTHER bookings too — ensures the
+  // Note: buffered window applies to OTHER bookings too - ensures the
   // gap respects travel time in both directions.
   const overlapping = excludeBookingId
     ? await sql`
@@ -458,7 +458,7 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
 //
 // hasConflict() is a SELECT-then-INSERT check, so two requests for the
 // same slot can BOTH pass it before either inserts (a check-then-act
-// race) — at scale this double-books. We can't prevent it with a UNIQUE
+// race) - at scale this double-books. We can't prevent it with a UNIQUE
 // / EXCLUDE constraint (existing intentional overlaps via
 // skipConflictCheck would make the constraint fail to apply, and the
 // Neon HTTP driver can't hold a transaction to serialize), so instead we
@@ -466,7 +466,7 @@ export async function hasConflict({ workspaceId, dateISO, start, end, serviceId 
 // it lost.
 //
 // A freshly-inserted booking "loses" iff at least `capacity` CONFLICTING
-// bookings rank before it by (created_at, id) — a total, deterministic
+// bookings rank before it by (created_at, id) - a total, deterministic
 // order, so exactly `capacity` winners survive and every later racer
 // rolls itself back. Because this runs as its own statement it sees the
 // other racers' committed rows. Mirrors hasConflict's overlap rules.

@@ -39,7 +39,7 @@ function hashToken(raw) {
 }
 
 export default async function handler(req, res) {
-  // Public endpoint (no requireUser) — bootstrap schema explicitly so
+  // Public endpoint (no requireUser) - bootstrap schema explicitly so
   // a cold-started function instance doesn't 500 on missing tables.
   try { await ensureSchemaApplied(); } catch { /* tolerate */ }
   if (req.method === 'GET')    return getDoc(req, res);
@@ -113,7 +113,7 @@ async function resolveByToken(rawToken) {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// GET — fetch the doc + position info, mark 'viewed'.
+// GET - fetch the doc + position info, mark 'viewed'.
 // ───────────────────────────────────────────────────────────────────────
 async function getDoc(req, res) {
   try {
@@ -170,7 +170,7 @@ async function getDoc(req, res) {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// POST — submit the signed values. Multi-signer: marks this signer
+// POST - submit the signed values. Multi-signer: marks this signer
 // complete, mints + emails the next, or completes the doc.
 // ───────────────────────────────────────────────────────────────────────
 async function signDoc(req, res) {
@@ -193,7 +193,7 @@ async function signDoc(req, res) {
 
     // Merge submitted values onto stored fields by id. Required-field
     // check is scoped to fields owned by THIS signer (per signerIndex)
-    // — otherwise signer 1 would trip over required fields that signer
+    // - otherwise signer 1 would trip over required fields that signer
     // 2 will only fill on their turn. For documents without
     // per-signer assignment (legacy single-signer / written multi),
     // all fields default to signerIndex 0 so the same signer fills
@@ -286,7 +286,7 @@ async function signDoc(req, res) {
             html: emailShell({
               heading: 'A document needs your signature',
               body: `<p>Hi ${escapeHtml(n.name)},</p>
-                     <p>You're up next on <b>${escapeHtml(doc.name)}</b> — signer ${n.order_index + 1} of ${totalSigners}.</p>`,
+                     <p>You're up next on <b>${escapeHtml(doc.name)}</b> - signer ${n.order_index + 1} of ${totalSigners}.</p>`,
               ctaText: 'Open and sign',
               ctaUrl: `${appUrl()}/sign/${encodeURIComponent(nextRaw)}`,
               footer: `If you weren't expecting this, you can safely ignore this email.`,
@@ -319,12 +319,12 @@ async function signDoc(req, res) {
       await maybeStampFinalPdf(finalDoc);
       await notifyOwnerOnCompletion(finalDoc);
       // Tell every signer who participated that the doc is fully
-      // executed — important for long-running multi-signer flows
+      // executed - important for long-running multi-signer flows
       // where signer 1 might have signed days before signer N
       // finally completes. Sends both a push (immediate) and an
       // email (durable record + link to their copy).
       try {
-        // Exclude declined signers — they walked away. Including them
+        // Exclude declined signers - they walked away. Including them
         // sends a "fully signed" email/push to someone who never agreed,
         // which is misleading and a small compliance risk.
         const { rows: allSigners } = await sql`
@@ -364,7 +364,7 @@ async function signDoc(req, res) {
                 html: emailShell({
                   heading: 'Document fully signed',
                   body: `<p>Hi ${escapeHtml(s.name || 'there')},</p>
-                    <p><strong>${escapeHtml(doc.name)}</strong> is now complete — every signer is in.</p>
+                    <p><strong>${escapeHtml(doc.name)}</strong> is now complete - every signer is in.</p>
                     <p>You can view a copy of the signed document any time from your portal.</p>`,
                   ctaText: 'View signed copy',
                   ctaUrl: portalLink,
@@ -421,7 +421,7 @@ async function signDoc(req, res) {
 }
 
 // ───────────────────────────────────────────────────────────────────────
-// DELETE — decline. Multi-signer: declining halts the entire document.
+// DELETE - decline. Multi-signer: declining halts the entire document.
 // ───────────────────────────────────────────────────────────────────────
 async function declineDoc(req, res) {
   try {
@@ -453,7 +453,7 @@ async function declineDoc(req, res) {
           updated_at      = NOW()
         WHERE id = ${signer.id}
       `;
-      // Invalidate any other pending signer tokens — once one declines,
+      // Invalidate any other pending signer tokens - once one declines,
       // the document is dead and we don't want the next email link to
       // accidentally let someone sign anyway.
       await sql`
@@ -469,8 +469,8 @@ async function declineDoc(req, res) {
         ts: new Date().toISOString(),
         kind: 'declined',
         text: isMulti
-          ? `${declinerName} (signer ${signerIndex + 1} of ${totalSigners}) declined${reason ? ` — "${reason}"` : ''}`
-          : `${declinerName} declined to sign${reason ? ` — "${reason}"` : ''}`,
+          ? `${declinerName} (signer ${signerIndex + 1} of ${totalSigners}) declined${reason ? ` - "${reason}"` : ''}`
+          : `${declinerName} declined to sign${reason ? ` - "${reason}"` : ''}`,
         ip,
       },
     ];
@@ -490,7 +490,7 @@ async function declineDoc(req, res) {
       type: 'documents',
       payload: {
         title: 'Document declined',
-        body: `${declinerName} declined "${doc.name}"${reason ? ` — ${reason}` : ''}`,
+        body: `${declinerName} declined "${doc.name}"${reason ? ` - ${reason}` : ''}`,
         url: '/documents',
         tag: `doc-declined-${doc.id}`,
       },
@@ -607,7 +607,7 @@ function computeHash({ contentHtml, signers }) {
 // If the doc is a PDF with placed fields, render the flattened final
 // PDF (signatures + text drawn into the document, plus an audit page)
 // and store its blob URL on documents.final_pdf_url. Best-effort: a
-// stamping failure is logged but doesn't roll back completion — the
+// stamping failure is logged but doesn't roll back completion - the
 // canonical record is the document_signers rows + completion_hash.
 async function maybeStampFinalPdf(doc) {
   if (!doc) return;

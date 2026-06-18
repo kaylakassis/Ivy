@@ -1,4 +1,4 @@
-// Website state — sourced from /api/website.
+// Website state - sourced from /api/website.
 // Local edits update immediately; writes are debounced to the server.
 //
 // Multi-page model:
@@ -7,7 +7,7 @@
 //   sync as a mirror of the home page (slug='') so any code path that
 //   still reads `sections` continues to work.
 //
-//   currentPageId tracks which page the editor is editing right now —
+//   currentPageId tracks which page the editor is editing right now -
 //   local-only state, not persisted.
 import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { api } from '../../lib/api.js';
@@ -79,7 +79,7 @@ function normalize(w) {
   };
 }
 
-// Debounced server write — every change is coalesced into a single PUT.
+// Debounced server write - every change is coalesced into a single PUT.
 function useDebouncedPut(delay = 600) {
   const pendingRef = useRef(null);
   const timerRef   = useRef(null);

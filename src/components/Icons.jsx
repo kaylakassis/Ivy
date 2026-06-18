@@ -1,4 +1,4 @@
-// Minimal icon set — stroke-based, 20px default
+// Minimal icon set - stroke-based, 20px default
 import React from 'react';
 
 const Icon = ({ size = 20, stroke = 'currentColor', fill = 'none', sw = 1.6, children, ...rest }) => (

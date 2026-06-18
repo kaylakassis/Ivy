@@ -1,4 +1,4 @@
-// /api/rewards/confirm — POST { ruleId, clientId, validityDays?, sendMessage? }
+// /api/rewards/confirm - POST { ruleId, clientId, validityDays?, sendMessage? }
 // Owner confirms an auto-detected eligibility. Inserts a redemption row with
 // status='issued' and (by default) drops a chat message in the client's thread
 // announcing the reward and its validity window.

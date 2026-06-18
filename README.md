@@ -5,7 +5,7 @@ All-in-one business platform for solo owners and small teams. Vite + React front
 ## Stack
 
 - **Frontend:** Vite + React 18 + React Router 6
-- **Styling:** CSS custom properties (two visual directions — Calm / Bold), Inter + Fraunces + Space Grotesk
+- **Styling:** CSS custom properties (two visual directions - Calm / Bold), Inter + Fraunces + Space Grotesk
 - **Backend:** Vercel serverless functions (`/api/**/*.js`)
 - **Database:** Neon serverless Postgres (`@neondatabase/serverless`)
 - **Deployment:** Vercel (framework preset: Vite)
@@ -25,7 +25,7 @@ All-in-one business platform for solo owners and small teams. Vite + React front
 │       ├── db.js                 # Vercel Postgres client
 │       └── json.js               # response helpers
 ├── src/
-│   ├── main.jsx                  # React entry — mounts <App />
+│   ├── main.jsx                  # React entry - mounts <App />
 │   ├── App.jsx                   # Route definitions
 │   ├── styles/
 │   │   ├── tokens.css            # design tokens (dir-calm / dir-bold)
@@ -67,7 +67,7 @@ npm run dev
 ```
 
 App runs on http://localhost:5173. For the API routes, you'll need `vercel dev` (or deploy
-to Vercel) — plain `vite dev` serves only the frontend.
+to Vercel) - plain `vite dev` serves only the frontend.
 
 ## Deploying to Vercel
 
@@ -86,9 +86,9 @@ to Vercel) — plain `vite dev` serves only the frontend.
 
 ## Auth + data model
 
-- `users`      — email + bcrypt password hash + name
-- `workspaces` — 1 per user (ownership)
-- `websites`   — 1 per workspace; `{ handle, business_name, template, sections (jsonb), launched, published_at }`
+- `users`      - email + bcrypt password hash + name
+- `workspaces` - 1 per user (ownership)
+- `websites`   - 1 per workspace; `{ handle, business_name, template, sections (jsonb), launched, published_at }`
 
 Session is a JWT in an httpOnly cookie (`ivy_session`, 30-day expiry). Routes under
 `/api/auth/*` handle signup/login/logout/me. All other `/api/*` routes call `requireUser()`
@@ -121,4 +121,4 @@ migrate endpoint once after first deploy to create tables.
 
 ## Reference: the prototype
 
-`project/Ivy OS.html` is the original design prototype (React + Babel in-browser). Every feature was designed and iterated there — treat it as the source of truth for visuals and UX. The feature stubs in `src/features/*` will be fleshed out to match, then wired to the Postgres-backed API.
+`project/Ivy OS.html` is the original design prototype (React + Babel in-browser). Every feature was designed and iterated there - treat it as the source of truth for visuals and UX. The feature stubs in `src/features/*` will be fleshed out to match, then wired to the Postgres-backed API.

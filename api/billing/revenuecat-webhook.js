@@ -7,14 +7,14 @@
 // provider-agnostic event to this endpoint.
 //
 // We're not the receipt validator and we're not parsing Apple's notify
-// payload — RevenueCat does both. We just trust their signed event and
+// payload - RevenueCat does both. We just trust their signed event and
 // flip the workspace's subscription state.
 //
 // Auth: shared-secret bearer header (REVENUECAT_WEBHOOK_SECRET). RC lets
 // you set an arbitrary Authorization header on every webhook delivery
 // (Project Settings → Integrations → Webhooks → Authorization header).
 // Constant-time compared; no signature trick because RC doesn't publish
-// an HMAC scheme — bearer is what they offer.
+// an HMAC scheme - bearer is what they offer.
 //
 // Event types we care about (RC docs:
 // https://www.revenuecat.com/docs/webhooks/webhooks-overview):
@@ -26,7 +26,7 @@
 //   EXPIRATION             → period_end passed without renewal
 //   BILLING_ISSUE          → renewal payment failed
 //   UNCANCELLATION         → user re-enabled auto-renew before expiration
-//   SUBSCRIBER_ALIAS       → identity merge (ignore — we use stable workspace id)
+//   SUBSCRIBER_ALIAS       → identity merge (ignore - we use stable workspace id)
 //
 // We mirror these to the same workspaces.subscription_status enum
 // Stripe uses, so the rest of the app (paywall, dunning, owner
@@ -49,7 +49,7 @@ import crypto from 'node:crypto';
 export const config = { api: { bodyParser: false } };
 
 // Constant-time bearer compare. Falls back to direct string compare if
-// the lengths differ — timingSafeEqual throws on length mismatch, and
+// the lengths differ - timingSafeEqual throws on length mismatch, and
 // we don't want a length-leak from the throw path.
 function bearerOk(header, secret) {
   if (!header || !secret) return false;
@@ -62,7 +62,7 @@ function bearerOk(header, secret) {
 // Map RC event types to our subscription_status. RC's `type` is on
 // event.event.type; the SAME event may carry an expiration timestamp
 // (event.event.expiration_at_ms) that determines if the entitlement is
-// still active — we honor that for CANCELLATION (user turned off
+// still active - we honor that for CANCELLATION (user turned off
 // auto-renew, but still has the paid period).
 function statusForEvent(eventType, expirationMs, nowMs) {
   switch (eventType) {
@@ -110,7 +110,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing event.id or event.type' });
     }
 
-    // Dedup — RC retries on non-2xx with the same event.id.
+    // Dedup - RC retries on non-2xx with the same event.id.
     if (!(await markProcessed('revenuecat', event.id, null))) {
       return ok(res, { received: true, deduped: true });
     }
@@ -120,7 +120,7 @@ export default async function handler(req, res) {
     // app_user_id on the event payload.
     const workspaceId = event.app_user_id;
     if (!workspaceId) {
-      // No workspace to flip — accept but no-op so RC doesn't retry.
+      // No workspace to flip - accept but no-op so RC doesn't retry.
       return ok(res, { received: true, noop: 'no app_user_id' });
     }
 
@@ -128,7 +128,7 @@ export default async function handler(req, res) {
     const nowMs = Date.now();
     const nextStatus = statusForEvent(event.type, expirationMs, nowMs);
     if (!nextStatus) {
-      // SUBSCRIBER_ALIAS, TEST, TRANSFER, etc. — accept silently.
+      // SUBSCRIBER_ALIAS, TEST, TRANSFER, etc. - accept silently.
       return ok(res, { received: true, ignored: event.type });
     }
 

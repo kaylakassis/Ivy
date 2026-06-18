@@ -5,7 +5,7 @@
 //
 // We only return the top match. Owners review + accept the result in the
 // UI before saving to their workspace, so an imperfect geocode is fine
-// — they'll either tweak the displayed coordinates or paste their own.
+// - they'll either tweak the displayed coordinates or paste their own.
 import { requireUser } from './_lib/auth.js';
 import { readBody } from './_lib/body.js';
 import { requireSameOrigin } from './_lib/security.js';
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     if (!user) return;
 
     const ip = getClientIp(req);
-    // Owners look up their address a couple of times tops — generous IP
+    // Owners look up their address a couple of times tops - generous IP
     // bucket but tight per-user effective rate via the same key.
     const blocked = await enforce(req, res, [
       { key: `geocode:user:${user.id}`, max: 30, windowSeconds: 60 * 60 },

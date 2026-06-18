@@ -1,4 +1,4 @@
-// POST /api/me/groups/:id/messages — client sends to the group.
+// POST /api/me/groups/:id/messages - client sends to the group.
 // Rejected when mode='broadcast'.
 import { sql } from '../../../_lib/db.js';
 import { requireUser } from '../../../_lib/auth.js';

@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     if (myIds.length === 0) return notFound(res, 'Document not found');
 
     // Look up the document AND verify the user has standing to access
-    // it — either as the legacy recipient OR as a multi-signer.
+    // it - either as the legacy recipient OR as a multi-signer.
     const docRows = await sql.query(
       `SELECT id, status FROM documents
         WHERE id = $1
@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     //     so resolveByToken in /api/sign/[token] takes the multi-signer
     //     path. Minting on documents.sign_token_hash would let them
     //     sign-the-whole-thing via the legacy fallback, bypassing the
-    //     order-of-signers chain — a subtle multi-tenant safety break.
+    //     order-of-signers chain - a subtle multi-tenant safety break.
     //   • Refuse if it's not their turn (status='pending').
     const signerRows = await sql.query(
       `SELECT id, status, order_index FROM document_signers
@@ -62,9 +62,9 @@ export default async function handler(req, res) {
 
     if (mySigner) {
       if (mySigner.status === 'pending') {
-        return badRequest(res, "It's not your turn yet — you'll be emailed when the previous signer is done.");
+        return badRequest(res, "It's not your turn yet - you'll be emailed when the previous signer is done.");
       }
-      // 'awaiting' / 'viewed' / 'completed' / 'declined' — mint a fresh
+      // 'awaiting' / 'viewed' / 'completed' / 'declined' - mint a fresh
       // token onto the signer row. resolveByToken handles whether they
       // can still sign or just view based on doc + signer status.
       await sql.query(
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
       return ok(res, { url: `${appUrl()}/sign/${encodeURIComponent(raw)}` });
     }
 
-    // Legacy single-signer flow — no document_signers row. Defense-in-
+    // Legacy single-signer flow - no document_signers row. Defense-in-
     // depth: re-scope the UPDATE to recipient_client_id = ANY(myIds).
     await sql.query(
       `UPDATE documents SET sign_token_hash = $1 WHERE id = $2 AND recipient_client_id = ANY($3)`,

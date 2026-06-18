@@ -43,7 +43,7 @@ function loadKey() {
   if (cachedPrimaryKey) return cachedPrimaryKey;
   const raw = process.env.SECRETS_KEY;
   if (!raw) {
-    throw new Error('SECRETS_KEY is not set — required to encrypt/decrypt stored secrets');
+    throw new Error('SECRETS_KEY is not set - required to encrypt/decrypt stored secrets');
   }
   cachedPrimaryKey = parseKey(raw, 'SECRETS_KEY');
   return cachedPrimaryKey;
@@ -66,7 +66,7 @@ function loadPreviousKey() {
   return cachedPreviousKey;
 }
 
-// Returns "v1.<iv_b64>.<tag_b64>.<ciphertext_b64>" — version-tagged so we can
+// Returns "v1.<iv_b64>.<tag_b64>.<ciphertext_b64>" - version-tagged so we can
 // rotate algorithms later without breaking existing rows.
 export function encrypt(plaintext) {
   if (typeof plaintext !== 'string') {
@@ -119,7 +119,7 @@ export function decrypt(blob) {
     try {
       return tryDecrypt(prev);
     } catch {
-      // Neither key worked — throw the primary error (more meaningful).
+      // Neither key worked - throw the primary error (more meaningful).
       throw primaryErr;
     }
   }

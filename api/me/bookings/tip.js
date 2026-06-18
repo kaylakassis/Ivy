@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     if (!b) return badRequest(res, 'Booking not found');
     if (Number(b.tip_amount) > 0) return badRequest(res, 'A tip has already been recorded');
     if (!b.stripe_customer_id || !b.payment_method_id) {
-      return badRequest(res, 'No card on file — add one in /me/billing first.');
+      return badRequest(res, 'No card on file - add one in /me/billing first.');
     }
 
     const creds = await loadStripeCreds(b.workspace_id);
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
       paymentMethodId: b.payment_method_id,
       amountCents: Math.round(amount * 100),
       currency: creds.currency,
-      description: `Tip — ${b.service_name || 'session'}`,
+      description: `Tip - ${b.service_name || 'session'}`,
       metadata: { booking_id: b.id, workspace_id: b.workspace_id, kind: 'tip', source: 'client_portal' },
       statementDescriptor: 'TIP',
       // Shares the `tip-<booking>` key with the owner tip endpoint so a

@@ -1,4 +1,4 @@
-// GET /api/me/groups — every group thread this user is an active member of,
+// GET /api/me/groups - every group thread this user is an active member of,
 // across all the workspaces they're a client of.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';

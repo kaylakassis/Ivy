@@ -49,7 +49,7 @@ export default async function handler(req, res) {
         ? session.subscription
         : (session.subscription ? await fetchSubscription({ secretKey, subscriptionId: session.subscription }) : null);
     } else {
-      // No session id supplied — fall back to the workspace's stored
+      // No session id supplied - fall back to the workspace's stored
       // subscription id and re-fetch it.
       const { rows } = await sql`
         SELECT stripe_customer_id, stripe_subscription_id FROM workspaces WHERE id = ${workspaceId}

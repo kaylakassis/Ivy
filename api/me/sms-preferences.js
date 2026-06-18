@@ -1,6 +1,6 @@
 // /api/me/sms-preferences
 //   GET  → current phone + consent across the user's client records
-//          (one phone per signed-in user — we apply changes uniformly
+//          (one phone per signed-in user - we apply changes uniformly
 //          across every workspace they're a client of)
 //   POST → body { phone?, smsConsent? }. Updates phone (normalized to
 //          E.164) and/or consent. Setting smsConsent: false clears the
@@ -24,7 +24,7 @@ export default async function handler(req, res) {
     if (myIds.length === 0) return ok(res, { phone: null, smsConsentAt: null });
 
     if (req.method === 'GET') {
-      // Pull the most recently updated row's phone/consent — usually
+      // Pull the most recently updated row's phone/consent - usually
       // they're the same across rows, but if they're not, the latest
       // edit wins for display. POST applies uniformly.
       const { rows } = await sql.query(

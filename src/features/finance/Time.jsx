@@ -248,7 +248,7 @@ function Timer({ running, defaultRate, onStart, onStop }) {
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ flex: 1 }}>
           <div className="metric-label" style={{ marginBottom: 4 }}>
-            {running ? 'Tracking' : 'Idle — start a timer'}
+            {running ? 'Tracking' : 'Idle - start a timer'}
           </div>
           <div style={{
             fontSize: 38, fontWeight: 600, fontVariantNumeric: 'tabular-nums',
@@ -281,13 +281,13 @@ function Timer({ running, defaultRate, onStart, onStop }) {
           placeholder="What are you working on?"
           style={{ ...inputS, gridColumn: '1 / -1' }}/>
         <select value={clientId} onChange={(e) => setClientId(e.target.value)} style={inputS}>
-          <option value="">— No client —</option>
+          <option value="">- No client -</option>
           {clients.map((c) => (
             <option key={c.id} value={c.id}>{c.name}</option>
           ))}
         </select>
         <select value={serviceId} onChange={(e) => setServiceId(e.target.value)} style={inputS}>
-          <option value="">— No service —</option>
+          <option value="">- No service -</option>
           {services.map((s) => (
             <option key={s.id} value={s.id}>{s.name}</option>
           ))}
@@ -350,7 +350,7 @@ function EntryRow({ entry, first, selected, onToggle, onOpen }) {
         </div>
       </div>
       <div style={{ fontSize: 12, color: 'var(--fg-2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-        {entry.clientName || <span style={{ color: 'var(--muted-2)' }}>—</span>}
+        {entry.clientName || <span style={{ color: 'var(--muted-2)' }}>-</span>}
       </div>
       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
         {new Date(entry.startedAt).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}
@@ -359,7 +359,7 @@ function EntryRow({ entry, first, selected, onToggle, onOpen }) {
         {fmtDuration(entry.durationSeconds || 0)}
       </div>
       <div className="mono-num" style={{ fontSize: 13, fontWeight: 600, textAlign: 'right' }}>
-        {entry.billable ? fmtMoney(entry.amount) : '—'}
+        {entry.billable ? fmtMoney(entry.amount) : '-'}
       </div>
       <div style={{ textAlign: 'right' }}>
         <Icons.Arrow size={13} stroke="var(--muted)"/>
@@ -447,14 +447,14 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
             <Field label="Client">
               <select value={clientId} onChange={(e) => setClientId(e.target.value)}
                 disabled={isLocked} style={inputS}>
-                <option value="">— No client —</option>
+                <option value="">- No client -</option>
                 {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
               </select>
             </Field>
             <Field label="Service">
               <select value={serviceId} onChange={(e) => setServiceId(e.target.value)}
                 disabled={isLocked} style={inputS}>
-                <option value="">— No service —</option>
+                <option value="">- No service -</option>
                 {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
               </select>
             </Field>

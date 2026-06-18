@@ -6,7 +6,7 @@
 //
 // This endpoint is reached via a top-level <a href> click, so we MUST
 // redirect back to /finance with a query-string error code on failure
-// — returning raw JSON would just appear as a blank-looking page in the
+// - returning raw JSON would just appear as a blank-looking page in the
 // browser (the "Square stuck loading" symptom). Mirrors the same error
 // pattern as stripe-oauth-init.
 import { requireUser } from '../_lib/auth.js';
@@ -44,13 +44,13 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
 
     if (!process.env.SQUARE_APPLICATION_ID || !process.env.SQUARE_APPLICATION_SECRET) {
-      return back(res, 'Square is not configured on this deploy yet — admin needs to set SQUARE_APPLICATION_ID and SQUARE_APPLICATION_SECRET.');
+      return back(res, 'Square is not configured on this deploy yet - admin needs to set SQUARE_APPLICATION_ID and SQUARE_APPLICATION_SECRET.');
     }
     if (!process.env.JWT_SECRET) {
       return back(res, 'Server misconfigured (JWT_SECRET missing).');
     }
 
-    // Short-lived signed state — Square echoes this back; we verify it
+    // Short-lived signed state - Square echoes this back; we verify it
     // in the callback so a man-in-the-middle can't swap tokens.
     const state = jwt.sign(
       { wid: workspaceId, uid: user.id, kind: 'square_oauth' },
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     // Diagnostic: the #1 Square-connect failure is a redirect_uri that
     // doesn't match the one registered in the Square dashboard (often
     // because APP_URL is unset and appUrl() falls back to the per-deploy
-    // VERCEL_URL). Log the resolved values — never the signed state — so
+    // VERCEL_URL). Log the resolved values - never the signed state - so
     // a failed connect is debuggable from the Vercel logs.
     // eslint-disable-next-line no-console
     console.log('[square-oauth-init] env=%s redirect_uri=%s authorize_host=%s',

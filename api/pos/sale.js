@@ -1,4 +1,4 @@
-// POST /api/pos/sale — in-person quick-sale.
+// POST /api/pos/sale - in-person quick-sale.
 // Body: {
 //   items: [{ productId?, description?, quantity, rate? }],  // product or ad-hoc
 //   payment: 'cash' | 'link',
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
       const number = `INV-${await nextInvoiceNumber(workspaceId)}`;
       const today = new Date().toISOString().slice(0, 10);
       const activity = [{ ts: new Date().toISOString(), kind: cash ? 'paid' : 'pay-link',
-        text: cash ? 'Paid in person (cash)' : 'In-person sale — pay link issued' }];
+        text: cash ? 'Paid in person (cash)' : 'In-person sale - pay link issued' }];
 
       let invoice;
       try {
@@ -136,7 +136,7 @@ export default async function handler(req, res) {
         throw err;
       }
 
-      // Cash sales settle immediately — stamp paid_amount + paid_method so
+      // Cash sales settle immediately - stamp paid_amount + paid_method so
       // they show up in revenue rollups AND client 30-day metrics (which
       // sum paid_amount). total is set by the BEFORE-insert trigger, so we
       // copy it across exactly rather than re-deriving. Best-effort: the
@@ -156,7 +156,7 @@ export default async function handler(req, res) {
       }
 
       // Email receipt for cash sales when the customer left an email.
-      // Best-effort — never fails the sale. Pay-link mode skips this
+      // Best-effort - never fails the sale. Pay-link mode skips this
       // because the buyer will see the invoice + receipt via the
       // /invoice/<token> flow anyway.
       const clientEmail = body.clientEmail ? String(body.clientEmail).trim().toLowerCase().slice(0, 200) : null;

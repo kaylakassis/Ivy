@@ -1,9 +1,9 @@
-// Capacitor config — wraps the Vite-built SPA as a native iOS app.
+// Capacitor config - wraps the Vite-built SPA as a native iOS app.
 //
 // Distribution model: BUNDLED (the contents of dist/ are copied into the
 // .ipa, no remote `server.url`). On `npx cap sync ios` the build is
 // snapshotted into ios/App/App/public. This means every functional
-// change ships as a normal App Store update — Apple will not reject for
+// change ships as a normal App Store update - Apple will not reject for
 // "thin web wrapper" the way they would if we set server.url to the
 // live web app.
 //
@@ -20,7 +20,7 @@ const config = {
   appName: 'Ivy OS',
   webDir: 'dist',
   ios: {
-    // Standard WebKit content inset behavior — prevents iOS bouncing
+    // Standard WebKit content inset behavior - prevents iOS bouncing
     // the whole web view when the user scrolls past the top, which
     // looks broken on a sticky-header app.
     contentInset: 'never',
@@ -28,7 +28,7 @@ const config = {
     // dismiss and first paint of the WebView. Matches our cream `--page`.
     backgroundColor: '#F5F1E8',
   },
-  // No server.url in prod — bundled assets only. For local dev against
+  // No server.url in prod - bundled assets only. For local dev against
   // a running vite server you can override this at build time via env
   // (Capacitor reads CAPACITOR_SERVER_URL etc.); intentionally omitted
   // from the static config so prod builds don't accidentally point at

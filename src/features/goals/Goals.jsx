@@ -177,7 +177,7 @@ function TaskRow({ task, onToggle, onUpdate, onRemove }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <button onClick={() => onToggle(task)}
-          title={readyToTick ? 'Ready — tap to mark done' : ''}
+          title={readyToTick ? 'Ready - tap to mark done' : ''}
           style={{
             width: 20, height: 20, flexShrink: 0,
             borderRadius: 6,
@@ -282,7 +282,7 @@ function GoalsPane({ goals, onCreate, onUpdate, onRemove }) {
       {goals.length === 0 && !adding ? (
         <EmptyNote icon="Trending"
           title="No goals yet"
-          hint="Set a target — revenue, clients, sessions — and watch your data march toward it."
+          hint="Set a target - revenue, clients, sessions - and watch your data march toward it."
           action={(
             <button className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 13 }}
               onClick={() => setAdding(true)}>

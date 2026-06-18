@@ -1,5 +1,5 @@
-// Runs the ENTIRE test suite — every tests/*.test.mjs plus the smoke
-// runner — each in its own process (the suites call process.exit, so they
+// Runs the ENTIRE test suite - every tests/*.test.mjs plus the smoke
+// runner - each in its own process (the suites call process.exit, so they
 // can't share one). Exits non-zero if any suite fails.
 //
 // Wired into `npm test`. Previously `npm test` ran only 5 of the suites,
@@ -23,7 +23,7 @@ const suites = [
 
 // Apply the schema ONCE up front, the same way the deploy does (migrate,
 // then run). A brand-new database (e.g. CI's fresh Postgres service) has no
-// tables, and not every suite self-migrates via ensureSchemaApplied — the
+// tables, and not every suite self-migrates via ensureSchemaApplied - the
 // alphabetically-first ones would otherwise hit "relation does not exist".
 // Run through the bootstrap shim so the Neon driver talks to local Postgres.
 console.log('======== schema migration ========');
@@ -33,7 +33,7 @@ const migrate = spawnSync(
   { stdio: 'inherit' },
 );
 if (migrate.status !== 0) {
-  console.error('schema migration failed — aborting test run');
+  console.error('schema migration failed - aborting test run');
   process.exit(1);
 }
 

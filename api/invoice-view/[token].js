@@ -95,7 +95,7 @@ async function getInvoice(req, res) {
     // that may never have been configured. Bounded (only invoices carrying
     // a cs_ session); no-op otherwise.
     if (await reconcileStripeInvoice(inv)) {
-      return notFound(res, 'This invoice was already paid — thank you!');
+      return notFound(res, 'This invoice was already paid - thank you!');
     }
 
     // Append a 'viewed' activity once per day (best-effort).
@@ -142,7 +142,7 @@ async function submitMarkPaid(req, res) {
       {
         ts: new Date().toISOString(),
         kind: 'client-marked-paid',
-        text: `${inv.client_name || 'Recipient'} marked this invoice as paid${note ? ` — "${note}"` : ''}`,
+        text: `${inv.client_name || 'Recipient'} marked this invoice as paid${note ? ` - "${note}"` : ''}`,
       },
     ];
     await sql`

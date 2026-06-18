@@ -1,9 +1,9 @@
-// Topbar — viewport-aware.
+// Topbar - viewport-aware.
 //   Mobile: hamburger button + page title + search icon button + bell.
 //   Tablet/Desktop: title block + 280px search input + bell.
 //
 // Search input is a button that opens the global CommandPalette via a
-// synthetic Cmd+K keydown — keeps this component dumb.
+// synthetic Cmd+K keydown - keeps this component dumb.
 //
 // Adds an info (i) button next to the title that opens the tab's
 // tutorial overlay. On a tab's first visit (not in tutorials_completed)
@@ -32,7 +32,7 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
   const hasTutorial = tabId && getTutorial(tabId);
   // Auto-open the tutorial on a tab's first ever visit. Once the GET
   // /me/tutorials response says we've seen this tab, we never auto-
-  // open again — the (i) button is the manual replay path.
+  // open again - the (i) button is the manual replay path.
   const lastAutoTabRef = useRef(null);
   useEffect(() => {
     if (!hasTutorial) return;

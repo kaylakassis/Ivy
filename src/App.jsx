@@ -2,7 +2,7 @@
 // fresh visit to /signin doesn't pull the entire business app + admin
 // console into the initial bundle. Eager:
 //   AuthPage, AppShell, ClientShell, RootRouter, RequireAuth, RoleRouter
-//   — first-paint critical or used by every authenticated request.
+//   - first-paint critical or used by every authenticated request.
 // Everything else loads on demand inside <Suspense>; the fallback is a
 // minimal centered spinner so navigation never feels stuck.
 import React, { Suspense, lazy } from 'react';
@@ -100,10 +100,10 @@ function RouteFallback() {
 // Page-scoped failure card. Surface enough info that a user can
 // recover OR get unstuck:
 //   • Show the actual error message (it's their session; safe to show).
-//   • "Try again" — resets the boundary.
-//   • "Go home"  — hard navigate to /, clears the route, clears any
+//   • "Try again" - resets the boundary.
+//   • "Go home"  - hard navigate to /, clears the route, clears any
 //     localStorage onboarding gate so a fresh load isn't trapped.
-//   • "Sign out" — clears auth cookie and bounces.
+//   • "Sign out" - clears auth cookie and bounces.
 //   • Email link with the error pre-filled.
 function RouteCrash({ resetError, error }) {
   // First: if this is a stale-chunk error from a fresh Vercel deploy,
@@ -172,11 +172,11 @@ export default function App() {
     <Suspense fallback={<RouteFallback/>}>
       <ErrorBoundary fallback={({ resetError, error }) => <RouteCrash resetError={resetError} error={error}/>}>
       <Routes>
-        {/* Public marketing landing — also handles "I'm logged in, where to?"
+        {/* Public marketing landing - also handles "I'm logged in, where to?"
             redirect for authenticated users. */}
         <Route path="/" element={<RootRouter />} />
 
-        {/* Auth — primary entry pages are eager (first paint); the
+        {/* Auth - primary entry pages are eager (first paint); the
             secondary flows (forgot/reset/verify) load lazily. */}
         <Route path="/signin"          element={<EarlyAccessGate><AuthPage mode="signin" /></EarlyAccessGate>} />
         <Route path="/signup"          element={<EarlyAccessGate><AuthPage mode="signup" /></EarlyAccessGate>} />
@@ -193,7 +193,7 @@ export default function App() {
         <Route path="/quote/:token"    element={<PublicQuote />} />
         <Route path="/review/:token"   element={<ReviewPage />} />
 
-        {/* Embeds — same components rendered inside iframes on the
+        {/* Embeds - same components rendered inside iframes on the
             owner's external website. embed.js (served from /public)
             handles auto-sizing via postMessage. */}
         <Route path="/embed/book/:slug"    element={<PublicBooking embedded />} />
@@ -204,7 +204,7 @@ export default function App() {
         <Route path="/terms"   element={<TermsPage />} />
         <Route path="/do-not-sell" element={<DoNotSellPage />} />
 
-        {/* Marketing — extra public surfaces beyond the home page. */}
+        {/* Marketing - extra public surfaces beyond the home page. */}
         <Route path="/about"       element={<AboutPage />} />
         <Route path="/for/:slug"   element={<VerticalPage />} />
         <Route path="/pricing"     element={<PricingPage />} />
@@ -245,7 +245,7 @@ export default function App() {
 
         {/* Client portal shell (auth-gated). Anyone can navigate here directly;
             the data they see is filtered by their email / user_id. */}
-        {/* Group-chat invite landing — auth required; component itself
+        {/* Group-chat invite landing - auth required; component itself
             handles the "redirect to /signup with next=..." bounce. */}
         <Route path="/invite/group/:token"
           element={<RequireAuth><AcceptGroupInvite /></RequireAuth>} />

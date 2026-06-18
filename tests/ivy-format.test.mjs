@@ -1,7 +1,7 @@
 // Unit tests for Ivy's reply formatting helpers (pure, DB-free):
-//   sanitizeIvyReply   — strips em/en dashes + literal "--" and markdown
+//   sanitizeIvyReply   - strips em/en dashes + literal "--" and markdown
 //                        we don't render, but PRESERVES **bold**.
-//   stripInlineMarkdown — flattens inline markup for plain-text previews.
+//   stripInlineMarkdown - flattens inline markup for plain-text previews.
 import assert from 'node:assert';
 import { sanitizeIvyReply, stripInlineMarkdown } from '../api/_lib/ivy.js';
 

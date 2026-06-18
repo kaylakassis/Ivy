@@ -28,7 +28,7 @@ export const config = { maxDuration: 30 };
 
 // Used to render the user's name into the verification email body.
 // Without this the line `${escapeHtml(user.name)}` throws ReferenceError
-// the moment a name is provided — historically suppressed by the
+// the moment a name is provided - historically suppressed by the
 // surrounding try/catch, which manifested as "verification email
 // silently doesn't arrive when the user typed their name."
 function escapeHtml(s) {
@@ -68,7 +68,7 @@ export default async function handler(req, res) {
     if (!cleanName) return badRequest(res, 'Your name is required');
     // Hard requirement: signup cannot proceed without an explicit
     // acceptance of the current Terms AND Privacy versions. Refuse
-    // the request rather than silently default — we want the proof.
+    // the request rather than silently default - we want the proof.
     // The frontend checkbox text says "I agree to the Terms and
     // Privacy Policy" so a single click is expected to send both.
     if (acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
@@ -77,7 +77,7 @@ export default async function handler(req, res) {
     if (acceptedPrivacyVersion !== CURRENT_PRIVACY_VERSION) {
       return badRequest(res, `You must accept the current Privacy Policy (${CURRENT_PRIVACY_VERSION}) to create an account.`);
     }
-    // 'owner' (default) creates a workspace; 'client' does not — they're
+    // 'owner' (default) creates a workspace; 'client' does not - they're
     // signing up to view their bookings/invoices/messages from businesses
     // that already added them to a workspace as a client record.
     const role = mode === 'client' ? 'client' : 'owner';
@@ -89,7 +89,7 @@ export default async function handler(req, res) {
       : null;
 
     const ip = getClientIp(req);
-    // Owners: tight cap (5/10min) — a single person rarely makes many.
+    // Owners: tight cap (5/10min) - a single person rarely makes many.
     // Clients: a business's customers commonly sign up the same day from
     // one shared office / clinic / carrier-grade-NAT IP, so a 5-cap
     // locks out legitimate invitees. Use a separate, higher client key.
@@ -128,7 +128,7 @@ export default async function handler(req, res) {
     // the email for a clean retry.
     try {
       // Append the immutable acceptance rows right after user creation.
-      // legal_acceptances is append-only — we never delete; the rows
+      // legal_acceptances is append-only - we never delete; the rows
       // plus IP + UA are the proof if it ever matters. Two rows: one
       // per document (terms + privacy) so a future change to either
       // one is independently auditable.
@@ -156,10 +156,10 @@ export default async function handler(req, res) {
       throw setupErr;
     }
 
-    // Attribution. Both run best-effort — never fail signup over them.
+    // Attribution. Both run best-effort - never fail signup over them.
     // The same ?ref= code is checked against TWO separate programs:
-    //   1. affiliates  — admin/invite-only paid partners (existing).
-    //   2. referrals   — the self-serve "refer one, get one" program
+    //   1. affiliates  - admin/invite-only paid partners (existing).
+    //   2. referrals   - the self-serve "refer one, get one" program
     //      every paying owner can use (api/_lib/referrals.js).
     // A given code resolves to at most one of them (setCode rejects
     // codes that collide with affiliate codes), so there's no
@@ -190,12 +190,12 @@ export default async function handler(req, res) {
     setSessionCookie(res, sessionToken);
 
     // Send the verification + welcome emails in parallel so we wait
-    // ~max(t1, t2) instead of t1 + t2 — Resend's API can take 1-3s
+    // ~max(t1, t2) instead of t1 + t2 - Resend's API can take 1-3s
     // each on a cold path, and back-to-back awaits used to push the
     // function over Vercel's 10s timeout, killing the second send
     // mid-flight. Promise.allSettled ensures one failure doesn't
     // cancel the other; the response carries which (if any) failed
-    // so the frontend can show "verification email couldn't be sent —
+    // so the frontend can show "verification email couldn't be sent -
     // resend it from your account" instead of silently swallowing.
     const verifyTokenP = createToken({
       userId: user.id, kind: KIND_VERIFY, ttlMinutes: VERIFY_TTL_MIN,
@@ -245,12 +245,12 @@ export default async function handler(req, res) {
       user: { ...user, isSuperAdmin: emailIsSuperAdmin(user.email) || user.user_type === 'super_admin' },
       role,
       // Surface email send errors to the client. Frontend can show a
-      // banner ("we couldn't send your verification email — resend it
+      // banner ("we couldn't send your verification email - resend it
       // from your account page") instead of pretending everything
       // worked. Empty object means both succeeded.
       emailErrors: Object.keys(emailErrors).length ? emailErrors : undefined,
     };
-    // Native shells get the JWT in the body — see auth/login.js for the
+    // Native shells get the JWT in the body - see auth/login.js for the
     // explanation; same constraint applies here.
     if (isNativeClient(req)) responsePayload.token = sessionToken;
     return created(res, responsePayload);

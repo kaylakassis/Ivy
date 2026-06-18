@@ -1,4 +1,4 @@
-// Event drawer — for both blocks (editable) and bookings (view + cancel options).
+// Event drawer - for both blocks (editable) and bookings (view + cancel options).
 import React, { useRef, useState } from 'react';
 import { upload } from '@vercel/blob/client';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
@@ -43,13 +43,13 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
   const [editingRecurrence, setEditingRecurrence] = useState(false);
   const [draftRule, setDraftRule]   = useState(event.recurrenceRule || null);
   const [draftUntil, setDraftUntil] = useState(event.recurrenceUntil || '');
-  // Reschedule editor — only visible for single (non-recurring) bookings.
+  // Reschedule editor - only visible for single (non-recurring) bookings.
   // Recurring bookings can't be rescheduled wholesale; owner must cancel
   // the occurrence + book a new one (same constraint as the client portal).
   //
   // Time inputs use HH:MM 24-hour format (HTML input[type=time]).
   // toTimeInput() converts our internal minute-of-day to that format.
-  // Defensive null/NaN coercion — a malformed event row with missing
+  // Defensive null/NaN coercion - a malformed event row with missing
   // startMin/endMin would otherwise render "NaN:NaN" which the time
   // input rejects silently. Default to 09:00 / 10:00 so the editor is
   // at least usable.
@@ -79,7 +79,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
       await onUpdateBooking(event.id, {
         rescheduleTo: { date: rescheduleDate, startMin, endMin },
       });
-      // Close the whole drawer on success — the booking has moved,
+      // Close the whole drawer on success - the booking has moved,
       // there's nothing else to act on here. Matches the cancel /
       // delete flow.
       onClose();
@@ -111,10 +111,10 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
     <Drawer title="Booking details" subtitle={isRecurring ? 'Part of a recurring series.' : null} onClose={onClose}>
       <InfoRow label="Client"  value={event.clientName}/>
       <InfoRow label="Email"   value={event.clientEmail}/>
-      <InfoRow label="Service" value={svc?.name || '—'}/>
+      <InfoRow label="Service" value={svc?.name || '-'}/>
       <InfoRow label="Date"    value={parseISO(occurrenceISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
       <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
-      <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '—'}/>
+      <InfoRow label="Price"   value={svc ? `$${Number(svc.price).toLocaleString()}` : '-'}/>
       {event.notes && <InfoRow label="Notes" value={event.notes}/>}
 
       {/* Mobile address (from client) + in-person venue (from service)
@@ -149,7 +149,7 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
         </div>
       )}
 
-      {/* Reschedule — single-occurrence bookings only. The API rejects
+      {/* Reschedule - single-occurrence bookings only. The API rejects
           reschedules on recurring series (cancel-occurrence-then-book
           is the documented path), so the UI hides it for those. */}
       {!isRecurring && !event.cancelledAt && (
@@ -410,7 +410,7 @@ function BookingExtraActions({ event, onBookingChanged }) {
       if (r.booking) onBookingChanged?.(r.booking);
       setSuccess(r.charged
         ? `Marked no-show + charged $${r.chargeAmount.toFixed(2)}.`
-        : (r.chargeError ? `Marked no-show — charge failed: ${r.chargeError}` : 'Marked no-show.'));
+        : (r.chargeError ? `Marked no-show - charge failed: ${r.chargeError}` : 'Marked no-show.'));
       setTimeout(close, 2500);
     } catch (e) {
       setError(e.message || 'Failed');
@@ -574,7 +574,7 @@ function BookingExtraActions({ event, onBookingChanged }) {
 //   - the editable form when the owner clicks in
 //   - a green completion read-card when this occurrence has been logged
 //
-// State storage is per-occurrence — looked up on the booking's
+// State storage is per-occurrence - looked up on the booking's
 // `completionLog` map keyed by occurrence ISO date.
 function CompletionSection({ event, occurrenceISO, masterId, onComplete, onEdit, onClear }) {
   const log = event.completionLog || {};
@@ -872,7 +872,7 @@ function ConfirmRow({ text, onCancel, onConfirm, busy }) {
 // the toggle in the UI maps to the blocks_bookings column.
 //
 // Color picker, private notes, and the blocks-vs-doesn't toggle are
-// all stamped onto the same record. Clients NEVER see this data —
+// all stamped onto the same record. Clients NEVER see this data -
 // the public booking endpoint serializes blocks with publicView:true
 // which redacts label/notes/color and forces the display label to
 // "Busy" (api/_lib/calendar.js).
@@ -893,7 +893,7 @@ function BlockEdit({ event, onSave, onDelete, onClose }) {
     startMin:       event.startMin,
     endMin:         event.endMin,
     label:          event.label || '',
-    // blocksBookings defaults to TRUE for new events — most "create
+    // blocksBookings defaults to TRUE for new events - most "create
     // event" actions ARE to block off time. Existing rows preserve
     // their stored value; legacy rows that predate the column
     // serialize as `true` so editing one keeps the original behavior.
@@ -954,7 +954,7 @@ function BlockEdit({ event, onSave, onDelete, onClose }) {
 
       {/* The headline choice: does this gate bookings or just live on
           the owner's calendar? Two big tappable buttons rather than a
-          tucked-away checkbox — this decides everything downstream. */}
+          tucked-away checkbox - this decides everything downstream. */}
       <Field label="Booking impact">
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
           <ToggleCard
@@ -1032,7 +1032,7 @@ function BlockEdit({ event, onSave, onDelete, onClose }) {
 }
 
 // Two-card tappable selector used for the "Block bookings" vs
-// "Reminder only" choice. Clearer than a toggle switch — both options
+// "Reminder only" choice. Clearer than a toggle switch - both options
 // labeled, the active one has a colored ring.
 function ToggleCard({ active, onClick, title, sub }) {
   return (

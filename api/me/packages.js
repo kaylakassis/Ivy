@@ -1,4 +1,4 @@
-// GET /api/me/packages — every active client_package across the
+// GET /api/me/packages - every active client_package across the
 // signed-in user's client memberships, with the issuing business name
 // attached so the UI can render "Marisol Hair · 8 of 10 sessions left".
 //

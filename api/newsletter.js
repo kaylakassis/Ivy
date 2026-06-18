@@ -1,6 +1,6 @@
 // POST /api/newsletter   { email, source? }
 //
-// Public endpoint — no auth. Stores an email in newsletter_subscribers
+// Public endpoint - no auth. Stores an email in newsletter_subscribers
 // for later batch sending. Idempotent on duplicate email (returns OK
 // without re-inserting). Rate-limited per IP so a script can't dump
 // 10k addresses into the table.
@@ -27,7 +27,7 @@ export default async function handler(req, res) {
 
     const ua = req.headers['user-agent']?.toString().slice(0, 500) || null;
 
-    // Idempotent on email — return OK whether the insert happened or
+    // Idempotent on email - return OK whether the insert happened or
     // the row already existed. We don't leak "already subscribed" to
     // avoid being a subscription-checking oracle.
     await sql`

@@ -1,9 +1,9 @@
-// Server monitoring — real Sentry when SENTRY_DSN is set, otherwise a
+// Server monitoring - real Sentry when SENTRY_DSN is set, otherwise a
 // console.error shim so dev / preview deploys don't need any infra.
 //
 // Sentry's Node SDK auto-instruments common libraries; we only hand it
 // the basic config + DSN. Initialization is lazy so a missing SDK module
-// (e.g. a stripped node_modules) can't kill cold starts — `reportError`
+// (e.g. a stripped node_modules) can't kill cold starts - `reportError`
 // always logs to the function log first, then best-effort forwards.
 //
 // Usage:
@@ -100,7 +100,7 @@ export function reportError(err, { req, extra, workspaceId, userId } = {}) {
   // Always log to the function log so we have something even if Sentry
   // is wedged or DSN isn't set yet on this deploy.
   // Logs feed third-party aggregators where any insider at that vendor
-  // can read them — redact emails / phones / tokens before write.
+  // can read them - redact emails / phones / tokens before write.
   // eslint-disable-next-line no-console
   console.error('[monitoring]', redact(err?.message || String(err)), {
     requestId: reqId,
@@ -112,7 +112,7 @@ export function reportError(err, { req, extra, workspaceId, userId } = {}) {
 
   if (!shouldSampleToSentry(err)) return null;
 
-  // Fire-and-forget Sentry capture. Don't await — `reportError` is called
+  // Fire-and-forget Sentry capture. Don't await - `reportError` is called
   // from request handlers and we don't want to delay the response.
   getClient().then((Sentry) => {
     if (!Sentry) return;
@@ -132,7 +132,7 @@ export function reportError(err, { req, extra, workspaceId, userId } = {}) {
         Sentry.captureException(err);
       });
     } catch {
-      // Swallow — already logged above.
+      // Swallow - already logged above.
     }
   }).catch(() => { /* swallow */ });
 
@@ -141,7 +141,7 @@ export function reportError(err, { req, extra, workspaceId, userId } = {}) {
 
 // Stamp the X-Request-Id response header. Call from any handler that
 // wants the round-trip ID visible to the client (useful when a user
-// reports an error — they paste the ID and we grep the logs).
+// reports an error - they paste the ID and we grep the logs).
 export function stampRequestId(req, res) {
   const id = requestId(req);
   try { res.setHeader('X-Request-Id', id); } catch { /* response already sent */ }

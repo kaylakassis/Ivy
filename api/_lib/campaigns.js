@@ -95,9 +95,9 @@ export async function buildCampaignEmail({ workspaceId, campaign }) {
 }
 
 // Run fn over items with bounded concurrency, classifying each result:
-//   sent    — actually delivered
-//   skipped — recipient opted out / quota (intentional, not an error)
-//   failed  — a real send error
+//   sent    - actually delivered
+//   skipped - recipient opted out / quota (intentional, not an error)
+//   failed  - a real send error
 async function runPool(items, concurrency, fn) {
   let i = 0;
   const counts = { sent: 0, skipped: 0, failed: 0 };

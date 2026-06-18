@@ -29,13 +29,13 @@ export function tryStaleChunkRecovery(err) {
   try {
     const last = Number(sessionStorage.getItem(CHUNK_RELOAD_KEY)) || 0;
     if (Date.now() - last < RELOAD_COOLDOWN_MS) {
-      // Recent reload didn't help — let the error UI render so the
+      // Recent reload didn't help - let the error UI render so the
       // user sees actionable buttons instead of an infinite reload
       // loop.
       return false;
     }
     sessionStorage.setItem(CHUNK_RELOAD_KEY, String(Date.now()));
-  } catch { /* private mode — fall through and reload anyway */ }
+  } catch { /* private mode - fall through and reload anyway */ }
   if (typeof window !== 'undefined') {
     // Hard reload so we bypass HTTP cache and pick up the fresh
     // index.html with the new asset hashes.

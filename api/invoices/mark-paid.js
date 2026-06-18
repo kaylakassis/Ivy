@@ -1,5 +1,5 @@
 // POST /api/invoices/mark-paid  body: { id, method? }
-// Manually marks an invoice paid. Real Stripe integration lands in phase B —
+// Manually marks an invoice paid. Real Stripe integration lands in phase B -
 // for now this is the owner saying "yes, the payment came through".
 
 import { sql } from '../_lib/db.js';
@@ -33,7 +33,7 @@ export default async function handler(req, res) {
     const inv = await fetchOwnedInvoice({ id, workspaceId });
     if (!inv) return badRequest(res, 'Invoice not found');
     if (inv.status === 'paid')   return badRequest(res, 'Already paid');
-    if (inv.status === 'voided') return badRequest(res, 'Voided — restore first');
+    if (inv.status === 'voided') return badRequest(res, 'Voided - restore first');
 
     const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
     const newActivity = [
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
 
     // Race-safe flip: two concurrent owner clicks ("did the second click
     // register?") used to both pass the line-33 status check and both
-    // run the UPDATE — the second one would overwrite paid_at + append a
+    // run the UPDATE - the second one would overwrite paid_at + append a
     // duplicate activity entry, AND both would fire the receipt email.
     // The AND status <> 'paid' filter + RETURNING id gates the
     // side-effects below on whether OUR statement actually flipped
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
       RETURNING *
     `;
     if (updated.rows.length === 0) {
-      // Lost the race — someone else already marked it. Return the
+      // Lost the race - someone else already marked it. Return the
       // current state without re-firing the receipt or thread message.
       const reloaded = await fetchOwnedInvoice({ id, workspaceId });
       return ok(res, { invoice: serializeInvoice(reloaded), deduped: true });

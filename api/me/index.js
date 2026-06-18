@@ -1,4 +1,4 @@
-// GET /api/me — returns the user-context object: which workspace they own
+// GET /api/me - returns the user-context object: which workspace they own
 // (if any), which businesses they're a client of, and a "summary" snapshot
 // the client home dashboard renders (counts of unread messages, upcoming
 // bookings, pending invoices/docs).
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
 
     const ctx = await userContext(user);
     if (!ctx.isClient) {
-      // Owner-only — return context with empty summary.
+      // Owner-only - return context with empty summary.
       return ok(res, { ...ctx, summary: emptySummary() });
     }
 

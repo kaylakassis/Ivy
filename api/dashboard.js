@@ -1,5 +1,5 @@
-// GET /api/dashboard — the owner home rollup. Previously the dashboard
-// rendered hardcoded "—" cards and empty panels; this returns the real
+// GET /api/dashboard - the owner home rollup. Previously the dashboard
+// rendered hardcoded "-" cards and empty panels; this returns the real
 // numbers (this-month revenue, active clients, bookings, hours), today's
 // schedule, a recent-activity feed, and open tasks, all workspace-scoped.
 import { sql } from './_lib/db.js';
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       })),
       ...recentBk.rows.map((r) => ({
         kind: 'booking', ts: r.created_at,
-        text: `New booking — ${r.client_name || 'client'}`,
+        text: `New booking - ${r.client_name || 'client'}`,
       })),
     ].filter((a) => a.ts)
       .sort((a, b) => new Date(b.ts) - new Date(a.ts))

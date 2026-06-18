@@ -79,7 +79,7 @@ export default async function handler(req, res) {
         const reason = body.reason ? String(body.reason).slice(0, 500) : null;
         const newActivity = [
           ...(row.activity || []),
-          { ts: new Date().toISOString(), kind: 'declined', text: `Client declined${reason ? ` — "${reason}"` : ''}`, ip },
+          { ts: new Date().toISOString(), kind: 'declined', text: `Client declined${reason ? ` - "${reason}"` : ''}`, ip },
         ];
         await sql`
           UPDATE quotes SET
@@ -95,8 +95,8 @@ export default async function handler(req, res) {
       }
 
       // Accept. For a proposal, apply the client's option selections
-      // (body.selections = [{ id, selected }]) — honored only for
-      // optional/package items — enforce one-per-package-group, then
+      // (body.selections = [{ id, selected }]) - honored only for
+      // optional/package items - enforce one-per-package-group, then
       // clone ONLY the included items into the invoice. The chosen
       // selection is saved back on the quote so the owner sees it.
       let items = Array.isArray(row.items) ? row.items.map((x) => ({ ...x })) : [];
@@ -153,7 +153,7 @@ export default async function handler(req, res) {
         `;
         newInvoice = invIns.rows[0];
       } catch (err) {
-        // Invoice creation failed — release the claim so the client can retry.
+        // Invoice creation failed - release the claim so the client can retry.
         await sql`UPDATE quotes SET status = 'sent', accepted_at = NULL, updated_at = NOW() WHERE id = ${row.id}`
           .catch(() => {});
         throw err;
@@ -161,7 +161,7 @@ export default async function handler(req, res) {
 
       const newActivity = [
         ...(row.activity || []),
-        { ts: new Date().toISOString(), kind: 'accepted', text: `Client accepted — invoice ${newInvoice.number} drafted`, ip },
+        { ts: new Date().toISOString(), kind: 'accepted', text: `Client accepted - invoice ${newInvoice.number} drafted`, ip },
       ];
       await sql`
         UPDATE quotes SET

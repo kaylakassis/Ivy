@@ -47,7 +47,7 @@ export default async function handler(req, res) {
     if (target.id === actor.id) return badRequest(res, "That's already you.");
 
     // Pull the actor's current cookie verbatim so we can restore exactly
-    // what the browser had — re-signing would reset the expiry clock and
+    // what the browser had - re-signing would reset the expiry clock and
     // accidentally extend the session by 30 days each time.
     const cur = req.headers.cookie || '';
     const m = cur.match(/(?:^|;\s*)ivy_session=([^;]+)/);

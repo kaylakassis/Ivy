@@ -1,4 +1,4 @@
-// GET /api/me/invoices — list every invoice tied to the user's client
+// GET /api/me/invoices - list every invoice tied to the user's client
 // records. Money math (totals incl. tax/discount) is computed in SQL so
 // the client just renders.
 //
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
       };
     });
 
-    // Five aggregates in parallel — same DB connection tolerates this
+    // Five aggregates in parallel - same DB connection tolerates this
     // fine via Neon's pooled driver, and serial-awaiting them would
     // add ~5 round-trips to a request the user is staring at.
     const [
@@ -135,7 +135,7 @@ export default async function handler(req, res) {
         [myIds],
       ), { rows: [] }),
       safe(sql.query(
-        // Most recent booking (past or upcoming) — used to target the
+        // Most recent booking (past or upcoming) - used to target the
         // rebook CTA at the right business when there's no upcoming
         // session. Falls back to NULL gracefully.
         `SELECT cs.slug AS biz_slug
@@ -148,7 +148,7 @@ export default async function handler(req, res) {
         [myIds],
       ), { rows: [] }),
       safe(sql.query(
-        // First active package — same filter the /api/me/packages list
+        // First active package - same filter the /api/me/packages list
         // uses, just LIMIT 1 for the metric tile.
         `SELECT * FROM client_packages
           WHERE client_id = ANY($1)
@@ -174,7 +174,7 @@ export default async function handler(req, res) {
       safe(sql.query(
         // Count of past (already-happened, non-cancelled) bookings this
         // calendar year. The < CURRENT_DATE guard excludes future ones
-        // even though they'd technically be in the same year — "Sessions
+        // even though they'd technically be in the same year - "Sessions
         // this year" means "you've already had this many."
         `SELECT COUNT(*)::int AS n
            FROM bookings

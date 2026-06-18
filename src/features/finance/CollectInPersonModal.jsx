@@ -1,4 +1,4 @@
-// "Collect in person" modal — owner shows it to a customer who pays on
+// "Collect in person" modal - owner shows it to a customer who pays on
 // their own phone. Lazy-imports the qrcode lib so InvoiceEditor's bundle
 // doesn't carry it on first paint.
 //
@@ -29,7 +29,7 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
         const r = await api.post('/invoices/pay-link', { id: invoice.id });
         if (!live) return;
         setUrl(r.url);
-        // Lazy-import qrcode only when the modal actually opens — keeps it
+        // Lazy-import qrcode only when the modal actually opens - keeps it
         // out of the InvoiceEditor first-paint bundle.
         const { default: QRCode } = await import('qrcode');
         const svg = await QRCode.toString(r.url, {
@@ -56,7 +56,7 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
       await navigator.clipboard.writeText(url);
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
-    } catch {/* clipboard blocked — owner can long-press to copy */}
+    } catch {/* clipboard blocked - owner can long-press to copy */}
   };
 
   const total = Number(invoice.total || 0);
@@ -94,7 +94,7 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
         </div>
 
         <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 16 }}>
-          Show the QR or text the link. Your customer pays on their own phone — Apple Pay, Google Pay, or card.
+          Show the QR or text the link. Your customer pays on their own phone - Apple Pay, Google Pay, or card.
         </div>
 
         <div style={{
@@ -183,7 +183,7 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
               fontSize: 11.5, color: 'var(--accent)',
               lineHeight: 1.5,
             }}>
-              Once they finish paying, the invoice will mark itself paid here automatically — usually within a few seconds.
+              Once they finish paying, the invoice will mark itself paid here automatically - usually within a few seconds.
             </div>
           </>
         )}

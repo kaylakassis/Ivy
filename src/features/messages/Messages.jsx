@@ -94,7 +94,7 @@ function DirectMessages() {
     );
   }
 
-  // On mobile we show ONE pane at a time — list when nothing's selected,
+  // On mobile we show ONE pane at a time - list when nothing's selected,
   // conversation otherwise (with a back button rendered in ConversationPane).
   const showList = !isMobile || !selectedId;
   const showConversation = !isMobile || !!selectedId;
@@ -284,7 +284,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
       return;
     }
     // Snapshot the existing input so the dictated transcript appends
-    // rather than replaces — useful when the owner has already typed
+    // rather than replaces - useful when the owner has already typed
     // a few words and just wants to dictate the rest.
     const prefix = input.trim() ? input.trim() + ' ' : '';
     dictation.start((transcript) => setInput(prefix + transcript));
@@ -411,7 +411,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
         {thread.mode === 'one-way' && (
           <div style={{ fontSize: 11, color: 'var(--muted)', marginBottom: 8, display: 'flex', alignItems: 'center', gap: 6 }}>
             <Icons.Mail size={11}/>
-            Broadcast mode — clients can&apos;t reply to this thread.
+            Broadcast mode - clients can&apos;t reply to this thread.
           </div>
         )}
         {voiceErr && (
@@ -485,7 +485,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
                 the thread). */}
             {smsAvailable && (
               <ComposerIconButton
-                title={smsMode ? 'Sending as text — tap for in-app' : 'Send as text message'}
+                title={smsMode ? 'Sending as text - tap for in-app' : 'Send as text message'}
                 onClick={() => setSmsMode((v) => !v)}
                 tone={smsMode ? 'accent' : 'muted'}
               >

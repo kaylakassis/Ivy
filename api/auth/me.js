@@ -1,4 +1,4 @@
-// GET /api/auth/me — returns the current user or 401.
+// GET /api/auth/me - returns the current user or 401.
 import { sql } from '../_lib/db.js';
 import { requireUser, readSession } from '../_lib/auth.js';
 import { emailIsSuperAdmin, ensureSuperAdminPromotion } from '../_lib/admin.js';
@@ -17,7 +17,7 @@ export default async function handler(req, res) {
     await ensureSuperAdminPromotion(user);
 
     // Surface impersonation state to the frontend so it can show a
-    // "you're viewing as X — stop" banner and post to the stop endpoint.
+    // "you're viewing as X - stop" banner and post to the stop endpoint.
     const session = readSession(req);
     let impersonating = null;
     if (session?.imp) {

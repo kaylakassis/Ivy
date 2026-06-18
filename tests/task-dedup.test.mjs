@@ -46,8 +46,8 @@ async function run() {
   for (let i = 0; i < 3; i++) {
     await sql`INSERT INTO tasks (workspace_id, title, done, source) VALUES (${wid}, 'Prep weekly newsletter', FALSE, 'ivy')`;
   }
-  await sql`INSERT INTO tasks (workspace_id, title, done, source) VALUES (${wid}, 'Prep weekly newsletter', TRUE, 'ivy')`;  // a DONE one — must survive
-  await sql`INSERT INTO tasks (workspace_id, title, done, source) VALUES (${wid}, 'Order more supplies', FALSE, 'ivy')`;   // distinct — must survive
+  await sql`INSERT INTO tasks (workspace_id, title, done, source) VALUES (${wid}, 'Prep weekly newsletter', TRUE, 'ivy')`;  // a DONE one - must survive
+  await sql`INSERT INTO tasks (workspace_id, title, done, source) VALUES (${wid}, 'Order more supplies', FALSE, 'ivy')`;   // distinct - must survive
   assert((await countOpen('Prep weekly newsletter')) === 3, 'seeded 3 open duplicates');
 
   await sql.query(CLEANUP_SQL);

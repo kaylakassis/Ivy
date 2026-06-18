@@ -47,7 +47,7 @@ export default async function handler(req, res) {
       if (name.length > 200)      return badRequest(res, 'name is too long');
       if (!VALID_MODES.has(mode)) return badRequest(res, 'mode must be "open" or "broadcast"');
 
-      // Workspace-scope every clientId. Drop any that don't belong —
+      // Workspace-scope every clientId. Drop any that don't belong -
       // never throw, so a stale UI-cached id can't block the whole
       // create.
       let validClientIds = [];
@@ -70,7 +70,7 @@ export default async function handler(req, res) {
         // Bulk insert members. ON CONFLICT covers the (extremely
         // unlikely) race where someone POSTs the same payload twice.
         const values = validClientIds.map((cid, i) => `($1, $${i + 2}, $1)`).join(', ');
-        // params: $1 = workspace_id (and thread_id is index 0 — actually
+        // params: $1 = workspace_id (and thread_id is index 0 - actually
         // we need thread_id too). Reshape:
         await sql.query(
           `INSERT INTO group_thread_members (thread_id, client_id, workspace_id)

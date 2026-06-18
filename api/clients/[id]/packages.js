@@ -5,7 +5,7 @@
 //          serviceIds?, expiryDays? } creates a one-off bundle without
 //          a template (useful for "comp 5 sessions" or one-off deals).
 //
-// Sale doesn't auto-create an invoice yet — owners can pair this with
+// Sale doesn't auto-create an invoice yet - owners can pair this with
 // the existing invoice flow themselves; deeper integration lands later.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';

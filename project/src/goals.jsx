@@ -1,4 +1,4 @@
-// GOALS & TASKS — synced across the app where relevant.
+// GOALS & TASKS - synced across the app where relevant.
 // - Tasks: generic to-dos + "smart" tasks that auto-complete from app activity
 // - Goals: target-based with progress pulled from finance / clients / sessions
 
@@ -165,7 +165,7 @@ function GoalsView() {
             Goals & Tasks
           </h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Your to-do list and targets — synced with what's happening in Ivy OS.
+            Your to-do list and targets - synced with what's happening in Ivy OS.
           </div>
         </div>
       </div>
@@ -407,7 +407,7 @@ function GoalsPane({ store, update }) {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center' }}>
         <div style={{ fontSize: 13, color: 'var(--muted)', flex: 1 }}>
-          Targets pulled from your real app data — financial, client, and session goals update automatically.
+          Targets pulled from your real app data - financial, client, and session goals update automatically.
         </div>
         <button className="btn btn-primary" onClick={() => setAdding(true)}>
           <Icons.Plus size={13} sw={2}/> New goal

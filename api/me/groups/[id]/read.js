@@ -1,4 +1,4 @@
-// POST /api/me/groups/:id/read — clear this client's unread_count.
+// POST /api/me/groups/:id/read - clear this client's unread_count.
 import { sql } from '../../../_lib/db.js';
 import { requireUser } from '../../../_lib/auth.js';
 import { myClientIds } from '../../../_lib/clientPortal.js';

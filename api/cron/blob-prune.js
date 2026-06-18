@@ -4,7 +4,7 @@
 // the parent row is deleted (a client → DELETE FROM clients, or a
 // signer attachment removed in the document editor), the blob is
 // orphaned in Blob storage and accumulates indefinitely. At scale
-// this is real money — Vercel Blob bills on stored bytes.
+// this is real money - Vercel Blob bills on stored bytes.
 //
 // Strategy:
 //   1. Walk every table that stores blob references; build an
@@ -56,7 +56,7 @@ async function handler(req, res) {
     const t0 = Date.now();
 
     // Step 1: collect every blob pathname referenced anywhere.
-    // Build cautiously — if any source query fails, we ABORT the
+    // Build cautiously - if any source query fails, we ABORT the
     // cron rather than risk deleting referenced files.
     const refs = await collectReferencedPathnames();
     if (refs === null) {
@@ -114,7 +114,7 @@ async function handler(req, res) {
 // Keyset-paginate a single ref source. queryFn(cursor) returns one page
 // ordered by `cursorField` (id/workspace_id); onRow extracts pathnames.
 // Returns true if the source fully drained, false if it hit the page cap
-// (an incomplete walk — caller must abort rather than risk false deletes).
+// (an incomplete walk - caller must abort rather than risk false deletes).
 async function drainSource(queryFn, cursorField, onRow) {
   let cursor = null;
   for (let page = 0; page < MAX_COLLECT_PAGES; page++) {
@@ -125,7 +125,7 @@ async function drainSource(queryFn, cursorField, onRow) {
     cursor = rows[rows.length - 1][cursorField];
     if (rows.length < COLLECT_BATCH) return true;
   }
-  return false; // page cap hit — did NOT finish draining this source
+  return false; // page cap hit - did NOT finish draining this source
 }
 
 // Walk every table/column that stores blob pathnames. Returns a Set
@@ -133,7 +133,7 @@ async function drainSource(queryFn, cursorField, onRow) {
 // fully drained (caller short-circuits to avoid deletions in that case).
 //
 // Each source is keyset-paginated so we never load an entire table (or its
-// JSONB columns) into memory at once — peak memory is one COLLECT_BATCH
+// JSONB columns) into memory at once - peak memory is one COLLECT_BATCH
 // page. The accumulated Set holds only pathname strings (the real working
 // set), not full rows.
 export async function collectReferencedPathnames() {
@@ -143,7 +143,7 @@ export async function collectReferencedPathnames() {
   try {
     const drained = [];
 
-    // documents — scalar pathname columns.
+    // documents - scalar pathname columns.
     drained.push(await drainSource(
       (cur) => sql.query(
         `SELECT id, pdf_blob_pathname, final_pdf_blob_pathname FROM documents
@@ -156,7 +156,7 @@ export async function collectReferencedPathnames() {
       (r) => { add(r.pdf_blob_pathname); add(r.final_pdf_blob_pathname); },
     ));
 
-    // calendar_settings — brand logo (keyed by workspace_id).
+    // calendar_settings - brand logo (keyed by workspace_id).
     drained.push(await drainSource(
       (cur) => sql.query(
         `SELECT workspace_id, brand_logo_blob_pathname FROM calendar_settings
@@ -169,7 +169,7 @@ export async function collectReferencedPathnames() {
       (r) => add(r.brand_logo_blob_pathname),
     ));
 
-    // clients — JSONB attachments[] + gallery_photos[].
+    // clients - JSONB attachments[] + gallery_photos[].
     drained.push(await drainSource(
       (cur) => sql.query(
         `SELECT id, attachments, gallery_photos FROM clients
@@ -186,7 +186,7 @@ export async function collectReferencedPathnames() {
       },
     ));
 
-    // messages — JSONB attachments[].
+    // messages - JSONB attachments[].
     drained.push(await drainSource(
       (cur) => sql.query(
         `SELECT id, attachments FROM messages
@@ -199,7 +199,7 @@ export async function collectReferencedPathnames() {
       (r) => { for (const a of (r.attachments || [])) add(a?.blobPathname); },
     ));
 
-    // bookings.completion_log — JSONB OBJECT keyed by date, each value has
+    // bookings.completion_log - JSONB OBJECT keyed by date, each value has
     // .attachments[].
     drained.push(await drainSource(
       (cur) => sql.query(
@@ -220,7 +220,7 @@ export async function collectReferencedPathnames() {
 
     if (drained.some((d) => d === false)) {
       // eslint-disable-next-line no-console
-      console.error('[blob-prune] a ref source exceeded MAX_COLLECT_PAGES — aborting to avoid false deletes');
+      console.error('[blob-prune] a ref source exceeded MAX_COLLECT_PAGES - aborting to avoid false deletes');
       return null;
     }
 

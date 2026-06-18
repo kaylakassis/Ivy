@@ -1,7 +1,7 @@
 // GET /api/search?q=
 // Cross-entity quick search for the signed-in owner. Returns up to ~25
 // hits across clients, services, invoices, quotes, bookings, documents,
-// tasks, and messages — each with a deep-link path the Cmd+K UI uses
+// tasks, and messages - each with a deep-link path the Cmd+K UI uses
 // to navigate.
 //
 // Scoped strictly to the caller's workspace; nothing leaks across
@@ -29,7 +29,7 @@ export default async function handler(req, res) {
     const like = `%${q.toLowerCase()}%`;
 
     const [clients, services, invoices, quotes, bookings, docs, tasks, threads] = await Promise.all([
-      // Client search now covers notes too — a 100-client owner relies
+      // Client search now covers notes too - a 100-client owner relies
       // on this to surface "the woman I tagged 'sensitive scalp'" from
       // memory of the note, not the name.
       sql.query(
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       ),
       // Quotes table mirrors invoices but with its own number space.
       // Search same fields. Wrap in try/catch effectively via a
-      // try-it-and-fall-back at the consumer — we use a separate query
+      // try-it-and-fall-back at the consumer - we use a separate query
       // and tolerate the table being missing on older schemas via the
       // outer catch.
       sql.query(

@@ -2,7 +2,7 @@
 //
 // Toggles Stripe Tax for the workspace. Owners must independently
 // configure tax registrations + thresholds in Stripe Dashboard
-// (https://dashboard.stripe.com/tax) — flipping this flag on
+// (https://dashboard.stripe.com/tax) - flipping this flag on
 // without registering jurisdictions will cause Stripe to throw at
 // checkout. We surface that in the UI as a warning.
 //

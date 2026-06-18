@@ -22,7 +22,7 @@ _[tool: local_ls]_
 
 _[tool: list_files]_
 
-The local folder shows only top-level files — I need to check if there are hidden subdirectories.
+The local folder shows only top-level files - I need to check if there are hidden subdirectories.
 
 _[tool: local_ls]_
 
@@ -30,7 +30,7 @@ _[tool: local_read]_
 
 _[tool: local_read]_
 
-The local folder only shows top-level files — the actual source (src/, components/, etc.) isn't mounted. Let me check the key config files and ask the user a few focused questions since I don't have visual context on what Ivy OS currently looks like or what screen they want me to design.
+The local folder only shows top-level files - the actual source (src/, components/, etc.) isn't mounted. Let me check the key config files and ask the user a few focused questions since I don't have visual context on what Ivy OS currently looks like or what screen they want me to design.
 
 _[tool: local_read]_
 
@@ -38,7 +38,7 @@ _[tool: local_read]_
 
 _[tool: local_read]_
 
-I have strong context on Ivy OS (React + Vite + shadcn/ui, Tailwind with HSL CSS variables, sidebar layout, business SaaS: clients, calendar, finance, Ivy Pro AI coach, comms, analytics, docs, website builder). The actual `src/` isn't exposed and the design system project is empty, so I'll need the user to tell me what to design — and I'll need to make style decisions since I can't see existing screens.
+I have strong context on Ivy OS (React + Vite + shadcn/ui, Tailwind with HSL CSS variables, sidebar layout, business SaaS: clients, calendar, finance, Ivy Pro AI coach, comms, analytics, docs, website builder). The actual `src/` isn't exposed and the design system project is empty, so I'll need the user to tell me what to design - and I'll need to make style decisions since I can't see existing screens.
 
 Let me ask focused questions before building.
 
@@ -50,12 +50,12 @@ Questions answered:
 - source_of_truth: Decide for me (build clean from scratch, shadcn-style)
 - target_screen: Full app shell + sidebar (pick one hero screen inside)
 - audience: Business owner (primary user)
-- device: Both — desktop hero, mobile secondary
-- visual_direction: Calm, trust-forward (soft neutrals, one deep accent — like Linear / Stripe), Bold & energetic (vibrant accent, strong type — modern SaaS)
+- device: Both - desktop hero, mobile secondary
+- visual_direction: Calm, trust-forward (soft neutrals, one deep accent - like Linear / Stripe), Bold & energetic (vibrant accent, strong type - modern SaaS)
 - variations: Decide for me
 - variation_axis: Decide for me
-- ivy_personality: Subtle — lives in a corner, surfaces insights
-- interactivity: Fully clickable — navigate between screens, tabs, modals
+- ivy_personality: Subtle - lives in a corner, surfaces insights
+- interactivity: Fully clickable - navigate between screens, tabs, modals
 - tweaks_interest: Populated vs empty state
 
 ## Assistant
@@ -69,12 +69,12 @@ _[tool: copy_starter_component]_
 Good, I have the iOS frame. Now let me plan and build. Given the scope, I'll structure this as:
 
 **Design system choices:**
-- **Direction A — "Calm"**: Soft ivory/slate, deep indigo accent (#2D3561 → #4338CA), Inter + light serif for numbers. Linear/Stripe energy.
-- **Direction B — "Bold"**: Off-white canvas, electric chartreuse/lime accent (#C5F800 or #BAFF39), heavy sans. Modern SaaS/Ramp energy.
+- **Direction A - "Calm"**: Soft ivory/slate, deep indigo accent (#2D3561 → #4338CA), Inter + light serif for numbers. Linear/Stripe energy.
+- **Direction B - "Bold"**: Off-white canvas, electric chartreuse/lime accent (#C5F800 or #BAFF39), heavy sans. Modern SaaS/Ramp energy.
 
 **Structure:**
 - Single HTML file, React+Babel, multiple JSX components
-- Desktop hero: full app shell (sidebar + topbar + dashboard) — clickable nav between Dashboard/Clients/Calendar/Finance/Ivy/Comms
+- Desktop hero: full app shell (sidebar + topbar + dashboard) - clickable nav between Dashboard/Clients/Calendar/Finance/Ivy/Comms
 - Mobile: iOS frame showing mobile dashboard for both directions
 - Tweaks panel: direction (calm/bold), populated/empty state, owner view (always on)
 
@@ -118,9 +118,9 @@ _[tool: snip]_
 
 _[tool: fork_verifier_agent]_
 
-**Ivy OS** — full app shell with two directions (Calm & Bold), populated/empty states, and a mobile PWA view.
+**Ivy OS** - full app shell with two directions (Calm & Bold), populated/empty states, and a mobile PWA view.
 
-**Hero screen**: Dashboard — greeting band, 4 metric cards with sparklines, revenue vs expenses chart, today's schedule, activity feed, task list.
+**Hero screen**: Dashboard - greeting band, 4 metric cards with sparklines, revenue vs expenses chart, today's schedule, activity feed, task list.
 
 **Clickable nav**: Dashboard, Clients (table), Calendar (week view), Finance (invoices), plus stubs for Messages / Documents / Website. The **Ivy** tab opens the side panel.
 
@@ -146,7 +146,7 @@ _[tool: snip]_
 
 _[tool: done]_
 
-Fixed the Ivy panel — title spacing in insight cards now breathes, and the quick-reply chips no longer overflow (nowrap).
+Fixed the Ivy panel - title spacing in insight cards now breathes, and the quick-reply chips no longer overflow (nowrap).
 
 ## User
 
@@ -158,13 +158,13 @@ _[tool: snip]_
 
 _[tool: read_file]_
 
-The user wants a clean slate — remove all mock/demo data so the app shows only empty states. The simplest approach: force `populated = false` and remove the "populated" toggle, plus gut the mock arrays.
+The user wants a clean slate - remove all mock/demo data so the app shows only empty states. The simplest approach: force `populated = false` and remove the "populated" toggle, plus gut the mock arrays.
 
 _[tool: snip]_
 
 _[tool: write_file]_
 
-Now I need to update the shell/dashboard/screens/sidebar so empty-state is the default everywhere (and the Tweaks panel no longer offers populated toggle). Also the sidebar has a hardcoded "68%" Pro meter and "Maren Voss" — clear those too.
+Now I need to update the shell/dashboard/screens/sidebar so empty-state is the default everywhere (and the Tweaks panel no longer offers populated toggle). Also the sidebar has a hardcoded "68%" Pro meter and "Maren Voss" - clear those too.
 
 _[tool: snip]_
 
@@ -202,7 +202,7 @@ _[tool: str_replace_edit]_
 
 _[tool: done]_
 
-Cleaned out all mock data. Every screen now renders empty/first-run states: dashboard metrics show "—", revenue chart is blanked with a prompt, today's schedule, activity, tasks, clients, finance, and mobile are all empty. Sidebar no longer names a fake user or plan. Tweaks panel now has just Direction + Layout.
+Cleaned out all mock data. Every screen now renders empty/first-run states: dashboard metrics show "-", revenue chart is blanked with a prompt, today's schedule, activity, tasks, clients, finance, and mobile are all empty. Sidebar no longer names a fake user or plan. Tweaks panel now has just Direction + Layout.
 
 ## User
 
@@ -213,7 +213,7 @@ It's missing the toggle feature. You should be able to toggle between the "clien
 <think>
 Let me snip aggressively and then plan the additions. The user wants:
 1. Toggle between Client view and Business view
-2. Client view: free — book with businesses, manage appointments/payments, complete documents
+2. Client view: free - book with businesses, manage appointments/payments, complete documents
 3. Business view: $39/month paywall after 28-day trial, billed every 28 days
 
 I need to add a view-mode toggle (likely in the sidebar or top), build a Client view (simplified UI), and add paywall UI for business after trial.
@@ -240,7 +240,7 @@ _[tool: read_file]_
 Now I have a clear picture. Let me build this:
 
 1. **View toggle** at top of sidebar: "Business" ↔ "Client" (persists to localStorage)
-2. **Client view**: a completely different UI — browse businesses, manage upcoming appointments, payment history, complete docs. Free, no paywall.
+2. **Client view**: a completely different UI - browse businesses, manage upcoming appointments, payment history, complete docs. Free, no paywall.
 3. **Business view**: adds a trial countdown banner and paywall modal after 28 days. $39/28-day billing.
 4. Tweaks: add **Trial state** selector (Day 1 / Day 24 / Expired) so user can demo the paywall without waiting.
 
@@ -280,16 +280,16 @@ _[tool: fork_verifier_agent]_
 
 Added the view toggle + real billing logic:
 
-**Business ↔ Client toggle** — floating pill at the bottom-center of the screen (also mirrored in Tweaks). State persists across reloads.
+**Business ↔ Client toggle** - floating pill at the bottom-center of the screen (also mirrored in Tweaks). State persists across reloads.
 
-**Client view** (free) — own sidebar + topbar in the same visual direction as Business:
-- **Discover** — browse businesses with a 3-step booking modal (service → time slot → review/confirm)
-- **Appointments** — upcoming + past
-- **Payments** — spend summary, card on file, full history
-- **Documents** — action-needed forms + signed & filed
-- **Messages** — threads with each business
+**Client view** (free) - own sidebar + topbar in the same visual direction as Business:
+- **Discover** - browse businesses with a 3-step booking modal (service → time slot → review/confirm)
+- **Appointments** - upcoming + past
+- **Payments** - spend summary, card on file, full history
+- **Documents** - action-needed forms + signed & filed
+- **Messages** - threads with each business
 
-**Business paywall** — $39 every 28 days:
+**Business paywall** - $39 every 28 days:
 - Top banner on every page showing days remaining; turns urgent (accent bg) at ≤5 days
 - On expiry: banner flips to "Trial has ended," content dims, paywall modal opens automatically and can't be dismissed until you subscribe
 - Paywall is a split card: big **$39** price panel explaining the 28-day cycle ("thirteen billing cycles a year, priced so it fits a busy week"), with the perks list on the right
@@ -310,20 +310,20 @@ Structure from image:
 2. Welcome heading "Welcome to Client Rewards"
 3. Subtitle "Transform one-time visitors into loyal, repeat customers"
 4. Card: "Why Reward Programs Work" with 3 stat tiles (67%, 60-70%, 2.5x)
-5. Card: "What You Can Do" — 4 checkmarked items (Visit-Based, Spend-Based, Referrals, Custom)
+5. Card: "What You Can Do" - 4 checkmarked items (Visit-Based, Spend-Based, Referrals, Custom)
 6. Primary CTA button "Set Up My First Reward Program"
 7. Fine print "Takes less than 2 minutes · Free with all plans"
 
 After launch: a full builder interface where business owner can create reward rules, see members, manage redemptions, etc.
 
-Let me match our Calm/Bold style. The accent in Calm is deep indigo (#2E3168); Bold is chartreuse (#CFFF50). Don't use the purple gradient — match our direction.
+Let me match our Calm/Bold style. The accent in Calm is deep indigo (#2E3168); Bold is chartreuse (#CFFF50). Don't use the purple gradient - match our direction.
 
 I'll add a Rewards nav item, create the landing + the full program view, and persist the "launched" state.
 
 Let me check the current NAV to add it.
 </think>
 
-I'll add Rewards as a top-level nav item, match it to our Calm/Bold directions (no pink gradient — use our accent), and split it into two states: the landing pitch + a full rewards manager once launched. The launch state persists.
+I'll add Rewards as a top-level nav item, match it to our Calm/Bold directions (no pink gradient - use our accent), and split it into two states: the landing pitch + a full rewards manager once launched. The launch state persists.
 
 _[tool: snip]_
 
@@ -353,17 +353,17 @@ _[tool: fork_verifier_agent]_
 
 Added a **Rewards** tab to the Business view.
 
-**Landing state** (matches your reference layout, adapted to our Calm/Bold palette — accent circle instead of the purple gradient):
+**Landing state** (matches your reference layout, adapted to our Calm/Bold palette - accent circle instead of the purple gradient):
 - Circular accent badge with gift icon
 - "Welcome to Client Rewards" display headline + tagline
 - "Why reward programs work" card with three stat tiles (67% / 60–70% / 2.5×) in tinted ok/accent/warn colors
-- "What you can do" card — 4 checkmarked offerings (visit-based, spend-based, referral, custom)
+- "What you can do" card - 4 checkmarked offerings (visit-based, spend-based, referral, custom)
 - Primary CTA "Set up my first reward program" + fine print
 
 **Manager state** (after launch, persisted to localStorage):
 - KPIs: active members, redemptions, repeat revenue, referrals converted
 - Tabs: **Rules** (cards with toggle + edit), **Members** (points & status), **Redemptions** (history)
-- "New rule" modal — pick type (visit/spend/referral/custom), name it, set trigger + reward, active toggle
+- "New rule" modal - pick type (visit/spend/referral/custom), name it, set trigger + reward, active toggle
 - Reset program button to go back to the landing
 
 ## User
@@ -378,7 +378,7 @@ _[tool: str_replace_edit]_
 
 _[tool: done]_
 
-Fixed — rule-row name and subline now both truncate with ellipsis and the type chip can't squeeze the layout.
+Fixed - rule-row name and subline now both truncate with ellipsis and the type chip can't squeeze the layout.
 
 ## User
 
@@ -430,8 +430,8 @@ Built out the full calendar:
 **Business view**:
 - Week grid with live-rendering availability bands (green tint), bookings (accent cards), and blocked time (striped)
 - Prev/next/today navigation
-- **Availability** drawer — per-day on/off toggles with start/end time inputs, add multiple windows per day
-- **Block time** — pick date + time range + reason
+- **Availability** drawer - per-day on/off toggles with start/end time inputs, add multiple windows per day
+- **Block time** - pick date + time range + reason
 - Click any booking to see client details or cancel
 - Upcoming bookings list below the grid
 
@@ -477,7 +477,7 @@ Let me build the Messages feature. Design:
 - Registered users only: show a "Find registered clients" search; only surface users who are on Ivy OS
 - Persist to localStorage so messages survive reloads, and the client view's messages tab should see them too
 
-Current client-view.jsx has a mock `ClientMessages` — let me hook both sides into the same shared state so messages flow between Business and Client views on the same device.
+Current client-view.jsx has a mock `ClientMessages` - let me hook both sides into the same shared state so messages flow between Business and Client views on the same device.
 
 Plan:
 1. Create `src/messages.jsx` with shared state (localStorage), a BusinessMessagesView component, and a ClientMessagesView that replaces the existing mock.
@@ -501,7 +501,7 @@ _[tool: grep]_
 
 _[tool: grep]_
 
-Good — icons exist. Let me wire the view into the main HTML.
+Good - icons exist. Let me wire the view into the main HTML.
 
 _[tool: grep]_
 
@@ -512,7 +512,7 @@ _[tool: grep]_
 _[tool: grep]_
 
 <think>
-Add the messages.jsx script tag. Also the top bar shows title/subtitle; "Messages / Inbox" is fine but since the view has its own conversation header, we should maybe hide the padding. Let me check the shell — actually the current viewer uses top bar with title. Probably fine. But the view uses 100vh height which may conflict with padding. Let me check how views are rendered.
+Add the messages.jsx script tag. Also the top bar shows title/subtitle; "Messages / Inbox" is fine but since the view has its own conversation header, we should maybe hide the padding. Let me check the shell - actually the current viewer uses top bar with title. Probably fine. But the view uses 100vh height which may conflict with padding. Let me check how views are rendered.
 </think>
 
 _[tool: str_replace_edit]_
@@ -548,8 +548,8 @@ Messages are now functional:
 **Business inbox** (`Messages` tab):
 - Two-pane layout: thread list + conversation, with unread badges and last-message preview
 - **Gear icon** → settings modal with two clear options:
-  - **Two-way messaging** — client can reply
-  - **Broadcast only** — owner sends, client can read but can't reply
+  - **Two-way messaging** - client can reply
+  - **Broadcast only** - owner sends, client can read but can't reply
   - Sets the default for all new threads
 - **+ icon** → "New conversation" picker that *only* lists registered Ivy OS users (unregistered contacts are filtered out with a note to invite them via Clients)
 - Per-thread override toggle in the conversation header (Two-way / Broadcast)
@@ -557,7 +557,7 @@ Messages are now functional:
 
 **Client side** (`Messages` tab in client view):
 - Same shared store, so messages flow both ways on the same device
-- When the business sets a thread to broadcast-only, the client's composer is replaced with a "Replies aren't enabled" notice — no sending possible
+- When the business sets a thread to broadcast-only, the client's composer is replaced with a "Replies aren't enabled" notice - no sending possible
 
 **Registered-users-only rule:**
 - Threads and the new-conversation picker both filter to `registered: true` users
@@ -597,7 +597,7 @@ A background task has completed. Here are the results:
 
 ## Assistant
 
-The verifier hit its usage limit, so I can't confirm via screenshot — but the fix is straightforward: the composer now has ~96px of clearance below it, well above the floating switcher (~60px from bottom) and Ivy FAB. If you see any remaining overlap, let me know and I'll tune it further.
+The verifier hit its usage limit, so I can't confirm via screenshot - but the fix is straightforward: the composer now has ~96px of clearance below it, well above the floating switcher (~60px from bottom) and Ivy FAB. If you see any remaining overlap, let me know and I'll tune it further.
 
 ## User
 
@@ -645,7 +645,7 @@ Key UX:
 5. Completion: adds another system message to both; moves doc to Vault.
 6. Reminder: button on outstanding doc sends another system message + email toast.
 
-Also email notifications should visually appear — I'll use a simple toast system.
+Also email notifications should visually appear - I'll use a simple toast system.
 
 Let me also tie into the messages store so we can inject system messages.
 
@@ -692,7 +692,7 @@ Google Drive: "Connect Google Drive" button in Templates/Vault; on click, show t
 
 Given complexity, let me just build the business side really well and make client signing work. Let me go.
 
-One more design decision: instead of rendering PDFs, for uploaded PDFs I'll just render N "page" rectangles (user provides page count) with "PDF page N" placeholders — this is acceptable for a design prototype. The user uploads a PDF → file name captured, we default to 3 pages.
+One more design decision: instead of rendering PDFs, for uploaded PDFs I'll just render N "page" rectangles (user provides page count) with "PDF page N" placeholders - this is acceptable for a design prototype. The user uploads a PDF → file name captured, we default to 3 pages.
 
 Let me write this efficiently.
 </think>
@@ -719,13 +719,13 @@ DOC_KEY = 'Ivy OS:docs'
 }
 ```
 
-And a helper `addSystemMessage(clientId, payload)` to push a doc-related message into the thread — it mutates the messages store directly. Since messages use their own store, I'll use `loadMsgs`/`saveMsgs` which I already exported.
+And a helper `addSystemMessage(clientId, payload)` to push a doc-related message into the thread - it mutates the messages store directly. Since messages use their own store, I'll use `loadMsgs`/`saveMsgs` which I already exported.
 
 Wait, I need to expose those. Let me check.
 
 `loadMsgs`/`saveMsgs` aren't on window. Let me add them, plus a helper to push a system message.
 
-Let me also update the messages.jsx rendering to show special `kind: 'doc-*'` bubbles. And the client bubble should have an "Open document" CTA that triggers signing flow. For that, I need a cross-file signing modal — the messages view can use `window.openSigningFlow(docId)` which I'll define in documents.jsx.
+Let me also update the messages.jsx rendering to show special `kind: 'doc-*'` bubbles. And the client bubble should have an "Open document" CTA that triggers signing flow. For that, I need a cross-file signing modal - the messages view can use `window.openSigningFlow(docId)` which I'll define in documents.jsx.
 
 Plan for rendering:
 - In BusinessMessagesView conversation: when `m.kind === 'doc-sent'`, show a card-style bubble "📄 Document sent: {docName}" with status.
@@ -811,7 +811,7 @@ _[tool: snip]_
 _[tool: grep]_
 
 <think>
-I need to mount SigningPortal at the root so both client view and business view (if previewing) can open it. Add it in both client and business return statements — or better, at the app-root outermost level. Let me add it just before the closing div in the client view.
+I need to mount SigningPortal at the root so both client view and business view (if previewing) can open it. Add it in both client and business return statements - or better, at the app-root outermost level. Let me add it just before the closing div in the client view.
 </think>
 
 _[tool: str_replace_edit]_
@@ -825,9 +825,9 @@ The string didn't match. Let me look at the exact content.
 _[tool: read_file]_
 
 <think>
-The page already mounts at client level. Let me add SigningPortal both at client and business root. Since it uses window.openSigningFlow, having both mounts would register twice; only need one. I'll mount in the outer wrapper — just below ViewSwitcher in both paths.
+The page already mounts at client level. Let me add SigningPortal both at client and business root. Since it uses window.openSigningFlow, having both mounts would register twice; only need one. I'll mount in the outer wrapper - just below ViewSwitcher in both paths.
 
-Actually, the business view might preview the client flow too — but openSigningFlow is triggered from messages which only shows in the client view. Let me add it just once, in client view. And also maybe business view in case the owner wants to preview? Keep it simple: client-only.
+Actually, the business view might preview the client flow too - but openSigningFlow is triggered from messages which only shows in the client view. Let me add it just once, in client view. And also maybe business view in case the owner wants to preview? Keep it simple: client-only.
 </think>
 
 _[tool: str_replace_edit]_
@@ -897,7 +897,7 @@ Signing flow is wired up. The `SigningPortal` now mounts at the client-view root
 - **Vault + Templates tabs** with Drive mock integration
 - **Activity log** per document (sent / viewed / completed)
 
-Verifier is running in the background — will wake me if anything's off.
+Verifier is running in the background - will wake me if anything's off.
 
 ## User
 
@@ -905,7 +905,7 @@ A background task has completed. Here are the results:
 
 ## Assistant
 
-Verifier hit an upstream error (not a design issue). The file loaded cleanly when I called `done`, and the wiring is straightforward — `SigningPortal` mounts in the client view, exposes `window.openSigningFlow(id)`, and the messages module calls it. You're good to test it directly: switch to Client view, open Messages, find a document card.
+Verifier hit an upstream error (not a design issue). The file loaded cleanly when I called `done`, and the wiring is straightforward - `SigningPortal` mounts in the client view, exposes `window.openSigningFlow(id)`, and the messages module calls it. You're good to test it directly: switch to Client view, open Messages, find a document card.
 
 ## User
 
@@ -1003,7 +1003,7 @@ _[tool: read_file]_
 _[tool: read_file]_
 
 <think>
-Context getting full. Let me snip aggressively and add icons. I see icons.jsx has a main Icons block plus something with a logo at the bottom. Need to add Paperclip, Camera, Image, FileIcon. Let me find a good insertion point — probably near Doc or Edit.
+Context getting full. Let me snip aggressively and add icons. I see icons.jsx has a main Icons block plus something with a logo at the bottom. Need to add Paperclip, Camera, Image, FileIcon. Let me find a good insertion point - probably near Doc or Edit.
 </think>
 
 _[tool: snip]_
@@ -1065,12 +1065,12 @@ _[tool: done]_
 Messages now have:
 
 - **Paperclip button** next to send, with a dropdown menu:
-  - **Photo library** — pick existing photos (multi-select)
-  - **Take photo** — opens the device camera on mobile; falls back to file picker on desktop
-  - **File** — any file type
+  - **Photo library** - pick existing photos (multi-select)
+  - **Take photo** - opens the device camera on mobile; falls back to file picker on desktop
+  - **File** - any file type
 - Pending attachments appear as removable chips above the composer before sending
 - Images render inline in bubbles as rounded thumbnails; files render as iMessage-style file cards
-- **iMessage-style timestamp dividers** appear above the first message and whenever there's a 15+ min gap — showing "Today 2:30 PM", "Yesterday 9:15 AM", day-of-week for the past week, or full date beyond that
+- **iMessage-style timestamp dividers** appear above the first message and whenever there's a 15+ min gap - showing "Today 2:30 PM", "Yesterday 9:15 AM", day-of-week for the past week, or full date beyond that
 - Wired into both the business and client composers
 
 ## User
@@ -1082,7 +1082,7 @@ The finance tab should work like Quickbooks in a simple way for the invoice func
 <think>
 Big task. Let me plan:
 
-1. Create `src/finance.jsx` — full finance module with:
+1. Create `src/finance.jsx` - full finance module with:
    - Dashboard (Gross revenue, Outstanding, Net profit, trends)
    - Invoices list (sent, paid, overdue, draft)
    - Invoice creator/editor with line items, branded templates
@@ -1138,8 +1138,8 @@ Also need to add to messages.jsx: invoice-sent bubble handler.
 Let me structure this carefully. Given size, I'll make finance.jsx a single focused file of maybe 1000-1200 lines, but I'll be efficient.
 
 Actually, I need to keep files under 1000 lines. Let me split:
-- `src/finance.jsx` — store + FinanceView shell + dashboard + accounts
-- `src/invoices.jsx` — invoices list + creator + templates + recurring + client view
+- `src/finance.jsx` - store + FinanceView shell + dashboard + accounts
+- `src/invoices.jsx` - invoices list + creator + templates + recurring + client view
 
 Let me build `src/finance.jsx` first.
 </think>
@@ -1237,7 +1237,7 @@ _[tool: snip]_
 _[tool: write_file]_
 
 <think>
-Let me snip aggressively and continue. First I need to verify the finance setup works and the toast wiring between files is correct. I need `window.FinanceToast.useToast` — but `useToast` is defined in finance.jsx but only the ToastProvider wraps the finance view. If invoices.jsx is rendered inside FinanceView, it shares the context — but the provider's context is not exposed globally.
+Let me snip aggressively and continue. First I need to verify the finance setup works and the toast wiring between files is correct. I need `window.FinanceToast.useToast` - but `useToast` is defined in finance.jsx but only the ToastProvider wraps the finance view. If invoices.jsx is rendered inside FinanceView, it shares the context - but the provider's context is not exposed globally.
 
 Let me fix that by exposing `window.FinanceToast = { useToast }` from finance.jsx. Also need to handle the finance view finishing before creating the 3 new big features. Let me prioritize:
 
@@ -1326,9 +1326,9 @@ _[tool: read_file]_
 
 <think>
 I need to replace the ClientsView in screens.jsx, and add a new GoalsView, Ivy full page. I'll build:
-1. clients.jsx — new full Clients page
-2. goals.jsx — Goals & Tasks  
-3. ivy-pro.jsx — full Ivy Pro page
+1. clients.jsx - new full Clients page
+2. goals.jsx - Goals & Tasks  
+3. ivy-pro.jsx - full Ivy Pro page
 
 Actually, the Ivy is currently a slide-out panel (IvyPanel) + FAB. User wants it to act like a full coach. Looking at the screenshots:
 - Top banner: "Ivy's Insight Today" with "Kickstart Your Client Acquisition" text and action buttons
@@ -1348,7 +1348,7 @@ Now update the 'ivy' case to render IvyProView full page (not panel), and leave 
 _[tool: str_replace_edit]_
 
 <think>
-Now I need to write 3 new files. Given context, I'll be compact but still feature-rich. Let me create goals.jsx first — with app-syncing.
+Now I need to write 3 new files. Given context, I'll be compact but still feature-rich. Let me create goals.jsx first - with app-syncing.
 
 Store model for goals & tasks:
 - tasks: [{id, title, type: 'generic'|'message-client'|'send-invoice'|'book-client', done, dueDate, clientId?, createdAt, source: 'user'|'ivy'|'auto'}]
@@ -1366,7 +1366,7 @@ Let me write this compactly.
 _[tool: write_file]_
 
 <think>
-Now build clients.jsx — full Clients view with Active/Leads/Paused tabs and analytics at top.
+Now build clients.jsx - full Clients view with Active/Leads/Paused tabs and analytics at top.
 
 Data model: extend messages.jsx clients with stage (active/lead/paused), since, lastSeen, lifetime. But since messages.jsx defines them, I should read from there and layer on additional attributes via separate store.
 
@@ -1402,9 +1402,9 @@ Snip completed work silently.
 _[tool: snip]_
 
 <think>
-Now I need to check: the old ClientsView is defined somewhere (in messages.jsx maybe, or screens.jsx). The new clients.jsx also defines ClientsView — it needs to override. Since clients.jsx loads after screens.jsx but both set window.ClientsView, whichever loads last wins. Let me check script ordering.
+Now I need to check: the old ClientsView is defined somewhere (in messages.jsx maybe, or screens.jsx). The new clients.jsx also defines ClientsView - it needs to override. Since clients.jsx loads after screens.jsx but both set window.ClientsView, whichever loads last wins. Let me check script ordering.
 
-Looking at the HTML: screens.jsx is likely loaded first, then later clients.jsx. But the babel transpilation scopes to each script — so `function ClientsView()` in screens.jsx doesn't necessarily pollute global; only if someone does `window.ClientsView = ClientsView` or the top-level function becomes a global.
+Looking at the HTML: screens.jsx is likely loaded first, then later clients.jsx. But the babel transpilation scopes to each script - so `function ClientsView()` in screens.jsx doesn't necessarily pollute global; only if someone does `window.ClientsView = ClientsView` or the top-level function becomes a global.
 
 Actually in Babel standalone, scripts become wrapped functions, so `function X()` isn't global. But reading `ClientsView` in the main HTML's script requires X to be on window. Let me check.
 </think>
@@ -1425,9 +1425,9 @@ _[tool: fork_verifier_agent]_
 
 Added three new sections:
 
-- **Goals & Tasks** tab — to-dos with smart types (message client, send invoice, book session) that auto-complete when you actually do the thing in the app. Goals pull "current" values from Finance, Clients, and Calendar so progress stays in sync.
-- **Clients** — full CRM with Active/Leads/Paused stages, analytics (total, leads in N days, conversion, churn), search, detail drawer with tags and notes, and add-lead flow.
-- **Ivy Pro** — full-page coach with chat history, prompt gallery, insight banner, file upload for analysis, and a live "what Ivy sees" panel reading from your real workspace data.
+- **Goals & Tasks** tab - to-dos with smart types (message client, send invoice, book session) that auto-complete when you actually do the thing in the app. Goals pull "current" values from Finance, Clients, and Calendar so progress stays in sync.
+- **Clients** - full CRM with Active/Leads/Paused stages, analytics (total, leads in N days, conversion, churn), search, detail drawer with tags and notes, and add-lead flow.
+- **Ivy Pro** - full-page coach with chat history, prompt gallery, insight banner, file upload for analysis, and a live "what Ivy sees" panel reading from your real workspace data.
 
 ## User
 

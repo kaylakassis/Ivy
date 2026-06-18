@@ -50,7 +50,7 @@ export default async function handler(req, res) {
     const reason = String(body.reason || '').slice(0, 1000).trim();
     const snippet = String(row.text || '').slice(0, 300);
 
-    // Mark the message reported (only the first reporter wins — the
+    // Mark the message reported (only the first reporter wins - the
     // reported_at clause stays null-aware so a re-report from another
     // client still creates a new support entry but doesn't overwrite
     // the original reporter).
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
 
     // Find or create the reporter's support thread, then post a
     // 'report' message. support_threads is keyed by user_id (one thread
-    // per user) — UPSERT for safety.
+    // per user) - UPSERT for safety.
     const st = await sql`
       INSERT INTO support_threads (user_id, status, last_message_at, last_message_preview)
       VALUES (${user.id}, 'open', NOW(), ${'Reported a DM'})
@@ -75,8 +75,8 @@ export default async function handler(req, res) {
       RETURNING id
     `;
     const reportText = reason
-      ? `[REPORT] ${reason}\n\n— Reported message —\n"${snippet}"`
-      : `[REPORT] User reported a direct message.\n\n— Reported message —\n"${snippet}"`;
+      ? `[REPORT] ${reason}\n\n- Reported message -\n"${snippet}"`
+      : `[REPORT] User reported a direct message.\n\n- Reported message -\n"${snippet}"`;
     await sql`
       INSERT INTO support_messages (thread_id, sender, text, kind, meta)
       VALUES (${st.rows[0].id}, 'user', ${reportText}, 'report',

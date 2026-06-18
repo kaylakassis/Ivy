@@ -1,7 +1,7 @@
-// POST /api/me/dms/:id/messages — send a DM
+// POST /api/me/dms/:id/messages - send a DM
 // Rejected when:
 //   • the two clients no longer share an active group
-//   • the recipient has blocked the sender (HARD reject — see clientDms.js note)
+//   • the recipient has blocked the sender (HARD reject - see clientDms.js note)
 import { sql } from '../../../_lib/db.js';
 import { requireUser } from '../../../_lib/auth.js';
 import { myClientIds } from '../../../_lib/clientPortal.js';
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
       }
       if (text.length > 4000) return { status: 400, body: { error: 'Message is too long' } };
 
-      // Re-check shared-group permission at send time — a client who's
+      // Re-check shared-group permission at send time - a client who's
       // left every shared group should no longer be able to message.
       const stillShared = await sharedGroupWorkspace({
         clientAId: thread.my_client_id, clientBId: thread.other_client_id,
@@ -57,7 +57,7 @@ export default async function handler(req, res) {
         return { status: 403, body: { error: "You're no longer in a group with this member." } };
       }
 
-      // Recipient block check — hard reject so the sender knows.
+      // Recipient block check - hard reject so the sender knows.
       const blocked = await isBlocked({
         blockerClientId: thread.other_client_id,
         blockedClientId: thread.my_client_id,

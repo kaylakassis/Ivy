@@ -7,7 +7,7 @@
 //      - text / initial / date → drawText with a serviceable font fit
 //   3. Append a final page summarizing every signer (name, email,
 //      signed_at, IP) plus the document's tamper-evident SHA-256 hash.
-//   4. Save and return the bytes — the caller uploads them to Blob and
+//   4. Save and return the bytes - the caller uploads them to Blob and
 //      stamps `documents.final_pdf_url` so the owner + every signer can
 //      download the flattened, legally-binding artifact.
 //
@@ -16,7 +16,7 @@
 // uses bottom-left points. We flip Y here.
 //
 // Failures are surfaced (caller logs + falls back to no final PDF)
-// rather than blocking completion — the canonical record is still the
+// rather than blocking completion - the canonical record is still the
 // document_signers rows + completion_hash.
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { put } from '@vercel/blob';
@@ -111,7 +111,7 @@ export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) 
   for (const s of signers) {
     if (cy < 140) {
       // Spill onto another page if we run out of room (rare unless 8+ signers).
-      current.drawText('— continued on next page —', { x: margin, y: 30, size: 9, font: helv, color: rgb(0.5, 0.5, 0.5) });
+      current.drawText('- continued on next page -', { x: margin, y: 30, size: 9, font: helv, color: rgb(0.5, 0.5, 0.5) });
       current = pdf.addPage();
       cy = current.getSize().height - margin;
     }
@@ -119,7 +119,7 @@ export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) 
     cy -= 16;
     const lines = [
       s.email,
-      s.signed_at ? `Signed at ${formatTs(s.signed_at)}` : (s.declined_at ? `Declined at ${formatTs(s.declined_at)}` : '—'),
+      s.signed_at ? `Signed at ${formatTs(s.signed_at)}` : (s.declined_at ? `Declined at ${formatTs(s.declined_at)}` : '-'),
       s.ip ? `IP ${s.ip}` : null,
       s.user_agent ? truncate(`UA ${s.user_agent}`, 90) : null,
       s.decline_reason ? truncate(`Reason: ${s.decline_reason}`, 90) : null,

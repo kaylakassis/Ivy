@@ -1,8 +1,8 @@
-// /do-not-sell — California CCPA / CPRA "Do Not Sell or Share My
+// /do-not-sell - California CCPA / CPRA "Do Not Sell or Share My
 // Personal Information" page. Required in the footer of every
 // California-consumer-facing business (CA SB-1808). Our actual practice
 // is that we don't sell or share personal information for cross-context
-// behavioral advertising — this page confirms that + gives California
+// behavioral advertising - this page confirms that + gives California
 // residents an explicit path to file a request if they want to.
 import React from 'react';
 import LegalPage, { H2, P } from './LegalPage.jsx';
@@ -30,7 +30,7 @@ export default function DoNotSellPage() {
         client records) is used to run the Service for you. It flows to the
         sub-processors listed on our{' '}
         <a href="/privacy" style={{ color: 'var(--accent)' }}>Privacy Policy</a>{' '}
-        — payment, email, AI, and infrastructure providers — strictly to
+        - payment, email, AI, and infrastructure providers - strictly to
         deliver the product you signed up for. None of these relationships
         constitute a "sale" or "sharing" under the CCPA/CPRA definitions.
       </P>
@@ -76,7 +76,7 @@ export default function DoNotSellPage() {
       <P>
         Exercising any of these rights does not affect the price you pay
         for Ivy OS or the service you receive. We don't run different
-        pricing tiers based on whether you opt out — there are no opt-out
+        pricing tiers based on whether you opt out - there are no opt-out
         penalties because we don't have an ad-tech model to penalize.
       </P>
 

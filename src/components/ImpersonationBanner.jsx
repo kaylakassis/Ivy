@@ -1,6 +1,6 @@
 // Sticky banner that surfaces whenever the current session is an
 // impersonated one (admin viewing as another user). Renders nothing
-// when /api/auth/me returns no `impersonating` block — i.e. for
+// when /api/auth/me returns no `impersonating` block - i.e. for
 // regular users this component is invisible and free.
 import React, { useState } from 'react';
 import { Icons } from './Icons.jsx';

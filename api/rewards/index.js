@@ -22,7 +22,7 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
 
     if (req.method === 'GET') {
-      // Per-query try/catch — any single missing table degrades to an
+      // Per-query try/catch - any single missing table degrades to an
       // empty fallback rather than 500ing the whole Rewards tab.
       const safe = async (p, fallback) => { try { return await p; } catch (e) {
         // eslint-disable-next-line no-console

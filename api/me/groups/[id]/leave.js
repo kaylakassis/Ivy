@@ -1,4 +1,4 @@
-// POST /api/me/groups/:id/leave — client leaves the group.
+// POST /api/me/groups/:id/leave - client leaves the group.
 import { sql } from '../../../_lib/db.js';
 import { requireUser } from '../../../_lib/auth.js';
 import { myClientIds } from '../../../_lib/clientPortal.js';

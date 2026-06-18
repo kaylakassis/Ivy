@@ -50,7 +50,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'PATCH') {
       const body = await readBody(req);
-      // Cheap toggle path — enabled-only PATCH doesn't need full
+      // Cheap toggle path - enabled-only PATCH doesn't need full
       // re-validation (no shape changes).
       if (Object.keys(body).length === 1 && 'enabled' in body) {
         const upd = await sql`
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
            WHERE id = ${id} AND workspace_id = ${workspaceId}
            RETURNING *
         `;
-        // Audit the toggle — workflows automate outbound comms; an
+        // Audit the toggle - workflows automate outbound comms; an
         // accidental flip from disabled→enabled can mass-send emails,
         // so the trail of who toggled when matters.
         recordWorkspaceAudit(req, {
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
         });
         return ok(res, { workflow: serializeWorkflow(upd.rows[0]) });
       }
-      // Full update — merge incoming with existing then re-validate.
+      // Full update - merge incoming with existing then re-validate.
       const merged = {
         name:           body.name ?? row.name,
         description:    body.description ?? row.description,

@@ -1,4 +1,4 @@
-// Shared serializer + helpers for the projects table. Kept tiny — most
+// Shared serializer + helpers for the projects table. Kept tiny - most
 // of the read/write logic lives in the api/projects/* endpoints; this
 // module just normalizes the row shape and centralizes the valid-status
 // set so endpoints don't drift on enum values.

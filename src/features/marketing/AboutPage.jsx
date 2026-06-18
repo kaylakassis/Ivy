@@ -33,7 +33,7 @@ const BLOCKS = [
     heading: 'Built so the client portal is free, forever.',
     paragraphs: [
       "Your clients shouldn't have to pay to interact with you. The portal - where they see their bookings, invoices, signed forms, and messages - is free for them and always will be. They sign up once and use the same portal across every business they work with on Ivy OS.",
-      `When Ivy OS charges, it charges the business owner only — one simple subscription after a ${TRIAL_DAYS}-day free trial. Early users get a meaningful discount locked in for life. No surprise bills, no rugpulls.`,
+      `When Ivy OS charges, it charges the business owner only - one simple subscription after a ${TRIAL_DAYS}-day free trial. Early users get a meaningful discount locked in for life. No surprise bills, no rugpulls.`,
     ],
   },
   {

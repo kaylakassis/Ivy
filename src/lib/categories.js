@@ -1,6 +1,6 @@
 // Service-business categories used by Onboarding (step 2: "What do you
 // do?") and the Calendar Share drawer's category dropdown. Centralized
-// so adding a category here unlocks it everywhere — previously this
+// so adding a category here unlocks it everywhere - previously this
 // list was duplicated across two files and silently drifted.
 //
 // Each category drives:
@@ -8,7 +8,7 @@
 //   - The starter service-pack the wizard suggests on step 3
 //   - The category facet on the Discover surface for clients
 //
-// "Other" exists as a deliberate escape hatch — solo businesses don't
+// "Other" exists as a deliberate escape hatch - solo businesses don't
 // fit five tidy buckets, and forcing a wrong choice hurts both the
 // service-pack quality and Ivy's tone-matching.
 export const CATEGORIES = [
@@ -33,10 +33,10 @@ export const CATEGORIES = [
   { id: 'Professional', label: 'Professional',      icon: 'Doc',
     hint: 'Consulting, coaching, legal, accounting' },
   { id: 'Other',        label: 'Other',             icon: 'Plus',
-    hint: 'Something else — we still fit. Pick this and customize.' },
+    hint: 'Something else - we still fit. Pick this and customize.' },
 ];
 
-// Just the IDs — used by ShareDrawer's <select>.
+// Just the IDs - used by ShareDrawer's <select>.
 export const CATEGORY_IDS = CATEGORIES.map((c) => c.id);
 
 // Starter packs the onboarding wizard offers when a category is picked.

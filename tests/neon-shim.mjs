@@ -2,7 +2,7 @@
 // rig so handlers that `import { neon } from '@neondatabase/serverless'`
 // transparently talk to a local Postgres instead of the Neon HTTP API.
 //
-// API surface kept minimal — we only export what the app actually uses:
+// API surface kept minimal - we only export what the app actually uses:
 //   • neon(connectionString, opts)
 //       Returns a tagged-template function `sql` with .query(text, params)
 //       attached. When opts.fullResults is true, the tagged invocation
@@ -40,7 +40,7 @@ export function neon(connectionString, opts = {}) {
 
   function tagged(strings, ...values) {
     // Translate the tagged template into a parameterized query. Neon's
-    // tagged form uses ${...} which we splice in as $1, $2, ... — this
+    // tagged form uses ${...} which we splice in as $1, $2, ... - this
     // matches the pg driver convention. JSON.stringify(obj)::jsonb etc.
     // is handled by the caller passing strings, so we just need to
     // weave parameters in.
@@ -63,7 +63,7 @@ export function neon(connectionString, opts = {}) {
 }
 
 // Some callers do `import { Pool } from '@neondatabase/serverless'` for
-// streaming queries — we don't, but stub it so re-exports don't break.
+// streaming queries - we don't, but stub it so re-exports don't break.
 export class Pool {}
 
 // db.js sets neonConfig.fetchConnectionCache + poolQueryViaFetch for

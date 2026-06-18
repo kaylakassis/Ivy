@@ -1,6 +1,6 @@
 // POST /api/push/subscribe   body: { endpoint, keys: { p256dh, auth }, userAgent? }
 // Stores the browser-issued push subscription against the signed-in
-// user. Idempotent on (user_id, endpoint) — re-subscribing from the
+// user. Idempotent on (user_id, endpoint) - re-subscribing from the
 // same device just refreshes user_agent + last_used_at.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

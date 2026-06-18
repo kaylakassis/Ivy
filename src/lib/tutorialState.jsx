@@ -1,4 +1,4 @@
-// Tutorial state — one round-trip on app boot pulls every tab's
+// Tutorial state - one round-trip on app boot pulls every tab's
 // completion status, and PATCH updates persist the user-side decision.
 //
 // Lifecycle:
@@ -25,7 +25,7 @@ export function TutorialProvider({ children }) {
       .catch((e) => {
         if (!live) return;
         setError(e);
-        // Fail soft — never let a tutorial fetch crash the app shell.
+        // Fail soft - never let a tutorial fetch crash the app shell.
         // An empty map means everything looks unseen which is the
         // worst-case behavior; better than blocking nav.
         setTutorials({});
@@ -40,7 +40,7 @@ export function TutorialProvider({ children }) {
     try {
       await api.patch('/me/tutorials', { tabId, status });
     } catch (e) {
-      // Optimistic — don't surface; the next page-load GET will be
+      // Optimistic - don't surface; the next page-load GET will be
       // authoritative. If the PATCH consistently fails it'll show up
       // in the user's Vercel logs.
       // eslint-disable-next-line no-console
@@ -73,7 +73,7 @@ export function TutorialProvider({ children }) {
 export function useTutorial() {
   const ctx = useContext(TutorialCtx);
   if (!ctx) {
-    // No provider — return a no-op object so a page rendered outside
+    // No provider - return a no-op object so a page rendered outside
     // the shell (e.g. Storybook, isolated dev preview) doesn't crash.
     return {
       tutorials: {}, ready: false, error: null,

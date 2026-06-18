@@ -1,24 +1,24 @@
-// Square adapter — owners connect their own Square account via OAuth;
+// Square adapter - owners connect their own Square account via OAuth;
 // we mint hosted Square Checkout links for owner→client charges. The
 // hosted page automatically offers Cash App Pay as a payment option in
 // supported regions, alongside cards.
 //
 // Required platform env vars (set in Vercel):
-//   SQUARE_APPLICATION_ID       — your Square app's public ID
-//   SQUARE_APPLICATION_SECRET   — your Square app's secret (OAuth code exchange)
-//   SQUARE_ENVIRONMENT          — 'sandbox' | 'production' (defaults to sandbox)
-//   SQUARE_WEBHOOK_SIGNATURE_KEY (optional) — for verifying webhook events
-//   SQUARE_REDIRECT_URI         (optional) — the EXACT OAuth redirect URL
+//   SQUARE_APPLICATION_ID       - your Square app's public ID
+//   SQUARE_APPLICATION_SECRET   - your Square app's secret (OAuth code exchange)
+//   SQUARE_ENVIRONMENT          - 'sandbox' | 'production' (defaults to sandbox)
+//   SQUARE_WEBHOOK_SIGNATURE_KEY (optional) - for verifying webhook events
+//   SQUARE_REDIRECT_URI         (optional) - the EXACT OAuth redirect URL
 //                                 registered in the Square dashboard. Pin
 //                                 this when APP_URL can't be relied on (it
 //                                 must match Square's "Redirect URL" field
 //                                 character-for-character or connect fails).
 //
 // Per-workspace credentials are stored in finance_settings.square_*:
-//   square_credentials_encrypted — JSON { access_token, refresh_token, expires_at }
-//   square_merchant_id           — for the Square-Merchant-Id header on writes
-//   square_location_id           — default location used for checkouts
-//   square_environment           — 'sandbox' | 'production' (matches the env at connect time)
+//   square_credentials_encrypted - JSON { access_token, refresh_token, expires_at }
+//   square_merchant_id           - for the Square-Merchant-Id header on writes
+//   square_location_id           - default location used for checkouts
+//   square_environment           - 'sandbox' | 'production' (matches the env at connect time)
 import crypto from 'node:crypto';
 import { sql } from '../db.js';
 import { encrypt, decrypt } from '../secrets.js';
@@ -42,7 +42,7 @@ export function squareOAuthBase(env = squareEnv()) {
     : 'https://connect.squareupsandbox.com/oauth2/authorize';
 }
 
-// Scopes we ask for at Connect time — wide enough for hosted-checkout
+// Scopes we ask for at Connect time - wide enough for hosted-checkout
 // link creation, payment lookup, and refunds. Square requires every
 // scope to be pre-declared in the app's dashboard.
 const SQUARE_SCOPES = [
@@ -54,7 +54,7 @@ const SQUARE_SCOPES = [
 
 // The OAuth redirect URL. Square requires this to EXACTLY match the
 // "Redirect URL" registered in the app dashboard (only one is allowed),
-// so it must be a single stable URL — never a per-deploy Vercel hostname.
+// so it must be a single stable URL - never a per-deploy Vercel hostname.
 // Pin SQUARE_REDIRECT_URI when APP_URL isn't the canonical production host.
 // Used by BOTH the init and the callback so the value can't drift (OAuth
 // requires the authorize redirect_uri and the token-exchange redirect_uri
@@ -98,7 +98,7 @@ export async function exchangeOAuthCode({ code, redirectUri }) {
   return res.json();
 }
 
-// Fetch the merchant's first location — checkouts need a location_id.
+// Fetch the merchant's first location - checkouts need a location_id.
 // Owners can change it later from settings if they have multiple.
 export async function fetchFirstLocation({ accessToken }) {
   const res = await fetch(`${squareApiBase()}/v2/locations`, {
@@ -201,7 +201,7 @@ export async function createCheckoutSession({
   // sessionId is what gets stashed in invoices.stripe_session_id by
   // /api/invoice-pay/[token].js. We deliberately use Square's
   // ORDER id, not the payment_link id, because Square's webhook
-  // events arrive with `payment.order_id` — same value, so the
+  // events arrive with `payment.order_id` - same value, so the
   // webhook can look the invoice up by `stripe_session_id =
   // payment.order_id` and mark it paid. Returning payment_link.id
   // here (the previous behaviour) made the round-trip silently
@@ -227,7 +227,7 @@ export async function createCheckoutSession({
 // regardless so the audit trail is intact.
 export async function createRefund({
   workspaceId, settings,
-  paymentIntent,  // the Square payment ID — caller passes invoice.stripe_payment_intent which works for both providers
+  paymentIntent,  // the Square payment ID - caller passes invoice.stripe_payment_intent which works for both providers
   amountCents,
   currency = 'USD',
   reason,
@@ -286,7 +286,7 @@ export function verifyWebhook({ rawBody, headers, notificationUrl }) {
   const expected = crypto.createHmac('sha256', key)
     .update(url + (typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')))
     .digest('base64');
-  // Timing-safe compare — plain string `!==` leaks the position of the
+  // Timing-safe compare - plain string `!==` leaks the position of the
   // first byte mismatch, which is enough to recover a signature offline
   // against a chatty endpoint. timingSafeEqual requires equal-length
   // buffers, so length-check first (length differences are public anyway:

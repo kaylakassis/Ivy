@@ -11,7 +11,7 @@
 //   • monthly_value_cents is overwritten on every call so the dashboard
 //     reflects the affiliate's current MRR contribution. If you want
 //     lifetime revenue per affiliate, sum each successful payment into
-//     a separate events table — out of scope here.
+//     a separate events table - out of scope here.
 import { sql } from './db.js';
 
 const PLAN_FALLBACK_CENTS = parseInt(
@@ -37,7 +37,7 @@ export function monthlyValueCents(stripeSubscription) {
 }
 
 // Stamp the workspace owner's affiliate_use row if there is one. No-op
-// (returns 0) when the owner wasn't referred — every workspace owner
+// (returns 0) when the owner wasn't referred - every workspace owner
 // hits this path on each successful payment, so the early return needs
 // to stay cheap.
 export async function attributePayment({ workspaceId, valueCents }) {

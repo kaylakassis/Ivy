@@ -1,4 +1,4 @@
-// /me/orders — order history across every business this user has
+// /me/orders - order history across every business this user has
 // bought products from. Read-only list; details expandable inline.
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';

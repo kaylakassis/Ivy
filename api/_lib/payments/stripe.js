@@ -1,4 +1,4 @@
-// Stripe adapter — wraps the existing per-workspace Stripe Connect
+// Stripe adapter - wraps the existing per-workspace Stripe Connect
 // integration through the common payments interface. Behavior is
 // unchanged from the pre-abstraction code path; this file just exposes
 // the shape every adapter exposes so callers don't branch on provider.
@@ -15,9 +15,9 @@ export function getProviderName() { return 'stripe'; }
 // "Connected" semantics differ slightly between flows:
 //   • Account Links / Express: acct exists AND onboarding is 'complete'
 //     (a 'pending' status means the owner started the form but didn't
-//      finish — they can't yet receive charges).
+//      finish - they can't yet receive charges).
 //   • Standard OAuth (legacy): the access token is the proof of
-//     connection — if it's stored, the account works.
+//     connection - if it's stored, the account works.
 function stripeIsLive(fs) {
   if (!fs) return false;
   if (fs.stripeConnectUserId && fs.stripeOnboardingStatus === 'complete') return true;

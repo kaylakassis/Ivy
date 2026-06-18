@@ -84,7 +84,7 @@ function ClientSidebar({ tabs, current, onNav, direction }) {
         fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5,
       }}>
         <div style={{ fontWeight: 600, color: 'var(--fg)', marginBottom: 4 }}>Run a business?</div>
-        Ivy OS is free for clients. If you serve clients, try the Business workspace — 28-day free trial.
+        Ivy OS is free for clients. If you serve clients, try the Business workspace - 28-day free trial.
         <button className="btn btn-outline" style={{ marginTop: 10, width: '100%', justifyContent: 'center' }}
           onClick={() => {
             localStorage.setItem('Ivy OS:view', 'business');
@@ -520,7 +520,7 @@ function ClientDocs({ direction }) {
 function ClientMessages({ direction }) {
   const threads = [
     { biz: 'Meridian Pilates', last: "Looking forward to seeing you tomorrow! Please arrive 10 min early.", time: '2h', unread: true, accent: '#C8D8FF' },
-    { biz: 'Juno Therapy',     last: "Here's the intake form — complete before our Thu session.", time: '1d', unread: true, accent: '#FFD1DC' },
+    { biz: 'Juno Therapy',     last: "Here's the intake form - complete before our Thu session.", time: '1d', unread: true, accent: '#FFD1DC' },
     { biz: 'Forge Strength',   last: "Thanks for the session. Here's your program for the week.", time: '6d', unread: false, accent: '#D0E8D0' },
   ];
   return (

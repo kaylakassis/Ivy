@@ -1,7 +1,7 @@
 // GET /api/admin/users/:id/metrics
 //
 // Per-workspace summary for the super-admin: counts, sums, and ratios.
-// PRIVACY CONTRACT — by design, this endpoint returns ZERO data that
+// PRIVACY CONTRACT - by design, this endpoint returns ZERO data that
 // could identify the workspace's own clients:
 //   • no client names, emails, phone numbers
 //   • no invoice line items, document content, message text
@@ -52,11 +52,11 @@ export default async function handler(req, res) {
           deletedAt: row.deleted_at,
         },
         workspace: null,
-        message: 'This account has no business workspace — they sign in to the client portal only.',
+        message: 'This account has no business workspace - they sign in to the client portal only.',
       });
     }
 
-    // Parallel aggregate queries — none return PII. Every WHERE clause
+    // Parallel aggregate queries - none return PII. Every WHERE clause
     // scopes by workspace_id so a single workspace's data is read.
     const [
       clientsCount,
@@ -114,9 +114,9 @@ export default async function handler(req, res) {
                  COALESCE(AVG(rating)::numeric(3,2), 0) AS avg_rating
             FROM reviews
            WHERE workspace_id = ${wsId} AND status = 'visible'`,
-      // Count only — no message text, no client identities.
+      // Count only - no message text, no client identities.
       sql`SELECT COUNT(*)::int AS n FROM message_threads WHERE workspace_id = ${wsId}`,
-      // Cheapest recency signal — last booking edit OR last invoice
+      // Cheapest recency signal - last booking edit OR last invoice
       // edit OR last message in the workspace. UNION across the
       // candidates and take MAX so the figure reflects real activity
       // rather than just one table's freshness.

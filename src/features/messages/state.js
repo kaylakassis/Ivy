@@ -6,7 +6,7 @@
 // backgrounded tab doesn't ping the server for nothing.
 //
 // True WebSocket / SSE realtime would need a persistent connection
-// layer (Pusher / Ably / Redis pub-sub) — Vercel serverless functions
+// layer (Pusher / Ably / Redis pub-sub) - Vercel serverless functions
 // don't hold long connections cheaply. Polling is the pragmatic
 // 95%-of-UX win without the infrastructure investment.
 import { useEffect, useState, useCallback } from 'react';
@@ -35,7 +35,7 @@ export function useThreads() {
 
   // Background refresh: poll while the tab is foregrounded so the
   // inbox list shows new threads + updated previews + unread counts
-  // without the user needing to refresh. Silent on failure — a
+  // without the user needing to refresh. Silent on failure - a
   // network blip shouldn't surface as an error to the user; their
   // existing state stays valid.
   const silentRefresh = useCallback(async () => {
@@ -106,7 +106,7 @@ export function useThread(threadId) {
 
   // Active-thread polling: 5s while the user is looking at this
   // thread. Tighter than the inbox-list cadence (15s) because the
-  // open thread is where the user expects "live" behavior — a
+  // open thread is where the user expects "live" behavior - a
   // client's reply should appear within seconds, not minutes.
   // Merges incoming messages by id so an optimistic local send
   // doesn't get duplicated when the server's version arrives.

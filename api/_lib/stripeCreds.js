@@ -1,6 +1,6 @@
 // Resolves the per-workspace Stripe credentials in one shot, returning
 // a normalized shape for caller use. Throws when the workspace hasn't
-// connected Stripe — every per-tenant Stripe call goes through this so
+// connected Stripe - every per-tenant Stripe call goes through this so
 // the error path is uniform.
 //
 // Two connection modes are supported transparently:
@@ -16,8 +16,8 @@
 //       account's own secret key (issued during OAuth token exchange).
 //       We use it directly; no Stripe-Account header needed.
 //
-// Callers receive the same shape — `secretKey` + optional `stripeAccount`
-// — and pass both to api/_lib/stripe.js helpers, which already know to
+// Callers receive the same shape - `secretKey` + optional `stripeAccount`
+// - and pass both to api/_lib/stripe.js helpers, which already know to
 // include the Stripe-Account header only when present.
 import { sql } from './db.js';
 import { decrypt } from './secrets.js';
@@ -33,7 +33,7 @@ export async function loadStripeCreds(workspaceId) {
   `;
   const row = r.rows[0];
 
-  // Account Links / Express path — preferred when an acct id exists.
+  // Account Links / Express path - preferred when an acct id exists.
   //
   // We accept ANY persisted acct id regardless of onboarding_status,
   // including 'pending'. Stripe's verification flow often holds
@@ -42,7 +42,7 @@ export async function loadStripeCreds(workspaceId) {
   // throws no_stripe_connection and the owner's Stripe page looks dead
   // even though the acct exists. The Stripe API itself returns the
   // right error (e.g. "Your account cannot currently make live
-  // charges") when an actual charge fails — that error surfaces
+  // charges") when an actual charge fails - that error surfaces
   // cleanly to the owner and is more useful than a synthetic
   // "not connected" message.
   if (row?.stripe_connect_user_id) {
@@ -63,7 +63,7 @@ export async function loadStripeCreds(workspaceId) {
     };
   }
 
-  // Legacy paste-your-key / Standard OAuth path — secret stored
+  // Legacy paste-your-key / Standard OAuth path - secret stored
   // directly. No Stripe-Account header.
   if (row?.stripe_secret_encrypted) {
     let secretKey;

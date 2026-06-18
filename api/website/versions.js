@@ -5,7 +5,7 @@
 // Every Publish stores a snapshot via api/website/publish.js. This
 // endpoint lets owners see what's stored and revert. Roll-back writes
 // the snapshot back into the live row and creates a NEW snapshot of
-// the current state first — so you can always undo your undo.
+// the current state first - so you can always undo your undo.
 
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

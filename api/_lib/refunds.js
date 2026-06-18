@@ -6,14 +6,14 @@
 //
 // Returns { invoice (serialized), refund: { amount, method, fullyRefunded,
 // stripeRefundId, deduped? } } on success. Throws Error (with a
-// user-safe message) on any validation/provider failure — callers map
+// user-safe message) on any validation/provider failure - callers map
 // that to their own error shape (badRequest for the route; tool error
 // surfaced to the owner for Ivy).
 //
 // `audit` is optional: when { req, actor } is supplied (the HTTP route),
 // an immutable workspace-audit row is recorded. Ivy omits it (no request
 // object), so the refund itself still happens but the IP-scoped audit
-// trail is skipped — the invoice activity log still captures the refund.
+// trail is skipped - the invoice activity log still captures the refund.
 import { sql } from './db.js';
 import { createRefund } from './stripe.js';
 import { loadStripeCreds } from './stripeCreds.js';
@@ -124,7 +124,7 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
     };
   }
 
-  // Immutable trail — only when an HTTP request context is supplied.
+  // Immutable trail - only when an HTTP request context is supplied.
   if (audit?.req) {
     recordWorkspaceAudit(audit.req, {
       workspaceId, actor: audit.actor,

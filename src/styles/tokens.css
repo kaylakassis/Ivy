@@ -1,5 +1,5 @@
 /* ============================================================
-   Ivy OS — shared tokens for both directions (Calm + Bold)
+   Ivy OS - shared tokens for both directions (Calm + Bold)
    ============================================================ */
 
 .dir-calm {
@@ -12,7 +12,7 @@
   --fg-2: #3F3D38;
   /* --muted bumped from #85827B to #6E6A62 to clear WCAG AA 4.5:1
      contrast on both --surface (#FFFFFF) and --surface-2 (#FAF8F3).
-     The previous value was ~4.1:1 — borderline failing for body
+     The previous value was ~4.1:1 - borderline failing for body
      text. The new value reads as "calm grey" but is reliably
      readable for visual-impairment users. */
   --muted: #6E6A62;

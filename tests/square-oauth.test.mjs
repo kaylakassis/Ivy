@@ -1,4 +1,4 @@
-// Square OAuth URL contract — the redirect_uri must be stable, pinnable,
+// Square OAuth URL contract - the redirect_uri must be stable, pinnable,
 // and identical between the authorize step and the token exchange, and the
 // authorize host must follow the environment. These are the pieces that
 // break "connect Square" when misconfigured.

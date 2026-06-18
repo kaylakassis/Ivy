@@ -35,7 +35,7 @@ export async function createToken({ userId, kind, ttlMinutes }) {
 //     consumed already (so callers can recognize a duplicate click /
 //     email-scanner prefetch as success instead of treating it as an
 //     attack). Includes the user_id so the caller can verify the user
-//     was actually verified — guards against returning 200 to someone
+//     was actually verified - guards against returning 200 to someone
 //     replaying a stale token for an account that DIDN'T finish.
 //   • null when the token is unknown, expired, or malformed.
 //
@@ -70,7 +70,7 @@ export async function invalidateUserTokens({ userId, kind }) {
   `;
 }
 
-// Public app URL — used when constructing verification / reset links.
+// Public app URL - used when constructing verification / reset links.
 // Vercel sets VERCEL_URL to the deploy URL; we prefer an explicit APP_URL when set.
 export function appUrl() {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');

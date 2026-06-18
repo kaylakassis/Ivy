@@ -1,6 +1,6 @@
 // POST /api/auth/totp/disable   body: { password }
 //
-// Turns 2FA off. Requires the user's current password to confirm —
+// Turns 2FA off. Requires the user's current password to confirm -
 // a stolen session cookie can NOT disable 2FA without also knowing
 // the password. Clears the secret + backup codes + enrolled_at in
 // one UPDATE; once that lands, login.js no longer requires the

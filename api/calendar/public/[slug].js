@@ -63,7 +63,7 @@ async function getCalendar(req, res) {
 
     // Pull the workspace's business_type + website handle so the
     // public booking page can render a "Visit our shop" CTA when the
-    // owner doesn't take appointments. Best-effort — defaults keep the
+    // owner doesn't take appointments. Best-effort - defaults keep the
     // booking page working even if the column or website row is absent.
     let businessType = 'both';
     let websiteHandle = null;
@@ -78,11 +78,11 @@ async function getCalendar(req, res) {
         businessType = ws.rows[0].business_type || 'both';
         websiteHandle = ws.rows[0].handle || null;
       }
-    } catch { /* column may be pre-migration — fall back to defaults */ }
+    } catch { /* column may be pre-migration - fall back to defaults */ }
 
     // Public booking page hides 'only_me' services entirely (they're
     // drafts the owner doesn't want anyone to see) but keeps 'private'
-    // ones — clients with a direct link/share can still book those.
+    // ones - clients with a direct link/share can still book those.
     const services = await sql`
       SELECT * FROM services
       WHERE workspace_id = ${s.workspace_id}
@@ -90,7 +90,7 @@ async function getCalendar(req, res) {
       ORDER BY display_order, created_at
     `;
     // Only fetch blocks that ACTUALLY gate bookings. Informational
-    // personal events (blocks_bookings = FALSE) are owner-private —
+    // personal events (blocks_bookings = FALSE) are owner-private -
     // they never appear on the public slot picker.
     const blocks = await sql`
       SELECT * FROM calendar_blocks
@@ -127,7 +127,7 @@ async function getCalendar(req, res) {
       });
     }
 
-    // Reviews block — drives the on-page social proof + the JSON-LD
+    // Reviews block - drives the on-page social proof + the JSON-LD
     // structured data we inject for SEO. Aggregate is computed across
     // every visible review; "recent" caps at 12 so the payload stays
     // small and the page renders quickly.
@@ -156,7 +156,7 @@ async function getCalendar(req, res) {
 
     // Active membership tiers, surfaced on the public booking page so
     // visitors can join. Only active rows with a Stripe price (i.e.
-    // genuinely buyable) — stripe_price_id null tiers are still in
+    // genuinely buyable) - stripe_price_id null tiers are still in
     // the owner's draft state and shouldn't be shown to the public.
     const mships = await sql`
       SELECT id, name, description, price_cents, interval, perks, display_order
@@ -179,7 +179,7 @@ async function getCalendar(req, res) {
     // visitors can buy a bundle of sessions up-front. Only active rows
     // marked visibility='public' show; 'private'/'only_me' are owner-
     // sold flows (assigned client-by-client). Unlike memberships, no
-    // pre-provisioned Stripe price is needed — we mint a one-time
+    // pre-provisioned Stripe price is needed - we mint a one-time
     // price inline at checkout, so the gating is just active+public.
     const pkgs = await sql`
       SELECT id, name, description, service_ids, session_count, price, expiry_days
@@ -250,7 +250,7 @@ async function createBooking(req, res) {
     const clientName = (body.clientName || '').toString().trim().slice(0, 120);
     const clientEmail = (body.clientEmail || '').toString().trim().toLowerCase();
     const notes = body.notes ? String(body.notes).slice(0, 1000) : null;
-    // Phone is optional — only normalized if the field was non-empty so
+    // Phone is optional - only normalized if the field was non-empty so
     // bookings without phones still succeed.
     let clientPhone = null;
     if (body.clientPhone) {
@@ -266,7 +266,7 @@ async function createBooking(req, res) {
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
     if (!Number.isInteger(end) || end <= start || end > 24 * 60) return badRequest(res, 'invalid endMin');
     // The START must sit on the booking grid. (The DURATION is validated
-    // separately against service + add-ons below — it does NOT have to be a
+    // separately against service + add-ons below - it does NOT have to be a
     // multiple of the slot size, e.g. a 45-min consult on a 30-min grid.)
     // In fixed-grid mode the start aligns to slot_minutes (so e.g. a
     // top-of-the-hour rule is enforced); in fit-to-service mode starts are
@@ -350,7 +350,7 @@ async function createBooking(req, res) {
     }
 
     // Recompute deposit using the booking total (service + add-ons),
-    // not just service.price — owners expect a 25% deposit on a $200
+    // not just service.price - owners expect a 25% deposit on a $200
     // service+add-on combo to be $50, not $50 of just the service.
     let depositRequired = depositFor(svc, bookingTotal);
 
@@ -364,7 +364,7 @@ async function createBooking(req, res) {
     if (giftCardCode) {
       giftCardRow = await findActiveByCode(workspaceId, giftCardCode);
       if (!giftCardRow) return badRequest(res, "That gift card code isn't valid (or has been used up).");
-      // Apply the lesser of (gift card balance, booking total) — owners
+      // Apply the lesser of (gift card balance, booking total) - owners
       // collect the rest from the client either at the chair (no deposit
       // required) or via a reduced deposit + balance-due-at-session.
       const totalCents = Math.round(Number(bookingTotal) * 100);
@@ -392,7 +392,7 @@ async function createBooking(req, res) {
     //
     // `(date, start)` is in the WORKSPACE'S wall-clock time, not UTC.
     // Before this change we built slotStart as new Date(date + 'T00:00:00Z')
-    // which interpreted both as UTC — fine for UTC owners, broken for
+    // which interpreted both as UTC - fine for UTC owners, broken for
     // anyone else (PST owner setting "3pm tomorrow" got compared as if
     // the slot were 3pm UTC, only ~6h away instead of ~18h away).
     const now = new Date();
@@ -426,7 +426,7 @@ async function createBooking(req, res) {
 
     if (joinWaitlist) {
       // Insert a waitlist entry instead of a booking. Allowed even when
-      // the slot is currently free — the client may want to be notified
+      // the slot is currently free - the client may want to be notified
       // if the time changes; just no-op if there's already an entry
       // from this email for the exact slot.
       const existing = await sql`
@@ -461,14 +461,14 @@ async function createBooking(req, res) {
       capacity: serviceCapacity, travelBufferMin: travelBuffer, bufferMin: bufferMinutes,
     })) {
       return badRequest(res, serviceCapacity > 1
-        ? 'That class just filled up — please pick another time'
-        : 'That slot was just taken — please pick another time');
+        ? 'That class just filled up - please pick another time'
+        : 'That slot was just taken - please pick another time');
     }
 
     // Attach to an existing client by email; create a lead if missing.
     // When the form provided a phone, store / refresh it on the client
     // row so future bookings + reminders pick it up by default. Same
-    // for SMS consent — never silently flip to TRUE; only stamp the
+    // for SMS consent - never silently flip to TRUE; only stamp the
     // timestamp if the form explicitly opted in.
     let clientId = null;
     const existing = await sql`
@@ -502,7 +502,7 @@ async function createBooking(req, res) {
         RETURNING id
       `;
       clientId = newClient.rows[0].id;
-      // First-time booker — email a "claim your account" invite alongside
+      // First-time booker - email a "claim your account" invite alongside
       // the booking confirmation that notifyNewBooking sends.
       sendClientInvite({ workspaceId, clientId })
         .catch((e) => console.error('[booking] sendClientInvite failed:', e?.message));
@@ -538,7 +538,7 @@ async function createBooking(req, res) {
     // pass the pre-insert hasConflict() for the same slot at once. Now
     // that our row is committed, yield if enough conflicting bookings
     // rank before us. Done BEFORE the gift-card debit so a loser doesn't
-    // need to be refunded — just deleted.
+    // need to be refunded - just deleted.
     if (await losesBookingRace({
       workspaceId, dateISO: date, start, end, serviceId,
       capacity: serviceCapacity, travelBufferMin: travelBuffer, bufferMin: bufferMinutes,
@@ -550,13 +550,13 @@ async function createBooking(req, res) {
     })) {
       await sql`DELETE FROM bookings WHERE id = ${newBookingRow.id}`.catch(() => {});
       return badRequest(res, serviceCapacity > 1
-        ? 'That class just filled up — please pick another time'
-        : 'That slot was just taken — please pick another time');
+        ? 'That class just filled up - please pick another time'
+        : 'That slot was just taken - please pick another time');
     }
 
     // Atomically debit the gift card after the booking row exists. If
     // the redemption fails (race against another concurrent redemption),
-    // we MUST delete the booking row — leaving it half-committed creates
+    // we MUST delete the booking row - leaving it half-committed creates
     // two bad outcomes:
     //   (a) deposit_required was already reduced by giftCardCreditCents
     //       at line ~ above, so the customer would pay a lower deposit
@@ -576,11 +576,11 @@ async function createBooking(req, res) {
           clientId,
         });
       } catch (err) {
-        // Roll back the booking entirely. Best-effort — if the DELETE
+        // Roll back the booking entirely. Best-effort - if the DELETE
         // also fails the row will be picked up by /api/cron/db-prune
         // eventually, but the slot stays held until then.
         await sql`DELETE FROM bookings WHERE id = ${newBookingRow.id}`.catch(() => {});
-        return badRequest(res, 'Gift card was just used by another transaction — please try a different code.');
+        return badRequest(res, 'Gift card was just used by another transaction - please try a different code.');
       }
     }
     const b = newBookingRow;
@@ -589,10 +589,10 @@ async function createBooking(req, res) {
     // provider connected (Stripe / Square / PayPal), mint a checkout
     // session for the deposit and return its URL so the public booker
     // can redirect the client to pay. Failures here don't block the
-    // booking — the slot is held; owner can collect manually later.
+    // booking - the slot is held; owner can collect manually later.
     //
     // Was hardcoded to Stripe before, which silently no-op'd deposit
-    // collection for Square/PayPal workspaces — clients were "confirmed"
+    // collection for Square/PayPal workspaces - clients were "confirmed"
     // without ever being asked to pay. Now routes through the provider
     // registry so all three work. The webhook handlers match the
     // returned sessionId back to the booking via bookings.deposit_
@@ -603,7 +603,7 @@ async function createBooking(req, res) {
       try {
         const { adapter, name, settings } = await getProvider(workspaceId);
         // adapter.createCheckoutSession throws if the provider isn't
-        // connected — swallow so the booking still completes. Owner can
+        // connected - swallow so the booking still completes. Owner can
         // collect the deposit manually after the fact.
         const base = appUrl();
         const depositCents = Math.round(depositRequired * 100);
@@ -631,7 +631,7 @@ async function createBooking(req, res) {
         console.warn(`[deposit] checkout session failed (provider connected?):`, err.message);
       }
     }
-    // Side effects (thread + emails). Don't await — the public booker
+    // Side effects (thread + emails). Don't await - the public booker
     // should see "confirmed!" without waiting on Resend round-trips. Each is
     // .catch'd: an unhandled rejection here can crash the serverless function
     // (the response is already sent) and take down concurrent requests.

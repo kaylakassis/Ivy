@@ -1,11 +1,11 @@
 // Resend wrapper. Sends transactional email (verification, password reset).
 // Env:
 //   RESEND_API_KEY (required)
-//   EMAIL_FROM     (defaults to onboarding@resend.dev — Resend's sandbox.
+//   EMAIL_FROM     (defaults to onboarding@resend.dev - Resend's sandbox.
 //                   Works for sending to your own verified-on-Resend email
 //                   only. Replace once you've verified your own domain in
 //                   Resend dashboard.)
-//   EMAIL_REPLY_TO (optional — where replies should route)
+//   EMAIL_REPLY_TO (optional - where replies should route)
 //
 // Production setup once you have a domain:
 //   1. Add your domain in https://resend.com/domains and finish the DNS
@@ -49,7 +49,7 @@ function fromDomain() {
 let _warnedSandbox = false;
 function warnIfSandbox() {
   // Light warning so the operator notices in function logs that they're
-  // on the resend.dev sandbox, but DON'T block the send — Resend's
+  // on the resend.dev sandbox, but DON'T block the send - Resend's
   // sandbox does deliver to verified Resend-account addresses, which
   // is enough to test signup-verification flows in production before a
   // custom domain is ready.
@@ -110,7 +110,7 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, tim
   } catch (err) {
     clearTimeout(t);
     if (err.name === 'AbortError') {
-      throw new Error(`Resend timed out after ${timeoutMs}ms — request never completed.`);
+      throw new Error(`Resend timed out after ${timeoutMs}ms - request never completed.`);
     }
     throw err;
   }
@@ -142,8 +142,8 @@ function stripHtml(s = '') {
 // ─────────────────────────────────────────────────────────────────────
 //
 // Visual goal: match the Ivy OS app's "bold" (dark) theme so every
-// transactional email — verification, password reset, invoice, booking
-// confirmation, doc signing, message reply — feels native to the
+// transactional email - verification, password reset, invoice, booking
+// confirmation, doc signing, message reply - feels native to the
 // product. Uses the same palette as src/styles/tokens.css `.dir-bold`:
 // near-black background, lime-green accent, off-white body text.
 //
@@ -157,7 +157,7 @@ function stripHtml(s = '') {
 // Windows still uses the Word HTML rendering engine, which silently
 // breaks margin/padding on block elements outside of <td>.
 //
-// Dark by default — the meta `color-scheme: dark only` tells Apple
+// Dark by default - the meta `color-scheme: dark only` tells Apple
 // Mail / Gmail / Outlook NOT to auto-adjust contrast, which is what
 // was dimming our intentionally-bright text to grey. The clients that
 // don't honor it just render the inline styles as-is, which is
@@ -168,7 +168,7 @@ function stripHtml(s = '') {
 // set) overrides the default lime; we compute a contrasting ink color
 // for button text via relative-luminance.
 export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding }) {
-  // Brand tokens — mirror tokens.css ".dir-bold" exactly. Hard-coded
+  // Brand tokens - mirror tokens.css ".dir-bold" exactly. Hard-coded
   // because email clients can't read CSS variables.
   const C = {
     page:         '#0D0E0C',
@@ -234,7 +234,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
     : `Made with care · <a href="https://getivyos.com" style="color:${C.muted};text-decoration:none;">getivyos.com</a>`;
 
   // CAN-SPAM postal address. Only shown on unbranded sends (i.e.
-  // Ivy OS itself as the sender — admin blasts, magic links, account
+  // Ivy OS itself as the sender - admin blasts, magic links, account
   // emails). Per-workspace transactional emails (booking confirmations,
   // invoices, etc.) carry the owner's branding and are exempt.
   const postalAddress = !businessName
@@ -371,7 +371,7 @@ function escapeAttr(s) { return escapeText(s); }
 
 // Resolve "which workspace does this email count against?" for the
 // per-workspace daily quota (§2.8). Critical types (verification,
-// password_reset, account_deletion) bypass the cap — those MUST go
+// password_reset, account_deletion) bypass the cap - those MUST go
 // through or the user is locked out.
 async function gateByQuota(workspaceId, type) {
   if (!workspaceId) return { ok: true };
@@ -416,7 +416,7 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
     const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
     return { ok: true, sent: true, result };
   } catch (err) {
-    // Log loudly even though we don't throw — callers commonly wrap us
+    // Log loudly even though we don't throw - callers commonly wrap us
     // in try/catch expecting a throw on failure (Resend rate-limit, 422,
     // timeout). Without this line, a Resend outage silently swallows
     // every transactional email and operators only find out via user
@@ -441,7 +441,7 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
     const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
     return { ok: true, sent: true, result };
   } catch (err) {
-    // Same rationale as sendEmailToUser above — log loud on failure so
+    // Same rationale as sendEmailToUser above - log loud on failure so
     // a Resend outage doesn't silently lose every invoice receipt /
     // booking confirmation / etc.
     // eslint-disable-next-line no-console

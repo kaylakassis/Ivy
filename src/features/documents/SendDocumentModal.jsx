@@ -1,6 +1,6 @@
 // Multi-recipient send modal. Pick one or more clients, optionally
 // reorder them, then send. Each gets a per-signer token (sequential
-// signing) — only the first one's email goes out immediately; the
+// signing) - only the first one's email goes out immediately; the
 // next signer is auto-emailed when the previous completes.
 import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
@@ -82,7 +82,7 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
             background: 'color-mix(in srgb, var(--accent-soft) 30%, transparent)',
           }}>
             <div className="metric-label" style={{ marginBottom: 8 }}>
-              Signing order — {picked.length} signer{picked.length === 1 ? '' : 's'}
+              Signing order - {picked.length} signer{picked.length === 1 ? '' : 's'}
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {picked.map((c, i) => (

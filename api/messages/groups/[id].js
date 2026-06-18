@@ -103,7 +103,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
-      // Archive, never hard-delete — preserves history for any member.
+      // Archive, never hard-delete - preserves history for any member.
       await sql`UPDATE group_threads SET archived = TRUE, updated_at = NOW()
                  WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       return noContent(res);

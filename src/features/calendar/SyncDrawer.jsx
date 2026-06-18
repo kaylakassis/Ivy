@@ -1,4 +1,4 @@
-// Calendar Sync drawer — outbound iCal feed setup + Google Calendar
+// Calendar Sync drawer - outbound iCal feed setup + Google Calendar
 // OAuth connect (richer two-way push integration).
 //
 // Both options keep Ivy OS as the source of truth: edits / cancels /
@@ -85,7 +85,7 @@ export default function SyncDrawer({ onClose }) {
         fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.55,
       }}>
         Works with any calendar app that supports subscriptions. One-way
-        only — edits, reschedules, and cancellations all happen here in
+        only - edits, reschedules, and cancellations all happen here in
         Ivy OS, then sync out within a few minutes.
       </div>
 
@@ -146,7 +146,7 @@ function GoogleSection() {
   useEffect(() => { load(); }, []);
 
   // After the OAuth round-trip, the callback bounces us back here with
-  // ?google=... — surface it as a banner, then strip from the URL.
+  // ?google=... - surface it as a banner, then strip from the URL.
   const callbackFlag = params.get('google');
   useEffect(() => {
     if (!callbackFlag) return;
@@ -318,7 +318,7 @@ function InboundToggle() {
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
             We'll pull busy windows from your primary Google calendar every
-            hour and block matching slots on your public booking page —
+            hour and block matching slots on your public booking page -
             so a dentist appointment on your personal calendar auto-blocks
             client bookings. Event titles never leave your account.
           </div>
@@ -333,7 +333,7 @@ function InboundToggle() {
         }}>
           {lastSync ? (
             <span>Last synced {lastSync.toLocaleString([], { dateStyle: 'short', timeStyle: 'short' })}</span>
-          ) : <span>Not synced yet — running on the next hourly cron tick.</span>}
+          ) : <span>Not synced yet - running on the next hourly cron tick.</span>}
           <button onClick={syncNow} disabled={busy != null}
             className="btn btn-ghost" style={{ fontSize: 11.5, padding: '4px 10px', color: 'var(--accent)' }}>
             {busy === 'sync' ? 'Syncing…' : 'Sync now'}
@@ -355,7 +355,7 @@ function InboundToggle() {
 function CallbackBanner({ flag }) {
   const map = {
     connected:        { tone: 'ok',    text: "You're connected. Bookings will start syncing now." },
-    denied:           { tone: 'muted', text: 'Connection cancelled — you can reconnect any time.' },
+    denied:           { tone: 'muted', text: 'Connection cancelled - you can reconnect any time.' },
     'state-mismatch': { tone: 'warn',  text: 'Authorization mismatch (try again from this tab).' },
     'no-refresh':     { tone: 'warn',  text: 'Google did not return a refresh token. Reconnect from your Google account settings to retry.' },
     invalid:          { tone: 'warn',  text: 'Invalid OAuth response.' },
@@ -446,7 +446,7 @@ function Connected({
             fontSize: 11.5, color: 'var(--accent-ink, var(--accent))',
             lineHeight: 1.5,
           }}>
-            <strong>Save this URL now</strong> — once you close this drawer,
+            <strong>Save this URL now</strong> - once you close this drawer,
             we won't show it again. Lost it? Regenerate and your old URL
             stops working.
           </div>
@@ -457,7 +457,7 @@ function Connected({
         <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           Your sync URL is already in use by your calendar app. We don't
           show old URLs (they're hashed for safety). To re-add the feed
-          on a new device, regenerate below — it'll invalidate the old
+          on a new device, regenerate below - it'll invalidate the old
           URL and give you a fresh one.
         </p>
       )}

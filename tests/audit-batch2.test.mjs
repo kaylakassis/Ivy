@@ -1,6 +1,6 @@
 // Tests for Batch-2 audit fixes (get-paid completeness).
 //   #3 public invoice Pay button readiness is provider-aware (not
-//      Stripe-only) — Square/PayPal workspaces can now collect.
+//      Stripe-only) - Square/PayPal workspaces can now collect.
 //   #2 PayPal orders are CAPTURED on return (money actually moves), and
 //      capture is idempotent for an already-captured order.
 //

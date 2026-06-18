@@ -1,5 +1,5 @@
 // Owner-side quotes/estimates manager. Mirrors the invoice list +
-// editor patterns intentionally — quotes are structurally invoices
+// editor patterns intentionally - quotes are structurally invoices
 // with a different lifecycle (draft → sent → accepted/declined →
 // optional auto-invoice).
 import React, { useEffect, useMemo, useState } from 'react';
@@ -48,7 +48,7 @@ export default function Quotes() {
     if (!quoteId || !Array.isArray(quotes)) return;
     const found = quotes.find((q) => q.id === quoteId);
     if (found) setEditing(found);
-    // Strip the param regardless — missing-quote case is a no-op,
+    // Strip the param regardless - missing-quote case is a no-op,
     // but leaving the URL param would re-fire the effect on every
     // quotes refresh.
     params.delete('quote');
@@ -127,7 +127,7 @@ export default function Quotes() {
                   <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
                 </span>
                 <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-                  {q.issueDate ? new Date(q.issueDate).toLocaleDateString() : '—'}
+                  {q.issueDate ? new Date(q.issueDate).toLocaleDateString() : '-'}
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>
                   {q.expiryDate ? new Date(q.expiryDate).toLocaleDateString() : 'No expiry'}
@@ -260,7 +260,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
             <div style={{ padding: '10px 14px', borderRadius: 10, background: 'var(--surface-2)',
               border: '1px solid var(--border)', fontSize: 12.5, color: 'var(--muted)' }}>
               <Icons.Lock size={11}/> {quote.status === 'accepted'
-                ? 'Accepted — see the resulting invoice in the Invoices tab.'
+                ? 'Accepted - see the resulting invoice in the Invoices tab.'
                 : 'Locked.'}
             </div>
           )}
@@ -268,7 +268,7 @@ function QuoteEditor({ quote, onClose, onChanged, setBusy, busy }) {
           <Field label="Client">
             <select value={clientId} onChange={(e) => setClientId(e.target.value)}
               disabled={isLocked} style={inputS}>
-              <option value="">— Select a client —</option>
+              <option value="">- Select a client -</option>
               {clients.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}{c.email ? ` · ${c.email}` : ''}

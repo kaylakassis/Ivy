@@ -130,7 +130,7 @@ export default function Clients() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Clients</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Your book of business — actives, leads, and the ones on pause.
+            Your book of business - actives, leads, and the ones on pause.
           </div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
@@ -199,7 +199,7 @@ export default function Clients() {
         </div>
       </div>
 
-      {/* Table — desktop/tablet keeps the 6-column grid; mobile collapses
+      {/* Table - desktop/tablet keeps the 6-column grid; mobile collapses
           to a stacked card list since six fixed-width columns can't fit
           a phone viewport without horizontal scroll. */}
       <div className="card" style={{ overflow: 'hidden' }}>
@@ -242,11 +242,11 @@ export default function Clients() {
           )
         ))}
 
-        {/* Load more — only renders when the server reports a page
+        {/* Load more - only renders when the server reports a page
             past 1000 rows is available. Tab/search filters operate
             on the loaded set; users with very large books may need
             to load more pages before the filter has anything to
-            match against. Plain button (no infinite scroll) — most
+            match against. Plain button (no infinite scroll) - most
             workspaces never hit this, and keyboard accessibility +
             visible state are simpler this way. */}
         {hasMore && tab === 'all' && !query && (
@@ -310,15 +310,15 @@ function ClientRow({ client, first, metrics, onOpen, onStage, onDelete }) {
             {client.name}
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {client.email || '—'}
+            {client.email || '-'}
           </div>
         </div>
       </div>
       <div><StageChip stage={client.stage}/></div>
       <ClientMetricsChips metrics={metrics}/>
-      <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{lastSeen || '—'}</div>
+      <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{lastSeen || '-'}</div>
       <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }} className="mono-num">
-        {client.lifetimeValue > 0 ? '$' + client.lifetimeValue.toLocaleString() : '—'}
+        {client.lifetimeValue > 0 ? '$' + client.lifetimeValue.toLocaleString() : '-'}
       </div>
       <div style={{ textAlign: 'right', color: 'var(--muted)' }} onClick={(e) => e.stopPropagation()}>
         <RowMenu client={client} onStage={onStage} onOpen={onOpen} onDelete={onDelete}/>
@@ -332,23 +332,23 @@ function ClientRow({ client, first, metrics, onOpen, onStage, onDelete }) {
 // is non-zero / present, so silent clients show a clean row.
 //
 // Order is deliberate:
-//   1. sessions left   — most actionable; owners decide who to upsell
-//   2. monthly payment — recurring revenue context
-//   3. due date        — what needs collecting / billing next
-//   4. 30d revenue     — momentum
+//   1. sessions left   - most actionable; owners decide who to upsell
+//   2. monthly payment - recurring revenue context
+//   3. due date        - what needs collecting / billing next
+//   4. 30d revenue     - momentum
 function ClientMetricsChips({ metrics }) {
-  if (!metrics) return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>—</div>;
+  if (!metrics) return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>-</div>;
   const chips = [];
   if (metrics.sessionsLeft > 0) {
     chips.push({
       key: 'sessions',
       label: `${metrics.sessionsLeft} session${metrics.sessionsLeft === 1 ? '' : 's'} left`,
       tone: metrics.sessionsLeft <= 1 ? 'warn' : 'default',
-      title: metrics.sessionsLeft <= 1 ? 'Running low — good time to offer a renewal' : null,
+      title: metrics.sessionsLeft <= 1 ? 'Running low - good time to offer a renewal' : null,
     });
   } else if (metrics.packagesExhausted > 0) {
     chips.push({ key: 'sessions', label: 'Out of sessions', tone: 'warn',
-      title: 'Active package is exhausted — offer a renewal' });
+      title: 'Active package is exhausted - offer a renewal' });
   }
   if (metrics.monthlyPaymentCents > 0) {
     chips.push({
@@ -362,7 +362,7 @@ function ClientMetricsChips({ metrics }) {
     // Skip the chip rather than render "Invalid Date" if the API returned
     // a malformed timestamp.
     if (!Number.isFinite(d.getTime())) {
-      // fall through — no due chip
+      // fall through - no due chip
     } else {
     const days = Math.ceil((d - Date.now()) / 86400e3);
     const fmt = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
@@ -386,7 +386,7 @@ function ClientMetricsChips({ metrics }) {
     });
   }
   if (chips.length === 0) {
-    return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>—</div>;
+    return <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>-</div>;
   }
   return (
     <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, minWidth: 0 }}>
@@ -411,7 +411,7 @@ function MetricChip({ label, tone, title }) {
   );
 }
 
-// Mobile variant — same data, stacked vertically. Two visible lines
+// Mobile variant - same data, stacked vertically. Two visible lines
 // (avatar+name+email, stage chip + last seen + lifetime) so the phone
 // shows enough to triage clients without horizontal scroll.
 function ClientCardMobile({ client, first, metrics, onOpen, onStage, onDelete }) {

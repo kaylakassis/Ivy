@@ -44,7 +44,7 @@ const subscribers = new Set();
 
 export function getLocale() { return currentLocale; }
 export function getSupportedLocales() {
-  // Hardcoded for now — we don't ship dynamic locale discovery.
+  // Hardcoded for now - we don't ship dynamic locale discovery.
   // Each locale that gets a strings file should be added here so
   // the language picker UI knows what to offer.
   return [
@@ -88,18 +88,18 @@ export async function setLocale(code) {
     const pick = [url, ls, navL].find((c) => c && supported.has(c));
     if (pick) {
       // Sync: only 'en' is preloaded. If user prefers fr/es etc,
-      // kick off the async load — until it resolves, we render in
+      // kick off the async load - until it resolves, we render in
       // English. Components subscribed via useLocale will re-render
       // when the load completes.
       if (pick === 'en') currentLocale = 'en';
       else setLocale(pick);
     }
   } catch {
-    // SSR or other context — stay on English.
+    // SSR or other context - stay on English.
   }
 })();
 
-// t(key, vars?) — looks up the string in the current locale's strings
+// t(key, vars?) - looks up the string in the current locale's strings
 // table; falls back to English if missing; falls back to the key
 // itself if both miss (developer can tell something's off).
 export function t(key, vars) {
@@ -116,7 +116,7 @@ export function t(key, vars) {
   if (value === undefined) value = en[key];
   if (value === undefined) return key;
 
-  // {var} interpolation — extremely simple, no ICU.
+  // {var} interpolation - extremely simple, no ICU.
   if (vars && typeof value === 'string') {
     return value.replace(/\{(\w+)\}/g, (_m, k) => (vars[k] !== undefined ? vars[k] : `{${k}}`));
   }

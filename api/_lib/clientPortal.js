@@ -3,13 +3,13 @@
 // A user can be:
 //   • An OWNER of a workspace (workspaces.owner_id = user.id)
 //   • A CLIENT of one or more businesses (clients.user_id = user.id, OR
-//     clients.email matches the user's email — the latter handles "claim
+//     clients.email matches the user's email - the latter handles "claim
 //     your account" before user_id is wired up)
 //   • Both, if they own a business AND book with another business
 //
 // All client-portal queries are scoped to the joined set of `clients` rows
 // owned by this user. We never trust user-supplied workspaceId / clientId
-// — every read is filtered through `myClientIds()` so a malicious request
+// - every read is filtered through `myClientIds()` so a malicious request
 // can't peek at someone else's data.
 import { sql } from './db.js';
 
@@ -20,7 +20,7 @@ import { sql } from './db.js';
 // SECURITY: the email auto-claim only runs once the user's email is verified.
 // Without this guard, anyone could sign up with a known target's email
 // address and immediately scoop up every workspace's clients-row that
-// happens to use that email — a cross-tenant data exfiltration path. The
+// happens to use that email - a cross-tenant data exfiltration path. The
 // verification step proves the user actually controls the inbox before we
 // link any pre-existing records to their account.
 //
@@ -76,7 +76,7 @@ export function ids(memberships) {
 // Tolerates partial schema: if calendar_settings or one of the subscription
 // columns hasn't been added yet (cold install / partial migration), we fall
 // back to a minimal lookup so /api/me still returns a usable context. The
-// user can then onboard normally — the alternative is a 500 that leaves
+// user can then onboard normally - the alternative is a 500 that leaves
 // them stuck on the sign-in screen with no recovery.
 export async function ownsWorkspace(userId) {
   try {
@@ -98,7 +98,7 @@ export async function ownsWorkspace(userId) {
       bizName: r.biz_name || null,
       slug:    r.slug || null,
       subscription: deriveSubscription(r),
-      // True when a Stripe customer exists for this workspace — the
+      // True when a Stripe customer exists for this workspace - the
       // Paywall uses this to decide whether the "Manage billing"
       // (Customer Portal) button is meaningful. Without a customer
       // record the portal endpoint 400s.
@@ -113,7 +113,7 @@ export async function ownsWorkspace(userId) {
       return {
         id: rows[0].id,
         onboardedAt: rows[0].onboarded_at,
-        businessType: 'both',  // safe default — column may be pre-migration
+        businessType: 'both',  // safe default - column may be pre-migration
         bizName: null,
         slug: null,
         subscription: { status: 'inactive', isActive: false, inTrial: false, trialEndsAt: null, periodEndsAt: null, daysRemaining: null },
@@ -132,16 +132,16 @@ export async function ownsWorkspace(userId) {
 // they can never disagree about whether a row counts as active.
 //
 // Allowed (hard-paywall semantics):
-//   • trialing  — only while trial_ends_at is in the future
-//   • active    — only while subscription_period_end is in the future
-//   • past_due  — Stripe's smart-retry grace; we stay open and let
+//   • trialing  - only while trial_ends_at is in the future
+//   • active    - only while subscription_period_end is in the future
+//   • past_due  - Stripe's smart-retry grace; we stay open and let
 //                 webhooks flip to suspended when retries run out.
 //
 // Blocked: incomplete (checkout flips to active in seconds, and
 // blocking surfaces the wall right away if a card fails), suspended,
 // cancelled, inactive, and trial- or period-expired forms of the above.
 //
-// `incomplete` is INTENTIONALLY not on the allowed list — under the
+// `incomplete` is INTENTIONALLY not on the allowed list - under the
 // hard paywall it shows the wall so the owner sees the right CTA, not
 // a half-broken app.
 export function isWorkspaceActive(row) {
@@ -155,14 +155,14 @@ export function isWorkspaceActive(row) {
   // past_due grace is owned by api/cron/subscription-dunning.js, which
   // flips the row to 'suspended' GRACE_DAYS (14) after the first failed
   // invoice. While the row is still 'past_due', Stripe is mid-retry and
-  // we keep the app open — period_end has typically just lapsed.
+  // we keep the app open - period_end has typically just lapsed.
   if (status === 'past_due') return true;
   return false;
 }
 
 // Turn the raw workspace row into the shape the frontend wants. `isActive`
 // is the single source of truth for whether the business app is unlocked
-// — derived from status + the trial / period end timestamps so the UI
+// - derived from status + the trial / period end timestamps so the UI
 // doesn't have to redo the comparison.
 function deriveSubscription(row) {
   const status = row.subscription_status || 'inactive';
@@ -173,7 +173,7 @@ function deriveSubscription(row) {
   const periodLive     = (status === 'active' || status === 'past_due')
                           && periodEndsAt && periodEndsAt > now;
   // isActive MUST come from the shared predicate so the backend gate
-  // (workspaceGate.js) and this /api/me serializer can never disagree —
+  // (workspaceGate.js) and this /api/me serializer can never disagree -
   // e.g. past_due is "active" (grace) here exactly as it is in the gate,
   // even when period_end has lapsed. Computing it independently is what
   // let them drift before.
@@ -205,7 +205,7 @@ export async function userContext(user) {
     myClientIds(user),
   ]);
 
-  // Sponsored accounts are comp'd by the platform — we synthesize an
+  // Sponsored accounts are comp'd by the platform - we synthesize an
   // always-active subscription so the Paywall renders nothing for them
   // even if their workspace row's columns drift from the admin endpoint.
   const isSponsored = user.user_type === 'sponsored';

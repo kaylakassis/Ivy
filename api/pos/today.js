@@ -1,11 +1,11 @@
-// GET /api/pos/today — today's in-person sales summary.
+// GET /api/pos/today - today's in-person sales summary.
 //
 // Surfaces sale count + revenue at the top of the Sell tab so the
 // cashier has a real-time "what's the drawer at?" reading for end-
 // of-day reconciliation without leaving the POS view.
 //
 // We treat any invoice that was both ISSUED today AND already PAID
-// as a same-day sale — covers cash sales (paid immediately) and
+// as a same-day sale - covers cash sales (paid immediately) and
 // pay-link sales the customer paid before close.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

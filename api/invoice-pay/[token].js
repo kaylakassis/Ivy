@@ -3,12 +3,12 @@
 // and returns its URL. The browser redirects there; on completion Stripe
 // posts to /api/webhooks/stripe/<workspaceId> which marks the invoice paid.
 //
-// Token authentication is identical to /api/invoice-view/:token — the same
+// Token authentication is identical to /api/invoice-view/:token - the same
 // sha256-hashed view token must match an invoice in 'sent' or 'overdue'.
 //
 // Idempotent-ish: a second call replaces the stored session id with a fresh
 // one. Stripe doesn't auto-expire abandoned sessions for hours, so reusing
-// the previous URL would also work — but issuing a new session is simpler
+// the previous URL would also work - but issuing a new session is simpler
 // than tracking expiry on our side.
 import { sql } from '../_lib/db.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -39,13 +39,13 @@ export default async function handler(req, res) {
     const tokenHash = hashToken(rawToken);
 
     // Confirm action: the buyer just returned from Checkout (?paid=1). Mark
-    // the invoice paid synchronously by reading the completed session —
+    // the invoice paid synchronously by reading the completed session -
     // don't wait on the per-workspace webhook (which most owners never set
     // up, so payments silently never landed in the finance tab). Idempotent.
     if (req.query.action === 'confirm') {
       const { rows } = await sql`SELECT * FROM invoices WHERE view_token_hash = ${tokenHash} LIMIT 1`;
       const inv = rows[0];
-      // Token is cleared once an invoice is paid — a not-found here in the
+      // Token is cleared once an invoice is paid - a not-found here in the
       // post-checkout return flow means it already settled.
       if (!inv) return ok(res, { paid: true });
       if (inv.status === 'paid' || inv.status === 'refunded') return ok(res, { paid: true });
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
 
     // Multi-provider checkout. The workspace's selected payment_provider
     // (Stripe / Square / PayPal) decides which adapter mints the link.
-    // Each adapter throws if it isn't connected — we surface the
+    // Each adapter throws if it isn't connected - we surface the
     // friendly message back to the public-pay page.
     let session;
     try {

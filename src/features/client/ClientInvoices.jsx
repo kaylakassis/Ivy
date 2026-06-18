@@ -1,4 +1,4 @@
-// /me/invoices — list of every invoice the user owes or has paid, across
+// /me/invoices - list of every invoice the user owes or has paid, across
 // businesses. Status chip + amount; click "View / pay" → server issues a
 // fresh view token and we open the existing public /invoice/:token page.
 //
@@ -26,29 +26,29 @@ const STATUS_META = {
 };
 
 function fmtDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 // Currency-aware wrapper. Client portal shows invoices from many
-// businesses — each invoice carries its own currency. Outstanding tile
+// businesses - each invoice carries its own currency. Outstanding tile
 // aggregates across mixed currencies; we show it in the dominant
 // currency, or USD if none.
 function fmtMoney(n, currency = 'USD') {
   return fmtMoneyShared(n, currency);
 }
-// "Member since" — month + year is the right granularity (specific date
+// "Member since" - month + year is the right granularity (specific date
 // feels surveillance-y, year-only feels meaningless).
 function fmtMonthYear(iso) {
   if (!iso) return null;
   return new Date(iso).toLocaleDateString([], { month: 'long', year: 'numeric' });
 }
-// Short date for tile hints — e.g. "Thu Jun 12".
+// Short date for tile hints - e.g. "Thu Jun 12".
 function fmtShortDate(iso) {
   if (!iso) return null;
   const d = new Date(iso.length === 10 ? iso + 'T00:00:00' : iso);
   return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' });
 }
-// "2:30 PM" — used in the Next-visit tile so a client at a glance knows
+// "2:30 PM" - used in the Next-visit tile so a client at a glance knows
 // not just the day but the time.
 function fmtTime(startMin) {
   if (startMin == null) return '';
@@ -109,7 +109,7 @@ export default function ClientInvoices() {
   // Pick the dominant currency across the user's invoices for the
   // Outstanding tile. Cross-currency sums don't strictly make sense,
   // but most users have a single dominant currency; the alternative
-  // — N tiles per currency — clutters the UI for the 99% case.
+  // - N tiles per currency - clutters the UI for the 99% case.
   const currencyCounts = invoices.reduce((m, i) => {
     const c = (i.currency || 'USD').toUpperCase();
     m[c] = (m[c] || 0) + 1;
@@ -142,7 +142,7 @@ export default function ClientInvoices() {
         )}
       </div>
 
-      {/* Three tiles — value-framed, not spend-framed. */}
+      {/* Three tiles - value-framed, not spend-framed. */}
       <div style={{
         display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 12,
       }}>
@@ -212,7 +212,7 @@ export default function ClientInvoices() {
   );
 }
 
-// Tile 1 — Next visit. Shows the soonest upcoming booking when there is
+// Tile 1 - Next visit. Shows the soonest upcoming booking when there is
 // one, or a rebook CTA pointing at the last business the client saw
 // when there isn't. Both states render at the same physical size so
 // the row doesn't reflow when the answer changes day-to-day.
@@ -242,13 +242,13 @@ function NextVisitTile({ nextBooking, lastBookingBizSlug }) {
   return (
     <SummaryTile
       label="Next visit"
-      value="—"
+      value="-"
       hint="No upcoming session"/>
   );
 }
 
-// Tile 2 — "What you've got left." Fallback chain: active package (the
-// strongest rebook nudge — surfaces value already paid for) → active
+// Tile 2 - "What you've got left." Fallback chain: active package (the
+// strongest rebook nudge - surfaces value already paid for) → active
 // membership (reminds them what they're getting) → sessions count this
 // year (frames engagement as activity, not expense).
 function WhatYouHaveLeftTile({ pkg, membership, sessionsThisYear }) {

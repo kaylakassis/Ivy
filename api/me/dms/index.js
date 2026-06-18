@@ -1,6 +1,6 @@
 // /api/me/dms
 //   GET  → list this user's DM threads (non-archived for their side)
-//   POST → start { recipientClientId } — requires shared active group
+//   POST → start { recipientClientId } - requires shared active group
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { myClientIds } from '../../_lib/clientPortal.js';
@@ -26,7 +26,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       // List every thread where ANY of my client-rows is the a OR b side,
       // not archived for that side. We don't surface other workspace's
-      // owners — DMs are strictly client↔client.
+      // owners - DMs are strictly client↔client.
       const r = await sql.query(
         `SELECT t.*,
                 CASE WHEN t.client_a_id = ANY($1::uuid[]) THEN t.client_b_id ELSE t.client_a_id END AS other_id,
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
 
       // Find a my-side client_id that shares a group with recipient.
       // Iterate each of my clients-rows because I might own clients-rows
-      // in multiple workspaces — only the one that shares a group is
+      // in multiple workspaces - only the one that shares a group is
       // valid. The first match wins.
       let workspaceId = null;
       let myClientId = null;

@@ -25,7 +25,7 @@ export default async function handler(req, res) {
 
     // Two transactional buckets + the AI assistant. All three are
     // workspace-scoped; values are best-effort (a transient DB blip
-    // returns 0 rather than 500 — the UI degrades to "—").
+    // returns 0 rather than 500 - the UI degrades to "-").
     const [email, sms, ivy] = await Promise.all([
       getTodayCount(workspaceId, 'email').catch(() => 0),
       getTodayCount(workspaceId, 'sms').catch(() => 0),

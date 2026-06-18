@@ -3,7 +3,7 @@
 // push + email so they can offer a renewal before the relationship goes
 // quiet.
 //
-// Fires from /api/calendar/bookings AFTER the booking row is inserted —
+// Fires from /api/calendar/bookings AFTER the booking row is inserted -
 // see packageExhaustionEvent in that handler.
 import { sql } from './db.js';
 import { sendEmailToUser, emailShell } from './email.js';
@@ -40,7 +40,7 @@ export async function notifyPackageExhausted({ workspaceId, clientPackageId, cli
     const branding = await fetchBranding(workspaceId);
     const clientName = r.client_name || 'Your client';
 
-    // Push (owner-side) — short, actionable, links to the client drawer.
+    // Push (owner-side) - short, actionable, links to the client drawer.
     notifyOwnerSafe({
       workspaceId,
       type: 'bookings',
@@ -52,7 +52,7 @@ export async function notifyPackageExhausted({ workspaceId, clientPackageId, cli
       },
     });
 
-    // Email (owner-side) — same beat but with more context + a direct
+    // Email (owner-side) - same beat but with more context + a direct
     // CTA into the client drawer where the owner can sell another pack.
     if (r.owner_email) {
       const greeting = r.owner_name ? `Hi ${escapeHtml(r.owner_name.split(/\s+/)[0])},` : 'Hi,';
@@ -61,7 +61,7 @@ export async function notifyPackageExhausted({ workspaceId, clientPackageId, cli
         branding,
         body: `<p>${greeting}</p>
           <p><strong>${escapeHtml(clientName)}</strong> just used the last credit on <strong>${escapeHtml(r.package_name)}</strong>.</p>
-          <p>Good moment to offer a renewal — they're booking actively and won't have credits for next time.</p>`,
+          <p>Good moment to offer a renewal - they're booking actively and won't have credits for next time.</p>`,
         ctaText: 'Open client',
         ctaUrl: `${appUrl()}/clients?id=${encodeURIComponent(r.client_id)}`,
         footer: `Adjust which alerts you receive from Account → Notifications.`,
@@ -69,7 +69,7 @@ export async function notifyPackageExhausted({ workspaceId, clientPackageId, cli
       await sendEmailToUser({
         userId: r.owner_id, type: 'bookings',
         to: r.owner_email,
-        subject: `${clientName} is out of sessions — offer a renewal?`,
+        subject: `${clientName} is out of sessions - offer a renewal?`,
         html,
       });
     }

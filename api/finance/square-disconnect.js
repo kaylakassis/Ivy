@@ -1,6 +1,6 @@
 // POST /api/finance/square-disconnect
 // Owner-only. Wipes the workspace's stored Square credentials. We do
-// NOT call Square's revoke endpoint — owners can re-connect any time
+// NOT call Square's revoke endpoint - owners can re-connect any time
 // and revoking would force them through merchant onboarding again.
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';

@@ -1,7 +1,7 @@
 // Cron run metrics. Wrap every cron handler with `trackCron(name, fn)`
 // to stamp a row into cron_runs on completion. The admin cron-health
 // dashboard reads from this to show per-cron success rate, latency
-// trend, and "items processed" — turning crons from black boxes into
+// trend, and "items processed" - turning crons from black boxes into
 // observable scheduled jobs.
 //
 // The metrics row is best-effort: a DB write failure here must NEVER
@@ -59,7 +59,7 @@ export function trackCron(name, handler) {
       if (capturedOk === null) capturedOk = false;
     }
 
-    // Always insert the metrics row, even on failure — that's the
+    // Always insert the metrics row, even on failure - that's the
     // whole point. Wrap in try/catch so a metrics-table outage
     // never breaks the actual cron.
     const duration = Date.now() - t0;
@@ -82,7 +82,7 @@ export function trackCron(name, handler) {
       console.error(`[cronMetrics] write failed for ${name}:`, metricsErr.message);
     }
 
-    // Re-throw if the handler threw — preserve original semantics so
+    // Re-throw if the handler threw - preserve original semantics so
     // Vercel logs the failure and (if configured) retries.
     if (handlerErr) throw handlerErr;
   };
@@ -97,7 +97,7 @@ function extractMetrics(body) {
   for (const [k, v] of Object.entries(body)) {
     if (typeof v === 'number' || typeof v === 'boolean') out[k] = v;
     else if (typeof v === 'string' && v.length <= 80) out[k] = v;
-    // skip nested objects/arrays — too big for the metrics row
+    // skip nested objects/arrays - too big for the metrics row
   }
   return out;
 }

@@ -1,7 +1,7 @@
 // /api/calendar/bookings/complete
 //   POST   → mark a single occurrence complete
 //   PATCH  → edit an existing occurrence's completion (notes / attachments / visibility)
-//   DELETE → un-mark an occurrence (rare — reversible-undo for stray clicks)
+//   DELETE → un-mark an occurrence (rare - reversible-undo for stray clicks)
 //
 // Body shape (all methods take { id, occurrenceDate, ... }):
 //   {
@@ -14,7 +14,7 @@
 //   }
 //
 // State stored as a JSONB map on `bookings.completion_log` keyed by
-// occurrenceDate — same per-occurrence pattern the app uses for
+// occurrenceDate - same per-occurrence pattern the app uses for
 // `cancelled_occurrences`. POST returns 409 if that occurrence is
 // already in the log (use PATCH to edit). Refuses when the booking
 // is cancelled, the specific occurrence is cancelled, or the
@@ -115,7 +115,7 @@ export default async function handler(req, res) {
     const existing = log[occurrenceDate] || null;
 
     // Look up staff_id for attribution display. Owner may not have a
-    // staff_members row; that's fine — completedByStaffId stays null
+    // staff_members row; that's fine - completedByStaffId stays null
     // and the UI falls back to "you".
     let staffId = null;
     if (booking.staff_id) {
@@ -130,7 +130,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      if (existing) return badRequest(res, 'Already completed — use PATCH to edit');
+      if (existing) return badRequest(res, 'Already completed - use PATCH to edit');
       const notes = body.completionNotes == null
         ? '' : String(body.completionNotes).slice(0, 8000);
       const attachments = sanitizeAttachments(body.completionAttachments);
@@ -145,7 +145,7 @@ export default async function handler(req, res) {
         visibleToClient,
       };
     } else if (req.method === 'PATCH') {
-      if (!existing) return badRequest(res, 'No completion to edit — use POST to mark complete');
+      if (!existing) return badRequest(res, 'No completion to edit - use POST to mark complete');
       const next = { ...existing };
       if ('completionNotes' in body) {
         next.notes = body.completionNotes == null ? '' : String(body.completionNotes).slice(0, 8000);

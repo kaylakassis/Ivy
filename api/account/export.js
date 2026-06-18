@@ -1,4 +1,4 @@
-// GET /api/account/export — returns a JSON dump of every row tied to the
+// GET /api/account/export - returns a JSON dump of every row tied to the
 // authenticated user's account. Intended for the GDPR right-to-portability:
 // users can download a complete copy of their data.
 //
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     // Pull each workspace-scoped table. We intentionally read everything in
-    // parallel rather than streaming — typical workspaces are small enough
+    // parallel rather than streaming - typical workspaces are small enough
     // (<10MB) that the overhead is fine; if export sizes ever blow up we
     // can switch to NDJSON.
     const [
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
 
     // Strip every encrypted-credential blob and OAuth refresh-token from
     // the export. These columns hold workspace credentials (Stripe secret
-    // key, Square OAuth, Google refresh token, etc.) — even encrypted,
+    // key, Square OAuth, Google refresh token, etc.) - even encrypted,
     // they should never leave the server in a user-facing download.
     // The ENCRYPTION_KEY rotates independently; pairing an exported blob
     // with a leaked key reproduces live credentials.
@@ -90,8 +90,8 @@ export default async function handler(req, res) {
     const stripRows = (rows) => Array.isArray(rows) ? rows.map(stripSensitive) : rows;
 
     // Client-side records: rows where THIS user is a CUSTOMER of other
-    // businesses (their portal data). Without this a client-only user —
-    // who never owns a real workspace — would download an export with
+    // businesses (their portal data). Without this a client-only user -
+    // who never owns a real workspace - would download an export with
     // none of their actual data (bookings/invoices/documents/messages
     // they hold as a client elsewhere). Covers the portability promise.
     const myClients = await myClientIds(user).catch(() => []);

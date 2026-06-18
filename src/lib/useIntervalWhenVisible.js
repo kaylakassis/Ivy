@@ -1,4 +1,4 @@
-// useIntervalWhenVisible — like setInterval but pauses when the tab
+// useIntervalWhenVisible - like setInterval but pauses when the tab
 // is backgrounded. At scale (many open tabs across many users) this
 // is the difference between baseline RPS being "actual users hitting
 // the site" and "every stale tab anyone forgot to close."

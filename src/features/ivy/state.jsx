@@ -24,14 +24,14 @@ export function IvyProvider({ children }) {
 }
 
 // Returns the live store when wrapped in <IvyProvider> (the normal
-// case — AppShell mounts it). When called outside the provider (a
+// case - AppShell mounts it). When called outside the provider (a
 // dev preview, a refactor that moves a consumer up the tree), we
 // fall back to a fresh local store so the consumer renders instead
-// of throwing — throwing would propagate through the React tree and
+// of throwing - throwing would propagate through the React tree and
 // crash the whole app via the root ErrorBoundary.
 export function useIvy() {
   const ctx = useContext(IvyCtx);
-  // useIvyState is a hook — must be called unconditionally on every
+  // useIvyState is a hook - must be called unconditionally on every
   // render. We always call it; we just return the context's value
   // when there is one. The "unused" hook in the provider path is the
   // cost of safety here.
@@ -92,7 +92,7 @@ function useIvyState() {
     setMessages([]);
   }, []);
 
-  // `text` may be empty when an attachment is supplied — the server treats
+  // `text` may be empty when an attachment is supplied - the server treats
   // that as an implicit "analyze this file" prompt.
   const send = useCallback(async (text, attachment = null) => {
     const t = (text || '').trim();

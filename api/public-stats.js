@@ -1,4 +1,4 @@
-// GET /api/public-stats — counts surfaced on the public landing page.
+// GET /api/public-stats - counts surfaced on the public landing page.
 //
 // One value for now: total active owners. Edge-cacheable so we don't
 // hit Postgres on every cold visitor. No PII; deliberate undercount

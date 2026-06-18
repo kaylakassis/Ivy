@@ -1,4 +1,4 @@
-// Auth context — holds the logged-in user and exposes sign-in / sign-up / sign-out.
+// Auth context - holds the logged-in user and exposes sign-in / sign-up / sign-out.
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { api } from './api.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
@@ -31,7 +31,7 @@ export function AuthProvider({ children }) {
     return r.user;
   }, []);
 
-  // mode: 'owner' (default — creates a workspace) or 'client' (no workspace,
+  // mode: 'owner' (default - creates a workspace) or 'client' (no workspace,
   // claims existing client records by email match).
   // ref: optional affiliate code preserved from ?ref=CODE on the signup URL.
   // The Terms version is pinned at compile time on the client and
@@ -42,7 +42,7 @@ export function AuthProvider({ children }) {
     const r = await api.post('/auth/signup', {
       email, password, name, mode, ref,
       // The AuthPage checkbox says "I agree to the Terms and Privacy
-      // Policy" — one click covers both. Send both versions so the
+      // Policy" - one click covers both. Send both versions so the
       // server can record an immutable acceptance row per document.
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
       acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,

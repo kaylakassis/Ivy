@@ -16,7 +16,7 @@ export function serializeMembership(row) {
     perks:        row.perks || [],
     active:       !!row.active,
     displayOrder: row.display_order || 0,
-    // Stripe-readiness — UI shows a warning when a membership exists
+    // Stripe-readiness - UI shows a warning when a membership exists
     // without a connected Stripe price.
     stripeReady:  !!row.stripe_price_id,
     createdAt:    row.created_at,
@@ -97,16 +97,16 @@ export function extractSubPriceId(sub) {
 
 // Take a Stripe subscription object + the workspace_id it belongs to
 // and reconcile client_memberships. Returns:
-//   'ok'        — applied (update)
-//   'created'   — applied (insert) when checkout.session.completed hadn't
+//   'ok'        - applied (update)
+//   'created'   - applied (insert) when checkout.session.completed hadn't
 //                 landed yet and the subscription event arrived first
-//   'retiered'  — update + tier resync (Stripe-side plan change)
-//   'race'      — subscription row hasn't reached us AND the sub carries
+//   'retiered'  - update + tier resync (Stripe-side plan change)
+//   'race'      - subscription row hasn't reached us AND the sub carries
 //                 insufficient info to upsert (no Ivy OS metadata, and
 //                 customer/price don't resolve to anything in this
 //                 workspace either)
-//   'mismatch'  — cross-tenant event, dropped
-//   'invalid'   — no subscription id
+//   'mismatch'  - cross-tenant event, dropped
+//   'invalid'   - no subscription id
 //
 // Two upsert paths close two races / gaps:
 //
@@ -119,13 +119,13 @@ export function extractSubPriceId(sub) {
 // (b) Subscriptions created from the Stripe Dashboard don't carry
 //     Ivy OS metadata at all. If the sub's customer maps to a clients
 //     row in this workspace AND the price maps to a memberships.
-//     stripe_price_id, we still materialize — owners who set up
+//     stripe_price_id, we still materialize - owners who set up
 //     recurring billing through Stripe directly shouldn't have their
 //     revenue disappear from Finance.
 //
 // Plan changes (UI or Stripe Dashboard) re-sync the tier snapshot
 // (membership_id/name/price_cents/interval) when the active price
-// id changes — 'retiered' is returned so the webhook can log it.
+// id changes - 'retiered' is returned so the webhook can log it.
 //
 // stripeContext (optional): { secretKey, stripeAccount } passed by the
 // webhook layer so the Dashboard-originated path can fetch a missing
@@ -194,9 +194,9 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
 
     // Path (b): Stripe-Dashboard-originated subscription with no Ivy OS
     // metadata. Match the customer to a clients row and the price to a
-    // memberships tier — both must resolve unambiguously within this
+    // memberships tier - both must resolve unambiguously within this
     // workspace, otherwise we ignore. This is the same scope as case
-    // (a) — we never insert across workspaces.
+    // (a) - we never insert across workspaces.
     if (!customerId || !priceId) return 'race';
     const tier = (await sql`
       SELECT id, name, price_cents, interval FROM memberships
@@ -233,7 +233,7 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
       if (!email) return 'race';
       // Match an existing client by email first (the owner may have
       // added the contact in Ivy OS before the Stripe-side subscription)
-      // — that's a stronger link than always inserting a new row.
+      // - that's a stronger link than always inserting a new row.
       const byEmail = (await sql`
         SELECT id FROM clients
          WHERE workspace_id = ${workspaceId} AND email = ${email}

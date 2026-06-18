@@ -66,7 +66,7 @@ export default async function handler(req, res) {
           paymentMethodId: b.payment_method_id,
           amountCents: Math.round(feeAmount * 100),
           currency: creds.currency,
-          description: `No-show fee — ${b.service_name || 'session'}`,
+          description: `No-show fee - ${b.service_name || 'session'}`,
           metadata: { booking_id: b.id, workspace_id: workspaceId, kind: 'no_show' },
           statementDescriptor: 'NO-SHOW FEE',
           // Shares the `fee-<booking>` key with charge-fee.js so a booking
@@ -77,7 +77,7 @@ export default async function handler(req, res) {
         paymentIntentId = pi.id;
       } catch (err) {
         // The no-show mark still goes through even if the charge
-        // fails — owner can chase manually. Surface the error in
+        // fails - owner can chase manually. Surface the error in
         // the response so the UI can show a warning.
         chargeError = err.message || 'Charge failed';
       }

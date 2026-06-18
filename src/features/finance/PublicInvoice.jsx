@@ -1,4 +1,4 @@
-// /invoice/:token — public invoice view (no login required).
+// /invoice/:token - public invoice view (no login required).
 // Shows the invoice with line items + total. When the issuing workspace has
 // Stripe wired up (paymentEnabled flag from the API), shows a "Pay with card"
 // button that creates a Checkout Session and redirects. Otherwise falls back
@@ -29,14 +29,14 @@ export default function PublicInvoice() {
     (async () => {
       // Returning from a successful checkout: confirm the payment
       // server-side so the invoice is marked paid (and shows up in the
-      // owner's finance tab) immediately — instead of waiting on a webhook
+      // owner's finance tab) immediately - instead of waiting on a webhook
       // that may never have been configured.
       if (paidFlag) {
         try {
           await fetch('/api/invoice-pay/' + encodeURIComponent(token) + '?action=confirm', {
             method: 'POST', credentials: 'omit',
           });
-        } catch { /* best-effort — the success screen still renders */ }
+        } catch { /* best-effort - the success screen still renders */ }
       }
       try {
         const res = await fetch('/api/invoice-view/' + encodeURIComponent(token), { credentials: 'omit' });
@@ -48,7 +48,7 @@ export default function PublicInvoice() {
         if (live) setInv(r.invoice);
       } catch (e) {
         // After a successful payment the invoice is marked paid and its link
-        // is consumed, so invoice-view 404s — that's expected; the paid
+        // is consumed, so invoice-view 404s - that's expected; the paid
         // success screen renders from paidFlag, not from the invoice.
         if (live && !paidFlag) setError(e);
       } finally {
@@ -93,7 +93,7 @@ export default function PublicInvoice() {
   if (loading) {
     return <PageWrap tweaks={tweaks}><div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div></PageWrap>;
   }
-  // Post-payment success — render even if the (now-paid) invoice link no
+  // Post-payment success - render even if the (now-paid) invoice link no
   // longer loads. We confirmed the payment server-side above.
   if (paidFlag) {
     return (
@@ -103,7 +103,7 @@ export default function PublicInvoice() {
             width: 48, height: 48, borderRadius: 99, background: 'var(--ok)', color: '#fff',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14,
           }}><Icons.Check size={24} sw={2.4}/></div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Payment received — thank you!</div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Payment received - thank you!</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
             {inv?.business?.name || 'The business'} has been notified and your invoice is marked paid.
           </div>
@@ -145,7 +145,7 @@ export default function PublicInvoice() {
         </div>
         {/* Print / Save-as-PDF: triggers the browser's native print
             dialog. On every modern browser "Save as PDF" is a
-            destination in that dialog — no client-side PDF library
+            destination in that dialog - no client-side PDF library
             needed. Hidden from the printed output itself via the
             print-hide CSS class so the button doesn't appear on the
             generated PDF. */}
@@ -170,7 +170,7 @@ export default function PublicInvoice() {
           <div style={{ textAlign: 'right' }}>
             <div className="metric-label">Issued</div>
             <div style={{ fontSize: 14, fontWeight: 500, marginTop: 4 }}>
-              {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString([], { dateStyle: 'medium' }) : '—'}
+              {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString([], { dateStyle: 'medium' }) : '-'}
             </div>
             {inv.dueDate && (
               <>
@@ -208,7 +208,7 @@ export default function PublicInvoice() {
               minWidth: 520,
               alignItems: 'center', fontSize: 13,
             }}>
-              <div>{it.description || '—'}</div>
+              <div>{it.description || '-'}</div>
               <div style={{ textAlign: 'right' }}>{it.quantity}</div>
               <div className="mono-num" style={{ textAlign: 'right' }}>{fmtMoney(it.rate)}</div>
               <div className="mono-num" style={{ textAlign: 'right', fontWeight: 600 }}>
@@ -247,7 +247,7 @@ export default function PublicInvoice() {
               width: 44, height: 44, borderRadius: 99, background: 'var(--ok)', color: '#fff',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
             }}><Icons.Check size={22} sw={2.4}/></div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Payment received — thanks!</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Payment received - thanks!</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
               {inv.business?.name || 'The sender'} will get a confirmation as soon as Stripe confirms the charge.
             </div>
@@ -258,7 +258,7 @@ export default function PublicInvoice() {
               width: 44, height: 44, borderRadius: 99, background: 'var(--ok)', color: '#fff',
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
             }}><Icons.Check size={22} sw={2.4}/></div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Thanks — we'll let {inv.business?.name || 'them'} know.</div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Thanks - we'll let {inv.business?.name || 'them'} know.</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
               They'll reconcile and mark this invoice paid on their side.
             </div>
@@ -267,14 +267,14 @@ export default function PublicInvoice() {
           <>
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginBottom: 12, lineHeight: 1.55 }}>
               Pay <strong>{fmtMoney(inv.total)}</strong> by card. You'll be taken to a secure
-              Stripe checkout — your card details never touch our servers.
+              Stripe checkout - your card details never touch our servers.
             </div>
             {cancelledFlag && (
               <div style={{
                 marginBottom: 12, padding: '6px 10px', borderRadius: 6,
                 background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 12,
               }}>
-                Payment was cancelled — try again whenever you're ready.
+                Payment was cancelled - try again whenever you're ready.
               </div>
             )}
             {payErr && (

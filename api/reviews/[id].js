@@ -1,9 +1,9 @@
-// PATCH /api/reviews/:id — owner actions on a single review.
+// PATCH /api/reviews/:id - owner actions on a single review.
 //   body { ownerResponse?: string | null, appealReason?: string }
 //
 // Reviews auto-publish, so owners CANNOT hide/publish them. They can:
 //   • respond publicly (owner_response shows under the review), and
-//   • appeal a review for removal — that flags it for the support team
+//   • appeal a review for removal - that flags it for the support team
 //     (super-admin) to approve (hide) or deny. The review stays visible
 //     until an appeal is approved.
 import { sql } from '../_lib/db.js';
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     }
     if ('appealReason' in body) {
       // File (or re-file) an appeal. Block if one is already open or was
-      // already approved — owners get one bite per review until support acts.
+      // already approved - owners get one bite per review until support acts.
       const cur = await sql`SELECT appeal_status FROM reviews WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       if (cur.rows.length === 0) return notFound(res, 'Review not found');
       const cs = cur.rows[0].appeal_status || 'none';

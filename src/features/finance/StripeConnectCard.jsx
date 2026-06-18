@@ -30,7 +30,7 @@ export default function StripeConnectCard() {
   };
   useEffect(() => { load(); }, []);
 
-  // OAuth callback drops the user back at /finance?stripe=… — surface
+  // OAuth callback drops the user back at /finance?stripe=… - surface
   // a toast and strip the param so a refresh doesn't re-toast.
   const location = useLocation();
   const navigate = useNavigate();
@@ -47,7 +47,7 @@ export default function StripeConnectCard() {
 
   const startOauth = () => {
     // The init endpoint is GET + 302-redirect to Stripe-hosted onboarding,
-    // so we navigate the browser directly. (Account Links flow — Stripe
+    // so we navigate the browser directly. (Account Links flow - Stripe
     // handles the entire onboarding UX.)
     setOauthBusy(true); setOauthErr(null);
     window.location.href = '/api/finance/stripe-oauth-init';
@@ -99,7 +99,7 @@ export default function StripeConnectCard() {
           <div style={{ flex: 1, minWidth: 220 }}>
             <div style={{ fontSize: 14, fontWeight: 600 }}>Accept card payments</div>
             <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2 }}>
-              Sign into Stripe in one click — no API keys to copy. Funds go
+              Sign into Stripe in one click - no API keys to copy. Funds go
               straight to your Stripe; we never hold money.
             </div>
           </div>
@@ -139,7 +139,7 @@ export default function StripeConnectCard() {
 function ConnectedView({ status, onDisconnected }) {
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
-  // Account-Links workspaces don't need a per-workspace webhook secret —
+  // Account-Links workspaces don't need a per-workspace webhook secret -
   // events flow through the platform webhook. Only the legacy
   // standard-oauth flow exposes the webhook-setup affordance.
   const isAccountLinks = status.flow === 'account-links';
@@ -193,12 +193,12 @@ function ConnectedView({ status, onDisconnected }) {
         }}><Icons.Check size={16} sw={2.4}/></div>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13.5, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            Stripe connected — {status.accountLabel || 'your account'}
+            Stripe connected - {status.accountLabel || 'your account'}
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
             {date && <>Connected {date}</>}
             {/* Webhook readiness messaging differs by flow:
-                  • account-links: platform webhook handles everything —
+                  • account-links: platform webhook handles everything -
                     show pending-onboarding status if it applies, else
                     nothing.
                   • standard-oauth: surface the legacy "webhook signing
@@ -212,7 +212,7 @@ function ConnectedView({ status, onDisconnected }) {
             ) : (
               <> · {status.webhookConfigured ? 'Webhook signing configured' : (
                 <span style={{ color: 'var(--warn)' }}>
-                  Webhook signing not set — paid invoices won't auto-mark
+                  Webhook signing not set - paid invoices won't auto-mark
                 </span>
               )}</>
             )}
@@ -311,21 +311,21 @@ function ConnectForm({ onConnected, onCancel }) {
         We'll verify the secret key and store it encrypted.
       </div>
 
-      <Field label="Secret key" hint="Starts with sk_live_ or sk_test_ — required.">
+      <Field label="Secret key" hint="Starts with sk_live_ or sk_test_ - required.">
         <input type="password" autoComplete="off" required
           value={secretKey} onChange={(e) => setSecret(e.target.value)}
           placeholder="sk_live_…"
           style={fieldStyle}/>
       </Field>
 
-      <Field label="Publishable key" hint="Starts with pk_… — optional, used by the public pay page.">
+      <Field label="Publishable key" hint="Starts with pk_… - optional, used by the public pay page.">
         <input type="text" autoComplete="off"
           value={publishableKey} onChange={(e) => setPublishable(e.target.value)}
           placeholder="pk_live_…"
           style={fieldStyle}/>
       </Field>
 
-      <Field label="Webhook signing secret" hint="Starts with whsec_… — required for paid invoices to auto-mark. Add a webhook in Stripe pointing at /api/webhooks/stripe and paste the signing secret here.">
+      <Field label="Webhook signing secret" hint="Starts with whsec_… - required for paid invoices to auto-mark. Add a webhook in Stripe pointing at /api/webhooks/stripe and paste the signing secret here.">
         <input type="password" autoComplete="off"
           value={webhookSecret} onChange={(e) => setWebhook(e.target.value)}
           placeholder="whsec_…"

@@ -1,11 +1,11 @@
-// Tests synchronous invoice payment settlement — the fix for "I paid via
+// Tests synchronous invoice payment settlement - the fix for "I paid via
 // the Stripe QR code but the finance tab never showed it / invoice stayed
 // overdue." Payment is now confirmed on return instead of relying solely on
 // a per-workspace webhook most owners never configure.
 //
-//   • markInvoicePaid — idempotent mark-paid (status, amount, method, intent)
-//   • reconcileStripeInvoice — no-op guards (no session / non-Stripe session)
-//   • invoice-pay ?action=confirm — idempotent confirm by token
+//   • markInvoicePaid - idempotent mark-paid (status, amount, method, intent)
+//   • reconcileStripeInvoice - no-op guards (no session / non-Stripe session)
+//   • invoice-pay ?action=confirm - idempotent confirm by token
 //
 // The live Stripe session fetch needs real creds, so the "happy path"
 // settlement is exercised through markInvoicePaid directly.
@@ -53,7 +53,7 @@ async function run() {
   assert((await reconcileStripeInvoice({ id: 'x', workspace_id: wid, status: 'sent', stripe_session_id: 'sq_123' })) === false, 'non-Stripe (no cs_ prefix) session → false');
   assert((await reconcileStripeInvoice({ id: 'x', workspace_id: wid, status: 'paid', stripe_session_id: 'cs_123' })) === true, 'already-paid → true (no fetch)');
 
-  console.log('\n[3] invoice-pay ?action=confirm — idempotent by token');
+  console.log('\n[3] invoice-pay ?action=confirm - idempotent by token');
   const tokPaid = `tok-${tag}-paid-abcdefgh`;
   const invPaid = await mkInvoice(tokPaid, 'cs_paid');
   await markInvoicePaid({ workspaceId: wid, invoiceId: invPaid.id, paymentIntent: 'pi_2', amountCents: 20000 });

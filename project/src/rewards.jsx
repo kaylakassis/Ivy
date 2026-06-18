@@ -1,4 +1,4 @@
-// Rewards — landing pitch + full program manager once launched.
+// Rewards - landing pitch + full program manager once launched.
 
 const REWARDS_LAUNCHED_KEY = 'Ivy OS:rewards-launched';
 
@@ -25,7 +25,7 @@ function RewardsLanding({ direction, onLaunch }) {
   const offerings = [
     { title: 'Visit-based rewards',   body: 'Book 5, get 1 free.' },
     { title: 'Spend-based rewards',   body: 'Spend $300, get $25 credit.' },
-    { title: 'Referral bonuses',      body: 'Refer a friend — both get rewarded.' },
+    { title: 'Referral bonuses',      body: 'Refer a friend - both get rewarded.' },
     { title: 'Custom rules',          body: 'Design your own loyalty program.' },
   ];
 
@@ -66,7 +66,7 @@ function RewardsLanding({ direction, onLaunch }) {
               Why reward programs work
             </h3>
             <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-              The goal isn't just to grow your business — it's to help you understand
+              The goal isn't just to grow your business - it's to help you understand
               the <i>why</i> behind what works. Every tool here is designed to make you
               a smarter, more profitable business owner.
             </p>
@@ -143,7 +143,7 @@ function StatTile({ value, body, src, tone }) {
         fontSize: 32, letterSpacing: '-0.03em', color: fg, lineHeight: 1,
       }}>{value}</div>
       <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.45 }}>{body}</div>
-      <div style={{ fontSize: 10, color: 'var(--muted-2)', marginTop: 2, letterSpacing: '0.02em' }}>— {src}</div>
+      <div style={{ fontSize: 10, color: 'var(--muted-2)', marginTop: 2, letterSpacing: '0.02em' }}>- {src}</div>
     </div>
   );
 }

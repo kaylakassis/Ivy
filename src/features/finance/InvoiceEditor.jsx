@@ -101,8 +101,8 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
               fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8,
             }}>
               <Icons.Lock size={13}/>
-              {invoice.status === 'paid'   && 'Paid — invoice is locked.'}
-              {invoice.status === 'voided' && 'Voided — invoice is locked.'}
+              {invoice.status === 'paid'   && 'Paid - invoice is locked.'}
+              {invoice.status === 'voided' && 'Voided - invoice is locked.'}
             </div>
           )}
 
@@ -363,7 +363,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
                     onClick={async () => {
                       await save();
                       const alreadySent = invoice.status === 'sent' || invoice.status === 'overdue';
-                      // Resend bypasses the "pick a recipient" modal — recipient
+                      // Resend bypasses the "pick a recipient" modal - recipient
                       // is already locked in on the row. Use the dedicated
                       // /resend endpoint when onResend is wired through.
                       if (alreadySent && onResend) {

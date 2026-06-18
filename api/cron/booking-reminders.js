@@ -1,10 +1,10 @@
-// /api/cron/booking-reminders — hourly job. For every upcoming non-cancelled
+// /api/cron/booking-reminders - hourly job. For every upcoming non-cancelled
 // booking, walks the service's reminder_minutes[] (default {10080, 2880,
 // 1440, 120} = 1 week, 2 days, 1 day, 2 hours). If now() is within a
 // (target - 70min, target + 5min] window for a beat that hasn't been sent
 // yet, fires the reminder email and stamps reminders_sent[<minutes>].
 //
-// Auth: same as welcome-emails — Authorization: Bearer $CRON_SECRET from
+// Auth: same as welcome-emails - Authorization: Bearer $CRON_SECRET from
 // Vercel cron, OR x-admin-secret for manual testing.
 //
 // TZ correctness: bookings.(date, start_min) are wall-clock in the
@@ -41,7 +41,7 @@ const LOOKAHEAD_MIN = 5;
 const SCAN_BATCH = 1000;
 // SQL pre-filter window (minutes). Deliberately WIDER than the JS
 // LOOKBACK/LOOKAHEAD so the pre-filter never excludes a booking the JS
-// per-beat check would have reminded — the JS check is the source of truth.
+// per-beat check would have reminded - the JS check is the source of truth.
 const SQL_LOOKBACK_MIN  = 60;
 const SQL_LOOKAHEAD_MIN = 15;
 
@@ -56,7 +56,7 @@ export async function fetchDueBookings(cursor) {
     cursorClause = `AND (b.date, b.start_min, b.id) > ($1, $2, $3)`;
     params.push(cursor.date, cursor.startMin, cursor.id);
   }
-  // Booking start as a UTC instant — interpret (date, start_min) as
+  // Booking start as a UTC instant - interpret (date, start_min) as
   // wall-clock in the workspace's IANA timezone. A null tz falls back
   // to UTC for legacy rows. This matches slotEpochMs() in JS so the
   // SQL prefilter and the per-row math agree.
@@ -111,13 +111,13 @@ async function handler(req, res) {
     let sent = 0;
     let scanned = 0;
     let failed = 0;
-    // Memoize branding per workspace for this run — many reminders share
+    // Memoize branding per workspace for this run - many reminders share
     // the same handful of workspaces.
     const getBranding = makeBrandingCache();
 
     // Keyset-paginate the candidate set instead of a single LIMIT 5000
     // scan. The old hard cap silently dropped reminders for every booking
-    // past the first 5000 in the 8-day window once an install got busy —
+    // past the first 5000 in the 8-day window once an install got busy -
     // entire tenants never got reminded. We now page through ALL due
     // bookings (bounded only by MAX_PER_RUN *sends*). fetchDueBookings
     // pre-filters in SQL to bookings with a beat landing in a generous
@@ -192,7 +192,7 @@ async function handler(req, res) {
             });
             // Push reminder to the client too (no-op if they haven't
             // claimed the portal or enabled push). Idempotency rides on
-            // the reminders_sent claim above — we only get here once.
+            // the reminders_sent claim above - we only get here once.
             if (r.client_id) {
               await notifyClientSafe({
                 clientId: r.client_id,
@@ -299,7 +299,7 @@ async function sendReminder({ to, clientId, clientName, serviceName, businessNam
   const html = emailShell({
     heading: `Reminder: your appointment is ${when}`,
     body: `<p>${greeting}</p>
-      <p>Just a heads up — you have an appointment with
+      <p>Just a heads up - you have an appointment with
         <strong>${escapeHtml(businessName)}</strong> ${when}.</p>
       <table role="presentation" cellpadding="0" cellspacing="0"
         style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
@@ -308,7 +308,7 @@ async function sendReminder({ to, clientId, clientName, serviceName, businessNam
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(fmtTime(startMin))} – ${escapeHtml(fmtTime(endMin))}</td></tr>
         ${notes ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;vertical-align:top;">Note</td><td style="padding:6px 0;">${escapeHtml(notes)}</td></tr>` : ''}
       </table>
-      <p>Need to reschedule or message ${escapeHtml(businessName)}? Open your portal —
+      <p>Need to reschedule or message ${escapeHtml(businessName)}? Open your portal -
       you can chat with them directly.</p>`,
     ctaText: 'Open my portal',
     ctaUrl: `${appUrl()}/me`,
@@ -318,7 +318,7 @@ async function sendReminder({ to, clientId, clientName, serviceName, businessNam
   return sendEmailToClient({
     clientId, type: 'bookings',
     to,
-    subject: `Reminder: ${serviceName} ${when} — ${fmtDay(dateISO)}`,
+    subject: `Reminder: ${serviceName} ${when} - ${fmtDay(dateISO)}`,
     html,
     replyTo: branding?.replyTo,
   });
@@ -328,7 +328,7 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// SMS bodies need to fit in a couple of segments — keep punchy. The
+// SMS bodies need to fit in a couple of segments - keep punchy. The
 // "Reply STOP to opt out" suffix is appended by withOptOutSuffix in
 // _lib/sms.js; don't add it here.
 function composeReminderSms({ clientName, serviceName, businessName, dateISO, startMin, reminderMinutes }) {

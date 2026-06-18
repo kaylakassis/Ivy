@@ -77,7 +77,7 @@ function Paywall({ open, onClose, onSubscribe, expired }) {
   if (!open) return null;
   const perks = [
     'Unlimited clients, appointments, and invoices',
-    'Ivy Pro — AI insights surfaced every morning',
+    'Ivy Pro - AI insights surfaced every morning',
     'Accept card payments (2.9% + 30¢, standard)',
     'Documents, e-signatures, and client portal',
     'Your public booking page on ivy.co/yourname',
@@ -94,7 +94,7 @@ function Paywall({ open, onClose, onSubscribe, expired }) {
         display: 'grid', gridTemplateColumns: '1fr 1fr', maxHeight: '92vh',
       }} onClick={e => e.stopPropagation()}>
 
-        {/* Left — price */}
+        {/* Left - price */}
         <div style={{
           padding: '40px 32px',
           background: 'var(--accent)', color: 'var(--accent-ink)',
@@ -116,7 +116,7 @@ function Paywall({ open, onClose, onSubscribe, expired }) {
               </div>
             </div>
             <div style={{ marginTop: 24, fontSize: 13, lineHeight: 1.6, opacity: 0.85 }}>
-              Thirteen billing cycles a year, priced so it fits a busy week — not a flat 30 that skips February.
+              Thirteen billing cycles a year, priced so it fits a busy week - not a flat 30 that skips February.
             </div>
           </div>
           <div style={{ fontSize: 11, opacity: 0.7, marginTop: 40, lineHeight: 1.5 }}>
@@ -124,7 +124,7 @@ function Paywall({ open, onClose, onSubscribe, expired }) {
           </div>
         </div>
 
-        {/* Right — content */}
+        {/* Right - content */}
         <div style={{ padding: '40px 32px', display: 'flex', flexDirection: 'column' }}>
           <h3 style={{
             fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 22,
@@ -154,7 +154,7 @@ function Paywall({ open, onClose, onSubscribe, expired }) {
           <button className="btn btn-primary" style={{
             justifyContent: 'center', padding: '12px 16px', fontSize: 14, fontWeight: 600,
           }} onClick={onSubscribe}>
-            Subscribe — $39 / 28 days
+            Subscribe - $39 / 28 days
           </button>
           {!expired && (
             <button className="btn btn-ghost" onClick={onClose} style={{

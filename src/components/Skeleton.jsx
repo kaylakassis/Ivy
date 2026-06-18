@@ -82,7 +82,7 @@ export function SkelRowList({ rows = 5, withAvatar = false, height = 56 }) {
   );
 }
 
-// Default export — a generic page skeleton used as a fallback.
+// Default export - a generic page skeleton used as a fallback.
 export default function Skeleton() {
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>

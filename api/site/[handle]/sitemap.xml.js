@@ -1,4 +1,4 @@
-// GET /site/:handle/sitemap.xml — XML sitemap listing every page of a
+// GET /site/:handle/sitemap.xml - XML sitemap listing every page of a
 // published site. Search engines fetch this to discover the page graph
 // and re-crawl efficiently after edits.
 

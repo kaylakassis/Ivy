@@ -2,7 +2,7 @@
 //
 // Lists the workspace's active products for the storefront Shop section.
 // Returns the same serialized shape as the owner-side /api/products list
-// minus internal-only fields (cost, sku). Stays read-only — the public
+// minus internal-only fields (cost, sku). Stays read-only - the public
 // can browse but never mutate inventory.
 import { sql } from '../../_lib/db.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';

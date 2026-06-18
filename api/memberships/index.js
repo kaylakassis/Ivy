@@ -1,6 +1,6 @@
 // /api/memberships
 //   GET  → list every membership tier the workspace has defined
-//          (active + inactive — owner sees all).
+//          (active + inactive - owner sees all).
 //   POST → create a new tier. If Stripe is connected, also provisions
 //          a Stripe Product + recurring Price on the connected
 //          account so the public sign-up flow can hand the price id
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
 
       // Try to provision Stripe product + price up front. Owners who
       // haven't connected Stripe yet still get the row written so they
-      // can connect later — the public sign-up button is gated on
+      // can connect later - the public sign-up button is gated on
       // stripe_price_id being non-null.
       let stripeProductId = null;
       let stripePriceId = null;

@@ -1,4 +1,4 @@
-// /me/bookings — every appointment across all the user's businesses,
+// /me/bookings - every appointment across all the user's businesses,
 // grouped Upcoming / Past / Cancelled with a tab picker.
 import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
@@ -26,7 +26,7 @@ const TABS = [
 ];
 
 // Tab IDs we accept from a ?tab= deep link. Anything else falls back
-// to 'upcoming' — guards against a copy-pasted typo opening an empty
+// to 'upcoming' - guards against a copy-pasted typo opening an empty
 // pane.
 const VALID_TAB_PARAMS = new Set(['upcoming', 'past', 'cancelled']);
 
@@ -56,7 +56,7 @@ export default function ClientBookings() {
   const [cancelBusy, setCancelBusy] = useState(false);
   const [cancelErr, setCancelErr]   = useState(null);
   const [rescheduling, setRescheduling] = useState(null); // booking pending reschedule
-  // Bookings the user can review — fetched server-side so we know which
+  // Bookings the user can review - fetched server-side so we know which
   // past rows haven't been reviewed yet without a per-row probe.
   const [pendingReviewIds, setPendingReviewIds] = useState(new Set());
   const [reviewing, setReviewing]   = useState(null); // booking pending review
@@ -91,7 +91,7 @@ export default function ClientBookings() {
       const fresh = await api.get('/me/bookings');
       setData(fresh);
       setConfirming(null);
-      // Surface a late-cancel fee that was actually charged — the client
+      // Surface a late-cancel fee that was actually charged - the client
       // must know money left their card. (The endpoint returns feeCharged
       // for exactly this; it used to be silently discarded.)
       if (r && Number(r.feeCharged) > 0) {
@@ -419,7 +419,7 @@ function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
           );
         })()}
         <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
-          The business will be notified through your message thread. This can't be undone — you'd need
+          The business will be notified through your message thread. This can't be undone - you'd need
           to book again from scratch.
         </div>
         {error && (
@@ -514,7 +514,7 @@ function ReviewDialog({ booking, onClose, onSubmitted }) {
         </div>
 
         <textarea value={text} onChange={(e) => setText(e.target.value.slice(0, 2000))}
-          placeholder="Anything you'd like the business — and other clients — to know? (optional)"
+          placeholder="Anything you'd like the business - and other clients - to know? (optional)"
           rows={5}
           style={{
             width: '100%', resize: 'vertical', padding: '10px 12px', borderRadius: 10,
@@ -580,7 +580,7 @@ function RescheduleDialog({ booking, onClose, onRescheduled }) {
   const svc = cal?.services.find((s) => s.id === booking.serviceId)
     || (booking.durationMinutes ? { id: booking.serviceId, durationMinutes: booking.durationMinutes } : null);
 
-  // slotsForDate is from the calendar utils — same logic the public
+  // slotsForDate is from the calendar utils - same logic the public
   // booking page uses, so the slot grid here matches what a fresh
   // booking would show. Reuses the same conflict / availability rules.
   const dateObj = (() => {
@@ -682,7 +682,7 @@ function RescheduleDialog({ booking, onClose, onRescheduled }) {
               background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
               color: 'var(--muted)', fontSize: 12.5, textAlign: 'center',
             }}>
-              No openings on that date — try another day.
+              No openings on that date - try another day.
             </div>
           ) : (
             <div style={{

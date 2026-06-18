@@ -1,7 +1,7 @@
 // ensureActiveWorkspace(user, req, res)
 //
 // The hard-paywall enforcement chokepoint. Drops into the slot where
-// owner endpoints used to call ensureWorkspace — every gated route
+// owner endpoints used to call ensureWorkspace - every gated route
 // looks like:
 //
 //   const workspaceId = await ensureActiveWorkspace(user, req, res);
@@ -9,23 +9,23 @@
 //
 // Semantics:
 //   • Returns the workspace id when the workspace is allowed to use the
-//     business app (see isWorkspaceActive — trialing-live, active-live,
+//     business app (see isWorkspaceActive - trialing-live, active-live,
 //     past_due-in-grace).
 //   • Returns null after writing a 402 'subscription-required' otherwise.
 //     This includes expired-trial, suspended, cancelled, incomplete,
 //     inactive, and anything else we can't positively classify.
-//   • FAILS CLOSED on DB error — denies with a distinct
+//   • FAILS CLOSED on DB error - denies with a distinct
 //     'gate-unavailable' status so the frontend can render a retry UI
 //     instead of the paywall. This is the inversion from the old
 //     subscriptionGate's "log + allow" path: under a hard paywall, a
 //     DB blip on the gate read must not silently open the doors.
-//   • Sponsored users (user.user_type === 'sponsored') bypass — same
+//   • Sponsored users (user.user_type === 'sponsored') bypass - same
 //     comp-account behavior as userContext().
 //
 // Latency note: a ~60-second per-lambda positive cache means a paying
 // owner whose first request hit a healthy DB doesn't get bounced if a
 // subsequent request races a brief Neon hiccup. The cache stores only
-// "this id was active at time T" — a deactivation (webhook flipping the
+// "this id was active at time T" - a deactivation (webhook flipping the
 // row) still wins within the cache TTL because writes still go through
 // fresh checks for new workspaceIds and the TTL is short. We never
 // cache the negative answer, so re-checking right after a successful
@@ -82,7 +82,7 @@ export async function ensureActiveWorkspace(user, req, res) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
   }
-  // Sponsored accounts skip the gate — they're comp'd by the platform
+  // Sponsored accounts skip the gate - they're comp'd by the platform
   // and we never want a billing read to lock them out.
   if (user.user_type === 'sponsored') {
     return ensureWorkspace(user.id);
@@ -90,7 +90,7 @@ export async function ensureActiveWorkspace(user, req, res) {
 
   // ensureWorkspace itself is required for shape (we need the id even
   // on a freshly-created row). If THAT throws, the request can't make
-  // any progress anyway, so we surface a 500 by re-throwing — this is
+  // any progress anyway, so we surface a 500 by re-throwing - this is
   // not a paywall denial.
   const workspaceId = await ensureWorkspace(user.id);
 
@@ -107,7 +107,7 @@ export async function ensureActiveWorkspace(user, req, res) {
     row = rows[0];
   } catch (err) {
     // FAIL CLOSED. The distinct 'gate-unavailable' status lets the
-    // frontend show a retry UI rather than the paywall — paying
+    // frontend show a retry UI rather than the paywall - paying
     // owners don't see the wrong CTA, but we also don't accidentally
     // grant access during an outage.
     // eslint-disable-next-line no-console
@@ -119,7 +119,7 @@ export async function ensureActiveWorkspace(user, req, res) {
   }
 
   if (!row) {
-    // Should not happen — ensureWorkspace just confirmed it exists —
+    // Should not happen - ensureWorkspace just confirmed it exists -
     // but if a concurrent delete won, deny rather than guess.
     return deny(res, {
       error: 'subscription-required',
@@ -134,7 +134,7 @@ export async function ensureActiveWorkspace(user, req, res) {
   }
 
   // Funnel instrumentation: stamp the very first time this workspace
-  // hits the wall. Fire-and-forget — a write failure here mustn't
+  // hits the wall. Fire-and-forget - a write failure here mustn't
   // block the 402 response. COALESCE keeps the original timestamp on
   // every subsequent denial so we measure FIRST-seen, not last-seen.
   sql`UPDATE workspaces

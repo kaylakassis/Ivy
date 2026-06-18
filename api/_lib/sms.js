@@ -2,13 +2,13 @@
 //   • Phone normalization to E.164 (+CCXXXXXXXXXX)
 //   • Compliance suffix on every outbound ("Reply STOP to opt out") so
 //     we don't drift out of TCPA / 10DLC requirements
-//   • Consent gating — clients with sms_consent_at NULL never receive
+//   • Consent gating - clients with sms_consent_at NULL never receive
 //     a non-essential message, full stop. Booking-confirmation /
 //     reminder paths must check consent before calling sendBookingSms.
 //
 // Ivy OS pays for SMS as part of subscription so owners don't have to
 // wire up Twilio themselves. Switching to per-workspace BYO Twilio is
-// a future option — keep the API of this module shaped so callers
+// a future option - keep the API of this module shaped so callers
 // only pass workspaceId + recipient details, no token plumbing.
 import { sendSms, isTwilioConfigured } from './twilio.js';
 import { tryConsumeQuota, DEFAULT_SMS_CAP_PER_DAY } from './usageCounters.js';
@@ -16,7 +16,7 @@ import { sql } from './db.js';
 
 // TCPA + carrier best practice: avoid SMS outside 8am-9pm local time.
 // Booking reminders are transactional (TCPA exempt) and should fire on
-// schedule regardless — they pass respectQuietHours: false. Workflow
+// schedule regardless - they pass respectQuietHours: false. Workflow
 // SMS actions (marketing/nurture) pass true, gating them to daytime
 // in the workspace's IANA timezone. If we have no timezone on file,
 // fall back to America/New_York (most US workspaces today).
@@ -30,7 +30,7 @@ async function isInQuietHours(workspaceId) {
     `;
     if (r.rows[0]?.timezone) tz = r.rows[0].timezone;
   } catch {
-    // calendar_settings missing on a brand-new workspace — accept the
+    // calendar_settings missing on a brand-new workspace - accept the
     // default and continue. SMS sending is rare on day-zero so any
     // misalignment is short-lived.
   }
@@ -49,7 +49,7 @@ async function isInQuietHours(workspaceId) {
 
 // Normalize whatever the user typed to E.164. Strip non-digits, then:
 //   • starts with '+' → assume already E.164, keep digits + plus
-//   • 10 digits → assume +1 (US/Canada default) — works for the bulk
+//   • 10 digits → assume +1 (US/Canada default) - works for the bulk
 //                   of our market, can be made smarter per-workspace later
 //   • 11 digits starting with 1 → +1XXXXXXXXXX
 //   • otherwise return null (caller treats as invalid)
@@ -70,7 +70,7 @@ export function normalizePhone(raw, defaultCountry = '+1') {
   return null;
 }
 
-// Append the standard opt-out suffix exactly once. Idempotent —
+// Append the standard opt-out suffix exactly once. Idempotent -
 // callers can naïvely add it without worrying about double-tagging.
 export function withOptOutSuffix(body) {
   if (!body) return body;
@@ -97,7 +97,7 @@ export async function sendClientSms({ phone, consentAt, body, workspaceId, respe
   // Quiet hours: marketing-class SMS (workflow actions, broadcasts)
   // must not fire outside 8am-9pm local time. Transactional sends
   // (booking reminders, two-way replies) pass respectQuietHours=false
-  // and bypass — TCPA exempts transactional/emergency.
+  // and bypass - TCPA exempts transactional/emergency.
   if (respectQuietHours && await isInQuietHours(workspaceId)) {
     return { ok: false, reason: 'quiet-hours' };
   }
@@ -105,7 +105,7 @@ export async function sendClientSms({ phone, consentAt, body, workspaceId, respe
   // Pre-charge the quota counter so two parallel sends can't both
   // pass the check. The counter increments first; if we're over the
   // cap, abort before contacting Twilio. (Slight downside: a Twilio
-  // failure still counts against the quota for today — acceptable
+  // failure still counts against the quota for today - acceptable
   // for cost control.)
   if (workspaceId) {
     const q = await tryConsumeQuota(workspaceId, 'sms', DEFAULT_SMS_CAP_PER_DAY);

@@ -1,8 +1,8 @@
-// GET  /api/businesses/:slug/reviews — public list of visible reviews +
+// GET  /api/businesses/:slug/reviews - public list of visible reviews +
 //                                       aggregate. Same surface anyone
 //                                       browsing the public booking page
 //                                       can read.
-// POST /api/businesses/:slug/reviews — signed-in client posts a new
+// POST /api/businesses/:slug/reviews - signed-in client posts a new
 //                                       review. Eligibility: must have
 //                                       at least one booking OR one
 //                                       message thread tied to the
@@ -96,7 +96,7 @@ async function createReview(req, res) {
     }
     const text = (body?.text || '').toString().trim().slice(0, 2000);
 
-    // Find this user's clients row(s) on the workspace — match by linked
+    // Find this user's clients row(s) on the workspace - match by linked
     // user_id or email. The reviewer is "verified" only if at least one
     // such client exists AND has booked OR messaged this workspace.
     const clientRows = await sql`
@@ -125,7 +125,7 @@ async function createReview(req, res) {
 
     // Insert. The UNIQUE INDEX on (workspace_id, reviewer_user_id) WHERE
     // reviewer_user_id IS NOT NULL surfaces "already reviewed" as a
-    // 23505 violation — translate to a friendly 400.
+    // 23505 violation - translate to a friendly 400.
     const reviewerName = (user.name || user.email?.split('@')[0] || 'Verified client').slice(0, 80);
     let inserted;
     try {

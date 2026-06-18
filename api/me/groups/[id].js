@@ -1,4 +1,4 @@
-// GET /api/me/groups/:id — group + members (when mode='open') + messages
+// GET /api/me/groups/:id - group + members (when mode='open') + messages
 // Also clears this client's unread_count.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
@@ -20,7 +20,7 @@ export default async function handler(req, res) {
     const { id } = req.query;
 
     // Resolve this user's membership in this thread (across all the
-    // clients-rows they own). One row max — one thread is in one workspace.
+    // clients-rows they own). One row max - one thread is in one workspace.
     const r = await sql.query(
       `SELECT t.*, m.client_id, m.unread_count, m.muted, m.last_read_at
          FROM group_threads t
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     const workspaceId = row.workspace_id;
     const myClientId = row.client_id;
 
-    // Members list — only visible in 'open' mode. In broadcast mode the
+    // Members list - only visible in 'open' mode. In broadcast mode the
     // member list is sensitive (might reveal who else subscribes to the
     // owner's announcements), so we hide it.
     const showMembers = row.mode === 'open';

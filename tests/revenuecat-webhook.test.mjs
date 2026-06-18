@@ -1,11 +1,11 @@
 // Coverage for the iOS / native-client server paths added for the
 // App Store build:
 //
-//   1. api/billing/revenuecat-webhook.js — the Apple in-app-purchase
+//   1. api/billing/revenuecat-webhook.js - the Apple in-app-purchase
 //      subscription webhook. Verifies bearer auth, event-id dedup, and
 //      the event-type → workspaces.subscription_status mapping that the
 //      rest of the app (paywall, dunning) keys off.
-//   2. api/_lib/auth.js — readSession now accepts `Authorization:
+//   2. api/_lib/auth.js - readSession now accepts `Authorization:
 //      Bearer <jwt>` (native shells can't use the SameSite cookie across
 //      the WebView↔API origin gap), and isNativeClient() detects the
 //      X-Client-Platform marker.
@@ -141,7 +141,7 @@ async function run() {
     await rcHandler(rcReq(mkEvent('SUBSCRIBER_ALIAS', wid)), aliasRes);
     assert(aliasRes.statusCode === 200 && aliasRes.body?.ignored === 'SUBSCRIBER_ALIAS', 'ignored event type → 200 ignored');
 
-    console.log('\n[8] readSession / isNativeClient — native Bearer auth path');
+    console.log('\n[8] readSession / isNativeClient - native Bearer auth path');
     const token = signSession(ownerId);
     const bearerSession = readSession({ headers: { authorization: `Bearer ${token}` } });
     assert(bearerSession?.sub === ownerId, 'readSession reads JWT from Authorization: Bearer');
@@ -153,7 +153,7 @@ async function run() {
     assert(isNativeClient({ headers: { 'x-client-platform': 'android' } }) === true, "isNativeClient true for 'android'");
     assert(isNativeClient({ headers: {} }) === false, 'isNativeClient false for web (no header)');
 
-    // Cleanup — cascade from workspace + user, and clear dedup rows.
+    // Cleanup - cascade from workspace + user, and clear dedup rows.
     await sql`DELETE FROM webhook_event_dedup WHERE provider = 'revenuecat'`.catch(() => {});
     await sql`DELETE FROM workspaces WHERE id = ${wid}`.catch(() => {});
     await sql`DELETE FROM users WHERE id = ${ownerId}`.catch(() => {});

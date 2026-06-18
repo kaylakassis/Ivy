@@ -1,4 +1,4 @@
-// POST /api/documents/void  — body: { id }
+// POST /api/documents/void  - body: { id }
 // Marks a document voided so its sign link stops working. Owner can edit it
 // again afterwards (PATCH gates on draft|voided).
 
@@ -46,13 +46,13 @@ export default async function handler(req, res) {
       RETURNING *
     `;
     // Guard against a race where the doc was deleted between fetch
-    // and update — without this we'd hand the serializer `undefined`
+    // and update - without this we'd hand the serializer `undefined`
     // and respond `{ document: null }` masking the real failure.
     if (updated.rows.length === 0) {
-      return badRequest(res, 'Document not found — was it deleted while you were voiding it?');
+      return badRequest(res, 'Document not found - was it deleted while you were voiding it?');
     }
     try {
-      // Nulling the token is enough — sign/[token] resolves by hash
+      // Nulling the token is enough - sign/[token] resolves by hash
       // and will 404 with no token to match. Status stays 'awaiting'
       // (the CHECK constraint doesn't allow 'voided' on this table).
       await sql`
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
         WHERE document_id = ${id}
       `;
     } catch (e) {
-      // document_signers may not exist on older deploys — log + continue.
+      // document_signers may not exist on older deploys - log + continue.
       console.error('[documents/void] document_signers cleanup failed:', e.message);
     }
     return ok(res, { document: serializeDoc(updated.rows[0]) });

@@ -2,7 +2,7 @@
 //   GET    → fetch a single schedule
 //   PATCH  → update template fields (items / cadence / status / etc.).
 //            Editing here doesn't touch invoices already issued from
-//            this schedule — those captured a snapshot at issue time.
+//            this schedule - those captured a snapshot at issue time.
 //   DELETE → remove the schedule entirely. Already-issued invoices
 //            stay; they referenced the schedule via last_invoice_id
 //            on the schedule, not the other way around.
@@ -83,7 +83,7 @@ export default async function handler(req, res) {
          RETURNING *
       `;
       // sanitized items needs to be a JSONB cast. The push above
-      // emitted `items = $N` which won't auto-cast — we wrap that
+      // emitted `items = $N` which won't auto-cast - we wrap that
       // particular slot when items is set.
       const finalText = queryText.replace(/items = \$(\d+)/, 'items = $$$1::jsonb');
       const { rows } = await sql.query(finalText, values);

@@ -3,7 +3,7 @@
 // bold, italic, and lists. Outputs an HTML string limited to the same
 // whitelist the recipient-side sanitizer accepts (h2/h3/p/br/strong/em/
 // ul/ol/li) so the body that lands in DB and gets rendered to signers
-// is exactly what was edited — no surprise tags from
+// is exactly what was edited - no surprise tags from
 // document.execCommand or paste.
 //
 // Why not a richer editor (TipTap, Lexical, Slate)?
@@ -52,7 +52,7 @@ export default function RichTextEditor({
   const emit = useCallback(() => {
     if (!ref.current) return;
     const html = normalizeHtml(ref.current.innerHTML || '');
-    // Keep `lastHtml` in sync with what we ship out, not the raw DOM —
+    // Keep `lastHtml` in sync with what we ship out, not the raw DOM -
     // otherwise the next `value` round-trip from the parent looks like
     // a foreign value and the prop-sync effect rewrites the DOM, which
     // jumps the caret.
@@ -71,7 +71,7 @@ export default function RichTextEditor({
 
   // Strip all formatting / non-text content from any pasted clipboard
   // so the editor never accumulates tags it can't render. We accept
-  // <strong>, <em>, headings, lists — everything else gets dropped on
+  // <strong>, <em>, headings, lists - everything else gets dropped on
   // the way out via the recipient-side sanitizer anyway, but doing it
   // here keeps the WYSIWYG honest.
   const onPaste = useCallback((e) => {

@@ -1,7 +1,7 @@
 // POST /api/me/accept-terms { version }
 //
 // Records a user's acceptance of a versioned legal document. The
-// version must match the current server-side CURRENT_TERMS_VERSION —
+// version must match the current server-side CURRENT_TERMS_VERSION -
 // we don't accept arbitrary version strings. Two writes:
 //   1. Append a row to legal_acceptances (immutable audit trail with
 //      IP + user_agent for evidentiary purposes).
@@ -9,7 +9,7 @@
 //      auth/me can answer "have they accepted current?" with one
 //      cheap column read.
 //
-// IMPORTANT — never delete legal_acceptances rows. They're our proof
+// IMPORTANT - never delete legal_acceptances rows. They're our proof
 // the user agreed to the version of the terms in effect at that time.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

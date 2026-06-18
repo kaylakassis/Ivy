@@ -1,4 +1,4 @@
-// POST /api/calendar/bookings — owner-side booking creation.
+// POST /api/calendar/bookings - owner-side booking creation.
 // Same validation as the public booking flow (slot must be in availability,
 // no conflicts, etc.) but lets the owner specify recurrence and an existing
 // client_id (instead of always creating a lead).
@@ -87,8 +87,8 @@ export default async function handler(req, res) {
       const settings = await sql`SELECT availability FROM calendar_settings WHERE workspace_id = ${workspaceId}`;
       if (settings.rows.length > 0 && !withinAvailability(settings.rows[0].availability, weekday, start, end, serviceAvailability)) {
         return badRequest(res, serviceAvailability
-          ? 'That slot is outside this service’s availability — toggle Override to book anyway'
-          : 'That slot is outside your availability — toggle Override to book anyway');
+          ? 'That slot is outside this service’s availability - toggle Override to book anyway'
+          : 'That slot is outside your availability - toggle Override to book anyway');
       }
       if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity })) {
         return badRequest(res, serviceCapacity > 1
@@ -100,7 +100,7 @@ export default async function handler(req, res) {
     // Optional package credit consumption. The atomic decrement in
     // consumeCredit prevents two concurrent bookings from spending the
     // same last credit. We refuse the booking outright if the consume
-    // fails — easier UX than silently falling back to "pay normally"
+    // fails - easier UX than silently falling back to "pay normally"
     // when the owner explicitly chose a package.
     const clientPackageId = body.clientPackageId ? String(body.clientPackageId) : null;
     let packageExhaustionEvent = null;
@@ -117,7 +117,7 @@ export default async function handler(req, res) {
       if (!consumeResult.ok) {
         return badRequest(res, 'Package has no credits left, is expired, or doesn\'t cover this service');
       }
-      // Stash the exhaustion signal — fired AFTER the booking row is
+      // Stash the exhaustion signal - fired AFTER the booking row is
       // inserted so the owner notification reflects the final state.
       if (consumeResult.exhausted) {
         packageExhaustionEvent = { clientPackageId, clientId: resolvedClientId };
@@ -125,7 +125,7 @@ export default async function handler(req, res) {
     }
 
     // Verify staff (if supplied) belongs to this workspace + is active.
-    // Defense-in-depth — never trust the browser-sent staff id alone.
+    // Defense-in-depth - never trust the browser-sent staff id alone.
     if (staffId) {
       try {
         const st = await sql`
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
         `;
         if (st.rows.length === 0) return badRequest(res, 'Unknown or inactive staff member');
       } catch (e) {
-        // staff_members table not yet created (partial schema) — drop
+        // staff_members table not yet created (partial schema) - drop
         // the assignment quietly so the booking still saves.
         // eslint-disable-next-line no-console
         console.error('[bookings] staff_members lookup failed; ignoring staffId:', e.message);
@@ -142,7 +142,7 @@ export default async function handler(req, res) {
     }
 
     // Insert. If `staff_id` column hasn't migrated yet, self-heal by
-    // adding it and retrying once — same pattern as
+    // adding it and retrying once - same pattern as
     // api/onboarding/state.js. Belt + suspenders for partial-schema
     // cold starts.
     let insert;
@@ -192,7 +192,7 @@ export default async function handler(req, res) {
     // can be passed by two concurrent requests for the same slot; now
     // that our row is committed, check whether enough conflicting
     // bookings rank before us to push us past capacity. If so we lost the
-    // race — undo this booking (and any package credit) and report the
+    // race - undo this booking (and any package credit) and report the
     // conflict, exactly as the pre-check would have. Owner overrides skip
     // this just like the pre-check.
     if (!skipConflictCheck) {
@@ -202,7 +202,7 @@ export default async function handler(req, res) {
         bookingId: insert.rows[0].id, createdAt: insert.rows[0].created_at,
       }).catch((e) => {
         // If the recheck itself errors, don't undo a real booking over a
-        // transient blip — log and keep it (pre-check already passed).
+        // transient blip - log and keep it (pre-check already passed).
         // eslint-disable-next-line no-console
         console.error('[bookings] race recheck failed; keeping booking:', e.message);
         return false;
@@ -214,8 +214,8 @@ export default async function handler(req, res) {
           catch (rErr) { console.error('[bookings] restoreCredit failed:', rErr.message); }
         }
         return badRequest(res, serviceCapacity > 1
-          ? 'That class just filled up — please pick another slot'
-          : 'That slot was just booked — please pick another time');
+          ? 'That class just filled up - please pick another slot'
+          : 'That slot was just booked - please pick another time');
       }
     }
 
@@ -226,7 +226,7 @@ export default async function handler(req, res) {
     syncOnBookingCreated({ workspaceId, bookingId: insert.rows[0].id });
     // Auto-send any intake forms the service has attached.
     attachIntakeForms({ workspaceId, bookingId: insert.rows[0].id });
-    // Tell the owner the client just used their last session — actionable
+    // Tell the owner the client just used their last session - actionable
     // moment to offer a renewal. Fire-and-forget; the booking still succeeds.
     if (packageExhaustionEvent) {
       notifyPackageExhausted({ workspaceId, ...packageExhaustionEvent });

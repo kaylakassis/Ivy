@@ -5,7 +5,7 @@
 //
 // After upload, the browser sends the returned URL as `photoUrl` on
 // the next PATCH /api/calendar/services. The token itself doesn't
-// commit anything — it just opens an upload window. If the owner
+// commit anything - it just opens an upload window. If the owner
 // changes their mind and never saves, the file lingers in Blob until
 // it's GC'd by an eventual cleanup pass.
 //
@@ -45,7 +45,7 @@ export default async function handler(req, res) {
         addRandomSuffix: true,
         tokenPayload: JSON.stringify({ workspaceId }),
       }),
-      onUploadCompleted: async () => { /* no-op — the URL is bound on the next services PATCH */ },
+      onUploadCompleted: async () => { /* no-op - the URL is bound on the next services PATCH */ },
     });
     return ok(res, result);
   } catch (err) {

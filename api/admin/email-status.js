@@ -27,9 +27,9 @@
 //   }
 //
 // Status values worth knowing:
-//   • verified — DNS records are correct, you're good to send
-//   • pending  — Resend is still polling DNS; usually clears in <30 min
-//   • failed   — record missing or wrong; copy the value from Resend
+//   • verified - DNS records are correct, you're good to send
+//   • pending  - Resend is still polling DNS; usually clears in <30 min
+//   • failed   - record missing or wrong; copy the value from Resend
 //                dashboard and re-add it at your DNS provider
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin } from '../_lib/admin.js';

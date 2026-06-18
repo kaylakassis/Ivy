@@ -2,7 +2,7 @@
 //
 // Lands here from the daily review-request email. Renders booking
 // context (business name + service + date), captures a star rating
-// + optional text, posts back to /api/review/:token. Single-use —
+// + optional text, posts back to /api/review/:token. Single-use -
 // the server invalidates the token on submit.
 //
 // Branding from the booking's workspace tints the page so the page
@@ -177,7 +177,7 @@ export default function ReviewPage() {
           {submitting ? 'Submitting…' : (rating ? 'Submit review' : 'Pick a rating to continue')}
         </button>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 12, textAlign: 'center' }}>
-          One-time link — once submitted, it can't be used again.
+          One-time link - once submitted, it can't be used again.
         </div>
       </form>
     </Wrap>

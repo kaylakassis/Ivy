@@ -39,8 +39,8 @@ export default async function handler(req, res) {
 
     // Resolve the user → clients-row in the invite's workspace. Prefer
     // an existing row (matched by user_id, then by email if verified).
-    // Email match requires verified email — same SECURITY rule as
-    // myClientIds — so a stranger can't claim invites against someone
+    // Email match requires verified email - same SECURITY rule as
+    // myClientIds - so a stranger can't claim invites against someone
     // else's known email.
     let client = (await sql`
       SELECT id FROM clients

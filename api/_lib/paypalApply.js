@@ -1,11 +1,11 @@
 // Shared PayPal webhook apply-logic. Used by both the platform-level
-// webhook (api/webhooks/paypal/index.js — the one PayPal actually delivers
+// webhook (api/webhooks/paypal/index.js - the one PayPal actually delivers
 // to, since PayPal Commerce supports a single app-level webhook URL) and
 // the legacy per-workspace route (api/webhooks/paypal/[workspaceId].js).
 //
-// All writes are workspace-scoped and idempotent so a webhook retry — or
+// All writes are workspace-scoped and idempotent so a webhook retry - or
 // the synchronous capture path in paypal-return.js calling applyPayment
-// directly — can't double-apply.
+// directly - can't double-apply.
 import { sql } from './db.js';
 import { computeTotals } from './finance.js';
 import { notifyOwnerSafe } from './push.js';
@@ -38,7 +38,7 @@ export async function resolveWorkspaceForPaypalEvent(parsed) {
 // Idempotent: a repeat for an already-paid invoice with the same capture
 // is a no-op; a different capture on an already-paid invoice is ignored.
 export async function applyPaymentToInvoice({ workspaceId, parsed }) {
-  // Booking deposit — invoice_id is synthetic ('bookdep_<bookingId>').
+  // Booking deposit - invoice_id is synthetic ('bookdep_<bookingId>').
   const invoiceId = parsed.metadata?.invoice_id;
   if (invoiceId && String(invoiceId).startsWith('bookdep_')) {
     const bookingId = String(invoiceId).slice('bookdep_'.length);
@@ -65,7 +65,7 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
   if (inv.status === 'paid' && inv.stripe_payment_intent === parsed.paymentId) return 'already-applied';
   if (inv.status === 'paid') {
     // eslint-disable-next-line no-console
-    console.warn('[paypal] invoice', invoiceId, 'already paid by a different capture id — ignoring');
+    console.warn('[paypal] invoice', invoiceId, 'already paid by a different capture id - ignoring');
     return 'already-paid';
   }
 
@@ -73,7 +73,7 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
   // Guard against a partial/under-capture (or currency mismatch) silently
   // flipping the invoice to fully paid. Only settle when the captured
   // amount covers the invoice total (1¢ tolerance for rounding). PayPal
-  // checkout amount is the invoice total — no Stripe-Tax add-on to expect.
+  // checkout amount is the invoice total - no Stripe-Tax add-on to expect.
   const expectedTotal = computeTotals(inv.items, inv.tax_rate, inv.discount).total;
   const underpaid = paidAmountDollars < expectedTotal - 0.01;
 
@@ -116,7 +116,7 @@ export async function applyPaymentToInvoice({ workspaceId, parsed }) {
   `;
   if (upd.rows.length === 0) return 'already-paid';
 
-  // Owner push + client receipt — parity with the Stripe path at
+  // Owner push + client receipt - parity with the Stripe path at
   // /api/webhooks/stripe/[workspaceId].js:482-502. Without these,
   // workspaces taking payment via PayPal saw the invoice flip to paid
   // but got no notification and the customer got no receipt email.
@@ -153,7 +153,7 @@ export async function applyRefundToInvoice({ workspaceId, parsed }) {
   const inv = invRows[0];
   if (!inv) {
     // eslint-disable-next-line no-console
-    console.warn('[paypal] no invoice matches capture', parsed.paymentId, '— ignoring refund');
+    console.warn('[paypal] no invoice matches capture', parsed.paymentId, '- ignoring refund');
     return 'invoice-not-found';
   }
   const refundAmount = Math.round(Number(parsed.amountCents || 0)) / 100;
@@ -207,7 +207,7 @@ export async function applyPaypalSubscriptionEvent({ parsed }) {
   `).rows[0];
 
   if (!existing) {
-    // We only create on a positive (active) signal — a cancel/past_due for a
+    // We only create on a positive (active) signal - a cancel/past_due for a
     // subscription we never recorded is a no-op (likely created out-of-band).
     if (parsed.subStatus !== 'active') return 'unknown-subscription';
     const md = parsed.metadata || {};

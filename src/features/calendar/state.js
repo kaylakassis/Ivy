@@ -22,14 +22,14 @@ export const EMPTY_CAL = {
   bookings: [],
 };
 
-// useCalendar(window?) — `window` is { from, to } in YYYY-MM-DD.
-// Without it the hook loads everything (legacy behavior — matches
+// useCalendar(window?) - `window` is { from, to } in YYYY-MM-DD.
+// Without it the hook loads everything (legacy behavior - matches
 // existing callers that don't yet pass a window). With it the hook
 // loads only bookings + blocks inside the window, which is the
 // scaling-safe default at workspace sizes that have thousands of
 // past bookings.
 //
-// Loaded set is replaced on window change — we don't accumulate
+// Loaded set is replaced on window change - we don't accumulate
 // across windows because the calendar UI only renders the
 // currently-visible window. A user navigating month-to-month will
 // see one fetch per month change; a workspace with 1000+ bookings
@@ -81,7 +81,7 @@ export function useCalendar(window) {
   }, []);
 
   // addBlock accepts the optional event fields (blocksBookings,
-  // color, notes, allDay) — defaults preserve legacy callers that
+  // color, notes, allDay) - defaults preserve legacy callers that
   // just pass date/start/end/label.
   const addBlock = useCallback(async ({
     date, startMin, endMin, label,

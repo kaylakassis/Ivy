@@ -1,6 +1,6 @@
 // End-to-end smoke test for the new email lifecycle flows. Verifies that
 // each new helper actually runs its DB queries + reaches the transport
-// without throwing. Outbound mail is muted by an invalid Resend key —
+// without throwing. Outbound mail is muted by an invalid Resend key -
 // what we're proving is that the prefs gate + DB lookups + email
 // composition all work; the Resend call returns a non-muted error
 // (transport failure), which is the correct path.
@@ -105,17 +105,17 @@ async function teardown() {
 // rejection (which we expect, since RESEND_API_KEY is fake) is the
 // correct path through the code.
 async function testCancellation() {
-  console.log('\n[1] notifyBookingCancellation — owner direction');
+  console.log('\n[1] notifyBookingCancellation - owner direction');
   await notifyBookingCancellation({ workspaceId, bookingId, source: 'owner' });
   assert(true, 'returns without throwing');
 
-  console.log('\n[2] notifyBookingCancellation — client direction');
+  console.log('\n[2] notifyBookingCancellation - client direction');
   await notifyBookingCancellation({ workspaceId, bookingId, source: 'client' });
   assert(true, 'returns without throwing');
 }
 
 async function testReschedule() {
-  console.log('\n[3] notifyBookingRescheduled — client direction');
+  console.log('\n[3] notifyBookingRescheduled - client direction');
   await notifyBookingRescheduled({
     workspaceId, bookingId,
     oldDateISO: yesterday, oldStartMin: 540, oldEndMin: 600,
@@ -194,7 +194,7 @@ async function testCronOverdue() {
   assert(res.statusCode === 200, 'cron returns 200');
   assert(res.body?.scanned >= 1, `cron scanned ≥ 1 invoice (saw ${res.body?.scanned})`);
 
-  // Re-run — should now find 0 (last_overdue_reminder_at was just set).
+  // Re-run - should now find 0 (last_overdue_reminder_at was just set).
   await handler(req, { ...res, body: undefined });
 }
 

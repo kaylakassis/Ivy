@@ -23,7 +23,7 @@ export default async function handler(req, res) {
     if (req.method === 'GET') {
       // Tolerate partial schema: a missing `clients` table or column
       // returns an empty list instead of 500ing the whole Clients tab.
-      // Email lookup is exact-match — used by AddBookingModal to find
+      // Email lookup is exact-match - used by AddBookingModal to find
       // the matching client without making the owner pick from a list.
       try {
         const email = (req.query.email || '').toString().trim().toLowerCase();
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
         // ceiling of 5000, plus a `hasMore` flag so a future UI can
         // wire pagination without a contract break. Existing callers
         // (current Clients.jsx, AddBookingModal etc) keep working
-        // unchanged — they just see "your first 1000 clients" which
+        // unchanged - they just see "your first 1000 clients" which
         // is fine for every workspace until the UI catches up.
         const requestedLimit = Number.parseInt(req.query.limit, 10);
         const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
@@ -133,7 +133,7 @@ export default async function handler(req, res) {
         sendClientInvite({ workspaceId, clientId: rows[0].id });
       }
       // Fire workflows: client_created always; lead_created when stage='lead'.
-      // Awaited so action results land before we respond — keeps the
+      // Awaited so action results land before we respond - keeps the
       // "Just-now triggered" run visible in the workflow runs list when
       // the owner refreshes.
       try {

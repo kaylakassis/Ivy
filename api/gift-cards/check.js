@@ -3,9 +3,9 @@
 //
 // Returns a public summary (balance + last4 + status) for a gift
 // card the visitor wants to apply to a booking. Rate-limited per
-// IP — anonymous brute-force protection.
+// IP - anonymous brute-force protection.
 //
-// Never returns the full code (we don't have it — only the hash).
+// Never returns the full code (we don't have it - only the hash).
 // Never reveals card existence to other workspaces.
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';

@@ -1,4 +1,4 @@
-// FINANCE — QuickBooks-lite for Ivy OS
+// FINANCE - QuickBooks-lite for Ivy OS
 // Store + FinanceView shell + Dashboard + Bank/Card accounts.
 // Invoicing, templates, recurring → src/invoices.jsx
 
@@ -21,7 +21,7 @@ function defaultFinance() {
           { id: 'li1', desc: 'Four-session coaching pack', qty: 4, rate: 120 },
           { id: 'li2', desc: 'Intake assessment', qty: 1, rate: 80 },
         ],
-        taxRate: 0, discount: 0, notes: "Thanks for the commitment — let's do great work together.",
+        taxRate: 0, discount: 0, notes: "Thanks for the commitment - let's do great work together.",
         status: 'paid', sentAt: now - D * 12, paidAt: now - D * 3, paidMethod: 'card',
         activity: [
           { ts: now - D * 12, kind: 'sent', text: 'Sent to Ana Beltrán' },
@@ -47,7 +47,7 @@ function defaultFinance() {
         clientId: 'c5', clientName: 'Leah Park', clientEmail: 'leah@example.com',
         templateId: 'tpl-classic',
         issueDate: now - D * 21, dueDate: now - D * 7,
-        items: [{ id: 'li1', desc: 'Studio membership — March', qty: 1, rate: 180 }],
+        items: [{ id: 'li1', desc: 'Studio membership - March', qty: 1, rate: 180 }],
         taxRate: 0, discount: 0, notes: '',
         status: 'overdue', sentAt: now - D * 21,
         activity: [
@@ -151,11 +151,11 @@ function generateTxns(now) {
     ['Utilities', 'Internet', 89, 'expense', 'bank-1'],
   ];
   const incomeCats = [
-    ['Income', 'Payment — Ana Beltrán',     560,  'income',  'bank-1'],
-    ['Income', 'Payment — Rina Okafor',     960,  'income',  'bank-1'],
-    ['Income', 'Payment — Chris Mendes',    240,  'income',  'bank-1'],
-    ['Income', 'Payment — Walk-in session', 140,  'income',  'bank-1'],
-    ['Income', 'Payment — Marcus Lee',      320,  'income',  'bank-1'],
+    ['Income', 'Payment - Ana Beltrán',     560,  'income',  'bank-1'],
+    ['Income', 'Payment - Rina Okafor',     960,  'income',  'bank-1'],
+    ['Income', 'Payment - Chris Mendes',    240,  'income',  'bank-1'],
+    ['Income', 'Payment - Walk-in session', 140,  'income',  'bank-1'],
+    ['Income', 'Payment - Marcus Lee',      320,  'income',  'bank-1'],
   ];
   let day = 0;
   for (let i = 0; i < 40; i++) {
@@ -306,7 +306,7 @@ function FinanceView({ direction }) {
               Finance
             </h2>
             <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-              Invoices, recurring billing, and connected accounts — all in one place.
+              Invoices, recurring billing, and connected accounts - all in one place.
             </div>
           </div>
         </div>
@@ -587,7 +587,7 @@ function IvyInsights({ kpi, store }) {
     if (overdue.length) {
       insights.push({
         tone: 'warn',
-        text: `${overdue.length} invoice${overdue.length === 1 ? '' : 's'} overdue (${money(overdue.reduce((s,i) => s+invoiceTotal(i), 0))}). I can send friendly reminders — one tap.`,
+        text: `${overdue.length} invoice${overdue.length === 1 ? '' : 's'} overdue (${money(overdue.reduce((s,i) => s+invoiceTotal(i), 0))}). I can send friendly reminders - one tap.`,
       });
     }
   }
@@ -595,7 +595,7 @@ function IvyInsights({ kpi, store }) {
     .filter(i => i.status === 'paid' && Date.now() - i.paidAt < 30 * 86400e3)
     .reduce((s, i) => s + invoiceTotal(i), 0);
   if (subRev > 0) {
-    insights.push({ tone: 'ok', text: `You collected ${money(subRev)} in the last 30 days — ${subRev > 1000 ? 'strong month' : 'steady flow'}.` });
+    insights.push({ tone: 'ok', text: `You collected ${money(subRev)} in the last 30 days - ${subRev > 1000 ? 'strong month' : 'steady flow'}.` });
   }
   const biggestCat = {};
   store.transactions.filter(t => t.type === 'expense').forEach(t => {
@@ -607,7 +607,7 @@ function IvyInsights({ kpi, store }) {
   }
   if (store.recurring.some(r => r.active)) {
     const activeRec = store.recurring.filter(r => r.active).length;
-    insights.push({ tone: 'info', text: `You have ${activeRec} recurring invoice${activeRec===1?'':'s'} scheduled — automated revenue.` });
+    insights.push({ tone: 'info', text: `You have ${activeRec} recurring invoice${activeRec===1?'':'s'} scheduled - automated revenue.` });
   }
   if (insights.length === 0) {
     insights.push({ tone: 'info', text: 'Not enough data yet. Send your first invoice or connect an account to begin.' });
@@ -819,7 +819,7 @@ function ConnectBankModal({ store, update, onClose }) {
         {step === 'pick' && (
           <>
             <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
-              We use bank-level encryption. Your login is sent securely to your institution — Ivy OS never stores it.
+              We use bank-level encryption. Your login is sent securely to your institution - Ivy OS never stores it.
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
               {banks.map(b => (
@@ -928,7 +928,7 @@ function ConnectBankModal({ store, update, onClose }) {
   );
 }
 
-/* ============ INVOICES / TEMPLATES / RECURRING — imported from invoices.jsx ============ */
+/* ============ INVOICES / TEMPLATES / RECURRING - imported from invoices.jsx ============ */
 function InvoicesTab()  { return <window.InvoicesModule.List />; }
 function TemplatesTab() { return <window.InvoicesModule.Templates />; }
 function RecurringTab() { return <window.InvoicesModule.Recurring />; }

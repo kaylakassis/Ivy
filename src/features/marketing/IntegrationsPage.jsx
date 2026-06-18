@@ -10,7 +10,7 @@ import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 const LIVE = [
   { name: 'Stripe',           icon: 'Dollar',   sub: 'The full toolkit: card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
-  { name: 'Tap to Pay',       icon: 'Phone',    sub: 'Take in-person card payments straight from your phone (iPhone & Android). No reader required — and Stripe Terminal hardware works too.' },
+  { name: 'Tap to Pay',       icon: 'Phone',    sub: 'Take in-person card payments straight from your phone (iPhone & Android). No reader required - and Stripe Terminal hardware works too.' },
   ...(FLAGS.squarePaypal ? [
     { name: 'Square',         icon: 'Receipt',  sub: 'Connect via OAuth for hosted checkout + refunds, paid into your Square account.' },
     { name: 'PayPal',         icon: 'Dollar',   sub: 'Hosted checkout (incl. Venmo) + refunds, paid into your PayPal account.' },

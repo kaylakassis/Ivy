@@ -17,7 +17,7 @@ export function serializePackage(row) {
   };
 }
 
-// Client-scoped package — what the client (and the booking flow) sees.
+// Client-scoped package - what the client (and the booking flow) sees.
 // Adds the friendly status label + days-until-expiry for the UI.
 export function serializeClientPackage(row, opts = {}) {
   if (!row) return null;
@@ -58,7 +58,7 @@ import { sql } from './db.js';
 // Atomically decrement a credit. Returns:
 //   { ok: true,  exhausted: bool, creditsRemaining: int }  on success
 //   { ok: false }                                          when the
-//     package isn't valid for the consumption — caller should refuse
+//     package isn't valid for the consumption - caller should refuse
 //     the booking or fall back to standard pay-per-session billing.
 //
 // `exhausted` is true when this decrement was the one that flipped the

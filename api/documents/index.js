@@ -24,7 +24,7 @@ export default async function handler(req, res) {
         // (or absent) returns instances. ServicesDrawer's intake picker
         // calls with templates=1.
         const templatesOnly = req.query.templates === '1';
-        // Hard cap at 200 — workspaces with 1000+ docs/templates would
+        // Hard cap at 200 - workspaces with 1000+ docs/templates would
         // otherwise OOM the function on the JSON serialize step. Matches
         // the pattern used by /api/clients, /api/invoices, /api/messages.
         // Future: add cursor pagination if owners legitimately need
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
       const body = await readBody(req);
       const name = (body.name || '').toString().trim();
       const kind = body.kind || 'written';
-      // Accept empty string on create — the new UX is "name the doc,
+      // Accept empty string on create - the new UX is "name the doc,
       // then write the body in the editor that opens." Truncate at
       // 200k for written docs; pass through null/empty for upload-kind
       // docs that don't have HTML at all.

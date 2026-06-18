@@ -1,4 +1,4 @@
-// Test for #17 — scheduled publish (now reachable + correct under #7).
+// Test for #17 - scheduled publish (now reachable + correct under #7).
 //   • PUT can SET and CLEAR a schedule (the old COALESCE blocked clearing).
 //   • The cron promotes scheduled content into the published_* snapshot so
 //     it actually goes live (publicSite reads published_*).

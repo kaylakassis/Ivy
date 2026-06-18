@@ -4,7 +4,7 @@
 // completed steps, skipped steps) so an owner who closes the tab in
 // the middle of setup picks up exactly where they left off.
 //
-// Form data (business name, services, etc.) is NOT stored here — each
+// Form data (business name, services, etc.) is NOT stored here - each
 // step writes to its real table via existing endpoints (PATCH /calendar,
 // PUT /calendar/services, etc.). This endpoint is purely about
 // wizard navigation.
@@ -123,14 +123,14 @@ export default async function handler(req, res) {
         const workspaceId = await ensureWorkspace(user.id);
         const w = await sql`SELECT business_type FROM workspaces WHERE id = ${workspaceId}`;
         businessType = w.rows[0]?.business_type || 'both';
-      } catch { /* missing column on a cold deploy — fall back to default */ }
+      } catch { /* missing column on a cold deploy - fall back to default */ }
       return ok(res, { state: normalizeState(raw), businessType });
     }
 
     if (req.method === 'PATCH') {
       const body = await readBody(req);
       // Read existing first so a partial PATCH only updates the keys
-      // the client supplied — closing the tab between two PATCHes
+      // the client supplied - closing the tab between two PATCHes
       // shouldn't blow away the half they already committed.
       const current = normalizeState(await readState(user.id));
 
@@ -162,7 +162,7 @@ export default async function handler(req, res) {
           businessType = body.businessType;
         } catch (e) {
           // Don't fail the wizard PATCH on a schema-laggy cold deploy
-          // — the column will heal on next refresh.
+          // - the column will heal on next refresh.
           // eslint-disable-next-line no-console
           console.error('[onboarding/state] business_type write failed:', e.message);
         }

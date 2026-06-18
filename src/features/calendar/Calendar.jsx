@@ -22,7 +22,7 @@ import MonthView from './MonthView.jsx';
 
 const VIEW_KEY = 'Ivy OS:calendar:view';
 
-// Calendar sync (Google + iCal) is TABLED for now — we want owners using the
+// Calendar sync (Google + iCal) is TABLED for now - we want owners using the
 // Ivy OS calendar as the source of truth. The drawer, endpoints, and adapter
 // code are all kept intact; this flag just hides the entry points. Flip to
 // true to bring the feature back.
@@ -107,7 +107,7 @@ export default function Calendar() {
         setSelectedEvent({ ...b, kind: 'booking' });
         setDrawer('event');
       }
-      // Strip the param either way — if the booking isn't in the list
+      // Strip the param either way - if the booking isn't in the list
       // (cancelled, on a different visible range), we don't want the
       // effect to keep re-firing on every cal.bookings change.
       params.delete('booking');
@@ -126,7 +126,7 @@ export default function Calendar() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, cal?.bookings]);
 
-  // Force day view on phones — the 7-column week grid is illegible on narrow
+  // Force day view on phones - the 7-column week grid is illegible on narrow
   // screens. Users can still pick week/month from the toggle if they want.
   useEffect(() => {
     if (isMobile && view === 'week') setView('day');
@@ -289,7 +289,7 @@ export default function Calendar() {
                   setSelectedEvent({ kind: 'block', date: todayISO, startMin: 12 * 60, endMin: 13 * 60, label: '', blocksBookings: true });
                   setDrawer('event');
                 } else {
-                  // services / staff / packages / availability / share / sync —
+                  // services / staff / packages / availability / share / sync -
                   // the action id matches the drawer key. (Sync + Packages
                   // used to be listed but unhandled → tapping did nothing.)
                   setDrawer(action);
@@ -331,7 +331,7 @@ export default function Calendar() {
             </button>
           )}
           <button className="btn btn-outline" onClick={() => {
-            // The block editor doubles as a general event editor —
+            // The block editor doubles as a general event editor -
             // owner picks "Block bookings" or "Reminder only" inside.
             // Default values open it in block mode for backwards
             // compatibility with the old "Block time" button.
@@ -347,7 +347,7 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* Legend (week + day views only — month uses chips inline) */}
+      {/* Legend (week + day views only - month uses chips inline) */}
       {view !== 'month' && (
         <div style={{ display: 'flex', gap: 14, fontSize: 12, color: 'var(--muted)', marginBottom: 12 }}>
           <Legend color="var(--accent)" label="Booked"/>
@@ -356,7 +356,7 @@ export default function Calendar() {
         </div>
       )}
 
-      {/* Staff filter pills — only renders when the workspace has at
+      {/* Staff filter pills - only renders when the workspace has at
           least one staff member. Hidden otherwise to avoid noise for
           solo-practitioner workspaces. */}
       {staffList.length > 0 && (
@@ -655,7 +655,7 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
                   </div>
                 );
               })}
-              {/* bookings — use the service's color when set so the
+              {/* bookings - use the service's color when set so the
                   owner can tell apart different service types at a
                   glance (yoga vs massage vs consultation). Falls back
                   to the workspace accent for legacy services. */}
@@ -690,7 +690,7 @@ function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
 // Bottom-sheet menu used by the mobile toolbar to expose Services /
 // Availability / Share / Block-time without crowding the header row.
 function ActionSheet({ onClose, onPick }) {
-  // Services + Packages relocated to /finance — removed from this
+  // Services + Packages relocated to /finance - removed from this
   // sheet so the mobile "+" menu only surfaces calendar-scoped actions.
   const items = [
     { id: 'staff',        label: 'Staff',        icon: 'Users' },

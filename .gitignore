@@ -9,7 +9,7 @@ dist
 .vite
 dev.log
 
-# Local skill aliases for other AI tools — actual skills live in .agents/skills/
+# Local skill aliases for other AI tools - actual skills live in .agents/skills/
 # (those are tracked). Keep .claude/ (this project's tool) tracked too.
 .adal/
 .augment/

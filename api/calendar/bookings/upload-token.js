@@ -47,7 +47,7 @@ export default async function handler(req, res) {
         addRandomSuffix: true,
         tokenPayload: JSON.stringify({ workspaceId, kind: 'completion' }),
       }),
-      onUploadCompleted: async () => { /* no-op — bound on the next /complete POST/PATCH */ },
+      onUploadCompleted: async () => { /* no-op - bound on the next /complete POST/PATCH */ },
     });
     return ok(res, result);
   } catch (err) {

@@ -1,7 +1,7 @@
 // Deploy-step schema migration.
 //
 // Wired into vercel.json's buildCommand so the full migration runs ONCE
-// per deploy, before the new functions go live — instead of lazily on the
+// per deploy, before the new functions go live - instead of lazily on the
 // first request that cold-starts. Keeps the ~80-statement DDL pass off the
 // hot path.
 //
@@ -23,7 +23,7 @@
 import { runSchemaMigration } from '../api/_lib/ensureSchema.js';
 
 if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
-  console.warn('[migrate] DATABASE_URL not set — skipping deploy-step migration (frontend-only build).');
+  console.warn('[migrate] DATABASE_URL not set - skipping deploy-step migration (frontend-only build).');
   process.exit(0);
 }
 

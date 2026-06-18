@@ -53,7 +53,7 @@ export default async function handler(req, res) {
     `;
     const row = rows[0];
     if (!row?.totp_secret_encrypted) {
-      return badRequest(res, "Start enrollment first — your secret isn't on file yet.");
+      return badRequest(res, "Start enrollment first - your secret isn't on file yet.");
     }
 
     let secretBase32;

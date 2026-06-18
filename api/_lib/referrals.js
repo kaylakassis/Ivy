@@ -3,7 +3,7 @@
 // Every business owner can set a referral code in Settings. A new user
 // who signs up with ?ref=<code> is attributed to that owner. When the
 // referred user becomes a paying owner, the referrer earns one free
-// month — applied as a credit to their Stripe customer balance so
+// month - applied as a credit to their Stripe customer balance so
 // their next invoice is reduced by a month's price. Stacks: N
 // conversions = N free months.
 //
@@ -57,7 +57,7 @@ export async function setCode(userId, raw) {
   try {
     const aff = await sql`SELECT id FROM affiliates WHERE UPPER(code) = ${code} LIMIT 1`;
     if (aff.rows.length > 0) return { ok: false, error: 'That code is taken. Try another.' };
-  } catch { /* affiliates table missing on a partial schema — ignore */ }
+  } catch { /* affiliates table missing on a partial schema - ignore */ }
 
   await sql`
     INSERT INTO referral_codes (user_id, code)
@@ -96,7 +96,7 @@ export async function recordReferralSignup({ referredUserId, rawCode }) {
 // Called when a user (the REFERRED one) first becomes paying. Stamps
 // converted_at on their referral, then attempts to reward the referrer
 // (only succeeds if the referrer is currently an active paying owner
-// with a Stripe customer). Safe to call on every payment_succeeded —
+// with a Stripe customer). Safe to call on every payment_succeeded -
 // it no-ops once converted_at is already set.
 export async function markReferralConverted(referredUserId) {
   if (!referredUserId) return { converted: false };
@@ -167,18 +167,18 @@ export async function grantPendingReferralCredits(referrerUserId) {
       });
       granted++;
     } catch (err) {
-      // Stripe credit failed AFTER we claimed the row — roll the claim
+      // Stripe credit failed AFTER we claimed the row - roll the claim
       // back so a later sweep retries it.
       // eslint-disable-next-line no-await-in-loop
       const rolledBack = await sql`UPDATE referrals SET rewarded_at = NULL, reward_cents = NULL WHERE id = ${row.id}`
         .then(() => true)
         .catch((rbErr) => {
           // If BOTH the credit AND its rollback fail, the row is stuck
-          // marked-rewarded with no credit applied — a silently-lost
+          // marked-rewarded with no credit applied - a silently-lost
           // free month. This must be loud so it can be reconciled by
           // hand; do NOT swallow it.
           // eslint-disable-next-line no-console
-          console.error(`[referrals] CRITICAL: rollback failed for referral ${row.id} — reward marked granted but no Stripe credit applied:`, rbErr.message);
+          console.error(`[referrals] CRITICAL: rollback failed for referral ${row.id} - reward marked granted but no Stripe credit applied:`, rbErr.message);
           return false;
         });
       // eslint-disable-next-line no-console

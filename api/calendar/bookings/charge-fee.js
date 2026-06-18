@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     if (!b) return badRequest(res, 'Booking not found');
     if (b.fee_charged_amount > 0) return badRequest(res, 'A fee was already charged for this booking');
     if (!b.stripe_customer_id || !b.payment_method_id) {
-      return badRequest(res, 'No card on file for this client — ask them to add one in their portal first.');
+      return badRequest(res, 'No card on file for this client - ask them to add one in their portal first.');
     }
 
     const policyFee = kind === 'late_cancel'
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
       paymentMethodId: b.payment_method_id,
       amountCents: Math.round(amount * 100),
       currency: creds.currency,
-      description: `${kind === 'late_cancel' ? 'Late-cancel' : 'No-show'} fee — ${b.service_name || 'session'}`,
+      description: `${kind === 'late_cancel' ? 'Late-cancel' : 'No-show'} fee - ${b.service_name || 'session'}`,
       metadata: { booking_id: b.id, workspace_id: workspaceId, kind },
       statementDescriptor: kind === 'late_cancel' ? 'LATE CANCEL FEE' : 'NO-SHOW FEE',
       // Stable per-booking key: a booking is fee-charged at most once, so

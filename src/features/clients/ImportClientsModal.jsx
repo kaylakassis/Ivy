@@ -9,7 +9,7 @@
 //   • CRLF or LF line endings
 //   • A header row (case-insensitive match against name/email/stage/notes/source/tags)
 //
-// Existing clients (matched by email) are SKIPPED — never silently overwritten.
+// Existing clients (matched by email) are SKIPPED - never silently overwritten.
 import React, { useMemo, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
@@ -23,7 +23,7 @@ const FIELD_ALIASES = {
   tags:   ['tags', 'tag', 'labels'],
 };
 
-// Order matters — drives the dropdown options in Preview.
+// Order matters - drives the dropdown options in Preview.
 const FIELD_OPTIONS = [
   { value: '',       label: 'Ignore this column' },
   { value: 'name',   label: 'Name' },
@@ -36,7 +36,7 @@ const FIELD_OPTIONS = [
 
 const VALID_STAGES = new Set(['lead', 'active', 'paused']);
 
-// Parses a CSV string into { headers, mapping, records } — records are still
+// Parses a CSV string into { headers, mapping, records } - records are still
 // raw cell arrays so we can re-apply mapping when the user fixes a column.
 // Tolerates the quirks listed at the top of the file.
 function parseCSV(input) {
@@ -78,7 +78,7 @@ function parseCSV(input) {
     for (const [field, aliases] of Object.entries(FIELD_ALIASES)) {
       if (aliases.includes(lower)) return field;
     }
-    return ''; // unknown column — user can override in Preview
+    return ''; // unknown column - user can override in Preview
   });
 
   const records = allRecords.slice(1).map((cells) =>
@@ -307,7 +307,7 @@ function PreviewStep({
     <>
       <p style={{ margin: '0 0 14px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
         Found <strong>{parsed.records.length}</strong> rows.
-        Match each column to a field — anything left as "Ignore" won't be imported.
+        Match each column to a field - anything left as "Ignore" won't be imported.
       </p>
 
       {/* Per-column mapping editor */}
@@ -406,10 +406,10 @@ function PreviewStep({
               <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
                 <td style={td}>{i + 1}</td>
                 <td style={td}>{r.name || <span style={{ color: 'var(--danger)' }}>missing</span>}</td>
-                <td style={td}>{r.email || <span style={{ color: 'var(--muted)' }}>—</span>}</td>
+                <td style={td}>{r.email || <span style={{ color: 'var(--muted)' }}>-</span>}</td>
                 <td style={td}>{VALID_STAGES.has(r.stage) ? r.stage : defaultStage}</td>
                 <td style={{ ...td, maxWidth: 220 }}>
-                  {(r.tags || []).join(', ') || <span style={{ color: 'var(--muted)' }}>—</span>}
+                  {(r.tags || []).join(', ') || <span style={{ color: 'var(--muted)' }}>-</span>}
                 </td>
               </tr>
             ))}
@@ -428,7 +428,7 @@ function PreviewStep({
       </div>
 
       <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.55 }}>
-        Existing clients with the same email will be <strong>skipped</strong> — they won't be overwritten,
+        Existing clients with the same email will be <strong>skipped</strong> - they won't be overwritten,
         so re-importing the same file is safe.
       </div>
 
@@ -455,7 +455,7 @@ function PreviewStep({
   );
 }
 
-// Quote a single CSV cell — wraps in quotes if it contains comma, quote, or
+// Quote a single CSV cell - wraps in quotes if it contains comma, quote, or
 // newline; doubles internal quotes per RFC 4180.
 function csvCell(value) {
   const s = value == null ? '' : String(value);
@@ -523,7 +523,7 @@ function DoneStep({ result, onClose }) {
           color: 'var(--fg-2)', fontSize: 12.5, lineHeight: 1.5,
         }}>
           The {summary.skipped} skipped row{summary.skipped === 1 ? '' : 's'} matched
-          existing client emails. Re-importing the same file later is safe — duplicates
+          existing client emails. Re-importing the same file later is safe - duplicates
           are never overwritten.
         </div>
       )}
@@ -544,7 +544,7 @@ function DoneStep({ result, onClose }) {
               ))}
               {errors.length > 20 && (
                 <li style={{ margin: '6px 0', color: 'var(--muted)', listStyle: 'none' }}>
-                  …and {errors.length - 20} more — download the CSV to see them all.
+                  …and {errors.length - 20} more - download the CSV to see them all.
                 </li>
               )}
             </ul>

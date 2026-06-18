@@ -70,7 +70,7 @@ export default async function handler(req, res) {
     if (req.method === 'POST') {
       // Block writes when the workspace's subscription is suspended
       // (set by api/cron/subscription-dunning after grace period
-      // elapses). Reads still work — owner can see what's there.
+      // elapses). Reads still work - owner can see what's there.
       // Idempotent: client may supply Idempotency-Key. A network
       // retry with the same key replays the cached response instead
       // of creating a duplicate invoice. See api/_lib/idempotency.js.

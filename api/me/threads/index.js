@@ -5,7 +5,7 @@
 //   POST → start (or reuse) a thread with a specific business by clientId.
 //          Returns the upserted thread.
 //
-// All access is filtered through clientPortal.myClientIds — a client can
+// All access is filtered through clientPortal.myClientIds - a client can
 // only ever see / write threads tied to their own client records.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';

@@ -1,6 +1,6 @@
 // Two slim bottom banners driven by src/lib/pwa.js:
-//   • "Update ready"  — a new service worker is waiting; reload to apply.
-//   • "Install"       — the browser offered an install prompt; offer it
+//   • "Update ready"  - a new service worker is waiting; reload to apply.
+//   • "Install"       - the browser offered an install prompt; offer it
 //                       once, then snooze a dismissal so we don't nag.
 import React, { useEffect, useState } from 'react';
 import { applyUpdate, promptInstall, canInstall, isStandalone } from '../lib/pwa.js';

@@ -1,7 +1,7 @@
 // Fixed-bottom 5-slot nav for mobile. Picks the most-used routes; the
 // hamburger drawer covers the rest (Finance, Goals, Rewards, Documents, Website).
 // Super-admins get a 6th slot so the Admin console is reachable without
-// opening the drawer — they tend to bounce in/out of it constantly.
+// opening the drawer - they tend to bounce in/out of it constantly.
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';

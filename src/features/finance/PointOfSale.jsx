@@ -1,5 +1,5 @@
 // In-person quick-sale (Finance → Sell). Tap products into a cart, add
-// ad-hoc items, take cash or issue a pay-link (QR) — inventory updates
+// ad-hoc items, take cash or issue a pay-link (QR) - inventory updates
 // on completion. Built for in-person product sales: searchable picker,
 // optional tax + customer email, today's drawer totals at the top.
 import React, { useMemo, useState, useRef } from 'react';
@@ -36,7 +36,7 @@ export default function PointOfSale() {
     );
   }, [products, search]);
 
-  // Subtotal / tax / total — tax is whatever the cashier typed (or
+  // Subtotal / tax / total - tax is whatever the cashier typed (or
   // 0 when empty; the server falls back to the workspace default).
   const subtotal = cart.reduce((s, x) => s + (Number(x.rate) || 0) * (Number(x.qty) || 0), 0);
   const taxPct = Number(taxRate) || 0;
@@ -74,7 +74,7 @@ export default function PointOfSale() {
         ? { paid: true, receiptEmailed: !!r.receiptEmailed }
         : { payUrl: r.payUrl });
       setCart([]); setClientName(''); setClientEmail('');
-      saleKeyRef.current = null; // success — next sale gets a fresh key
+      saleKeyRef.current = null; // success - next sale gets a fresh key
     } catch (e) {
       setErr(e.message || 'Sale failed'); // keep the key so a retry dedupes
     } finally { setBusy(false); }
@@ -200,9 +200,9 @@ export default function PointOfSale() {
 
         <input value={clientName} onChange={(e) => setClientName(e.target.value)} placeholder="Customer name (optional)" style={inp}/>
         <input value={clientEmail} onChange={(e) => setClientEmail(e.target.value)}
-          type="email" placeholder="Email (optional — send receipt)" style={inp}/>
+          type="email" placeholder="Email (optional - send receipt)" style={inp}/>
         <div style={{ display: 'flex', gap: 8 }}>
-          {[['cash', 'Cash / in person'], ['link', 'Card — pay link / QR']].map(([id, label]) => (
+          {[['cash', 'Cash / in person'], ['link', 'Card - pay link / QR']].map(([id, label]) => (
             <button key={id} onClick={() => setPayment(id)} style={{
               flex: 1, padding: '8px 10px', borderRadius: 8, fontSize: 12.5, cursor: 'pointer',
               border: '1px solid ' + (payment === id ? 'var(--accent)' : 'var(--border)'),
@@ -220,7 +220,7 @@ export default function PointOfSale() {
 
       {result?.paid && (
         <Toast onClose={() => setResult(null)} icon="Check"
-          text={result.receiptEmailed ? 'Paid — receipt emailed.' : 'Paid — sale recorded.'}/>
+          text={result.receiptEmailed ? 'Paid - receipt emailed.' : 'Paid - sale recorded.'}/>
       )}
       {result?.payUrl && (
         <QRCodeModal url={result.payUrl} label="Scan to pay"

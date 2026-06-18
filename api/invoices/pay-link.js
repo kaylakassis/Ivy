@@ -1,14 +1,14 @@
 // POST /api/invoices/pay-link  body: { id }
 //
 // Mints a one-time view token for an invoice and returns the public-pay
-// URL. Used by the "Collect in person" flow — the owner shows the URL
+// URL. Used by the "Collect in person" flow - the owner shows the URL
 // (or a QR rendering of it) to the customer, who pays on their own
 // phone via the existing /invoice/:token page.
 //
 // Differs from /api/invoices/send:
 //   • Doesn't email the recipient. The owner is going to share the link
 //     in person (SMS, AirDrop, QR scan).
-//   • Doesn't change invoice status away from 'draft' — issuing a link
+//   • Doesn't change invoice status away from 'draft' - issuing a link
 //     for an unsent draft is a normal in-person flow ("I just made the
 //     invoice, here's the QR, please pay").
 //   • Returns the raw token URL in the response. /send is server-side
@@ -16,7 +16,7 @@
 //     one who needs it.
 //
 // The token is stored hashed exactly like /send, so this minting
-// invalidates any previous link to the same invoice — last one wins.
+// invalidates any previous link to the same invoice - last one wins.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
     const inv = await fetchOwnedInvoice({ id, workspaceId });
     if (!inv) return badRequest(res, 'Invoice not found');
     if (inv.status === 'paid')   return badRequest(res, 'Invoice already paid');
-    if (inv.status === 'voided') return badRequest(res, 'Invoice voided — restore first');
+    if (inv.status === 'voided') return badRequest(res, 'Invoice voided - restore first');
 
     const rawToken = generateRawToken(32);
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');

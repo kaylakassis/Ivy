@@ -1,5 +1,5 @@
-// DELETE /api/waitlist/:id — owner removes a waitlist entry. Doesn't
-// delete the row (keeps audit trail) — just sets status='cancelled'
+// DELETE /api/waitlist/:id - owner removes a waitlist entry. Doesn't
+// delete the row (keeps audit trail) - just sets status='cancelled'
 // so it stops competing for promotion slots.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

@@ -22,7 +22,7 @@ export default function SectionLibrary({ site, sections, selectedId, onSelect, o
   // site.sections for callers that haven't migrated.
   const list = Array.isArray(sections) ? sections : (site?.sections || []);
 
-  // Catalog filters. Search trumps category — typing narrows the
+  // Catalog filters. Search trumps category - typing narrows the
   // visible tile set regardless of which category pill is active.
   const [q, setQ]             = useState('');
   const [category, setCategory] = useState('all');
@@ -121,7 +121,7 @@ export default function SectionLibrary({ site, sections, selectedId, onSelect, o
         </div>
       </div>
 
-      {/* Section catalog — 2-column grid, scrollable when the list of
+      {/* Section catalog - 2-column grid, scrollable when the list of
           types is long. Now 20+ section types, so we let it grow but
           cap it so the page outline below stays visible. */}
       <div className="scroll" style={{
@@ -174,7 +174,7 @@ export default function SectionLibrary({ site, sections, selectedId, onSelect, o
         </div>
       </div>
 
-      {/* Outline — takes whatever vertical space is left after the
+      {/* Outline - takes whatever vertical space is left after the
           catalog. flex: 1 means it grows to fill but can also shrink
           if needed; minHeight: 0 prevents children from forcing the
           parent to overflow. */}

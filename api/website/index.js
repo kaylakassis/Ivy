@@ -3,9 +3,9 @@
 //   PUT  → upsert (partial) the website row; rejects duplicate handle
 //
 // New schema fields surfaced here:
-//   • pages       — array of page objects (multi-page sites)
-//   • customCss   — owner-supplied CSS injected into the rendered site
-//   • fontPair    — preset id overriding the template's font choice
+//   • pages       - array of page objects (multi-page sites)
+//   • customCss   - owner-supplied CSS injected into the rendered site
+//   • fontPair    - preset id overriding the template's font choice
 //
 // `sections` (legacy single-page) and `pages` (multi-page) coexist for
 // backward compat. If `pages` is empty, the renderer treats `sections`
@@ -38,7 +38,7 @@ function serialize(row) {
   // Unpublished-changes cue: only meaningful once the site is live. True
   // when the draft (sections/pages) differs from the published snapshot.
   // (published_* is copied from the draft on Publish, so they match until
-  // the next edit.) Stable key order — both come from the same source.
+  // the next edit.) Stable key order - both come from the same source.
   const stable = (v) => JSON.stringify(v ?? null);
   const hasUnpublishedChanges = !!row.published_at && (
     stable(row.sections) !== stable(row.published_sections ?? row.sections)
@@ -114,7 +114,7 @@ function sanitizePage(p, idx) {
   const title = String(p.title || 'Untitled').slice(0, 120);
   const sections = Array.isArray(p.sections) ? p.sections : [];
   const out = { id, slug, title, sections, inNav: p.inNav !== false };
-  // Per-page SEO overrides — all optional. We only persist the fields
+  // Per-page SEO overrides - all optional. We only persist the fields
   // when they're set so the page JSON stays compact for older sites.
   if (p.metaTitle)       out.metaTitle       = String(p.metaTitle).slice(0, 200);
   if (p.metaDescription) out.metaDescription = String(p.metaDescription).slice(0, 400);

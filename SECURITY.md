@@ -29,18 +29,18 @@ and uses that workspace_id in every read and write.
 
 ### Public endpoints (intentional)
 
-- `GET /api/website/public/:handle` — serves only published sites
+- `GET /api/website/public/:handle` - serves only published sites
   (`published_at IS NOT NULL`). Returns the chosen template + section content
   the owner explicitly published.
-- `GET /api/calendar/public/:slug` — serves only the slots needed to book.
+- `GET /api/calendar/public/:slug` - serves only the slots needed to book.
   Booking rows are returned with `clientName`, `clientEmail`, and `notes`
   redacted to `null` (`serializeBooking(_, { redactClient: true })`) so a
   visitor can see the times that are taken without learning who took them.
-- `POST /api/calendar/public/:slug` — public booking. Validates the slot is in
+- `POST /api/calendar/public/:slug` - public booking. Validates the slot is in
   the owner's published availability, the service exists in this workspace, and
   the time isn't in the past. Auto-attaches the booking to (or creates) a
   `clients` row for that email.
-- `GET /api/health` — returns a fixed string. No data.
+- `GET /api/health` - returns a fixed string. No data.
 
 ## Authentication
 
@@ -118,14 +118,14 @@ Postgres-backed sliding-window limiter on:
 ## Operator checklist before onboarding real users
 
 - [ ] Generate a fresh, long random `JWT_SECRET` and `ADMIN_SECRET` (≥256 bits each)
-      — `openssl rand -hex 32` for both — and set them in Vercel's project env vars.
+      - `openssl rand -hex 32` for both - and set them in Vercel's project env vars.
       Mark both **Sensitive**. Apply to all environments.
 - [ ] Confirm `RESEND_API_KEY` is set and the sending domain is verified in
       Resend (so password-reset / verification emails land in inboxes, not spam).
 - [ ] In Vercel → Settings → Functions, confirm Node 22 is selected
       (already pinned via `package.json` engines).
 - [ ] Run the migration once (`POST /api/admin/migrate` with the
-      `x-admin-secret` header) — see README.
+      `x-admin-secret` header) - see README.
 - [ ] Open `https://<your-domain>` in a new browser, sign up, and verify you
       receive: (a) the verification email and (b) the password-reset email
       flow if you click "Forgot your password?".

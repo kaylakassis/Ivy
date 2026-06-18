@@ -95,7 +95,7 @@ async function run() {
     await dmSend(authReq({ method: 'POST', cookie: cookieA, query: { id: dmId }, body: { text: 'hi bob' } }), sendR);
     assert(sendR.statusCode === 201, `send → 201 (got ${sendR.statusCode})`);
     // The schema canonicalizes (a,b) so we don't know which UUID is on
-    // which side — derive my-side / their-side from the actual row.
+    // which side - derive my-side / their-side from the actual row.
     const tRow = (await sql`SELECT client_a_id, unread_a, unread_b FROM client_dm_threads WHERE id = ${dmId}`).rows[0];
     const aIsSender = tRow.client_a_id === cA;
     const senderUnread = aIsSender ? Number(tRow.unread_a) : Number(tRow.unread_b);
@@ -121,7 +121,7 @@ async function run() {
     const bView = mkRes();
     await dmOne(authReq({ method: 'GET', cookie: cookieB, query: { id: dmId } }), bView);
     assert(bView.body?.messages?.length === 0, "B no longer sees A's history while blocked");
-    // Unblock — A can send again.
+    // Unblock - A can send again.
     await dmBlock(authReq({ method: 'DELETE', cookie: cookieB, query: { id: dmId } }), mkRes());
     const ok2 = mkRes();
     await dmSend(authReq({ method: 'POST', cookie: cookieA, query: { id: dmId }, body: { text: 'ok thanks' } }), ok2);

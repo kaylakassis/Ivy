@@ -1,4 +1,4 @@
-// GET /marketing-sitemap.xml — XML sitemap for every static marketing
+// GET /marketing-sitemap.xml - XML sitemap for every static marketing
 // page (homepage, /pricing, /blog, /vs/*, /for/*, /security, etc.).
 // Crawlers fetch this to discover the full marketing surface in one go.
 //

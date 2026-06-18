@@ -81,7 +81,7 @@ export default async function handler(req, res) {
       const text = (body.text || '').toString().trim();
       // Voice memos send an empty text (or a transcript) plus an audio
       // attachment. Either text or at least one attachment must be
-      // present — both empty would be a no-op.
+      // present - both empty would be a no-op.
       const rawAttachments = Array.isArray(body.attachments) ? body.attachments : [];
       const attachments = rawAttachments
         .map((a) => ({
@@ -119,7 +119,7 @@ export default async function handler(req, res) {
       `;
       // Push to the client (no-op if they haven't claimed their portal
       // account or haven't enabled push). Awaited because Vercel kills
-      // un-awaited fetches the moment the response is sent — fire-and-
+      // un-awaited fetches the moment the response is sent - fire-and-
       // forget here means the push silently drops on the no-email path.
       await notifyClientSafe({
         clientId: thread.client_id,
@@ -134,7 +134,7 @@ export default async function handler(req, res) {
 
       // Email the client too. Critical for prospects who messaged
       // through the public contact form before claiming an Ivy OS
-      // portal account — without this, owner replies would just sit
+      // portal account - without this, owner replies would just sit
       // in their Ivy OS inbox where the prospect can't see them.
       // For clients with portal accounts the email also acts as a
       // backup channel (push may be disabled / dismissed).

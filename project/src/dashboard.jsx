@@ -1,9 +1,9 @@
-// Dashboard — clean slate. All sections render empty states.
+// Dashboard - clean slate. All sections render empty states.
 
 const { METRICS } = window.IVY_DATA;
 
 function fmtMoney(n, { compact } = {}) {
-  if (n == null) return '—';
+  if (n == null) return '-';
   if (compact && n >= 1000) return '$' + (n/1000).toFixed(n >= 10000 ? 1 : 2).replace(/\.0$/, '') + 'k';
   return '$' + n.toLocaleString('en-US');
 }
@@ -17,7 +17,7 @@ function MetricCard({ k, data, direction }) {
         <Icons.More size={16} stroke="var(--muted)" sw={1.8} />
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-        <span className="metric-value" style={{ fontSize: 38, color: 'var(--muted-2)' }}>—</span>
+        <span className="metric-value" style={{ fontSize: 38, color: 'var(--muted-2)' }}>-</span>
       </div>
       <div style={{ height: 32, borderTop: '1px dashed var(--border)' }} />
     </div>
@@ -55,7 +55,7 @@ function MiniSpark({ values, direction, height = 32 }) {
   );
 }
 
-// ---------- Revenue chart — empty state ----------
+// ---------- Revenue chart - empty state ----------
 function RevenueChart({ direction }) {
   const W = 600, H = 180;
   return (
@@ -64,7 +64,7 @@ function RevenueChart({ direction }) {
         <div>
           <div className="metric-label" style={{ marginBottom: 4 }}>Revenue vs expenses</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 18 }}>
-            <span className="metric-value" style={{ fontSize: 28, color: 'var(--muted-2)' }}>—</span>
+            <span className="metric-value" style={{ fontSize: 28, color: 'var(--muted-2)' }}>-</span>
             <span style={{ fontSize: 12, color: 'var(--muted)' }}>Waiting for data</span>
           </div>
         </div>

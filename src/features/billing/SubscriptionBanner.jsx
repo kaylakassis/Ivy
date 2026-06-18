@@ -4,14 +4,14 @@
 //   • past_due any time             → "Card declined" + Update card (portal)
 //   • suspended                     → "Account suspended" + Update card
 //                                     (the dunning cron flips here after
-//                                     14 days past_due — at that point
+//                                     14 days past_due - at that point
 //                                     write actions return 402; banner
 //                                     stays visible until card updated)
 //
 // Renders nothing otherwise (active sub with healthy headroom, cancelled
 // subs already get the full Paywall, and client-only users have no biz).
 //
-// Action buttons share the Paywall's plumbing — checkout for new subs,
+// Action buttons share the Paywall's plumbing - checkout for new subs,
 // portal for existing customers.
 import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
@@ -60,7 +60,7 @@ export default function SubscriptionBanner() {
         body={<>
           <strong>Account suspended.</strong>{' '}
           <span style={{ color: 'var(--fg-2)' }}>
-            Your subscription is past due. Update your card to restore access — your data is safe.
+            Your subscription is past due. Update your card to restore access - your data is safe.
           </span>
         </>}
         action={<Action busy={busy} err={err} onClick={openPortal} label="Update card"/>}
@@ -74,7 +74,7 @@ export default function SubscriptionBanner() {
         body={<>
           <strong>Card declined.</strong>{' '}
           <span style={{ color: 'var(--fg-2)' }}>
-            Stripe will keep retrying — update your card to avoid losing access.
+            Stripe will keep retrying - update your card to avoid losing access.
           </span>
         </>}
         action={<Action busy={busy} err={err} onClick={openPortal} label="Update card"/>}
@@ -94,7 +94,7 @@ export default function SubscriptionBanner() {
               : `Your free trial ends in ${sub.daysRemaining} days.`}
         </strong>{' '}
         <span style={{ color: 'var(--fg-2)' }}>
-          Subscribe now to keep your business app — the client portal stays free either way.
+          Subscribe now to keep your business app - the client portal stays free either way.
         </span>
       </>}
       action={<Action busy={busy} err={err} onClick={subscribe} label="Subscribe"/>}

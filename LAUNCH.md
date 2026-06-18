@@ -1,4 +1,4 @@
-# Ivy OS — Go-Live Runbook
+# Ivy OS - Go-Live Runbook
 
 The code is launch-ready. This document is the operator checklist to flip
 the app from staging to public. Every step is real; none is optional
@@ -20,7 +20,7 @@ openssl rand -hex 32  # SECRETS_KEY
 npx web-push generate-vapid-keys  # VAPID_PUBLIC_KEY + VAPID_PRIVATE_KEY
 ```
 
-Keep them somewhere safe — you'll never see them again after pasting.
+Keep them somewhere safe - you'll never see them again after pasting.
 
 ## 2 · Vercel project env vars
 
@@ -37,7 +37,7 @@ Preview + Development.
 | `CRON_SECRET` | `openssl rand -hex 32` output | **Vercel cron jobs reject without this** |
 | `SECRETS_KEY` | `openssl rand -hex 32` output | At-rest encryption of provider tokens |
 | `DATABASE_URL` | From Vercel → Storage → Neon | Auto-injected when Neon is linked |
-| `APP_URL` | `https://getivyos.com` (or your domain) | Used in email links — **must be HTTPS** |
+| `APP_URL` | `https://getivyos.com` (or your domain) | Used in email links - **must be HTTPS** |
 | `VITE_APP_URL` | Same as `APP_URL` | Frontend mirror |
 | `STRIPE_SECRET_KEY` | `sk_live_…` | TEST mode shows as a WARN |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4) | Connect platform webhook signing |
@@ -53,10 +53,10 @@ Preview + Development.
 
 | Variable | What breaks without it |
 |---|---|
-| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Push notifications — Ivy nudges, message alerts, payment receipts go email-only |
+| `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` | Push notifications - Ivy nudges, message alerts, payment receipts go email-only |
 | `BLOB_READ_WRITE_TOKEN` | Document uploads, e-signature PDFs, message attachments |
 | `ANTHROPIC_API_KEY` | Ivy falls back to canned mock responses |
-| `SENTRY_DSN` | No error tracking — day-one bugs go unnoticed unless you tail Vercel logs |
+| `SENTRY_DSN` | No error tracking - day-one bugs go unnoticed unless you tail Vercel logs |
 
 **Optional providers** (skip if not using):
 
@@ -76,7 +76,7 @@ curl -X POST https://<your-domain>/api/admin/migrate \
   -H "x-admin-secret: $ADMIN_SECRET"
 ```
 
-Returns `{ "applied": N }`. Idempotent — safe to re-run after every
+Returns `{ "applied": N }`. Idempotent - safe to re-run after every
 deploy. The schema is designed to be applied repeatedly with
 `IF NOT EXISTS` everywhere.
 
@@ -87,7 +87,7 @@ In **Stripe Dashboard → Developers → Webhooks → Add endpoint**:
 - **URL:** `https://<your-domain>/api/webhooks/stripe-platform`
 - **Events:**
   - `checkout.session.completed`
-  - `payment_intent.succeeded` (safety net — added in 2026-05)
+  - `payment_intent.succeeded` (safety net - added in 2026-05)
   - `customer.subscription.created`
   - `customer.subscription.updated`
   - `customer.subscription.deleted`
@@ -99,8 +99,8 @@ After saving, click the endpoint and copy the **Signing secret** into
 ## 4a · Subscription billing setup ($49/mo)
 
 The webhook in §4 handles owner-facing payments (the money clients send
-to owners via Stripe Connect). Ivy OS's own subscription — the $49/mo
-that owners pay us — is a separate Product, separate webhook endpoint,
+to owners via Stripe Connect). Ivy OS's own subscription - the $49/mo
+that owners pay us - is a separate Product, separate webhook endpoint,
 separate signing secret.
 
 ### Create the Ivy OS subscription Product
@@ -108,7 +108,7 @@ separate signing secret.
 In **Stripe Dashboard → Products → Add product**:
 
 - **Name:** `Ivy OS Business Platform`
-- **Description:** `All-in-one platform for service businesses — bookings, clients, payments, marketing, Ivy AI.`
+- **Description:** `All-in-one platform for service businesses - bookings, clients, payments, marketing, Ivy AI.`
 - **Pricing:** Recurring · **$49.00 USD** · billed **monthly**.
 - Save. Open the product, copy the `price_…` id from the Pricing
   section, paste it into `IVY_STRIPE_PRICE_ID` in Vercel.
@@ -122,7 +122,7 @@ this is on.)
 
 ### Add the subscription webhook endpoint
 
-**Stripe Dashboard → Developers → Webhooks → Add endpoint** — this is
+**Stripe Dashboard → Developers → Webhooks → Add endpoint** - this is
 a *second* endpoint, separate from the §4 one.
 
 - **URL:** `https://<your-domain>/api/webhooks/billing`
@@ -137,7 +137,7 @@ a *second* endpoint, separate from the §4 one.
 
 Save. Copy the new endpoint's **Signing secret** into
 `IVY_BILLING_WEBHOOK_SECRET` in Vercel (mark Sensitive). This is a
-**different** secret than `STRIPE_WEBHOOK_SECRET` from §4 — Stripe
+**different** secret than `STRIPE_WEBHOOK_SECRET` from §4 - Stripe
 issues one signing secret per endpoint URL, so the two webhook handlers
 each need their own. If you reuse the §4 secret here, the subscription
 webhook will reject every event with "signature verification failed."
@@ -177,7 +177,7 @@ The response includes `ok: true` and `blockers: 0` when you're ready.
 ## 6 · Live smoke test (last gate)
 
 1. Sign up with a real email on `https://<your-domain>`. Confirm the
-   verification email arrives in the **inbox** (not spam — if it's in
+   verification email arrives in the **inbox** (not spam - if it's in
    spam, your Resend sending domain isn't fully warmed; ride it out a
    few days or set up SPF/DKIM properly).
 2. Click "Forgot password," confirm the reset email lands.
@@ -196,7 +196,7 @@ If everything passes, you're live.
 - Tail Vercel function logs for `[api] server error:` entries.
 - If `SENTRY_DSN` is set, watch the Sentry project for any first
   occurrences.
-- Watch the **Readiness** tab daily for the first week — env-var drift
+- Watch the **Readiness** tab daily for the first week - env-var drift
   is the most common silent failure.
 
 ## Rollback

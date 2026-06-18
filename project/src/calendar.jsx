@@ -498,7 +498,7 @@ function ShareDrawer({ cal, shareUrl, onChangeSlug, onChangeName, onClose }) {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Anyone with the link can see your available slots and book — they can't see your other bookings, clients, or notes.
+        Anyone with the link can see your available slots and book - they can't see your other bookings, clients, or notes.
         As clients book and you update your availability, the page updates in real time.
       </div>
 

@@ -1,6 +1,6 @@
 // Tests the public-booking fixes:
 //   • slotsForDate hides past times + honors minimum advance notice
-//   • the booking POST validates START alignment (not duration) — so a
+//   • the booking POST validates START alignment (not duration) - so a
 //     45-min service on a 30-min grid books at a valid start (the bug in
 //     the screenshot), and enforces past + lead-time server-side.
 //
@@ -43,7 +43,7 @@ async function run() {
   const weekOut = new Date(Date.now() + 7 * 24 * 3600 * 1000);
   assert(slotsForDate(cal(24), weekOut, svc).some((s) => s.available), 'a week out is bookable under a 24h notice');
 
-  console.log('\n[2] booking POST — start alignment (the screenshot bug) + notice/past enforcement');
+  console.log('\n[2] booking POST - start alignment (the screenshot bug) + notice/past enforcement');
   const tag = `bn-${Date.now()}`;
   const slug = `bn-${Date.now()}`;
   const uid = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
@@ -66,7 +66,7 @@ async function run() {
   const base = { serviceId: sid, clientName: 'Kayla', clientEmail: 'kayla@example.com', smsConsent: false };
   const future = iso(new Date(Date.now() + 5 * 24 * 3600 * 1000));
 
-  // 45-min service, aligned 10:00 start on a 30-min grid — used to 400 with
+  // 45-min service, aligned 10:00 start on a 30-min grid - used to 400 with
   // "Slot must align to 30-minute increments". Should now succeed.
   let r = await post({ ...base, date: future, startMin: 600, endMin: 645 });
   assert([200,201].includes(r.statusCode), `45-min service books at an aligned 10:00 start (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
@@ -88,7 +88,7 @@ async function run() {
   r = await post({ ...base, date: fdate, startMin: 600, endMin: 645 });
   assert([200,201].includes(r.statusCode), `beyond the notice window books fine (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
 
-  console.log('\n[3] start-time spacing — fixed grid vs fit-to-service');
+  console.log('\n[3] start-time spacing - fixed grid vs fit-to-service');
   const calX = (extra) => ({ settings: { availability: fullWeek, slotMinutes: 30, minNoticeHours: 0, ...extra }, blocks: [], bookings: [] });
   const future2 = new Date(Date.now() + 10 * 24 * 3600 * 1000);
   const topHour = slotsForDate(calX({ slotMinutes: 60 }), future2, svc);
@@ -116,7 +116,7 @@ async function run() {
   assert(slot11(0) && slot11(0).available === true, 'no buffer: that same 11:00 slot IS bookable');
 
   // Server enforces the buffer on the public POST. Reset the rate limiter
-  // first — sections [1]–[3] above have already spent this IP's hourly
+  // first - sections [1]–[3] above have already spent this IP's hourly
   // booking quota, and a stale rate_limits table (this DB persists across
   // suites/runs) would otherwise make these POSTs 429 instead of hitting
   // the real 400 buffer/horizon paths. Same guard section [5] uses below.
@@ -133,7 +133,7 @@ async function run() {
   r = await post({ ...base, date: bufDate, startMin: 720, endMin: 765 }); // 12:00, 75 min gap
   assert([200,201].includes(r.statusCode), `server: a slot beyond the buffer books fine (got ${r.statusCode}: ${r.body?.error || 'ok'})`);
 
-  console.log('\n[5] booking horizon — how far ahead clients can book');
+  console.log('\n[5] booking horizon - how far ahead clients can book');
   // slotsForDate: days beyond the horizon are 'Too far'; within stays open;
   // 0 = no limit.
   const calAdv = (days) => ({ settings: { availability: fullWeek, slotMinutes: 30, minNoticeHours: 0, maxAdvanceDays: days }, blocks: [], bookings: [] });
@@ -145,7 +145,7 @@ async function run() {
   assert(slotsForDate(calAdv(0), wayOut, svc).some((s) => s.available), 'no-limit (0): a 40-day-out day is bookable');
 
   // Server enforces the horizon on the public POST. Reset the rate limiter
-  // first — the earlier sections have already spent this IP's hourly quota.
+  // first - the earlier sections have already spent this IP's hourly quota.
   await sql`TRUNCATE rate_limits`;
   await sql`UPDATE calendar_settings SET min_notice_hours = 0, slot_minutes = 30, slot_fit_service = FALSE, buffer_minutes = 0, max_advance_days = 14 WHERE workspace_id = ${wid}`;
   const farDate = iso(new Date(Date.now() + 30 * 24 * 3600 * 1000)); // 30 days > 14-day horizon

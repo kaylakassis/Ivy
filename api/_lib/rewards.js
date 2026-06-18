@@ -108,7 +108,7 @@ export async function rewardKpis(workspaceId) {
 // A reward is "earned" once `current >= threshold`. Each crossing of a multiple
 // of the threshold (10, 20, 30…) is one earned reward. The number actually
 // claimed is `count(reward_redemptions WHERE rule_id = X AND client_id = Y)`
-// — including 'dismissed' rows so the same milestone never re-fires.
+// - including 'dismissed' rows so the same milestone never re-fires.
 // pending = max(0, earnedCount - claimedCount).
 
 function progressQueryForType(type) {
@@ -192,7 +192,7 @@ export async function pendingRewards(workspaceId) {
   const out = [];
   for (const r of rules.rows) {
     const threshold = Number(r.threshold || 0);
-    if (threshold <= 0) continue; // misconfigured — skip
+    if (threshold <= 0) continue; // misconfigured - skip
     const progress = await clientProgressForRule(workspaceId, r);
     for (const p of progress) {
       const earned = Math.floor(p.current / threshold);
@@ -342,7 +342,7 @@ export async function issueReward({
     redemption.notified_at = new Date().toISOString();
 
     // Out-of-band nudge (push + email) so a client who doesn't open the
-    // portal still learns they earned the reward — the in-app thread
+    // portal still learns they earned the reward - the in-app thread
     // message alone went unseen. Best-effort; dynamically imported to
     // avoid an import cycle (rewards.js is pulled in widely). Never block
     // issuance on a notification failure.

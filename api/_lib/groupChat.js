@@ -1,5 +1,5 @@
 // Shared serializers + ownership helpers for the group_chat tables.
-// Parallel to api/_lib/messages.js (1:1 threads) — the two systems
+// Parallel to api/_lib/messages.js (1:1 threads) - the two systems
 // do not share rows.
 import crypto from 'node:crypto';
 import { sql } from './db.js';
@@ -60,11 +60,11 @@ export function serializeGroupMessage(row) {
 // against the supplied active-member list (case-insensitive substring
 // match against client name) AND against the literal token '@owner' /
 // '@everyone'. Returns:
-//   mentions    — [{ clientId, displayName, isOwner }]
-//   broadcastAll — true when @everyone was used
+//   mentions    - [{ clientId, displayName, isOwner }]
+//   broadcastAll - true when @everyone was used
 // Resolution is best-effort: ambiguous matches are dropped (we never
 // fire a notification at the wrong person). The original text is left
-// unchanged — the UI renders @Name as a chip via the saved mention rows.
+// unchanged - the UI renders @Name as a chip via the saved mention rows.
 export function extractMentions(text, activeMembers = []) {
   const out = { mentions: [], broadcastAll: false, isOwnerMention: false };
   if (!text) return out;
@@ -146,7 +146,7 @@ export async function fetchClientGroupMembership({ threadId, clientId, workspace
 
 // Per-message side-effects: bump unread for every member who didn't
 // send, push to them, push to the owner (if a client sent), update
-// thread last_* fields. Best-effort — caller already returned the
+// thread last_* fields. Best-effort - caller already returned the
 // new message to the user; this is fire-and-forget but awaited so
 // Vercel doesn't kill it.
 //
@@ -217,7 +217,7 @@ export async function fanoutGroupMessage({
     });
   }
 
-  // If a client sent, ping the owner too — boost if @owner mentioned.
+  // If a client sent, ping the owner too - boost if @owner mentioned.
   if (senderClientId) {
     notifyOwnerSafe({
       workspaceId, type: 'messages',
@@ -270,7 +270,7 @@ export async function insertGroupMessage({
 
   // Resolve @mentions BEFORE insert so the mention rows + the message
   // row land in one logical send. If active-members weren't supplied,
-  // skip mention extraction silently — owner-side send already loads
+  // skip mention extraction silently - owner-side send already loads
   // members; client-side does too.
   const { mentions, isOwnerMention } = extractMentions(text, activeMembers || []);
 
@@ -340,7 +340,7 @@ export async function loadReactionsForMessages(messageIds, mineKey) {
   return map;
 }
 
-// Sanitize the attachments payload — same shape as messages POST.
+// Sanitize the attachments payload - same shape as messages POST.
 export function cleanAttachments(raw) {
   return (Array.isArray(raw) ? raw : [])
     .map((a) => ({

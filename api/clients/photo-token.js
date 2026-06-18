@@ -6,7 +6,7 @@
 // `photoUrl` (profile pic) or `galleryPhotos: [...]` (gallery array).
 //
 // Mirrors api/calendar/services/photo-token + account/branding-logo-token.
-// One token covers both surfaces — same MIME allow-list, same workspace
+// One token covers both surfaces - same MIME allow-list, same workspace
 // scoping; the caller decides which field on the client to bind the
 // returned URL to.
 import { handleUpload } from '@vercel/blob/client';

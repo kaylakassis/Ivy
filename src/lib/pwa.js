@@ -71,7 +71,7 @@ export function registerServiceWorker() {
     }
   });
 
-  // Reload once the waiting SW takes over — but only when the user
+  // Reload once the waiting SW takes over - but only when the user
   // applied an update, not on the first-install clients.claim().
   navigator.serviceWorker.addEventListener('controllerchange', () => {
     if (!updateApplied || refreshing) return;

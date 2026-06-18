@@ -1,6 +1,6 @@
 // fetch() wrapped with an AbortController timeout. Without this, a slow or
 // hung third-party (Stripe/Twilio/etc.) pins the serverless function until
-// the platform's hard timeout — at scale that exhausts the concurrency pool
+// the platform's hard timeout - at scale that exhausts the concurrency pool
 // and cascades into an outage. Default 8s: comfortably above normal API
 // latency, well under Vercel's function ceiling.
 export async function fetchWithTimeout(url, options = {}, timeoutMs = 8000) {

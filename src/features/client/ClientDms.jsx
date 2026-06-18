@@ -89,7 +89,7 @@ export default function ClientDms() {
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {d.mutedByMe && '🔕 '}
                   {d.blockedByMe && '🚫 '}
-                  {d.lastPreview || '—'}
+                  {d.lastPreview || '-'}
                 </div>
               </button>
             ))}

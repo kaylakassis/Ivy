@@ -19,7 +19,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
   try {
-    // Heavy rate limit — the gate password is a single global secret.
+    // Heavy rate limit - the gate password is a single global secret.
     const ip = getClientIp(req);
     const blocked = await enforce(req, res, [
       { key: `ea-verify:ip:${ip}`, max: 10, windowSeconds: 60 * 60 },
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
       if (result.reason === 'no_password_set') {
         return badRequest(res, 'The gate is enabled but no password has been set yet. Contact the operator.');
       }
-      // Tiny jitter on miss to discourage timing-based enumeration —
+      // Tiny jitter on miss to discourage timing-based enumeration -
       // bcrypt is already constant-time but request-level timing can
       // leak when the early reject paths are short.
       await new Promise((r) => setTimeout(r, 250));

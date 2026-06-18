@@ -1,4 +1,4 @@
-// /admin — operator console for super-admins.
+// /admin - operator console for super-admins.
 // Sub-tabs:
 //   Overview   → analytics counters + churn (configurable date range)
 //   Users      → search/filter/list every user, manage type, reset password,
@@ -33,7 +33,7 @@ const TABS = [
 export default function AdminPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState('overview');
-  // Total unread support messages across all threads — drives the
+  // Total unread support messages across all threads - drives the
   // red badge on the Support tab so the operator can see "someone's
   // waiting for me" at a glance without clicking through. Polled
   // every 30s so a fresh message lights up without manual refresh.
@@ -52,7 +52,7 @@ export default function AdminPage() {
         const total = (s.threads || []).reduce((sum, t) => sum + (t.unreadAdmin || 0), 0);
         setSupportUnread(total);
         setBugsOpen(b.openCount || 0);
-      } catch { /* ignore — badges degrade to zero, not a blocker */ }
+      } catch { /* ignore - badges degrade to zero, not a blocker */ }
     };
     load();
     const id = setInterval(() => { if (!document.hidden) load(); }, 30_000);
@@ -78,7 +78,7 @@ export default function AdminPage() {
       <div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 30 }}>Admin</h2>
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-          Operator console — analytics, users, affiliates, support.
+          Operator console - analytics, users, affiliates, support.
         </div>
       </div>
 
@@ -236,7 +236,7 @@ function BugDetail({ report, onTriage }) {
   const Row = ({ k, v }) => (
     <div style={{ display: 'flex', gap: 10, fontSize: 12.5, padding: '3px 0' }}>
       <div style={{ color: 'var(--muted)', minWidth: 96 }}>{k}</div>
-      <div style={{ flex: 1, wordBreak: 'break-word', color: 'var(--fg)' }}>{v || '—'}</div>
+      <div style={{ flex: 1, wordBreak: 'break-word', color: 'var(--fg)' }}>{v || '-'}</div>
     </div>
   );
   return (
@@ -261,9 +261,9 @@ function BugDetail({ report, onTriage }) {
       <div>
         <Row k="From"        v={report.userEmail || '(deleted user)'}/>
         <Row k="Submitted"   v={new Date(report.createdAt).toLocaleString()}/>
-        <Row k="On page"     v={report.url ? <a href={report.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>{report.url}</a> : '—'}/>
+        <Row k="On page"     v={report.url ? <a href={report.url} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>{report.url}</a> : '-'}/>
         <Row k="Viewport"    v={report.viewport}/>
-        <Row k="App version" v={report.appVersion ? <code>{report.appVersion}</code> : '—'}/>
+        <Row k="App version" v={report.appVersion ? <code>{report.appVersion}</code> : '-'}/>
         <Row k="User agent"  v={report.userAgent}/>
       </div>
 
@@ -366,7 +366,7 @@ function useDateRange(defaultPreset = '30d') {
 
   const range = useMemo(() => {
     const now = new Date();
-    // Safe ISO conversion — `new Date(invalidString).toISOString()` throws
+    // Safe ISO conversion - `new Date(invalidString).toISOString()` throws
     // RangeError. Fall back to the epoch if parsing fails, so a typo in
     // the date picker doesn't crash the admin dashboard.
     const safeIso = (raw, fallback) => {
@@ -453,8 +453,8 @@ function Overview() {
           <div className="grid-auto" style={{ gap: 12 }}>
             <Stat label="Total users"            value={fmtN(data.totals.users)}/>
             <Stat label="New signups (window)"   value={fmtN(data.totals.newSignups)} accent/>
-            <Stat label="Business — Active"      value={fmtN(data.totals.businessActive)}/>
-            <Stat label="Business — Trial"       value={fmtN(data.totals.businessTrial)}/>
+            <Stat label="Business - Active"      value={fmtN(data.totals.businessActive)}/>
+            <Stat label="Business - Trial"       value={fmtN(data.totals.businessTrial)}/>
             <Stat label="Sponsored"              value={fmtN(data.totals.sponsored)}/>
             <Stat label="Affiliates"             value={fmtN(data.totals.affiliate)}/>
             <Stat label="Client-only"            value={fmtN(data.totals.clientOnly)}/>
@@ -502,8 +502,8 @@ function FunnelCard({ funnel }) {
 
   const overallPct = rate(funnel.converted, funnel.signups);
   // The wall-conversion rate is only meaningful when paywallSeen actually
-  // captured the converters — for an inverted (pre-deploy) cohort show
-  // "—" rather than a clamped-but-misleading number.
+  // captured the converters - for an inverted (pre-deploy) cohort show
+  // "-" rather than a clamped-but-misleading number.
   const wallPct = funnel.paywallSeen >= funnel.converted
     ? rate(funnel.converted, funnel.paywallSeen)
     : null;
@@ -528,9 +528,9 @@ function FunnelCard({ funnel }) {
             <Stat label="Signup → paid" value={`${overallPct}%`} accent
               hint={`${fmtN(funnel.converted)} of ${fmtN(funnel.signups)} signups`}/>
             <Stat label="Paywall → paid (wall conversion)"
-              value={wallPct == null ? '—' : `${wallPct}%`}
+              value={wallPct == null ? '-' : `${wallPct}%`}
               hint={wallPct == null
-                ? 'cohort predates the paywall — not measurable'
+                ? 'cohort predates the paywall - not measurable'
                 : `${fmtN(funnel.converted)} of ${fmtN(funnel.paywallSeen)} who hit the wall`}/>
           </div>
 
@@ -581,7 +581,7 @@ function FunnelCard({ funnel }) {
 // Onboarding "About you" answer distributions for the signup cohort in
 // the selected window. Marketing + product intel: goal mix, top
 // challenges, acquisition channels, business stage. PRIVACY: aggregate
-// only — counts per preset option, never per-workspace rows or the
+// only - counts per preset option, never per-workspace rows or the
 // free-text answers (those feed Ivy, not this surface).
 const ONB_LABELS = {
   goal: {
@@ -644,7 +644,7 @@ function DistList({ title, rows, labels }) {
     <div>
       <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 8 }}>{title}</div>
       {total === 0 ? (
-        <div style={{ fontSize: 12, color: 'var(--muted)' }}>—</div>
+        <div style={{ fontSize: 12, color: 'var(--muted)' }}>-</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 7 }}>
           {rows.map((r) => {
@@ -667,11 +667,11 @@ function DistList({ title, rows, labels }) {
   );
 }
 
-// Platform-impact snapshot — marketing-friendly aggregates that the
+// Platform-impact snapshot - marketing-friendly aggregates that the
 // super-admin can copy verbatim into landing copy, pitch decks, or
 // social posts. Window is 90 days (rolling), labeled inline so the
 // number is auditable later. PRIVACY: every value here is an aggregate
-// across the active business base — no individual workspace data
+// across the active business base - no individual workspace data
 // crosses this surface, intentional by design.
 function PlatformImpactCard({ impact }) {
   const [copied, setCopied] = useState(null);
@@ -680,7 +680,7 @@ function PlatformImpactCard({ impact }) {
       await navigator.clipboard.writeText(text);
       setCopied(key);
       setTimeout(() => setCopied((k) => (k === key ? null : k)), 1500);
-    } catch { /* clipboard blocked — silent */ }
+    } catch { /* clipboard blocked - silent */ }
   };
   const snippets = [
     {
@@ -729,7 +729,7 @@ function PlatformImpactCard({ impact }) {
       key: 'rating', label: 'Avg published review rating',
       value: impact.reviews.count > 0
         ? `${impact.reviews.avgRating.toFixed(2)}★`
-        : '—',
+        : '-',
       copy: impact.reviews.count > 0
         ? `Customers leave Ivy OS businesses an average rating of ${impact.reviews.avgRating.toFixed(2)}★ across ${fmtN(impact.reviews.count)} published reviews.`
         : '',
@@ -746,7 +746,7 @@ function PlatformImpactCard({ impact }) {
           <p style={{ margin: '6px 0 0', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
             Window: rolling {impact.lookbackDays} days · {fmtN(impact.bookingsCounted)} bookings counted.
             Click any card to copy a sentence ready for landing copy, pitch decks, or social.
-            Aggregates only — no individual-workspace data is in this view.
+            Aggregates only - no individual-workspace data is in this view.
           </p>
         </div>
       </div>
@@ -785,8 +785,8 @@ function PlatformImpactCard({ impact }) {
   );
 }
 
-// One-click migration trigger. Re-running the schema is idempotent —
-// every statement uses IF NOT EXISTS / IF EXISTS — so this is safe to
+// One-click migration trigger. Re-running the schema is idempotent -
+// every statement uses IF NOT EXISTS / IF EXISTS - so this is safe to
 // click after any deploy that adds columns or tweaks constraints.
 // Lives at the bottom of the Overview tab so it's discoverable without
 // owning a whole tab. Shows last-run state inline so you can tell
@@ -814,7 +814,7 @@ function SystemCard() {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>Database schema</div>
           <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-            Re-applies every CREATE / ALTER in the schema file. Safe to click — every
+            Re-applies every CREATE / ALTER in the schema file. Safe to click - every
             statement is idempotent. Run after any deploy that adds a new column.
           </div>
         </div>
@@ -847,7 +847,7 @@ function SystemCard() {
 
 // Email-delivery health banner. Hidden when everything's healthy. Loud
 // when EMAIL_FROM is the Resend sandbox or the configured sending
-// domain isn't verified — those states mean welcome / verification /
+// domain isn't verified - those states mean welcome / verification /
 // reset / invoice emails will silently fail to deliver to real users.
 function EmailHealthBanner() {
   const [state, setState] = useState({ loading: true });
@@ -1012,10 +1012,10 @@ function UsersTab() {
                 {data.users.map((u) => (
                   <tr key={u.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <Td>{u.email}</Td>
-                    <Td>{u.name || <span style={{ color: 'var(--muted)' }}>—</span>}</Td>
+                    <Td>{u.name || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td><Pill text={u.classification}/></Td>
-                    <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '—'}</Td>
-                    <Td>{u.emailVerifiedAt ? '✓' : <span style={{ color: 'var(--muted)' }}>—</span>}</Td>
+                    <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</Td>
+                    <Td>{u.emailVerifiedAt ? '✓' : <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
                       <button onClick={() => setActive(u)} className="btn btn-ghost"
                         style={{ padding: '4px 10px', fontSize: 12 }}>
@@ -1050,10 +1050,10 @@ function UsersTab() {
   );
 }
 
-// Per-workspace metrics panel — fetched on-demand from /api/admin/
+// Per-workspace metrics panel - fetched on-demand from /api/admin/
 // users/[id]/metrics. Counts + sums only; no client identities, no
 // message text, no document content. The endpoint enforces this on
-// the server side too — we display the privacy disclaimer it returns.
+// the server side too - we display the privacy disclaimer it returns.
 function WorkspaceMetricsPanel({ metrics, err }) {
   if (err) {
     return (
@@ -1094,16 +1094,16 @@ function WorkspaceMetricsPanel({ metrics, err }) {
         padding: '6px 10px', borderRadius: 8, background: 'var(--surface)',
         border: '1px solid var(--border)',
       }}>
-        🔒 {metrics.privacyNote || 'Aggregates only — no client identities or message text shown.'}
+        🔒 {metrics.privacyNote || 'Aggregates only - no client identities or message text shown.'}
       </div>
 
       <div className="metric-label">Workspace</div>
-      <Row k="Created" v={workspace.createdAt ? new Date(workspace.createdAt).toLocaleDateString() : '—'}/>
-      <Row k="Subscription" v={workspace.subscriptionStatus || '—'}/>
+      <Row k="Created" v={workspace.createdAt ? new Date(workspace.createdAt).toLocaleDateString() : '-'}/>
+      <Row k="Subscription" v={workspace.subscriptionStatus || '-'}/>
       {workspace.trialEndsAt && (
         <Row k="Trial ends" v={new Date(workspace.trialEndsAt).toLocaleDateString()}/>
       )}
-      <Row k="Last activity" v={lastActivity ? new Date(lastActivity).toLocaleDateString() : '—'}/>
+      <Row k="Last activity" v={lastActivity ? new Date(lastActivity).toLocaleDateString() : '-'}/>
 
       <div className="metric-label" style={{ marginTop: 6 }}>Counts</div>
       <Row k="Clients" v={fmtN(counts.clients)}/>
@@ -1117,14 +1117,14 @@ function WorkspaceMetricsPanel({ metrics, err }) {
       <Row k="Invoices (all/paid/overdue)" v={`${fmtN(counts.invoices.all)} / ${fmtN(counts.invoices.paid)} / ${fmtN(counts.invoices.overdue)}`}/>
       <Row k="Documents (sent/completed)" v={`${fmtN(counts.documents.all)} / ${fmtN(counts.documents.completed)}`}/>
       <Row k="Workflows (enabled/total)" v={`${fmtN(counts.workflows.enabled)} / ${fmtN(counts.workflows.total)}`}/>
-      <Row k="Reviews" v={counts.reviews.count > 0 ? `${fmtN(counts.reviews.count)} · ${counts.reviews.avgRating.toFixed(2)}★` : '—'}/>
+      <Row k="Reviews" v={counts.reviews.count > 0 ? `${fmtN(counts.reviews.count)} · ${counts.reviews.avgRating.toFixed(2)}★` : '-'}/>
       <Row k="Message threads" v={fmtN(counts.messageThreads)} hint="(counts only)"/>
 
       <div className="metric-label" style={{ marginTop: 6 }}>Revenue</div>
       <Row k="All-time paid" v={fmtMoney(revenue.allTime)}/>
       <Row k="Last 30 days" v={fmtMoney(revenue.last30d)}/>
       <Row k="Last 90 days" v={fmtMoney(revenue.last90d)}/>
-      <Row k="Avg booking value" v={revenue.avgBookingValue > 0 ? fmtMoney(revenue.avgBookingValue) : '—'}/>
+      <Row k="Avg booking value" v={revenue.avgBookingValue > 0 ? fmtMoney(revenue.avgBookingValue) : '-'}/>
 
       <div className="metric-label" style={{ marginTop: 6 }}>Rates</div>
       <Row k="No-show rate" v={`${rates.noShowPct}%`}/>
@@ -1169,8 +1169,8 @@ function CreateUserModal({ onClose, onCreated }) {
         </Field>
         <Field label="Type">
           <select value={userType} onChange={(e) => setUserType(e.target.value)} style={fieldSty}>
-            <option value="business-active">Business — Active (paying)</option>
-            <option value="business-trial">Business — Trial (28-day)</option>
+            <option value="business-active">Business - Active (paying)</option>
+            <option value="business-trial">Business - Trial (28-day)</option>
             <option value="sponsored">Sponsored (comp full access)</option>
             <option value="affiliate">Affiliate (with referral code)</option>
             <option value="regular">Regular (no workspace)</option>
@@ -1199,7 +1199,7 @@ function CreateUserModal({ onClose, onCreated }) {
   );
 }
 
-// Roles surfaced in the modal — five buttons that fully reconcile
+// Roles surfaced in the modal - five buttons that fully reconcile
 // users.user_type AND workspace subscription state on the server side.
 // Order goes from "no perks" → "all perks" so the row reads left-to-right.
 const ROLES = [
@@ -1212,7 +1212,7 @@ const ROLES = [
 
 // Map a user's current state onto a single ROLES.id so the active button
 // gets the primary highlight. Subscription state takes precedence over
-// user_type when classifying — a sponsored user shows "Sponsored" even
+// user_type when classifying - a sponsored user shows "Sponsored" even
 // if their workspace also happens to be 'active'.
 function currentRole(user) {
   if (user.userType === 'sponsored') return 'sponsored';
@@ -1229,7 +1229,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
   const [err, setErr] = useState(null);
   const [info, setInfo] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
-  // Workspace metrics — fetched once when the user expands the panel.
+  // Workspace metrics - fetched once when the user expands the panel.
   // Counts + sums only; PRIVACY: no client identities or message text
   // are returned by /api/admin/users/[id]/metrics by design.
   const [metricsOpen, setMetricsOpen] = useState(false);
@@ -1278,8 +1278,8 @@ function UserDetailModal({ user, onClose, onChanged }) {
   return (
     <Modal title={user.email} onClose={onClose}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
-        <Row k="Name" v={user.name || '—'}/>
-        <Row k="Joined" v={user.createdAt ? new Date(user.createdAt).toLocaleString() : '—'}/>
+        <Row k="Name" v={user.name || '-'}/>
+        <Row k="Joined" v={user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'}/>
         <Row k="Email verified" v={user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString() : 'No'}/>
         <Row k="Classification" v={<Pill text={user.classification}/>}/>
         {user.workspace && (
@@ -1318,12 +1318,12 @@ function UserDetailModal({ user, onClose, onChanged }) {
             {busy === 'Reset link sent' ? '…' : 'Send password-reset link'}
           </button>
           <button disabled={!!busy || !!user.emailVerifiedAt} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
-            title={user.emailVerifiedAt ? 'Already verified — no need to resend.' : 'Send a fresh email-verification link.'}
+            title={user.emailVerifiedAt ? 'Already verified - no need to resend.' : 'Send a fresh email-verification link.'}
             onClick={async () => {
               const r = await action('Verification link sent',
                 () => api.patch(`/admin/users/${user.id}`, { sendVerificationLink: true }),
                 { keepOpen: true });
-              if (r?.alreadyVerified) setInfo('Already verified — no email sent.');
+              if (r?.alreadyVerified) setInfo('Already verified - no email sent.');
             }}>
             {busy === 'Verification link sent' ? '…' : 'Send verification email'}
           </button>
@@ -1418,7 +1418,7 @@ function ConfirmDeleteUser({ email, busy, onCancel, onConfirm }) {
         </div>
         <p style={{ margin: '4px 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           Permanently removes <strong>{email}</strong> and everything tied to
-          their account — workspace, clients, invoices, documents, messages,
+          their account - workspace, clients, invoices, documents, messages,
           Ivy chats, support thread, push subscriptions. There is no undo.
         </p>
         <label style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14, fontSize: 12 }}>
@@ -1615,7 +1615,7 @@ function SupportTab() {
               </span>
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3, overflow: 'hidden', whiteSpace: 'nowrap', textOverflow: 'ellipsis' }}>
-              {t.lastPreview || '—'}
+              {t.lastPreview || '-'}
             </div>
           </button>
         ))}
@@ -1710,8 +1710,8 @@ function SupportConversation({ thread, onChanged }) {
 // ---------- Email blast tab ----------
 
 const BLAST_SEGMENTS = [
-  { id: 'business-active', label: 'Business — Active' },
-  { id: 'business-trial',  label: 'Business — Trial' },
+  { id: 'business-active', label: 'Business - Active' },
+  { id: 'business-trial',  label: 'Business - Trial' },
   { id: 'sponsored',       label: 'Sponsored' },
   { id: 'affiliate',       label: 'Affiliates' },
   { id: 'client-only',     label: 'Client-only' },
@@ -1750,7 +1750,7 @@ function BlastTab() {
       <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
         Sends a one-off email to a filtered segment of your users. Only
         verified addresses receive it (unverified ones bounce and hurt
-        deliverability). The body supports HTML — keep it simple, the
+        deliverability). The body supports HTML - keep it simple, the
         branded shell wraps it for you.
       </div>
 
@@ -1840,7 +1840,7 @@ function AuditTab() {
                     <Td>{new Date(e.createdAt).toLocaleString()}</Td>
                     <Td>{e.actorEmail || <span style={{ color: 'var(--muted)' }}>system</span>}</Td>
                     <Td><code>{e.action}</code></Td>
-                    <Td>{e.targetEmail || <span style={{ color: 'var(--muted)' }}>—</span>}</Td>
+                    <Td>{e.targetEmail || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td><code style={{ fontSize: 11 }}>{JSON.stringify(e.meta)}</code></Td>
                   </tr>
                 ))}
@@ -1869,7 +1869,7 @@ function AuditTab() {
 
 function ExportTab() {
   const get = (kind) => {
-    // Direct download — let the browser handle the CSV save dialog.
+    // Direct download - let the browser handle the CSV save dialog.
     window.location.href = `/api/admin/export?kind=${encodeURIComponent(kind)}`;
   };
   return (
@@ -2122,7 +2122,7 @@ function SettingsTab() {
 // One-click "what does a notification look like" preview. Hits
 // /api/admin/push-test which fires a webpush to the admin's own
 // subscriptions (or, with a selected target user, that user's
-// subscriptions) — so the operator can sanity-check VAPID config,
+// subscriptions) - so the operator can sanity-check VAPID config,
 // browser permission state, the actual rendering, AND show a customer
 // what a real notification looks like in support.
 function PushTestCard() {
@@ -2167,12 +2167,12 @@ function PushTestCard() {
       const r = await api.post('/admin/push-test', body);
       setResult(r);
       if (r?.ok === false && r?.reason === 'not configured') {
-        setErr('Web push is not configured on this deploy — set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT in Vercel and redeploy.');
+        setErr('Web push is not configured on this deploy - set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT in Vercel and redeploy.');
       } else if ((r?.sent || 0) === 0 && (r?.devices?.length || 0) === 0) {
         const who = r?.target?.isSelf ? "This account doesn't" : `${r?.target?.email || 'That user'} doesn't`;
-        setMsg(`Sent to 0 devices. ${who} have any push subscriptions yet — they need to enable notifications in /account first.`);
+        setMsg(`Sent to 0 devices. ${who} have any push subscriptions yet - they need to enable notifications in /account first.`);
       } else if ((r?.sent || 0) === 0) {
-        setMsg(`Sent to 0 of ${r?.devices?.length || 0} devices. All subscriptions appear dead — they may have been cleared just now (see device list below).`);
+        setMsg(`Sent to 0 of ${r?.devices?.length || 0} devices. All subscriptions appear dead - they may have been cleared just now (see device list below).`);
       } else {
         const who = r?.target?.isSelf ? 'your devices' : (r?.target?.email || 'the target user');
         const removed = r?.removed ? `, removed ${r.removed} dead` : '';
@@ -2295,7 +2295,7 @@ function PushTestCard() {
       {msg && <div style={{ fontSize: 12.5, color: 'var(--ok)', lineHeight: 1.5 }}>{msg}</div>}
       {err && <ErrCard msg={err}/>}
 
-      {/* Device list — surfaced after every send so the operator can
+      {/* Device list - surfaced after every send so the operator can
           see exactly which subscriptions were attempted. */}
       {result?.devices && result.devices.length > 0 && (
         <div style={{

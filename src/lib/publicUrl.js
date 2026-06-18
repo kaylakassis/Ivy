@@ -4,7 +4,7 @@
 // Why not just use `window.location.origin`?
 //   The app runs on three URLs in practice:
 //     - https://getivyos.com            (production, marketed)
-//     - https://ivy-pink.vercel.app  (default Vercel deploy URL — same project)
+//     - https://ivy-pink.vercel.app  (default Vercel deploy URL - same project)
 //     - http://localhost:5173           (local dev)
 //   Operators using the second one would otherwise see and copy
 //   "ivy-pink.vercel.app/book/handle" from the wizard / share

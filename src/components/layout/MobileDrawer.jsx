@@ -17,7 +17,7 @@ export default function MobileDrawer({ direction, onClose }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
-  // Match Sidebar's filter — non-super-admins don't see the Admin link.
+  // Match Sidebar's filter - non-super-admins don't see the Admin link.
   const visibleNav = NAV.filter((n) => !n.superAdminOnly || user?.isSuperAdmin);
   // Mirror the floating ViewToggle's URL-based logic so the drawer
   // version of the switcher stays in sync without needing /api/me.

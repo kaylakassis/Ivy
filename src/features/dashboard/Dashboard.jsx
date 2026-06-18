@@ -39,14 +39,14 @@ function fmtTime(min) {
 }
 
 function MetricCard({ label, value, kind, currency, loading, to }) {
-  let display = '—';
+  let display = '-';
   if (!loading && value != null) {
     if (kind === 'money') display = fmtMoney(value, currency);
     else if (kind === 'hours') display = `${value}h`;
     else display = String(value);
   }
   // The whole card links to the relevant section. (The old top-right
-  // three-dots was a dead affordance — tapping it did nothing — so it's
+  // three-dots was a dead affordance - tapping it did nothing - so it's
   // replaced by a real, tappable arrow that takes you to the detail page.)
   return (
     <Link to={to || '/dashboard'} className="card"
@@ -66,15 +66,15 @@ function MetricCard({ label, value, kind, currency, loading, to }) {
 }
 
 // Owner setup checklist. Two phases:
-//   PHASE 1 (required incomplete): "Finish setting up" — accent banner with
+//   PHASE 1 (required incomplete): "Finish setting up" - accent banner with
 //   the next required action front and center. Recommended items also
 //   listed but visually de-emphasized.
 //   PHASE 2 (required complete, recommended outstanding): "Get fully ready
-//   for business" — softer banner. The required cluster is collapsed and
+//   for business" - softer banner. The required cluster is collapsed and
 //   shows a green check-mark. Recommended items are the focus.
 // Phase 3 (everything done) hides the card entirely.
 //
-// Dismissable via "Hide for now" — stamps localStorage with a 7-day TTL
+// Dismissable via "Hide for now" - stamps localStorage with a 7-day TTL
 // so the card disappears for that period and the user isn't nagged on
 // every page load. Re-shows automatically once the TTL expires OR a new
 // item flips back to incomplete.
@@ -141,7 +141,7 @@ function SetupChecklist() {
 
   const headline = phase === 'required'
     ? 'Finish setting up your business'
-    : "You're ready to take bookings — keep going";
+    : "You're ready to take bookings - keep going";
   const sub = phase === 'required'
     ? 'A few quick steps and your booking page is live.'
     : 'Optional but worth it: card payments, a public website, your first client. Each one moves the needle.';
@@ -188,7 +188,7 @@ function SetupChecklist() {
           </div>
           <p style={{ margin: '6px 0 12px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
             {sub}
-            {nextItem && <> Up next — <strong>{(nextItem.label || '').toLowerCase()}</strong>.</>}
+            {nextItem && <> Up next - <strong>{(nextItem.label || '').toLowerCase()}</strong>.</>}
           </p>
           {/* Progress bar */}
           <div style={{
@@ -320,7 +320,7 @@ function HeroBand() {
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, letterSpacing: '0.04em' }}>{dateStr}</div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 36 }}>{greet}.</h2>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 560 }}>
-          Welcome to Ivy OS. Add a client or open Ivy — she'll walk you through setup.
+          Welcome to Ivy OS. Add a client or open Ivy - she'll walk you through setup.
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

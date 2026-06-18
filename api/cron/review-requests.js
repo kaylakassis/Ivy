@@ -1,7 +1,7 @@
-// /api/cron/review-requests — daily at 17:00 UTC.
+// /api/cron/review-requests - daily at 17:00 UTC.
 //
 // Walks bookings that completed 2–14 days ago, haven't been asked yet,
-// don't already have a review, and have a client email — for each,
+// don't already have a review, and have a client email - for each,
 // mints a one-time signed link and emails "How was it?". Submitting
 // the review (or going past the 14-day window) nulls the token hash
 // so it can't be reused.
@@ -29,7 +29,7 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Bookings with an occurrence that COMPLETED in the 2–14 day window —
+// Bookings with an occurrence that COMPLETED in the 2–14 day window -
 // keyed on completion_log entries, NOT b.date. The old
 // `b.date BETWEEN window AND completion_log ? b.date` form only matched
 // single bookings (and a recurring series' very first occurrence), so
@@ -96,7 +96,7 @@ async function handler(req, res) {
           .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
         const link = `${appUrl()}/review/${encodeURIComponent(raw)}`;
 
-        // Pre-rated quick-action links — clicking a star on the email
+        // Pre-rated quick-action links - clicking a star on the email
         // takes them straight to the form with that rating selected.
         const quickStars = [1, 2, 3, 4, 5].map((n) =>
           `<a href="${link}?rating=${n}" style="text-decoration:none;font-size:28px;line-height:1;padding:0 4px;color:#E0B645;">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</a>`
@@ -119,7 +119,7 @@ async function handler(req, res) {
               </p>`,
             ctaText: 'Leave a review',
             ctaUrl: link,
-            footer: `One-time link — once you submit, this email's link won't work again. Your review is published to ${escapeHtml(business)}'s public profile.`,
+            footer: `One-time link - once you submit, this email's link won't work again. Your review is published to ${escapeHtml(business)}'s public profile.`,
             branding,
           }),
         });

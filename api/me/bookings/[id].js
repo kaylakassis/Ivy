@@ -1,4 +1,4 @@
-// DELETE /api/me/bookings/:id — client cancels their own booking.
+// DELETE /api/me/bookings/:id - client cancels their own booking.
 //
 // Authorization: the booking's client_id must be in the user's myClientIds()
 // (i.e. they own the `clients` row this booking is attached to). Walk-ins
@@ -130,14 +130,14 @@ export default async function handler(req, res) {
       const body = await readBody(req);
 
       // Reschedule path: { rescheduleTo: { date, startMin, endMin } }
-      // — moves the booking to a new slot. Server-validates against the
+      // - moves the booking to a new slot. Server-validates against the
       // workspace's availability + active bookings, including a
       // self-exclusion so the booking's own current slot doesn't count
       // as a conflict if the user re-picks the same slot.
       if (body.rescheduleTo && typeof body.rescheduleTo === 'object') {
         if (booking.cancelled_at) return badRequest(res, "Can't reschedule a cancelled booking");
         if (booking.recurrence_rule) {
-          return badRequest(res, 'Recurring bookings can\'t be rescheduled — cancel this occurrence and book a new one.');
+          return badRequest(res, 'Recurring bookings can\'t be rescheduled - cancel this occurrence and book a new one.');
         }
         const r = body.rescheduleTo;
         const newDate  = (r.date || '').toString();
@@ -171,7 +171,7 @@ export default async function handler(req, res) {
           serviceAvailability = sv.rows[0]?.availability || null;
         }
 
-        // getUTCDay() (not getDay()) — matches the other booking paths
+        // getUTCDay() (not getDay()) - matches the other booking paths
         // so a workspace in a non-UTC timezone doesn't see day-of-week
         // drift around midnight UTC.
         const weekday = new Date(newDate + 'T00:00:00Z').getUTCDay();
@@ -191,7 +191,7 @@ export default async function handler(req, res) {
           excludeBookingId: booking.id,
           bufferMin,
         });
-        if (conflict) return badRequest(res, 'That slot is no longer available — pick another time.');
+        if (conflict) return badRequest(res, 'That slot is no longer available - pick another time.');
 
         // Apply the move. Defense-in-depth: re-scope by client_id
         // so a future regression in the ownership SELECT above can't
@@ -230,7 +230,7 @@ export default async function handler(req, res) {
                WHERE id = $1 AND client_id = ANY($2)`,
             [id, myIds, oldDateISO, booking.start_min, booking.end_min],
           ).catch(() => {});
-          return badRequest(res, 'That slot is no longer available — pick another time.');
+          return badRequest(res, 'That slot is no longer available - pick another time.');
         }
 
         await postRescheduleNote({
@@ -293,7 +293,7 @@ export default async function handler(req, res) {
 // cancellation_window_hours AND the service has a non-zero fee AND
 // the client has a card on file, charge the fee off-session. Returns
 // { charged, error } where charged is { amount, paymentIntent } on
-// success or null when nothing was charged. Never throws — the cancel
+// success or null when nothing was charged. Never throws - the cancel
 // must always go through.
 async function maybeChargeLateCancel({ booking, myIds }) {
   try {
@@ -316,7 +316,7 @@ async function maybeChargeLateCancel({ booking, myIds }) {
 
     // "Inside the window" = booking starts before NOW + windowHours.
     // The (date, start_min) pair is wall-clock in the workspace timezone,
-    // so the UTC epoch we compare against has to honor that tz — otherwise
+    // so the UTC epoch we compare against has to honor that tz - otherwise
     // a non-UTC owner sees cancellation-fee math drift by several hours
     // (same root cause as the public-booking notice-window bug).
     const dateISO = booking.date instanceof Date
@@ -326,7 +326,7 @@ async function maybeChargeLateCancel({ booking, myIds }) {
     const workspaceTz = tzRow.rows[0]?.timezone || null;
     const startMs = slotEpochMs(dateISO, booking.start_min, workspaceTz);
     const cutoffMs = Date.now() + windowHours * 60 * 60 * 1000;
-    if (startMs >= cutoffMs) return { charged: null, error: null }; // outside window — free cancel
+    if (startMs >= cutoffMs) return { charged: null, error: null }; // outside window - free cancel
 
     const creds = await loadStripeCreds(booking.workspace_id);
     const pi = await chargeOffSession({
@@ -337,7 +337,7 @@ async function maybeChargeLateCancel({ booking, myIds }) {
       paymentMethodId: row.payment_method_id,
       amountCents: Math.round(feeAmount * 100),
       currency: creds.currency,
-      description: `Late-cancel fee — ${row.service_name || 'session'}`,
+      description: `Late-cancel fee - ${row.service_name || 'session'}`,
       metadata: { booking_id: booking.id, workspace_id: booking.workspace_id, kind: 'late_cancel' },
       statementDescriptor: 'LATE CANCEL FEE',
       // Shares the `fee-<booking>` key so a late-cancel fee can't be
@@ -407,7 +407,7 @@ async function postCancellationNote({ workspaceId, clientId, booking, occurrence
       WHERE id = ${threadId} AND workspace_id = ${workspaceId}
     `;
   } catch {
-    // Best-effort — never fail the cancel because the side-effect threw.
+    // Best-effort - never fail the cancel because the side-effect threw.
   }
 }
 

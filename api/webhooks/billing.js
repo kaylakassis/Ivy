@@ -1,13 +1,13 @@
 // POST /api/webhooks/billing  (public, signature-verified)
-// Ivy OS-side Stripe webhook — handles the subscription lifecycle for
+// Ivy OS-side Stripe webhook - handles the subscription lifecycle for
 // workspaces. Verified against IVY_BILLING_WEBHOOK_SECRET (dedicated
-// secret for this endpoint URL — Stripe issues a separate signing
+// secret for this endpoint URL - Stripe issues a separate signing
 // secret per endpoint, so it cannot share STRIPE_WEBHOOK_SECRET with
 // the Connect platform webhook at /api/webhooks/stripe-platform).
 // Scoped to a single platform Stripe account, NOT the per-workspace
 // customer-Stripe (those land in /api/webhooks/stripe/<workspaceId>).
 //
-// Source of truth for subscription_status — the /api/billing/sync endpoint
+// Source of truth for subscription_status - the /api/billing/sync endpoint
 // is just race-mitigation for the redirect→webhook gap.
 //
 // Body parsing disabled because Stripe-Signature is computed over the raw
@@ -26,7 +26,7 @@ import {
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 // Stripe statuses that count as "this user is paying us". Trialing is
-// excluded — affiliates only earn attribution on real revenue.
+// excluded - affiliates only earn attribution on real revenue.
 const PAYING_STATUSES = new Set(['active', 'past_due']);
 
 export const config = { api: { bodyParser: false } };
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
     }
     return ok(res, { received: true });
   } catch (err) {
-    // Processing threw after we claimed the event — release the claim so
+    // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.
     if (claimedEventId) await releaseProcessed('billing', claimedEventId);
     return serverError(res, err);
@@ -182,7 +182,7 @@ async function onSubscriptionChanged(sub, eventType) {
     }).catch((e) => console.warn('[billing] attribute on sub change failed:', e.message));
   }
 
-  // Cancellation email — fires on customer.subscription.deleted, but
+  // Cancellation email - fires on customer.subscription.deleted, but
   // Stripe will also send subscription.updated with status 'canceled'
   // when cancel_at_period_end fires. Trigger on either signal.
   if (resolvedWorkspaceId && (eventType === 'customer.subscription.deleted' || status === 'canceled')) {
@@ -216,7 +216,7 @@ async function onInvoiceUpcoming(invoice) {
 
 // Renewals: invoice.payment_succeeded refreshes period_end and forces
 // status back to 'active' (in case we'd flagged past_due). Failures move
-// us to past_due so the UI can warn — Stripe's smart retry handles the
+// us to past_due so the UI can warn - Stripe's smart retry handles the
 // actual recovery without us needing to do anything.
 async function onInvoiceEvent(invoice, type, secretKey) {
   const subId = invoice.subscription;
@@ -277,7 +277,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
     // Referral program. The owner of this workspace just paid, so:
     //   1. If THEY were referred, mark their referral converted (and
     //      reward their referrer if that referrer is active).
-    //   2. Sweep any of THEIR OWN pending referral rewards — referrals
+    //   2. Sweep any of THEIR OWN pending referral rewards - referrals
     //      that converted while this owner wasn't yet active now get
     //      their free-month credit applied.
     const ownerId = sub.metadata?.user_id

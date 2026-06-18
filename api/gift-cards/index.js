@@ -1,4 +1,4 @@
-// GET /api/gift-cards — owner-side list of issued cards.
+// GET /api/gift-cards - owner-side list of issued cards.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';

@@ -23,7 +23,7 @@ export function serializeClient(row) {
     lastSeenAt:    row.last_seen_at,
     createdAt:     row.created_at,
     updatedAt:     row.updated_at,
-    // Portal-claim state — surfaces in the owner-side ClientDrawer so the
+    // Portal-claim state - surfaces in the owner-side ClientDrawer so the
     // "Resend invitation" affordance only shows when the client hasn't
     // already claimed their account.
     inviteSentAt:  row.invite_sent_at || null,

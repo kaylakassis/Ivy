@@ -47,7 +47,7 @@ function defaultMsgs() {
         mode: 'one-way',
         unreadBiz: 0, unreadClient: 0,
         messages: [
-          { from: 'biz', text: "Studio hours change next week — closing at 6pm Fri.", ts: Date.now() - 86400e3 * 2 },
+          { from: 'biz', text: "Studio hours change next week - closing at 6pm Fri.", ts: Date.now() - 86400e3 * 2 },
         ],
       },
     },
@@ -139,14 +139,14 @@ function TimestampHeader({ ts }) {
   );
 }
 
-/* Renders every message bubble — including special kind='doc-*' cards. */
+/* Renders every message bubble - including special kind='doc-*' cards. */
 function MessageBubble({ m, perspective }) {
   // perspective: 'biz' (owner view) or 'client'
   const mine = (perspective === 'biz' ? m.from === 'biz' : m.from === 'client');
   const isSystem = m.from === 'system';
   const kind = m.kind;
 
-  // System doc-completed event — centered announcement
+  // System doc-completed event - centered announcement
   if (kind === 'doc-completed') {
     return (
       <div style={{ alignSelf: 'stretch', display: 'flex', justifyContent: 'center', margin: '10px 0' }}>
@@ -165,7 +165,7 @@ function MessageBubble({ m, perspective }) {
     );
   }
 
-  // Doc sent / reminder — card bubble on the "from biz" side
+  // Doc sent / reminder - card bubble on the "from biz" side
   if (kind === 'doc-sent' || kind === 'doc-reminder') {
     const fromBiz = true;
     const bubbleMine = (perspective === 'biz');
@@ -378,11 +378,11 @@ function AttachButton({ onAttach, disabled, compact }) {
         </div>
       )}
 
-      {/* Photo library — images only, multi */}
+      {/* Photo library - images only, multi */}
       <input ref={photoRef} type="file" accept="image/*" multiple
         style={{ display: 'none' }}
         onChange={(e) => { handleFiles(e.target.files, true); e.target.value = ''; }}/>
-      {/* Camera — forces capture on mobile, falls back to file dialog on desktop */}
+      {/* Camera - forces capture on mobile, falls back to file dialog on desktop */}
       <input ref={cameraRef} type="file" accept="image/*" capture="environment"
         style={{ display: 'none' }}
         onChange={(e) => { handleFiles(e.target.files, true); e.target.value = ''; }}/>
@@ -452,7 +452,7 @@ function PendingAttachmentChip({ att, onRemove }) {
 }
 
 /* ============================================================
-   BUSINESS VIEW — Messages
+   BUSINESS VIEW - Messages
    ============================================================ */
 function BusinessMessagesView({ direction }) {
   const [store, update] = useMsgsStore();
@@ -716,7 +716,7 @@ function MessagingSettings({ store, update, onClose }) {
           padding: 12, borderRadius: 10, background: 'var(--surface-2)', border: '1px solid var(--border)',
           fontSize: 12, color: 'var(--muted)', lineHeight: 1.5, marginTop: 8,
         }}>
-          <b style={{ color: 'var(--fg-2)' }}>Registered users only.</b> Messaging works only between Ivy OS accounts —
+          <b style={{ color: 'var(--fg-2)' }}>Registered users only.</b> Messaging works only between Ivy OS accounts -
           your registered clients and other business owners. Unregistered contacts won't appear here.
         </div>
 
@@ -833,11 +833,11 @@ function NewMessageModal({ store, onPick, onClose }) {
 }
 
 /* ============================================================
-   CLIENT VIEW — Messages (replaces old mock)
+   CLIENT VIEW - Messages (replaces old mock)
    ============================================================ */
 function ClientMessagesLive({ direction }) {
   const [store, update] = useMsgsStore();
-  // Client is simulating one of the registered clients for demo purposes — use first registered
+  // Client is simulating one of the registered clients for demo purposes - use first registered
   const me = store.clients.find(c => c.registered) || store.clients[0];
   const [selected, setSelected] = React.useState(me?.id);
   const [input, setInput] = React.useState('');
@@ -929,7 +929,7 @@ function ClientMessagesLive({ direction }) {
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 600, fontSize: 14 }}>Your business</div>
                 <div style={{ fontSize: 11, color: 'var(--muted)' }}>
-                  {mode === 'one-way' ? 'Broadcast — replies disabled by business' : 'Two-way messaging'}
+                  {mode === 'one-way' ? 'Broadcast - replies disabled by business' : 'Two-way messaging'}
                 </div>
               </div>
             </div>

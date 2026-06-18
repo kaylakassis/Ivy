@@ -1,11 +1,11 @@
 // /api/documents/templates
 //   GET  → list all built-in starter templates (no auth body, but
-//          gated by login — the gallery surfaces inside the app).
+//          gated by login - the gallery surfaces inside the app).
 //   POST → clone a built-in template into a fresh draft for the
 //          calling workspace. Body: { templateId, name? }.
 //
 // "Built-in" here means the static set in api/_lib/documentTemplates.js
-// — distinct from user-defined templates (documents.is_template=TRUE)
+// - distinct from user-defined templates (documents.is_template=TRUE)
 // which already roundtrip through /api/documents.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

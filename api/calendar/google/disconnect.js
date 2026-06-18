@@ -2,7 +2,7 @@
 // Clears all Google sync state for the workspace. Best-effort revoke of
 // the refresh_token at Google so our app no longer appears in the user's
 // connected-apps list. The dedicated "Ivy OS Bookings" calendar isn't
-// deleted — owner can keep or remove it themselves.
+// deleted - owner can keep or remove it themselves.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';

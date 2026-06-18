@@ -1,5 +1,5 @@
 // Renders the published site at /site/:handle (home) and
-// /site/:handle/:slug (sub-pages) — reads from
+// /site/:handle/:slug (sub-pages) - reads from
 // /api/website/public/:handle?slug=<slug>.
 import React, { useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
@@ -37,7 +37,7 @@ export default function PublicSite() {
     }
   }, [site, handle]);
 
-  // Pageview beacon — the production live site is server-rendered (each
+  // Pageview beacon - the production live site is server-rendered (each
   // /site/:handle[/:slug] is its own SSR request that already beacons), so
   // this only fires on the CSR fallback path; keyed on the page so a
   // client-side sub-page nav is still counted. Best-effort.
@@ -94,11 +94,11 @@ export default function PublicSite() {
       fontFamily: 'var(--site-font-body)',
     }}>
       {/* Owner-supplied CSS. Scoped within this wrapper by sitting
-          inside the var()'d shell — there's no `scope` attr in CSS yet
+          inside the var()'d shell - there's no `scope` attr in CSS yet
           but the variable wrapper is sufficient for theme isolation. */}
       {site.customCss && <style>{site.customCss}</style>}
 
-      {/* Site-wide nav strip — only renders for multi-page sites. */}
+      {/* Site-wide nav strip - only renders for multi-page sites. */}
       {nav.length > 1 && (
         <PublicNav handle={handle} nav={nav} currentSlug={pageSlug}
           businessName={site.businessName}/>
@@ -115,7 +115,7 @@ export default function PublicSite() {
   );
 }
 
-// Fixed promo bar — mirrors renderStickyCta in siteHtml.js.
+// Fixed promo bar - mirrors renderStickyCta in siteHtml.js.
 function StickyCta({ cfg }) {
   if (!cfg || !cfg.enabled || !cfg.text) return null;
   const pos = cfg.position === 'top' ? { top: 0 } : { bottom: 0 };
@@ -128,7 +128,7 @@ function StickyCta({ cfg }) {
   );
 }
 
-// Exit-intent modal — mirrors renderExitIntent in siteHtml.js. Shows once
+// Exit-intent modal - mirrors renderExitIntent in siteHtml.js. Shows once
 // per session on first upward mouse-exit.
 function ExitIntent({ cfg }) {
   const [show, setShow] = useState(false);

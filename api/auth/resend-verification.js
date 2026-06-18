@@ -1,4 +1,4 @@
-// POST /api/auth/resend-verification — auth-required; resend the verification email
+// POST /api/auth/resend-verification - auth-required; resend the verification email
 // to the current user. No-op if already verified.
 import { requireUser } from '../_lib/auth.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -9,7 +9,7 @@ import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const VERIFY_TTL_MIN = 60 * 24;
 
-// Bump from default 10s — Resend can take 1-3s on a cold path and a
+// Bump from default 10s - Resend can take 1-3s on a cold path and a
 // timeout here would silently kill the email mid-send.
 export const config = { maxDuration: 30 };
 

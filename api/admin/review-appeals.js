@@ -62,7 +62,7 @@ export default async function handler(req, res) {
       }
       const adminId = adminIdFromSession(req);
 
-      // Only act on reviews with an OPEN appeal — guards against double-resolve.
+      // Only act on reviews with an OPEN appeal - guards against double-resolve.
       const newStatus = action === 'approve' ? 'hidden' : null; // deny leaves status untouched
       const newAppeal = action === 'approve' ? 'approved' : 'denied';
       const { rows } = await sql`

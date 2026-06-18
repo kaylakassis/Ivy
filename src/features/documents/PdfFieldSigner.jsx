@@ -3,7 +3,7 @@
 // active. The signer clicks an active box to enter the value
 // (signature pad pop-up, or inline input for date/text/initial).
 //
-// Fields belonging to other signers are shown dimmed + read-only —
+// Fields belonging to other signers are shown dimmed + read-only -
 // gives the current signer context for who else has touched the doc
 // without letting them fill anything that isn't theirs.
 import React, { useState } from 'react';

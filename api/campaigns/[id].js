@@ -1,4 +1,4 @@
-// /api/campaigns/:id  — GET one, PATCH a draft, DELETE.
+// /api/campaigns/:id  - GET one, PATCH a draft, DELETE.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';

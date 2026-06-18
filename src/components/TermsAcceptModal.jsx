@@ -4,7 +4,7 @@
 // with a backdrop they can't click through; the only way out is to
 // accept or sign out.
 //
-// The legal copy here is a short summary — the full Terms + Privacy
+// The legal copy here is a short summary - the full Terms + Privacy
 // open in a new tab via the prominent links. The same explicit
 // language as the signup checkbox is reused so this isn't a softer
 // re-prompt than the original consent.
@@ -21,7 +21,7 @@ export default function TermsAcceptModal() {
 
   // Hide the modal entirely if the user has accepted, isn't signed in,
   // or is on a public-only path. AuthProvider doesn't know the route,
-  // so we mount this from AppShell + ClientShell — the modal itself
+  // so we mount this from AppShell + ClientShell - the modal itself
   // bails when there's nothing to ask.
   if (!user || !mustAcceptTerms) return null;
 
@@ -34,13 +34,13 @@ export default function TermsAcceptModal() {
 
   const out = async () => { await signOut(); window.location.href = '/signin'; };
 
-  // First-acceptance vs re-acceptance — the framing changes slightly.
+  // First-acceptance vs re-acceptance - the framing changes slightly.
   const isFirstTime = !terms?.acceptedVersion;
   const heading = isFirstTime
     ? 'Before you continue: confirm a few things.'
     : 'We updated our Terms.';
   const intro = isFirstTime
-    ? "Your account was created before we tracked acceptance explicitly. Take a minute to confirm the disclaimers below — we want every user to have seen them."
+    ? "Your account was created before we tracked acceptance explicitly. Take a minute to confirm the disclaimers below - we want every user to have seen them."
     : `Our Terms of Service were updated to version ${terms?.currentVersion || 'the current version'}. Take a minute to read what changed and confirm before continuing.`;
 
   return (
@@ -101,8 +101,8 @@ export default function TermsAcceptModal() {
             I have read and agree to the{' '}
             <Link to="/terms" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Terms of Service</Link>{' '}and{' '}
             <Link to="/privacy" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Privacy Policy</Link>,
-            and I understand that Ivy OS — including the Ivy AI coach
-            and every integrated third-party service — provides
+            and I understand that Ivy OS - including the Ivy AI coach
+            and every integrated third-party service - provides
             informational tools only, not financial, legal, tax, or
             other professional advice. I am responsible for my own
             business decisions and outcomes, and I will consult a

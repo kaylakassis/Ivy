@@ -222,7 +222,7 @@ async function createUser(req, res) {
           body: bodyFor(userType, name),
           ctaText: 'Set my password',
           ctaUrl: link,
-          footer: `If you weren't expecting this, you can ignore this email — your account stays put until you set a password.`,
+          footer: `If you weren't expecting this, you can ignore this email - your account stays put until you set a password.`,
         }),
       });
     } catch (err) {
@@ -281,7 +281,7 @@ function subjectFor(type) {
   switch (type) {
     case 'sponsored':       return "You've got a sponsored Ivy OS account";
     case 'affiliate':       return "Welcome to the Ivy OS affiliate program";
-    case 'business-trial':  return "Your Ivy OS account is ready — 28-day trial activated";
+    case 'business-trial':  return "Your Ivy OS account is ready - 28-day trial activated";
     case 'business-active': return "Your Ivy OS account is ready";
     default:                return 'Welcome to Ivy OS';
   }
@@ -293,7 +293,7 @@ function headingFor(type, name) {
 function bodyFor(type, name) {
   switch (type) {
     case 'sponsored':
-      return `<p>You've been given full access to Ivy OS — no subscription
+      return `<p>You've been given full access to Ivy OS - no subscription
         needed. Treat it like the paid version: the calendar, clients,
         invoicing, AI coach, all of it. Set your password below and
         you're in.</p>`;
@@ -304,7 +304,7 @@ function bodyFor(type, name) {
         you in your account.</p>`;
     case 'business-trial':
       return `<p>Your Ivy OS account is set up. You're on a 28-day full-
-        access trial — long enough to actually run a month of bookings
+        access trial - long enough to actually run a month of bookings
         and see if the numbers move. Set your password to get in.</p>`;
     case 'business-active':
       return `<p>Your Ivy OS account is set up and active. Pick a

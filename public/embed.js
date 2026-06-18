@@ -27,7 +27,7 @@
 (function () {
   'use strict';
 
-  // currentScript is the running <script> tag — that's the anchor point
+  // currentScript is the running <script> tag - that's the anchor point
   // we insert the iframe next to. Falls back to last <script> for old
   // browsers that don't expose currentScript.
   var script = document.currentScript;
@@ -42,7 +42,7 @@
   var accent = script.getAttribute('data-accent') || '';
 
   if (!slug) {
-    // Don't litter the page with a broken iframe — log and bail.
+    // Don't litter the page with a broken iframe - log and bail.
     if (window.console) console.warn('[Ivy OS] embed missing data-slug');
     return;
   }

@@ -3,7 +3,7 @@
 // Public, no-auth. Mints a Stripe Checkout subscription session for
 // a membership tier on a given workspace's public booking page.
 // Workspace is resolved by `slug` (NOT trusted from the membership
-// row — same defense-in-depth pattern as /api/calendar/public/contact).
+// row - same defense-in-depth pattern as /api/calendar/public/contact).
 //
 // On checkout success, the workspace's webhook (subscription mode)
 // creates the client_memberships row + links to a Stripe customer.
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
 
     // Fetch + verify the membership belongs to this workspace AND
     // has a Stripe price provisioned. The public flow can't fall
-    // back to "create a price now" — that would let a hostile caller
+    // back to "create a price now" - that would let a hostile caller
     // mint Stripe products on someone else's account.
     const m = await sql`
       SELECT id, name, stripe_price_id, active
@@ -54,7 +54,7 @@ export default async function handler(req, res) {
     if (!tier.active) return badRequest(res, 'This membership is no longer accepting new members.');
     if (!tier.stripe_price_id) return badRequest(res, "This business hasn't finished connecting payments yet.");
 
-    // Memberships are recurring subscriptions — Stripe-only by design
+    // Memberships are recurring subscriptions - Stripe-only by design
     // (Square/PayPal hosted checkout here is one-time). Say so plainly.
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }

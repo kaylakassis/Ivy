@@ -1,4 +1,4 @@
-// Owner-side cohort group chat UI. Sibling of Messages.jsx — they
+// Owner-side cohort group chat UI. Sibling of Messages.jsx - they
 // share a tab toggle in MessagesPage but each owns its own layout.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
@@ -95,7 +95,7 @@ export default function GroupChats() {
                 </div>
                 <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3,
                   whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {g.memberCount ?? '—'} member{g.memberCount === 1 ? '' : 's'}
+                  {g.memberCount ?? '-'} member{g.memberCount === 1 ? '' : 's'}
                   {g.mode === 'broadcast' && ' · Announcements'}
                   {g.lastPreview && ` · ${g.lastPreview}`}
                 </div>
@@ -191,7 +191,7 @@ function GroupConversation({ groupId, onBack, onAddMembers, onArchive, onModeCha
   useEffect(() => { refresh(); }, [refresh]);
 
   // Smart polling: 2s when this tab is focused + visible, 30s when not.
-  // Cheap "real-time" without any new infra — feels instant for the
+  // Cheap "real-time" without any new infra - feels instant for the
   // active reader, near-free for background tabs. SSE with Neon would
   // still need server-side DB polling so the cost trade is identical,
   // and Pusher/Ably are paid. Revisit if active simultaneous members
@@ -561,7 +561,7 @@ function MessageBubble({ msg, parent, onReact, onReply }) {
 }
 
 // Render text with @mention chips highlighted. Mentions are pre-resolved
-// by the backend — we just style any @Name token that matches a mention.
+// by the backend - we just style any @Name token that matches a mention.
 function AttachmentList({ attachments, fromBiz }) {
   if (!attachments || attachments.length === 0) return null;
   return (
@@ -675,8 +675,8 @@ function NewGroupModal({ onClose, onCreated }) {
         </Field>
         <Field label="Mode">
           <select value={mode} onChange={(e) => setMode(e.target.value)} style={inputStyle}>
-            <option value="open">Open — clients see each other + can reply</option>
-            <option value="broadcast">Broadcast — owner posts only</option>
+            <option value="open">Open - clients see each other + can reply</option>
+            <option value="broadcast">Broadcast - owner posts only</option>
           </select>
         </Field>
         <Field label={`Members (${selectedIds.size} selected)`}>

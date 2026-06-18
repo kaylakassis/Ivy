@@ -128,7 +128,7 @@ export async function syncOnBookingUpdated({ workspaceId, bookingId }) {
 
 // Express an absolute instant as wall-clock { date, minutes } in the
 // workspace's IANA timezone. Ivy OS bookings/slots use floating LOCAL
-// time, so a Google event at 2pm Pacific must block the 2pm slot — not
+// time, so a Google event at 2pm Pacific must block the 2pm slot - not
 // 9pm (its UTC hour). When no workspace timezone is configured we fall
 // back to the event's own wall-clock (the time as written before the
 // RFC3339 offset), which is still closer than coercing to UTC.
@@ -148,7 +148,7 @@ function eventLocalParts(rfc3339, timeZone) {
         date: `${parts.year}-${parts.month}-${parts.day}`,
         minutes: hour * 60 + parseInt(parts.minute, 10),
       };
-    } catch { /* bad tz string — fall through to wall-clock parse */ }
+    } catch { /* bad tz string - fall through to wall-clock parse */ }
   }
   const m = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/.exec(String(rfc3339));
   if (m) return { date: `${m[1]}-${m[2]}-${m[3]}`, minutes: (+m[4]) * 60 + (+m[5]) };
@@ -166,7 +166,7 @@ function eventLocalParts(rfc3339, timeZone) {
 // the latest pull. So cancellations in upstream Google free the slot
 // back up automatically.
 //
-// All-day events (DTSTART is a 'date' not 'dateTime') are skipped —
+// All-day events (DTSTART is a 'date' not 'dateTime') are skipped -
 // "out for the day" should block via blocks/availability anyway, and
 // taking a whole day off via a Google all-day event would be surprising.
 export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
@@ -209,7 +209,7 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     if (ev.status === 'cancelled') continue;
     // Don't block on events the user already marked as available.
     if (ev.transparency === 'transparent') { skipped++; continue; }
-    // Skip events from our own dedicated Ivy OS calendar — those are
+    // Skip events from our own dedicated Ivy OS calendar - those are
     // bookings we pushed; double-counting them would block our own
     // future slots from existing bookings.
     if (ev.organizer?.email === r.google_email && ev.calendarId === ivyCalId) continue;
@@ -224,7 +224,7 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     const ep = eventLocalParts(end, r.timezone);
     const dateA = sp.date;
     const dateB = ep.date;
-    // Only mirror events that fall on a single local date — multi-day
+    // Only mirror events that fall on a single local date - multi-day
     // events need expanding into per-day rows. Rare for personal events; punt.
     if (dateA !== dateB) { skipped++; continue; }
 

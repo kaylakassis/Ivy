@@ -19,7 +19,7 @@
 //   • Stripe is gradually retiring Standard OAuth for new platforms.
 //
 // Required env:
-//   STRIPE_SECRET_KEY  sk_xxx — your platform secret (Vercel Stripe
+//   STRIPE_SECRET_KEY  sk_xxx - your platform secret (Vercel Stripe
 //                      integration sets this automatically; falls back to
 //                      IVY_STRIPE_SECRET / STRIPE_PLATFORM_SECRET).
 //   APP_URL            used to build refresh + return URLs.
@@ -39,7 +39,7 @@ export default async function handler(req, res) {
   let step = 'init';
   try {
     step = 'auth';
-    // requireUser 401-JSONs on missing session — but this endpoint is
+    // requireUser 401-JSONs on missing session - but this endpoint is
     // reached via a top-level <a href> click, so a raw JSON response
     // would just appear in the address bar. Sniff the cookie first;
     // if there's no session, redirect to /signin so the user lands
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     step = 'platform-key';
     const platformKey = platformStripeSecret();
     if (!platformKey) {
-      // Top-level navigation lands here — bounce back to /finance (or
+      // Top-level navigation lands here - bounce back to /finance (or
       // /onboarding if they came from the wizard) with an error code
       // in the query string so the React app can render a proper
       // banner instead of a raw API page.
@@ -105,12 +105,12 @@ export default async function handler(req, res) {
     step = 'create-link';
     // Build the onboarding link. refresh_url brings them back here if
     // the link expires; return_url is where Stripe sends them when the
-    // form is submitted (whether or not it's actually complete — we
+    // form is submitted (whether or not it's actually complete - we
     // re-check status server-side in the callback).
     //
     // `?from=onboarding` is propagated through both URLs so the
     // callback can route a wizard user back to /onboarding instead of
-    // /finance — preventing the "I clicked Connect Stripe mid-wizard
+    // /finance - preventing the "I clicked Connect Stripe mid-wizard
     // and got dumped onto the dashboard" UX trap.
     const base = appUrl();
     const fromParam = req.query.from === 'onboarding' ? '?from=onboarding' : '';
@@ -130,7 +130,7 @@ export default async function handler(req, res) {
 
     // Translate known Stripe gotchas into a short error code that the
     // /finance page can map to a proper UI banner. Top-level navigation
-    // lands HERE on failure, so a raw JSON response is the wrong UX —
+    // lands HERE on failure, so a raw JSON response is the wrong UX -
     // bounce back to /finance with the code in the query string instead.
     const raw = (err.message || String(err)).toLowerCase();
     let code = 'unknown';

@@ -1,12 +1,12 @@
-// GET  /api/finance/stripe-status   — read connection state
-// POST /api/finance/stripe-status   — refresh from Stripe API, persist
+// GET  /api/finance/stripe-status   - read connection state
+// POST /api/finance/stripe-status   - refresh from Stripe API, persist
 //
 // GET is the read-only "what's our state" call the Finance UI makes on
 // mount. POST re-fetches the connected account from Stripe and updates
-// the local row — owners hit this when their card says "Pending" and
+// the local row - owners hit this when their card says "Pending" and
 // they've since finished verification on Stripe's side (or vice versa).
 //
-// Never returns the encrypted secrets — only metadata.
+// Never returns the encrypted secrets - only metadata.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
@@ -36,7 +36,7 @@ async function handleGet(req, res) {
 }
 
 // Owner-triggered: re-fetch the connected account from Stripe and
-// flip onboarding_status if charges are now enabled. Idempotent —
+// flip onboarding_status if charges are now enabled. Idempotent -
 // safe to call repeatedly.
 async function handlePost(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -52,7 +52,7 @@ async function handlePost(req, res) {
     `;
     const acctId = rows[0]?.stripe_connect_user_id;
     if (!acctId) {
-      // Nothing to refresh — caller just gets the current (empty) state.
+      // Nothing to refresh - caller just gets the current (empty) state.
       const status = await readStatus(workspaceId);
       return ok(res, status);
     }
@@ -75,9 +75,9 @@ async function handlePost(req, res) {
         WHERE workspace_id = ${workspaceId}
       `;
     } catch (err) {
-      // Stripe rejected the lookup — most often the acct id is from a
+      // Stripe rejected the lookup - most often the acct id is from a
       // different mode (test vs live key). Surface so the UI can show
-      // "your saved acct id doesn't match the current Stripe key —
+      // "your saved acct id doesn't match the current Stripe key -
       // disconnect + reconnect."
       // eslint-disable-next-line no-console
       console.warn('[stripe-status refresh] Stripe rejected:', err.message);
@@ -125,7 +125,7 @@ async function readStatus(workspaceId) {
   // 'flow' tells the UI which webhook architecture is in use:
   //   • account-links: events flow through the single platform webhook
   //     (/api/webhooks/stripe-platform). Owner doesn't need to configure
-  //     anything — no "Webhook signing not set" warning should appear.
+  //     anything - no "Webhook signing not set" warning should appear.
   //   • standard-oauth: legacy path that requires the owner to paste
   //     their workspace's webhook signing secret here.
   const flow = connectedNew ? 'account-links' : 'standard-oauth';

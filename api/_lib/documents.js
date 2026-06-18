@@ -67,7 +67,7 @@ export async function fetchSigners(documentId) {
   return rows;
 }
 
-// Bulk fetch — given a list of doc ids, returns a Map<docId, signers[]>.
+// Bulk fetch - given a list of doc ids, returns a Map<docId, signers[]>.
 // Used by the index list endpoint to avoid N+1 queries.
 export async function fetchSignersBulk(docIds) {
   if (!Array.isArray(docIds) || docIds.length === 0) return new Map();

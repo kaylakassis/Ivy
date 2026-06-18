@@ -5,7 +5,7 @@
 // web we don't want it in the critical-path bundle and (b) on a fresh
 // developer install before `npm install` runs the module may not be
 // present. Capacitor injects a global `Capacitor` object into the WebView
-// at runtime when the app is running natively — that's the cheap probe.
+// at runtime when the app is running natively - that's the cheap probe.
 const cap = () => (typeof window !== 'undefined' ? window.Capacitor : null);
 
 export function isNative() {

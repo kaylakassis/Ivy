@@ -13,7 +13,7 @@ export function noContent(res) {
   return res.status(204).end();
 }
 export function badRequest(res, message = 'Bad request', details) {
-  // Vercel emails on 4xx with almost no context — surface the message + path
+  // Vercel emails on 4xx with almost no context - surface the message + path
   // in the function log so we have something to grep when a regression
   // ships. `req` isn't always passed; we walk the response object's socket
   // for the URL as a fallback.
@@ -39,12 +39,12 @@ export function methodNotAllowed(res, allowed = []) {
 }
 export function serverError(res, err, req) {
   // Log the error server-side (Vercel captures console.error in logs) but
-  // redact PII first — Postgres errors + stacks can carry query params
+  // redact PII first - Postgres errors + stacks can carry query params
   // (emails, phones, tokens) into third-party log aggregators. Sentry's
   // own path redacts separately via monitoring.js.
   // eslint-disable-next-line no-console
   console.error('[api] server error:', redact(err?.stack || err?.message || String(err)));
-  // Best-effort report to Sentry — no-ops if SENTRY_DSN isn't set. We
+  // Best-effort report to Sentry - no-ops if SENTRY_DSN isn't set. We
   // don't await it (Sentry buffers + flushes async) and we don't surface
   // the event id to the client to avoid leaking infra detail.
   try { reportError(err, { req }); } catch { /* ignore */ }

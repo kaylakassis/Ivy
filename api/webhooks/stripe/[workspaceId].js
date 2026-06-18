@@ -1,7 +1,7 @@
 // POST /api/webhooks/stripe/:workspaceId  (public, signature-verified)
 // Stripe posts here when a checkout session for one of the workspace's
 // invoices completes. Each workspace has its own webhook URL with their
-// own signing secret — pasted into Stripe dashboard's webhook config —
+// own signing secret - pasted into Stripe dashboard's webhook config -
 // so verification is scoped to the right tenant by construction.
 //
 // Body parsing is disabled because the Stripe-Signature header is computed
@@ -63,7 +63,7 @@ export default async function handler(req, res) {
     // below skip gracefully.
     let workspaceCreds = null;
     try { workspaceCreds = await loadStripeCreds(workspaceId); }
-    catch { /* no_stripe_connection — non-fatal here */ }
+    catch { /* no_stripe_connection - non-fatal here */ }
 
     const rawBody = await readRawBody(req);
     let event;
@@ -108,18 +108,18 @@ export default async function handler(req, res) {
       try {
         const c = await loadStripeCreds(workspaceId);
         stripeContext = { secretKey: c.secretKey, stripeAccount: c.stripeAccount };
-      } catch { /* no creds available — fall back to pure-DB matching */ }
+      } catch { /* no creds available - fall back to pure-DB matching */ }
       const result = await applySubscriptionState({ workspaceId, sub, stripeContext });
       return ok(res, { received: true, applied: 'membership-state', result });
     }
 
-    // payment_intent.succeeded — safety net for invoice payments.
+    // payment_intent.succeeded - safety net for invoice payments.
     // Stripe fans a single Checkout payment into both events; if
     // checkout.session.completed is dropped for any reason (or the
     // payment came in via chargeOffSession rather than Checkout), the
     // PI event still marks the invoice paid. markInvoicePaid is
     // idempotent so the duplicate from the pair is a no-op. Booking
-    // deposits (invoice_id 'bookdep_…') skip — they ride session.completed.
+    // deposits (invoice_id 'bookdep_…') skip - they ride session.completed.
     if (event.type === 'payment_intent.succeeded') {
       const pi = event.data?.object || {};
       const invoiceId = pi.metadata?.invoice_id;
@@ -151,7 +151,7 @@ export default async function handler(req, res) {
     const invoiceId = session.metadata?.invoice_id;
     const eventWorkspaceId = session.metadata?.workspace_id;
 
-    // Reject events for the wrong workspace — defends against a misconfigured
+    // Reject events for the wrong workspace - defends against a misconfigured
     // owner pasting another workspace's webhook URL into Stripe.
     if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
       return res.status(400).json({ error: 'workspace mismatch' });
@@ -256,7 +256,7 @@ export default async function handler(req, res) {
       }
       // Look up the membership template + the client row by the
       // metadata's client_id (preferred) or by Stripe customer email
-      // fallback — the public sign-up flow may not have a client_id
+      // fallback - the public sign-up flow may not have a client_id
       // yet for first-time buyers.
       const m = await sql`
         SELECT id, name, price_cents, interval FROM memberships
@@ -277,7 +277,7 @@ export default async function handler(req, res) {
         `;
         if (cl.rows.length > 0) clientId = cl.rows[0].id;
         else {
-          // First-time buyer with no clients-row yet — provision one
+          // First-time buyer with no clients-row yet - provision one
           // as a 'lead' so the membership has somewhere to attach.
           const ins = await sql`
             INSERT INTO clients (workspace_id, name, email, stage, source)
@@ -381,7 +381,7 @@ export default async function handler(req, res) {
         )
         RETURNING *
       `;
-      // Email the recipient with the raw code. We never store it —
+      // Email the recipient with the raw code. We never store it -
       // this is the only moment it's available.
       try {
         if (recipEmail) {
@@ -400,7 +400,7 @@ export default async function handler(req, res) {
                 <div style="font-size:28px;font-weight:600;font-family:Fraunces,Georgia,serif;letter-spacing:-0.02em;color:#141414;">$${(amountCents / 100).toFixed(2)}</div>
                 <p style="font-size:13px;color:#85827B;margin-top:18px;">Your code:</p>
                 <div style="font-family:ui-monospace,monospace;font-size:18px;font-weight:600;letter-spacing:0.04em;padding:10px 14px;background:#F6F5F1;border:1px solid #E8E4DC;border-radius:8px;display:inline-block;">${escapeHtml(rawCode)}</div>
-                <p style="font-size:12px;color:#85827B;margin-top:18px;">Apply it on your booking page during checkout. Save this email — the code is shown only here.</p>`,
+                <p style="font-size:12px;color:#85827B;margin-top:18px;">Apply it on your booking page during checkout. Save this email - the code is shown only here.</p>`,
               ctaText: 'Visit booking page',
               ctaUrl: `${process.env.APP_URL || ''}`,
               footer: `Sent by ${escapeHtml(branding.businessName || 'an Ivy OS business')}.`,
@@ -453,7 +453,7 @@ export default async function handler(req, res) {
         `;
         return ok(res, { received: true, marked: 'deposit-paid', bookingId: booking.id });
       }
-      // Fall through if no matching booking — invoice case below.
+      // Fall through if no matching booking - invoice case below.
     }
     if (!invoiceId) return ok(res, { received: true, ignored: 'no metadata' });
 
@@ -465,12 +465,12 @@ export default async function handler(req, res) {
     const inv = invRows[0];
     if (!inv) return ok(res, { received: true, ignored: 'invoice not found' });
 
-    // Idempotent — webhook retries shouldn't double-mark or re-append history.
+    // Idempotent - webhook retries shouldn't double-mark or re-append history.
     if (inv.status === 'paid') {
       return ok(res, { received: true, ignored: 'already paid' });
     }
     if (sessionId && inv.stripe_session_id && inv.stripe_session_id !== sessionId) {
-      // The invoice was paid with a different session — likely the owner
+      // The invoice was paid with a different session - likely the owner
       // generated a new checkout link after this one. Don't mark from a
       // stale event.
       return ok(res, { received: true, ignored: 'session id mismatch' });
@@ -523,7 +523,7 @@ export default async function handler(req, res) {
 
     // Proactive Ivy hand-off: tap the push to land in Ivy with a
     // ready-to-go thank-you prompt. The /ivy?prompt= deep link is
-    // consumed by IvyPro on mount — see the useEffect there.
+    // consumed by IvyPro on mount - see the useEffect there.
     const clientLabel = inv.client_name || 'A client';
     const totalLabel  = fmtMoney(paidAmount);
     const ivyPrompt   = `Draft a short, warm thank-you message for ${clientLabel} who just paid invoice ${inv.number} (${totalLabel}). Then send it as a chat message to them.`;
@@ -539,9 +539,9 @@ export default async function handler(req, res) {
     });
 
     // Client receipt. Use paidAmount (what the buyer was actually
-    // charged, including Stripe-Tax add-on) — not totals.total (which
+    // charged, including Stripe-Tax add-on) - not totals.total (which
     // is the invoice subtotal+tax_rate). For Stripe-Tax-enabled
-    // workspaces the two differ. Best-effort — the race guard above
+    // workspaces the two differ. Best-effort - the race guard above
     // means this only fires when our UPDATE actually flipped status.
     notifyInvoicePaid({
       workspaceId, invoiceId: inv.id, totalAmount: paidAmount, method: 'card',
@@ -549,7 +549,7 @@ export default async function handler(req, res) {
 
     return ok(res, { received: true, marked: 'paid' });
   } catch (err) {
-    // Processing threw after we claimed the event — release the claim so
+    // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.
     if (claimedEventId) await releaseProcessed('stripe', claimedEventId);
     return serverError(res, err);

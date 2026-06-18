@@ -4,7 +4,7 @@
 // card after a session. Companion endpoint /api/me/bookings/[id]/tip
 // powers the client-portal "leave a tip" flow.
 //
-// Either path: idempotent in spirit — if a tip's already been
+// Either path: idempotent in spirit - if a tip's already been
 // charged, returns 400 so the owner doesn't double-bill.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
@@ -56,10 +56,10 @@ export default async function handler(req, res) {
       paymentMethodId: b.payment_method_id,
       amountCents: Math.round(amount * 100),
       currency: creds.currency,
-      description: `Tip — ${b.service_name || 'session'}`,
+      description: `Tip - ${b.service_name || 'session'}`,
       metadata: { booking_id: b.id, workspace_id: workspaceId, kind: 'tip' },
       statementDescriptor: 'TIP',
-      // One tip per booking — stable key dedupes retries / crash-after-
+      // One tip per booking - stable key dedupes retries / crash-after-
       // charge so the client isn't tipped twice.
       idempotencyKey: `tip-${b.id}`,
     });

@@ -56,8 +56,8 @@ export function memRateLimit({ key, max, windowSeconds }) {
 // Trusted client IP. The leftmost x-forwarded-for entry is NOT safe to
 // trust: Vercel appends to a client-supplied XFF, so an attacker can
 // prepend a fake IP to dodge per-IP rate limits (login/signup/booking
-// spam). Prefer the headers Vercel sets at the edge — clients cannot
-// override the x-vercel-* prefix or x-real-ip — and only fall back to the
+// spam). Prefer the headers Vercel sets at the edge - clients cannot
+// override the x-vercel-* prefix or x-real-ip - and only fall back to the
 // LAST x-forwarded-for hop (added by the closest trusted proxy) rather
 // than the spoofable first.
 export function getClientIp(req) {
@@ -78,7 +78,7 @@ export function getClientIp(req) {
 // Super-admins skip the limiter entirely so manual testing / repeated
 // password-reset triggers don't lock them out of their own product.
 // Admin auth is detected via x-admin-secret header OR a session belonging
-// to an allowlisted email — same paths as requireSuperAdmin.
+// to an allowlisted email - same paths as requireSuperAdmin.
 export async function enforce(req, res, limits) {
   if (await isAdminBypass(req)) return false;
 

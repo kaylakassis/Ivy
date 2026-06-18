@@ -6,7 +6,7 @@
 // Each schedule lives forever (or until end_date) and the daily cron
 // (/api/cron/recurring-invoices) materializes a real invoice row at
 // every interval. Editing the schedule template doesn't affect
-// already-issued invoices — they capture a snapshot at issue time.
+// already-issued invoices - they capture a snapshot at issue time.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';

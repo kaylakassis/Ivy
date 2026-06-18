@@ -29,7 +29,7 @@ export function useDocuments() {
   }, []);
 
   // Clone a built-in starter template (api/_lib/documentTemplates.js)
-  // into a fresh draft. Single round trip — the server handles the
+  // into a fresh draft. Single round trip - the server handles the
   // body + field copy. Returns the new doc so callers can immediately
   // open it in the editor.
   const createFromTemplate = useCallback(async (templateId, name) => {

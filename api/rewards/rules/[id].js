@@ -1,4 +1,4 @@
-// /api/rewards/rules/:id  — PATCH / DELETE
+// /api/rewards/rules/:id  - PATCH / DELETE
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';

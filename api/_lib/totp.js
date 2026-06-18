@@ -1,5 +1,5 @@
 // RFC 6238 TOTP (Time-based One-Time Password) implementation using
-// only node:crypto. No external dependency — adds zero bytes to the
+// only node:crypto. No external dependency - adds zero bytes to the
 // function bundle that web-push or stripe wouldn't already cost.
 //
 // What this provides:
@@ -23,7 +23,7 @@
 // existing enrollments.
 import crypto from 'node:crypto';
 
-// RFC 4648 base32 alphabet — uppercase letters A-Z + digits 2-7.
+// RFC 4648 base32 alphabet - uppercase letters A-Z + digits 2-7.
 // Drops the visually-ambiguous 0/O/1/I so manual entry is forgiving.
 const ALPHABET = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ234567';
 
@@ -84,7 +84,7 @@ export function generateTotp(secretBuf, { period = 30 } = {}) {
 }
 
 // drift=1 means we accept the previous, current, or next 30-second
-// window — total tolerance ~90 seconds for clock skew. drift=0 is
+// window - total tolerance ~90 seconds for clock skew. drift=0 is
 // strict; drift=2 is loose.
 export function verifyTotp(secretBuf, code, { period = 30, drift = 1 } = {}) {
   const target = String(code || '').trim();
@@ -111,7 +111,7 @@ export function otpauthUrl({ secretBase32, label, issuer = 'Ivy OS' }) {
 }
 
 // 10 single-use recovery codes for "lost my phone" scenarios.
-// 8 alphanumeric chars (base32 alphabet — no 0/O/1/I confusion),
+// 8 alphanumeric chars (base32 alphabet - no 0/O/1/I confusion),
 // formatted as XXXX-XXXX so they're human-readable + email-friendly.
 // Plaintext is shown to the owner ONCE at enrollment; we store hashes.
 export function generateBackupCodes(count = 10) {

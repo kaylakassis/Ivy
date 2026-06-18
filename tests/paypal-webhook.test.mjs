@@ -1,7 +1,7 @@
 // Tests the PayPal webhook foundation: resolving the owning workspace from
 // an event (by payee merchant id, or by capture id for refunds) and the
 // idempotent apply logic that marks invoices paid / refunded. This is the
-// piece that makes PayPal payments actually register — PayPal Commerce
+// piece that makes PayPal payments actually register - PayPal Commerce
 // delivers to ONE platform webhook, so the handler must resolve the
 // workspace itself rather than rely on a per-workspace URL.
 //

@@ -62,7 +62,7 @@ export async function subscribePush() {
       applicationServerKey: urlBase64ToUint8Array(publicKey),
     });
   }
-  // Strip the keys from the subscription object — PushManager hands them
+  // Strip the keys from the subscription object - PushManager hands them
   // back as ArrayBuffers in the .toJSON() output, base64-encoded.
   const json = sub.toJSON();
   await api.post('/push/subscribe', {

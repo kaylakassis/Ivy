@@ -1,5 +1,5 @@
 // Tests for the post-audit fixes + the hard paywall:
-//   1. Hard-paywall state matrix (isWorkspaceActive) — pure-function
+//   1. Hard-paywall state matrix (isWorkspaceActive) - pure-function
 //      truth table including the fail-closed DB-throws case.
 //   1b. The gate is actually WIRED into every non-exempt owner endpoint
 //       (end-to-end via the migrated ensureActiveWorkspace).
@@ -62,7 +62,7 @@ async function run() {
     const future = new Date(Date.now() + 86400_000);
     const past   = new Date(Date.now() - 86400_000);
 
-    // Pure-function truth table — no DB needed. Drives the gate.
+    // Pure-function truth table - no DB needed. Drives the gate.
     assert(isWorkspaceActive({ subscription_status: 'trialing', trial_ends_at: future }) === true,
       'trialing + future trial_ends_at → active');
     assert(isWorkspaceActive({ subscription_status: 'trialing', trial_ends_at: past }) === false,
@@ -86,7 +86,7 @@ async function run() {
     assert(isWorkspaceActive(null) === false, 'null row → BLOCKED');
 
     console.log('\n[1b] gate is actually WIRED into newly-gated endpoints (end-to-end)');
-    // Suspended owner hitting a gated endpoint must get 402 — proves
+    // Suspended owner hitting a gated endpoint must get 402 - proves
     // the one-liner is in place, not just the helper.
     const suspended = await mkWorkspaceUser({ status: 'suspended', trialEndsAt: future.toISOString() });
     for (const [name, mod] of [
@@ -121,11 +121,11 @@ async function run() {
       assert(r.statusCode !== 402, 'within-trial owner is NOT blocked by the gate (got ' + r.statusCode + ')');
     }
 
-    console.log('\n[1c] ensureActiveWorkspace fails CLOSED — DB error denies, never allows');
+    console.log('\n[1c] ensureActiveWorkspace fails CLOSED - DB error denies, never allows');
     // Synthesize a user that owns NO workspace so ensureWorkspace will
     // try to INSERT. If we then call into ensureActiveWorkspace with a
     // user that lacks a valid id, the helper hits the early 401 branch
-    // — separately covering the deny-by-default invariant.
+    // - separately covering the deny-by-default invariant.
     {
       const r = mockRes();
       const result = await ensureActiveWorkspace(null, { headers: {}, method: 'POST' }, r);

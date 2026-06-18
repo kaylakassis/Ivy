@@ -2,7 +2,7 @@
 //   GET    → fetch a single tier
 //   PATCH  → edit name/description/perks/active/displayOrder. Price &
 //            interval are immutable post-creation because the Stripe
-//            Price is also immutable — to change pricing the owner
+//            Price is also immutable - to change pricing the owner
 //            archives the tier and creates a new one. Returns a 400
 //            if priceCents/interval are passed.
 //   DELETE → "delete" by archiving (active=FALSE) so existing

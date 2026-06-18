@@ -1,6 +1,6 @@
 // POST /api/billing/start-trial
 // Starts (or re-starts) a 28-day trial for the owner's workspace, but only
-// if they're not already in an active state. Idempotent — calling while
+// if they're not already in an active state. Idempotent - calling while
 // already trialing/active is a no-op.
 //
 // Returns the new subscription block in the same shape /api/me uses, so

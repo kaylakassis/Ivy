@@ -4,7 +4,7 @@
 // keyset-paginated query (fetchDueBookings) with a SQL pre-filter that only
 // returns bookings with a reminder beat landing near now.
 //
-// These tests assert the SELECTION + CURSOR behavior directly — i.e. that
+// These tests assert the SELECTION + CURSOR behavior directly - i.e. that
 // due bookings are returned, not-due / ineligible / cancelled ones are
 // excluded, and the keyset cursor pages forward without dropping rows.
 //
@@ -24,7 +24,7 @@ function assert(cond, label) {
 const tag = `br-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
 
 // date (YYYY-MM-DD, UTC) + minutes-of-day for an instant `msFromNow` from
-// now — matches how the query reconstructs a booking's UTC start.
+// now - matches how the query reconstructs a booking's UTC start.
 function dateAndMin(msFromNow) {
   const d = new Date(Date.now() + msFromNow);
   return { date: d.toISOString().slice(0, 10), startMin: d.getUTCHours() * 60 + d.getUTCMinutes() };
@@ -54,7 +54,7 @@ async function run() {
      VALUES ($1, 'R', 60, 1, $2::int[]) RETURNING id`,
     [workspaceId, [120]],
   )).rows[0].id;
-  // Service with NO reminder beats — bookings under it should never appear.
+  // Service with NO reminder beats - bookings under it should never appear.
   const noBeatService = (await sql.query(
     `INSERT INTO services (workspace_id, name, duration_minutes, capacity, reminder_minutes)
      VALUES ($1, 'N', 60, 1, $2::int[]) RETURNING id`,
@@ -93,7 +93,7 @@ async function run() {
   // Find `due`'s sort key, page AFTER it, and confirm `due` is excluded.
   const dueRow = all.find((r) => r.id === due);
   const afterDue = (await fetchDueBookings({ date: dueRow.date, startMin: dueRow.start_min, id: dueRow.id })).rows;
-  assert(!afterDue.some((r) => r.id === due), 'cursor is exclusive — the cursor row itself is not re-returned');
+  assert(!afterDue.some((r) => r.id === due), 'cursor is exclusive - the cursor row itself is not re-returned');
 
   // Paging from the very last row returns nothing (clean termination).
   const lastRow = all[all.length - 1];

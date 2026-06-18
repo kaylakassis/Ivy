@@ -1,5 +1,5 @@
 // iCalendar (RFC 5545) serializer. Just enough of the spec to emit a
-// subscribable feed of Ivy OS bookings — VCALENDAR + VEVENT, with RRULE
+// subscribable feed of Ivy OS bookings - VCALENDAR + VEVENT, with RRULE
 // for recurring bookings and EXDATE for cancelled occurrences.
 //
 // Privacy: SUMMARY uses the service name + the client's first name only.
@@ -13,7 +13,7 @@
 //
 // First line: 75 octets. Continuation lines: 74 octets of content (the
 // leading space makes each 75 wide). We count UTF-8 BYTES and split on
-// code points so a multibyte char (accents, emoji) is never cut in half —
+// code points so a multibyte char (accents, emoji) is never cut in half -
 // strict parsers (Apple Cal, Outlook) reject a line split mid-sequence.
 function fold(line) {
   const byteLen = (s) => Buffer.byteLength(s, 'utf8');
@@ -45,7 +45,7 @@ function escText(s) {
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
-// "20260101T140000Z" — UTC, basic format. We treat Ivy OS booking
+// "20260101T140000Z" - UTC, basic format. We treat Ivy OS booking
 // times as the workspace's local time, but since we don't have per-
 // workspace tz wired through the schema yet, emit floating local time
 // (no Z suffix). Calendar apps will treat that as the user's local
@@ -104,14 +104,14 @@ export function buildICalFeed({ bizName, bookings, services }) {
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     fold(`X-WR-CALNAME:${escText(`Bookings · ${bizName || 'Ivy OS'}`)}`),
-    fold(`X-WR-CALDESC:${escText('Read-only mirror of bookings managed in Ivy OS. Edits, reschedules, and cancellations happen in the Ivy OS app — this feed updates automatically.')}`),
+    fold(`X-WR-CALDESC:${escText('Read-only mirror of bookings managed in Ivy OS. Edits, reschedules, and cancellations happen in the Ivy OS app - this feed updates automatically.')}`),
     'X-PUBLISHED-TTL:PT15M',
   ];
 
   for (const b of (bookings || [])) {
     if (b.cancelled_at) continue;
     const svc = serviceById.get(b.service_id);
-    const summary = `${svc?.name || 'Appointment'} — ${firstName(b.client_name)}`;
+    const summary = `${svc?.name || 'Appointment'} - ${firstName(b.client_name)}`;
     const dtstart = fmtLocal(b.date, b.start_min);
     const dtend   = fmtLocal(b.date, b.end_min);
     const uid     = `${b.id}@getivyos.com`;

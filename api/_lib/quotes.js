@@ -1,4 +1,4 @@
-// Helpers for quotes. Mirrors the invoice helpers — line items use
+// Helpers for quotes. Mirrors the invoice helpers - line items use
 // the same {id, description, quantity, rate} shape so accepting a
 // quote can clone its items into a fresh invoice with no mapping.
 import { sql } from './db.js';
@@ -7,9 +7,9 @@ import { computeTotals, cleanItems } from './finance.js';
 export const VALID_STATUS = new Set(['draft', 'sent', 'accepted', 'declined', 'expired', 'voided']);
 
 // Proposal items extend invoice items with client-selectable options:
-//   optional      — an add-on the client can include/exclude
-//   packageGroup  — a tier key; client picks exactly one item per group
-//   selected      — current/default selection (required items are always in)
+//   optional      - an add-on the client can include/exclude
+//   packageGroup  - a tier key; client picks exactly one item per group
+//   selected      - current/default selection (required items are always in)
 // isIncluded decides whether an item counts toward the total + is cloned
 // into the invoice on accept.
 export function isIncluded(it) {

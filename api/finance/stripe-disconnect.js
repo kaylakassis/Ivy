@@ -18,7 +18,7 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
 
     // Clear both Standard-OAuth (legacy) and Account-Links columns. The
-    // acct row on Stripe's side stays put — Stripe doesn't let platforms
+    // acct row on Stripe's side stays put - Stripe doesn't let platforms
     // delete connected Express accounts via API. Reconnecting later
     // will create a fresh acct since this row no longer references it.
     await sql`

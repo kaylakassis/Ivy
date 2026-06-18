@@ -2,7 +2,7 @@
 //
 //   GET  → fetch the booking summary so the page can render
 //          ("Review your massage with Calm Hands on June 4")
-//   POST → submit { rating, text? } — creates a reviews row, nulls
+//   POST → submit { rating, text? } - creates a reviews row, nulls
 //          the token so the link can't be reused
 //
 // Token mirrors the documents/invoices pattern: the raw token lives
@@ -94,7 +94,7 @@ export default async function handler(req, res) {
         WHERE id = ${row.booking_id}
       `;
 
-      // Owner push so a fresh review surfaces immediately — high-signal
+      // Owner push so a fresh review surfaces immediately - high-signal
       // event that almost always wants a response. Type 'messages' keeps
       // it in the same opt-out bucket as client messages so an owner
       // who wants quiet hours can still mute it cleanly.
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
         workspaceId: row.workspace_id, type: 'messages',
         payload: {
           title: `★ ${rating} review from ${row.client_name || 'a client'}`,
-          body: (text || '').slice(0, 200) || 'No comment — just a rating.',
+          body: (text || '').slice(0, 200) || 'No comment - just a rating.',
           url: '/reviews',
           tag: `review-${row.booking_id}`,
         },

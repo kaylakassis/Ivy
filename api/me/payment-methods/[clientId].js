@@ -2,7 +2,7 @@
 //
 // Detaches the saved card on the user's clients row at the named
 // workspace. clientId in the URL is the clients.id (per workspace),
-// not the Stripe customer id — strict ownership check via
+// not the Stripe customer id - strict ownership check via
 // myClientIds before any Stripe / DB write happens.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const c = r.rows[0];
     if (!c?.payment_method_id) return noContent(res); // already gone
 
-    // Try to detach in Stripe first — best-effort. If the workspace
+    // Try to detach in Stripe first - best-effort. If the workspace
     // disconnected Stripe (or the PM was already removed there), we
     // still scrub the local row so the portal stops claiming there's
     // a card on file.
@@ -43,7 +43,7 @@ export default async function handler(req, res) {
         paymentMethodId: c.payment_method_id,
       });
     } catch {
-      // ignore — we still want to scrub locally below
+      // ignore - we still want to scrub locally below
     }
 
     // Defense-in-depth: re-scope to id = ANY(myIds) so a future

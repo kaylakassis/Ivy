@@ -1,6 +1,6 @@
 // POST /api/website/form-submission
 //
-// Public — no auth. Accepts contact form / newsletter submissions from
+// Public - no auth. Accepts contact form / newsletter submissions from
 // a published Ivy OS site, finds the owner's matching form destination
 // (email or webhook), and delivers. Every submission is also persisted
 // in `website_form_submissions` so owners see inbound traffic even when
@@ -11,7 +11,7 @@
 //     handle:   "rivers-coaching",     // identifies the site
 //     formId:   "contact" | "newsletter" | <custom>,
 //     payload:  { ... }                // fields the form collected
-//     hp:       "..."                  // honeypot — non-empty = bot
+//     hp:       "..."                  // honeypot - non-empty = bot
 //   }
 //
 // Spam controls: a hidden honeypot field (`hp`) that real users leave
@@ -31,7 +31,7 @@ export default async function handler(req, res) {
     const body = await readBody(req);
     if (!body || typeof body !== 'object') return badRequest(res, 'Invalid body');
 
-    // Honeypot — bots typically fill every field. Real users leave it
+    // Honeypot - bots typically fill every field. Real users leave it
     // empty. Silent-accept (200 OK) so the bot's behavior signal is
     // hidden, but skip all downstream work.
     if (body.hp) return ok(res, { received: true });
@@ -58,7 +58,7 @@ export default async function handler(req, res) {
     if (found.rows.length === 0) return badRequest(res, 'Site not found');
     const site = found.rows[0];
 
-    // Record the submission first — that way even if the destination
+    // Record the submission first - that way even if the destination
     // fails the owner can still see the data on their next login.
     const inserted = await sql`
       INSERT INTO website_form_submissions (website_id, form_id, payload)
@@ -128,7 +128,7 @@ export default async function handler(req, res) {
 }
 
 async function deliverByEmail({ to, site, formId, payload }) {
-  const subject = `New ${formId} submission — ${site.business_name || site.handle}`;
+  const subject = `New ${formId} submission - ${site.business_name || site.handle}`;
   const rows = Object.entries(payload || {}).map(([k, v]) => `
     <tr>
       <td style="padding:8px 12px;color:#5C5A55;font-size:12px;text-transform:uppercase;letter-spacing:0.05em">${escapeHtml(k)}</td>

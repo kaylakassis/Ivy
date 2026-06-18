@@ -1,6 +1,6 @@
 // Catalog shape test for src/features/workflows/templates.js.
-// Catches breakage in the static data — types, missing config keys,
-// dangling token references — so the picker never offers a template
+// Catches breakage in the static data - types, missing config keys,
+// dangling token references - so the picker never offers a template
 // that would 400 on save.
 //
 // Run with:
@@ -121,7 +121,7 @@ assert(c.actions[0].config.subject !== 'mutated',
 assert(getTemplateById('nope-not-a-real-id') === null, 'unknown id returns null');
 
 console.log('\n[5] if_has_tag / if_lacks_tag have something after them');
-// A workflow that ENDS on a conditional is a no-op — flag any template
+// A workflow that ENDS on a conditional is a no-op - flag any template
 // where the last action is a conditional.
 for (const t of WORKFLOW_TEMPLATES) {
   const last = t.actions[t.actions.length - 1];

@@ -6,7 +6,7 @@
 // Auth: matches the other crons. Vercel cron sends
 //   Authorization: Bearer ${CRON_SECRET}
 // Admin trigger via header. Signed-in super-admin via session cookie.
-// Without any of those, refuse — without this check anyone on the
+// Without any of those, refuse - without this check anyone on the
 // internet can force-publish every scheduled website in the system.
 
 import { sql } from '../_lib/db.js';
@@ -58,7 +58,7 @@ async function handler(req, res) {
           })}::jsonb)
         `;
         // Promote scheduled_pages into BOTH the draft (pages/sections) and
-        // the published snapshot (published_pages/published_sections) — the
+        // the published snapshot (published_pages/published_sections) - the
         // public site reads the published_* columns (publicSite.js), so
         // without setting those the scheduled content would never go live.
         const schedPages = Array.isArray(row.scheduled_pages) ? row.scheduled_pages : [];

@@ -1,5 +1,5 @@
 // Owner-side gift cards: summary + list of issued cards with running
-// balances. Read-only — issuance happens on the public booking page;
+// balances. Read-only - issuance happens on the public booking page;
 // redemption happens at booking time via the gift-card code field.
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
@@ -94,7 +94,7 @@ export default function GiftCards() {
                   …{c.codeLast4}
                 </div>
                 <div style={{ minWidth: 0, fontSize: 13 }}>
-                  <div style={{ fontWeight: 600 }}>{c.recipientName || '—'}</div>
+                  <div style={{ fontWeight: 600 }}>{c.recipientName || '-'}</div>
                   <div style={{ color: 'var(--muted)', fontSize: 11.5 }}>
                     {c.recipientEmail}
                     {c.senderName && ` · From ${c.senderName}`}

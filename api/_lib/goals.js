@@ -111,7 +111,7 @@ export async function computeGoalCurrent(workspaceId, type) {
   if (type === 'custom') return null; // caller falls back to current_manual
 
   if (type === 'revenue') {
-    // Read the materialized invoices.total column — the SAME source the
+    // Read the materialized invoices.total column - the SAME source the
     // finance dashboard uses (api/finance/index.js, switched in cae9800).
     // Previously this re-derived the total from the items JSONB, which
     // rounded differently than the column and made the goal's "current"
@@ -162,7 +162,7 @@ export async function fetchOwnedGoal({ id, workspaceId }) {
 
 // Auto-complete "smart" tasks whose triggering activity has happened.
 // The UI shows these at progress=100 with an "auto" badge (see
-// TASK_SELECT_WITH_PROGRESS), but nothing ever actually marked them done —
+// TASK_SELECT_WITH_PROGRESS), but nothing ever actually marked them done -
 // so the badge was unreachable and owners still ticked every one by hand.
 // Run from the workflows cron. One set-based UPDATE across all workspaces;
 // mirrors the exact progress=100 conditions. Returns the count flipped.

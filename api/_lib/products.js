@@ -21,7 +21,7 @@ export function serializeProduct(row) {
 }
 
 // Atomically decrement stock. Succeeds (returns true) only if the product
-// either doesn't track stock or has enough on hand — so two simultaneous
+// either doesn't track stock or has enough on hand - so two simultaneous
 // sales of the last unit can't both win.
 export async function decrementStock({ workspaceId, productId, qty }) {
   const n = Math.max(0, Math.ceil(Number(qty) || 0));

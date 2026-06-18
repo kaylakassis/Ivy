@@ -1,4 +1,4 @@
-// /me/messages — client side of native chat. Mirrors the owner's Messages
+// /me/messages - client side of native chat. Mirrors the owner's Messages
 // view but inverted: the client is the user, the business is the "other"
 // participant. Two-pane on desktop/tablet, single-pane on mobile.
 //
@@ -115,10 +115,10 @@ function ClientMessages() {
   }, []);
 
   // Deep-link consumer. Two entry points:
-  //   ?threadId=<id>  — push-notification + transactional-email CTAs
+  //   ?threadId=<id>  - push-notification + transactional-email CTAs
   //                     ("New message from ${biz}") land here. We just
   //                     select the thread if it's in our list.
-  //   ?clientId=<id>  — ClientHome's "Message" quick-action sends here
+  //   ?clientId=<id>  - ClientHome's "Message" quick-action sends here
   //                     when the client may not have an open thread yet;
   //                     we either pick the existing one or create one.
   // Both params are stripped after consuming so a refresh doesn't
@@ -132,7 +132,7 @@ function ClientMessages() {
     if (!tid && !cid) return;
     consumedRef.current = true;
     if (tid) {
-      // Only honor threadIds that belong to one of our threads — a
+      // Only honor threadIds that belong to one of our threads - a
       // copy-pasted link to someone else's thread should silently no-op
       // rather than dead-pane on an unloadable selection.
       if (threads.some((t) => t.id === tid)) setSelectedId(tid);
@@ -399,7 +399,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontWeight: 600, fontSize: 14 }}>{thread.businessName}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-            {thread.mode === 'one-way' ? 'Announcements only — replies disabled' : 'Direct chat'}
+            {thread.mode === 'one-way' ? 'Announcements only - replies disabled' : 'Direct chat'}
           </div>
         </div>
       </div>

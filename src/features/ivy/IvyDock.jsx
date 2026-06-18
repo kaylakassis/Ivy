@@ -1,4 +1,4 @@
-// IvyDock — global floating Ivy bubble + panel.
+// IvyDock - global floating Ivy bubble + panel.
 //
 // Sits at the bottom-right of every authenticated owner page (mounted in
 // AppShell). Click the FAB to open a 380×620 panel; close to collapse
@@ -13,7 +13,7 @@
 // Proactive surface: when the panel opens with no active session, a
 // "Suggestions" strip surfaces 1-3 prefilled prompts derived from
 // workspace context (quiet clients, open invoices, upcoming sessions).
-// Tapping a card fires it as the next message — Ivy then responds with
+// Tapping a card fires it as the next message - Ivy then responds with
 // drafts the owner can approve/edit. The FAB carries a notification dot
 // whenever there's at least one actionable suggestion.
 import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
@@ -49,7 +49,7 @@ export default function IvyDock() {
 
   // Cmd/Ctrl + I toggles the dock. Useful for power users who live in
   // the keyboard. Bail out if the user is typing into a regular input
-  // or rich-text editor elsewhere on the page — Cmd+I is the standard
+  // or rich-text editor elsewhere on the page - Cmd+I is the standard
   // italic shortcut and we don't want to swallow it from an unrelated
   // editor (the document body editor, message composer, etc.).
   useEffect(() => {
@@ -148,7 +148,7 @@ function FabButton({ onClick, notify, isMobile }) {
   );
 }
 
-// Lightweight wordmark — accent-colored badge with a serif lowercase t.
+// Lightweight wordmark - accent-colored badge with a serif lowercase t.
 // Mirrors the marketing-site logotype so the FAB feels native to Ivy OS.
 function IvyMark({ size = 22 }) {
   return (
@@ -175,7 +175,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, thinking]);
 
-  // Focus the composer when the panel opens — feels like a real chat.
+  // Focus the composer when the panel opens - feels like a real chat.
   useEffect(() => {
     const t = setTimeout(() => inputRef.current?.focus(), 120);
     return () => clearTimeout(t);
@@ -246,7 +246,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
         <IconBtn label="Close"  onClick={onClose}  render={<XGlyph/>}/>
       </div>
 
-      {/* Mode/error strip — only when something's worth saying */}
+      {/* Mode/error strip - only when something's worth saying */}
       {(modeError || mode === 'mock') && (
         <div style={{
           flex: '0 0 auto',
@@ -255,7 +255,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
           borderBottom: '1px solid var(--border)',
           fontSize: 11, color: 'var(--muted)',
         }}>
-          {modeError ? `Ivy is offline — ${modeError}` : 'Demo mode — replies are placeholders.'}
+          {modeError ? `Ivy is offline - ${modeError}` : 'Demo mode - replies are placeholders.'}
         </div>
       )}
 
@@ -278,7 +278,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
 
       {/* Persistent suggestion chips. Once the conversation starts the
           full Welcome panel is replaced by the message list, but the
-          owner should still be able to fire other starters — the old
+          owner should still be able to fire other starters - the old
           behavior unmounted ALL suggestions after the first pick, which
           read as "I can't click the other options." Horizontal-scroll
           chip row above the composer keeps them one tap away. */}
@@ -366,7 +366,7 @@ function Welcome({ context, suggestions, onPick }) {
         fontSize: 22, lineHeight: 1.2, color: 'var(--fg)',
         marginBottom: 6,
       }}>
-        Hi — I'm Ivy.
+        Hi - I'm Ivy.
       </div>
       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
         Ask me anything, or pick something to get started. I can pull data, draft outreach, and send messages or invoices for you.
@@ -530,7 +530,7 @@ function XGlyph() {
   );
 }
 
-// Build proactive suggestions from workspace context. Order matters —
+// Build proactive suggestions from workspace context. Order matters -
 // the most actionable, highest-value items go first. Keep this short
 // (max 3) so the welcome screen stays readable.
 function buildSuggestions(ctx) {
@@ -545,7 +545,7 @@ function buildSuggestions(ctx) {
       id: 'quiet',
       icon: 'Users',
       title: quiet === 1 ? 'Reach out to 1 quiet client' : `Reach out to ${quiet} quiet clients`,
-      subtitle: 'Draft personalized check-ins for clients who\'ve gone silent — I can send them on your behalf.',
+      subtitle: 'Draft personalized check-ins for clients who\'ve gone silent - I can send them on your behalf.',
       prompt: `I have ${quiet} client${quiet === 1 ? '' : 's'} who have been quiet. Pull the list, draft a warm check-in for each, and ask me to confirm before sending.`,
     });
   }
@@ -565,8 +565,8 @@ function buildSuggestions(ctx) {
       id: 'upcoming',
       icon: 'Calendar',
       title: 'Prep for upcoming sessions',
-      subtitle: `${upcoming} on the books — get a quick brief on each.`,
-      prompt: `What's on my calendar this week? Give me a one-line brief on each upcoming session — who, when, and anything I should know going in.`,
+      subtitle: `${upcoming} on the books - get a quick brief on each.`,
+      prompt: `What's on my calendar this week? Give me a one-line brief on each upcoming session - who, when, and anything I should know going in.`,
     });
   }
 

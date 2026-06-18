@@ -3,7 +3,7 @@
 // The app ships no markdown library on purpose, but Ivy's replies use a
 // little inline markup (**bold**, *italic*, `code`, "- " bullets). Rendered
 // as plain text that markup leaks as literal asterisks/backticks. This
-// converts the common inline subset into React elements — NO
+// converts the common inline subset into React elements - NO
 // dangerouslySetInnerHTML, so model output can never inject markup.
 //
 // Supported: **bold** / __bold__, *italic* / _italic_, `inline code`,
@@ -14,7 +14,7 @@
 import React from 'react';
 
 // Split one line of text into bold/italic/code spans. Greedy, left-to-
-// right, non-nested — enough for chat copy and safe against unmatched
+// right, non-nested - enough for chat copy and safe against unmatched
 // delimiters (a lone ** just renders as text).
 function renderInline(text, keyPrefix) {
   const out = [];

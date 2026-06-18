@@ -1,4 +1,4 @@
-// Finance → Packages tab. Same relocation as Services — formerly a
+// Finance → Packages tab. Same relocation as Services - formerly a
 // Calendar drawer, now an inline Finance page section. Owners reach
 // packages alongside Products / Memberships / Gift cards.
 import React from 'react';

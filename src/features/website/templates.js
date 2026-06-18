@@ -1,4 +1,4 @@
-// Visual templates — each defines the base palette, typography, and radii
+// Visual templates - each defines the base palette, typography, and radii
 // that the rendered site will inherit. Templates are applied by scoping a
 // CSS variable block on the outer wrapper.
 
@@ -6,7 +6,7 @@ export const TEMPLATES = {
   clean: {
     id: 'clean',
     name: 'Clean & Modern',
-    desc: 'White space, minimal layout — lets your work speak.',
+    desc: 'White space, minimal layout - lets your work speak.',
     vars: {
       '--site-bg':        '#FFFFFF',
       '--site-fg':        '#141414',
@@ -24,7 +24,7 @@ export const TEMPLATES = {
   warm: {
     id: 'warm',
     name: 'Warm & Personal',
-    desc: 'Earthy tones, personal feel — great for coaches & wellness.',
+    desc: 'Earthy tones, personal feel - great for coaches & wellness.',
     vars: {
       '--site-bg':        '#FBF7F0',
       '--site-fg':        '#2A1F14',
@@ -42,7 +42,7 @@ export const TEMPLATES = {
   bold: {
     id: 'bold',
     name: 'Bold & Electric',
-    desc: 'Dark background, bright accents — high-impact and memorable.',
+    desc: 'Dark background, bright accents - high-impact and memorable.',
     vars: {
       '--site-bg':        '#0D0E0C',
       '--site-fg':        '#F3F3EE',
@@ -60,7 +60,7 @@ export const TEMPLATES = {
   studio: {
     id: 'studio',
     name: 'Studio',
-    desc: 'Gallery-forward, image-heavy — photographers, designers, creatives.',
+    desc: 'Gallery-forward, image-heavy - photographers, designers, creatives.',
     vars: {
       '--site-bg':        '#F5F5F1',
       '--site-fg':        '#0F0F0F',
@@ -78,7 +78,7 @@ export const TEMPLATES = {
   wellness: {
     id: 'wellness',
     name: 'Wellness',
-    desc: 'Soft sage + cream, gentle pace — massage, yoga, body-work.',
+    desc: 'Soft sage + cream, gentle pace - massage, yoga, body-work.',
     vars: {
       '--site-bg':        '#F4F1EA',
       '--site-fg':        '#1F2A23',
@@ -96,7 +96,7 @@ export const TEMPLATES = {
   editorial: {
     id: 'editorial',
     name: 'Editorial',
-    desc: 'Magazine-style — heavy serif headlines, generous whitespace, writers + thinkers.',
+    desc: 'Magazine-style - heavy serif headlines, generous whitespace, writers + thinkers.',
     vars: {
       '--site-bg':        '#FAF8F4',
       '--site-fg':        '#0A0A0A',
@@ -114,7 +114,7 @@ export const TEMPLATES = {
   mono: {
     id: 'mono',
     name: 'Mono',
-    desc: 'Black, white, one accent — minimalist for consultants + lawyers.',
+    desc: 'Black, white, one accent - minimalist for consultants + lawyers.',
     vars: {
       '--site-bg':        '#FFFFFF',
       '--site-fg':        '#000000',
@@ -132,7 +132,7 @@ export const TEMPLATES = {
   sunset: {
     id: 'sunset',
     name: 'Sunset',
-    desc: 'Warm peach + coral — lifestyle, coaching, hospitality.',
+    desc: 'Warm peach + coral - lifestyle, coaching, hospitality.',
     vars: {
       '--site-bg':        '#FFF4EC',
       '--site-fg':        '#2A1814',
@@ -150,7 +150,7 @@ export const TEMPLATES = {
   forest: {
     id: 'forest',
     name: 'Forest',
-    desc: 'Deep green + bone — outdoorsy, organic, premium.',
+    desc: 'Deep green + bone - outdoorsy, organic, premium.',
     vars: {
       '--site-bg':        '#15201A',
       '--site-fg':        '#F1ECE0',
@@ -168,7 +168,7 @@ export const TEMPLATES = {
   brutalist: {
     id: 'brutalist',
     name: 'Brutalist',
-    desc: 'High-contrast, raw, monospace — power-users, designers, devs.',
+    desc: 'High-contrast, raw, monospace - power-users, designers, devs.',
     vars: {
       '--site-bg':        '#FAFAF7',
       '--site-fg':        '#000000',
@@ -186,7 +186,7 @@ export const TEMPLATES = {
   retro: {
     id: 'retro',
     name: 'Retro',
-    desc: '70s palette + rounded shapes — playful, vintage, hospitality.',
+    desc: '70s palette + rounded shapes - playful, vintage, hospitality.',
     vars: {
       '--site-bg':        '#FFF4D6',
       '--site-fg':        '#3A1F0A',
@@ -204,7 +204,7 @@ export const TEMPLATES = {
   art_deco: {
     id: 'art_deco',
     name: 'Art Deco',
-    desc: 'Gold on charcoal — ornamental, luxe, gala.',
+    desc: 'Gold on charcoal - ornamental, luxe, gala.',
     vars: {
       '--site-bg':        '#0A0907',
       '--site-fg':        '#F5E9C8',
@@ -222,7 +222,7 @@ export const TEMPLATES = {
   japanese_minimal: {
     id: 'japanese_minimal',
     name: 'Japanese Minimal',
-    desc: 'Beige + generous whitespace — wabi-sabi, zen, brand-light.',
+    desc: 'Beige + generous whitespace - wabi-sabi, zen, brand-light.',
     vars: {
       '--site-bg':        '#F6F2E8',
       '--site-fg':        '#1B1B1B',
@@ -240,7 +240,7 @@ export const TEMPLATES = {
   dark_premium: {
     id: 'dark_premium',
     name: 'Dark Premium',
-    desc: 'Deep navy + champagne — high-end services, agencies.',
+    desc: 'Deep navy + champagne - high-end services, agencies.',
     vars: {
       '--site-bg':        '#0A1224',
       '--site-fg':        '#EDE8DA',

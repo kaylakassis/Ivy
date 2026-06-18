@@ -1,6 +1,6 @@
-// POST /api/sms/inbound — Twilio webhook for inbound SMS.
+// POST /api/sms/inbound - Twilio webhook for inbound SMS.
 //
-// SUPERSEDED: point Twilio at /api/webhooks/twilio/sms instead — that one
+// SUPERSEDED: point Twilio at /api/webhooks/twilio/sms instead - that one
 // handles these same compliance keywords AND threads non-keyword replies
 // into the client conversation. This endpoint remains as a consent-only
 // fallback (it does NOT thread replies) for any number still configured here.
@@ -18,7 +18,7 @@
 //                                              auto-response handles it
 //
 // Twilio expects an HTTP 200 (or 204) with optional TwiML body. We return
-// 204 — Twilio's built-in STOP/START handling already responds to the
+// 204 - Twilio's built-in STOP/START handling already responds to the
 // sender on our behalf.
 //
 // Signature verification: the request URL + sorted form params are
@@ -79,7 +79,7 @@ export default async function handler(req, res) {
     if (STOP_WORDS.has(body)) {
       // Wipe consent for EVERY client row matching this number, across
       // every workspace this number is associated with. Compliance > UX
-      // here — one number = one consent state at the platform layer.
+      // here - one number = one consent state at the platform layer.
       await sql`UPDATE clients SET sms_consent_at = NULL WHERE phone = ${from}`;
       return ok(res, { ok: true, action: 'opt-out', phone: from });
     }
@@ -87,7 +87,7 @@ export default async function handler(req, res) {
       await sql`UPDATE clients SET sms_consent_at = NOW() WHERE phone = ${from}`;
       return ok(res, { ok: true, action: 'opt-in', phone: from });
     }
-    // Anything else (HELP, freeform, etc.) — ack with no state change.
+    // Anything else (HELP, freeform, etc.) - ack with no state change.
     return ok(res, { ok: true, ignored: body || '(empty)' });
   } catch (err) {
     return serverError(res, err);

@@ -106,7 +106,7 @@ export default async function handler(req, res) {
 
     // Build CSV.
     const lines = [];
-    lines.push(row(`Ivy OS — Tax export for ${bizName} — ${year}`));
+    lines.push(row(`Ivy OS - Tax export for ${bizName} - ${year}`));
     lines.push(row('Generated', new Date().toISOString()));
     lines.push('');
     lines.push(row('SUMMARY'));
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
     }
     lines.push('');
 
-    lines.push(row('EXPENSES — RAW LINE ITEMS'));
+    lines.push(row('EXPENSES - RAW LINE ITEMS'));
     lines.push(row('Date', 'Schedule C line', 'Category', 'Vendor', 'Amount', 'Method', 'Notes'));
     for (const cat of SCHEDULE_C_CATEGORIES) {
       const v = byCategory.get(cat.key);
@@ -138,7 +138,7 @@ export default async function handler(req, res) {
     }
     lines.push('');
 
-    lines.push(row('INCOME — PAID INVOICES'));
+    lines.push(row('INCOME - PAID INVOICES'));
     lines.push(row('Date', 'Number', 'Client', 'Gross', 'Refunded', 'Net'));
     for (const r of incomeRows) {
       lines.push(row(r.date, r.number, r.client, n(r.gross), n(r.refunded), n(r.net)));

@@ -1,7 +1,7 @@
 # tests
 
 End-to-end tests that run the real API handlers against a local Postgres
-instead of Neon. The handlers are unchanged — a loader hook redirects
+instead of Neon. The handlers are unchanged - a loader hook redirects
 `@neondatabase/serverless` to a `pg`-backed shim at import time.
 
 ## Prerequisites
@@ -35,7 +35,7 @@ bootstrap defaults are minimal.
 | File                    | What it does                                                 |
 |-------------------------|--------------------------------------------------------------|
 | `bootstrap.mjs`         | Registers the loader hook + sets minimal test env vars       |
-| `loader.mjs`            | ESM resolver hook — rewrites `@neondatabase/serverless` URL  |
+| `loader.mjs`            | ESM resolver hook - rewrites `@neondatabase/serverless` URL  |
 | `neon-shim.mjs`         | `neon(url, opts)` factory backed by `pg.Client`              |
 | `email-prefs.test.mjs`  | 34 assertions over `userAllowsEmail` / `clientAllowsEmail` / `sendEmail*` wrappers + `/me/bookings` PHI redaction |
 | `email-flows.test.mjs`  | 12 assertions exercising every new lifecycle helper end-to-end |

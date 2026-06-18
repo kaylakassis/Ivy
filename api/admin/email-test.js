@@ -7,7 +7,7 @@
 //     -H "Content-Type: application/json" \
 //     -d '{"to":"you@example.com"}'
 //
-// Then open the message and check the headers — you should see
+// Then open the message and check the headers - you should see
 // `Authentication-Results: ... spf=pass dkim=pass dmarc=pass`.
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { readBody } from '../_lib/body.js';
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
         Authentication-Results header reads:<br/>
         <code>spf=pass dkim=pass dmarc=pass</code></p>
         <p>If any of those say <code>fail</code> or <code>none</code>, fix
-        the corresponding DNS record at your domain registrar — Resend's
+        the corresponding DNS record at your domain registrar - Resend's
         dashboard shows the exact values.</p>`,
       footer: `Sent from /api/admin/email-test at ${new Date().toISOString()}`,
     });

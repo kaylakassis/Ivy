@@ -31,7 +31,7 @@ export default async function handler(req, res) {
         try {
           const fs = await sql`SELECT default_hourly_rate FROM finance_settings WHERE workspace_id = ${workspaceId}`;
           defaultHourlyRate = Number(fs.rows[0]?.default_hourly_rate || 0);
-        } catch { /* finance_settings missing — fall back to 0 */ }
+        } catch { /* finance_settings missing - fall back to 0 */ }
         return ok(res, { entries, defaultHourlyRate });
       } catch (e) {
         // eslint-disable-next-line no-console

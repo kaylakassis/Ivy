@@ -1,11 +1,11 @@
-// GET /api/me/setup-status — returns the owner's onboarding completion
+// GET /api/me/setup-status - returns the owner's onboarding completion
 // state. Drives the "Set up your business" checklist on /dashboard.
 //
 // Two tiers:
-//   REQUIRED — minimum to take a real booking. Checklist won't dismiss
+//   REQUIRED - minimum to take a real booking. Checklist won't dismiss
 //              the "you still have setup to do" framing while any of
 //              these are open.
-//   RECOMMENDED — gets the workspace fully ready for business: Stripe
+//   RECOMMENDED - gets the workspace fully ready for business: Stripe
 //              for card payments, a website for marketing, a real
 //              client to actually use the system, a tagline. Counted
 //              separately so the checklist can show real progress
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     try {
       ws = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
     } catch (e) {
-      // workspaces table missing entirely (very-cold install) — pretend
+      // workspaces table missing entirely (very-cold install) - pretend
       // we're done so the dashboard doesn't crash. The wizard will create
       // it on first onboarding action.
       // eslint-disable-next-line no-console
@@ -46,7 +46,7 @@ export default async function handler(req, res) {
       return ok(res, { complete: true, fullyComplete: true, items: [] });
     }
     if (ws.rows.length === 0) {
-      // Not an owner — checklist doesn't apply.
+      // Not an owner - checklist doesn't apply.
       return ok(res, { complete: true, fullyComplete: true, items: [] });
     }
     const workspaceId = ws.rows[0].id;
@@ -107,7 +107,7 @@ export default async function handler(req, res) {
         done: !!(settings.slug && settings.slug.trim()),
         required: true,
         href: '/calendar',
-        why: '/book/<your-slug> — the link you share with clients.',
+        why: '/book/<your-slug> - the link you share with clients.',
       },
       {
         id: 'service',
@@ -141,7 +141,7 @@ export default async function handler(req, res) {
         done: websiteLive,
         required: false,
         href: '/website',
-        why: 'A polished, hosted site you can spin up in minutes — services, pricing, contact, all linked to your booking flow.',
+        why: 'A polished, hosted site you can spin up in minutes - services, pricing, contact, all linked to your booking flow.',
       },
       {
         id: 'firstClient',
@@ -149,7 +149,7 @@ export default async function handler(req, res) {
         done: clientCount > 0,
         required: false,
         href: '/clients?add=1',
-        why: 'Either import from a CSV or add a few you already work with — they get a "claim your portal" invite automatically.',
+        why: 'Either import from a CSV or add a few you already work with - they get a "claim your portal" invite automatically.',
       },
       {
         id: 'firstBooking',
@@ -165,7 +165,7 @@ export default async function handler(req, res) {
         done: !!(settings.tagline && settings.tagline.trim()),
         required: false,
         href: '/calendar',
-        why: 'One short line above your services on the booking page — what you do, who for.',
+        why: 'One short line above your services on the booking page - what you do, who for.',
       },
     ];
 

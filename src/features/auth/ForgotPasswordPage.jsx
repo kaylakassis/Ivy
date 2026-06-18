@@ -1,4 +1,4 @@
-// /forgot-password — request a password reset email.
+// /forgot-password - request a password reset email.
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';

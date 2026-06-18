@@ -4,7 +4,7 @@
 //
 // Distinct from /api/me/notifications.js, which manages per-type
 // PUSH/EMAIL preferences (the toggle list on /account). This is the
-// feed surface — the bell icon + dropdown in the topbar.
+// feed surface - the bell icon + dropdown in the topbar.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -21,7 +21,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'GET') {
       // Hard cap so a runaway notification spammer can't blow up the
-      // payload. 50 covers the common "last few days" window — older
+      // payload. 50 covers the common "last few days" window - older
       // rows are still in the table for audit but the bell only
       // surfaces the recent slice. db-prune trims > 60 days.
       const { rows } = await sql`

@@ -24,7 +24,7 @@ export default async function handler(req, res) {
       const status   = (req.query.status   || '').toString().toLowerCase();
       const clientId = (req.query.clientId || '').toString();
 
-      // Build the WHERE dynamically — kept parameterized to avoid
+      // Build the WHERE dynamically - kept parameterized to avoid
       // injection. status + clientId are both optional, both
       // composable; the index on (workspace_id, status, updated_at)
       // covers the common dashboard query.
@@ -110,7 +110,7 @@ export default async function handler(req, res) {
       const status = (body.status || 'active').toString().toLowerCase();
       if (!VALID_STATUS.has(status)) return badRequest(res, 'Invalid status');
 
-      // Verify the client (if supplied) belongs to this workspace —
+      // Verify the client (if supplied) belongs to this workspace -
       // never trust the browser-sent id alone.
       const clientId = body.clientId ? String(body.clientId) : null;
       if (clientId) {

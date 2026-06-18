@@ -11,7 +11,7 @@ body {
 button { font: inherit; border: 0; background: none; cursor: pointer; color: inherit; }
 input, textarea, select { font: inherit; color: inherit; }
 
-/* .input — canonical form-control styling used across modals, drawers,
+/* .input - canonical form-control styling used across modals, drawers,
    and onboarding. Without this, raw <input className="input"> renders
    with browser defaults (white background on every OS) and our
    light-on-dark theme makes typed text invisible. */
@@ -269,13 +269,13 @@ body.app-walled .view-toggle { display: none; }
 
   /* Modal containers should fill the viewport on phones so users aren't
      fighting tiny dialogs with full keyboards. Pages that show modals
-     via `position: fixed; inset: 0` already fill the screen — this just
+     via `position: fixed; inset: 0` already fill the screen - this just
      tightens default modal padding. */
   [role="dialog"] {
     padding: 12px !important;
   }
 
-  /* Auth-card padding on mobile — desktop uses 32, mobile would waste
+  /* Auth-card padding on mobile - desktop uses 32, mobile would waste
      half the screen. */
   .app-root form.card {
     padding: 22px !important;
@@ -286,7 +286,7 @@ body.app-walled .view-toggle { display: none; }
   .hero-band .page-title { font-size: 28px !important; }
 
   /* Cap top-level page titles on mobile so headers don't wrap awkwardly.
-     Pages set inline fontSize: 32 — this overrides on small screens. */
+     Pages set inline fontSize: 32 - this overrides on small screens. */
   .page-pad h1.page-title,
   .page-pad h2.page-title {
     font-size: 24px !important;
@@ -473,7 +473,7 @@ body.app-walled .view-toggle { display: none; }
   to   { transform: translateX(0); }
 }
 
-/* Skeleton placeholder — used while data is loading. The shimmer is paused
+/* Skeleton placeholder - used while data is loading. The shimmer is paused
    when the user prefers reduced motion. */
 .skel {
   display: block;
@@ -495,7 +495,7 @@ body.app-walled .view-toggle { display: none; }
   .skel { animation: none; background: var(--surface-2); }
 }
 
-/* Walkthrough spotlight ring — pulses outward to draw attention without
+/* Walkthrough spotlight ring - pulses outward to draw attention without
    trapping clicks (the ring itself has pointer-events: none). */
 @keyframes ivy-tour-pulse {
   0%   { box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 60%, transparent),
@@ -511,14 +511,14 @@ body.app-walled .view-toggle { display: none; }
 }
 
 /* Route-fallback spinner. Used by the lazy-route Suspense fallback in
-   App.jsx — small, low-contrast, doesn't fight the destination page's
+   App.jsx - small, low-contrast, doesn't fight the destination page's
    own loader for visual real estate. */
 @keyframes ivy-spin {
   to { transform: rotate(360deg); }
 }
 
 /* ======================================================================
-   Document editor — DocuSign-style two-pane editor.
+   Document editor - DocuSign-style two-pane editor.
    - .rt-content: contenteditable surface for the body text editor.
    - .doc-editor-panes: side-by-side editor + preview on desktop, stacks
      to a single column controlled by mobile tabs (Edit / Preview)
@@ -578,7 +578,7 @@ body.app-walled .view-toggle { display: none; }
   .doc-preview-page      { padding: 28px 24px 36px !important; }
 }
 
-/* Marketing-home "Built for [vertical]" headline — each new word slides
+/* Marketing-home "Built for [vertical]" headline - each new word slides
    in from below + fades; the outgoing word's lifecycle is implicit
    (React's `key` change unmounts it). Animation runs on every freshly
    keyed word. */
@@ -596,7 +596,7 @@ body.app-walled .view-toggle { display: none; }
   .rotating-vertical-word { animation: none; }
 }
 
-/* Onboarding wizard — the per-step label row under the progress bar
+/* Onboarding wizard - the per-step label row under the progress bar
    (Welcome · Your business · Services · …). Hidden on phones where it
    would compress to two-character truncations; the "Step X of Y"
    counter in the top bar carries the same info more cleanly. */
@@ -642,7 +642,7 @@ body.app-walled .view-toggle { display: none; }
 }
 
 /* Expanded business sheet: full-screen on phones, centered card on
-   desktop — same pattern messaging modals use elsewhere. */
+   desktop - same pattern messaging modals use elsewhere. */
 @media (min-width: 720px) {
   .discover-sheet {
     border-radius: 18px !important;
@@ -659,7 +659,7 @@ body.app-walled .view-toggle { display: none; }
   gap: 8px;
 }
 
-/* Photo gallery — horizontal scroll, hide scrollbar on most browsers
+/* Photo gallery - horizontal scroll, hide scrollbar on most browsers
    so the strip looks like a native carousel. */
 .discover-gallery {
   display: flex;
@@ -676,14 +676,14 @@ body.app-walled .view-toggle { display: none; }
   100% { opacity: 1; transform: translateY(0)   scale(1); }
 }
 
-/* Messages voice memo + dictation — pulsing red dot for the recording
+/* Messages voice memo + dictation - pulsing red dot for the recording
    indicator and a subtle ring on the dictate button while listening. */
 @keyframes msg-mic-pulse {
   0%, 100% { opacity: 1;   transform: scale(1); }
   50%      { opacity: 0.45; transform: scale(0.92); }
 }
 
-/* Ivy floating dock — global FAB + slide-in panel. Mounted in AppShell so
+/* Ivy floating dock - global FAB + slide-in panel. Mounted in AppShell so
    it follows the owner across every route in the business app. */
 .ivy-dock-fab:hover {
   transform: translateY(-2px);

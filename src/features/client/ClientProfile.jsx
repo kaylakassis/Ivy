@@ -1,8 +1,8 @@
-// /me/profile — lets a client update the name on their account plus
+// /me/profile - lets a client update the name on their account plus
 // the phone / address / photo they share with the businesses they're
 // connected to.
 //
-// Email is read-only — changing it is auth-critical (it's the login
+// Email is read-only - changing it is auth-critical (it's the login
 // identity + the workspace-link key) and would need its own verify-
 // new-address flow. Documented as a TODO on the surface so users
 // aren't left guessing why the field doesn't accept edits.
@@ -17,7 +17,7 @@ export default function ClientProfile() {
   const [busy, setBusy] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  // Local form state — initialized from the loaded profile so the
+  // Local form state - initialized from the loaded profile so the
   // user can type freely without re-fetching on every keystroke.
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
@@ -96,7 +96,7 @@ export default function ClientProfile() {
             style={inputStyle}/>
         </Field>
 
-        <Field label="Email" hint="Read-only — used to sign in + link you to businesses. Contact support to change it.">
+        <Field label="Email" hint="Read-only - used to sign in + link you to businesses. Contact support to change it.">
           <input
             type="email"
             className="input"
@@ -105,7 +105,7 @@ export default function ClientProfile() {
             style={{ ...inputStyle, opacity: 0.6, cursor: 'not-allowed' }}/>
         </Field>
 
-        <Field label="Phone" hint="Saved with each business so they can reach you. SMS reminders also need consent — turn them on under Notifications.">
+        <Field label="Phone" hint="Saved with each business so they can reach you. SMS reminders also need consent - turn them on under Notifications.">
           <input
             type="tel"
             inputMode="tel"

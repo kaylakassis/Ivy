@@ -1,5 +1,5 @@
 // Owner Reviews tab. Reviews AUTO-PUBLISH the moment a client leaves them.
-// Owners can respond publicly to any review, or appeal one for removal —
+// Owners can respond publicly to any review, or appeal one for removal -
 // appeals go to the Ivy OS support team, who approve (remove) or deny. Owners
 // can't hide reviews themselves.
 // Backed by GET /api/reviews (list + summary) and PATCH /api/reviews/:id
@@ -139,27 +139,27 @@ export default function Reviews() {
       <div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 22 }}>Reviews</h2>
         <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--fg-2)' }}>
-          Reviews publish automatically. Respond to any review, or appeal one for removal — our support team reviews every appeal.
+          Reviews publish automatically. Respond to any review, or appeal one for removal - our support team reviews every appeal.
         </p>
       </div>
 
       {/* Summary tiles */}
       <div className="grid-auto" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 10 }}>
-        <Tile label="Average" value={summary.avg != null ? `${summary.avg.toFixed(1)} ★` : '—'} />
+        <Tile label="Average" value={summary.avg != null ? `${summary.avg.toFixed(1)} ★` : '-'} />
         <Tile label="Published" value={summary.visibleCount || 0} />
         <Tile label="Removed" value={summary.hiddenCount || 0} />
       </div>
 
       {error && (
         <div className="card" style={{ padding: 14, color: 'var(--danger)', fontSize: 13 }}>
-          Couldn’t complete that — {error.message}
+          Couldn’t complete that - {error.message}
         </div>
       )}
 
       {reviews.length === 0 ? (
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Heart" title="No reviews yet"
-            hint="After a completed appointment, Ivy OS automatically asks clients for a review. New reviews publish here right away — you can respond to any of them." />
+            hint="After a completed appointment, Ivy OS automatically asks clients for a review. New reviews publish here right away - you can respond to any of them." />
         </div>
       ) : (
         <>

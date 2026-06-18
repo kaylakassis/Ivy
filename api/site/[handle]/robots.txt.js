@@ -1,4 +1,4 @@
-// GET /site/:handle/robots.txt — per-site robots file. Points crawlers
+// GET /site/:handle/robots.txt - per-site robots file. Points crawlers
 // at the sitemap and allows everything by default. Owners can extend
 // this later via a future "robots.txt override" field; for v1 every
 // published site gets a wide-open allow.

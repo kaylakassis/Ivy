@@ -1,4 +1,4 @@
-// Mobile dashboard — clean slate.
+// Mobile dashboard - clean slate.
 
 function MobileDashboard({ direction }) {
   const hour = new Date().getHours();

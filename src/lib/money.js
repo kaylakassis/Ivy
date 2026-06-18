@@ -1,7 +1,7 @@
 // Locale + currency-aware money formatting.
 //
 // The app used to hardcode '$' + .toLocaleString('en-US', ...) all
-// over the place — fine while every workspace was USD-only. With
+// over the place - fine while every workspace was USD-only. With
 // multi-currency invoices each one carries its own currency code;
 // we have to render the right symbol + decimal convention.
 //
@@ -20,7 +20,7 @@ function getFormatter(currency) {
       currency: code,
     });
   } catch {
-    // Unknown currency code — fall back to USD formatting with the
+    // Unknown currency code - fall back to USD formatting with the
     // code prepended, e.g. "ZZZ 1,234.00". Better than crashing the UI.
     f = {
       format: (n) => `${code} ${Number(n || 0).toLocaleString(undefined, {

@@ -1,4 +1,4 @@
-// /api/rewards/pending — GET list of clients who've earned a reward but
+// /api/rewards/pending - GET list of clients who've earned a reward but
 // haven't been issued one yet for the matching rule. Drives the "Ready to
 // redeem" panel on the rewards tab.
 import { requireUser } from '../_lib/auth.js';

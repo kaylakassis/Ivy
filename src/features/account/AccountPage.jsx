@@ -1,7 +1,7 @@
-// /account — settings page. Currently exposes the GDPR controls:
+// /account - settings page. Currently exposes the GDPR controls:
 //   • Profile (read-only summary of the authenticated user)
-//   • Export your data — downloads a JSON dump of every workspace row
-//   • Delete account — irreversible; requires re-typing the email
+//   • Export your data - downloads a JSON dump of every workspace row
+//   • Delete account - irreversible; requires re-typing the email
 //   • (Super-admin only) Admin panel: run migrations, test email, etc.
 //
 // Future tabs (billing, team, notifications) will mount alongside.
@@ -61,10 +61,10 @@ export default function AccountPage() {
       {/* Profile */}
       <div className="card" style={{ padding: 22 }}>
         <div className="metric-label" style={{ marginBottom: 12 }}>Profile</div>
-        <Row label="Name"  value={user?.name || '—'}/>
-        <Row label="Email" value={user?.email || '—'}/>
+        <Row label="Name"  value={user?.name || '-'}/>
+        <Row label="Email" value={user?.email || '-'}/>
         <Row label="Email verified" value={user?.email_verified_at ? 'Yes' : 'No'}/>
-        <Row label="Member since" value={user?.created_at ? new Date(user.created_at).toLocaleDateString([], { dateStyle: 'long' }) : '—'}/>
+        <Row label="Member since" value={user?.created_at ? new Date(user.created_at).toLocaleDateString([], { dateStyle: 'long' }) : '-'}/>
       </div>
 
       <BrandingCard/>
@@ -84,7 +84,7 @@ export default function AccountPage() {
         <div className="metric-label" style={{ marginBottom: 8 }}>Your data</div>
         <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Export everything</h3>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Download a single JSON file with every row tied to your workspace —
+          Download a single JSON file with every row tied to your workspace -
           clients, invoices, messages, documents, calendar, goals, rewards,
           and Ivy chats. Yours to keep, search, or import elsewhere.
         </p>
@@ -106,7 +106,7 @@ export default function AccountPage() {
         <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Delete your account</h3>
         <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           Permanently removes your account, your workspace, and every row tied
-          to it — clients, invoices, documents, messages, the lot. This is{' '}
+          to it - clients, invoices, documents, messages, the lot. This is{' '}
           <strong>irreversible</strong> and takes effect immediately. We don't
           keep backups beyond 30 days, so the data is truly gone after that.
         </p>
@@ -397,7 +397,7 @@ function SendTestEmailRow() {
   );
 }
 
-// Referral panel — "refer one, get one." Owners set a custom code,
+// Referral panel - "refer one, get one." Owners set a custom code,
 // share their link, and earn a free month for every referred user who
 // becomes paying. Renders for owners only.
 function ReferralCard() {
@@ -436,7 +436,7 @@ function ReferralCard() {
       await navigator.clipboard.writeText(data.link);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked — ignore */ }
+    } catch { /* clipboard blocked - ignore */ }
   };
 
   const months = data?.stats?.rewarded || 0;
@@ -506,7 +506,7 @@ function Stat({ label, value }) {
   );
 }
 
-// Subscription panel — shows current state for owners and links to the
+// Subscription panel - shows current state for owners and links to the
 // Stripe billing portal when there's a customer record. For client-only
 // Pre-checkout auto-renewal disclosure. California SB-313 and the FTC
 // ROSCA rule both require recurring-charge consumers to see, BEFORE
@@ -535,7 +535,7 @@ function AutoRenewalDisclosureModal({ onCancel, onConfirm, busy }) {
           Before you continue to Stripe, here's the plain-English version:
         </p>
         <ul style={{ margin: '0 0 18px 18px', padding: 0, fontSize: 13.5, color: 'var(--fg)', lineHeight: 1.65 }}>
-          <li><strong>Auto-renews.</strong> Your card is charged on the same day each billing period (monthly or annual — Stripe's next page shows which).</li>
+          <li><strong>Auto-renews.</strong> Your card is charged on the same day each billing period (monthly or annual - Stripe's next page shows which).</li>
           <li><strong>Price.</strong> The amount you'll be charged is shown on Stripe's checkout page. It doesn't change without notice.</li>
           <li><strong>Cancel anytime.</strong> From <em>Account → Manage subscription</em> here. You keep access through the end of the current billing period; no partial refunds.</li>
           <li><strong>Receipts</strong> are emailed to you after every successful charge.</li>
@@ -580,7 +580,7 @@ function SubscriptionCard() {
     }
   };
 
-  // Triggered when the owner clicks Subscribe/Resubscribe — opens the
+  // Triggered when the owner clicks Subscribe/Resubscribe - opens the
   // disclosure modal instead of jumping straight to Stripe. The actual
   // redirect happens in confirmSubscribe below after they accept.
   const subscribeNow = () => {
@@ -653,7 +653,7 @@ function SubscriptionCard() {
         {sub.status === 'active'
           ? 'Open the Stripe billing portal to update your card, view past invoices, or cancel.'
         : sub.status === 'past_due'
-          ? "Stripe couldn't charge your card. Open the billing portal to update it — your access will resume automatically once the next attempt succeeds."
+          ? "Stripe couldn't charge your card. Open the billing portal to update it - your access will resume automatically once the next attempt succeeds."
         : sub.status === 'trialing'
           ? `You're on the free trial. Subscribe any time to keep access after it ends.`
           : 'Subscribe to keep using the business app. The client portal stays free either way.'}
@@ -697,7 +697,7 @@ function SubscriptionCard() {
 }
 
 // Push-notifications opt-in. Real `Notification.requestPermission()` only
-// works inside a user gesture, so the toggle has to be a plain button —
+// works inside a user gesture, so the toggle has to be a plain button -
 // no auto-prompt on mount. Once granted, the browser remembers; we just
 // reflect the current state on every render.
 function NotificationsCard() {
@@ -761,7 +761,7 @@ function NotificationsCard() {
       <div className="metric-label" style={{ marginBottom: 8 }}>Notifications</div>
       <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Push notifications</h3>
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        Get notified the moment something needs you — new messages, signed
+        Get notified the moment something needs you - new messages, signed
         documents, paid invoices, booking confirmations, and reminders for
         clients who haven't completed their forms yet. We never use these for
         marketing.
@@ -829,7 +829,7 @@ function DigestPrefs() {
   const [err, setErr] = useState(null);
   useEffect(() => {
     api.get('/me/notification-prefs').then((r) => setPrefs(r.prefs))
-      .catch(() => { /* silent — defaults */ });
+      .catch(() => { /* silent - defaults */ });
   }, []);
   const toggle = async () => {
     const next = !(prefs?.digestGroupsDaily !== false);
@@ -864,7 +864,7 @@ function DigestPrefs() {
 // Per-type opt-out toggles. Lives below the device-level enable/disable
 // row so the workflow reads top-down: turn ON in this browser, then
 // pick which notification types you want to receive. Each toggle PATCHes
-// /api/me/notifications optimistically — server is authoritative on
+// /api/me/notifications optimistically - server is authoritative on
 // the next page load.
 const PUSH_LABELS = {
   messages:  { label: 'Messages',  hint: 'New chat messages from clients (or businesses, if you\'re a client).' },
@@ -1071,7 +1071,7 @@ function SupportCard() {
 
   // Initial load when the panel opens. The recurring poll is wired
   // through useIntervalWhenVisible below so a backgrounded tab stops
-  // hammering /support — at scale that's the difference between
+  // hammering /support - at scale that's the difference between
   // baseline RPS being "active users" and "every stale open tab."
   useEffect(() => { if (open) load(); }, [open]);
   useIntervalWhenVisible(load, 15000, open);
@@ -1093,7 +1093,7 @@ function SupportCard() {
       <div className="metric-label" style={{ marginBottom: 8 }}>Help</div>
       <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Contact support</h3>
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        Stuck on something or have feedback? Send us a message — we'll
+        Stuck on something or have feedback? Send us a message - we'll
         reply right here. You'll get a push notification when we do
         (if you've enabled them).
       </p>
@@ -1171,7 +1171,7 @@ function WalkthroughCard() {
       await refresh();
       nav('/dashboard?walkthrough=1');
     } catch {
-      // Best-effort — fall back to URL flag even if the reset POST hiccups.
+      // Best-effort - fall back to URL flag even if the reset POST hiccups.
       nav('/dashboard?walkthrough=1');
     } finally {
       setBusy(false);
@@ -1186,7 +1186,7 @@ function WalkthroughCard() {
       </h3>
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
         A 1-minute tour through every section of Ivy OS. Doesn't touch any of
-        your data — start it any time you'd like a refresher.
+        your data - start it any time you'd like a refresher.
       </p>
       <button onClick={replay} disabled={busy}
         className="btn btn-outline">
@@ -1199,7 +1199,7 @@ function WalkthroughCard() {
 // Branding: logo + accent color + email signature + business name.
 // Drives every client-facing email (invoices, documents, booking
 // reminders, etc.) so the recipient sees the OWNER'S brand instead of
-// Ivy OS's defaults. Saves field-by-field — no big "Save" button.
+// Ivy OS's defaults. Saves field-by-field - no big "Save" button.
 function BrandingCard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -1360,10 +1360,10 @@ function BrandingCard() {
         <textarea value={signature} onChange={(e) => setSignature(e.target.value)}
           onBlur={() => signature !== (data?.emailSignature || '') && save({ emailSignature: signature }, 'sig')}
           rows={4} maxLength={2000}
-          placeholder={`— Kayla\nFounder, Calm Hands Wellness\n(415) 555-0123`}
+          placeholder={`- Kayla\nFounder, Calm Hands Wellness\n(415) 555-0123`}
           style={{ ...fieldStyle, fontFamily: 'inherit', resize: 'vertical', lineHeight: 1.5 }}/>
         <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
-          Appended to every client-facing email under your message body. Plain text — line breaks are preserved.
+          Appended to every client-facing email under your message body. Plain text - line breaks are preserved.
         </div>
       </div>
 

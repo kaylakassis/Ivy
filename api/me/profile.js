@@ -3,7 +3,7 @@
 //           users, plus phone / address / photoUrl which live on the
 //           per-workspace clients row).
 //   PATCH → updates name (on users) + phone/address/photoUrl (on every
-//           clients row connected to this user). Email is read-only —
+//           clients row connected to this user). Email is read-only -
 //           changing it is auth-critical and goes through a separate
 //           flow (not built yet; documented).
 //
@@ -12,7 +12,7 @@
 // new client's phone, etc.). When the client later claims their
 // portal account, we link the clients row to the user via user_id.
 // Letting the CLIENT edit their own contact info means propagating
-// the update across every workspace they're a member of — owners
+// the update across every workspace they're a member of - owners
 // see the latest value the client supplied next time they open the
 // drawer.
 import { sql } from '../_lib/db.js';
@@ -105,7 +105,7 @@ export default async function handler(req, res) {
         } else {
           const u = String(body.photoUrl).trim();
           if (u.length > 1000) errors.push('Photo URL is too long');
-          // No protocol whitelist — caller already uploaded to Vercel
+          // No protocol whitelist - caller already uploaded to Vercel
           // Blob and got an https:// URL.
           else photoUrlToSet = u;
         }
@@ -135,7 +135,7 @@ export default async function handler(req, res) {
             params,
           );
         } catch (e) {
-          // Most likely a missing column on a partial-schema dev DB —
+          // Most likely a missing column on a partial-schema dev DB -
           // log + continue so the name update sticks.
           console.error('[me/profile PATCH] clients update failed:', e.message);
         }

@@ -5,16 +5,16 @@
 // before the new functions go live. So in steady state the schema is
 // already current by the time any request lands.
 //
-// This module is now the SAFETY NET for the request path — two-stage so
+// This module is now the SAFETY NET for the request path - two-stage so
 // cold-started functions don't pay the full ~80-statement migration cost:
 //
-//   1. PROBE — compares the set of statement hashes in the CURRENT
+//   1. PROBE - compares the set of statement hashes in the CURRENT
 //      SCHEMA_SQL against the hashes recorded applied in the
 //      `schema_migrations` table. If every current statement is already
 //      recorded applied, the schema is current and we mark the process
 //      up-to-date. After a successful deploy migration this ALWAYS
 //      passes, so the expensive full path below never runs on a request.
-//   2. FULL — only when the probe fails (a new/changed statement isn't
+//   2. FULL - only when the probe fails (a new/changed statement isn't
 //      recorded yet, e.g. the deploy migration was skipped or a hotfix
 //      added a column without redeploying). Runs every statement;
 //      idempotent (IF NOT EXISTS everywhere) so it's safe to retry, then
@@ -45,7 +45,7 @@ let inFlight = null;
 // When runFull fails, we throw so the caller treats schema as not-yet-
 // applied. But repeating the full migration on EVERY request (which
 // touches ~80 statements + the network) is expensive when a statement
-// is permanently broken. So we cool down — at most one runFull every
+// is permanently broken. So we cool down - at most one runFull every
 // COOLDOWN_MS. The probe still runs in between; if it starts passing
 // we're back to fast-path.
 const COOLDOWN_MS = 30_000;
@@ -60,7 +60,7 @@ let lastFullRunAt = 0;
 // preserved verbatim regardless of nesting.
 //
 // Exported so api/admin/migrate.js uses the same splitter as the
-// cold-start bootstrap — keeps the two paths from drifting apart.
+// cold-start bootstrap - keeps the two paths from drifting apart.
 export function splitStatements(sqlText) {
   // Step 1: strip line comments. We can do this naively at the line
   // level because schema.js doesn't use `--` inside literals.
@@ -177,7 +177,7 @@ async function recordApplied(statements) {
   }
 }
 
-// Multi-pass migration. The schema has forward references — e.g. an
+// Multi-pass migration. The schema has forward references - e.g. an
 // `ALTER TABLE bookings ADD COLUMN review_request_token_hash` lives ABOVE
 // the CREATE TABLE bookings, because the historical authoring order
 // mixed columns + tables. Rather than rewrite 1500 lines of SQL, we
@@ -196,11 +196,11 @@ const MAX_PASSES = 4;
 //
 // We CANNOT use pg_advisory_lock here: the Neon HTTP driver opens a new
 // connection per query, so a session-level advisory lock is released the
-// instant its acquiring query returns — it wouldn't span the migration's
+// instant its acquiring query returns - it wouldn't span the migration's
 // subsequent statements. Instead we use a single-row claim with a TTL,
 // which is atomic per-statement and therefore correct over independent
 // HTTP connections. The TTL means a crashed migrator can't wedge the
-// lock forever — after it lapses another instance reclaims.
+// lock forever - after it lapses another instance reclaims.
 const LOCK_TTL_SECONDS = 120;
 
 async function tryAcquireMigrationLock() {
@@ -234,7 +234,7 @@ async function runFull() {
   try {
     haveLock = await tryAcquireMigrationLock();
   } catch {
-    // Lock machinery itself failed — migrate anyway. Correctness is
+    // Lock machinery itself failed - migrate anyway. Correctness is
     // preserved (every statement is idempotent IF NOT EXISTS); we just
     // lose stampede protection for this one run.
     haveLock = true;
@@ -280,7 +280,7 @@ async function runFullLocked() {
     // eslint-disable-next-line no-console
     console.log(`[bootstrap] pass ${pass}: ${pending.length - failures.length}/${pending.length} succeeded, ${failures.length} pending`);
     if (failures.length === pending.length) {
-      // Zero progress on this pass — the remaining statements are
+      // Zero progress on this pass - the remaining statements are
       // permanently broken, not just out of order. Stop and report.
       break;
     }
@@ -320,7 +320,7 @@ export async function ensureSchemaApplied() {
     // Cooldown: if we just ran a full migration in the last 30s and it
     // failed, don't immediately re-run. The probe will keep being
     // checked on each request, so when the broken statement is fixed
-    // we'll catch up on the next probe success — but in the meantime
+    // we'll catch up on the next probe success - but in the meantime
     // we avoid pegging the DB.
     const sinceLast = Date.now() - lastFullRunAt;
     if (sinceLast < COOLDOWN_MS && lastFullRunAt > 0) {
@@ -341,7 +341,7 @@ export async function ensureSchemaApplied() {
     console.error('[bootstrap] schema bootstrap failed; will retry after cooldown:', err.message);
     // Leave applied=false so subsequent requests retry once the cooldown
     // elapses. Endpoints with critical columns (e.g. onboarding_state)
-    // also self-heal at the statement level — see api/onboarding/state.js.
+    // also self-heal at the statement level - see api/onboarding/state.js.
   } finally {
     inFlight = null;
   }
@@ -361,7 +361,7 @@ export async function runSchemaMigration() {
   try {
     await runProbe();
     // eslint-disable-next-line no-console
-    console.log('[migrate] schema already current — nothing to do');
+    console.log('[migrate] schema already current - nothing to do');
     return;
   } catch {
     // eslint-disable-next-line no-console
@@ -377,7 +377,7 @@ export async function runSchemaMigration() {
     return;
   }
 
-  // A peer is migrating — wait for it to finish by re-probing.
+  // A peer is migrating - wait for it to finish by re-probing.
   for (let i = 0; i < 30; i++) {
     // eslint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, 2000));

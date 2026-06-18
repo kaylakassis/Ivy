@@ -1,4 +1,4 @@
-// Ivy OS — clean-slate data. No demo content.
+// Ivy OS - clean-slate data. No demo content.
 // Arrays are empty; static config (nav, metric labels) remains.
 
 const CLIENTS = [];
@@ -9,7 +9,7 @@ const ACTIVITY = [];
 const IVY_INSIGHTS = [];
 const TASKS = [];
 
-// Metric shells — value = null means no data yet. Labels + suffixes kept so UI has structure.
+// Metric shells - value = null means no data yet. Labels + suffixes kept so UI has structure.
 const METRICS = {
   mrr:     { value: null, delta: null, label: 'Monthly revenue' },
   clients: { value: null, delta: null, label: 'Active clients',   suffix: '' },

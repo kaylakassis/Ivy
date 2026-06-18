@@ -1,4 +1,4 @@
-// GET /api/me/documents — list every document where the user is the
+// GET /api/me/documents - list every document where the user is the
 // recipient, across businesses they're a client of.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
@@ -51,7 +51,7 @@ export default async function handler(req, res) {
     }
 
     // Pull every signer for the docs we just listed, scoped to the
-    // user's own client_ids so we only show THEIR signing status —
+    // user's own client_ids so we only show THEIR signing status -
     // not other signers' names, emails, IPs, etc.
     const docIds = rows.map((r) => r.id);
     const signerByDoc = new Map();
@@ -78,7 +78,7 @@ export default async function handler(req, res) {
         );
         totalsByDoc = new Map(tr.rows.map((r) => [r.document_id, r.total]));
       } catch (e) {
-        // document_signers table missing — fall back to no per-signer
+        // document_signers table missing - fall back to no per-signer
         // detail, but still render the documents list.
         // eslint-disable-next-line no-console
         console.error('[me/documents] signers join failed (continuing):', e.message);

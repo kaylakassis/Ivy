@@ -7,7 +7,7 @@
 //   • Each stage stamps its own column (trial_reminder_7d_sent_at, …) so
 //     a workspace gets each nudge AT MOST ONCE. The stamp is written
 //     before the (async) send so a retry or overlapping run can't double
-//     up — same stamp-then-send idempotency the win-back path uses.
+//     up - same stamp-then-send idempotency the win-back path uses.
 //
 // Relationship to win-back: these fire DURING the trial; the win-back
 // cron fires only AFTER a workspace has lapsed (3 days past
@@ -17,7 +17,7 @@
 //
 // Rollout safety: the 'expired' stage is bounded to trials that ended
 // within the last 3 days, so turning this on does NOT blast every
-// long-lapsed trialing workspace with a "your trial ended" email — those
+// long-lapsed trialing workspace with a "your trial ended" email - those
 // are already the win-back cron's job.
 import { sql } from '../_lib/db.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';

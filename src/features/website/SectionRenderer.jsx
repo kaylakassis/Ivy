@@ -2,13 +2,13 @@
 // Used by the editor Canvas AND the public-facing site.
 //
 // Section-level overrides (set via Inspector):
-//   section.variant — which layout to use (e.g. 'left' vs 'center' hero)
-//   section.style.background — custom CSS color/gradient/image
-//   section.style.padding    — density key from PADDING_DENSITIES
-//   section.style.textAlign  — 'left' | 'center' | 'right' override
+//   section.variant - which layout to use (e.g. 'left' vs 'center' hero)
+//   section.style.background - custom CSS color/gradient/image
+//   section.style.padding    - density key from PADDING_DENSITIES
+//   section.style.textAlign  - 'left' | 'center' | 'right' override
 //
 // The wrapper here applies the style overrides as a thin shell around
-// whatever the per-section renderer outputs — keeps the renderers focused.
+// whatever the per-section renderer outputs - keeps the renderers focused.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
@@ -56,12 +56,12 @@ export default function SectionRenderer({ section, handle, editable = false, onU
 // Inline-editable text. When `editable` is true the rendered span is
 // contentEditable; on blur we commit the new value via `onCommit`. We
 // intentionally use `dangerouslySetInnerHTML` ONLY to seed the initial
-// text — subsequent renders are skipped (suppressContentEditableWarning)
+// text - subsequent renders are skipped (suppressContentEditableWarning)
 // to avoid React fighting the cursor on each keystroke.
 export function EditableText({ value, onCommit, editable, as = 'span', style }) {
   const ref = React.useRef(null);
   // Keep the DOM text synced when `value` changes externally (e.g. undo)
-  // but only when we're NOT actively editing — otherwise we'd clobber
+  // but only when we're NOT actively editing - otherwise we'd clobber
   // the user's typing.
   React.useEffect(() => {
     if (!editable) return;
@@ -249,7 +249,7 @@ function Hero({ data, variant, editable, onUpdate }) {
     );
   }
 
-  // Default — center or left aligned.
+  // Default - center or left aligned.
   const align = v === 'left' ? 'left' : 'center';
   return (
     <section style={{
@@ -286,7 +286,7 @@ function Services({ data, variant }) {
   const items = data.items || [];
 
   if (v === 'list') {
-    // Stacked single-column rows — narrow, scannable, premium feel.
+    // Stacked single-column rows - narrow, scannable, premium feel.
     return (
       <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
         <div style={container}>
@@ -436,7 +436,7 @@ function Booking({ data, handle }) {
             <Icons.Calendar size={24} sw={1.8} />
           </div>
           <div style={{ fontSize: 15, color: 'var(--site-fg-2)', maxWidth: 480, margin: '0 auto' }}>
-            Live booking widget — opens your available times from your calendar.
+            Live booking widget - opens your available times from your calendar.
           </div>
           <a
             href={effective ? `/book/${effective}` : '#'}
@@ -554,7 +554,7 @@ function Gallery({ data }) {
 
 // ---------- Contact ----------
 // POST a public site form to the form-submission endpoint (email/webhook
-// routing + persistence live server-side). Same-origin plain fetch — the
+// routing + persistence live server-side). Same-origin plain fetch - the
 // endpoint is public (no auth). Returns true on success.
 async function postSiteForm({ handle, formId, payload, hp }) {
   const res = await fetch('/api/website/form-submission', {
@@ -572,7 +572,7 @@ function Contact({ data, handle, editable }) {
   const set = (k) => (e) => setVals((v) => ({ ...v, [k]: e.target.value }));
   const submit = async (e) => {
     e.preventDefault();
-    // Inert in the editor preview (or with no live handle) — only the
+    // Inert in the editor preview (or with no live handle) - only the
     // published site actually delivers submissions.
     if (editable || !handle || state === 'sending' || state === 'sent') return;
     setState('sending');
@@ -601,16 +601,16 @@ function Contact({ data, handle, editable }) {
               padding: 20, borderRadius: 'var(--site-radius)',
               background: 'var(--site-surface)', border: '1px solid var(--site-border)',
               fontSize: 15, color: 'var(--site-fg)',
-            }}>{data.successMessage || "Thanks — we'll be in touch shortly."}</div>
+            }}>{data.successMessage || "Thanks - we'll be in touch shortly."}</div>
           ) : (
             <form style={{ display: 'grid', gap: 12 }} onSubmit={submit}>
               <input placeholder="Your name" style={siteInput} value={vals.name} onChange={set('name')} />
               <input placeholder="Email" type="email" required style={siteInput} value={vals.email} onChange={set('email')} />
               <textarea placeholder="Message" rows={5} style={{ ...siteInput, resize: 'vertical' }} value={vals.message} onChange={set('message')} />
-              {/* Honeypot — hidden from humans; bots that fill it are dropped server-side. */}
+              {/* Honeypot - hidden from humans; bots that fill it are dropped server-side. */}
               <input tabIndex={-1} autoComplete="off" aria-hidden="true" value={hp} onChange={(e) => setHp(e.target.value)}
                 style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }} />
-              {state === 'error' && <div style={{ fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t send — please try again.</div>}
+              {state === 'error' && <div style={{ fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t send - please try again.</div>}
               <button type="submit" disabled={state === 'sending'} style={{
                 padding: '12px 22px',
                 background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
@@ -885,7 +885,7 @@ function Newsletter({ data, handle, editable }) {
         )}
         {state === 'sent' ? (
           <div style={{ marginTop: 24, fontSize: 15, color: 'var(--site-fg)' }}>
-            {data.successMessage || "You're subscribed — thanks!"}
+            {data.successMessage || "You're subscribed - thanks!"}
           </div>
         ) : (
           <form onSubmit={submit} style={{
@@ -911,7 +911,7 @@ function Newsletter({ data, handle, editable }) {
             }}>{state === 'sending' ? '…' : (data.buttonText || 'Subscribe')}</button>
           </form>
         )}
-        {state === 'error' && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t subscribe — please try again.</div>}
+        {state === 'error' && <div style={{ marginTop: 10, fontSize: 13, color: 'var(--site-accent)' }}>Couldn’t subscribe - please try again.</div>}
       </div>
     </section>
   );
@@ -972,7 +972,7 @@ function toEmbedUrl(url) {
       const id = u.pathname.replace(/^\//, '');
       if (/^\d+$/.test(id)) return `https://player.vimeo.com/video/${id}`;
     }
-    // Generic — assume the URL is already an embed URL.
+    // Generic - assume the URL is already an embed URL.
     return url;
   } catch { return null; }
 }
@@ -1045,7 +1045,7 @@ function PricingTable({ data }) {
                     <td key={i} style={{
                       padding: '14px 20px', textAlign: 'center',
                       fontSize: 14, color: v ? 'var(--site-fg)' : 'var(--site-muted)',
-                    }}>{v || '—'}</td>
+                    }}>{v || '-'}</td>
                   ))}
                 </tr>
               ))}
@@ -1255,7 +1255,7 @@ function Hours({ data }) {
   );
 }
 
-// ---------- Map (OpenStreetMap iframe — no API key required) ----------
+// ---------- Map (OpenStreetMap iframe - no API key required) ----------
 function Map({ data }) {
   const zoom = Number(data.zoom) || 14;
   const lat  = Number(data.lat) || 0;
@@ -1400,7 +1400,7 @@ function CustomHtml({ data }) {
   );
 }
 
-// Shop section: live product grid + add-to-cart. Read-only — owners
+// Shop section: live product grid + add-to-cart. Read-only - owners
 // edit the catalog in Finance → Products, not the section editor.
 // Cart state lives in sessionStorage keyed by handle so a refresh
 // doesn't dump it. Checkout POSTs to /api/site/:handle/checkout which

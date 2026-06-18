@@ -1,17 +1,17 @@
-// Paywall modal — UNSKIPPABLE hard wall when the workspace's subscription
+// Paywall modal - UNSKIPPABLE hard wall when the workspace's subscription
 // isn't active. Replaces the previous soft wall that let owners route to
 // /me and keep working in the free client portal.
 //
 // Affordances (always rendered, in this order):
-//   • Subscribe        — POSTs /api/billing/checkout, redirects to Stripe.
-//   • Start free trial — only shown for owners who haven't trialed yet.
-//   • Manage billing   — POSTs /api/billing/portal, opens Stripe Customer
+//   • Subscribe        - POSTs /api/billing/checkout, redirects to Stripe.
+//   • Start free trial - only shown for owners who haven't trialed yet.
+//   • Manage billing   - POSTs /api/billing/portal, opens Stripe Customer
 //                        Portal so a card update or reactivation doesn't
 //                        require a second support touch.
-//   • Export my data   — anchor GET /api/account/export. The portability
+//   • Export my data   - anchor GET /api/account/export. The portability
 //                        promise: owners can always retrieve their data,
 //                        even when locked out of the app.
-//   • Log out          — escape that doesn't compromise the wall.
+//   • Log out          - escape that doesn't compromise the wall.
 //
 // isClient carve-out: an owner who's ALSO a client of another Ivy OS
 // business gets one labeled link "Go to {business} as a client" → /me.
@@ -29,13 +29,13 @@ import { isIos } from '../../lib/platform.js';
 import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV } from '../../lib/pricing.js';
 
-// Real, truthful conversion proof — mirrors the marketing pricing page.
+// Real, truthful conversion proof - mirrors the marketing pricing page.
 // We deliberately do NOT fabricate star ratings or user counts (Ivy OS
 // has no review corpus to quote); the stack-replacement savings is a
 // concrete claim we can stand behind.
 const MONTHLY_SAVINGS = Math.max(0, STACK_TOTAL - IVY_PRICE);
 
-// The benefit list — each row is a real capability gated behind the wall.
+// The benefit list - each row is a real capability gated behind the wall.
 const PERKS = [
   'Unlimited clients, bookings & invoices',
   'Take card payments through your own Stripe',
@@ -57,7 +57,7 @@ export default function Paywall({ ctx, onRefresh }) {
   const winbackTried = useRef(false);
 
   // Owners who are ALSO clients of another business get one labeled link
-  // out — the wall stays unskippable from THEIR perspective (they can't
+  // out - the wall stays unskippable from THEIR perspective (they can't
   // dodge it for their own workspace), but their access to other
   // businesses' client portals isn't collateral damage.
   const clientOnlyBusiness = ctx?.isClient && ctx?.memberships?.length
@@ -77,7 +77,7 @@ export default function Paywall({ ctx, onRefresh }) {
         await api.post('/billing/sync', { sessionId });
         await onRefresh();
       } catch (e) {
-        // Webhook will eventually catch up — start a short poll loop.
+        // Webhook will eventually catch up - start a short poll loop.
         await pollForActive(onRefresh, 6, 1500);
       }
       // Clean the success/cancel params so a refresh doesn't re-run sync.
@@ -102,7 +102,7 @@ export default function Paywall({ ctx, onRefresh }) {
     api.post('/billing/winback-offer', {})
       .then((r) => {
         // Only render the offer when the numeric terms are actually
-        // present — guards against a malformed eligible:true response
+        // present - guards against a malformed eligible:true response
         // rendering "NaN% off" / "$NaN/mo".
         if (r?.eligible
             && Number.isFinite(r.percentOff) && r.percentOff > 0
@@ -110,7 +110,7 @@ export default function Paywall({ ctx, onRefresh }) {
           setWinback(r);
         }
       })
-      .catch(() => { /* no offer is a fine outcome — fall back to the plain banner */ });
+      .catch(() => { /* no offer is a fine outcome - fall back to the plain banner */ });
   }, [cancelled]);
 
   const startTrial = async () => {
@@ -128,12 +128,12 @@ export default function Paywall({ ctx, onRefresh }) {
   const subscribe = async () => {
     setBusy('subscribe'); setErr(null);
     // iOS in-app purchase branch. Apple requires that subscriptions sold
-    // INSIDE the app go through StoreKit — we can't redirect to a Stripe
+    // INSIDE the app go through StoreKit - we can't redirect to a Stripe
     // checkout URL from within the WebView without violating App Store
     // Review Guideline 3.1.1. So on iOS we run the StoreKit purchase
     // sheet via RevenueCat instead; on success, RC's webhook
     // (/api/billing/revenuecat-webhook) flips subscription_status to
-    // 'active', and we poll /api/me to pick up the change — same
+    // 'active', and we poll /api/me to pick up the change - same
     // pattern as Stripe post-checkout.
     if (isIos()) {
       try {
@@ -173,7 +173,7 @@ export default function Paywall({ ctx, onRefresh }) {
     }
     try {
       // winback is a monthly-only offer (checkout.js scopes the coupon to
-      // monthly), so the toggle is hidden while it's showing — `plan`
+      // monthly), so the toggle is hidden while it's showing - `plan`
       // stays 'monthly' in that case.
       const r = await api.post('/billing/checkout', { plan });
       if (!r.url) throw new Error('No checkout URL returned');
@@ -230,7 +230,7 @@ export default function Paywall({ ctx, onRefresh }) {
 
   // Distinguish trial-expired from never-trialed so the copy matches.
   // A 'trialing' status that isn't active means the trial window has
-  // lapsed. (daysRemaining is null — not 0 — for an expired trial, so
+  // lapsed. (daysRemaining is null - not 0 - for an expired trial, so
   // the old `=== 0` check never fired and this copy was dead.)
   const trialExpired = sub?.status === 'trialing' && !sub?.isActive;
   const everTrialed  = !!sub?.trialEndsAt;
@@ -283,8 +283,8 @@ export default function Paywall({ ctx, onRefresh }) {
           }}>{heading}</h2>
           {!syncing && (
             <p style={{ margin: '8px auto 0', maxWidth: 320, color: 'var(--fg-2)', fontSize: 13.5, lineHeight: 1.5 }}>
-              Everything you run your business on — clients, calendar, invoices,
-              documents, messaging — in one place.
+              Everything you run your business on - clients, calendar, invoices,
+              documents, messaging - in one place.
             </p>
           )}
         </div>
@@ -298,11 +298,11 @@ export default function Paywall({ ctx, onRefresh }) {
           {syncing ? (
             <p style={{ margin: '6px 0', color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55, textAlign: 'center' }}>
               Stripe just confirmed your payment. We're refreshing your
-              account — this usually takes a couple of seconds.
+              account - this usually takes a couple of seconds.
             </p>
           ) : (
             <>
-              {/* Truthful savings proof — the refs' "social proof / save
+              {/* Truthful savings proof - the refs' "social proof / save
                   X%" slot, filled with a claim we can stand behind. */}
               {MONTHLY_SAVINGS > 0 && (
                 <div style={{
@@ -314,7 +314,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   <Icons.Spark size={15} stroke="var(--accent)"/>
                   <span>
                     Replaces <strong style={{ color: 'var(--fg)' }}>${STACK_TOTAL}/mo</strong> of
-                    stitched-together tools — <strong style={{ color: 'var(--ok)' }}>save ${MONTHLY_SAVINGS}/mo</strong>.
+                    stitched-together tools - <strong style={{ color: 'var(--ok)' }}>save ${MONTHLY_SAVINGS}/mo</strong>.
                   </span>
                 </div>
               )}
@@ -341,7 +341,7 @@ export default function Paywall({ ctx, onRefresh }) {
 
               {/* ─── BILLING PERIOD TOGGLE ───────────────────────────
                   Monthly (honest default) vs Annual (highlighted LTV
-                  option — 2 months free). Hidden while a monthly-only
+                  option - 2 months free). Hidden while a monthly-only
                   win-back offer is showing. */}
               {!winback && (
                 <div role="tablist" aria-label="Billing period" style={{
@@ -403,7 +403,7 @@ export default function Paywall({ ctx, onRefresh }) {
                 <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
                   {plan === 'annual'
                     ? (canTrial
-                        ? `Free for 28 days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) — save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
+                        ? `Free for 28 days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) - save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
                         : `$${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) · save $${ANNUAL_SAVINGS}/yr vs monthly. Cancel anytime.`)
                     : (canTrial
                         ? `Free for 28 days, then $${IVY_PRICE}/mo. Cancel anytime.`
@@ -415,7 +415,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   the server handed us a one-time discount, the plain
                   "cancelled" note is replaced by the offer. Subscribing
                   from here is auto-discounted server-side (checkout.js
-                  reads the stamped coupon) — no code entry needed. */}
+                  reads the stamped coupon) - no code entry needed. */}
               {cancelled && winback && (
                 <div style={{
                   padding: '12px 14px', borderRadius: 12,
@@ -426,13 +426,13 @@ export default function Paywall({ ctx, onRefresh }) {
                     fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 16,
                     letterSpacing: '-0.01em', color: 'var(--fg)',
                   }}>
-                    Wait — {winback.percentOff}% off your first {winback.durationMonths} months
+                    Wait - {winback.percentOff}% off your first {winback.durationMonths} months
                   </div>
                   <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.45 }}>
                     That's <strong style={{ color: 'var(--fg)' }}>
                       ${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo
                     </strong> for {winback.durationMonths} months. The discount applies automatically at
-                    checkout{winback.promoCode ? <> — or use code <strong>{winback.promoCode}</strong></> : null}.
+                    checkout{winback.promoCode ? <> - or use code <strong>{winback.promoCode}</strong></> : null}.
                     {winback.expiresAt && (
                       <span style={{ color: 'var(--muted)' }}> Expires {new Date(winback.expiresAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.</span>
                     )}
@@ -445,7 +445,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   padding: '8px 12px', borderRadius: 8,
                   background: 'var(--surface-2)', border: '1px solid var(--border)',
                   color: 'var(--fg-2)', fontSize: 12.5,
-                }}>Checkout was cancelled — try again whenever you're ready.</div>
+                }}>Checkout was cancelled - try again whenever you're ready.</div>
               )}
 
               {err && (
@@ -471,7 +471,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   <button onClick={subscribe} disabled={busy != null}
                     className="btn btn-ghost"
                     style={{ justifyContent: 'center', fontSize: 13, color: 'var(--muted)' }}>
-                    {busy === 'subscribe' ? 'Redirecting…' : `or subscribe now — ${priceLabel}`}
+                    {busy === 'subscribe' ? 'Redirecting…' : `or subscribe now - ${priceLabel}`}
                   </button>
                 </div>
               ) : (
@@ -479,13 +479,13 @@ export default function Paywall({ ctx, onRefresh }) {
                   className="btn btn-primary"
                   style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
                   {busy === 'subscribe' ? 'Redirecting…'
-                    : winback ? `Claim ${winback.percentOff}% off — $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo`
-                    : `Subscribe — ${priceLabel}`}
+                    : winback ? `Claim ${winback.percentOff}% off - $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo`
+                    : `Subscribe - ${priceLabel}`}
                   {busy !== 'subscribe' && <Icons.Arrow size={14} sw={2.2}/>}
                 </button>
               )}
 
-              {/* Reassurance microcopy — the refs' "No payment now ·
+              {/* Reassurance microcopy - the refs' "No payment now ·
                   Cancel anytime" trust line. "No payment now" only shows
                   when it's literally true (no-card trial). */}
               <div style={{
@@ -496,7 +496,7 @@ export default function Paywall({ ctx, onRefresh }) {
                 {canTrial ? 'No payment due today · Cancel anytime' : 'Secure checkout · Cancel anytime'}
               </div>
 
-              {/* ─── Secondary affordances — the entire hard-wall escape
+              {/* ─── Secondary affordances - the entire hard-wall escape
                   surface. Manage billing only when a Stripe customer
                   exists; Export hits the ungated data-portability GET;
                   Log out clears the session. */}
@@ -542,7 +542,7 @@ export default function Paywall({ ctx, onRefresh }) {
               </div>
 
               {/* isClient carve-out: one labeled link to the OTHER
-                  business's portal — never a generic /me link. */}
+                  business's portal - never a generic /me link. */}
               {clientOnlyBusiness && (
                 <a href="/me"
                   className="btn btn-ghost"
@@ -554,7 +554,7 @@ export default function Paywall({ ctx, onRefresh }) {
                 </a>
               )}
 
-              {/* Trust line — every top-earner closes with Terms/Privacy. */}
+              {/* Trust line - every top-earner closes with Terms/Privacy. */}
               <div style={{
                 textAlign: 'center', fontSize: 11, color: 'var(--muted-2)', marginTop: 2,
               }}>
@@ -571,7 +571,7 @@ export default function Paywall({ ctx, onRefresh }) {
 }
 
 // Refresh + recheck up to `attempts` times. Resolves once isActive becomes
-// true or attempts run out — caller decides what to do with the timeout.
+// true or attempts run out - caller decides what to do with the timeout.
 async function pollForActive(refresh, attempts, intervalMs) {
   for (let i = 0; i < attempts; i++) {
     const r = await refresh();

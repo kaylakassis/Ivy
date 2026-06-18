@@ -6,7 +6,7 @@
 //   - resend    transactional email key present + domain not on sandbox
 //   - stripe    platform secret key present (one-of: STRIPE_SECRET_KEY /
 //                 IVY_STRIPE_SECRET / STRIPE_PLATFORM_SECRET)
-//   - twilio    SMS creds present (graceful degrade — SMS is opt-in)
+//   - twilio    SMS creds present (graceful degrade - SMS is opt-in)
 //   - vapid     web-push keys present (graceful degrade)
 //   - anthropic Ivy key present (graceful degrade)
 //
@@ -15,7 +15,7 @@
 //
 // Cheap on purpose: no outbound API calls (each would add latency +
 // burn provider rate-limit budget on every uptime probe). Env-presence
-// checks catch the most common deploy mistake — forgetting a Vercel
+// checks catch the most common deploy mistake - forgetting a Vercel
 // env var on a new environment.
 import { sql } from '../_lib/db.js';
 import { methodNotAllowed } from '../_lib/json.js';

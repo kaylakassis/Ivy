@@ -1,7 +1,7 @@
 // Shared win-back offer logic. Two callers:
-//   • api/cron/winback.js          — daily dwell-based sweep (email/push
+//   • api/cron/winback.js          - daily dwell-based sweep (email/push
 //                                     to owners who left without paying).
-//   • api/billing/winback-offer.js — on-demand, fired the moment an owner
+//   • api/billing/winback-offer.js - on-demand, fired the moment an owner
 //                                     ABANDONS Stripe checkout and lands
 //                                     back on the wall (?subscribed=cancelled).
 //
@@ -25,11 +25,11 @@ export const WINBACK = {
 //     fresh=true  → we just minted it (caller may send email/push)
 //     fresh=false → a live offer already existed; re-read, don't re-email
 //   null → workspace already had an offer that has since EXPIRED (one
-//          offer per workspace, ever — we don't renew), or minting failed.
+//          offer per workspace, ever - we don't renew), or minting failed.
 //
 // Concurrency-safe: the stamp UPDATE carries `winback_offer_sent_at IS
 // NULL`, so two racers (cron + on-demand endpoint at the same instant)
-// can't both mint — the loser re-reads the winner's row.
+// can't both mint - the loser re-reads the winner's row.
 export async function ensureWinbackOffer({ secretKey, workspaceId }) {
   const { rows } = await sql`
     SELECT winback_offer_sent_at, winback_coupon_id,
@@ -39,7 +39,7 @@ export async function ensureWinbackOffer({ secretKey, workspaceId }) {
   const row = rows[0];
   if (!row) return null;
 
-  // Fast path: a non-expired offer already exists — return it untouched,
+  // Fast path: a non-expired offer already exists - return it untouched,
   // no Stripe call, no email (fresh=false).
   if (row.winback_coupon_id && row.winback_expires_at
       && new Date(row.winback_expires_at).getTime() > Date.now()) {
@@ -65,7 +65,7 @@ export async function ensureWinbackOffer({ secretKey, workspaceId }) {
     RETURNING winback_coupon_id, winback_promo_code, winback_expires_at
   `;
   if (stamped.rows.length === 0) {
-    // Lost the race — return whatever the winner wrote, no email.
+    // Lost the race - return whatever the winner wrote, no email.
     const r2 = await sql`
       SELECT winback_coupon_id, winback_promo_code, winback_expires_at
         FROM workspaces WHERE id = ${workspaceId}

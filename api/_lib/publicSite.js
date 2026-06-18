@@ -2,8 +2,8 @@
 //
 // Both the JSON endpoint (api/website/public/[handle].js, used by the
 // SPA fallback) and the SSR HTML endpoint (api/site/[handle].js) call
-// loadPublicSite() so the resolution rules — visibility filter, page
-// fallback, nav build — stay in sync.
+// loadPublicSite() so the resolution rules - visibility filter, page
+// fallback, nav build - stay in sync.
 
 import { sql } from './db.js';
 

@@ -1,4 +1,4 @@
-// /me/billing — saved cards + active memberships across every
+// /me/billing - saved cards + active memberships across every
 // business the user is a client of. Two stacked sections; either
 // or both can be empty depending on which businesses use card-on-
 // file or membership flows.
@@ -191,12 +191,12 @@ export default function ClientBilling() {
       </Section>
 
       <Section title="Memberships"
-        hint="Subscriptions you've signed up for. Cancel any time — your access continues to the end of the period you've already paid for.">
+        hint="Subscriptions you've signed up for. Cancel any time - your access continues to the end of the period you've already paid for.">
         {memberships && memberships.length === 0 ? (
           <div className="card" style={{ padding: 32 }}>
             <EmptyNote icon="Heart"
               title="No memberships yet"
-              hint="Some businesses on Ivy OS offer monthly memberships — they'll show up on their booking page when they do."/>
+              hint="Some businesses on Ivy OS offer monthly memberships - they'll show up on their booking page when they do."/>
           </div>
         ) : (
           <div className="card" style={{ overflow: 'hidden' }}>

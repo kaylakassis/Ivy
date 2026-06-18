@@ -22,7 +22,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
   const compact = variant === 'compact';
   // Filter out super-admin-only items unless the user qualifies.
   // Also hide product-only-hidden items (currently just Calendar) when
-  // the workspace is product-only — a candle maker doesn't take
+  // the workspace is product-only - a candle maker doesn't take
   // appointments. The route still exists in App.jsx so deep links work.
   const businessType = ctx?.owns?.businessType || 'both';
   const visibleNav = NAV.filter((n) => {

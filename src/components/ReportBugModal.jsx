@@ -4,7 +4,7 @@
 //   - viewport (mobile-specific bugs are common)
 //   - browser/OS via user-agent on the server
 //   - app version (BUILD_SHA injected by vite, falls back to 'dev')
-// Severity picker is intentionally simple — most reports come in as
+// Severity picker is intentionally simple - most reports come in as
 // 'minor' and we re-classify in /admin. The four-level scale matches
 // the bug_reports.severity CHECK constraint.
 import React, { useState } from 'react';
@@ -32,7 +32,7 @@ export default function ReportBugModal({ onClose }) {
 
   const submit = async (e) => {
     e?.preventDefault?.();
-    if (!title.trim()) { setErr('A short title helps a lot — what went wrong?'); return; }
+    if (!title.trim()) { setErr('A short title helps a lot - what went wrong?'); return; }
     setBusy(true); setErr(null);
     try {
       const viewport = (typeof window !== 'undefined')
@@ -94,11 +94,11 @@ export default function ReportBugModal({ onClose }) {
           }}>
             <div style={{ fontSize: 30 }}>🙏</div>
             <div style={{ fontWeight: 600, fontSize: 15, marginTop: 6 }}>
-              Got it — thank you.
+              Got it - thank you.
             </div>
             <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6, lineHeight: 1.5 }}>
               We&apos;ll triage this in the next few hours and follow up directly
-              if we need more details. You can keep using the app — no need
+              if we need more details. You can keep using the app - no need
               to refresh.
             </div>
             <button type="button" onClick={onClose} className="btn btn-primary"
@@ -110,7 +110,7 @@ export default function ReportBugModal({ onClose }) {
           <>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
               We&apos;re in beta and your eyes catch things ours miss. Tell us
-              what happened — we&apos;ll automatically include the page you&apos;re
+              what happened - we&apos;ll automatically include the page you&apos;re
               on, your browser, and your screen size so we don&apos;t have to
               ask.
             </p>

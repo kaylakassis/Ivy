@@ -61,7 +61,7 @@ export default async function handler(req, res) {
           maxUses: row.max_uses,
           expiresAt: row.expires_at,
           createdAt: row.created_at,
-          // Returned ONCE — caller must surface in UI immediately.
+          // Returned ONCE - caller must surface in UI immediately.
           url: `${appUrl()}/invite/group/${plaintext}`,
           token: plaintext,
         },

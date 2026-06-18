@@ -1,4 +1,4 @@
-// PUT /api/calendar/services — replace the workspace's services list in one shot.
+// PUT /api/calendar/services - replace the workspace's services list in one shot.
 // Body: {
 //   services: [{
 //     id?, name, durationMinutes, price, displayOrder?,
@@ -104,7 +104,7 @@ export default async function handler(req, res) {
         ? null
         : String(s.locationLabel).trim().slice(0, 500) || null;
 
-      // Visibility — three-state. Default 'public' so existing services
+      // Visibility - three-state. Default 'public' so existing services
       // that don't send the field stay listed.
       const visibility = s?.visibility || 'public';
       if (!['public', 'private', 'only_me'].includes(visibility)) {
@@ -112,7 +112,7 @@ export default async function handler(req, res) {
       }
 
       // Cancellation / no-show policy. Both fees are optional; a 0
-      // fee means "no auto-charge — owner can still cancel manually."
+      // fee means "no auto-charge - owner can still cancel manually."
       const cancellationFeeAmount = Number(s?.cancellationFeeAmount ?? 0);
       if (!Number.isFinite(cancellationFeeAmount) || cancellationFeeAmount < 0) {
         return badRequest(res, `services[${idx}].cancellationFeeAmount must be non-negative`);

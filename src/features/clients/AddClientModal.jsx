@@ -1,4 +1,4 @@
-// Modal: collect name + email + phone (all required) + source — adds as a lead.
+// Modal: collect name + email + phone (all required) + source - adds as a lead.
 // Photo upload + per-client attachments live in the full ClientDrawer
 // once the lead exists, since upload-then-cancel without a row leaves
 // orphan files in Blob.
@@ -20,7 +20,7 @@ export default function AddClientModal({ onClose, onAdd }) {
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
   const trimmedPhone = phone.trim();
-  // All three are required. Email validity is a loose check — the
+  // All three are required. Email validity is a loose check - the
   // server runs the strict one and rejects if needed.
   const emailLooksValid = /\S+@\S+\.\S+/.test(trimmedEmail);
   const phoneLooksValid = trimmedPhone.replace(/\D/g, '').length >= 7;

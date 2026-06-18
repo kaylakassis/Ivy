@@ -1,4 +1,4 @@
-// useEscapeKey — runs `onEscape` whenever the user presses Esc.
+// useEscapeKey - runs `onEscape` whenever the user presses Esc.
 // Pass `enabled = false` to temporarily skip (e.g. when the modal is
 // closed but the component is still mounted).
 //

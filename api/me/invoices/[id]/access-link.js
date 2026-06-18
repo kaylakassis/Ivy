@@ -5,7 +5,7 @@
 // rebuild a paid-from-portal flow.
 //
 // Rotating the token on every portal access invalidates the original
-// emailed link — that's intentional and fine: magic links are one-shot
+// emailed link - that's intentional and fine: magic links are one-shot
 // anyway, and the client's authenticated session is the source of truth.
 import crypto from 'node:crypto';
 import { sql } from '../../../_lib/db.js';

@@ -10,7 +10,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedProject, serializeProject, VALID_STATUS } from '../_lib/projects.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
-// Invoices + quotes don't store `total` as a column — it's computed
+// Invoices + quotes don't store `total` as a column - it's computed
 // from items + tax_rate + discount on read. Mirrors the math in
 // api/_lib/finance.js so the drawer values match what the editor and
 // PDF show.
@@ -37,7 +37,7 @@ export default async function handler(req, res) {
     if (!existing) return notFound(res, 'Project not found');
 
     if (req.method === 'GET') {
-      // Pull every linked artifact in parallel. Each is a thin row —
+      // Pull every linked artifact in parallel. Each is a thin row -
       // enough to render in the project drawer's tabs without follow-up.
       const [bookings, invoices, quotes, documents] = await Promise.all([
         sql`SELECT id, date, start_min, end_min, client_name, notes
@@ -161,7 +161,7 @@ export default async function handler(req, res) {
     if (req.method === 'DELETE') {
       // FK cascade: artifacts.project_id flips to NULL automatically.
       // The project row itself goes; we don't soft-delete because there's
-      // no "trash bin" surface in the UI yet — owners want clean lists.
+      // no "trash bin" surface in the UI yet - owners want clean lists.
       await sql`DELETE FROM projects WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       return noContent(res);
     }

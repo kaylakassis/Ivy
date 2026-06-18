@@ -1,11 +1,11 @@
-// QR code generator — owners pop this open to grab a printable QR for
+// QR code generator - owners pop this open to grab a printable QR for
 // any URL (booking link, website, etc.). Renders an SVG via the
 // existing `qrcode` dependency we already bundle, with three export
 // options:
 //
-//   • Download SVG  — vector, scales to billboard size
-//   • Download PNG  — 1024×1024 raster for print/social
-//   • Copy link     — plain URL to clipboard, no QR involved
+//   • Download SVG  - vector, scales to billboard size
+//   • Download PNG  - 1024×1024 raster for print/social
+//   • Copy link     - plain URL to clipboard, no QR involved
 //
 // Lazy-imports qrcode so the lib only ships to the browser when an
 // owner actually opens the modal.
@@ -101,7 +101,7 @@ export default function QRCodeModal({ url, label, sublabel, onClose }) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1800);
     } catch {
-      /* clipboard blocked — owner can long-press to copy manually */
+      /* clipboard blocked - owner can long-press to copy manually */
     }
   };
 
@@ -151,7 +151,7 @@ export default function QRCodeModal({ url, label, sublabel, onClose }) {
           }}>{err}</div>
         )}
 
-        {/* QR — white background regardless of theme so cameras read
+        {/* QR - white background regardless of theme so cameras read
             cleanly when downloaded/printed. */}
         <div style={{
           display: 'flex', justifyContent: 'center',

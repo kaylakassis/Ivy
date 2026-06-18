@@ -1,6 +1,6 @@
 // Helpers for gift cards. Codes are generated client-side at issue
 // time, hashed before storage (so a leaked DB doesn't immediately
-// give attackers usable codes), and never decrypted — recipient sees
+// give attackers usable codes), and never decrypted - recipient sees
 // the raw code via email; redemption looks up by hash.
 import crypto from 'node:crypto';
 import { sql } from './db.js';
@@ -45,7 +45,7 @@ export function serializeGiftCard(row) {
 
 // Public-facing balance lookup. Used by /api/gift-cards/check (public)
 // and the booking flow when a code is entered. NEVER returns the full
-// code — only display fragments.
+// code - only display fragments.
 export async function findActiveByCode(workspaceId, rawCode) {
   const norm = normalizeCode(rawCode);
   if (norm.length < 8) return null;

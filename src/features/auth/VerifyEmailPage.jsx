@@ -1,4 +1,4 @@
-// /verify-email?token=... — confirms email and bounces to dashboard.
+// /verify-email?token=... - confirms email and bounces to dashboard.
 // Works for both signed-in and signed-out users (the token is the proof).
 //
 // Idempotent: if the link was already consumed by an email-security
@@ -99,7 +99,7 @@ function ErrorState({ errMsg, user }) {
       if (r?.alreadyVerified) setResendState({ alreadyVerified: true });
       else setResendState('sent');
     } catch (e) {
-      setResendState({ error: e.message || 'Couldn\'t send the email — try again in a minute.' });
+      setResendState({ error: e.message || 'Couldn\'t send the email - try again in a minute.' });
     }
   };
   return (
@@ -109,7 +109,7 @@ function ErrorState({ errMsg, user }) {
         {errMsg || 'This link is invalid or has expired.'}
       </p>
       {user ? (
-        // Signed-in user — let them resend without leaving the page.
+        // Signed-in user - let them resend without leaving the page.
         <>
           {resendState === 'sent' && (
             <div style={{
@@ -122,7 +122,7 @@ function ErrorState({ errMsg, user }) {
           )}
           {resendState?.alreadyVerified && (
             <div style={{ fontSize: 13, color: 'var(--accent)' }}>
-              Your email is already verified — no need to resend.
+              Your email is already verified - no need to resend.
             </div>
           )}
           {resendState?.error && (
@@ -144,7 +144,7 @@ function ErrorState({ errMsg, user }) {
           <Link to="/" style={{ fontSize: 12.5, color: 'var(--muted)' }}>Back to home</Link>
         </>
       ) : (
-        // Signed-out — push them to sign in (the account page has a
+        // Signed-out - push them to sign in (the account page has a
         // resend button there too).
         <>
           <p style={{ margin: 0, color: 'var(--muted)', fontSize: 12 }}>

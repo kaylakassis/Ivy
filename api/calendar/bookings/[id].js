@@ -35,15 +35,15 @@ export default async function handler(req, res) {
       const booking = found.rows[0];
 
       // Reschedule path: { rescheduleTo: { date, startMin, endMin } }
-      // — owner moves a booking to a new slot. Mirrors the client-portal
+      // - owner moves a booking to a new slot. Mirrors the client-portal
       // path at /api/me/bookings/[id].js so audit-trail (booking id),
       // package credits, and Google Calendar sync are preserved.
-      // Recurring series can't be rescheduled — owner cancels the
+      // Recurring series can't be rescheduled - owner cancels the
       // occurrence + books a new one, same as the client portal.
       if (body.rescheduleTo && typeof body.rescheduleTo === 'object') {
         if (booking.cancelled_at) return badRequest(res, "Can't reschedule a cancelled booking");
         if (booking.recurrence_rule) {
-          return badRequest(res, "Recurring bookings can't be rescheduled — cancel this occurrence and book a new one.");
+          return badRequest(res, "Recurring bookings can't be rescheduled - cancel this occurrence and book a new one.");
         }
         const r = body.rescheduleTo;
         const newDate  = (r.date || '').toString();
@@ -69,10 +69,10 @@ export default async function handler(req, res) {
         const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
         if (!r.allowPast) {
           if (newDate < today) {
-            return badRequest(res, "That's in the past — pass allowPast: true to record a historical session.");
+            return badRequest(res, "That's in the past - pass allowPast: true to record a historical session.");
           }
           if (newDate === today && newEnd <= nowMins) {
-            return badRequest(res, "That time has already passed today — pass allowPast: true to record a historical session.");
+            return badRequest(res, "That time has already passed today - pass allowPast: true to record a historical session.");
           }
         }
 
@@ -88,7 +88,7 @@ export default async function handler(req, res) {
           serviceAvailability = sv.rows[0]?.availability || null;
         }
 
-        // Availability check — getUTCDay() to match other booking paths.
+        // Availability check - getUTCDay() to match other booking paths.
         // Owner can override via skipAvailabilityCheck for off-hours
         // bookings (e.g. a Sunday session when normal hours are
         // Mon–Sat). Conflict check the same way.
@@ -100,8 +100,8 @@ export default async function handler(req, res) {
           const weekday = new Date(newDate + 'T00:00:00Z').getUTCDay();
           if (!withinAvailability(availability, weekday, newStart, newEnd, serviceAvailability)) {
             return badRequest(res, serviceAvailability
-              ? "That time isn't in this service’s available hours — toggle Override to book anyway"
-              : "That time isn't in your available hours — toggle Override to book anyway");
+              ? "That time isn't in this service’s available hours - toggle Override to book anyway"
+              : "That time isn't in your available hours - toggle Override to book anyway");
           }
         }
 
@@ -141,7 +141,7 @@ export default async function handler(req, res) {
         // check-then-act, so two concurrent reschedules (or a reschedule
         // racing a fresh booking) into the same slot can both pass it.
         // Now that the move is committed, yield if enough conflicting
-        // bookings rank before us — and on loss REVERT to the old slot
+        // bookings rank before us - and on loss REVERT to the old slot
         // (unlike a create, the row must survive at its prior time).
         if (!skipConflict) {
           const lost = await losesBookingRace({
@@ -164,7 +164,7 @@ export default async function handler(req, res) {
             `.catch(() => {});
             return badRequest(res, capacity > 1
               ? 'That class is full or the slot conflicts with another booking'
-              : 'That slot was just taken — please pick another time');
+              : 'That slot was just taken - please pick another time');
           }
         }
 
@@ -197,7 +197,7 @@ export default async function handler(req, res) {
           RETURNING *
         `;
         syncOnBookingUpdated({ workspaceId, bookingId: id });
-        // Fire-and-forget notification — owner is cancelling on behalf
+        // Fire-and-forget notification - owner is cancelling on behalf
         // of the recurring series, so source='owner'.
         notifyBookingCancellation({
           workspaceId, bookingId: id,
@@ -272,7 +272,7 @@ export default async function handler(req, res) {
       notifyBookingCancellation({ workspaceId, bookingId: id, source: 'owner' });
       // Refund the package credit if this booking consumed one.
       await restoreCredit({ workspaceId, clientPackageId: cancelled.client_package_id });
-      // Promote next waitlist entry into a real booking. Best-effort —
+      // Promote next waitlist entry into a real booking. Best-effort -
       // any failure logs but doesn't fail the cancel.
       try {
         const promoted = await promoteWaitlistOnCancel({

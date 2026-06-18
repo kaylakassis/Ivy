@@ -1,4 +1,4 @@
-// GET /api/waitlist — owner: list waitlist entries on this workspace.
+// GET /api/waitlist - owner: list waitlist entries on this workspace.
 // Active (status='waiting') first, then promoted/cancelled history.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';

@@ -2,7 +2,7 @@
 //
 // Without this: a client retries on network error → server processes
 // the request twice → duplicate booking, duplicate invoice, duplicate
-// message. At scale this is constant — phone clients on flaky LTE
+// message. At scale this is constant - phone clients on flaky LTE
 // retry the moment they see a timeout, even though the original
 // request already completed server-side.
 //
@@ -15,7 +15,7 @@
 //      response body WITHOUT re-running the handler.
 //
 // Storage: idempotency_records table, scoped by (user_id, key) to
-// prevent cross-tenant collisions. TTL is 24h — long enough to
+// prevent cross-tenant collisions. TTL is 24h - long enough to
 // catch any realistic retry, short enough that the table doesn't
 // balloon. Cleanup runs in api/cron/db-prune.js.
 import crypto from 'crypto';
@@ -25,7 +25,7 @@ const TTL_HOURS = 24;
 const MAX_KEY_LEN = 200;
 
 // Read the Idempotency-Key header. Returns null if absent OR
-// malformed — handlers should treat null as "no idempotency
+// malformed - handlers should treat null as "no idempotency
 // requested" (i.e. run normally). Validates shape to prevent
 // header injection / abuse (alphanumeric + a few punctuation,
 // reasonable length).
@@ -43,7 +43,7 @@ export function readKey(req) {
 // fn, captures the response, stores it, returns the result.
 //
 // fn must return { status, body } where body is JSON-serializable.
-// Caller is responsible for writing that to res — withIdempotency
+// Caller is responsible for writing that to res - withIdempotency
 // is purely a memoization layer, not a response shim. This keeps
 // the API simple and lets callers decide what to write (json vs
 // custom Content-Type, headers, etc.).
@@ -55,7 +55,7 @@ export function readKey(req) {
 export async function withIdempotency(req, userId, fn) {
   const key = readKey(req);
   if (!key) {
-    // No idempotency requested — just run the handler.
+    // No idempotency requested - just run the handler.
     const result = await fn();
     return { ...result, idempotent: false };
   }
@@ -68,7 +68,7 @@ export async function withIdempotency(req, userId, fn) {
 
   // Look for a cached response first.
   // TTL_HOURS is a module-level constant (not user input) so inlining
-  // it as a literal in the INTERVAL clause is safe — and necessary,
+  // it as a literal in the INTERVAL clause is safe - and necessary,
   // because tagged-template ${...} substitution treats it as a bound
   // parameter, which breaks `INTERVAL '$N hours'` syntax.
   try {
@@ -105,7 +105,7 @@ export async function withIdempotency(req, userId, fn) {
     return { ...result, idempotent: false };
   }
 
-  // First time we've seen this key — run the handler.
+  // First time we've seen this key - run the handler.
   const result = await fn();
 
   // Best-effort store. If this fails the user still gets their
@@ -131,7 +131,7 @@ export async function withIdempotency(req, userId, fn) {
 
 // Hash the request body + path so we can detect key-reuse with a
 // different body. We don't hash headers (they vary legitimately
-// across retries — User-Agent jitter, Cookie refresh).
+// across retries - User-Agent jitter, Cookie refresh).
 function hashRequest(req) {
   try {
     const path = req.url || '';

@@ -2,7 +2,7 @@
 //   POST → mints a Vercel Blob client-upload token for a client
 //          profile photo OR a per-client document attachment.
 //          Image-only for photos, broader allowlist for attachments
-//          (PDFs, images, common docs — same set as the messages
+//          (PDFs, images, common docs - same set as the messages
 //          attachment endpoint).
 //
 // Single endpoint covers both surfaces; the caller chooses what
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
         addRandomSuffix: true,
         tokenPayload: JSON.stringify({ workspaceId }),
       }),
-      onUploadCompleted: async () => { /* no-op — bound on the next clients PATCH */ },
+      onUploadCompleted: async () => { /* no-op - bound on the next clients PATCH */ },
     });
     return ok(res, result);
   } catch (err) {

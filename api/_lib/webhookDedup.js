@@ -10,18 +10,18 @@
 // providers retry aggressively on any non-2xx response, AND on
 // timeout. A handler that 500s mid-write (e.g. notifyOwner threw,
 // or Postgres blipped) leaves application state in a half-written
-// place — the next delivery sees that state and the application-
+// place - the next delivery sees that state and the application-
 // state guard may or may not catch it. This table is the single
 // source of truth for "have we seen event X yet?".
 //
 // Backed by webhook_event_dedup (see schema.js). A nightly retention
 // cron trims rows older than 90 days (providers don't retry past
-// then — Stripe retries for up to 3 days, Square for ~24h, PayPal
+// then - Stripe retries for up to 3 days, Square for ~24h, PayPal
 // for ~25 hours).
 import { sql } from './db.js';
 
 // Release a claim taken by markProcessed. Call this if processing THROWS
-// after the claim was inserted — otherwise the provider's retry would be
+// after the claim was inserted - otherwise the provider's retry would be
 // deduped (returns 200) and the event silently lost (the claim-before-
 // process failure mode). After release, the retry re-runs the handler;
 // the handlers' natural idempotency guards (invoice already paid,

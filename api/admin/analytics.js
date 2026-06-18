@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       churnCancelledRow,
       churnActiveAtStartRow,
       // Marketing-grade aggregates. Every number here is a sum, count,
-      // or AVG across the active business base — no PII, no per-
+      // or AVG across the active business base - no PII, no per-
       // workspace identifying fields. Safe to use in landing copy
       // ("Average no-show rate is X%") with privacy intact.
       bookingTotalsRow,         // total bookings + no-shows + cancelled, last 90d
@@ -92,7 +92,7 @@ export default async function handler(req, res) {
               AND trial_ends_at > NOW()`,
       sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'sponsored'`,
       sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'affiliate'`,
-      // "Client-only" — users who don't own a workspace but DO have at
+      // "Client-only" - users who don't own a workspace but DO have at
       // least one clients row claimed under their user_id. Avoids
       // counting bare auth records that haven't been linked anywhere.
       sql`SELECT COUNT(DISTINCT u.id)::int AS n
@@ -118,7 +118,7 @@ export default async function handler(req, res) {
             AND subscription_period_end < $2`,
         [fromIso, toIso],
       ),
-      // Active denominator at start of window — best-effort proxy:
+      // Active denominator at start of window - best-effort proxy:
       // workspaces created before window start that are or were paying.
       sql.query(
         `SELECT COUNT(*)::int AS n FROM workspaces
@@ -137,7 +137,7 @@ export default async function handler(req, res) {
           WHERE date >= CURRENT_DATE - ($1::int || ' days')::interval`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
-      // Completed bookings via completion_log JSONB — any key present
+      // Completed bookings via completion_log JSONB - any key present
       // counts the booking once. Denominator = past bookings that weren't
       // cancelled or no-show'd. Compares completed vs unattended.
       sql.query(
@@ -380,7 +380,7 @@ export default async function handler(req, res) {
     // Raw cohort counts; the UI computes step-to-step + overall rates so
     // the math is visible in one place. Every count is a subset of
     // `signups`, so the funnel is monotonically non-increasing by
-    // construction (a converted workspace also has paywall_seen etc. —
+    // construction (a converted workspace also has paywall_seen etc. -
     // except where a cohort predates the paywall deploy; see the query
     // comment).
     const fn = funnelRow.rows[0] || {};
@@ -404,7 +404,7 @@ export default async function handler(req, res) {
         ratePct,
       },
       // Marketing-friendly platform aggregates. All values are means
-      // or ratios across active workspaces — no per-workspace data
+      // or ratios across active workspaces - no per-workspace data
       // leaves this endpoint. Safe to drop into landing copy ("Ivy OS
       // users see an average no-show rate of X%"). Window: 90d rolling.
       platformImpact: {
@@ -428,7 +428,7 @@ export default async function handler(req, res) {
         eligibleCount,
       },
       // Acquisition funnel for the selected window's signup cohort.
-      // Counts only — the UI renders the bars + computes the conversion
+      // Counts only - the UI renders the bars + computes the conversion
       // and drop-off percentages.
       funnel: {
         signups:           fn.signups || 0,
@@ -437,7 +437,7 @@ export default async function handler(req, res) {
         paywallSeen:       fn.paywall_seen || 0,
         converted:         fn.converted || 0,
       },
-      // Onboarding "About you" answer distributions (aggregate only —
+      // Onboarding "About you" answer distributions (aggregate only -
       // no per-workspace data, no free text). Each list is [{k, n}]
       // sorted by frequency; the UI maps option ids → labels + bars.
       onboarding: {
@@ -455,7 +455,7 @@ export default async function handler(req, res) {
 }
 
 // Distribution query for one onboarding preset field. `field` /
-// `otherField` are internal literals (allowlisted below — never user
+// `otherField` are internal literals (allowlisted below - never user
 // input), so interpolating them as column names is safe. When otherField
 // is given, preset-null-with-free-text rows collapse into an 'other'
 // bucket so the mix stays honest.

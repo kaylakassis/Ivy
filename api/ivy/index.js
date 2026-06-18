@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       const context = await safe(workspaceContext(workspaceId), {});
       // Cheap env-var probe so the UI can show a "mock mode" warning even
       // before the user has sent their first message. Doesn't actually
-      // call Anthropic — that happens on POST.
+      // call Anthropic - that happens on POST.
       const hasKey = !!process.env.ANTHROPIC_API_KEY;
       const usage = await safe(getDailyUsage(workspaceId), { used: 0, limit: 0 });
       return ok(res, {
@@ -81,7 +81,7 @@ export default async function handler(req, res) {
       // injection attempts use to hide instructions in plain sight.
       const text = sanitizeUserText((body.text || '').toString()).trim();
       // Validate + normalize attachment if present. Allow an empty text
-      // when an attachment is attached — "analyze this" is implicit.
+      // when an attachment is attached - "analyze this" is implicit.
       const attachment = parseAttachment(body.attachment);
       if (attachment instanceof Error) return badRequest(res, attachment.message);
       if (!text && !attachment) return badRequest(res, 'Message is required');
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
 
       // The persisted user message includes a one-line note about the
       // attachment so it shows up in chat history. The actual file
-      // bytes are NOT stored — they only live in the API call.
+      // bytes are NOT stored - they only live in the API call.
       const persistedText = attachment
         ? (text ? `${text}\n\n📎 ${attachment.filename || 'file'}` : `📎 ${attachment.filename || 'file'}`)
         : text;

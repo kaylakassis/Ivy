@@ -22,7 +22,7 @@ const FIELD_TYPES = [
 ];
 
 // Color the per-signer field outlines so the editor can see at a glance
-// who's filling what. Wraps after 5 — enough for the 10-signer cap.
+// who's filling what. Wraps after 5 - enough for the 10-signer cap.
 const SIGNER_COLORS = [
   '#2C7BE5', '#9B2C2C', '#1F8A4C', '#B97A07', '#6E3FB6',
   '#0D6E6E', '#A02E63', '#3B5998', '#7A6B22', '#5C5C5C',
@@ -78,7 +78,7 @@ export default function PdfFieldEditor({
     e.stopPropagation();
     e.preventDefault();
     // Capture the pointer so move/up keep tracking even if the finger
-    // drifts off the field — essential for touch dragging.
+    // drifts off the field - essential for touch dragging.
     try { e.currentTarget.setPointerCapture?.(e.pointerId); } catch { /* ignore */ }
     setSelectedId(field.id);
     const pageEl = e.currentTarget.closest('[data-page-idx]');
@@ -113,7 +113,7 @@ export default function PdfFieldEditor({
   const onMouseUp = () => setDrag(null);
 
   // Number of signer "slots" the dropdown exposes. Before send, signers
-  // is empty — so we infer from the highest signerIndex already used,
+  // is empty - so we infer from the highest signerIndex already used,
   // plus one extra so the owner can always pre-target the next signer.
   // After send, the actual signers list pins the count to who's
   // attached.

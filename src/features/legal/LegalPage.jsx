@@ -1,5 +1,5 @@
 // Shared layout for /privacy and /terms. Plain prose, public, no auth.
-// Renderable while logged out — used during signup flow + accessible from
+// Renderable while logged out - used during signup flow + accessible from
 // the footer of every auth page.
 import React from 'react';
 import { Link } from 'react-router-dom';

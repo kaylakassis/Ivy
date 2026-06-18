@@ -19,7 +19,7 @@ export default function AcceptGroupInvite() {
   useEffect(() => {
     if (ctxLoading) return;
     if (!ctx?.user) {
-      // Not signed in — bounce to signup with a return URL.
+      // Not signed in - bounce to signup with a return URL.
       const next = encodeURIComponent(`/invite/group/${token}`);
       navigate(`/signup?next=${next}`, { replace: true });
       return;

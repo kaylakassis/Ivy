@@ -1,4 +1,4 @@
-// GET /api/health — readiness check. Probes the database so a Postgres
+// GET /api/health - readiness check. Probes the database so a Postgres
 // outage with otherwise-healthy functions reports as degraded (503)
 // instead of falsely green. Used by Vercel + external uptime monitors.
 import { sql } from './_lib/db.js';

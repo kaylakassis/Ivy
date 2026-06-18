@@ -41,7 +41,7 @@ export default function DocumentPreview({
         padding: '56px 64px 64px',
         fontFamily: '"Inter", -apple-system, sans-serif',
       }}>
-        {/* Letterhead — workspace name top-right, doc name big at the
+        {/* Letterhead - workspace name top-right, doc name big at the
             top. Mirrors the SignPage header so the preview lands
             close to what the recipient sees when they open the link. */}
         <div style={{
@@ -73,7 +73,7 @@ export default function DocumentPreview({
           </div>
         </div>
 
-        {/* Body — same whitelist as recipient side so the preview
+        {/* Body - same whitelist as recipient side so the preview
             matches one-to-one. */}
         {safeBody ? (
           <div className="doc-preview-body"
@@ -86,11 +86,11 @@ export default function DocumentPreview({
             padding: '32px 0', textAlign: 'center',
             color: '#9F9F9F', fontSize: 14, fontStyle: 'italic',
           }}>
-            Start typing on the left — the document fills in here.
+            Start typing on the left - the document fills in here.
           </div>
         )}
 
-        {/* Fields strip — visualizes how each labeled input will appear
+        {/* Fields strip - visualizes how each labeled input will appear
             to the signer. Each control is rendered as the actual UI
             element (signature line, date stamp, text box) the
             recipient will fill, not as an abstract config row. */}

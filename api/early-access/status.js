@@ -1,4 +1,4 @@
-// GET /api/early-access/status — public, no auth.
+// GET /api/early-access/status - public, no auth.
 // Returns { enabled, unlocked } so the frontend knows whether to
 // render the gate screen at all (enabled) and whether the current
 // session has already supplied the right password (unlocked).

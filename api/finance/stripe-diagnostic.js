@@ -9,12 +9,12 @@
 // Checks:
 //   1. STRIPE_SECRET_KEY present + non-empty
 //   2. Key mode (test vs live) detected from the prefix
-//   3. /v1/account on the platform itself responds — confirms the
+//   3. /v1/account on the platform itself responds - confirms the
 //      key is valid and not revoked
-//   4. /v1/account/capabilities — confirms Connect is enabled
+//   4. /v1/account/capabilities - confirms Connect is enabled
 //   5. The workspace's stripe_connect_user_id (if any) is fetchable
 //   6. /v1/account_links can be minted for a throwaway test acct
-//      (only when there's no existing connected acct — we don't
+//      (only when there's no existing connected acct - we don't
 //      want to spam acct creation on every probe).
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
@@ -56,7 +56,7 @@ export default async function handler(req, res) {
       pass('Key mode', mode);
     }
 
-    // 3. Platform account fetch — proves the key is valid
+    // 3. Platform account fetch - proves the key is valid
     let platformAcct = null;
     try {
       platformAcct = await fetchAccountSummary(key);
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
       return ok(res, { checks });
     }
 
-    // 4. Connect capabilities — confirms the platform is set up for Connect
+    // 4. Connect capabilities - confirms the platform is set up for Connect
     try {
       const headers = { Authorization: `Bearer ${key}`, Accept: 'application/json' };
       const r = await fetch('https://api.stripe.com/v1/accounts?limit=1', { headers });
@@ -75,7 +75,7 @@ export default async function handler(req, res) {
         const m = body?.error?.message || `HTTP ${r.status}`;
         // The classic "Connect not enabled" error message.
         if (/sign up for Connect/i.test(m) || /Connect/i.test(m)) {
-          fail('Stripe Connect enabled', `${m} — enable Connect at https://dashboard.stripe.com/${mode === 'test' ? 'test/' : ''}connect/accounts/overview`);
+          fail('Stripe Connect enabled', `${m} - enable Connect at https://dashboard.stripe.com/${mode === 'test' ? 'test/' : ''}connect/accounts/overview`);
         } else {
           fail('Stripe Connect enabled', m);
         }
@@ -100,7 +100,7 @@ export default async function handler(req, res) {
         const body = await r.json().catch(() => ({}));
         if (!r.ok) {
           fail('Existing connected account valid',
-            `${body?.error?.message || `HTTP ${r.status}`} — acct=${acctId} (likely created in the OTHER mode). Disconnect Stripe in /finance to clear and reconnect.`);
+            `${body?.error?.message || `HTTP ${r.status}`} - acct=${acctId} (likely created in the OTHER mode). Disconnect Stripe in /finance to clear and reconnect.`);
         } else {
           pass('Existing connected account valid', `acct=${body.id}, details_submitted=${!!body.details_submitted}, charges_enabled=${!!body.charges_enabled}, livemode=${!!body.livemode}, status=${fs.rows[0].stripe_onboarding_status || 'null'}`);
         }
@@ -108,10 +108,10 @@ export default async function handler(req, res) {
         fail('Existing connected account valid', err.message);
       }
     } else {
-      pass('Existing connected account valid', 'None — fresh workspace, will create on first Connect click');
+      pass('Existing connected account valid', 'None - fresh workspace, will create on first Connect click');
     }
 
-    // 6. /v1/account_links smoke test — only when there's already an
+    // 6. /v1/account_links smoke test - only when there's already an
     //    acct we can use; we don't want to create test accounts on
     //    every probe. Skipped if no acct exists yet.
     if (acctId) {

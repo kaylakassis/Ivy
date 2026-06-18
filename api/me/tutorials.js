@@ -4,7 +4,7 @@
 //           body: { tabId, status: 'completed' | 'skipped' }
 //
 // We don't differentiate "completed" from "skipped" for auto-trigger
-// purposes — both stop the tab from auto-opening the tutorial again.
+// purposes - both stop the tab from auto-opening the tutorial again.
 // We DO record which it was so we can later report completion-rate
 // stats and identify tabs people consistently skip.
 import { sql } from '../_lib/db.js';

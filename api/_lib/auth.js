@@ -34,14 +34,14 @@ export function signSession(userId, extraClaims = {}) {
 // Vercel runs all deployments over HTTPS, so secure: always-on. NODE_ENV check
 // would silently disable secure for any custom environment that doesn't set it.
 const COOKIE_BASE = {
-  httpOnly: true,    // Not readable by JavaScript — XSS can't exfil the session.
+  httpOnly: true,    // Not readable by JavaScript - XSS can't exfil the session.
   secure: true,      // Only sent over HTTPS.
   sameSite: 'lax',   // Blocks cross-site POST/PATCH/DELETE under default rules.
   path: '/',
 };
 
 // Helper that lets us set multiple cookies in one response. Vercel's
-// res.setHeader('Set-Cookie', ...) overwrites — pass an array for stacking.
+// res.setHeader('Set-Cookie', ...) overwrites - pass an array for stacking.
 function setCookies(res, ...cookies) {
   res.setHeader('Set-Cookie', cookies);
 }
@@ -119,7 +119,7 @@ export function readSession(req) {
 // True when the request was made by the native iOS/Android Capacitor
 // shell, which sets X-Client-Platform on every fetch. Used by login /
 // signup / OAuth-callback endpoints to also include the raw JWT in the
-// response body so the client can stash it in iOS Keychain — the cookie
+// response body so the client can stash it in iOS Keychain - the cookie
 // they'd otherwise rely on doesn't cross the WebView↔API origin gap.
 export function isNativeClient(req) {
   const v = req.headers['x-client-platform'] || req.headers['X-Client-Platform'];
@@ -128,7 +128,7 @@ export function isNativeClient(req) {
 
 // Returns the current user row, or sends 401 and returns null.
 export async function requireUser(req, res) {
-  // Lazy import to avoid a circular dep — auth.js is imported very early.
+  // Lazy import to avoid a circular dep - auth.js is imported very early.
   const { ensureSchemaApplied } = await import('./ensureSchema.js');
   await ensureSchemaApplied();
 
@@ -165,7 +165,7 @@ export async function requireUser(req, res) {
   // (jsonwebtoken default); password_changed_at is a timestamp.
   const pcAt = rows[0].password_changed_at;
   if (pcAt && session.iat && (session.iat * 1000) < new Date(pcAt).getTime()) {
-    res.status(401).json({ error: 'Session expired — please sign in again' });
+    res.status(401).json({ error: 'Session expired - please sign in again' });
     return null;
   }
   return rows[0];
@@ -177,7 +177,7 @@ export async function requireUser(req, res) {
 // user (signup + first dashboard hit, or two browser tabs at once)
 // both pass the SELECT and race to INSERT. Without protection the
 // loser raises a unique-key error and the request 500s. We backstop
-// with a partial unique index on (owner_id) WHERE row_count=1 — but
+// with a partial unique index on (owner_id) WHERE row_count=1 - but
 // that's expensive to maintain, so instead we just catch the
 // duplicate and re-read. Cheap, correct, no schema change.
 export async function ensureWorkspace(userId) {
@@ -189,7 +189,7 @@ export async function ensureWorkspace(userId) {
     `;
     return created.rows[0].id;
   } catch (err) {
-    // Concurrent request won the INSERT — re-read and return its row.
+    // Concurrent request won the INSERT - re-read and return its row.
     const retry = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
     if (retry.rows.length > 0) return retry.rows[0].id;
     throw err;

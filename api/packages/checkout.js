@@ -2,7 +2,7 @@
 //
 // Public, no-auth. Mints a Stripe Checkout session for a one-time package
 // purchase on a given workspace's public booking page. The workspace is
-// resolved by `slug` (NOT trusted from the package row — same defense-in-
+// resolved by `slug` (NOT trusted from the package row - same defense-in-
 // depth pattern as /api/calendar/public/contact + /api/memberships/checkout).
 //
 // On checkout success, the workspace's webhook handler
@@ -55,7 +55,7 @@ export default async function handler(req, res) {
     if (!p.active) return badRequest(res, 'This package is no longer being sold.');
     if (p.visibility !== 'public') return badRequest(res, 'This package is not available for self-checkout.');
     if (Number(p.price || 0) <= 0) {
-      return badRequest(res, "This package isn't priced yet — contact the business.");
+      return badRequest(res, "This package isn't priced yet - contact the business.");
     }
 
     // Stripe is required (one-time payment via the connected account).

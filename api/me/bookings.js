@@ -1,4 +1,4 @@
-// GET /api/me/bookings — list every booking across the businesses the user
+// GET /api/me/bookings - list every booking across the businesses the user
 // is a client of. Grouped server-side: { upcoming, past, cancelled }.
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
@@ -41,7 +41,7 @@ export default async function handler(req, res) {
        LIMIT 500`,
       [myIds],
     )); } catch (e) {
-      // Partial schema or missing service column — degrade to empty
+      // Partial schema or missing service column - degrade to empty
       // groups rather than 500ing the whole portal.
       // eslint-disable-next-line no-console
       console.error('[me/bookings] query failed (returning empty):', e.message);
@@ -74,7 +74,7 @@ export default async function handler(req, res) {
         durationMinutes: r.duration_minutes,
         price: r.price != null ? Number(r.price) : null,
         cancelledAt: r.cancelled_at,
-        // Cancellation policy — lets the portal warn the client BEFORE a
+        // Cancellation policy - lets the portal warn the client BEFORE a
         // late-cancel fee is auto-charged on their card.
         cancellationFeeAmount: Number(r.cancellation_fee_amount || 0),
         cancellationWindowHours: Number.isInteger(r.cancellation_window_hours)
@@ -86,7 +86,7 @@ export default async function handler(req, res) {
         // Slug + workspaceId let the client-side reschedule modal fetch
         // the public availability + slot grid without duplicating
         // server-side scoping logic. Don't echo workspaceId externally
-        // — but the slug is already public.
+        // - but the slug is already public.
         bizSlug: r.biz_slug || null,
         clientId: r.client_id,
         completedAt: visible ? completionEntry.completedAt : null,

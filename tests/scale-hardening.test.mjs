@@ -1,5 +1,5 @@
 // Tests the launch-readiness hardening fixes:
-//   [1] the rate limiter never fails open — DB-backed path works, and the
+//   [1] the rate limiter never fails open - DB-backed path works, and the
 //       in-memory fallback throttles per-instance.
 //   [2] bulk client import inserts in batches (not one round trip per row),
 //       while still validating, de-duping, and storing text[] tags.
@@ -56,7 +56,7 @@ async function run() {
   const cookie = `ivy_session=${signSession(uid)}`;
   const headers = { ...sameOrigin, cookie };
 
-  console.log('\n[2] bulk client import — batched, validated, de-duped');
+  console.log('\n[2] bulk client import - batched, validated, de-duped');
   const dup = `dup-${Date.now()}@example.com`;
   await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${wid}, 'Existing', ${dup}, 'lead')`;
   const rows = [
@@ -71,14 +71,14 @@ async function run() {
   await importHandler({ method: 'POST', query: {}, body: { rows }, headers }, ires);
   assert(ires.statusCode === 200, `import returns 200 (got ${ires.statusCode}: ${ires.body?.error || ''})`);
   const sum = ires.body?.summary;
-  assert(sum?.created === 3, `created 3 (Alice/Bob/Carol) — got ${sum?.created}`);
-  assert(sum?.skipped === 1, `skipped 1 duplicate — got ${sum?.skipped}`);
-  assert(sum?.invalid === 2, `invalid 2 (no-name + bad-email) — got ${sum?.invalid}`);
+  assert(sum?.created === 3, `created 3 (Alice/Bob/Carol) - got ${sum?.created}`);
+  assert(sum?.skipped === 1, `skipped 1 duplicate - got ${sum?.skipped}`);
+  assert(sum?.invalid === 2, `invalid 2 (no-name + bad-email) - got ${sum?.invalid}`);
   const aliceTags = (await sql`SELECT tags FROM clients WHERE workspace_id = ${wid} AND name = 'Alice'`).rows[0]?.tags;
   assert(Array.isArray(aliceTags) && aliceTags.includes('vip') && aliceTags.includes('new'),
     'Alice tags stored as text[] via the batched insert');
   const total = (await sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${wid}`).rows[0].n;
-  assert(total === 4, `workspace has 4 clients (1 existing + 3 created) — got ${total}`);
+  assert(total === 4, `workspace has 4 clients (1 existing + 3 created) - got ${total}`);
 
   console.log('\n[3] calendar GET bounds its default window');
   const svc = (await sql`INSERT INTO services (workspace_id, name, duration_minutes, capacity, price)

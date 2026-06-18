@@ -1,4 +1,4 @@
-// Section catalog — the library of blocks users can add to their site.
+// Section catalog - the library of blocks users can add to their site.
 // Each section has a `type`, default data, and a human-friendly label/description.
 
 // Category pills that show above the catalog in the section library.
@@ -34,11 +34,11 @@ export const SECTION_TYPES = {
       ctaLink: '',
       align: 'center',
       imgUrl: '',     // split_image, image_bg, centered_image_below
-      videoUrl: '',   // video_bg variant — looping muted MP4 background
+      videoUrl: '',   // video_bg variant - looping muted MP4 background
     }),
   },
   // Product storefront. Renders live from /api/site/:handle/products
-  // (active products only) — owners manage the catalog in
+  // (active products only) - owners manage the catalog in
   // Finance → Products, no per-section editing here. Add-to-cart +
   // checkout are wired in SectionRenderer's Shop renderer.
   shop: {
@@ -68,7 +68,7 @@ export const SECTION_TYPES = {
       sub: '',
       items: [
         { id: 'i1', name: 'Intro session',    desc: 'A short call to see if we are a good fit.',        price: '$45',  duration: '30 min', imgUrl: '' },
-        { id: 'i2', name: 'Standard session', desc: 'The core offering — one hour of focused work.',    price: '$85',  duration: '60 min', imgUrl: '' },
+        { id: 'i2', name: 'Standard session', desc: 'The core offering - one hour of focused work.',    price: '$85',  duration: '60 min', imgUrl: '' },
         { id: 'i3', name: 'Full assessment',  desc: 'Deep-dive session with a written summary after.',  price: '$140', duration: '90 min', imgUrl: '' },
       ],
     }),
@@ -168,7 +168,7 @@ export const SECTION_TYPES = {
   stats: {
     label: 'Stats',
     icon: 'Trending',
-    desc: 'Counters — clients served, years in business, etc.',
+    desc: 'Counters - clients served, years in business, etc.',
     category: 'social_proof',
     default: () => ({
       headline: '',
@@ -187,7 +187,7 @@ export const SECTION_TYPES = {
     category: 'cta',
     default: () => ({
       headline: 'Ready to start?',
-      sub: "Book a 20-minute intro call — no commitment.",
+      sub: "Book a 20-minute intro call - no commitment.",
       cta: 'Book now',
       ctaLink: '',
     }),
@@ -200,8 +200,8 @@ export const SECTION_TYPES = {
     default: () => ({
       headline: 'Meet the team',
       members: [
-        { id: 'm1', name: 'Sam Johnson', role: 'Lead practitioner', bio: 'Short bio — what they do, what makes them great.', imgUrl: '' },
-        { id: 'm2', name: 'Alex Rivera', role: 'Associate',         bio: 'Short bio — what they do, what makes them great.', imgUrl: '' },
+        { id: 'm1', name: 'Sam Johnson', role: 'Lead practitioner', bio: 'Short bio - what they do, what makes them great.', imgUrl: '' },
+        { id: 'm2', name: 'Alex Rivera', role: 'Associate',         bio: 'Short bio - what they do, what makes them great.', imgUrl: '' },
       ],
     }),
   },
@@ -227,7 +227,7 @@ export const SECTION_TYPES = {
     category: 'cta',
     default: () => ({
       headline: 'Stay in touch',
-      sub: 'Occasional emails about what I am working on — no spam.',
+      sub: 'Occasional emails about what I am working on - no spam.',
       buttonText: 'Subscribe',
       placeholder: 'you@example.com',
     }),
@@ -246,7 +246,7 @@ export const SECTION_TYPES = {
   logos: {
     label: 'Featured in',
     icon: 'Globe',
-    desc: 'Logos / press strip — "as seen in"',
+    desc: 'Logos / press strip - "as seen in"',
     category: 'social_proof',
     default: () => ({
       headline: 'Featured in',
@@ -279,7 +279,7 @@ export const SECTION_TYPES = {
   blog: {
     label: 'Blog / posts',
     icon: 'Doc',
-    desc: 'Recent posts strip — title + excerpt + link',
+    desc: 'Recent posts strip - title + excerpt + link',
     category: 'content',
     default: () => ({
       headline: 'Latest writing',
@@ -361,13 +361,13 @@ export const SECTION_TYPES = {
   accordion: {
     label: 'Accordion',
     icon: 'Chat',
-    desc: 'Collapsible Q&A — the FAQ variant for long lists',
+    desc: 'Collapsible Q&A - the FAQ variant for long lists',
     category: 'content',
     default: () => ({
       headline: 'Frequently asked',
       items: [
         { id: 'a1', q: 'How long is a typical engagement?', a: '8–12 weeks. We start with a 1-week scoping sprint then settle into a weekly cadence.' },
-        { id: 'a2', q: 'Do you offer payment plans?',       a: 'Yes — split into two or three payments at no extra cost.' },
+        { id: 'a2', q: 'Do you offer payment plans?',       a: 'Yes - split into two or three payments at no extra cost.' },
         { id: 'a3', q: 'What if I need to pause?',          a: 'You can pause anytime with 1 week notice; we hold your slot for up to 60 days.' },
       ],
     }),
@@ -416,7 +416,7 @@ export const SECTION_TYPES = {
   custom_html: {
     label: 'Custom HTML',
     icon: 'Doc',
-    desc: 'Power-user escape hatch — embeds owner-supplied HTML (sandboxed)',
+    desc: 'Power-user escape hatch - embeds owner-supplied HTML (sandboxed)',
     category: 'embed',
     default: () => ({
       html: '<div style="padding:48px;text-align:center;font-family:sans-serif">Paste any HTML here. Renders inside a sandboxed iframe.</div>',
@@ -436,9 +436,9 @@ export function mkSection(type, businessName = '') {
     type,
     visible: true,
     // Optional fields the editor sets to customize this instance:
-    //   variant — which layout to use (one of cfg.variants[].id)
-    //   style   — { background?, padding?, textAlign? } per-section overrides
-    //   animate — entry animation key (one of ANIMATIONS) or null
+    //   variant - which layout to use (one of cfg.variants[].id)
+    //   style   - { background?, padding?, textAlign? } per-section overrides
+    //   animate - entry animation key (one of ANIMATIONS) or null
     variant: cfg.variants?.[0]?.id || null,
     style: {},
     animate: null,
@@ -457,7 +457,7 @@ export const ANIMATIONS = {
   zoom:        { label: 'Subtle zoom' },
 };
 
-// Font-pair presets — owners can override the template's defaults.
+// Font-pair presets - owners can override the template's defaults.
 // Each preset names the display + body fonts; the renderer maps them
 // into the --site-font-display / --site-font-body CSS variables.
 // All presets pull from Google Fonts; the public renderer injects the
@@ -488,7 +488,7 @@ export const PADDING_DENSITIES = {
   spacious: '140px 80px',
 };
 
-// Starter pages for first-time users — applied by the wizard.
+// Starter pages for first-time users - applied by the wizard.
 // Kept for backward compat with any direct callers (the new Wizard
 // uses STARTER_PACKS below).
 export function starterSections(businessName) {
@@ -517,13 +517,13 @@ function buildPage({ slug = '', title = 'Home', sections = [], inNav = true } = 
   };
 }
 
-// STARTER_PACKS — opinionated starting points the Wizard offers up
+// STARTER_PACKS - opinionated starting points the Wizard offers up
 // front. Each pack defines:
-//   id, label, desc            — for the picker UI
-//   template, fontPair         — site-wide style hints (Wizard still
+//   id, label, desc            - for the picker UI
+//   template, fontPair         - site-wide style hints (Wizard still
 //                                lets the owner override these later)
-//   icon                       — Icons key for the pack chip
-//   build(businessName)        — function returning a `pages` array
+//   icon                       - Icons key for the pack chip
+//   build(businessName)        - function returning a `pages` array
 //                                ready to drop into state.js's site.pages
 //
 // Packs lean into the new section types (stats, cta_banner, team,
@@ -534,7 +534,7 @@ export const STARTER_PACKS = {
   service_pro: {
     id: 'service_pro',
     label: 'Service business',
-    desc: 'Single-page site — hero, services, testimonials, booking. The default for most owners.',
+    desc: 'Single-page site - hero, services, testimonials, booking. The default for most owners.',
     icon: 'Dollar',
     template: 'clean',
     fontPair: 'fraunces_inter',
@@ -568,7 +568,7 @@ export const STARTER_PACKS = {
           mk('logos',    biz, { animate: 'fade' }),
           mk('about',    biz, { animate: 'rise' }),
           mk('cta_banner', biz, { animate: 'zoom',
-                                  data: { headline: 'Ready to start?', sub: "Tell me about your project — I'll get back within 24 hours.", cta: 'Book a consultation' } }),
+                                  data: { headline: 'Ready to start?', sub: "Tell me about your project - I'll get back within 24 hours.", cta: 'Book a consultation' } }),
           mk('footer',   biz),
         ],
       }),
@@ -593,7 +593,7 @@ export const STARTER_PACKS = {
   coach_consultant: {
     id: 'coach_consultant',
     label: 'Coach / Consultant',
-    desc: 'Pricing-forward — stats, testimonials, three-tier pricing, newsletter. Multi-page: Home + Pricing + Compare.',
+    desc: 'Pricing-forward - stats, testimonials, three-tier pricing, newsletter. Multi-page: Home + Pricing + Compare.',
     icon: 'Users',
     template: 'editorial',
     fontPair: 'playfair_lato',
@@ -606,7 +606,7 @@ export const STARTER_PACKS = {
           mk('about',        biz, { animate: 'rise' }),
           mk('testimonials', biz, { animate: 'rise' }),
           mk('cta_banner',   biz, { animate: 'zoom',
-                                    data: { headline: 'See if we fit.', sub: '20-minute intro — no commitment.', cta: 'Schedule it' } }),
+                                    data: { headline: 'See if we fit.', sub: '20-minute intro - no commitment.', cta: 'Schedule it' } }),
           mk('newsletter',   biz, { animate: 'fade' }),
           mk('footer',       biz),
         ],
@@ -632,7 +632,7 @@ export const STARTER_PACKS = {
   studio_team: {
     id: 'studio_team',
     label: 'Studio / Team',
-    desc: 'Team-led — meet-the-team page, services, gallery, contact. Best for shops with 2+ practitioners.',
+    desc: 'Team-led - meet-the-team page, services, gallery, contact. Best for shops with 2+ practitioners.',
     icon: 'Users',
     template: 'wellness',
     fontPair: 'fraunces_inter',
@@ -668,7 +668,7 @@ export const STARTER_PACKS = {
   premium_minimal: {
     id: 'premium_minimal',
     label: 'Premium / Minimalist',
-    desc: 'Quiet, confident — left-aligned hero, list services, single testimonial, generous whitespace.',
+    desc: 'Quiet, confident - left-aligned hero, list services, single testimonial, generous whitespace.',
     icon: 'Edit',
     template: 'mono',
     fontPair: 'space_inter',
@@ -693,7 +693,7 @@ export const STARTER_PACKS = {
   writer_speaker: {
     id: 'writer_speaker',
     label: 'Writer / Speaker',
-    desc: 'Editorial — blog strip, about, video, newsletter. Built for thought leaders.',
+    desc: 'Editorial - blog strip, about, video, newsletter. Built for thought leaders.',
     icon: 'Doc',
     template: 'editorial',
     fontPair: 'fraunces_fraunces',
@@ -711,7 +711,7 @@ export const STARTER_PACKS = {
       }),
       buildPage({
         slug: 'writing', title: 'Writing', sections: [
-          mk('hero',   biz, { variant: 'left', data: { headline: 'Writing', sub: 'All essays — newest first.', cta: '' } }),
+          mk('hero',   biz, { variant: 'left', data: { headline: 'Writing', sub: 'All essays - newest first.', cta: '' } }),
           mk('blog',   biz, { animate: 'rise' }),
           mk('footer', biz),
         ],

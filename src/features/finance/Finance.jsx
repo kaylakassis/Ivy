@@ -45,7 +45,7 @@ export default function Finance() {
   const [exportMenuOpen, setExportMenuOpen] = useState(false);
 
   // Prompt for year and trigger a CSV download. Used for the Schedule-C
-  // summary AND the QuickBooks/Xero importable exports — all three share
+  // summary AND the QuickBooks/Xero importable exports - all three share
   // the year-pick UX, only the URL differs.
   const downloadCSV = (path) => {
     const year = new Date().getFullYear();
@@ -124,13 +124,13 @@ export default function Finance() {
       return;
     }
     if (quoteId) {
-      // Quotes is a SECTION (not a tab — `tab` is invoice-status
+      // Quotes is a SECTION (not a tab - `tab` is invoice-status
       // filter). Switch section so the Quotes component mounts; it
       // reads ?quote on its own and strips it after consumption.
       setSection('quotes');
-      // Leave ?quote in the URL — Quotes.jsx consumes + strips it.
+      // Leave ?quote in the URL - Quotes.jsx consumes + strips it.
     }
-    // ?section=<id> — used by the Calendar → /finance redirect for the
+    // ?section=<id> - used by the Calendar → /finance redirect for the
     // legacy ?service= deep link and any future tab-switch links.
     const sectionParam = params.get('section');
     if (sectionParam) {
@@ -166,7 +166,7 @@ export default function Finance() {
         </div>
         <div style={{ position: 'relative' }}>
           <button className="btn btn-outline" onClick={() => setExportMenuOpen((v) => !v)}
-            title="Year-end CSV exports — for taxes or accounting software">
+            title="Year-end CSV exports - for taxes or accounting software">
             <Icons.Doc size={13}/> Export ▾
           </button>
           {exportMenuOpen && (
@@ -214,7 +214,7 @@ export default function Finance() {
         </div>
         {section === 'invoices' && (
           // Arrow wraps startNew so the click's SyntheticEvent doesn't
-          // land as the clientId arg — `...(clientId ? {clientId} : {})`
+          // land as the clientId arg - `...(clientId ? {clientId} : {})`
           // below would otherwise spread the event into the API payload.
           <button className="btn btn-primary" onClick={() => startNew()} disabled={creatingBusy}>
             <Icons.Plus size={13} sw={2}/> {creatingBusy ? 'Creating…' : 'New invoice'}
@@ -365,7 +365,7 @@ function InvoicesSection({
             <InvoiceRow key={i.id} invoice={i} first={idx === 0} onOpen={() => setOpenId(i.id)}/>
           ))}
 
-          {/* Load more — only when the server reports a page past
+          {/* Load more - only when the server reports a page past
               1000 invoices. On filtered tabs the user-facing rows
               might already be a small set; we still surface the
               loader so filters can find matches on later pages. */}
@@ -426,7 +426,7 @@ function InvoiceRow({ invoice, first, onOpen }) {
           {invoice.clientName || <span style={{ color: 'var(--muted-2)' }}>No client yet</span>}
         </div>
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-          {invoice.clientEmail || (invoice.items?.[0]?.description || '—')}
+          {invoice.clientEmail || (invoice.items?.[0]?.description || '-')}
         </div>
       </div>
       <span style={{
@@ -437,10 +437,10 @@ function InvoiceRow({ invoice, first, onOpen }) {
         <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
       </span>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
-        {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString() : '—'}
+        {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString() : '-'}
       </div>
       <div style={{ fontSize: 12.5, color: invoice.status === 'overdue' ? 'var(--danger)' : 'var(--fg-2)' }}>
-        {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : '—'}
+        {invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString() : '-'}
       </div>
       <div className="mono-num" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }}>
         {fmtMoney(invoice.total, invoice.currency)}
@@ -478,15 +478,15 @@ function SummaryCard({ label, value, sub, icon, tone = 'neutral' }) {
 // Owner dashboard formatter. The dashboard summary rolls up multi-
 // currency invoices but the workspace usually has a dominant
 // currency, so for the summary tiles we default to USD (the column
-// default) — invoice rows themselves render with the per-row
+// default) - invoice rows themselves render with the per-row
 // currency via inv.currency. Cross-currency mixing is an
 // edge case until a workspace genuinely has dual-currency clients.
 function fmtMoney(n, currency = 'USD') {
-  if (n == null) return '—';
+  if (n == null) return '-';
   return fmtMoneyShared(n, currency);
 }
 
-// Tiny dropdown helpers for the Export menu. Inline styles only —
+// Tiny dropdown helpers for the Export menu. Inline styles only -
 // nothing fancy, just a labeled group + clickable rows.
 function ExportMenuHeader({ label }) {
   return (
@@ -522,7 +522,7 @@ function ExportMenuItem({ label, hint, onClick }) {
 const STRIPE_ERRORS = {
   no_key: {
     title: 'Stripe isn\'t configured on this deploy yet',
-    body: 'Set STRIPE_SECRET_KEY in your Vercel project settings — a key starting with sk_live_ (or sk_test_ for testing) from https://dashboard.stripe.com/apikeys. Redeploy after saving.',
+    body: 'Set STRIPE_SECRET_KEY in your Vercel project settings - a key starting with sk_live_ (or sk_test_ for testing) from https://dashboard.stripe.com/apikeys. Redeploy after saving.',
   },
   bad_key: {
     title: 'Stripe rejected the API key',
@@ -530,11 +530,11 @@ const STRIPE_ERRORS = {
   },
   connect_not_enabled: {
     title: 'Your Stripe account hasn\'t enabled Connect yet',
-    body: 'Visit https://dashboard.stripe.com/connect/accounts/overview (or /test/connect/accounts/overview if you\'re using a test key) and click "Get started" — takes about 2 minutes. Then retry the Connect button.',
+    body: 'Visit https://dashboard.stripe.com/connect/accounts/overview (or /test/connect/accounts/overview if you\'re using a test key) and click "Get started" - takes about 2 minutes. Then retry the Connect button.',
   },
   wrong_mode: {
     title: 'Saved Stripe account is from the other mode',
-    body: 'A connected-account ID from the other mode (test vs. live) is saved on this workspace. Click Disconnect Stripe below, then reconnect — the new connection will match the current key.',
+    body: 'A connected-account ID from the other mode (test vs. live) is saved on this workspace. Click Disconnect Stripe below, then reconnect - the new connection will match the current key.',
   },
   unsupported_country: {
     title: 'Stripe rejected the account country',

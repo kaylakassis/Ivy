@@ -1,5 +1,5 @@
 // Spanish strings. Missing keys fall back to English at runtime
-// (see i18n.js), so it's safe to ship a partial translation —
+// (see i18n.js), so it's safe to ship a partial translation -
 // untranslated surfaces just stay in English until translated.
 export default {
   'common.save':         'Guardar',
@@ -47,7 +47,7 @@ export default {
   'inbox.no_threads':       'No hay conversaciones todavía.',
   'inbox.new_message':      'Mensaje nuevo',
 
-  'error.network':       'Error de red — verifica tu conexión e intenta de nuevo.',
+  'error.network':       'Error de red - verifica tu conexión e intenta de nuevo.',
   'error.unauthorized':  'Necesitas iniciar sesión.',
   'error.server':        'Algo salió mal. Recibimos una notificación.',
 };

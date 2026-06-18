@@ -1,11 +1,11 @@
-// Expenses surface — list, add/edit modal, delete.
+// Expenses surface - list, add/edit modal, delete.
 // Lives inside Finance.jsx alongside invoices (toggle at the top).
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 
-// Mirror api/_lib/expenses.js. Kept in sync by hand — small + stable.
+// Mirror api/_lib/expenses.js. Kept in sync by hand - small + stable.
 const CATEGORIES = [
   { key: 'advertising',     label: 'Advertising' },
   { key: 'car',             label: 'Car & truck' },
@@ -32,7 +32,7 @@ function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 function fmtDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso + 'T00:00:00').toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
@@ -254,7 +254,7 @@ function ExpenseEditor({ expense, onClose, onSaved }) {
 
         <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12.5, color: 'var(--fg-2)', marginBottom: 14 }}>
           <input type="checkbox" checked={isDeductible} onChange={(e) => setIsDeductible(e.target.checked)}/>
-          Deductible — include in tax export totals
+          Deductible - include in tax export totals
         </label>
 
         {err && (

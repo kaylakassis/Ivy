@@ -1,17 +1,17 @@
 // Client-side image pre-processing for uploads.
 //
-// Modern phone cameras produce 12-48 MP photos at 5-15 MB each — far
+// Modern phone cameras produce 12-48 MP photos at 5-15 MB each - far
 // larger than any web surface needs. Uploading raw is slow on mobile
 // LTE and wastes Vercel Blob storage. We resize + re-encode in the
 // browser before upload, which also conveniently STRIPS EXIF metadata
-// (Canvas re-encoding drops everything that isn't pixels — including
+// (Canvas re-encoding drops everything that isn't pixels - including
 // GPS location, camera serial, focal length, the lot).
 //
 // Why client-side and not server-side sharp:
 //   • No serverless function bandwidth cost for the raw upload.
 //   • No sharp dependency (it's a 30MB native binary that needs
 //     special Vercel build config).
-//   • Privacy win — GPS coordinates never leave the device.
+//   • Privacy win - GPS coordinates never leave the device.
 //
 // What we DON'T do:
 //   • Virus / malware scan. Web-browser sandboxed; not our threat
@@ -23,7 +23,7 @@
 //     If a Chrome user attaches a HEIC photo, the canvas read will
 //     fail; we surface that as a clear error so they can re-pick.
 //
-// Returns a new File ready to upload — same .name, possibly different
+// Returns a new File ready to upload - same .name, possibly different
 // .type (jpeg/webp) and much smaller .size.
 
 const DEFAULT_MAX_DIM   = 1920;     // longest edge in px
@@ -33,7 +33,7 @@ const SKIP_SIZE_BYTES   = 200 * 1024;  // files under 200 KB skip processing
 
 export async function processImageForUpload(file, opts = {}) {
   if (!file || !file.type || !file.type.startsWith('image/')) {
-    return file; // non-image — passthrough
+    return file; // non-image - passthrough
   }
   // Small images: skip the round-trip through canvas. They're already
   // web-friendly + EXIF on tiny thumbnails isn't a privacy risk.
@@ -121,7 +121,7 @@ function drawToCanvas(source, width, height) {
   canvas.width  = width;
   canvas.height = height;
   const ctx = canvas.getContext('2d');
-  // Higher quality scaling — default 'pixelated' on Firefox at very
+  // Higher quality scaling - default 'pixelated' on Firefox at very
   // small sizes; 'high' is the modern correct setting for photos.
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = 'high';

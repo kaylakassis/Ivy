@@ -1,4 +1,4 @@
-// /api/cron/google-busy-sync — runs hourly (see vercel.json).
+// /api/cron/google-busy-sync - runs hourly (see vercel.json).
 // Pulls personal-calendar busy windows from every workspace that has
 // Google sync connected AND google_block_inbound enabled, mirroring
 // them into external_busy_blocks. The slot conflict check on the
@@ -7,7 +7,7 @@
 //
 // Failures on individual workspaces are logged and stored on
 // google_inbound_last_error so the owner sees them in the SyncDrawer
-// — one workspace's bad token never breaks sync for everyone else.
+// - one workspace's bad token never breaks sync for everyone else.
 import { sql } from '../_lib/db.js';
 import { pullBusyTimes } from '../_lib/googleSync.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -20,7 +20,7 @@ async function handler(req, res) {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
   // Vercel cron requests carry an Authorization: Bearer <CRON_SECRET>
-  // header. Refuse to run when the secret is unset — leaving the route
+  // header. Refuse to run when the secret is unset - leaving the route
   // open made sense in early-stage deploys but production must always
   // require auth, otherwise anyone can trigger a sync of every
   // workspace's Google calendar on demand.

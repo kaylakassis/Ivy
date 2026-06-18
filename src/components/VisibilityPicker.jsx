@@ -1,9 +1,9 @@
-// Shared 3-state visibility selector — used by Services, Packages,
+// Shared 3-state visibility selector - used by Services, Packages,
 // and Website. Three radio cards, current state highlighted.
 //
-//   public   — listed on Discover + the public booking page
-//   private  — bookable by direct link only; not listed
-//   only_me  — fully hidden from clients (effectively a draft)
+//   public   - listed on Discover + the public booking page
+//   private  - bookable by direct link only; not listed
+//   only_me  - fully hidden from clients (effectively a draft)
 //
 // The hint copy stays at the call site so each surface can phrase
 // the consequences in its own words ("hidden from your booking page",

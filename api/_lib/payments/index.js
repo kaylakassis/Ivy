@@ -1,4 +1,4 @@
-// Payment provider registry — picks the right adapter for a workspace.
+// Payment provider registry - picks the right adapter for a workspace.
 //
 // All provider adapters expose the same async interface so the
 // application code never branches on provider type:
@@ -15,7 +15,7 @@
 //                                                          metadata } | null
 //
 // Provider-specific extras (refunds, saved cards, recurring billing,
-// subscriptions) are not part of the common interface yet — those flows
+// subscriptions) are not part of the common interface yet - those flows
 // stay Stripe-only in v1 because Square and PayPal need separate per-
 // adapter implementations and v1 is checkout-only.
 import { fetchFinanceSettings } from '../finance.js';

@@ -1,4 +1,4 @@
-// /quote/:token (public) — recipient view of an estimate. Shows
+// /quote/:token (public) - recipient view of an estimate. Shows
 // itemized line + totals + accept / decline actions. Branded with
 // the workspace's logo + accent color when set.
 import React, { useEffect, useState } from 'react';
@@ -153,7 +153,7 @@ export default function PublicQuote() {
         <div style={{ display: 'flex', justifyContent: 'space-between', flexWrap: 'wrap', gap: 12,
           fontSize: 12.5, color: 'var(--muted)', marginBottom: 18 }}>
           <span>For: <b style={{ color: 'var(--fg-2)' }}>{quote.clientName}</b></span>
-          <span>Issued: {quote.issueDate ? new Date(quote.issueDate).toLocaleDateString() : '—'}</span>
+          <span>Issued: {quote.issueDate ? new Date(quote.issueDate).toLocaleDateString() : '-'}</span>
           {quote.expiryDate && <span>Valid through: {new Date(quote.expiryDate).toLocaleDateString()}</span>}
         </div>
 
@@ -187,7 +187,7 @@ export default function PublicQuote() {
                           onChange={() => toggleOpt(it.id)} style={{ accentColor: accent }}/>
                       ) : null}
                       <span>
-                        {it.description || '—'}
+                        {it.description || '-'}
                         {it.packageGroup
                           ? <span style={{ color: 'var(--muted)', fontSize: 11 }}> · choose one</span>
                           : it.optional
@@ -207,7 +207,7 @@ export default function PublicQuote() {
 
         {isProposal && quote.status === 'sent' && (
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
-            Tick the add-ons you want and pick one option per group — your total updates live.
+            Tick the add-ons you want and pick one option per group - your total updates live.
           </div>
         )}
 
@@ -259,7 +259,7 @@ export default function PublicQuote() {
           ) : (
             <div>
               <textarea value={declineReason} onChange={(e) => setDeclineReason(e.target.value.slice(0, 500))}
-                rows={3} placeholder="Optional — let them know what changed."
+                rows={3} placeholder="Optional - let them know what changed."
                 style={{ width: '100%', padding: '10px 12px', borderRadius: 10,
                   background: 'var(--surface-2)', border: '1px solid var(--border-strong)',
                   color: 'var(--fg)', fontSize: 13.5, outline: 'none',
@@ -278,7 +278,7 @@ export default function PublicQuote() {
         </div>
       ) : (
         <div className="card" style={{ padding: 20, textAlign: 'center', fontSize: 13, color: 'var(--muted)' }}>
-          This estimate is no longer active{quote.status === 'expired' ? ' — it expired' : ''}.
+          This estimate is no longer active{quote.status === 'expired' ? ' - it expired' : ''}.
         </div>
       )}
     </Wrap>

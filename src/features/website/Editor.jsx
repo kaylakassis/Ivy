@@ -1,4 +1,4 @@
-// Main editor — 3-column layout (library | canvas | inspector) + a publish toolbar.
+// Main editor - 3-column layout (library | canvas | inspector) + a publish toolbar.
 //
 // Responsive behavior:
 //   • Desktop (≥ 1024px): three columns side-by-side, full toolbar.
@@ -35,7 +35,7 @@ export default function Editor({
   const activeSections = currentPage?.sections || site.sections || [];
   const [selectedId, setSelectedId] = useState(activeSections[0]?.id || null);
   const [pageMenuOpen, setPageMenuOpen] = useState(false);
-  // Reset selection when the active page changes — IDs are per-page so
+  // Reset selection when the active page changes - IDs are per-page so
   // keeping the prior selectedId would mismatch the new section list.
   useEffect(() => {
     setSelectedId(activeSections[0]?.id || null);
@@ -71,7 +71,7 @@ export default function Editor({
   const [publishErr, setPublishErr] = useState(null);
   const { isMobile, isTablet } = useViewport();
   // Mobile pane: 'outline' | 'canvas' | 'inspector'. The inspector tab
-  // is only enabled when a section is selected — otherwise tapping it
+  // is only enabled when a section is selected - otherwise tapping it
   // would land on an empty "click a section" placeholder.
   const [mobileTab, setMobileTab] = useState('canvas');
 
@@ -169,7 +169,7 @@ export default function Editor({
 
         {!isMobile && <div style={{ flex: 1 }} />}
 
-        {/* Visibility selector — Public / Link only / Only me. Mirrors
+        {/* Visibility selector - Public / Link only / Only me. Mirrors
             the same control on Services + Packages so owners learn one
             mental model for "where does this show up". */}
         <SiteVisibilityButton
@@ -227,7 +227,7 @@ export default function Editor({
           )}
         </div>
 
-        {/* Undo / redo — sits next to the template menu so it stays
+        {/* Undo / redo - sits next to the template menu so it stays
             on-screen on every viewport. Wired to global Cmd/Ctrl+Z and
             Cmd/Ctrl+Shift+Z below via a keyboard listener on document. */}
         <div style={{ display: 'flex', gap: 4 }}>
@@ -241,17 +241,17 @@ export default function Editor({
           </button>
         </div>
 
-        {/* Site-style affordances — font pair + custom CSS. Both apply
+        {/* Site-style affordances - font pair + custom CSS. Both apply
             site-wide (every page, every section). */}
         <SiteStyleButton site={site} set={set}/>
 
-        {/* Advanced — domain / forms / redirects / popups / history / traffic */}
+        {/* Advanced - domain / forms / redirects / popups / history / traffic */}
         <button className="btn btn-outline" onClick={() => setShowAdvanced(true)}
           title="Domain, forms, redirects, history, traffic">
           <Icons.Settings size={13}/> Advanced
         </button>
 
-        {/* Device toggle — hide on phones; the user is already on a phone
+        {/* Device toggle - hide on phones; the user is already on a phone
             and doesn't need a "preview at desktop width" toggle squeezed
             into a row that's already wrapping. */}
         {!isMobile && <div style={{
@@ -370,7 +370,7 @@ export default function Editor({
           fontSize: 12,
         }}>
           <Icons.Check size={14} />
-          <span>Published — your site is live at</span>
+          <span>Published - your site is live at</span>
           <a href={publicUrl} target="_blank" rel="noreferrer" style={{ color: 'var(--accent)', fontWeight: 600 }}>{publicUrl}</a>
           <button
             className="btn btn-ghost"
@@ -404,7 +404,7 @@ export default function Editor({
         }}>
           <Icons.Edit size={13}/>
           <span style={{ color: 'var(--fg-2)' }}>
-            You have unpublished edits — saved as a draft. Click <strong>Republish</strong> to push them live.
+            You have unpublished edits - saved as a draft. Click <strong>Republish</strong> to push them live.
           </span>
         </div>
       )}
@@ -417,7 +417,7 @@ export default function Editor({
         />
       )}
 
-      {/* Mobile pane tab bar — only renders on phones, and only outside
+      {/* Mobile pane tab bar - only renders on phones, and only outside
           preview mode (preview takes the whole screen). The Inspector
           tab is only enabled when something is selected. */}
       {isMobile && !previewMode && (
@@ -433,7 +433,7 @@ export default function Editor({
         </div>
       )}
 
-      {/* Page tabs — sites with > 1 page show a pill row that switches
+      {/* Page tabs - sites with > 1 page show a pill row that switches
           which page is edited. Single-page sites hide it entirely so
           the bar isn't noise. The "+ Page" button appends a new page. */}
       {!previewMode && (
@@ -450,7 +450,7 @@ export default function Editor({
 
       {/* Main body */}
       <div style={{ flex: 1, display: 'flex', minHeight: 0 }}>
-        {/* SectionLibrary — desktop: always visible. Tablet: visible.
+        {/* SectionLibrary - desktop: always visible. Tablet: visible.
             Mobile: only when 'outline' tab is active. */}
         {!previewMode && (!isMobile || mobileTab === 'outline') && (
           <SectionLibrary
@@ -460,7 +460,7 @@ export default function Editor({
             onSelect={(id) => {
               setSelectedId(id);
               // Tapping a section on mobile should jump to the inspector
-              // so the user can immediately edit it — otherwise the tap
+              // so the user can immediately edit it - otherwise the tap
               // selects the section but leaves the user staring at the
               // same outline list with no visible feedback.
               if (isMobile) setMobileTab('inspector');
@@ -471,7 +471,7 @@ export default function Editor({
             mobile={isMobile}
           />
         )}
-        {/* Canvas — desktop/tablet always visible. Mobile: only when
+        {/* Canvas - desktop/tablet always visible. Mobile: only when
             'canvas' tab is active OR when previewMode is on. */}
         {(!isMobile || mobileTab === 'canvas' || previewMode) && (
           <Canvas
@@ -487,7 +487,7 @@ export default function Editor({
             previewMode={previewMode}
           />
         )}
-        {/* Inspector — desktop: always. Tablet: only when a section is
+        {/* Inspector - desktop: always. Tablet: only when a section is
             selected (saves horizontal real estate). Mobile: only when
             'inspector' tab is active. */}
         {!previewMode && (
@@ -607,7 +607,7 @@ function SiteVisibilityButton({ visibility, onChange, isMobile }) {
   );
 }
 
-// PageTabs — pill row above the main editor body. Renders the list of
+// PageTabs - pill row above the main editor body. Renders the list of
 // pages for the site, lets the owner switch which page is being edited,
 // rename via prompt, reorder, and delete (with home-page protection).
 function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onRemove }) {
@@ -723,7 +723,7 @@ function PageTabs({ pages, currentPageId, onSelect, onAdd, onRename, onMove, onR
   );
 }
 
-// SiteStyleButton — toolbar dropdown that surfaces site-wide style
+// SiteStyleButton - toolbar dropdown that surfaces site-wide style
 // + SEO overrides decoupled from the template:
 //   • Font pair: 6 presets that override the template's font choice
 //   • Custom CSS: textarea injected as a <style> tag inside the site
@@ -784,7 +784,7 @@ function SiteStyleButton({ site, set }) {
                   <label style={fieldLabelSt}>Custom CSS</label>
                   <textarea value={site.customCss || ''}
                     onChange={(e) => set({ customCss: e.target.value })}
-                    placeholder="/* Style anything in your site — written exactly as standard CSS. */"
+                    placeholder="/* Style anything in your site - written exactly as standard CSS. */"
                     rows={6}
                     style={{ ...fieldInputSt, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', fontSize: 12, resize: 'vertical', minHeight: 120 }}/>
                   <div style={fieldHintSt}>
@@ -813,7 +813,7 @@ function SiteStyleButton({ site, set }) {
                   <label style={fieldLabelSt}>Default description</label>
                   <textarea value={site.seoDescription || ''}
                     onChange={(e) => set({ seoDescription: e.target.value })}
-                    placeholder="A short pitch — shown in Google results and link previews."
+                    placeholder="A short pitch - shown in Google results and link previews."
                     rows={3}
                     maxLength={400}
                     style={{ ...fieldInputSt, resize: 'vertical', lineHeight: 1.5 }}/>

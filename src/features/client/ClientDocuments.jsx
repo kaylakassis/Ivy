@@ -1,4 +1,4 @@
-// /me/documents — pending and signed documents from every business.
+// /me/documents - pending and signed documents from every business.
 // "Open & sign" mints a fresh signing token then opens the existing
 // public /sign/:token page in a new tab.
 import React, { useEffect, useState } from 'react';
@@ -15,7 +15,7 @@ const STATUS_META = {
 };
 
 function fmtDate(iso) {
-  if (!iso) return '—';
+  if (!iso) return '-';
   return new Date(iso).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
@@ -76,7 +76,7 @@ export default function ClientDocuments() {
           letterSpacing: '-0.03em', margin: '0 0 6px', lineHeight: 1.05,
         }}>Documents</h2>
         <p style={{ color: 'var(--muted)', fontSize: 13, margin: 0 }}>
-          Forms and agreements from every business you work with — sign once, kept forever.
+          Forms and agreements from every business you work with - sign once, kept forever.
         </p>
       </div>
 

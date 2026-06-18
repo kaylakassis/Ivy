@@ -1,4 +1,4 @@
-// GET /api/reviews — owner: list every review (visible + hidden) on
+// GET /api/reviews - owner: list every review (visible + hidden) on
 // their workspace, plus aggregate stats. Used by the Reviews tab in
 // the business app.
 import { sql } from '../_lib/db.js';

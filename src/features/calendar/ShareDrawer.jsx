@@ -1,4 +1,4 @@
-// Share booking link drawer — edit business name + handle, copy link.
+// Share booking link drawer - edit business name + handle, copy link.
 // Both fields require an explicit Save (no silent on-blur). Status banner
 // makes it obvious whether the handle is published yet.
 import React, { useState, useEffect } from 'react';
@@ -78,7 +78,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
       setLat(r.match.lat.toFixed(5));
       setLng(r.match.lng.toFixed(5));
       // If the geocoder gave a more canonical label (e.g. "123 Main St,
-      // Austin, TX 78701, USA"), suggest it but don't overwrite — owner
+      // Austin, TX 78701, USA"), suggest it but don't overwrite - owner
       // chose what to show on their card.
     } catch (e) {
       setErr(e.message || 'Could not look up that address.');
@@ -175,7 +175,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
         </div>
       </Field>
 
-      {/* Discover opt-in. Only meaningful once a handle is saved — Discover
+      {/* Discover opt-in. Only meaningful once a handle is saved - Discover
           listings link to /book/<slug>, so a business with no slug has nothing
           to point at. */}
       <div style={{
@@ -195,7 +195,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
             <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
               {isPublished
                 ? "Show your business in the Ivy OS directory. Any signed-in user can find you and book through your public link."
-                : "Save a handle above first — Discover entries link to your public booking page."}
+                : "Save a handle above first - Discover entries link to your public booking page."}
             </div>
             {discoverable && isPublished && (
               <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 14 }}>
@@ -263,7 +263,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
                     </button>
                   </div>
                   <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.45 }}>
-                    Without coordinates, your business won't show up when clients search by distance — but you'll still match category, price, and service searches.
+                    Without coordinates, your business won't show up when clients search by distance - but you'll still match category, price, and service searches.
                   </div>
                 </div>
               </div>
@@ -280,7 +280,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
         }}>{err}</div>
       )}
 
-      {/* Save button — explicit so users don't have to know about blur events. */}
+      {/* Save button - explicit so users don't have to know about blur events. */}
       <button className="btn btn-primary" onClick={save}
         disabled={!dirty || busy}
         style={{
@@ -296,7 +296,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
         {!busy && dirty && <Icons.Check size={14} sw={2.2}/>}
       </button>
 
-      {/* Shareable link card — only fully active once we have a saved handle */}
+      {/* Shareable link card - only fully active once we have a saved handle */}
       <div style={{
         padding: 14, borderRadius: 10,
         background: 'var(--surface-2)', border: '1px solid var(--border)',
@@ -335,7 +335,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
           <QRCodeModal
             url={shareUrl}
             label={`${savedSlug || 'Booking link'} QR`}
-            sublabel="Print on flyers, drop in stories, stick on the front desk — anyone who scans lands on your booking page."
+            sublabel="Print on flyers, drop in stories, stick on the front desk - anyone who scans lands on your booking page."
             onClose={() => setQrOpen(false)}
           />
         )}
@@ -343,7 +343,7 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Anyone with the link can see your available slots and book — they can't see your other
+        Anyone with the link can see your available slots and book - they can't see your other
         bookings, clients, or notes.
       </div>
 
@@ -363,7 +363,7 @@ function Field({ label, hint, children }) {
 }
 
 // Hits /api/calendar/public/<slug> directly so the owner can see whether the
-// public booking page is actually serving — useful when the deploy is lagging
+// public booking page is actually serving - useful when the deploy is lagging
 // or schema isn't migrated.
 function LinkTest({ slug }) {
   const [state, setState] = useState({ kind: 'idle' });
@@ -402,7 +402,7 @@ function LinkTest({ slug }) {
   );
 }
 
-// Embed snippets — copyable <script> tags owners drop onto their own
+// Embed snippets - copyable <script> tags owners drop onto their own
 // website to render an Ivy OS booking widget or contact form. The
 // script's loader lives at /embed.js (in public/); the inner page is
 // our /embed/book/:slug or /embed/contact/:slug route. Auto-sized via
@@ -429,7 +429,7 @@ function EmbedSnippets({ slug }) {
       <div>
         <div style={{ fontSize: 13.5, fontWeight: 600 }}>Embed on your existing website</div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.5 }}>
-          One-line snippet — drops a booking widget or a lead-capture form
+          One-line snippet - drops a booking widget or a lead-capture form
           right into your Squarespace / Wix / WordPress / Instagram-link page.
         </div>
       </div>

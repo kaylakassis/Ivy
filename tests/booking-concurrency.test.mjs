@@ -1,8 +1,8 @@
 // Tests for the two scale fixes added after the production audit:
-//   1. Double-booking race resolution (losesBookingRace) — the optimistic
+//   1. Double-booking race resolution (losesBookingRace) - the optimistic
 //      post-insert check that lets exactly `capacity` concurrent bookings
 //      of a slot win and rolls back the rest.
-//   2. Stripe-native charge idempotency — chargeOffSession forwards an
+//   2. Stripe-native charge idempotency - chargeOffSession forwards an
 //      Idempotency-Key header so a retry / crash-after-charge can't
 //      double-bill.
 //

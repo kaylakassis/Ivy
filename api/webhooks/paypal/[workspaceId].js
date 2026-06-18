@@ -53,7 +53,7 @@ export default async function handler(req, res) {
         && settings.paypalMerchantId
         && parsed.payeeMerchantId !== settings.paypalMerchantId) {
       console.warn('[webhooks/paypal] payee merchant', parsed.payeeMerchantId,
-        'does not match workspace merchant', settings.paypalMerchantId, '— ignoring');
+        'does not match workspace merchant', settings.paypalMerchantId, '- ignoring');
       return ok(res, { handled: false, reason: 'merchant-mismatch' });
     }
 

@@ -4,12 +4,12 @@
 //   • For every workspace with Stripe Connect enabled, list active +
 //     past_due + trialing + recently-cancelled subscriptions and
 //     replay each through applySubscriptionState. This catches drift
-//     that the webhook missed — dropped deliveries, retries past
+//     that the webhook missed - dropped deliveries, retries past
 //     Stripe's retention window, subscriptions created/edited in the
 //     Stripe Dashboard during a webhook outage, plan changes that
 //     fired before the metadata stamping was added, etc.
 //
-//   • Idempotent. applySubscriptionState is guarded — same state
+//   • Idempotent. applySubscriptionState is guarded - same state
 //     replay is a no-op UPDATE; tier changes still resync.
 //
 // Why a cron, not just the webhook:

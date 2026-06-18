@@ -99,13 +99,13 @@ export function slotsForDate(cal, date, serviceOrDur) {
   const windows = svcWindowsRaw
     ? intersectWindowsLocal(wsWindows, svcWindowsRaw)
     : wsWindows;
-  // Start-time spacing: a fixed grid (slotMinutes — e.g. 60 = top of the
+  // Start-time spacing: a fixed grid (slotMinutes - e.g. 60 = top of the
   // hour) or, when slotFitService is set, each service's own length so
   // appointments pack back-to-back. Floored at 5 min to avoid a 0-step loop.
   const step = Math.max(5, cal.settings?.slotFitService ? dur : (cal.settings?.slotMinutes || 30));
   // Minimum advance notice: slots earlier than (now + notice) aren't
   // bookable, and past times are always excluded. Default 24h; 0 = same-day
-  // allowed (but never the past). Client-facing only — public booking +
+  // allowed (but never the past). Client-facing only - public booking +
   // portal reschedule both call this; the owner's calendar does not.
   const minNoticeMin = Math.max(0, Number(cal.settings?.minNoticeHours ?? 24) * 60);
   const cutoffMs = Date.now() + minNoticeMin * 60 * 1000;
@@ -189,7 +189,7 @@ export function expandBookings(bookings, rangeStart, rangeEnd) {
 
   for (const b of bookings) {
     if (!b.recurrenceRule) {
-      // Single occurrence — include if it lands in range.
+      // Single occurrence - include if it lands in range.
       if (b.date >= startISO && b.date <= endISO) out.push({ ...b, occurrenceDate: b.date });
       continue;
     }

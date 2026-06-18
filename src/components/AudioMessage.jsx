@@ -1,8 +1,8 @@
 // Shared building blocks for voice messages across the messaging surfaces
 // (owner 1:1, owner group chat, client DMs, client group chat).
 //
-// AudioPlayer  — inline player rendered inside a message bubble.
-// RecordingBar — full-width composer state shown while recording.
+// AudioPlayer  - inline player rendered inside a message bubble.
+// RecordingBar - full-width composer state shown while recording.
 //
 // Both were originally inlined in Messages.jsx (owner 1:1). Extracting
 // them here lets every other thread renderer/composer use the exact
@@ -86,7 +86,7 @@ export function RecordingBar({ elapsedMs, transcript, onSend, onCancel, sending 
   );
 }
 
-// Circular mic icon button — used to start a recording from a composer.
+// Circular mic icon button - used to start a recording from a composer.
 // Sized to match the other composer-icon buttons (Plus, Phone, etc.)
 // already in use across the surfaces.
 export function MicButton({ onClick, title = 'Record voice message', disabled }) {
@@ -119,7 +119,7 @@ export function MicButton({ onClick, title = 'Record voice message', disabled })
 // durationMs }). Centralised here so the four composer integrations
 // don't drift on file naming or extension logic.
 //
-// `upload` is the @vercel/blob/client function — passed in by the
+// `upload` is the @vercel/blob/client function - passed in by the
 // caller so this module doesn't need to import it directly (keeps the
 // dependency surface explicit at call sites).
 export async function uploadVoiceMemo(upload, { blob, mime, durationMs }, prefix = 'voice') {
