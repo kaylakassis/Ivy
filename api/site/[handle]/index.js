@@ -7,9 +7,9 @@
 // gets replaced by React on render - that's fine, the static markup is
 // only there for crawlers and for the millisecond before JS runs.
 
-import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
-import { loadPublicSite } from '../_lib/publicSite.js';
-import { renderSiteHtml } from '../_lib/siteHtml.js';
+import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
+import { loadPublicSite } from '../../_lib/publicSite.js';
+import { renderSiteHtml } from '../../_lib/siteHtml.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
