@@ -29,6 +29,39 @@ function norm(s) {
   return String(s || '').trim().toLowerCase().replace(/\.+$/, '');
 }
 
+// Register the domain with our Vercel project so Vercel terminates TLS
+// for it and routes the host to this deployment. Without this step the
+// DNS can be correct but Vercel still answers the host with its own
+// "domain not configured" error, because it doesn't know to serve us.
+//
+// Idempotent: a 409 means the domain is already attached - treat as
+// success. Best-effort + guarded: if VERCEL_TOKEN / VERCEL_PROJECT_ID
+// aren't set we skip provisioning (the operator adds the domain in the
+// Vercel dashboard manually) and say so in `detail`.
+async function provisionVercelDomain(domain) {
+  const token = process.env.VERCEL_TOKEN;
+  const projectId = process.env.VERCEL_PROJECT_ID;
+  if (!token || !projectId) return { ok: false, reason: 'not_configured' };
+  const teamQ = process.env.VERCEL_TEAM_ID
+    ? `?teamId=${encodeURIComponent(process.env.VERCEL_TEAM_ID)}`
+    : '';
+  try {
+    const r = await fetch(
+      `https://api.vercel.com/v10/projects/${encodeURIComponent(projectId)}/domains${teamQ}`,
+      {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: domain }),
+      },
+    );
+    if (r.ok || r.status === 409) return { ok: true };
+    const body = await r.text().catch(() => '');
+    return { ok: false, reason: `vercel ${r.status}: ${body.slice(0, 160)}` };
+  } catch (e) {
+    return { ok: false, reason: e.message || 'request failed' };
+  }
+}
+
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -64,6 +97,15 @@ export default async function handler(req, res) {
     } catch (e) {
       status = 'failed';
       detail = e.message || 'DNS lookup failed';
+    }
+    // DNS is correct → make Vercel actually serve the domain.
+    if (status === 'verified') {
+      const prov = await provisionVercelDomain(domain);
+      if (!prov.ok && prov.reason !== 'not_configured') {
+        // Keep the DNS verdict (DNS IS verified), but tell the owner the
+        // domain still needs to be attached on our side.
+        detail = `DNS verified. Finishing domain setup is taking a moment (${prov.reason}). Your site will be live here shortly.`;
+      }
     }
     await sql`UPDATE websites SET domain_status = ${status}, updated_at = NOW() WHERE id = ${row.rows[0].id}`;
     return ok(res, {

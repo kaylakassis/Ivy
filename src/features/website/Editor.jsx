@@ -15,7 +15,7 @@ import Inspector, { ImageInput } from './Inspector.jsx';
 import AdvancedPanel from './AdvancedPanel.jsx';
 import { mkSection, FONT_PAIRS } from './sections.js';
 import { TEMPLATE_LIST, TEMPLATES } from './templates.js';
-import { publicOrigin } from '../../lib/publicUrl.js';
+import { siteShareUrl } from '../../lib/publicUrl.js';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 
@@ -131,7 +131,10 @@ export default function Editor({
   const doCancelSchedule = async () => {
     try { await cancelSchedule(); } catch (e) { setPublishErr(e.message || 'Could not cancel'); }
   };
-  const publicUrl = site.handle ? `${publicOrigin()}/site/${site.handle}` : null;
+  // Share the owner's verified custom domain when connected; otherwise
+  // the platform /site/<handle> URL. The "Published - live at", Copy
+  // button, and QR all read from this.
+  const publicUrl = siteShareUrl(site);
 
   return (
     <div style={{
@@ -162,7 +165,7 @@ export default function Editor({
               fontSize: 11, color: 'var(--muted)',
               whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
             }}>
-              {publicUrl ? `/site/${site.handle}` : 'Set a handle to publish'}
+              {publicUrl ? publicUrl.replace(/^https?:\/\//, '') : 'Set a handle to publish'}
             </div>
           </div>
         </div>

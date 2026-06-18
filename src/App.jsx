@@ -18,6 +18,7 @@ import RootRouter from './features/marketing/RootRouter.jsx';
 import ClientShell from './features/client/ClientShell.jsx';
 import { ErrorBoundary } from './lib/monitoring.js';
 import { tryStaleChunkRecovery } from './lib/staleChunk.js';
+import { isPlatformHost } from './lib/publicUrl.js';
 
 // ── Lazy: business app pages ──
 const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
@@ -167,6 +168,27 @@ function RouteCrash({ resetError, error }) {
 }
 
 export default function App() {
+  // Custom-domain mode: when the app is loaded on a business owner's
+  // connected custom domain (not a platform host), the ONLY thing that
+  // domain serves is that owner's published site, resolved server-side
+  // by host. The dashboard, auth, and marketing live only on the
+  // platform domain. /book/:slug stays available so the site's
+  // "Book a session" button works on the custom domain too.
+  const onCustomDomain = typeof window !== 'undefined'
+    && !isPlatformHost(window.location.host);
+  if (onCustomDomain) {
+    return (
+      <Suspense fallback={<RouteFallback/>}>
+        <ErrorBoundary fallback={({ resetError, error }) => <RouteCrash resetError={resetError} error={error}/>}>
+          <Routes>
+            <Route path="/book/:slug" element={<PublicBooking />} />
+            <Route path="*"           element={<PublicSite byHost />} />
+          </Routes>
+        </ErrorBoundary>
+      </Suspense>
+    );
+  }
+
   return (
     <>
     <Suspense fallback={<RouteFallback/>}>

@@ -2,31 +2,47 @@
 // /site/:handle/:slug (sub-pages) - reads from
 // /api/website/public/:handle?slug=<slug>.
 import React, { useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useLocation } from 'react-router-dom';
 import SectionRenderer from './SectionRenderer.jsx';
 import { TEMPLATES } from './templates.js';
 import { FONT_PAIRS } from './sections.js';
 import { api } from '../../lib/api.js';
 import EmptyNote from '../../components/EmptyNote.jsx';
 
-export default function PublicSite() {
-  const { handle, slug } = useParams();
-  const pageSlug = slug || '';
+// `byHost` mode renders the site for a business owner's connected custom
+// domain: there's no /site/:handle in the URL, so the page slug comes
+// from the path and the site is resolved server-side by the request
+// host (/api/website/by-host). Platform mode (/site/:handle) is unchanged.
+export default function PublicSite({ byHost = false }) {
+  const params = useParams();
+  const location = useLocation();
+  const pageSlug = byHost
+    ? location.pathname.replace(/^\/+/, '').toLowerCase()
+    : (params.slug || '');
   const [site, setSite]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
+  // On a custom domain the handle isn't in the URL; use the one the
+  // server resolved (for titles, nav, the pageview beacon).
+  const handle = byHost ? (site?.handle || '') : params.handle;
+  // Link base for in-site navigation: empty on a custom domain (links
+  // are root-relative, e.g. /about), /site/<handle> on the platform.
+  const linkBase = byHost ? '' : `/site/${handle}`;
 
   useEffect(() => {
     let live = true;
     setLoading(true);
     setError(null);
-    const url = `/website/public/${encodeURIComponent(handle)}` + (pageSlug ? `?slug=${encodeURIComponent(pageSlug)}` : '');
+    const qs = pageSlug ? `?slug=${encodeURIComponent(pageSlug)}` : '';
+    const url = byHost
+      ? `/website/by-host${qs}`
+      : `/website/public/${encodeURIComponent(params.handle)}${qs}`;
     api.get(url)
       .then((r) => live && setSite(r.site))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, [handle, pageSlug]);
+  }, [byHost, params.handle, pageSlug]);
 
   useEffect(() => {
     if (site) {
@@ -100,7 +116,7 @@ export default function PublicSite() {
 
       {/* Site-wide nav strip - only renders for multi-page sites. */}
       {nav.length > 1 && (
-        <PublicNav handle={handle} nav={nav} currentSlug={pageSlug}
+        <PublicNav handle={handle} linkBase={linkBase} nav={nav} currentSlug={pageSlug}
           businessName={site.businessName}/>
       )}
 
@@ -177,7 +193,7 @@ function ExitIntent({ cfg }) {
 // Top-of-page nav for multi-page sites. Sticky, transparent over the
 // hero, gains a backdrop when scrolled. Page links use React Router so
 // transitions stay client-side.
-function PublicNav({ handle, nav, currentSlug, businessName }) {
+function PublicNav({ handle, linkBase = `/site/${handle}`, nav, currentSlug, businessName }) {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 24);
@@ -195,7 +211,7 @@ function PublicNav({ handle, nav, currentSlug, businessName }) {
       borderBottom: scrolled ? '1px solid var(--site-border)' : '1px solid transparent',
       transition: 'background 0.2s, border-color 0.2s',
     }}>
-      <Link to={`/site/${handle}`} style={{
+      <Link to={linkBase || '/'} style={{
         fontFamily: 'var(--site-font-display)', fontSize: 20, fontWeight: 550,
         color: 'var(--site-fg)', textDecoration: 'none', letterSpacing: '-0.015em',
       }}>{businessName || handle}</Link>
@@ -205,7 +221,7 @@ function PublicNav({ handle, nav, currentSlug, businessName }) {
           const active = (p.slug || '') === (currentSlug || '');
           return (
             <Link key={p.slug || 'home'}
-              to={p.slug ? `/site/${handle}/${p.slug}` : `/site/${handle}`}
+              to={p.slug ? `${linkBase}/${p.slug}` : (linkBase || '/')}
               style={{
                 fontSize: 14, color: active ? 'var(--site-accent)' : 'var(--site-fg-2)',
                 textDecoration: 'none', fontWeight: active ? 600 : 500,
