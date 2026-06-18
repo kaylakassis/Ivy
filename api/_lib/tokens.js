@@ -71,9 +71,22 @@ export async function invalidateUserTokens({ userId, kind }) {
 }
 
 // Public app URL - used when constructing verification / reset links.
-// Vercel sets VERCEL_URL to the deploy URL; we prefer an explicit APP_URL when set.
+//
+// Order:
+//   1. APP_URL when explicitly set (the operator's source of truth).
+//   2. In Vercel PRODUCTION, the canonical public domain. We deliberately
+//      do NOT use VERCEL_URL here: those per-deployment *.vercel.app URLs
+//      sit behind Vercel Deployment Protection, so an emailed link to one
+//      resolves to a blank / auth-walled response (the "clicking the
+//      verify button downloads a blank .txt" bug). Email links must point
+//      at the real, publicly-reachable domain.
+//   3. Preview deploys: the deployment's own VERCEL_URL.
+//   4. Local dev: localhost.
+const CANONICAL_APP_URL = 'https://getivyos.com';
+
 export function appUrl() {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');
+  if (process.env.VERCEL_ENV === 'production') return CANONICAL_APP_URL;
   if (process.env.VERCEL_URL) return `https://${process.env.VERCEL_URL}`;
   return 'http://localhost:5173';
 }
