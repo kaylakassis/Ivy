@@ -120,6 +120,11 @@ Value: cname.getivyos.com`}</pre>
             <span style={{ fontSize: 12, color: statusStyle.color, fontWeight: 600 }}>
               ● {statusStyle.label}
             </span>
+            {result && result.live != null && (
+              <span style={{ fontSize: 12, fontWeight: 600, color: result.live ? '#0E8A4D' : '#9A6B12' }}>
+                ● {result.live ? 'Live - SSL active' : 'Setting up SSL…'}
+              </span>
+            )}
           </div>
           {result?.detail && (
             <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--muted)' }}>{result.detail}</div>

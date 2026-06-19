@@ -16,6 +16,7 @@ import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { enforce } from '../_lib/rate-limit.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { addProjectDomain, getDomainConfig } from '../_lib/vercelDomains.js';
 import dns from 'node:dns/promises';
 
 // The platform-level CNAME owners point their domain at. Owners type
@@ -27,39 +28,6 @@ const TARGET_CNAME = process.env.WEBSITE_CNAME_TARGET || 'cname.getivyos.com';
 // deterministic regardless of how the resolver returns the record.
 function norm(s) {
   return String(s || '').trim().toLowerCase().replace(/\.+$/, '');
-}
-
-// Register the domain with our Vercel project so Vercel terminates TLS
-// for it and routes the host to this deployment. Without this step the
-// DNS can be correct but Vercel still answers the host with its own
-// "domain not configured" error, because it doesn't know to serve us.
-//
-// Idempotent: a 409 means the domain is already attached - treat as
-// success. Best-effort + guarded: if VERCEL_TOKEN / VERCEL_PROJECT_ID
-// aren't set we skip provisioning (the operator adds the domain in the
-// Vercel dashboard manually) and say so in `detail`.
-async function provisionVercelDomain(domain) {
-  const token = process.env.VERCEL_TOKEN;
-  const projectId = process.env.VERCEL_PROJECT_ID;
-  if (!token || !projectId) return { ok: false, reason: 'not_configured' };
-  const teamQ = process.env.VERCEL_TEAM_ID
-    ? `?teamId=${encodeURIComponent(process.env.VERCEL_TEAM_ID)}`
-    : '';
-  try {
-    const r = await fetch(
-      `https://api.vercel.com/v10/projects/${encodeURIComponent(projectId)}/domains${teamQ}`,
-      {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: domain }),
-      },
-    );
-    if (r.ok || r.status === 409) return { ok: true };
-    const body = await r.text().catch(() => '');
-    return { ok: false, reason: `vercel ${r.status}: ${body.slice(0, 160)}` };
-  } catch (e) {
-    return { ok: false, reason: e.message || 'request failed' };
-  }
 }
 
 export default async function handler(req, res) {
@@ -98,19 +66,31 @@ export default async function handler(req, res) {
       status = 'failed';
       detail = e.message || 'DNS lookup failed';
     }
-    // DNS is correct → make Vercel actually serve the domain.
+    // DNS is correct → attach the domain to Vercel so it actually serves,
+    // then ask Vercel whether TLS is live yet so we can tell the owner the
+    // real state (DNS-verified is not the same as reachable-with-SSL).
+    let live = null;
     if (status === 'verified') {
-      const prov = await provisionVercelDomain(domain);
-      if (!prov.ok && prov.reason !== 'not_configured') {
-        // Keep the DNS verdict (DNS IS verified), but tell the owner the
-        // domain still needs to be attached on our side.
+      const prov = await addProjectDomain(domain);
+      if (prov.configured && prov.ok === false) {
+        // Keep the DNS verdict (DNS IS verified), but flag that attaching
+        // the domain on our side hit a snag.
         detail = `DNS verified. Finishing domain setup is taking a moment (${prov.reason}). Your site will be live here shortly.`;
+      } else if (prov.configured) {
+        const cfg = await getDomainConfig(domain);
+        live = cfg.live;
+        if (live === true) {
+          detail = 'Live - SSL active. Your site is reachable on this domain.';
+        } else if (live === false) {
+          detail = 'DNS verified. Vercel is issuing the SSL certificate - this usually takes a minute or two.';
+        }
       }
     }
     await sql`UPDATE websites SET domain_status = ${status}, updated_at = NOW() WHERE id = ${row.rows[0].id}`;
     return ok(res, {
       domain,
       status,
+      live,
       detail,
       target: TARGET_CNAME,
     });

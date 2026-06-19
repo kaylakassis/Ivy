@@ -17,6 +17,14 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
+import { removeProjectDomain } from '../_lib/vercelDomains.js';
+
+// Normalize a domain for change-detection: lowercase, strip scheme,
+// trailing slashes/dots. Mirrors api/_lib/publicSite.js host handling.
+function normDomain(d) {
+  return String(d || '').trim().toLowerCase()
+    .replace(/^https?:\/\//, '').replace(/[/.]+$/, '');
+}
 
 const ALLOWED_TEMPLATES = new Set([
   'clean', 'warm', 'bold',
@@ -245,6 +253,21 @@ export default async function handler(req, res) {
       // Ensure a row exists, then apply patch.
       await getOrCreate(workspaceId);
 
+      // Custom-domain lifecycle: when the owner sets / changes / clears the
+      // domain, force re-verification (reset domain_status) and detach the
+      // OLD domain from the Vercel project so it doesn't orphan (and can be
+      // reused). Best-effort - never block the save on Vercel.
+      let domainChanged = false;
+      if ('customDomain' in body) {
+        const cur = await sql`SELECT custom_domain FROM websites WHERE workspace_id = ${workspaceId}`;
+        const oldDomain = normDomain(cur.rows[0]?.custom_domain);
+        const newDomain = normDomain(patch.customDomain);
+        domainChanged = oldDomain !== newDomain;
+        if (domainChanged && oldDomain) {
+          await removeProjectDomain(oldDomain).catch(() => {});
+        }
+      }
+
       const updated = await sql`
         UPDATE websites SET
           handle             = COALESCE(${patch.handle ?? null},         handle),
@@ -254,7 +277,10 @@ export default async function handler(req, res) {
           custom_css         = COALESCE(${patch.customCss ?? null},      custom_css),
           sections           = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
           pages              = COALESCE(${JSON.stringify(patch.pages ?? null)}::jsonb,    pages),
-          custom_domain      = COALESCE(${patch.customDomain ?? null},   custom_domain),
+          custom_domain      = CASE WHEN ${'customDomain' in body}
+            THEN ${patch.customDomain ?? null} ELSE custom_domain END,
+          domain_status      = CASE WHEN ${domainChanged}
+            THEN NULL ELSE domain_status END,
           launched           = COALESCE(${patch.launched ?? null},       launched),
           visibility         = COALESCE(${patch.visibility ?? null},     visibility),
           seo_title          = COALESCE(${patch.seoTitle ?? null},       seo_title),
