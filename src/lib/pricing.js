@@ -29,7 +29,7 @@ export const IVY_PRICE = 49;
 // default (api/_lib/schema.js) - the hard paywall flips the wall on
 // when this expires. Marketing copy reads from here so a future change
 // in the trial length only happens in one place.
-export const TRIAL_DAYS = 28;
+export const TRIAL_DAYS = 14;
 
 // Annual plan ("Active, billed yearly"). Priced at 10× the monthly
 // rate so a year of Ivy OS costs the same as ten months paid monthly -

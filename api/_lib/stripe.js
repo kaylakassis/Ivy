@@ -304,7 +304,8 @@ export function verifyWebhookSignature({ payload, header, secret, tolerance = 30
 export async function createSubscriptionCheckoutSession({
   secretKey, priceId, customerId, customerEmail,
   workspaceId, successUrl, cancelUrl,
-  couponId, // optional - when set, pre-applies the win-back coupon.
+  couponId,  // optional - when set, pre-applies the win-back coupon.
+  trialDays, // optional - when set, starts a card-on-file free trial of N days.
 }) {
   const body = {
     mode: 'subscription',
@@ -315,6 +316,13 @@ export async function createSubscriptionCheckoutSession({
     'metadata[workspace_id]': workspaceId,
     'subscription_data[metadata][workspace_id]': workspaceId,
   };
+  if (trialDays && Number(trialDays) > 0) {
+    // Card-backed free trial: collect the card now, charge $0 today, and
+    // auto-convert at trial end. payment_method_collection:'always' forces
+    // the card field even though the amount due today is $0.
+    body['subscription_data[trial_period_days]'] = String(Math.floor(trialDays));
+    body.payment_method_collection = 'always';
+  }
   if (couponId) {
     // Stripe rejects `discounts` together with `allow_promotion_codes`,
     // so the win-back path turns the input box OFF and pre-applies the

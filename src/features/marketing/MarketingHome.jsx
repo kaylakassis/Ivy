@@ -118,7 +118,7 @@ const FAQ = [
   },
   {
     q: "What's pricing going to look like?",
-    a: `Start with a ${TRIAL_DAYS}-day free trial - no credit card required - then one simple subscription at $${IVY_PRICE}/mo. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use Ivy OS.`,
+    a: `Start with a ${TRIAL_DAYS}-day free trial - $0 today, cancel anytime - then one simple subscription at $${IVY_PRICE}/mo. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use Ivy OS.`,
   },
   {
     q: 'Is there a mobile app?',
@@ -430,7 +430,7 @@ function Hero() {
         </Link>
       </div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14 }}>
-        No credit card required · Cancel anytime
+        $0 today · Cancel anytime
       </div>
     </section>
   );
@@ -741,7 +741,7 @@ function TrustStrip() {
     'Stripe-verified · no transaction fees',
     'Cancel anytime · no contract',
     'Export your data any time',
-    `${TRIAL_DAYS}-day free trial · no card · then $${IVY_PRICE}/mo`,
+    `${TRIAL_DAYS}-day free trial · $0 today · then $${IVY_PRICE}/mo`,
   ];
   return (
     <section style={{
@@ -1291,10 +1291,10 @@ function Pricing() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <div className="metric-label" style={{ color: 'var(--accent)' }}>Pricing</div>
           <h3 className="page-title" style={{ margin: '6px 0 8px', fontSize: 24 }}>
-            {TRIAL_DAYS} days. No credit card.
+            {TRIAL_DAYS} days. $0 today.
           </h3>
           <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            Use everything free for {TRIAL_DAYS} days - no card required - then a simple ${IVY_PRICE}/mo
+            Use everything free for {TRIAL_DAYS} days - $0 today, cancel anytime - then a simple ${IVY_PRICE}/mo
             when you subscribe. No per-seat math, no surprise bills. Early users get a
             discount locked in for life. The client portal stays free forever for clients.
           </p>

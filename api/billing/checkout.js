@@ -12,6 +12,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { readBody } from '../_lib/body.js';
 import { createSubscriptionCheckoutSession, platformStripeSecret } from '../_lib/stripe.js';
+import { TRIAL_DAYS } from '../_lib/billing.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -43,13 +44,20 @@ export default async function handler(req, res) {
 
     const { rows } = await sql`
       SELECT stripe_customer_id, subscription_status,
-             winback_coupon_id, winback_expires_at
+             winback_coupon_id, winback_expires_at,
+             trial_started_at, trial_ends_at, converted_at
         FROM workspaces WHERE id = ${workspaceId}
     `;
     const w = rows[0];
     if (w?.subscription_status === 'active') {
       return badRequest(res, 'You already have an active subscription. Open the billing portal to manage it.');
     }
+
+    // Card-backed free trial, first-timers only. Eligible = the workspace has
+    // never started a trial of any kind (old no-card OR new card-backed) and
+    // never converted. Lapsed/returning owners subscribe at full price (no
+    // second free trial).
+    const eligibleForTrial = !w?.trial_started_at && !w?.trial_ends_at && !w?.converted_at;
 
     // Pre-apply the win-back coupon if the cron stamped one and it
     // hasn't expired. The Stripe helper drops `allow_promotion_codes`
@@ -77,6 +85,9 @@ export default async function handler(req, res) {
       successUrl: `${base}/?subscribed=1&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl:  `${base}/?subscribed=cancelled`,
       couponId:   winbackCoupon,
+      // First-timers start a card-on-file free trial; winback (already-trialed)
+      // and returning users go straight to a paid subscription.
+      trialDays:  eligibleForTrial ? TRIAL_DAYS : undefined,
     });
 
     return ok(res, { url: session.url });

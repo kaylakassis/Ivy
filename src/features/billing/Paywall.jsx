@@ -27,7 +27,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos } from '../../lib/platform.js';
 import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
-import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV } from '../../lib/pricing.js';
+import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
 // We deliberately do NOT fabricate star ratings or user counts (Ivy OS
@@ -112,18 +112,6 @@ export default function Paywall({ ctx, onRefresh }) {
       })
       .catch(() => { /* no offer is a fine outcome - fall back to the plain banner */ });
   }, [cancelled]);
-
-  const startTrial = async () => {
-    setBusy('trial'); setErr(null);
-    try {
-      await api.post('/billing/start-trial', {});
-      await onRefresh();
-    } catch (e) {
-      setErr(e.message || 'Could not start trial');
-    } finally {
-      setBusy(null);
-    }
-  };
 
   const subscribe = async () => {
     setBusy('subscribe'); setErr(null);
@@ -245,7 +233,7 @@ export default function Paywall({ ctx, onRefresh }) {
   const heading = syncing      ? 'Confirming your subscription…'
                 : wasPaid       ? 'Pick up where you left off'
                 : trialExpired  ? 'Your free trial has ended'
-                : canTrial      ? 'Start your 28-day free trial'
+                : canTrial      ? `Start your ${TRIAL_DAYS}-day free trial`
                 :                 'Subscribe to keep going';
 
   return (
@@ -390,7 +378,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   padding: '2px 10px', borderRadius: 99,
                   background: 'var(--accent)', color: 'var(--accent-ink)',
                   fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
-                }}>{canTrial ? '28 days free' : (plan === 'annual' ? '2 months free' : 'Full access')}</div>
+                }}>{canTrial ? `${TRIAL_DAYS} days free` : (plan === 'annual' ? '2 months free' : 'Full access')}</div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>Active</span>
@@ -403,10 +391,10 @@ export default function Paywall({ ctx, onRefresh }) {
                 <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
                   {plan === 'annual'
                     ? (canTrial
-                        ? `Free for 28 days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) - save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
+                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) - save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
                         : `$${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) · save $${ANNUAL_SAVINGS}/yr vs monthly. Cancel anytime.`)
                     : (canTrial
-                        ? `Free for 28 days, then $${IVY_PRICE}/mo. Cancel anytime.`
+                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE}/mo. Cancel anytime.`
                         : `$${IVY_PRICE}/mo · one plan, no per-seat fees. Cancel anytime.`)}
                 </div>
               </div>
@@ -462,16 +450,14 @@ export default function Paywall({ ctx, onRefresh }) {
                   friction) with subscribe as a quiet secondary. */}
               {canTrial && !winback ? (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  <button onClick={startTrial} disabled={busy != null}
+                  {/* Card-backed trial: this starts the free trial AND collects
+                      the card (Stripe trial-with-card on web, Apple intro offer
+                      on iOS) via the same commit flow as a paid subscribe. */}
+                  <button onClick={subscribe} disabled={busy != null}
                     className="btn btn-primary"
                     style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
-                    {busy === 'trial' ? 'Starting…' : 'Start 28-day free trial'}
-                    {busy !== 'trial' && <Icons.Arrow size={14} sw={2.2}/>}
-                  </button>
-                  <button onClick={subscribe} disabled={busy != null}
-                    className="btn btn-ghost"
-                    style={{ justifyContent: 'center', fontSize: 13, color: 'var(--muted)' }}>
-                    {busy === 'subscribe' ? 'Redirecting…' : `or subscribe now - ${priceLabel}`}
+                    {busy ? 'Starting…' : `Start ${TRIAL_DAYS}-day free trial`}
+                    {!busy && <Icons.Arrow size={14} sw={2.2}/>}
                   </button>
                 </div>
               ) : (

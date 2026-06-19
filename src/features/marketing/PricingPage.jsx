@@ -67,7 +67,7 @@ const FAQ = [
   },
   {
     q: 'Is there a free trial?',
-    a: `Yes. ${TRIAL_DAYS} days, the whole product unlocked, no credit card required. We won't ask for payment until you decide to subscribe - and even then, you can subscribe at a discount that's locked in for life.`,
+    a: `Yes. ${TRIAL_DAYS} days, the whole product unlocked. You add a card to start - $0 charged today - and you're not billed until the trial ends, so cancel anytime before then and you'll never pay a cent. Early users lock in a discount for life.`,
   },
   {
     q: "What if I'm switching from another tool?",
@@ -83,7 +83,7 @@ export default function PricingPage() {
   useEffect(() => {
     document.title = 'Pricing - Ivy OS';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, no credit card. Then $${IVY_PRICE}/mo.`);
+    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, $0 today. Then $${IVY_PRICE}/mo.`);
   }, []);
 
   return (
@@ -113,7 +113,7 @@ export default function PricingPage() {
             fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
           }}>
             Replace your full stack - CRM, scheduler, invoicing, contracts, website,
-            email, AI - with one subscription. {TRIAL_DAYS}-day free trial, no credit card.
+            email, AI - with one subscription. {TRIAL_DAYS}-day free trial, $0 today.
             Then a simple ${IVY_PRICE}/mo when you're ready.
           </p>
         </section>
@@ -123,7 +123,7 @@ export default function PricingPage() {
           display: 'flex', justifyContent: 'center', alignItems: 'center',
           gap: 12, marginBottom: 28, flexWrap: 'wrap',
         }}>
-          <StateChip label={`${TRIAL_DAYS} days free`} sub="the whole product, no card" active/>
+          <StateChip label={`${TRIAL_DAYS} days free`} sub="the whole product, $0 today" active/>
           <Icons.Arrow size={16} sw={2} style={{ color: 'var(--muted)' }}/>
           <StateChip label="Active" sub={`$${IVY_PRICE}/mo when subscribed`}/>
         </section>
@@ -286,7 +286,7 @@ export default function PricingPage() {
             Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={14} sw={2}/>
           </Link>
           <div style={{ marginTop: 10, fontSize: 12, color: 'var(--muted)' }}>
-            No credit card required · Cancel anytime
+            $0 today · Cancel anytime
           </div>
         </section>
 

@@ -1246,7 +1246,7 @@ function TrialTimeline({ trialEndsAt }) {
 
   const rows = [
     { when: `Today, ${fmt(today)}`, icon: 'Spark',
-      text: 'Full access to everything - clients, calendar, invoices, messaging, your booking site. No card required.' },
+      text: 'Full access to everything - clients, calendar, invoices, messaging, your booking site. $0 charged today.' },
     { when: fmt(remind), icon: 'Bell',
       text: "We'll email you a friendly heads-up that your trial is ending - no surprises." },
     { when: fmt(ends), icon: 'Clock',
@@ -1291,7 +1291,7 @@ function TrialTimeline({ trialEndsAt }) {
         borderTop: '1px solid var(--border)', marginTop: 4,
       }}>
         <Icons.Check size={12} sw={2.4} stroke="var(--ok)"/>
-        No card required · Cancel anytime
+        $0 today · Cancel anytime
       </div>
     </div>
   );

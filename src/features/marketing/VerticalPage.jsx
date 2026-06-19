@@ -83,7 +83,7 @@ export default function VerticalPage() {
           </Link>
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
-          No credit card required · Cancel anytime
+          $0 today · Cancel anytime
         </div>
       </section>
 

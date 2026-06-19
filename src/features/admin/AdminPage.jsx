@@ -1170,7 +1170,7 @@ function CreateUserModal({ onClose, onCreated }) {
         <Field label="Type">
           <select value={userType} onChange={(e) => setUserType(e.target.value)} style={fieldSty}>
             <option value="business-active">Business - Active (paying)</option>
-            <option value="business-trial">Business - Trial (28-day)</option>
+            <option value="business-trial">Business - Trial (14-day)</option>
             <option value="sponsored">Sponsored (comp full access)</option>
             <option value="affiliate">Affiliate (with referral code)</option>
             <option value="regular">Regular (no workspace)</option>
@@ -1204,7 +1204,7 @@ function CreateUserModal({ onClose, onCreated }) {
 // Order goes from "no perks" → "all perks" so the row reads left-to-right.
 const ROLES = [
   { id: 'regular',         label: 'Regular',          desc: 'Default. Honors normal billing.' },
-  { id: 'business-trial',  label: 'Business · Trial', desc: '28-day full-access trial.' },
+  { id: 'business-trial',  label: 'Business · Trial', desc: '14-day full-access trial.' },
   { id: 'business-active', label: 'Business · Active', desc: 'Manually flag as paying.' },
   { id: 'sponsored',       label: 'Sponsored',        desc: 'Comp full access, no sub.' },
   { id: 'affiliate',       label: 'Affiliate',        desc: 'Auto-creates a referral code.' },

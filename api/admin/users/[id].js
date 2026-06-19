@@ -11,7 +11,7 @@
 //                                        an affiliates row with a generated
 //                                        code if one doesn't exist yet
 //                      business-trial  → workspace.subscription_status =
-//                                        'trialing' with a fresh 28-day window
+//                                        'trialing' with a fresh 14-day window
 //                      business-active → workspace.subscription_status =
 //                                        'active' with period_end = NOW() + 1mo
 //                                        (manual flag - Stripe webhook still
@@ -238,7 +238,7 @@ async function deleteUser(u, req, res) {
 //   affiliate       → user_type = 'affiliate'; auto-create an affiliates
 //                     row with a generated code if one doesn't exist.
 //   business-trial  → workspace.subscription_status = 'trialing' with a
-//                     fresh 28-day trial; user_type back to 'regular' if
+//                     fresh 14-day trial; user_type back to 'regular' if
 //                     they were sponsored.
 //   business-active → workspace.subscription_status = 'active' with a
 //                     1-month period_end (the Stripe webhook will refresh
@@ -265,7 +265,7 @@ async function applyRole(u, role, req, actor) {
     await sql`
       UPDATE workspaces SET
         subscription_status     = 'trialing',
-        trial_ends_at           = NOW() + INTERVAL '28 days',
+        trial_ends_at           = NOW() + INTERVAL '14 days',
         subscription_period_end = NULL
       WHERE owner_id = ${u.id}
     `;
@@ -279,7 +279,7 @@ async function applyRole(u, role, req, actor) {
     `;
   } else if (u.user_type === 'sponsored' && role !== 'sponsored') {
     // Leaving sponsored back to regular/affiliate without an explicit
-    // billing role - give them a fresh 28-day trial unless they already
+    // billing role - give them a fresh 14-day trial unless they already
     // have a Stripe sub doing the real billing.
     await sql`
       UPDATE workspaces SET
@@ -293,7 +293,7 @@ async function applyRole(u, role, req, actor) {
         END,
         trial_ends_at           = CASE
           WHEN stripe_subscription_id IS NOT NULL THEN trial_ends_at
-          ELSE NOW() + INTERVAL '28 days'
+          ELSE NOW() + INTERVAL '14 days'
         END
       WHERE owner_id = ${u.id}
     `;

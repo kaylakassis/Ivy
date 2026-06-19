@@ -117,6 +117,13 @@ async function onCheckoutCompleted(session, secretKey) {
   const periodEnd = sub?.current_period_end
     ? new Date(sub.current_period_end * 1000)
     : null;
+  // A card-backed trial checkout lands as 'trialing' — that's a TRIAL START,
+  // not a conversion. Stamp trial_started_at/trial_ends_at and hold
+  // converted_at until the trial actually charges (handled in
+  // onSubscriptionChanged when status flips to active). A no-trial checkout
+  // lands 'active' and converts immediately.
+  const isTrialing = status === 'trialing';
+  const trialEnd = sub?.trial_end ? new Date(sub.trial_end * 1000) : periodEnd;
 
   await sql`
     UPDATE workspaces SET
@@ -124,7 +131,9 @@ async function onCheckoutCompleted(session, secretKey) {
       stripe_customer_id      = ${session.customer || null},
       stripe_subscription_id  = ${sub?.id || null},
       subscription_period_end = ${periodEnd},
-      converted_at            = COALESCE(converted_at, NOW())
+      trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
+      trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
+      converted_at     = CASE WHEN ${isTrialing} THEN converted_at ELSE COALESCE(converted_at, NOW()) END
     WHERE id = ${workspaceId}
   `;
 
@@ -153,12 +162,24 @@ async function onSubscriptionChanged(sub, eventType) {
   const periodEnd = sub.current_period_end
     ? new Date(sub.current_period_end * 1000)
     : null;
+  // Card-backed trial: when Stripe reports the sub as trialing, mirror its
+  // trial_end into trial_ends_at so isWorkspaceActive (trialing branch) keeps
+  // the workspace unlocked, and stamp trial_started_at once for the funnel.
+  const isTrialing = status === 'trialing';
+  const trialEnd = sub.trial_end ? new Date(sub.trial_end * 1000) : periodEnd;
+
+  // Conversion = the first time the sub is actually paying (active). For a
+  // trial that's the trialing→active flip; for a no-trial sub it's immediate.
+  const isActive = status === 'active';
 
   // Try by subscription id first.
   const updated = await sql`
     UPDATE workspaces SET
       subscription_status     = ${status},
-      subscription_period_end = ${periodEnd}
+      subscription_period_end = ${periodEnd},
+      trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
+      trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
+      converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
     WHERE stripe_subscription_id = ${sub.id}
     RETURNING id
   `;
@@ -169,7 +190,10 @@ async function onSubscriptionChanged(sub, eventType) {
         subscription_status     = ${status},
         stripe_subscription_id  = ${sub.id},
         stripe_customer_id      = ${sub.customer || null},
-        subscription_period_end = ${periodEnd}
+        subscription_period_end = ${periodEnd},
+        trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
+        trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
+        converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
       WHERE id = ${workspaceId}
     `;
     resolvedWorkspaceId = workspaceId;

@@ -128,7 +128,7 @@ WHERE onboarded_at IS NULL
 -- New workspaces start trialing for 28 days. Existing workspaces get a
 -- grace window so the rollout doesn't paywall anyone overnight.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_status    TEXT NOT NULL DEFAULT 'trialing';
-ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at          TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '28 days');
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at          TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '14 days');
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_period_end TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_customer_id     TEXT;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS stripe_subscription_id TEXT;
@@ -175,6 +175,11 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_last_dunning_at TIM
 -- (active / past_due) via billing/sync.js or the webhook; gives the
 -- "did they convert?" leg of the funnel.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS paywall_first_seen_at TIMESTAMPTZ;
+-- trial_started_at: stamped the first time a CARD-BACKED trial begins (Stripe
+-- subscription enters 'trialing' via the billing webhook, or Apple
+-- INITIAL_PURCHASE with an intro offer). Distinct from the legacy no-card
+-- trial_ends_at default; this is the funnel step "paywall seen → trial started".
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_started_at      TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS converted_at          TIMESTAMPTZ;
 
 -- Win-back drip. The cron creates a one-time Stripe coupon + promo
@@ -213,10 +218,12 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_winback_candidates
   WHERE winback_offer_sent_at IS NULL AND paywall_first_seen_at IS NOT NULL;
 -- Update the column default for any future workspace inserts that bypass
 -- the explicit value (e.g. raw SQL admin tooling).
-ALTER TABLE workspaces ALTER COLUMN trial_ends_at SET DEFAULT (NOW() + INTERVAL '28 days');
+ALTER TABLE workspaces ALTER COLUMN trial_ends_at SET DEFAULT (NOW() + INTERVAL '14 days');
 -- One-time backfill for any workspace that existed before this column was
--- added (the DEFAULT only applies to inserts).
-UPDATE workspaces SET trial_ends_at = NOW() + INTERVAL '28 days'
+-- added (the DEFAULT only applies to inserts). Only touches trialing rows with
+-- no end date — new signups are created 'incomplete' (card-backed trial model),
+-- and existing trials already have a concrete trial_ends_at, so this is inert.
+UPDATE workspaces SET trial_ends_at = NOW() + INTERVAL '14 days'
 WHERE trial_ends_at IS NULL AND subscription_status = 'trialing';
 
 CREATE TABLE IF NOT EXISTS websites (

@@ -149,10 +149,18 @@ export default async function handler(req, res) {
     const productId = event.product_id || null;
     const originalTxn = event.original_transaction_id || null;
 
-    // First successful purchase ever → stamp converted_at. Subsequent
-    // renewals keep the original conversion stamp so funnel metrics
-    // (signup→onboarding→paywall→conversion) don't drift.
-    const shouldStampConverted = !prev.converted_at && nextStatus === 'active';
+    // Apple intro free-trial vs a real paid period. RevenueCat tags the event
+    // with period_type ('TRIAL' / 'INTRO' / 'NORMAL'). The trial START is the
+    // INITIAL_PURCHASE in a trial period; the CONVERSION is the first real
+    // (non-trial) paid period (the RENEWAL after the trial, or an immediate
+    // no-trial purchase).
+    const periodType = String(event.period_type || '').toUpperCase();
+    const isTrialPeriod = periodType === 'TRIAL' || periodType === 'INTRO';
+    const shouldStampTrialStart = event.type === 'INITIAL_PURCHASE' && isTrialPeriod;
+
+    // First real paid period → stamp converted_at once. Subsequent renewals
+    // keep the original stamp so funnel metrics don't drift.
+    const shouldStampConverted = !prev.converted_at && nextStatus === 'active' && !isTrialPeriod;
 
     await sql`
       UPDATE workspaces
@@ -168,6 +176,10 @@ export default async function handler(req, res) {
                WHEN ${nextStatus} <> 'past_due'
                  THEN NULL
                ELSE subscription_past_due_since
+             END,
+             trial_started_at = CASE
+               WHEN ${shouldStampTrialStart} THEN COALESCE(trial_started_at, NOW())
+               ELSE trial_started_at
              END,
              converted_at = CASE
                WHEN ${shouldStampConverted} THEN NOW()

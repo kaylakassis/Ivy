@@ -688,7 +688,7 @@ function SubscriptionCard() {
         {!sub.isActive && !sub.trialEndsAt && (
           <button className="btn btn-ghost" onClick={startTrial} disabled={busy}
             style={{ color: 'var(--muted)' }}>
-            Start 28-day free trial
+            Start 14-day free trial
           </button>
         )}
       </div>

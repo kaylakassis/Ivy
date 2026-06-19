@@ -118,7 +118,7 @@ export default function AboutPage() {
             Try it.
           </h3>
           <p style={{ margin: '0 0 18px', fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-            {TRIAL_DAYS} days free, no credit card, three minutes to set up.
+            {TRIAL_DAYS} days free, $0 today, three minutes to set up.
             Bring one client in. See if it feels different.
           </p>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>

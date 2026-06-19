@@ -141,7 +141,16 @@ export default async function handler(req, res) {
       `;
 
       if (role === 'owner') {
-        await sql`INSERT INTO workspaces (owner_id) VALUES (${user.id})`;
+        // Card-backed-trial model: new owners start INACTIVE (no auto no-card
+        // trial). They onboard freely (onboarding isn't subscription-gated),
+        // then hit the hard paywall and start a card-on-file free trial
+        // (Stripe trial-with-card on web / Apple intro offer on iOS). Override
+        // the schema defaults explicitly so this doesn't silently regress if
+        // the column defaults change.
+        await sql`
+          INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
+          VALUES (${user.id}, 'incomplete', NULL)
+        `;
       } else {
         // Client signup: claim every existing `clients` row that already
         // matches this email so they immediately see their data when they

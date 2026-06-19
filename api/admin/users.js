@@ -177,7 +177,7 @@ async function createUser(req, res) {
   } else if (userType === 'business-trial') {
     const w = await sql`
       INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
-      VALUES (${user.id}, 'trialing', NOW() + INTERVAL '28 days')
+      VALUES (${user.id}, 'trialing', NOW() + INTERVAL '14 days')
       RETURNING id
     `;
     workspaceId = w.rows[0].id;
@@ -193,7 +193,7 @@ async function createUser(req, res) {
     // regular owner; their primary value is the referral code.
     const w = await sql`
       INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
-      VALUES (${user.id}, 'trialing', NOW() + INTERVAL '28 days')
+      VALUES (${user.id}, 'trialing', NOW() + INTERVAL '14 days')
       RETURNING id
     `;
     workspaceId = w.rows[0].id;
@@ -281,7 +281,7 @@ function subjectFor(type) {
   switch (type) {
     case 'sponsored':       return "You've got a sponsored Ivy OS account";
     case 'affiliate':       return "Welcome to the Ivy OS affiliate program";
-    case 'business-trial':  return "Your Ivy OS account is ready - 28-day trial activated";
+    case 'business-trial':  return "Your Ivy OS account is ready - 14-day trial activated";
     case 'business-active': return "Your Ivy OS account is ready";
     default:                return 'Welcome to Ivy OS';
   }
@@ -303,9 +303,9 @@ function bodyFor(type, name) {
         up through it. Set your password and the code will be waiting for
         you in your account.</p>`;
     case 'business-trial':
-      return `<p>Your Ivy OS account is set up. You're on a 28-day full-
-        access trial - long enough to actually run a month of bookings
-        and see if the numbers move. Set your password to get in.</p>`;
+      return `<p>Your Ivy OS account is set up. You're on a 14-day full-
+        access trial - long enough to actually run a couple weeks of
+        bookings and see if the numbers move. Set your password to get in.</p>`;
     case 'business-active':
       return `<p>Your Ivy OS account is set up and active. Pick a
         password below and you're ready to use the app.</p>`;
