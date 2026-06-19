@@ -74,6 +74,7 @@ export default async function handler(req, res) {
       reviewsRow,               // count + avg rating
       activationRow,            // workspaces that took their first booking within 7d of signup
       funnelRow,                // acquisition funnel cohort counts (signup→converted)
+      funnelStepsRow,           // per-onboarding-step first-seen counts
       onbCountsRow,             // onboarding "About you": cohort + answered counts
       onbGoalRows,              // goal distribution
       onbChallengeRows,         // challenge distribution
@@ -269,7 +270,8 @@ export default async function handler(req, res) {
       // brand-new row may be '{}' (counts as not-started).
       sql.query(
         `WITH cohort AS (
-           SELECT w.id, w.onboarded_at, w.paywall_first_seen_at, w.converted_at,
+           SELECT w.id, w.onboarded_at, w.paywall_first_seen_at,
+                  w.trial_started_at, w.converted_at, w.subscription_source,
                   u.onboarding_state
              FROM workspaces w
              LEFT JOIN users u ON u.id = w.owner_id
@@ -291,10 +293,46 @@ export default async function handler(req, res) {
                  OR COALESCE(onboarding_state->>'currentStep', 'welcome') <> 'welcome'
                )
            )::int AS onboarding_started,
-           COUNT(*) FILTER (WHERE onboarded_at IS NOT NULL)::int       AS onboarding_done,
-           COUNT(*) FILTER (WHERE paywall_first_seen_at IS NOT NULL)::int AS paywall_seen,
-           COUNT(*) FILTER (WHERE converted_at IS NOT NULL)::int       AS converted
+           COUNT(*) FILTER (WHERE onboarded_at IS NOT NULL)::int           AS onboarding_done,
+           COUNT(*) FILTER (WHERE paywall_first_seen_at IS NOT NULL)::int  AS paywall_seen,
+           -- trial_started: card-backed trial commit (Stripe trial-with-card
+           -- on web, Apple intro offer on iOS). The funnel step between
+           -- paywall_seen and converted that the video stresses.
+           COUNT(*) FILTER (WHERE trial_started_at IS NOT NULL)::int       AS trial_started,
+           COUNT(*) FILTER (WHERE converted_at IS NOT NULL)::int           AS converted,
+           -- Platform split on trial starts so we can read iOS vs web
+           -- conversion in isolation (Apple takes a 15-30% cut, so the
+           -- mix matters for ARPU math).
+           COUNT(*) FILTER (WHERE trial_started_at IS NOT NULL AND subscription_source = 'apple')::int AS trial_started_apple,
+           COUNT(*) FILTER (WHERE trial_started_at IS NOT NULL AND subscription_source <> 'apple')::int AS trial_started_web,
+           COUNT(*) FILTER (WHERE converted_at IS NOT NULL     AND subscription_source = 'apple')::int AS converted_apple,
+           COUNT(*) FILTER (WHERE converted_at IS NOT NULL     AND subscription_source <> 'apple')::int AS converted_web
            FROM cohort`,
+        [fromIso, toIso],
+      ),
+      // Per-onboarding-step first-seen counts. The server stamps each
+      // step's first-seen time into onboarding_state.stepTimestamps; we
+      // count how many cohort users have a stamp for each step, so the
+      // admin can see "how many got to 'about' but not 'services'".
+      sql.query(
+        `WITH cohort AS (
+           SELECT u.onboarding_state
+             FROM workspaces w
+             LEFT JOIN users u ON u.id = w.owner_id
+            WHERE w.created_at >= $1 AND w.created_at < $2
+         ),
+         steps(id) AS (
+           VALUES ('welcome'), ('business'), ('about'), ('services'),
+                  ('availability'), ('first_product'), ('payments'),
+                  ('branding'), ('first_client'), ('website'),
+                  ('tour'), ('done')
+         )
+         SELECT s.id AS step,
+                (SELECT COUNT(*)::int FROM cohort c
+                  WHERE c.onboarding_state IS NOT NULL
+                    AND jsonb_typeof(c.onboarding_state->'stepTimestamps') = 'object'
+                    AND c.onboarding_state->'stepTimestamps' ? s.id) AS reached
+           FROM steps s`,
         [fromIso, toIso],
       ),
       // ─── Onboarding "About you" aggregates (cohort = signups in window) ──
@@ -435,7 +473,19 @@ export default async function handler(req, res) {
         onboardingStarted: fn.onboarding_started || 0,
         onboardingDone:    fn.onboarding_done || 0,
         paywallSeen:       fn.paywall_seen || 0,
+        trialStarted:      fn.trial_started || 0,
         converted:         fn.converted || 0,
+        // Platform mix (Apple vs web) on the two billing-driven steps,
+        // for "where are paying users coming from" reads.
+        byPlatform: {
+          trialStartedApple: fn.trial_started_apple || 0,
+          trialStartedWeb:   fn.trial_started_web || 0,
+          convertedApple:    fn.converted_apple || 0,
+          convertedWeb:      fn.converted_web || 0,
+        },
+        // Per-onboarding-step first-seen counts (where in the wizard
+        // owners drop off). [{ step, reached }].
+        steps: funnelStepsRow.rows.map((r) => ({ step: r.step, reached: Number(r.reached) || 0 })),
       },
       // Onboarding "About you" answer distributions (aggregate only -
       // no per-workspace data, no free text). Each list is [{k, n}]

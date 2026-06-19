@@ -490,8 +490,14 @@ function FunnelCard({ funnel }) {
     { key: 'onboardingStarted', label: 'Started onboarding',   n: funnel.onboardingStarted },
     { key: 'onboardingDone',    label: 'Finished onboarding',  n: funnel.onboardingDone },
     { key: 'paywallSeen',       label: 'Hit the paywall',      n: funnel.paywallSeen },
-    { key: 'converted',         label: 'Subscribed',           n: funnel.converted },
+    // trialStarted = card-backed trial commit (Stripe trial-with-card on
+    // web, Apple intro offer on iOS). Stamped by the webhooks on first
+    // 'trialing' status. The "did the priming work?" step in the funnel.
+    { key: 'trialStarted',      label: 'Started a trial',      n: funnel.trialStarted || 0 },
+    { key: 'converted',         label: 'Subscribed (paid)',    n: funnel.converted },
   ];
+  const platform = funnel.byPlatform || {};
+  const onbSteps = Array.isArray(funnel.steps) ? funnel.steps : [];
   const top = funnel.signups || 0;
   const pctOf = (n) => (top > 0 ? Math.round((n / top) * 1000) / 10 : 0);
   // Clamp at 100%: a cohort straddling the paywall deploy can have
@@ -567,10 +573,64 @@ function FunnelCard({ funnel }) {
             })}
           </div>
 
+          {/* Per-onboarding-step drop-off. Shows where in the wizard
+              owners stall before reaching the paywall. Only renders for
+              cohorts where at least one user has step-timestamp data
+              (older cohorts predate the stamping). */}
+          {onbSteps.some((s) => s.reached > 0) && (
+            <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                Onboarding step drop-off
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                {onbSteps.map((s, i) => {
+                  const prev = i > 0 ? onbSteps[i - 1].reached : null;
+                  const continued = prev != null && prev > 0
+                    ? Math.round((s.reached / prev) * 1000) / 10
+                    : null;
+                  return (
+                    <div key={s.step} style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 12 }}>
+                      <span style={{ flex: 1, color: 'var(--fg-2)', textTransform: 'capitalize' }}>
+                        {String(s.step).replace(/_/g, ' ')}
+                      </span>
+                      <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>{fmtN(s.reached)}</span>
+                      <span style={{ width: 64, textAlign: 'right', color: 'var(--muted)' }}>
+                        {continued == null ? '-' : `${continued}% kept`}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 8, lineHeight: 1.5 }}>
+                "Kept" = % of users who reached the previous step who also reached this one.
+                Per-step timestamps started recording when stepTimestamps shipped, so older cohorts under-report.
+              </div>
+            </div>
+          )}
+
+          {/* Platform mix on the two billing-driven steps. Apple takes a
+              15-30% cut, so the iOS vs web split is the ARPU lever to
+              watch alongside raw counts. */}
+          {(platform.trialStartedApple || platform.trialStartedWeb || platform.convertedApple || platform.convertedWeb) ? (
+            <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                Platform mix (trials + conversions)
+              </div>
+              <div className="grid-auto" style={{ gap: 10 }}>
+                <Stat label="Trials · web (Stripe)"
+                  value={fmtN(platform.trialStartedWeb || 0)}
+                  hint={`${fmtN(platform.convertedWeb || 0)} converted`}/>
+                <Stat label="Trials · iOS (Apple)"
+                  value={fmtN(platform.trialStartedApple || 0)}
+                  hint={`${fmtN(platform.convertedApple || 0)} converted`}/>
+              </div>
+            </div>
+          ) : null}
+
           <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 14, lineHeight: 1.5 }}>
-            "Hit the paywall" + "Subscribed" only began recording when the hard
-            paywall shipped, so cohorts from before that deploy under-report
-            those two steps. Recent windows are accurate.
+            "Hit the paywall", "Started a trial", and "Subscribed" only began
+            recording when the hard paywall + card-backed trial shipped, so
+            cohorts from before that deploy under-report those steps.
           </div>
         </>
       )}

@@ -15,8 +15,14 @@
 //     completedSteps: ['welcome', 'business'],
 //     skippedSteps: [],
 //     dismissedChecklistItems: [],
+//     stepTimestamps: { welcome: '<ISO>', business: '<ISO>', ... },  // funnel drop-off
 //     lastActiveAt: '<ISO>',
 //   }
+//
+// stepTimestamps is FIRST-SEEN times, recorded server-side - the first
+// PATCH whose currentStep names a step not yet in the map stamps it. The
+// client never sends timestamps; that keeps the drop-off measurement
+// honest (a user can't backfill timestamps for steps they skipped).
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
@@ -63,11 +69,20 @@ function normalizeState(raw) {
   const dismissedChecklistItems = Array.isArray(s.dismissedChecklistItems)
     ? s.dismissedChecklistItems.filter((x) => typeof x === 'string').slice(0, 50)
     : [];
+  // Per-step first-seen timestamps. Filter keys to VALID_STEPS so a stale
+  // step id from a prior version can't pollute the map.
+  const stepTimestamps = {};
+  if (s.stepTimestamps && typeof s.stepTimestamps === 'object') {
+    for (const [k, v] of Object.entries(s.stepTimestamps)) {
+      if (VALID_STEPS.has(k) && typeof v === 'string') stepTimestamps[k] = v;
+    }
+  }
   return {
     currentStep: VALID_STEPS.has(s.currentStep) ? s.currentStep : 'welcome',
     completedSteps,
     skippedSteps,
     dismissedChecklistItems,
+    stepTimestamps,
     lastActiveAt: s.lastActiveAt || null,
   };
 }
@@ -134,14 +149,29 @@ export default async function handler(req, res) {
       // shouldn't blow away the half they already committed.
       const current = normalizeState(await readState(user.id));
 
+      // Server-stamp the FIRST time each step is reached. We look at the
+      // resolved nextCurrentStep AND every step in the completedSteps
+      // array (in case the client jumped past one) so the funnel can
+      // compute per-step drop-off without trusting client clocks.
+      const nowIso = new Date().toISOString();
+      const nextCurrentStep = body.currentStep ?? current.currentStep;
+      const stepTimestamps = { ...current.stepTimestamps };
+      const stampIfNew = (id) => {
+        if (VALID_STEPS.has(id) && !stepTimestamps[id]) stepTimestamps[id] = nowIso;
+      };
+      stampIfNew(nextCurrentStep);
+      const nextCompleted = Array.isArray(body.completedSteps) ? body.completedSteps : current.completedSteps;
+      for (const id of nextCompleted) stampIfNew(id);
+
       const next = {
-        currentStep:             body.currentStep ?? current.currentStep,
-        completedSteps:          Array.isArray(body.completedSteps) ? body.completedSteps : current.completedSteps,
+        currentStep:             nextCurrentStep,
+        completedSteps:          nextCompleted,
         skippedSteps:            Array.isArray(body.skippedSteps)   ? body.skippedSteps   : current.skippedSteps,
         dismissedChecklistItems: Array.isArray(body.dismissedChecklistItems)
           ? body.dismissedChecklistItems
           : current.dismissedChecklistItems,
-        lastActiveAt: new Date().toISOString(),
+        stepTimestamps,
+        lastActiveAt: nowIso,
       };
       const normalized = normalizeState(next);
       if (normalized.completedSteps.length > 50 || normalized.skippedSteps.length > 50) {

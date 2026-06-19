@@ -52,6 +52,12 @@ export default function Paywall({ ctx, onRefresh }) {
   // Billing period. Monthly is the honest default; annual is the
   // highlighted LTV option (2 months free). Flows into the checkout call.
   const [plan, setPlan]   = useState('monthly'); // 'monthly' | 'annual'
+  // Multi-step trust-building "priming" flow shown only for trial-eligible
+  // users (and never during a win-back, where we want one strong claim
+  // screen). Step 1: "$0 today". Step 2: "we'll remind you before it ends".
+  // Step 3: the existing plan card + commit CTA. Non-trial paths (winback,
+  // reactivation, expired) skip the priming entirely.
+  const [primingStep, setPrimingStep] = useState(1);
   const [params, setParams] = useSearchParams();
   const synced = useRef(false);
   const winbackTried = useRef(false);
@@ -230,6 +236,11 @@ export default function Paywall({ ctx, onRefresh }) {
   // Price string for the subscribe CTAs, reflecting the selected period.
   const priceLabel = plan === 'annual' ? `$${IVY_PRICE_ANNUAL}/yr` : `$${IVY_PRICE}/mo`;
 
+  // Show the 2 trust-building "priming" screens only for trial-eligible
+  // owners; win-back / reactivation / expired flows jump straight to the
+  // plan card (one strong claim, not three).
+  const showPriming = canTrial && !winback && !syncing && primingStep < 3;
+
   const heading = syncing      ? 'Confirming your subscription…'
                 : wasPaid       ? 'Pick up where you left off'
                 : trialExpired  ? 'Your free trial has ended'
@@ -288,6 +299,8 @@ export default function Paywall({ ctx, onRefresh }) {
               Stripe just confirmed your payment. We're refreshing your
               account - this usually takes a couple of seconds.
             </p>
+          ) : showPriming ? (
+            <PrimingStep step={primingStep} setStep={setPrimingStep} canTrial={canTrial}/>
           ) : (
             <>
               {/* Truthful savings proof - the refs' "social proof / save
@@ -552,6 +565,82 @@ export default function Paywall({ ctx, onRefresh }) {
           )}
         </div>
       </div>
+    </div>
+  );
+}
+
+// Two trust-building screens shown BEFORE the plan card for trial-eligible
+// owners. Pattern from the funnel teardown video / Cali-style paywalls:
+// (1) emphasize "$0 today" so the user knows they aren't being charged now;
+// (2) tell them we'll remind them before the trial ends, framing the
+// payment-method requirement as low-risk; (3) is the existing plan card,
+// rendered by the parent when primingStep === 3. Each priming screen is a
+// single big card + one "Continue" CTA, so the cognitive load is one
+// decision at a time. Skipped entirely for win-back / lapsed users (the
+// parent gates with `canTrial && !winback`).
+function PrimingStep({ step, setStep, canTrial }) {
+  if (!canTrial) return null;
+  const screens = [
+    {
+      icon: 'Spark',
+      title: `Free for ${TRIAL_DAYS} days. $0 charged today.`,
+      body: `Add your card to unlock everything - bookings, invoices, messaging, your website. You won't be billed until the ${TRIAL_DAYS}-day trial ends, so cancel anytime before then and you'll never pay a cent.`,
+      cta: 'Continue',
+    },
+    {
+      icon: 'Bell',
+      title: "We'll remind you before the trial ends.",
+      body: `Two days before your trial wraps up, we'll send a heads-up email so you can decide. No surprise charges. Cancel in one tap from your account, anytime.`,
+      cta: 'See the plan',
+    },
+  ];
+  const s = screens[Math.max(0, Math.min(step - 1, screens.length - 1))];
+  const Icon = Icons[s.icon] || Icons.Check;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '8px 0' }}>
+      {/* Step pip indicator: two filled dots for the priming screens + one
+          outline dot representing the upcoming plan card. */}
+      <div style={{ display: 'flex', justifyContent: 'center', gap: 6 }}>
+        {[1, 2, 3].map((n) => (
+          <span key={n} style={{
+            width: 8, height: 8, borderRadius: 99,
+            background: n === step ? 'var(--accent)' : 'var(--surface-2)',
+            border: '1px solid var(--border)',
+          }}/>
+        ))}
+      </div>
+      <div style={{
+        display: 'flex', flexDirection: 'column', alignItems: 'center',
+        gap: 14, padding: '24px 18px', textAlign: 'center',
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        borderRadius: 14,
+      }}>
+        <div style={{
+          width: 48, height: 48, borderRadius: 99,
+          background: 'var(--accent-soft)', color: 'var(--accent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icon size={22} sw={2}/>
+        </div>
+        <div style={{
+          fontFamily: 'var(--font-display)', fontWeight: 500,
+          fontSize: 20, lineHeight: 1.2, letterSpacing: '-0.015em',
+          color: 'var(--fg)',
+        }}>{s.title}</div>
+        <p style={{ margin: 0, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>{s.body}</p>
+      </div>
+      <button onClick={() => setStep(step + 1)}
+        className="btn btn-primary"
+        style={{ justifyContent: 'center', padding: '13px 16px', fontSize: 15 }}>
+        {s.cta} <Icons.Arrow size={14} sw={2.2}/>
+      </button>
+      {step > 1 && (
+        <button onClick={() => setStep(step - 1)}
+          className="btn btn-ghost"
+          style={{ justifyContent: 'center', fontSize: 12.5, color: 'var(--muted)' }}>
+          Back
+        </button>
+      )}
     </div>
   );
 }
