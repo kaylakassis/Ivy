@@ -36,6 +36,15 @@ Mac - Xcode is required.
      - Product ID `ivyos_yearly`, price $499.99 / year
    - Both must be in the same group so Apple offers proration when
      users upgrade/downgrade between them.
+   - **Add a 14-day Introductory Offer → Free Trial to each product**
+     (App Store Connect → the subscription → Introductory Offers → Create
+     → Free, 2 weeks). This is what makes the StoreKit sheet read
+     "Free for 14 days, then $X" and is the iOS half of the
+     hard-paywall-after-onboarding funnel. Apple grants one intro per
+     Apple ID; our RevenueCat webhook stamps `trial_started_at` on the
+     trial `INITIAL_PURCHASE` and `converted_at` on the first paid
+     renewal. Keep the 14 days in sync with `TRIAL_DAYS`
+     (`src/lib/pricing.js` / `api/_lib/billing.js`).
    - Submit at least one introductory screenshot per product, plus
      localized display name + description.
 4. **App Privacy:** declare data collection per the questions:
