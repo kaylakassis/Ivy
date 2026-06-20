@@ -111,6 +111,12 @@ const STEPS = [
     selector: '[data-tour="nav-website"]',
     placement: 'right',
   },
+  // Aha-moment step (the video's #5 theme). Centered card right before
+  // Ivy hello that frames the FIRST BOOKING as the moment Ivy OS proves
+  // itself. Two CTAs: jump straight to the booking-link share drawer, or
+  // skip and meet Ivy. Goal: get the owner to do the thing that creates
+  // real value in their first session in the app.
+  { id: 'aha-first-booking', kind: 'aha' },
   // Final step: Ivy hello with inline chat.
   { id: 'ivy-hello', kind: 'ivy' },
 ];
@@ -211,6 +217,11 @@ export default function Walkthrough({ onClose }) {
       {step.kind === 'ivy' ? (
         <IvyHello onDismiss={dismiss}
           onBack={goBack}/>
+      ) : step.kind === 'aha' ? (
+        <AhaStep
+          onBack={goBack}
+          onSkip={goNext}
+          onTake={() => { navigate('/calendar?share=1'); goNext(); }}/>
       ) : showSpotlight ? (
         <Tooltip target={target} placement={step.placement}>
           <StepCard step={step} stepIdx={stepIdx}
@@ -604,5 +615,59 @@ function Bubble({ role, text }) {
         whiteSpace: 'pre-wrap',
       }}>{text}</div>
     </div>
+  );
+}
+
+// Aha-moment step: frame the FIRST BOOKING as the moment the system
+// proves itself, then hand the user the path to make it happen (jump
+// straight to the share-link drawer on /calendar). Centered card so it
+// stops the user momentarily without obscuring nav. Skipping is fine -
+// the dashboard's setup checklist will keep nudging them.
+function AhaStep({ onBack, onSkip, onTake }) {
+  return (
+    <CenteredCard>
+      <div className="card" style={{
+        padding: 26,
+        display: 'flex', flexDirection: 'column', gap: 14,
+        textAlign: 'center',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.32)',
+        border: '1px solid var(--border-strong)',
+        background: 'var(--surface)',
+      }}>
+        <div style={{
+          width: 52, height: 52, borderRadius: 99, alignSelf: 'center',
+          background: 'var(--accent-soft)', color: 'var(--accent)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icons.Spark size={22} sw={2}/>
+        </div>
+        <h2 style={{
+          margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500,
+          fontSize: 22, letterSpacing: '-0.015em', lineHeight: 1.2,
+        }}>Your first booking is the moment.</h2>
+        <p style={{ margin: 0, color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55 }}>
+          When the first real booking lands, you'll see it flow through Ivy OS -
+          calendar confirmed, client created, confirmation email + reminder
+          queued, invoice ready. <strong>Grab your booking link, send it to one
+          person, and watch.</strong>
+        </p>
+        <button onClick={onTake} className="btn btn-primary"
+          style={{ justifyContent: 'center', padding: '12px 16px', fontSize: 14, marginTop: 4 }}>
+          Get my booking link <Icons.Arrow size={14} sw={2.2}/>
+        </button>
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'space-between', marginTop: 2 }}>
+          {onBack && (
+            <button onClick={onBack} className="btn btn-ghost"
+              style={{ fontSize: 12, color: 'var(--muted)', padding: '6px 10px' }}>
+              Back
+            </button>
+          )}
+          <button onClick={onSkip} className="btn btn-ghost"
+            style={{ fontSize: 12, color: 'var(--muted)', padding: '6px 10px', marginLeft: 'auto' }}>
+            Skip - I'll do it later
+          </button>
+        </div>
+      </div>
+    </CenteredCard>
   );
 }

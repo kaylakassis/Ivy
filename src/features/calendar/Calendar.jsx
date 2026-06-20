@@ -1,6 +1,6 @@
 // Owner-side Calendar: Day / Week / Month views with shared toolbar.
 import React, { useState, useEffect, useMemo } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useCalendar } from './state.js';
@@ -73,6 +73,19 @@ export default function Calendar() {
   const [addBookingOpen, setAddBookingOpen] = useState(false);
   const [bookingDefaultClientId, setBookingDefaultClientId] = useState(null);
   const [actionsOpen, setActionsOpen] = useState(false);
+
+  // Deep link from the walkthrough "aha" step (and any future shareable
+  // CTA): /calendar?share=1 auto-opens the booking-link share drawer so
+  // the user lands on the exact action they were sent here for.
+  const [calParams, setCalParams] = useSearchParams();
+  useEffect(() => {
+    if (calParams.get('share') === '1') {
+      setDrawer('share');
+      const next = new URLSearchParams(calParams); next.delete('share');
+      setCalParams(next, { replace: true });
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [calParams]);
 
   // Deep link from ClientDrawer's "Book" button: ?newBooking=<clientId>
   // → open AddBookingModal with that client's name + email pre-filled.

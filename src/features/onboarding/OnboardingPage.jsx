@@ -387,11 +387,24 @@ export default function OnboardingPage() {
     finally { setBusy(false); }
   };
 
-  // "About you" step. All questions are optional (we never want this to
-  // block finishing setup) - whatever's answered is persisted to the
-  // workspace_profile and then we advance.
+  // "About you" step. Goal + challenge are LIGHTLY REQUIRED (sunk-cost:
+  // the user names the problem they're here to solve before getting the
+  // tool) - all OTHER questions remain optional. We block advance with an
+  // inline error rather than disabling the button so the user understands
+  // why; rejection rate is tiny in practice (two clicks).
   const saveAbout = async () => {
-    setBusy(true); setErr(null);
+    setErr(null);
+    const hasGoal = about.goal && (about.goal !== OTHER || (about.goalOther || '').trim());
+    const hasChallenge = about.challenge && (about.challenge !== OTHER || (about.challengeOther || '').trim());
+    if (!hasGoal || !hasChallenge) {
+      setErr(!hasGoal && !hasChallenge
+        ? 'Pick your #1 goal and biggest challenge so Ivy can tailor your advice. The rest is optional.'
+        : !hasGoal
+          ? 'Pick your #1 goal so Ivy knows what to optimize for.'
+          : 'Pick your biggest challenge so Ivy knows where to focus.');
+      return;
+    }
+    setBusy(true);
     try {
       await api.patch('/onboarding/profile', {
         goal: about.goal, goalOther: about.goalOther,
@@ -1350,11 +1363,11 @@ function AboutStep({ about, setAbout }) {
     <>
       <StepHeader
         title="A little about you"
-        subtitle="This tailors your dashboard and lets Ivy - your built-in AI assistant - give advice that actually fits your business. All optional."
+        subtitle="Two quick picks so Ivy - your built-in AI assistant - can give advice that actually fits. The rest is optional."
       />
 
       <ChoiceField
-        label="What's your #1 goal with Ivy OS?"
+        label="What's your #1 goal with Ivy OS? *"
         options={[
           { id: 'grow_revenue', label: 'Grow revenue' },
           { id: 'more_clients', label: 'Get more clients' },
@@ -1368,7 +1381,7 @@ function AboutStep({ about, setAbout }) {
       />
 
       <ChoiceField
-        label="What's your biggest challenge right now?"
+        label="What's your biggest challenge right now? *"
         options={[
           { id: 'leads',        label: 'Not enough leads' },
           { id: 'no_shows',     label: 'No-shows & cancellations' },
