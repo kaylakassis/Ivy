@@ -75,7 +75,7 @@ async function listUsers(req, res) {
   const queryText = `
     SELECT
       u.id, u.email, u.name, u.user_type,
-      u.created_at, u.email_verified_at,
+      u.created_at, u.email_verified_at, u.last_login_at,
       w.id   AS workspace_id,
       w.subscription_status,
       w.trial_ends_at,
@@ -104,6 +104,7 @@ async function listUsers(req, res) {
     userType: row.user_type,
     createdAt: row.created_at,
     emailVerifiedAt: row.email_verified_at,
+    lastLoginAt: row.last_login_at,
     workspace: row.workspace_id ? {
       id: row.workspace_id,
       status: row.subscription_status,

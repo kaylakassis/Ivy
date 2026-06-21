@@ -79,6 +79,11 @@ export default async function handler(req, res) {
 
     const token = signSession(user.id);
     setSessionCookie(res, token);
+    // Stamp last login for the admin Users view. Awaited (a single cheap
+    // UPDATE) so it reliably commits before the serverless function freezes,
+    // but wrapped so a write hiccup never blocks a successful sign-in.
+    await sql`UPDATE users SET last_login_at = NOW() WHERE id = ${user.id}`
+      .catch((e) => console.warn('[login] last_login_at stamp failed:', e.message));
     recordAudit(req, { actor: user, action: 'auth.login', meta: {} });
     // Decorate the user payload with isSuperAdmin so the sidebar /
     // bottom-nav / command-palette show the Admin tab on first paint.

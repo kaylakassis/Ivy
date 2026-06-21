@@ -346,6 +346,11 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
 CREATE INDEX IF NOT EXISTS idx_auth_tokens_user ON auth_tokens(user_id);
 
 ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
+-- Last successful sign-in. Stamped by api/auth/login.js on each password
+-- login (NOT impersonation - that's an admin acting as the user, not the
+-- user logging in). Surfaced in the admin Users view so operators can see
+-- who's actually returning.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 -- Welcome-email sequence tracker. Keys are 'day1' | 'day3' | 'day7' | 'day14',
 -- values are ISO timestamps. Stored as JSONB so we can add new beats later
 -- without another migration.

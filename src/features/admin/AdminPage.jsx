@@ -1065,7 +1065,7 @@ function UsersTab() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ background: 'var(--surface-2)' }}>
                 <tr style={{ textAlign: 'left' }}>
-                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Joined</Th><Th>Verified</Th><Th></Th>
+                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Joined</Th><Th>Last login</Th><Th>Verified</Th><Th></Th>
                 </tr>
               </thead>
               <tbody>
@@ -1075,6 +1075,7 @@ function UsersTab() {
                     <Td>{u.name || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td><Pill text={u.classification}/></Td>
                     <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</Td>
+                    <Td><span style={{ color: u.lastLoginAt ? 'inherit' : 'var(--muted)' }} title={u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never signed in'}>{lastLoginLabel(u.lastLoginAt)}</span></Td>
                     <Td>{u.emailVerifiedAt ? '✓' : <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
                       <button onClick={() => setActive(u)} className="btn btn-ghost"
@@ -1085,7 +1086,7 @@ function UsersTab() {
                   </tr>
                 ))}
                 {data.users.length === 0 && (
-                  <tr><td colSpan={6} style={{ padding: 28 }}>
+                  <tr><td colSpan={7} style={{ padding: 28 }}>
                     <EmptyNote icon="Users" title="No users match" hint="Try a different filter or search."/>
                   </td></tr>
                 )}
@@ -1340,6 +1341,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
         <Row k="Name" v={user.name || '-'}/>
         <Row k="Joined" v={user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'}/>
+        <Row k="Last login" v={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Never'}/>
         <Row k="Email verified" v={user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString() : 'No'}/>
         <Row k="Classification" v={<Pill text={user.classification}/>}/>
         {user.workspace && (
@@ -1997,6 +1999,20 @@ const fieldSty = {
   background: 'var(--surface)', border: '1px solid var(--border-strong)',
   color: 'var(--fg)', fontSize: 13, outline: 'none',
 };
+
+// Compact relative label for "last login" - "Never" when the user has
+// signed in before this column existed (or never), else "Today"/"3d ago"/
+// a date for anything older than a week.
+function lastLoginLabel(iso) {
+  if (!iso) return 'Never';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return 'Never';
+  const days = Math.floor((Date.now() - then) / 86400000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Yesterday';
+  if (days < 7) return `${days}d ago`;
+  return new Date(iso).toLocaleDateString();
+}
 
 function Th({ children }) {
   return <th style={{ padding: '10px 12px', fontSize: 11.5, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>{children}</th>;
