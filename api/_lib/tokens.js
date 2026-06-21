@@ -4,9 +4,13 @@
 import crypto from 'node:crypto';
 import { sql } from './db.js';
 
-const KIND_VERIFY = 'verify_email';
-const KIND_RESET  = 'reset_password';
-export { KIND_VERIFY, KIND_RESET };
+const KIND_VERIFY  = 'verify_email';
+const KIND_RESET   = 'reset_password';
+// Recover-from-soft-delete. Minted at the moment of account deletion
+// (api/account/delete.js); valid for the 30-day grace window during which
+// db-prune hasn't hard-deleted the row yet. Single-use.
+const KIND_RECOVER = 'account_recover';
+export { KIND_VERIFY, KIND_RESET, KIND_RECOVER };
 
 export function generateRawToken(bytes = 32) {
   return crypto.randomBytes(bytes).toString('base64url');
@@ -17,7 +21,7 @@ function hashToken(raw) {
 }
 
 export async function createToken({ userId, kind, ttlMinutes }) {
-  if (![KIND_VERIFY, KIND_RESET].includes(kind)) throw new Error(`Invalid token kind: ${kind}`);
+  if (![KIND_VERIFY, KIND_RESET, KIND_RECOVER].includes(kind)) throw new Error(`Invalid token kind: ${kind}`);
   const raw = generateRawToken();
   const tokenHash = hashToken(raw);
   const expiresAt = new Date(Date.now() + ttlMinutes * 60 * 1000).toISOString();

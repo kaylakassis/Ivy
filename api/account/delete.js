@@ -19,6 +19,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { cancelSubscription, platformStripeSecret } from '../_lib/stripe.js';
+import { createToken, KIND_RECOVER, appUrl } from '../_lib/tokens.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -124,8 +125,24 @@ export default async function handler(req, res) {
       try {
         const fn = (userName || '').split(/\s+/)[0] || 'there';
         const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
-        const finalDelete = new Date(Date.now() + 30 * 24 * 3600 * 1000)
+        // 30-day recovery window matches db-prune.js's hard-delete cutoff.
+        const ttlMinutes = 30 * 24 * 60;
+        const finalDelete = new Date(Date.now() + ttlMinutes * 60 * 1000)
           .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
+        // Mint a single-use recovery token. Best-effort - if this fails we
+        // still send the email but fall back to "email support". Better to
+        // confirm the deletion than to suppress the notice over a token blip.
+        let recoverUrl = null;
+        try {
+          const raw = await createToken({ userId: user.id, kind: KIND_RECOVER, ttlMinutes });
+          recoverUrl = `${appUrl()}/account-recover?token=${encodeURIComponent(raw)}`;
+        } catch (tokErr) {
+          // eslint-disable-next-line no-console
+          console.error('[account/delete] recovery token mint failed:', tokErr.message);
+        }
+        const recoveryLine = recoverUrl
+          ? `<p><strong>Changed your mind?</strong> One-click restore using the button below — works any time before ${escapeText(finalDelete)}.</p>`
+          : `<p><strong>Changed your mind?</strong> Email <a href="mailto:${escapeText(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeText(supportEmail)}</a> before ${escapeText(finalDelete)} and we'll restore your account.</p>`;
         await sendEmail({
           to: userEmail,
           subject: 'Your Ivy OS account deletion request',
@@ -139,8 +156,10 @@ export default async function handler(req, res) {
                 <li>Until then, it's deactivated but <strong>recoverable</strong></li>
                 <li>After that date, your data is permanently erased and can't be restored</li>
               </ul>
-              <p><strong>Changed your mind?</strong> Email <a href="mailto:${escapeText(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeText(supportEmail)}</a> before ${escapeText(finalDelete)} and we'll restore your account from backups.</p>
+              ${recoveryLine}
               <p>(Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>`,
+            ctaText: recoverUrl ? 'Keep my account →' : undefined,
+            ctaUrl:  recoverUrl || undefined,
             footer: `Thanks for trying Ivy OS. If you have a moment, reply with what we could have done better. — The Ivy OS Team`,
           }),
         });

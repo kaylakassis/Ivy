@@ -56,6 +56,7 @@ const NotFoundPage    = lazy(() => import('./features/marketing/NotFoundPage.jsx
 const ForgotPasswordPage = lazy(() => import('./features/auth/ForgotPasswordPage.jsx'));
 const ResetPasswordPage  = lazy(() => import('./features/auth/ResetPasswordPage.jsx'));
 const VerifyEmailPage    = lazy(() => import('./features/auth/VerifyEmailPage.jsx'));
+const AccountRecoverPage = lazy(() => import('./features/auth/AccountRecoverPage.jsx'));
 const OnboardingPage     = lazy(() => import('./features/onboarding/OnboardingPage.jsx'));
 
 // ── Lazy: public surfaces (often a fresh visit's first hit) ──
@@ -205,6 +206,7 @@ export default function App() {
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
         <Route path="/verify-email"    element={<VerifyEmailPage />} />
+        <Route path="/account-recover" element={<AccountRecoverPage />} />
 
         {/* Public */}
         <Route path="/book/:slug"      element={<PublicBooking />} />
