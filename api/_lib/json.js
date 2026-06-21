@@ -37,6 +37,16 @@ export function methodNotAllowed(res, allowed = []) {
   console.warn('[api] 405:', res.req?.method, res.req?.url, 'allowed:', allowed.join(','));
   return res.status(405).json({ error: 'Method not allowed' });
 }
+export function serviceUnavailable(res, message = 'The service is warming up. Please try again in a moment.') {
+  // 503 + Retry-After: the database was unreachable (e.g. a suspended /
+  // scaled-to-zero Neon instance, or a transient connectivity blip). This
+  // is RETRYABLE - distinct from a 500, which signals a real bug. Clients
+  // (and the browser) can safely retry after the hint.
+  res.setHeader('Retry-After', '3');
+  // eslint-disable-next-line no-console
+  console.warn('[api] 503:', message, '·', res.req?.method, res.req?.url);
+  return res.status(503).json({ error: message, retryable: true });
+}
 export function serverError(res, err, req) {
   // Log the error server-side (Vercel captures console.error in logs) but
   // redact PII first - Postgres errors + stacks can carry query params

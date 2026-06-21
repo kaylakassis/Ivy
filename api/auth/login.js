@@ -1,6 +1,6 @@
 // POST /api/auth/login  { email, password }
 import bcrypt from 'bcryptjs';
-import { sql } from '../_lib/db.js';
+import { sql, warmupDb, isConnectionError } from '../_lib/db.js';
 import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient } from '../_lib/auth.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
@@ -8,7 +8,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireGate } from '../_lib/earlyAccess.js';
 import { recordAudit } from '../_lib/audit.js';
-import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { badRequest, methodNotAllowed, ok, serverError, serviceUnavailable, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 
 // Decoy bcrypt hash for constant-time email-enumeration defense. When
@@ -30,6 +30,13 @@ export default async function handler(req, res) {
   // password to /api/early-access/verify first (sets ea_pass cookie).
   if (!(await requireGate(req, res))) return;
   try {
+    // Wake the database before doing anything else. A suspended /
+    // scaled-to-zero Neon instance (or a transient blip) would otherwise
+    // make the SELECT below throw and hard-500 the login. warmupDb retries
+    // a quick `SELECT 1` to wake it; if it's genuinely down it throws a
+    // `dbUnavailable`-tagged error, which we answer with a retryable 503
+    // instead of a confusing 500.
+    await warmupDb();
     // Cold-started function with no schema yet would 500 the SELECT
     // below. Bootstrap explicitly - login is a public endpoint that
     // doesn't call requireUser.
@@ -87,6 +94,10 @@ export default async function handler(req, res) {
     if (isNativeClient(req)) payload.token = token;
     return ok(res, payload);
   } catch (err) {
+    // DB unreachable (asleep/over-limit/connectivity) → retryable 503,
+    // not a 500. Covers both the warmup's tagged error and a connection
+    // that drops mid-request after warmup.
+    if (isConnectionError(err)) return serviceUnavailable(res);
     return serverError(res, err);
   }
 }

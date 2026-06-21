@@ -51,3 +51,61 @@ export const sql = new Proxy(function () {}, {
     return getSql()(...args);
   },
 });
+
+// Is this error a CONNECTION-level failure (DB asleep/unreachable/over
+// limits) rather than a query/constraint error? A suspended or
+// scaled-to-zero Neon instance, a dropped socket, or a rotated/invalid
+// connection string all surface here. We use this to tell "the database
+// is down" apart from "this query is wrong" so the former can be retried
+// (and answered with a friendly 503) instead of hard-500'd.
+export function isConnectionError(err) {
+  if (err?.dbUnavailable) return true;
+  const msg = String(err?.message || err || '').toLowerCase();
+  return (
+    msg.includes('error connecting to database') ||
+    msg.includes('fetch failed') ||
+    msg.includes('failed to fetch') ||
+    msg.includes('econnrefused') ||
+    msg.includes('econnreset') ||
+    msg.includes('etimedout') ||
+    msg.includes('enotfound') ||
+    msg.includes('connection terminated') ||
+    msg.includes('connection refused') ||
+    msg.includes('could not connect') ||
+    msg.includes('terminating connection') ||
+    msg.includes('the endpoint has been disabled') || // Neon suspended
+    msg.includes('compute time quota') ||             // Neon over-limit
+    msg.includes('too many connections') ||
+    msg.includes('timeout')
+  );
+}
+
+// Warm the DB connection with a few QUICK retries. Resolves once a
+// `SELECT 1` succeeds; throws a `dbUnavailable`-tagged error if the
+// instance is still unreachable after the retries.
+//
+// Tuned SHORT for the request hot path (default ~1s total) so a
+// cold/scaled-to-zero Neon instance gets a chance to wake without hanging
+// the user. On an already-warm connection this is a single ~10ms round
+// trip. A non-connection error (a genuine query failure) is re-thrown
+// immediately - we only retry connectivity blips, never logic errors.
+export async function warmupDb({ retries = 3, baseDelayMs = 150 } = {}) {
+  let lastErr;
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      await sql`SELECT 1`;
+      return;
+    } catch (err) {
+      lastErr = err;
+      if (!isConnectionError(err)) throw err;
+      if (attempt < retries) {
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, baseDelayMs * 2 ** attempt));
+      }
+    }
+  }
+  const e = new Error(`database unavailable: ${lastErr?.message || 'unknown error'}`);
+  e.dbUnavailable = true;
+  throw e;
+}
