@@ -52,6 +52,19 @@ In Vercel → Project → Settings → Environment Variables, for **each environ
 
 ⚠️ Renaming the env vars takes effect on the **next deploy**, not immediately. Don't delete the old `THRYVE_*` ones until the deploy succeeds with the new names.
 
+### Optional: passwordless QA test login
+
+Set **`DEV_LOGIN_SECRET`** (a long random string, **16+ chars** - e.g. `openssl rand -hex 24`) to enable a one-click, passwordless login into a dedicated **QA-only** account (`qa@getivyos.com`) for visually testing app states. Off by default; with no secret set the endpoint 404s and is invisible.
+
+- Bookmark: `https://getivyos.com/api/auth/dev-login?token=YOUR_SECRET`
+- Force a state with `&state=`:
+  - `…&state=onboarding` - re-walk onboarding + walkthrough from the top (default for a fresh QA account)
+  - `…&state=paywall` - jump straight to the hard paywall + priming screens
+  - `…&state=trial` - in-trial app (14 days left)
+  - `…&state=active` - paying-subscriber app
+
+The QA account is a plain owner (never an admin) and the `state` switch only ever touches that one workspace, so a leaked link can't reach real users. Optionally set `QA_USER_EMAIL` to use a different QA address. To fully disable, delete `DEV_LOGIN_SECRET` and redeploy.
+
 ## 4. Stripe (platform side - your own billing)
 
 In Stripe Dashboard, account-wide:
