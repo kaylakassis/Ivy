@@ -22,6 +22,8 @@ export default function AccountPage() {
   const nav = useNavigate();
   const [busyExport, setBusyExport] = useState(false);
   const [exportErr, setExportErr]   = useState(null);
+  const [busyEmail, setBusyEmail]   = useState(false);
+  const [emailedNote, setEmailedNote] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
 
   const downloadExport = async () => {
@@ -46,6 +48,24 @@ export default function AccountPage() {
       setExportErr(err.message || 'Could not export');
     } finally {
       setBusyExport(false);
+    }
+  };
+
+  const emailExport = async () => {
+    setBusyEmail(true);
+    setExportErr(null);
+    setEmailedNote(null);
+    try {
+      const res = await fetch('/api/account/export', { method: 'POST', credentials: 'include' });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setEmailedNote(j.attached
+        ? `Sent — check ${user?.email || 'your inbox'} for your data as a .json attachment.`
+        : `Your export was too large to attach, so we emailed you instructions to download it instead.`);
+    } catch (err) {
+      setExportErr(err.message || 'Could not email your export');
+    } finally {
+      setBusyEmail(false);
     }
   };
 
@@ -95,9 +115,21 @@ export default function AccountPage() {
             color: 'var(--danger)', fontSize: 12.5,
           }}>{exportErr}</div>
         )}
-        <button className="btn btn-outline" onClick={downloadExport} disabled={busyExport}>
-          <Icons.Doc size={14}/> {busyExport ? 'Preparing…' : 'Download my data'}
-        </button>
+        {emailedNote && (
+          <div style={{
+            padding: '8px 12px', borderRadius: 8, marginBottom: 12,
+            background: 'rgba(80,140,60,0.10)', border: '1px solid rgba(80,140,60,0.30)',
+            color: 'var(--fg)', fontSize: 12.5,
+          }}>{emailedNote}</div>
+        )}
+        <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <button className="btn btn-outline" onClick={downloadExport} disabled={busyExport}>
+            <Icons.Doc size={14}/> {busyExport ? 'Preparing…' : 'Download my data'}
+          </button>
+          <button className="btn btn-ghost" onClick={emailExport} disabled={busyEmail}>
+            <Icons.Mail size={14}/> {busyEmail ? 'Sending…' : 'Email me a copy'}
+          </button>
+        </div>
       </div>
 
       {/* Danger zone */}

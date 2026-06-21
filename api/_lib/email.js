@@ -61,7 +61,7 @@ function warnIfSandbox() {
   }
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs = 8000 }) {
+export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs = 8000 }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
   warnIfSandbox();
@@ -77,6 +77,17 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, tim
   // Reply-To: explicit override > env default > skip.
   const reply = replyTo || replyToAddress();
   if (reply) body.reply_to = reply;
+
+  // Optional file attachments. Resend expects
+  // [{ filename, content: <base64 string>, content_type? }]. We accept the
+  // camelCase `contentType` for convenience and map it through.
+  if (Array.isArray(attachments) && attachments.length) {
+    body.attachments = attachments.map((a) => ({
+      filename: a.filename,
+      content: a.content,
+      ...(a.contentType || a.content_type ? { content_type: a.contentType || a.content_type } : {}),
+    }));
+  }
 
   // Default List-Unsubscribe headers for every send. Gmail bumps senders
   // that don't expose a one-click unsubscribe to spam more aggressively
