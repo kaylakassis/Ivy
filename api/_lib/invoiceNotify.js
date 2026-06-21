@@ -58,6 +58,49 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
   }
 }
 
+// Friendly "payment due soon" nudge - fires a few days BEFORE due_date,
+// once per invoice. The proactive counterpart to notifyInvoiceOverdue.
+export async function notifyInvoiceDueSoon({ workspaceId, invoiceId, daysUntilDue, viewUrl }) {
+  try {
+    const { rows } = await sql`
+      SELECT i.id, i.number, i.client_id, i.client_name, i.client_email,
+             i.due_date, i.items, i.tax_rate, i.discount
+      FROM invoices i
+      WHERE i.id = ${invoiceId} AND i.workspace_id = ${workspaceId}
+    `;
+    const inv = rows[0];
+    if (!inv?.client_email) return;
+    const { computeTotals } = await import('./finance.js');
+    const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
+    const branding = await fetchBranding(workspaceId);
+    const business = branding.businessName || 'your business';
+    const whenLabel = daysUntilDue <= 0 ? 'today'
+      : daysUntilDue === 1 ? 'tomorrow'
+      : `in ${daysUntilDue} days`;
+    const html = emailShell({
+      heading: `A quick heads-up on invoice ${escapeHtml(inv.number)}`,
+      branding,
+      body: `<p>Hi ${escapeHtml((inv.client_name || '').split(/\s+/)[0] || 'there')},</p>
+        <p>Just a friendly reminder that invoice <strong>${escapeHtml(inv.number)}</strong>
+        for <strong>${fmtMoney(totals.total)}</strong> is due <strong>${whenLabel}</strong>${inv.due_date ? ` (${escapeHtml(fmtDate(inv.due_date))})` : ''}.</p>
+        <p>You can pay it in a couple of taps using the button below. If you've already taken care of it, thank you - no need to do anything.</p>`,
+      ctaText: 'View & pay invoice',
+      ctaUrl: viewUrl || `${appUrl()}`,
+      footer: `Questions? Just reply to this email to reach ${escapeHtml(business)}.`,
+    });
+    await sendEmailToClient({
+      clientId: inv.client_id, type: 'invoices',
+      to: inv.client_email,
+      subject: `Reminder: invoice ${inv.number} is due ${whenLabel}`,
+      html,
+      replyTo: branding.replyTo,
+    });
+  } catch (err) {
+    console.error('[notifyInvoiceDueSoon] failed:', err.message);
+    reportError(err, { extra: { invoiceId, workspaceId } });
+  }
+}
+
 // Single-invoice overdue reminder. Cron picks the row + calls this.
 export async function notifyInvoiceOverdue({ workspaceId, invoiceId, daysOverdue, viewUrl }) {
   try {

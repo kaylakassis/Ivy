@@ -1445,6 +1445,11 @@ CREATE TABLE IF NOT EXISTS invoices (
 );
 CREATE INDEX IF NOT EXISTS idx_invoices_workspace_status ON invoices(workspace_id, status);
 CREATE INDEX IF NOT EXISTS idx_invoices_workspace_issued ON invoices(workspace_id, issue_date DESC);
+-- Reminder dedupe stamps. last_overdue_reminder_at repeats weekly (set by
+-- the invoice-overdue cron); due_soon_reminder_sent_at fires ONCE, a few
+-- days before due_date (the invoice-due-soon cron).
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_overdue_reminder_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS due_soon_reminder_sent_at TIMESTAMPTZ;
 
 -- Expenses. Owners log deductible business spend with category +
 -- optional vendor + notes + receipt URL. Categories map to IRS
