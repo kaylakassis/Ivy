@@ -51,28 +51,60 @@ async function loadUser(userId) {
   } catch { return null; }
 }
 
-// Shared sender for all three alert flavors.
-async function sendSecurityAlert({ userId, subject, heading, intro, ip, userAgent }) {
+// Shared sender for the security-alert family. `kind` decides the copy;
+// device/IP/timestamp are rendered into a consistent detail block.
+async function sendSecurityAlert({ userId, kind, ip, userAgent, enabled }) {
   try {
     const u = await loadUser(userId);
     if (!u?.email) return;
+    const fn = escapeHtml((u.name || '').split(/\s+/)[0] || 'there');
     const device = prettyDevice(userAgent);
+    const when = fmtWhen();
+    const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
+
+    let subject, preheader, heading, intro, decided;
+    if (kind === 'new_signin') {
+      subject = 'New sign-in to your Ivy OS account';
+      preheader = 'Was this you?';
+      heading = 'New sign-in to your account';
+      intro = `Your Ivy OS account was just signed into:`;
+      decided = `<p><strong>If this was you, you're all set</strong> — no action needed.</p>
+        <p>If you don't recognize this, secure your account right away by changing your password.</p>`;
+    } else if (kind === 'password_changed') {
+      subject = 'Your Ivy OS password was changed';
+      preheader = `If this wasn't you, act now.`;
+      heading = 'Your password was changed';
+      intro = `The password for your Ivy OS account was just changed:`;
+      decided = `<p><strong>If you made this change</strong>, no action is needed.</p>
+        <p><strong>If you didn't</strong>, your account may be at risk. Reset your password immediately and contact us at <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a>.</p>`;
+    } else if (kind === 'two_factor') {
+      subject = enabled ? 'Two-factor authentication is on' : 'Two-factor authentication was turned off';
+      preheader = enabled ? 'Your Ivy OS account just got more secure.' : 'Your account is now protected by your password alone.';
+      heading = enabled ? 'Two-factor authentication is on' : 'Two-factor authentication was turned off';
+      intro = enabled
+        ? `Two-factor authentication was turned on for your Ivy OS account. From now on, you'll confirm a code when you sign in — nice work locking things down.`
+        : `Two-factor authentication was turned off for your Ivy OS account. It is now protected by your password alone.`;
+      decided = `<p>If you didn't make this change, secure your account right away.</p>`;
+    } else {
+      return;
+    }
+
     const detail = `
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:18px 0 6px;font-size:13.5px;line-height:1.8;">
-        <tr><td style="color:#8A8D85;padding-right:16px;vertical-align:top;">When</td><td style="color:#F3F3EE;">${escapeHtml(fmtWhen())}</td></tr>
         <tr><td style="color:#8A8D85;padding-right:16px;vertical-align:top;">Device</td><td style="color:#F3F3EE;">${escapeHtml(device)}</td></tr>
-        ${ip ? `<tr><td style="color:#8A8D85;padding-right:16px;vertical-align:top;">IP address</td><td style="color:#F3F3EE;">${escapeHtml(ip)}</td></tr>` : ''}
+        <tr><td style="color:#8A8D85;padding-right:16px;vertical-align:top;">Time</td><td style="color:#F3F3EE;">${escapeHtml(when)}</td></tr>
+        ${ip ? `<tr><td style="color:#8A8D85;padding-right:16px;vertical-align:top;">IP</td><td style="color:#F3F3EE;">${escapeHtml(ip)}</td></tr>` : ''}
       </table>`;
+
     const html = emailShell({
-      heading,
-      body: `<p>Hi ${escapeHtml((u.name || '').split(/\s+/)[0] || 'there')},</p>
+      heading, preheader,
+      body: `<p>Hi ${fn},</p>
         <p>${intro}</p>
         ${detail}
-        <p style="margin-top:18px;">If this was you, you're all set - no action needed.</p>
-        <p><strong>If this wasn't you</strong>, secure your account now: change your password and review your security settings.</p>`,
-      ctaText: 'Review account security',
-      ctaUrl: `${appUrl()}/account?tab=security`,
-      footer: `You're getting this because it affects your account's security. For your protection, these alerts can't be turned off.`,
+        ${decided}`,
+      ctaText: kind === 'password_changed' ? 'Reset my password' : 'Review account security',
+      ctaUrl: kind === 'password_changed' ? `${appUrl()}/forgot-password` : `${appUrl()}/account?tab=security`,
+      footer: `You're getting this because it affects your account's security. For your protection, these alerts can't be turned off. — The Ivy OS Team`,
     });
     await sendEmailToUser({ userId, type: 'security_alert', to: u.email, subject, html, timeoutMs: 6000 });
   } catch (err) {
@@ -83,27 +115,11 @@ async function sendSecurityAlert({ userId, subject, heading, intro, ip, userAgen
 }
 
 export async function notifyPasswordChanged({ userId, ip, userAgent } = {}) {
-  return sendSecurityAlert({
-    userId, ip, userAgent,
-    subject: 'Your Ivy OS password was changed',
-    heading: 'Your password was changed',
-    intro: 'The password on your Ivy OS account was just changed.',
-  });
+  return sendSecurityAlert({ userId, kind: 'password_changed', ip, userAgent });
 }
 
 export async function notifyTwoFactorChanged({ userId, enabled, ip, userAgent } = {}) {
-  return sendSecurityAlert({
-    userId, ip, userAgent,
-    subject: enabled
-      ? 'Two-factor authentication was turned on'
-      : 'Two-factor authentication was turned off',
-    heading: enabled
-      ? 'Two-factor authentication is on'
-      : 'Two-factor authentication was turned off',
-    intro: enabled
-      ? 'Two-factor authentication (2FA) was just enabled on your Ivy OS account - nice, your account is now harder to break into.'
-      : 'Two-factor authentication (2FA) was just turned off on your Ivy OS account. It is now protected by your password alone.',
-  });
+  return sendSecurityAlert({ userId, kind: 'two_factor', ip, userAgent, enabled });
 }
 
 // New-device sign-in. Tracks a per-user set of device fingerprints (a hash
@@ -125,12 +141,7 @@ export async function maybeNotifyNewSignIn({ userId, ip, userAgent } = {}) {
     await sql`UPDATE users SET known_login_fingerprints = ${JSON.stringify(next)}::jsonb WHERE id = ${userId}`;
     if (isBaseline) return; // first device on record → establish silently
 
-    await sendSecurityAlert({
-      userId, ip, userAgent,
-      subject: 'New sign-in to your Ivy OS account',
-      heading: 'New sign-in to your account',
-      intro: "We noticed a sign-in to your Ivy OS account from a device or browser we haven't seen before.",
-    });
+    await sendSecurityAlert({ userId, kind: 'new_signin', ip, userAgent });
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[securityNotify/newSignIn] failed:', err.message);

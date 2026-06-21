@@ -22,6 +22,10 @@ import { cancelSubscription, platformStripeSecret } from '../_lib/stripe.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
+function escapeText(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   if (!requireSameOrigin(req, res)) return;
@@ -111,17 +115,33 @@ export default async function handler(req, res) {
     // Confirmation email - bypasses prefs since the user opted in by
     // running the destructive action. Best-effort; deletion already
     // succeeded so the API ack doesn't depend on email delivery.
+    //
+    // Behavior we describe in the copy MUST match what we actually did:
+    // soft-deleted now, recoverable for 30 days, hard-deleted by the
+    // db-prune cron after that. The 30-day mark is the
+    // permanent-deletion date.
     if (r.rowCount > 0 && userEmail) {
       try {
+        const fn = (userName || '').split(/\s+/)[0] || 'there';
+        const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
+        const finalDelete = new Date(Date.now() + 30 * 24 * 3600 * 1000)
+          .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' });
         await sendEmail({
           to: userEmail,
-          subject: 'Your Ivy OS account was deleted',
+          subject: 'Your Ivy OS account deletion request',
           html: emailShell({
-            heading: 'Your account is deleted',
-            body: `<p>Hi ${userName ? userName.split(/\s+/)[0] : 'there'},</p>
-              <p>Per your request, we've deleted your Ivy OS account and the workspace you owned - your clients, bookings, invoices, documents, and messages. This action can't be reversed. (Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>
-              <p>If you didn't make this request, please email us right away - we still have backups for 30 days that we can restore from in case of unauthorized deletion.</p>`,
-            footer: 'Thanks for trying Ivy OS. We\'re sorry to see you go - if you have a moment, reply with what we could have done better.',
+            heading: `Your account deletion request`,
+            preheader: `Here's what happens — and how to cancel.`,
+            body: `<p>Hi ${escapeText(fn)},</p>
+              <p>We've received your request to delete your Ivy OS account. Here's what happens next:</p>
+              <ul style="padding-left:20px;margin:14px 0;">
+                <li>Your account is scheduled for permanent deletion on <strong>${escapeText(finalDelete)}</strong></li>
+                <li>Until then, it's deactivated but <strong>recoverable</strong></li>
+                <li>After that date, your data is permanently erased and can't be restored</li>
+              </ul>
+              <p><strong>Changed your mind?</strong> Email <a href="mailto:${escapeText(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeText(supportEmail)}</a> before ${escapeText(finalDelete)} and we'll restore your account from backups.</p>
+              <p>(Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>`,
+            footer: `Thanks for trying Ivy OS. If you have a moment, reply with what we could have done better. — The Ivy OS Team`,
           }),
         });
       } catch (mailErr) {

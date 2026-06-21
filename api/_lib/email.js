@@ -178,7 +178,7 @@ function stripHtml(s = '') {
 // applies the workspace owner's chosen presentation. accentColor (if
 // set) overrides the default lime; we compute a contrasting ink color
 // for button text via relative-luminance.
-export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding }) {
+export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, preheader }) {
   // Brand tokens - mirror tokens.css ".dir-bold" exactly. Hard-coded
   // because email clients can't read CSS variables.
   const C = {
@@ -265,8 +265,10 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding })
   <title>${escapeText(heading || 'Ivy OS')}</title>
 </head>
 <body style="margin:0;padding:0;background:${C.page};font-family:${fontSans};color:${C.fg};-webkit-font-smoothing:antialiased;mso-line-height-rule:exactly;">
-  <!-- Hidden preheader: shows as the inbox-list preview text. -->
-  <div style="display:none;font-size:1px;color:${C.page};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeText(stripHtml(body || '').slice(0, 110))}</div>
+  <!-- Hidden preheader: shows as the inbox-list preview text. Explicit
+       value when provided (best - the caller writes deliberate preview
+       copy); otherwise derived from the first chunk of the body. -->
+  <div style="display:none;font-size:1px;color:${C.page};line-height:1px;max-height:0;max-width:0;opacity:0;overflow:hidden;">${escapeText((preheader || stripHtml(body || '')).slice(0, 140))}</div>
 
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${C.page};">
     <tr>

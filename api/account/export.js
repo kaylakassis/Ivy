@@ -74,30 +74,28 @@ async function emailCopy(req, res) {
     const tooBig = bytes > MAX_EMAIL_ATTACH_BYTES;
     const sizeMb = (bytes / (1024 * 1024)).toFixed(1);
 
+    const fn = escapeHtml((user.name || '').split(/\s+/)[0] || 'there');
+    const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
     const body = tooBig
-      ? `<p>Hi ${escapeHtml((user.name || '').split(/\s+/)[0] || 'there')},</p>
-         <p>You asked for a copy of your Ivy OS data. It turned out to be a bit large
-         to email safely (about ${sizeMb} MB), so we couldn't attach it here.</p>
-         <p>You can download the complete file any time from
-         <strong>Account → Your data → Export everything</strong>.</p>`
-      : `<p>Hi ${escapeHtml((user.name || '').split(/\s+/)[0] || 'there')},</p>
-         <p>As requested, your complete Ivy OS data export is attached to this email
-         as <strong>${escapeHtml(filename)}</strong> (${sizeMb} MB of JSON).</p>
-         <p>It includes your profile, clients, bookings, invoices, documents,
-         messages, and everything else tied to your account. Keep it somewhere safe -
-         it's a full copy of your data.</p>
-         <p>You didn't request this? You can ignore the email, then change your
-         password and review your security settings to be safe.</p>`;
+      ? `<p>Hi ${fn},</p>
+         <p>Your data export for your Ivy OS account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb} MB</strong>), so we couldn't attach it here.</p>
+         <p>You can download the complete file any time from <strong>Account → Your data → Download my data</strong>. It includes your clients, bookings, financials, and account records.</p>
+         <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`
+      : `<p>Hi ${fn},</p>
+         <p>Your data export for your Ivy OS account is ready. It's attached to this email as <strong>${escapeHtml(filename)}</strong> (${sizeMb} MB of JSON) and includes your clients, bookings, financials, and account records.</p>
+         <p>For your security, keep this file somewhere safe — it's a complete copy of your data.</p>
+         <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`;
 
     const html = emailShell({
-      heading: 'Your data export',
+      heading: 'Your data export is ready',
+      preheader: tooBig ? 'Download instructions inside.' : 'Download attached.',
       body,
-      footer: `Requested from your account on ${new Date().toUTCString()}.`,
+      footer: `Requested from your account on ${new Date().toUTCString()}. — The Ivy OS Team`,
     });
 
     await sendEmail({
       to: user.email,
-      subject: tooBig ? 'Your Ivy OS data export (download from your account)' : 'Your Ivy OS data export is attached',
+      subject: tooBig ? 'Your Ivy OS data export is ready' : 'Your Ivy OS data export is ready',
       html,
       timeoutMs: 20000,
       attachments: tooBig ? undefined : [{
