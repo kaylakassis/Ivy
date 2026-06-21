@@ -23,6 +23,7 @@ import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { notifyLeadInstantReply, extractLeadContact } from '../_lib/leadNotify.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -120,6 +121,17 @@ export default async function handler(req, res) {
       SET delivered = ${delivered}, delivery_err = ${deliveryErr}
       WHERE id = ${submissionId}
     `;
+
+    // Instant lead reply: acknowledge the prospect right away with the
+    // booking link (per-workspace toggle, default on). Skip the newsletter
+    // form - a "thanks for reaching out" reply makes no sense for a
+    // subscribe box. Best-effort; never blocks the 200.
+    if (formId !== 'newsletter' && site.workspace_id) {
+      const { email: leadEmail, name: leadName } = extractLeadContact(payload);
+      if (leadEmail) {
+        await notifyLeadInstantReply({ workspaceId: site.workspace_id, toEmail: leadEmail, leadName });
+      }
+    }
 
     return ok(res, { received: true, delivered });
   } catch (err) {

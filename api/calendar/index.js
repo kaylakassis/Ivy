@@ -145,6 +145,13 @@ export default async function handler(req, res) {
         const t = body.tagline == null ? null : String(body.tagline).trim().slice(0, 140);
         push('tagline', t || null);
       }
+      if ('leadInstantReplyEnabled' in body) {
+        push('lead_instant_reply_enabled', !!body.leadInstantReplyEnabled);
+      }
+      if ('leadInstantReplyMessage' in body) {
+        const m = body.leadInstantReplyMessage == null ? null : String(body.leadInstantReplyMessage).trim().slice(0, 2000);
+        push('lead_instant_reply_message', m || null);
+      }
       if ('category' in body) {
         const c = body.category == null ? null : String(body.category).trim();
         if (c && !DISCOVER_CATEGORY_SET.has(c)) {

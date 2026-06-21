@@ -17,6 +17,8 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   const [slug, setSlug]       = useState(settings.slug || '');
   const [tagline, setTagline] = useState(settings.tagline || '');
   const [discoverable, setDiscoverable] = useState(!!settings.discoverable);
+  const [leadReply, setLeadReply] = useState(settings.leadInstantReplyEnabled !== false);
+  const [leadMsg, setLeadMsg]     = useState(settings.leadInstantReplyMessage || '');
   const [category, setCategory] = useState(settings.category || '');
   const [addressLabel, setAddressLabel] = useState(settings.addressLabel || '');
   const [lat, setLat]         = useState(settings.lat ?? '');
@@ -32,6 +34,8 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
   useEffect(() => { setSlug(settings.slug || ''); },       [settings.slug]);
   useEffect(() => { setTagline(settings.tagline || ''); }, [settings.tagline]);
   useEffect(() => { setDiscoverable(!!settings.discoverable); }, [settings.discoverable]);
+  useEffect(() => { setLeadReply(settings.leadInstantReplyEnabled !== false); }, [settings.leadInstantReplyEnabled]);
+  useEffect(() => { setLeadMsg(settings.leadInstantReplyMessage || ''); }, [settings.leadInstantReplyMessage]);
   useEffect(() => { setCategory(settings.category || ''); }, [settings.category]);
   useEffect(() => { setAddressLabel(settings.addressLabel || ''); }, [settings.addressLabel]);
   useEffect(() => { setLat(settings.lat ?? ''); }, [settings.lat]);
@@ -41,6 +45,8 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
     || slug !== (settings.slug || '')
     || tagline !== (settings.tagline || '')
     || discoverable !== !!settings.discoverable
+    || leadReply !== (settings.leadInstantReplyEnabled !== false)
+    || leadMsg !== (settings.leadInstantReplyMessage || '')
     || category !== (settings.category || '')
     || addressLabel !== (settings.addressLabel || '')
     || String(lat ?? '') !== String(settings.lat ?? '')
@@ -102,6 +108,8 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
         slug: slug ? slug.toLowerCase().trim() : null,
         tagline: tagline.trim() || null,
         discoverable,
+        leadInstantReplyEnabled: leadReply,
+        leadInstantReplyMessage: leadMsg.trim() || null,
         category: category || null,
         addressLabel: addressLabel.trim() || null,
         lat: Number.isFinite(latNum) ? latNum : null,
@@ -174,6 +182,42 @@ export default function ShareDrawer({ settings, onSave, onClose }) {
           {tagline.length}/140
         </div>
       </Field>
+
+      {/* Instant lead reply. Auto-acknowledges website contact-form leads
+          with the booking link so nobody waits. On by default. */}
+      <div style={{
+        padding: '12px 14px', borderRadius: 10, marginBottom: 16,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+      }}>
+        <label style={{ display: 'flex', alignItems: 'flex-start', gap: 12, cursor: 'pointer' }}>
+          <input type="checkbox" checked={leadReply}
+            onChange={(e) => setLeadReply(e.target.checked)}
+            style={{ marginTop: 3 }}/>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <Icons.Mail size={13} sw={1.7}/> Instant reply to new leads
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
+              When someone messages you through your website contact form, auto-send them a friendly reply with your booking link, so no lead waits while you're busy.
+            </div>
+          </div>
+        </label>
+        {leadReply && (
+          <div style={{ marginTop: 12 }}>
+            <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--fg-2)', marginBottom: 6 }}>
+              Custom message <span style={{ fontWeight: 400, color: 'var(--muted)' }}>(optional — leave blank for the default)</span>
+            </div>
+            <textarea value={leadMsg}
+              onChange={(e) => setLeadMsg(e.target.value.slice(0, 2000))}
+              placeholder="Thanks for reaching out, {{firstName}}! I'll get back to you shortly. In the meantime, feel free to grab a time on my calendar."
+              rows={3}
+              style={{ ...inputSty, resize: 'vertical', lineHeight: 1.5 }}/>
+            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 4 }}>
+              Use <code>{'{{firstName}}'}</code> and <code>{'{{businessName}}'}</code> to personalize. Your booking link is added automatically.
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* Discover opt-in. Only meaningful once a handle is saved - Discover
           listings link to /book/<slug>, so a business with no slug has nothing

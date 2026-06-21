@@ -756,6 +756,11 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS max_advance_days INT NOT 
 -- is the one-line pitch shown under the business name on the listing.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS discoverable BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS tagline TEXT;
+-- Lead instant reply: when a prospect submits the owner's website contact
+-- form, auto-send them a white-labeled acknowledgement with the booking
+-- link, so no inbound lead waits. On by default; message NULL = default copy.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lead_instant_reply_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS lead_instant_reply_message TEXT;
 -- iCal subscription feed. Owner generates a token and pastes the resulting
 -- URL into Google Cal / Apple Cal / Outlook to mirror their Ivy OS bookings
 -- into their personal calendar. We store the sha256 of the token so leaked

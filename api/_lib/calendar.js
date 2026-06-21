@@ -27,6 +27,8 @@ export function serializeSettings(row) {
     availability:   row.availability || {},
     discoverable:   !!row.discoverable,
     tagline:        row.tagline || '',
+    leadInstantReplyEnabled: row.lead_instant_reply_enabled !== false,
+    leadInstantReplyMessage: row.lead_instant_reply_message || '',
     category:       row.category || null,
     addressLabel:   row.address_label || '',
     lat:            row.lat == null ? null : Number(row.lat),
