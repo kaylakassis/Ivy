@@ -351,6 +351,12 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
 -- user logging in). Surfaced in the admin Users view so operators can see
 -- who's actually returning.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+-- Device fingerprints (sha256 of the user agent, capped) we've seen this
+-- user sign in from. Powers the "new sign-in" security alert: a sign-in
+-- from a fingerprint not in this list is treated as a new device. The
+-- FIRST tracked sign-in just seeds the baseline silently (no alert), so
+-- neither fresh signups nor the rollout itself cause an alert storm.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS known_login_fingerprints JSONB NOT NULL DEFAULT '[]'::jsonb;
 -- Welcome-email sequence tracker. Keys are 'day1' | 'day3' | 'day7' | 'day14',
 -- values are ISO timestamps. Stored as JSONB so we can add new beats later
 -- without another migration.

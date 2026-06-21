@@ -19,8 +19,9 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
 import { base32Decode, verifyTotp } from '../../_lib/totp.js';
-import { enforce } from '../../_lib/rate-limit.js';
+import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { recordAudit } from '../../_lib/audit.js';
+import { notifyTwoFactorChanged } from '../../_lib/securityNotify.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -84,6 +85,8 @@ export default async function handler(req, res) {
         UPDATE users SET totp_enrolled_at = NOW(), updated_at = NOW()
          WHERE id = ${user.id}
       `;
+      // "2FA turned on" security alert (only on the transition). Fire-and-forget.
+      notifyTwoFactorChanged({ userId: user.id, enabled: true, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
     }
 
     recordAudit(req, {

@@ -46,6 +46,7 @@ export const CRITICAL_EMAIL_TYPES = new Set([
   'verification',     // signup confirm, email change
   'password_reset',
   'account_deletion',
+  'security_alert',   // new-device sign-in, password change, 2FA on/off
 ]);
 
 // Read users.notification_prefs, return true if the `email_<type>` key

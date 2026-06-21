@@ -10,6 +10,7 @@ import { requireGate } from '../_lib/earlyAccess.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError, serviceUnavailable, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
+import { maybeNotifyNewSignIn } from '../_lib/securityNotify.js';
 
 // Decoy bcrypt hash for constant-time email-enumeration defense. When
 // the email doesn't exist we still run bcrypt.compare() against this
@@ -84,6 +85,10 @@ export default async function handler(req, res) {
     // but wrapped so a write hiccup never blocks a successful sign-in.
     await sql`UPDATE users SET last_login_at = NOW() WHERE id = ${user.id}`
       .catch((e) => console.warn('[login] last_login_at stamp failed:', e.message));
+    // Security alert on a sign-in from a device we haven't seen before.
+    // Fire-and-forget (like recordAudit) so it never slows or breaks login;
+    // the helper seeds a silent baseline on the first tracked sign-in.
+    maybeNotifyNewSignIn({ userId: user.id, ip, userAgent: req.headers['user-agent'] });
     recordAudit(req, { actor: user, action: 'auth.login', meta: {} });
     // Decorate the user payload with isSuperAdmin so the sidebar /
     // bottom-nav / command-palette show the Admin tab on first paint.

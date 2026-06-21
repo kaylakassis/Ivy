@@ -12,8 +12,9 @@ import { sql } from '../../_lib/db.js';
 import { requireUser, verifyPassword } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
-import { enforce } from '../../_lib/rate-limit.js';
+import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { recordAudit } from '../../_lib/audit.js';
+import { notifyTwoFactorChanged } from '../../_lib/securityNotify.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -65,6 +66,8 @@ export default async function handler(req, res) {
       action: 'totp.disabled',
       meta: { was_enrolled_at: row.totp_enrolled_at },
     });
+    // "2FA turned off" security alert. Fire-and-forget.
+    notifyTwoFactorChanged({ userId: user.id, enabled: false, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
 
     return ok(res, { ok: true, enrolled: false });
   } catch (err) {

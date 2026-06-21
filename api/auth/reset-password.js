@@ -8,6 +8,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { findValidToken, consumeToken, invalidateUserTokens, KIND_RESET } from '../_lib/tokens.js';
 import { recordAudit } from '../_lib/audit.js';
+import { notifyPasswordChanged } from '../_lib/securityNotify.js';
 import { badRequest, methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -51,6 +52,8 @@ export default async function handler(req, res) {
     setSessionCookie(res, signSession(valid.userId));
     const { rows } = await sql`SELECT id, email, name, created_at FROM users WHERE id = ${valid.userId}`;
     recordAudit(req, { actor: rows[0], action: 'auth.password_reset', meta: {} });
+    // "Your password was changed" security alert. Fire-and-forget.
+    notifyPasswordChanged({ userId: valid.userId, ip, userAgent: req.headers['user-agent'] });
     return ok(res, { user: rows[0] });
   } catch (err) {
     return serverError(res, err);
