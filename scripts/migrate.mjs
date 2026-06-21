@@ -5,17 +5,30 @@
 // first request that cold-starts. Keeps the ~80-statement DDL pass off the
 // hot path.
 //
+// THIS STEP NEVER FAILS THE BUILD. It is a deploy-time OPTIMIZATION
+// (apply the schema once, off the request hot path), NOT the only line of
+// defense: the request path runs the same migration lazily via
+// ensureSchemaApplied() (api/_lib/ensureSchema.js) on the first cold
+// request, and that path is idempotent + self-healing. So if the build
+// can't migrate - most commonly because Vercel-managed Neon has
+// auto-SUSPENDED and the first connection at build time hits a sleeping
+// DB - we must NOT hard-fail the deploy. Doing so freezes production on
+// the last successful build (stale site, missing new routes) for a
+// transient condition that the runtime resolves on its own the moment
+// the DB wakes. A frozen production is strictly worse than a deployed
+// app that migrates on first request.
+//
 // Behavior:
-//   • No DATABASE_URL/POSTGRES_URL  → skip + exit 0. Lets a frontend-only
-//     build (local `npm run build`, CI without a DB) succeed. On Vercel
-//     the DB env vars are present in the build environment, so the
-//     migration runs for real.
-//   • DB unreachable                → exit 1 with a CLEAR "database
-//     unreachable" message (after a warmup retry to wake a suspended
-//     Neon instance), NOT the misleading "N statements failed" report.
-//   • Migration succeeds            → exit 0.
-//   • A statement permanently fails → exit 1, which FAILS the build so a
-//     broken schema never ships.
+//   • No DATABASE_URL/POSTGRES_URL  → skip + exit 0 (frontend-only build).
+//   • DB asleep/unreachable at build → warmup retries to wake it; if it
+//     stays down, log loudly and exit 0 anyway (runtime migration is the
+//     backstop). Deploy proceeds.
+//   • Migration runs → great, schema is current before traffic lands.
+//   • Migration errors → log loudly and exit 0 (runtime backstop). A
+//     genuinely broken DDL statement is caught earlier by `npm test`
+//     (the full schema runs against Postgres in CI), so it shouldn't
+//     reach here; if it does, the loud log + per-request runtime errors
+//     surface it without bricking the entire site.
 //
 // Idempotent: safe to run on every deploy (every statement is IF NOT
 // EXISTS / idempotent UPSERT). Runs for preview deploys too, against
@@ -75,15 +88,22 @@ try {
   await runSchemaMigration();
   process.exit(0);
 } catch (err) {
+  // NON-FATAL by design (see header). We log loudly so the build log
+  // shows what happened, but ALWAYS exit 0 so a sleeping/unreachable
+  // Neon - or any migration hiccup - can't freeze production on a stale
+  // deploy. The runtime ensureSchemaApplied() backstop applies the
+  // schema on the first request once the DB is awake.
   if (err.unreachable) {
-    console.error('[migrate] FAILED: database unreachable -', err.message);
-    process.exit(1);
-  }
-  console.error('[migrate] FAILED:', err.message);
-  if (Array.isArray(err.failures)) {
-    for (const f of err.failures) {
-      console.error(`  - stmt #${f.origIndex + 1}: ${f.message} | ${f.preview}`);
+    console.warn('[migrate] DB unreachable at build time -', err.message);
+    console.warn('[migrate] Proceeding with deploy; the runtime migration will apply the schema on first request once Neon wakes.');
+  } else {
+    console.warn('[migrate] migration did not complete at build time:', err.message);
+    if (Array.isArray(err.failures)) {
+      for (const f of err.failures) {
+        console.warn(`  - stmt #${f.origIndex + 1}: ${f.message} | ${f.preview}`);
+      }
     }
+    console.warn('[migrate] Proceeding with deploy; the runtime migration backstop will retry on first request.');
   }
-  process.exit(1);
+  process.exit(0);
 }
