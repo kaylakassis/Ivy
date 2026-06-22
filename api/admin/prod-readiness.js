@@ -161,10 +161,25 @@ export default async function handler(req, res) {
       checks.push(check('stripe_connect', 'STRIPE_CONNECT_CLIENT_ID', 'ok'));
     }
     if (!process.env.IVY_STRIPE_PRICE_ID) {
-      checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'warn',
-        "No subscription Price configured - owners can\'t pay Ivy OS."));
+      checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'fail',
+        "Set to the price_xxx from Stripe → Products → your $49/mo product. Without it, new signups can't reach Stripe Checkout — checkout.js falls back to a no-card trial, so the card-up-front funnel is NOT engaged."));
     } else {
       checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'ok'));
+    }
+
+    // Funnel summary - one banner that tells the operator at a glance
+    // whether the card-up-front trial is wired. Surfaces the no-card
+    // fallback condition (where api/billing/checkout grants a no-card
+    // trial instead of going to Stripe Checkout) in plain English,
+    // since that's the single most common "I configured Stripe but
+    // nothing happened" gotcha.
+    const cardUpFrontReady = !!stripeKey && !!process.env.IVY_STRIPE_PRICE_ID;
+    if (cardUpFrontReady) {
+      checks.push(check('funnel', 'Funnel: card-backed trial', 'ok',
+        'New signups will be routed through Stripe Checkout to put a card on file before the trial starts (the funnel rework intent).'));
+    } else {
+      checks.push(check('funnel', 'Funnel: running on NO-CARD fallback', 'fail',
+        `Stripe isn't fully configured, so api/billing/checkout grants every new signup a 14-day no-card trial instead of routing them through Stripe Checkout. The app keeps working, but the conversion lift from card-up-front isn't engaged. Set STRIPE_SECRET_KEY${process.env.IVY_STRIPE_PRICE_ID ? '' : ' AND IVY_STRIPE_PRICE_ID'} and redeploy to engage the intended funnel.`));
     }
 
     // ── Email (BLOCKER for password reset + verification) ───────────

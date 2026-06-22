@@ -661,10 +661,16 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
   // business), falls back to the workspace's accent color, and
   // finally to the deterministic pastel banner so a brand-new
   // workspace still has a hero.
+  // Color-only heroes used to render a 132px solid accent slab — with a
+  // saturated brand color it read as a giant empty block (nothing in it
+  // but the close button). For accent-only we now use a much shorter
+  // band (64px) that gradients from the accent down to transparent, so
+  // it blends into the page as a brand-color topper instead of a wall.
+  // Photo heroes keep the full 220px since the photo carries content.
   const heroCover = gallery[0]
     ? `linear-gradient(0deg, rgba(0,0,0,0.35), rgba(0,0,0,0)), url(${gallery[0]}) center/cover`
     : biz?.accentColor
-    ? `linear-gradient(135deg, ${accent}, ${accent}cc)`
+    ? `linear-gradient(180deg, ${accent} 0%, ${accent}80 55%, transparent 100%)`
     : fallback;
   const visitHref = biz ? `${publicOrigin()}/book/${biz.slug}` : '#';
 
@@ -712,11 +718,11 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
           boxShadow: '0 24px 60px rgba(0,0,0,0.4)',
         }}>
         {/* Hero - a full 220px photo when the business uploaded one, but a
-            shorter banner for color-only heroes so a flat accent slab doesn't
-            dominate the card. */}
+            slim 64px gradient strip for color-only heroes so the accent
+            reads as a brand-color topper and not an empty slab. */}
         <div style={{
           position: 'relative',
-          height: gallery[0] ? 220 : 132,
+          height: gallery[0] ? 220 : 64,
           background: heroCover,
         }}>
           <button onClick={onClose} aria-label="Close"

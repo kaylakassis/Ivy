@@ -51,10 +51,18 @@ async function run() {
     const keys = new Set(r.body.checks.map((c) => c.key));
     for (const required of [
       'jwt_secret', 'admin_secret', 'cron_secret', 'secrets_key', 'app_url',
-      'database', 'stripe_key', 'stripe_webhook', 'email', 'email_from',
+      'database', 'stripe_key', 'stripe_webhook', 'stripe_price', 'funnel',
+      'email', 'email_from',
       'push', 'blob', 'ivy', 'sentry', 'node_env',
     ]) {
       assert(keys.has(required), `${required} check present`);
+    }
+
+    console.log('\n[3a] funnel check flags the no-card fallback when Stripe is missing');
+    const funnel = r.body.checks.find((c) => c.key === 'funnel');
+    if (!process.env.STRIPE_SECRET_KEY || !process.env.IVY_STRIPE_PRICE_ID) {
+      assert(funnel.level === 'fail', 'no-card fallback is surfaced as a BLOCKER');
+      assert(/no-card|NO-CARD/.test(funnel.detail || ''), 'detail mentions the no-card fallback');
     }
 
     console.log('\n[4] missing CRON_SECRET marked as fail');
