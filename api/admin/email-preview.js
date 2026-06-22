@@ -108,7 +108,15 @@ function render(template) {
     case 'payment_failed':
       return renderPaymentFailed({ amountCents: SAMPLE.amountCents, currency: SAMPLE.currency, nextAttemptAt: new Date(Date.now() + 3 * 86400000), firstName: SAMPLE.firstName, businessName: SAMPLE.businessName });
     case 'winback_offer':
-      return renderWinbackOffer({ percentOff: 30, durationMonths: 3, promoCode: 'COMEBACK30-DEMO', expiresAt: new Date(Date.now() + 14 * 86400000), firstName: SAMPLE.firstName, businessName: SAMPLE.businessName });
+      // Mirror the live behavior: when WINBACK_PROMO_CODE is set, the
+      // real win-back email shows that exact code. Preview should too,
+      // so what the operator sees in their inbox matches production.
+      return renderWinbackOffer({
+        percentOff: 30, durationMonths: 3,
+        promoCode: process.env.WINBACK_PROMO_CODE || 'COMEBACK30-DEMO',
+        expiresAt: new Date(Date.now() + 14 * 86400000),
+        firstName: SAMPLE.firstName, businessName: SAMPLE.businessName,
+      });
     case 'security_new_signin':
       return renderSecurityAlert({ kind: 'new_signin',       firstName: SAMPLE.firstName, device: 'Chrome on macOS',  ip: '203.0.113.42', when: new Date().toUTCString() });
     case 'security_password_changed':
