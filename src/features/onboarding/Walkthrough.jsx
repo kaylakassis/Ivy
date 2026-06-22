@@ -135,6 +135,13 @@ export default function Walkthrough({ onClose }) {
   const step = STEPS[stepIdx];
   const isLast = stepIdx === STEPS.length - 1;
 
+  // Fire-and-forget telemetry on first mount so the funnel can read how
+  // many owners who finish onboarding actually open the walkthrough.
+  // Idempotent server-side (column-IS-NULL guard) so a re-mount is safe.
+  useEffect(() => {
+    api.post('/onboarding/walkthrough', { event: 'started' }).catch(() => {});
+  }, []);
+
   const dismiss = async () => {
     try { await api.post('/me/walkthrough', { completed: true }); }
     catch { /* user can dismiss again */ }
@@ -220,8 +227,16 @@ export default function Walkthrough({ onClose }) {
       ) : step.kind === 'aha' ? (
         <AhaStep
           onBack={goBack}
-          onSkip={goNext}
-          onTake={() => { navigate('/calendar?share=1'); goNext(); }}/>
+          onSkip={() => {
+            // Stamp skip → funnel can compute aha take-rate. Fire-and-forget.
+            api.post('/onboarding/walkthrough', { event: 'aha_skipped' }).catch(() => {});
+            goNext();
+          }}
+          onTake={() => {
+            api.post('/onboarding/walkthrough', { event: 'aha_clicked' }).catch(() => {});
+            navigate('/calendar?share=1');
+            goNext();
+          }}/>
       ) : showSpotlight ? (
         <Tooltip target={target} placement={step.placement}>
           <StepCard step={step} stepIdx={stepIdx}

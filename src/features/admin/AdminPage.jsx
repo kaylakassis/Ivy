@@ -608,6 +608,37 @@ function FunnelCard({ funnel }) {
             </div>
           )}
 
+          {/* Aha-moment funnel: did the post-onboarding walkthrough's
+              "Get my booking link" CTA actually drive owners to take the
+              first-booking action? Click-rate here is the leading signal
+              for the activationPct lagging metric. Only renders once
+              telemetry is flowing (newer cohorts only). */}
+          {funnel.aha?.walkthroughStarted > 0 && (
+            <div style={{ marginTop: 22, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+                Aha moment (walkthrough)
+              </div>
+              {(() => {
+                const ws = funnel.aha.walkthroughStarted || 0;
+                const clicked = funnel.aha.ctaClicked || 0;
+                const skipped = funnel.aha.ctaSkipped || 0;
+                const clickPct = ws > 0 ? Math.round((clicked / ws) * 1000) / 10 : 0;
+                return (
+                  <div className="grid-auto" style={{ gap: 10 }}>
+                    <Stat label="Opened walkthrough" value={fmtN(ws)}
+                      hint={`${fmtN(funnel.onboardingDone)} finished onboarding`}/>
+                    <Stat label="Took the booking-link CTA" value={fmtN(clicked)}
+                      hint={`${clickPct}% click-through`}/>
+                    <Stat label="Skipped the aha step" value={fmtN(skipped)}/>
+                  </div>
+                );
+              })()}
+              <div style={{ fontSize: 11, color: 'var(--muted-2)', marginTop: 8, lineHeight: 1.5 }}>
+                Telemetry started recording when the walkthrough endpoint shipped, so older cohorts under-report.
+              </div>
+            </div>
+          )}
+
           {/* Platform mix on the two billing-driven steps. Apple takes a
               15-30% cut, so the iOS vs web split is the ARPU lever to
               watch alongside raw counts. */}

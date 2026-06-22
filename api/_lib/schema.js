@@ -202,6 +202,15 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_7d_sent_at    TIM
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_1d_sent_at    TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_expired_notice_sent_at TIMESTAMPTZ;
 
+-- Post-onboarding walkthrough + aha-moment telemetry. Without these we
+-- can measure paywall→trial but have no signal on whether the "Get my
+-- booking link" aha CTA actually drives the first-booking activation
+-- it's designed to produce. Each is stamped at most once per workspace
+-- by api/onboarding/walkthrough.js; first-event wins, repeats are no-ops.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS walkthrough_started_at  TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS aha_cta_clicked_at      TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS aha_cta_skipped_at      TIMESTAMPTZ;
+
 -- Weekly owner recap (cron: owner-weekly-recap.js). One email per
 -- active-trialing-or-paid workspace per week, summarizing bookings,
 -- revenue, new clients, overdue invoices, etc. for the prior 7 days.

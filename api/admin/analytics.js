@@ -272,6 +272,7 @@ export default async function handler(req, res) {
         `WITH cohort AS (
            SELECT w.id, w.onboarded_at, w.paywall_first_seen_at,
                   w.trial_started_at, w.converted_at, w.subscription_source,
+                  w.walkthrough_started_at, w.aha_cta_clicked_at, w.aha_cta_skipped_at,
                   u.onboarding_state
              FROM workspaces w
              LEFT JOIN users u ON u.id = w.owner_id
@@ -306,7 +307,15 @@ export default async function handler(req, res) {
            COUNT(*) FILTER (WHERE trial_started_at IS NOT NULL AND subscription_source = 'apple')::int AS trial_started_apple,
            COUNT(*) FILTER (WHERE trial_started_at IS NOT NULL AND subscription_source <> 'apple')::int AS trial_started_web,
            COUNT(*) FILTER (WHERE converted_at IS NOT NULL     AND subscription_source = 'apple')::int AS converted_apple,
-           COUNT(*) FILTER (WHERE converted_at IS NOT NULL     AND subscription_source <> 'apple')::int AS converted_web
+           COUNT(*) FILTER (WHERE converted_at IS NOT NULL     AND subscription_source <> 'apple')::int AS converted_web,
+           -- Aha-moment telemetry. walkthrough_started → reached the
+           -- post-onboarding tour at all; aha_clicked → took the "Get my
+           -- booking link" CTA; aha_skipped → bailed. Click-rate of
+           -- aha_clicked / walkthrough_started is the "is the aha screen
+           -- working" signal.
+           COUNT(*) FILTER (WHERE walkthrough_started_at IS NOT NULL)::int AS walkthrough_started,
+           COUNT(*) FILTER (WHERE aha_cta_clicked_at IS NOT NULL)::int     AS aha_cta_clicked,
+           COUNT(*) FILTER (WHERE aha_cta_skipped_at IS NOT NULL)::int     AS aha_cta_skipped
            FROM cohort`,
         [fromIso, toIso],
       ),
@@ -486,6 +495,14 @@ export default async function handler(req, res) {
         // Per-onboarding-step first-seen counts (where in the wizard
         // owners drop off). [{ step, reached }].
         steps: funnelStepsRow.rows.map((r) => ({ step: r.step, reached: Number(r.reached) || 0 })),
+        // Aha-moment funnel: of the cohort that finished onboarding and
+        // opened the walkthrough, how many took the "Get my booking
+        // link" CTA vs skipped it. Drives the activation metric below.
+        aha: {
+          walkthroughStarted: fn.walkthrough_started || 0,
+          ctaClicked:         fn.aha_cta_clicked || 0,
+          ctaSkipped:         fn.aha_cta_skipped || 0,
+        },
       },
       // Onboarding "About you" answer distributions (aggregate only -
       // no per-workspace data, no free text). Each list is [{k, n}]
