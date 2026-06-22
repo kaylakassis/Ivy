@@ -12,6 +12,7 @@ import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { api } from '../../lib/api.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
+import { TRIAL_DAYS } from '../../lib/pricing.js';
 import {
   pushSupported, permissionState, getSubscription,
   subscribePush, unsubscribePush,
@@ -720,7 +721,7 @@ function SubscriptionCard() {
         {!sub.isActive && !sub.trialEndsAt && (
           <button className="btn btn-ghost" onClick={startTrial} disabled={busy}
             style={{ color: 'var(--muted)' }}>
-            Start 14-day free trial
+            Start {TRIAL_DAYS}-day free trial
           </button>
         )}
       </div>
