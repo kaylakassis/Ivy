@@ -14,6 +14,7 @@ import { readBody } from '../_lib/body.js';
 import { createSubscriptionCheckoutSession, platformStripeSecret } from '../_lib/stripe.js';
 import { TRIAL_DAYS } from '../_lib/billing.js';
 import { appUrl } from '../_lib/tokens.js';
+import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -22,8 +23,41 @@ export default async function handler(req, res) {
   try {
     const secretKey = platformStripeSecret();
     const monthlyPriceId = process.env.IVY_STRIPE_PRICE_ID;
+    // Graceful fallback: Stripe isn't configured yet. Without a fallback,
+    // brand-new signups would be locked out (their workspace is `incomplete`
+    // and the only way out of the paywall is Checkout, which doesn't exist).
+    // We grant a no-card trial - same length as the card-backed one - so the
+    // app stays usable while the operator finishes wiring Stripe. Once
+    // STRIPE_SECRET_KEY + IVY_STRIPE_PRICE_ID are set, subsequent signups go
+    // through Checkout as designed.
     if (!secretKey || !monthlyPriceId) {
-      return badRequest(res, 'Subscription billing is not configured yet - set STRIPE_SECRET_KEY (the Vercel Stripe integration provides this) and IVY_STRIPE_PRICE_ID.');
+      const user = await requireUser(req, res);
+      if (!user) return;
+      const workspaceId = await ensureWorkspace(user.id);
+      const { rows } = await sql`
+        SELECT subscription_status, trial_started_at, trial_ends_at, converted_at
+          FROM workspaces WHERE id = ${workspaceId}
+      `;
+      const w = rows[0] || {};
+      const now = Date.now();
+      const stillTrialing = w.subscription_status === 'trialing'
+        && w.trial_ends_at && new Date(w.trial_ends_at).getTime() > now;
+      if (stillTrialing) return ok(res, { url: null, trialStarted: true, alreadyActive: true });
+      const eligibleForTrial = !w.trial_started_at && !w.trial_ends_at && !w.converted_at;
+      if (!eligibleForTrial) {
+        return badRequest(res, 'Subscription billing is not configured yet. Please contact support to subscribe.');
+      }
+      await sql`
+        UPDATE workspaces SET
+          subscription_status = 'trialing',
+          trial_started_at = NOW(),
+          trial_ends_at = NOW() + (${TRIAL_DAYS}::int || ' days')::interval
+        WHERE id = ${workspaceId}
+      `;
+      evictWorkspaceGateCache(workspaceId);
+      // eslint-disable-next-line no-console
+      console.warn('[billing/checkout] Stripe not configured — granted no-card fallback trial for workspace', workspaceId);
+      return ok(res, { url: null, trialStarted: true, fallback: 'no-card' });
     }
 
     // Plan selection. Monthly is the default and the always-available

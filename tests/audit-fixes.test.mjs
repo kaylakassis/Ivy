@@ -46,9 +46,13 @@ async function mkWorkspaceUser({ status, trialEndsAt }) {
     VALUES (${`gate-${Date.now()}-${Math.random().toString(36).slice(2, 7)}@example.com`}, 'x', '2026-05-05', NOW())
     RETURNING id`;
   createdUsers.push(u.rows[0].id);
+  // Stamp onboarded_at so the workspaceGate's onboarding bypass doesn't
+  // accidentally rescue a 'suspended' / expired-trial fixture. In reality
+  // any workspace that reaches a post-trial state has by definition
+  // completed onboarding.
   const w = await sql`
-    INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
-    VALUES (${u.rows[0].id}, ${status}, ${trialEndsAt})
+    INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at, onboarded_at)
+    VALUES (${u.rows[0].id}, ${status}, ${trialEndsAt}, NOW())
     RETURNING id`;
   return { workspaceId: w.rows[0].id, ownerId: u.rows[0].id };
 }

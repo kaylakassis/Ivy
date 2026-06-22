@@ -170,6 +170,15 @@ export default function Paywall({ ctx, onRefresh }) {
       // monthly), so the toggle is hidden while it's showing - `plan`
       // stays 'monthly' in that case.
       const r = await api.post('/billing/checkout', { plan });
+      // Fallback path: Stripe isn't configured yet on the server, so
+      // checkout.js granted a no-card trial instead of returning a Stripe
+      // URL. Refresh the context so the paywall closes and the user lands
+      // in the working app.
+      if (r.trialStarted) {
+        if (onRefresh) await onRefresh();
+        else window.location.reload();
+        return;
+      }
       if (!r.url) throw new Error('No checkout URL returned');
       window.location.href = r.url;
     } catch (e) {

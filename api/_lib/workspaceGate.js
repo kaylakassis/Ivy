@@ -99,7 +99,7 @@ export async function ensureActiveWorkspace(user, req, res) {
   let row;
   try {
     const { rows } = await sql`
-      SELECT subscription_status, trial_ends_at, subscription_period_end
+      SELECT subscription_status, trial_ends_at, subscription_period_end, onboarded_at
         FROM workspaces
        WHERE id = ${workspaceId}
        LIMIT 1
@@ -126,6 +126,19 @@ export async function ensureActiveWorkspace(user, req, res) {
       status: 'inactive',
       message: 'Your workspace is no longer active.',
     });
+  }
+
+  // Onboarding bypass. The funnel design is: signup → onboarding →
+  // (onboarding_complete sets onboarded_at) → THEN the hard paywall
+  // fires. So while onboarded_at IS NULL, every gated endpoint is open
+  // for the user to actually finish setting up - configure business
+  // info, services, branding, etc. Without this bypass, the onboarding
+  // wizard's first calendar PATCH 402s and the new owner can't proceed.
+  // We cache this just like a positive subscription so we don't hammer
+  // the DB on every request during the onboarding session.
+  if (row.onboarded_at == null) {
+    cacheStore(workspaceId);
+    return workspaceId;
   }
 
   if (isWorkspaceActive(row)) {
