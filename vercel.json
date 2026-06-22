@@ -30,7 +30,7 @@
       "includeFiles": "dist/**"
     },
     "api/ivy/**/*.js":            { "maxDuration": 60 },
-    "api/cron/**/*.js":           { "maxDuration": 60 },
+    "api/cron/**/*.js":           { "maxDuration": 300 },
     "api/admin/email-blast.js":   { "maxDuration": 60 },
     "api/sign/[token].js":        { "maxDuration": 45 },
     "api/documents/send.js":      { "maxDuration": 30 },

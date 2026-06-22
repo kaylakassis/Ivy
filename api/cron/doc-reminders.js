@@ -29,7 +29,9 @@ import { trackCron } from '../_lib/cronMetrics.js';
 
 const SEND_AFTER_HOURS  = 24 * 3;   // first nag at 3 days
 const REPEAT_AFTER_HOURS = 24 * 7;  // then once a week
-const MAX_PER_RUN = 200;
+// Sized for ~100K active workspaces; sendEmail throttle (~8/sec) gates
+// real throughput within the 300s cron budget.
+const MAX_PER_RUN = 1000;
 
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET

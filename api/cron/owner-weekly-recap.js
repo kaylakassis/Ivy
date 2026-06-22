@@ -25,7 +25,10 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 
-const MAX_PER_RUN = 500;
+// Sized for ~100K active workspaces. The 6-day cooldown distributes
+// owners across the week naturally; this is the maximum we'll send in
+// any single cron invocation.
+const MAX_PER_RUN = 2000;
 const REPEAT_AFTER_HOURS = 6 * 24; // 6 days
 
 async function handler(req, res) {

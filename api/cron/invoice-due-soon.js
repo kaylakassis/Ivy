@@ -23,7 +23,9 @@ import { trackCron } from '../_lib/cronMetrics.js';
 
 // How many days before due_date the heads-up goes out.
 const DUE_SOON_DAYS = 3;
-const MAX_PER_RUN = 200;
+// Sized for ~100K active workspaces; sendEmail throttle (~8/sec) gates
+// real throughput within the 300s cron budget.
+const MAX_PER_RUN = 1500;
 
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET

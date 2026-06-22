@@ -20,6 +20,23 @@ import { sql } from './db.js';
 
 const RESEND_URL = 'https://api.resend.com/emails';
 
+// Resend's per-account rate limit is 10 requests/sec on Pro and below. A
+// cron that loops sendEmail() in a tight inner loop will trip 429s well
+// before that ceiling because bursts come faster than Resend admits.
+// This in-process token bucket spaces sends ~125ms apart (≈8/sec sustained)
+// to stay under the ceiling without throwing away throughput. Each
+// serverless function invocation has its own bucket - which is fine, since
+// the crons that drive heavy volume are the only callers issuing tight
+// loops and they run one at a time.
+const MIN_INTERVAL_MS = 125;
+let lastSendAt = 0;
+async function throttle() {
+  const now = Date.now();
+  const wait = lastSendAt + MIN_INTERVAL_MS - now;
+  if (wait > 0) await new Promise((r) => setTimeout(r, wait));
+  lastSendAt = Date.now();
+}
+
 function fromAddress() {
   return process.env.EMAIL_FROM || 'Ivy OS <onboarding@resend.dev>';
 }
@@ -65,6 +82,10 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
   warnIfSandbox();
+  // Pace sustained loops to stay under Resend's 10/sec ceiling. Single
+  // sends pay no real cost (the bucket only blocks if you've just sent
+  // one); cron tight-loops space out automatically.
+  await throttle();
 
   const body = {
     from: fromAddress(),

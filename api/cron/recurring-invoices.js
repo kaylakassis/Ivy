@@ -26,7 +26,9 @@ import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 import { trackCron } from '../_lib/cronMetrics.js';
 
-const MAX_PER_RUN = 200;
+// Sized for ~100K active workspaces; sendEmail throttle (~8/sec) gates
+// real throughput within the 300s cron budget.
+const MAX_PER_RUN = 1000;
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

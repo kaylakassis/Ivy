@@ -20,7 +20,9 @@ import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 
 const REPEAT_AFTER_HOURS = 24 * 7;
-const MAX_PER_RUN = 200;
+// Sized for ~100K active workspaces; sendEmail throttle (~8/sec) gates
+// real throughput within the 300s cron budget.
+const MAX_PER_RUN = 1500;
 
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET

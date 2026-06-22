@@ -24,11 +24,36 @@ import { neon, neonConfig } from '@neondatabase/serverless';
 neonConfig.fetchConnectionCache = true;
 neonConfig.poolQueryViaFetch    = true;
 
+let _poolerWarned = false;
+function warnIfNotPooler(url) {
+  // Once-per-process check: serverless apps NEED Neon's pooler endpoint
+  // (host contains '-pooler') to multiplex hundreds of concurrent lambda
+  // invocations across the DB's ~100-connection cap. The direct host
+  // (e.g. 'ep-foo-1234.us-east-2.aws.neon.tech') will silently work fine
+  // at low traffic and then exhaust connections under any real load.
+  // We don't throw - some envs (local Postgres, branch DBs) legitimately
+  // use direct connections - but we DO warn so it's caught in logs.
+  if (_poolerWarned) return;
+  _poolerWarned = true;
+  try {
+    const host = new URL(url.replace(/^postgres(ql)?:\/\//, 'http://')).host;
+    if (/neon\.tech/.test(host) && !/-pooler\./.test(host)) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        `[db] DATABASE_URL points at a NON-POOLER Neon host (${host}). ` +
+        `Serverless will exhaust the connection cap under load — switch ` +
+        `to the '-pooler' URL from your Neon dashboard.`,
+      );
+    }
+  } catch { /* unparseable URL — leave to neon() to surface */ }
+}
+
 function connectionString() {
   // Vercel injects POSTGRES_URL when the legacy Vercel Postgres integration is in place.
   // The native Neon integration uses DATABASE_URL.
   const url = process.env.DATABASE_URL || process.env.POSTGRES_URL;
   if (!url) throw new Error('DATABASE_URL (or POSTGRES_URL) is not set');
+  warnIfNotPooler(url);
   return url;
 }
 

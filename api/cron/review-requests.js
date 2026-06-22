@@ -23,7 +23,9 @@ import { trackCron } from '../_lib/cronMetrics.js';
 
 const MIN_DAYS_AFTER = 2;
 const MAX_DAYS_AFTER = 14;
-const MAX_PER_RUN = 100;
+// Sized for ~100K active workspaces. sendEmail throttles at ~8/sec
+// (Resend ceiling), so 1000 sends fits well inside the 300s cron budget.
+const MAX_PER_RUN = 1000;
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

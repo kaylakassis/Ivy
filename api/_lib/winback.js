@@ -20,7 +20,9 @@ export const WINBACK = {
   // (most who convert do it in the same session). Past that, the
   // discount nudge is exactly the point of win-back.
   DWELL_DAYS:       1,    // cron: wait this long after first-paywall-seen
-  MAX_PER_RUN:      200,  // cron: daily coupon-creation ceiling
+  // Sized for ~100K active workspaces. Each offer mints a Stripe coupon
+  // so the API-call cost matters; this is a daily ceiling.
+  MAX_PER_RUN:      1000,
 };
 
 // Idempotently ensure a win-back offer exists for this workspace and

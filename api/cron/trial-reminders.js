@@ -27,7 +27,9 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 
 // Per-run, per-stage ceiling so a large backfill can't burst a flood of
 // emails in one run; the rest roll to the next day's run.
-const MAX_PER_RUN = 500;
+// Per STAGE (7d/1d/expired), so the effective daily ceiling is 3×.
+// Sized for ~100K active trialing workspaces.
+const MAX_PER_RUN = 1000;
 
 // Disjoint windows keyed off trial_ends_at. Literals are trusted (no user
 // input) so they're inlined directly into the SQL.
