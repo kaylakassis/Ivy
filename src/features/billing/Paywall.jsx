@@ -97,6 +97,16 @@ export default function Paywall({ ctx, onRefresh }) {
 
   const cancelled = params.get('subscribed') === 'cancelled';
 
+  // Beacon: tell the server we SAW the wall, so the win-back cron has a
+  // first-seen timestamp to count from even for owners who bounce without
+  // tripping any gated endpoint. Idempotent server-side. Fire-and-forget.
+  const seenBeacon = useRef(false);
+  useEffect(() => {
+    if (seenBeacon.current) return;
+    seenBeacon.current = true;
+    api.post('/billing/seen-paywall', {}).catch(() => {});
+  }, []);
+
   // Abandoned-cart win-back: the moment an owner bails out of Stripe
   // checkout and returns to the wall, ask the server for their one-time
   // discount and surface it inline. ensureWinbackOffer is idempotent +
@@ -324,7 +334,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   <Icons.Spark size={15} stroke="var(--accent)"/>
                   <span>
                     Replaces <strong style={{ color: 'var(--fg)' }}>${STACK_TOTAL}/mo</strong> of
-                    stitched-together tools - <strong style={{ color: 'var(--ok)' }}>save ${MONTHLY_SAVINGS}/mo</strong>.
+                    stitched-together tools - <strong style={{ color: 'var(--ok)' }}>save $100+/mo on average</strong>.
                   </span>
                 </div>
               )}

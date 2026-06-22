@@ -41,6 +41,12 @@ const EXEMPT_DIRS = [
   'api/review/',
   'api/early-access/',
   'api/support/',
+  // Ivy is intentionally freemium: every signed-in owner gets up to
+  // DAILY_REQUEST_CAP (200) messages/day, even pre-trial. The throttle
+  // is the cap inside generateReply, not the paywall — gating on the
+  // sub would 402 the chat bubble at the very moment Ivy could most
+  // help an undecided owner convert.
+  'api/ivy/',
 ];
 const EXEMPT_FILES = [
   'api/account/export.js',

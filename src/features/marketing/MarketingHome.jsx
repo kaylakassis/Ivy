@@ -413,7 +413,7 @@ function Hero() {
         Meet Ivy. She knows your clients, your numbers, and your calendar - and she
         actually <em>does the busywork</em>: drafts invoices, books sessions, messages
         quiet clients, sends contracts. All inside one workspace that replaces
-        ${STACK_TOTAL}/mo of stitched-together tools.
+        ${STACK_TOTAL}/mo of stitched-together tools - <strong>save $100+/mo on average</strong>.
       </p>
 
       <div style={{

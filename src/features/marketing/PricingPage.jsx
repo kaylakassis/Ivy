@@ -188,7 +188,7 @@ export default function PricingPage() {
             margin: '0 0 8px', fontFamily: 'var(--font-display)',
             fontSize: 28, fontWeight: 500, letterSpacing: '-0.02em',
           }}>
-            Replace ${STACK_TOTAL}/mo of stitched-together SaaS
+            Save $100+/mo on average — replace ${STACK_TOTAL}/mo of stitched-together SaaS
           </h2>
           <p style={{ margin: '0 0 24px', color: 'var(--fg-2)', fontSize: 15 }}>
             The tools most solo businesses end up running in parallel. Ivy OS

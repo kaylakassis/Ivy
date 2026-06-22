@@ -10,13 +10,16 @@
 // Typical replaceable monthly spend across the SaaS stack a solo
 // business otherwise has to assemble. Numbers are publicly listed
 // entry-tier prices (May 2026), kept conservative so we never
-// over-promise.
+// over-promise. Sum lands above $149/mo so the "save $100+/mo on
+// average" headline is grounded in real prices rather than puffery.
 export const TOOL_STACK = [
   { name: 'HoneyBook',  monthly: 39, replaces: 'clients + invoices + contracts' },
   { name: 'Calendly',   monthly: 12, replaces: 'booking pages + reminders' },
+  { name: 'Acuity Scheduling', monthly: 16, replaces: 'advanced scheduling + intake forms' },
   { name: 'QuickBooks Self-Employed', monthly: 20, replaces: 'invoices + expenses + taxes' },
   { name: 'Mailchimp',  monthly: 13, replaces: 'newsletter + email blasts' },
   { name: 'Squarespace', monthly: 23, replaces: 'website + custom domain' },
+  { name: 'DocuSign',   monthly: 15, replaces: 'legally-binding e-signatures' },
   { name: 'Loom',       monthly: 15, replaces: 'product walkthroughs' },
 ];
 

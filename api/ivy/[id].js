@@ -1,7 +1,6 @@
 // /api/ivy/:id  - GET (session + messages) / DELETE
 import { sql } from '../_lib/db.js';
-import { requireUser } from '../_lib/auth.js';
-import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
+import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedSession, serializeSession, serializeMessage } from '../_lib/ivy.js';
 import { methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
@@ -11,8 +10,9 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
-    if (!workspaceId) return;
+    // Ungated like /api/ivy (see comment there). Daily cap inside
+    // generateReply is the throttle.
+    const workspaceId = await ensureWorkspace(user.id);
     const { id } = req.query;
 
     const session = await fetchOwnedSession({ id, workspaceId });

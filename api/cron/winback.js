@@ -69,8 +69,13 @@ async function handler(req, res) {
          AND w.paywall_first_seen_at IS NOT NULL
          AND w.paywall_first_seen_at <= NOW() - (${WINBACK.DWELL_DAYS} || ' days')::interval
          AND w.converted_at IS NULL
-         AND COALESCE(u.user_type, 'regular') <> 'sponsored'
-         AND w.subscription_status IN ('inactive', 'cancelled', 'suspended', 'trialing')
+         AND COALESCE(u.user_type, 'regular') NOT IN ('sponsored', 'beta')
+         -- 'incomplete' is included so the funnel rework's brand-new
+         -- signups (workspace defaults to 'incomplete' until trial OR
+         -- subscription is committed) get the win-back nudge after
+         -- bouncing off the paywall - otherwise the most receptive
+         -- audience for the offer never sees it.
+         AND w.subscription_status IN ('inactive', 'cancelled', 'suspended', 'trialing', 'incomplete')
          -- ...but never an owner still inside a LIVE trial (they haven't
          -- lapsed yet - don't burn their one lifetime offer).
          AND NOT (w.subscription_status = 'trialing'

@@ -15,7 +15,11 @@ export const WINBACK = {
   PERCENT_OFF:      30,   // % off the monthly price
   DURATION_MONTHS:  3,    // how many invoices the discount covers
   OFFER_VALID_DAYS: 14,   // how long the coupon stays usable
-  DWELL_DAYS:       3,    // cron: wait this long after first-paywall-seen
+  // Cron: wait this long after first-paywall-seen before offering. 24h
+  // is enough room for an owner who would convert organically to do so
+  // (most who convert do it in the same session). Past that, the
+  // discount nudge is exactly the point of win-back.
+  DWELL_DAYS:       1,    // cron: wait this long after first-paywall-seen
   MAX_PER_RUN:      200,  // cron: daily coupon-creation ceiling
 };
 

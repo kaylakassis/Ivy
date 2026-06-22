@@ -628,6 +628,42 @@ export const IVY_TOOLS = [
       required: ['invoice_id'],
     },
   },
+  {
+    name: 'update_settings',
+    description: "Update workspace settings the owner would normally edit in Account/Calendar/Share. Covers business name + slug, the booking-page tagline, slot/buffer minutes, lead-reply behavior, AND email branding (logo URL, accent color, signature). Only the fields supplied are changed - omit fields you don't want to touch. Use sparingly: confirm WITH THE OWNER what you're changing before calling, especially for slug (changes their public /book/{slug} URL).",
+    input_schema: {
+      type: 'object',
+      properties: {
+        business_name:        { type: 'string', description: 'Visible on booking page, invoices, and emails.' },
+        slug:                 { type: 'string', description: 'Public booking handle (lowercase, hyphens, 1-40 chars). Renames /book/{slug}.' },
+        tagline:              { type: 'string', description: 'One-line pitch under the business name on the booking page.' },
+        slot_minutes:         { type: 'integer', enum: [5, 10, 15, 20, 30, 45, 60] },
+        buffer_minutes:       { type: 'integer', minimum: 0, maximum: 240 },
+        accent_color:         { type: 'string', description: 'Hex color, e.g. #2E3168.' },
+        logo_url:             { type: 'string', description: 'Public https URL of the logo image.' },
+        email_signature:      { type: 'string', description: 'Plain-text signature appended to outbound emails.' },
+        lead_instant_reply_enabled: { type: 'boolean' },
+        lead_instant_reply_message: { type: 'string' },
+        confirm:              { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+    },
+  },
+  {
+    name: 'block_calendar_time',
+    description: 'Block off a calendar slot so no one can book during it - vacation, focus time, a personal appointment. Pass a date (YYYY-MM-DD) plus either all_day=true OR start_min/end_min (minutes-since-midnight, 0-1440). Confirm WITH THE OWNER before calling.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        date:      { type: 'string', description: 'YYYY-MM-DD' },
+        all_day:   { type: 'boolean', description: 'True for a full-day block; if true, start_min/end_min are ignored.' },
+        start_min: { type: 'integer', minimum: 0, maximum: 1440, description: 'Minutes since midnight, e.g. 540 = 9:00 AM.' },
+        end_min:   { type: 'integer', minimum: 0, maximum: 1440 },
+        label:     { type: 'string', description: 'Short description shown on the calendar tile, e.g. "Out — dentist".' },
+        confirm:   { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+      required: ['date'],
+    },
+  },
 ];
 
 // ── Executors ────────────────────────────────────────────────────────
@@ -688,6 +724,9 @@ export const HANDLERS = {
   send_document,
   send_review_request,
   refund_invoice,
+  // Settings + calendar control
+  update_settings,
+  block_calendar_time,
 };
 
 // Outbound / hard-to-reverse actions. These never auto-execute: the model
@@ -706,6 +745,11 @@ export const SENSITIVE_TOOLS = new Set([
   'send_document',
   'send_review_request',
   'refund_invoice',
+  // Settings + calendar control: never auto-execute. Renaming a slug
+  // breaks the public booking URL; blocking time stops bookings; logo /
+  // branding affects every outbound email. Always confirm with the owner.
+  'update_settings',
+  'block_calendar_time',
 ]);
 
 // Async so a few gated actions can resolve real context for the
@@ -743,6 +787,26 @@ async function describeSensitiveAction(name, a, ctx = {}) {
         }
       } catch { /* fall through to the generic summary */ }
       return `Send campaign ${a.campaign_id || '(unknown)'} to its full audience`;
+    }
+    case 'update_settings': {
+      const parts = [];
+      if (a.business_name != null) parts.push(`business name → "${String(a.business_name).slice(0, 60)}"`);
+      if (a.slug != null) parts.push(`booking handle → /book/${a.slug} (changes the public URL)`);
+      if (a.tagline != null) parts.push(`tagline → "${String(a.tagline).slice(0, 60)}"`);
+      if (a.slot_minutes != null) parts.push(`slot minutes → ${a.slot_minutes}`);
+      if (a.buffer_minutes != null) parts.push(`buffer minutes → ${a.buffer_minutes}`);
+      if (a.accent_color != null) parts.push(`accent color → ${a.accent_color}`);
+      if (a.logo_url !== undefined) parts.push(a.logo_url ? `logo URL → ${a.logo_url}` : 'remove logo');
+      if (a.email_signature != null) parts.push(`email signature → "${String(a.email_signature).slice(0, 60)}…"`);
+      if (a.lead_instant_reply_enabled != null) parts.push(`instant lead reply → ${a.lead_instant_reply_enabled ? 'on' : 'off'}`);
+      if (a.lead_instant_reply_message != null) parts.push(`lead-reply message updated`);
+      return `Update settings: ${parts.length ? parts.join('; ') : '(no fields supplied)'}`;
+    }
+    case 'block_calendar_time': {
+      const when = a.all_day
+        ? `${a.date || '?'} (all day)`
+        : `${a.date || '?'} ${fmtMinAsTime(a.start_min)}-${fmtMinAsTime(a.end_min)}`;
+      return `Block off ${when}${a.label ? ` — "${a.label}"` : ''}. Clients can't book this window.`;
     }
     default:
       return `Run ${name}`;
@@ -1985,4 +2049,88 @@ async function refund_invoice({ workspaceId, args }) {
     workspaceId, id, amount: args.amount, reason: args.reason,
   });
   return { ok: true, invoice_id: id, refund: result.refund };
+}
+
+// Settings update covering business info + booking config + email
+// branding. We hand-build the SET clause (rather than slamming every
+// column in one big UPDATE) so omitted fields are left untouched.
+async function update_settings({ workspaceId, args }) {
+  const sets = [];
+  const values = [];
+  const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };
+
+  if (typeof args.business_name === 'string') {
+    const v = args.business_name.trim().slice(0, 120);
+    if (!v) throw new Error('business_name cannot be empty');
+    push('biz_name', v);
+  }
+  if (typeof args.slug === 'string') {
+    const slug = args.slug.toLowerCase().trim();
+    if (!/^[a-z0-9-]{1,40}$/.test(slug)) throw new Error('slug must be 1-40 chars: lowercase letters, digits, hyphens');
+    const clash = await sql`SELECT 1 FROM calendar_settings WHERE slug = ${slug} AND workspace_id <> ${workspaceId} LIMIT 1`;
+    if (clash.rows.length > 0) throw new Error('that slug is already taken by another business');
+    push('slug', slug);
+  }
+  if (typeof args.tagline === 'string') {
+    push('tagline', args.tagline.trim().slice(0, 140) || null);
+  }
+  if (Number.isInteger(args.slot_minutes)) {
+    if (![5, 10, 15, 20, 30, 45, 60].includes(args.slot_minutes)) throw new Error('slot_minutes must be one of 5, 10, 15, 20, 30, 45, 60');
+    push('slot_minutes', args.slot_minutes);
+  }
+  if (Number.isInteger(args.buffer_minutes)) {
+    if (args.buffer_minutes < 0 || args.buffer_minutes > 240) throw new Error('buffer_minutes must be 0-240');
+    push('buffer_minutes', args.buffer_minutes);
+  }
+  if (typeof args.accent_color === 'string') {
+    const c = args.accent_color.trim();
+    if (!/^#[0-9a-fA-F]{6}$/.test(c)) throw new Error('accent_color must be a 6-digit hex like #2E3168');
+    push('brand_accent_color', c);
+  }
+  if (typeof args.logo_url === 'string') {
+    const u = args.logo_url.trim();
+    if (u && !/^https:\/\//.test(u)) throw new Error('logo_url must be an https URL (or empty to remove)');
+    push('brand_logo_url', u || null);
+  }
+  if (typeof args.email_signature === 'string') {
+    push('brand_email_signature', args.email_signature.trim().slice(0, 2000) || null);
+  }
+  if (typeof args.lead_instant_reply_enabled === 'boolean') {
+    push('lead_instant_reply_enabled', args.lead_instant_reply_enabled);
+  }
+  if (typeof args.lead_instant_reply_message === 'string') {
+    push('lead_instant_reply_message', args.lead_instant_reply_message.trim().slice(0, 2000) || null);
+  }
+  if (sets.length === 0) return { ok: true, updated: 0, note: 'No supported fields supplied; nothing changed.' };
+
+  // Ensure the row exists, then patch.
+  await sql`INSERT INTO calendar_settings (workspace_id) VALUES (${workspaceId})
+            ON CONFLICT (workspace_id) DO NOTHING`;
+  sets.push('updated_at = NOW()');
+  values.push(workspaceId);
+  await sql.query(
+    `UPDATE calendar_settings SET ${sets.join(', ')} WHERE workspace_id = $${values.length}`,
+    values,
+  );
+  return { ok: true, updated: sets.length - 1, changed_fields: Object.keys(args).filter((k) => k !== 'confirm') };
+}
+
+async function block_calendar_time({ workspaceId, args }) {
+  const date = String(args.date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('date must be YYYY-MM-DD');
+  const allDay = !!args.all_day;
+  let startMin = 0, endMin = 24 * 60;
+  if (!allDay) {
+    const s = Number(args.start_min), e = Number(args.end_min);
+    if (!Number.isInteger(s) || !Number.isInteger(e)) throw new Error('start_min and end_min must be integers (or set all_day=true)');
+    if (s < 0 || e > 24 * 60 || s >= e) throw new Error('invalid time window: start_min must be < end_min, both in 0-1440');
+    startMin = s; endMin = e;
+  }
+  const label = args.label ? String(args.label).trim().slice(0, 200) : null;
+  const r = await sql`
+    INSERT INTO calendar_blocks (workspace_id, date, start_min, end_min, label, all_day)
+    VALUES (${workspaceId}, ${date}::date, ${startMin}, ${endMin}, ${label}, ${allDay})
+    RETURNING id
+  `;
+  return { ok: true, block_id: r.rows[0].id, date, all_day: allDay, start_min: startMin, end_min: endMin };
 }

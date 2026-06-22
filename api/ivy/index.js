@@ -5,8 +5,7 @@
 //          (mock now, real Anthropic later) and persists both turns.
 
 import { sql } from '../_lib/db.js';
-import { requireUser } from '../_lib/auth.js';
-import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
+import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
@@ -35,8 +34,14 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
-    if (!workspaceId) return;
+    // Ivy is intentionally NOT paywalled - every signed-in owner gets up
+    // to DAILY_REQUEST_CAP (200) messages/day from the moment they sign
+    // up, including while still on the paywall. The cap inside
+    // generateReply is the real throttle; gating with the subscription
+    // check would 402 the chat bubble for brand-new owners who haven't
+    // started their trial yet (the exact moment Ivy can be most
+    // persuasive about converting them).
+    const workspaceId = await ensureWorkspace(user.id);
 
     if (req.method === 'GET') {
       const safe = async (p, fallback) => { try { return await p; } catch (e) {
