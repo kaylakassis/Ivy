@@ -16,6 +16,7 @@
 //      Resend reports the domain as verified.
 import { userAllowsEmail, clientAllowsEmail, clientAllowsEmailByAddress, CRITICAL_EMAIL_TYPES } from './notificationPrefs.js';
 import { tryConsumeQuota, DEFAULT_EMAIL_CAP_PER_DAY } from './usageCounters.js';
+import { unsubscribeUrlFor } from './unsubscribeToken.js';
 import { sql } from './db.js';
 
 const RESEND_URL = 'https://api.resend.com/emails';
@@ -78,7 +79,7 @@ function warnIfSandbox() {
   }
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs = 8000 }) {
+export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, unsubscribeUrl, timeoutMs = 8000 }) {
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
   warnIfSandbox();
@@ -87,12 +88,20 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   // one); cron tight-loops space out automatically.
   await throttle();
 
+  // Inject a visible "Unsubscribe / Manage preferences" link near the
+  // bottom of every prefs-aware send. The List-Unsubscribe HEADER is
+  // what Gmail / Apple Mail surface as a one-click inbox button, but a
+  // chunk of clients (older Outlook, Yahoo on some platforms) don't
+  // render it — recipients there need a clickable link in the body or
+  // they have no opt-out at all. Done at send-time so we don't have to
+  // thread unsubscribeUrl through every emailShell call site.
+  const finalHtml = unsubscribeUrl ? injectUnsubFooter(html, unsubscribeUrl) : html;
   const body = {
     from: fromAddress(),
     to: Array.isArray(to) ? to : [to],
     subject,
-    html,
-    text: text || stripHtml(html),
+    html: finalHtml,
+    text: text || stripHtml(finalHtml),
   };
 
   // Reply-To: explicit override > env default > skip.
@@ -110,14 +119,19 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
     }));
   }
 
-  // Default List-Unsubscribe headers for every send. Gmail bumps senders
-  // that don't expose a one-click unsubscribe to spam more aggressively
-  // (RFC 8058, mandatory for 5K+/day senders since 2024). The mailto:
-  // form is the universal fallback; the https form lets clients show a
-  // native "Unsubscribe" link in the inbox header. Callers can override
-  // by passing their own `headers` object.
+  // List-Unsubscribe headers. Gmail bumps senders that don't expose a
+  // one-click unsubscribe (RFC 8058, mandatory for 5K+/day senders since
+  // 2024). When the caller has minted a per-recipient signed URL
+  // (sendEmailToUser / sendEmailToClient etc.), use it — the /api/unsubscribe
+  // endpoint handles POST one-click and applies the opt-out without
+  // requiring login. Fall back to the generic prefs page + mailto for
+  // bare sendEmail() callers (system-critical, no recipient lookup
+  // possible) so the header is never missing.
+  const httpsUnsub = unsubscribeUrl
+    || `${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications`;
+  const mailtoUnsub = `mailto:${replyToAddress() || 'hello@getivyos.com'}?subject=unsubscribe`;
   const defaultHeaders = {
-    'List-Unsubscribe': `<mailto:${replyToAddress() || 'hello@getivyos.com'}?subject=unsubscribe>, <${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications>`,
+    'List-Unsubscribe': `<${httpsUnsub}>, <${mailtoUnsub}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
   };
   body.headers = { ...defaultHeaders, ...(headers && typeof headers === 'object' ? headers : {}) };
@@ -169,6 +183,25 @@ function stripHtml(s = '') {
   return s.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
 }
 
+// Append a small "Unsubscribe · Manage preferences" line just before
+// </body> so every prefs-aware send carries a visible opt-out, regardless
+// of which call site rendered the body. If the body is not a full HTML
+// document, we tack it on the end. Idempotent on the marker so a
+// double-call (test wrappers, retries) doesn't double-print the line.
+const UNSUB_MARKER = 'data-ivy-unsub="1"';
+function injectUnsubFooter(html, unsubscribeUrl) {
+  if (!html || typeof html !== 'string') return html;
+  if (html.includes(UNSUB_MARKER)) return html;
+  const prefsUrl = `${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications`;
+  const block = `<div ${UNSUB_MARKER} style="margin:18px auto 0;max-width:600px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,Arial,sans-serif;font-size:11px;color:#8A8D85;line-height:1.5;">
+    <a href="${unsubscribeUrl}" style="color:#8A8D85;text-decoration:underline;">Unsubscribe</a>
+    &nbsp;·&nbsp;
+    <a href="${prefsUrl}" style="color:#8A8D85;text-decoration:underline;">Manage email preferences</a>
+  </div>`;
+  if (/<\/body\s*>/i.test(html)) return html.replace(/<\/body\s*>/i, `${block}</body>`);
+  return html + block;
+}
+
 // ─────────────────────────────────────────────────────────────────────
 // Branded email shell
 // ─────────────────────────────────────────────────────────────────────
@@ -199,7 +232,7 @@ function stripHtml(s = '') {
 // applies the workspace owner's chosen presentation. accentColor (if
 // set) overrides the default lime; we compute a contrasting ink color
 // for button text via relative-luminance.
-export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, preheader }) {
+export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, preheader, unsubscribeUrl }) {
   // Brand tokens - mirror tokens.css ".dir-bold" exactly. Hard-coded
   // because email clients can't read CSS variables.
   const C = {
@@ -342,6 +375,13 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
                 ${footerByline}
               </div>
               ${postalBlock}
+              ${unsubscribeUrl
+                ? `<div style="margin-top:8px;font-size:11px;color:${C.muted2};letter-spacing:0.02em;">
+                     <a href="${unsubscribeUrl}" style="color:${C.muted};text-decoration:underline;">Unsubscribe</a>
+                     &nbsp;·&nbsp;
+                     <a href="${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications" style="color:${C.muted};text-decoration:underline;">Manage preferences</a>
+                   </div>`
+                : ''}
             </td>
           </tr>
         </table>
@@ -446,8 +486,16 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
   const workspaceId = await workspaceForUser(userId);
   const q = await gateByQuota(workspaceId, type);
   if (!q.ok) return { ok: true, sent: false, reason: 'workspace-quota-exceeded' };
+  // Mint a one-click unsubscribe URL for this owner + category. Critical
+  // types (verification, password reset, etc.) skip — those have no
+  // opt-out by design. Without a known userId we also skip; the generic
+  // fallback in sendEmail still attaches a header pointing to the prefs
+  // page so the email is never headerless.
+  const unsubscribeUrl = (userId && type && !CRITICAL_EMAIL_TYPES.has(type))
+    ? unsubscribeUrlFor({ scope: 'user', id: userId, type })
+    : null;
   try {
-    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     // Log loudly even though we don't throw - callers commonly wrap us
@@ -471,8 +519,11 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
   const workspaceId = await workspaceForClient(clientId);
   const q = await gateByQuota(workspaceId, type);
   if (!q.ok) return { ok: true, sent: false, reason: 'workspace-quota-exceeded' };
+  const unsubscribeUrl = (clientId && type && !CRITICAL_EMAIL_TYPES.has(type))
+    ? unsubscribeUrlFor({ scope: 'client', id: clientId, type })
+    : null;
   try {
-    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs });
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     // Same rationale as sendEmailToUser above - log loud on failure so
@@ -493,8 +544,14 @@ export async function sendEmailToClientByAddress({ workspaceId, email, type, sub
   }
   const q = await gateByQuota(workspaceId, type);
   if (!q.ok) return { ok: true, sent: false, reason: 'workspace-quota-exceeded' };
+  // Token is keyed on (workspaceId, email) — the public endpoint then
+  // updates every clients row in this workspace matching that address,
+  // so the opt-out sticks whether or not a clients record exists today.
+  const unsubscribeUrl = (workspaceId && email && type && !CRITICAL_EMAIL_TYPES.has(type))
+    ? unsubscribeUrlFor({ scope: 'clientEmail', id: email, workspaceId, type })
+    : null;
   try {
-    const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, timeoutMs });
+    const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     return { ok: false, sent: false, reason: err.message };

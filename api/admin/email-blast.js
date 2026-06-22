@@ -22,7 +22,7 @@ import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmailToUser, emailShell } from '../_lib/email.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -101,21 +101,32 @@ export default async function handler(req, res) {
     // far past the 60s function timeout. 20-at-a-time keeps us well
     // under Resend's burst limit (10/s on the free tier, 100/s paid)
     // while finishing 2000 sends in ~20s of wall time.
-    let sent = 0; let failed = 0;
+    // Route through sendEmailToUser with type='marketing' so:
+    //   • recipients who muted marketing in their prefs are skipped (not
+    //     just spammed) — kept honest with CAN-SPAM + Gmail policy
+    //   • each send carries a per-recipient signed unsubscribe URL that
+    //     /api/unsubscribe applies without requiring login
+    let sent = 0; let failed = 0; let skipped = 0;
     const BATCH = 20;
     for (let i = 0; i < recipients.length; i += BATCH) {
       const slice = recipients.slice(i, i + BATCH);
       // eslint-disable-next-line no-await-in-loop
       const results = await Promise.allSettled(
-        slice.map((r) => sendEmail({ to: r.email, subject, html })),
+        slice.map((r) => sendEmailToUser({
+          userId: r.id, type: 'marketing',
+          to: r.email, subject, html,
+        })),
       );
       for (let j = 0; j < results.length; j++) {
-        if (results[j].status === 'fulfilled') {
-          sent++;
+        const r = results[j];
+        if (r.status === 'fulfilled') {
+          if (r.value?.sent) sent++;
+          else if (r.value?.ok) skipped++;
+          else failed++;
         } else {
           failed++;
           // eslint-disable-next-line no-console
-          console.warn('[email-blast] failed for', slice[j].email, results[j].reason?.message || results[j].reason);
+          console.warn('[email-blast] failed for', slice[j].email, r.reason?.message || r.reason);
         }
       }
     }
@@ -123,10 +134,10 @@ export default async function handler(req, res) {
     const actor = await getAdminActor(req);
     await recordAudit(req, {
       actor, action: 'email_blast',
-      meta: { segment, subject, recipients: recipients.length, sent, failed },
+      meta: { segment, subject, recipients: recipients.length, sent, skipped, failed },
     });
 
-    return ok(res, { ok: true, recipients: recipients.length, sent, failed });
+    return ok(res, { ok: true, recipients: recipients.length, sent, skipped, failed });
   } catch (err) {
     return serverError(res, err);
   }

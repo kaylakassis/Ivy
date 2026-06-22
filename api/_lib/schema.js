@@ -125,7 +125,7 @@ WHERE onboarded_at IS NULL
 -- Subscription state. Owners need an active sub (or live trial) to use the
 -- business app - the client portal is always free. Status mirrors Stripe's:
 --   trialing | active | past_due | cancelled | inactive
--- New workspaces start trialing for 28 days. Existing workspaces get a
+-- New workspaces start trialing for 14 days. Existing workspaces get a
 -- grace window so the rollout doesn't paywall anyone overnight.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS subscription_status    TEXT NOT NULL DEFAULT 'trialing';
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_ends_at          TIMESTAMPTZ DEFAULT (NOW() + INTERVAL '14 days');
