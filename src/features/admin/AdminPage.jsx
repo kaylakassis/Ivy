@@ -2196,6 +2196,104 @@ function SettingsTab() {
       </div>
 
       <PushTestCard/>
+      <EmailPreviewCard/>
+    </div>
+  );
+}
+
+// "Send me a preview of THIS template" — picks a transactional template,
+// renders it with sample merge data via the same render* function the
+// production notify path uses, and emails it to the operator. Lets her
+// iterate on copy + see how it lands in her inbox without spinning up
+// throwaway users or waiting for the real send to fire.
+function EmailPreviewCard() {
+  const { user } = useAuth();
+  // Template catalogue — kept in sync by hand with the server-side
+  // catalogue in api/admin/email-preview.js. If the server adds a new
+  // template, surfacing it here is a one-line addition.
+  const TEMPLATES = [
+    { group: 'Trial',     id: 'trial_reminder_7d',         label: 'Trial reminder — 7 days left' },
+    { group: 'Trial',     id: 'trial_reminder_1d',         label: 'Trial reminder — 1 day left' },
+    { group: 'Trial',     id: 'trial_reminder_expired',    label: 'Trial expired (auto-downgrade)' },
+    { group: 'Billing',   id: 'subscription_started',      label: 'Subscription confirmed (first paid)' },
+    { group: 'Billing',   id: 'subscription_renewal',      label: 'Upcoming renewal' },
+    { group: 'Billing',   id: 'subscription_cancelled',    label: 'Subscription cancelled' },
+    { group: 'Billing',   id: 'payment_failed',            label: 'Payment failed / dunning' },
+    { group: 'Win-back',  id: 'winback_offer',             label: 'Win-back — 30% off offer' },
+    { group: 'Security',  id: 'security_new_signin',       label: 'Security alert — new sign-in' },
+    { group: 'Security',  id: 'security_password_changed', label: 'Security alert — password changed' },
+    { group: 'Security',  id: 'security_two_factor_on',    label: 'Security alert — 2FA turned on' },
+    { group: 'Security',  id: 'security_two_factor_off',   label: 'Security alert — 2FA turned off' },
+  ];
+  const [template, setTemplate] = useState(TEMPLATES[0].id);
+  const [to, setTo] = useState(user?.email || '');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const send = async () => {
+    if (busy) return;
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const r = await api.post('/admin/email-preview', { template, to: to.trim() || undefined });
+      setMsg(`Sent to ${r.to} — check your inbox (and the spam folder, just in case).`);
+    } catch (e) {
+      setErr(e.message || 'Could not send preview');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Email previews</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Send me a preview of THIS template</h3>
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Renders with sample data and emails it to you so you can see how the
+        copy lands in a real inbox. The preview is byte-identical to what
+        production sends — same renderer, same shell. Subjects are prefixed
+        <code style={{ background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, fontSize: 12 }}>[PREVIEW]</code>
+        so they don't get confused with real sends.
+      </p>
+
+      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1.5fr', gap: 10, marginBottom: 12 }}>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Template</span>
+          <select value={template} onChange={(e) => setTemplate(e.target.value)}
+            style={{ padding: '9px 12px', borderRadius: 8, background: 'var(--surface-2)',
+              border: '1px solid var(--border)', color: 'var(--fg)', fontSize: 13 }}>
+            {['Trial', 'Billing', 'Win-back', 'Security'].map((g) => (
+              <optgroup key={g} label={g}>
+                {TEMPLATES.filter((t) => t.group === g).map((t) => (
+                  <option key={t.id} value={t.id}>{t.label}</option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+        <label style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+          <span style={{ fontSize: 12, color: 'var(--muted)', fontWeight: 600 }}>Send to</span>
+          <input type="email" value={to} onChange={(e) => setTo(e.target.value)}
+            placeholder={user?.email || 'you@example.com'}
+            style={{ padding: '9px 12px', borderRadius: 8, background: 'var(--surface-2)',
+              border: '1px solid var(--border)', color: 'var(--fg)', fontSize: 13 }}/>
+        </label>
+      </div>
+
+      {msg && (
+        <div style={{ padding: '8px 12px', borderRadius: 8, marginBottom: 10,
+          background: 'rgba(80,140,60,0.10)', border: '1px solid rgba(80,140,60,0.30)',
+          color: 'var(--fg)', fontSize: 12.5 }}>{msg}</div>
+      )}
+      {err && (
+        <div style={{ padding: '8px 12px', borderRadius: 8, marginBottom: 10,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12.5 }}>{err}</div>
+      )}
+
+      <button className="btn btn-primary" onClick={send} disabled={busy || !template}>
+        <Icons.Mail size={14}/> {busy ? 'Sending…' : 'Send preview'}
+      </button>
     </div>
   );
 }
