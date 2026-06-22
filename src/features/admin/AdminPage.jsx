@@ -2212,6 +2212,24 @@ function EmailPreviewCard() {
   // catalogue in api/admin/email-preview.js. If the server adds a new
   // template, surfacing it here is a one-line addition.
   const TEMPLATES = [
+    // Account
+    { group: 'Account',  id: 'verify_email',             label: 'Verify your email' },
+    { group: 'Account',  id: 'password_reset',           label: 'Password reset' },
+    { group: 'Account',  id: 'account_deletion_request', label: 'Account deletion request' },
+    { group: 'Account',  id: 'account_restored',         label: 'Account restored (welcome back)' },
+    { group: 'Account',  id: 'data_export_ready',        label: 'Data export ready (attachment)' },
+    { group: 'Account',  id: 'data_export_too_big',      label: 'Data export ready (too big, link)' },
+    // Welcome
+    { group: 'Welcome',  id: 'welcome_owner',            label: 'Welcome — business owner' },
+    { group: 'Welcome',  id: 'welcome_client',           label: 'Welcome — client' },
+    // Admin invites
+    { group: 'Admin invites', id: 'admin_invite_sponsored',       label: 'Admin invite — Sponsored' },
+    { group: 'Admin invites', id: 'admin_invite_beta',            label: 'Admin invite — Beta' },
+    { group: 'Admin invites', id: 'admin_invite_business_trial',  label: 'Admin invite — Business Trial' },
+    { group: 'Admin invites', id: 'admin_invite_business_active', label: 'Admin invite — Business Active' },
+    { group: 'Admin invites', id: 'admin_invite_affiliate',       label: 'Admin invite — Affiliate' },
+    { group: 'Admin invites', id: 'admin_deliverability_test',    label: 'Deliverability test (DKIM/SPF/DMARC)' },
+    // Trial + Billing + Win-back
     { group: 'Trial',     id: 'trial_reminder_7d',         label: 'Trial reminder — 7 days left' },
     { group: 'Trial',     id: 'trial_reminder_1d',         label: 'Trial reminder — 1 day left' },
     { group: 'Trial',     id: 'trial_reminder_expired',    label: 'Trial expired (auto-downgrade)' },
@@ -2220,10 +2238,21 @@ function EmailPreviewCard() {
     { group: 'Billing',   id: 'subscription_cancelled',    label: 'Subscription cancelled' },
     { group: 'Billing',   id: 'payment_failed',            label: 'Payment failed / dunning' },
     { group: 'Win-back',  id: 'winback_offer',             label: 'Win-back — 30% off offer' },
+    // Security
     { group: 'Security',  id: 'security_new_signin',       label: 'Security alert — new sign-in' },
     { group: 'Security',  id: 'security_password_changed', label: 'Security alert — password changed' },
     { group: 'Security',  id: 'security_two_factor_on',    label: 'Security alert — 2FA turned on' },
     { group: 'Security',  id: 'security_two_factor_off',   label: 'Security alert — 2FA turned off' },
+    // End-customer (white-labeled with workspace branding)
+    { group: 'End-customer', id: 'booking_confirmation_client', label: 'Booking confirmation (to client)' },
+    { group: 'End-customer', id: 'booking_reminder',            label: 'Booking reminder (to client)' },
+    { group: 'End-customer', id: 'booking_cancellation_client', label: 'Booking cancelled (to client)' },
+    { group: 'End-customer', id: 'invoice_sent',                label: 'Invoice sent' },
+    { group: 'End-customer', id: 'invoice_paid_receipt',        label: 'Invoice paid — receipt' },
+    { group: 'End-customer', id: 'invoice_due_soon',            label: 'Invoice due soon (3-day heads-up)' },
+    { group: 'End-customer', id: 'invoice_overdue',             label: 'Invoice overdue reminder' },
+    { group: 'End-customer', id: 'lead_instant_reply',          label: 'Lead instant auto-reply' },
+    { group: 'End-customer', id: 'review_request',              label: 'Review request (post-service)' },
   ];
   const [template, setTemplate] = useState(TEMPLATES[0].id);
   const [to, setTo] = useState(user?.email || '');
@@ -2262,7 +2291,7 @@ function EmailPreviewCard() {
           <select value={template} onChange={(e) => setTemplate(e.target.value)}
             style={{ padding: '9px 12px', borderRadius: 8, background: 'var(--surface-2)',
               border: '1px solid var(--border)', color: 'var(--fg)', fontSize: 13 }}>
-            {['Trial', 'Billing', 'Win-back', 'Security'].map((g) => (
+            {['Account', 'Welcome', 'Admin invites', 'Trial', 'Billing', 'Win-back', 'Security', 'End-customer'].map((g) => (
               <optgroup key={g} label={g}>
                 {TEMPLATES.filter((t) => t.group === g).map((t) => (
                   <option key={t.id} value={t.id}>{t.label}</option>

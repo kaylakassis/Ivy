@@ -104,10 +104,30 @@ async function run() {
     assert(renderTrialReminder({ stage: 'bogus' }) === null, 'unknown stage → null');
 
     console.log('\n[4] admin endpoint catalogue lists known templates');
-    assert(Array.isArray(PREVIEW_CATALOGUE) && PREVIEW_CATALOGUE.length >= 10, `catalogue has ${PREVIEW_CATALOGUE.length} entries (≥10)`);
+    assert(Array.isArray(PREVIEW_CATALOGUE) && PREVIEW_CATALOGUE.length >= 30, `catalogue has ${PREVIEW_CATALOGUE.length} entries (≥30)`);
     const ids = new Set(PREVIEW_CATALOGUE.map((t) => t.id));
-    for (const id of ['trial_reminder_7d', 'payment_failed', 'winback_offer', 'security_new_signin']) {
+    for (const id of [
+      'trial_reminder_7d', 'payment_failed', 'winback_offer', 'security_new_signin',
+      'verify_email', 'password_reset', 'account_deletion_request', 'account_restored',
+      'data_export_ready', 'welcome_owner', 'welcome_client',
+      'admin_invite_beta', 'admin_invite_sponsored', 'admin_deliverability_test',
+      'booking_confirmation_client', 'booking_reminder', 'booking_cancellation_client',
+      'invoice_sent', 'invoice_paid_receipt', 'invoice_due_soon', 'invoice_overdue',
+      'lead_instant_reply', 'review_request',
+    ]) {
       assert(ids.has(id), `catalogue includes ${id}`);
+    }
+
+    console.log('\n[4a] every catalogued template renders without throwing');
+    // Hit the endpoint for each template; we don't care about the send
+    // (sandbox blocks it), we care about render not throwing. 400 would
+    // mean a registry miss or a renderer bug — that's the regression.
+    for (const t of PREVIEW_CATALOGUE) {
+      const r2 = mockRes();
+      // eslint-disable-next-line no-await-in-loop
+      await previewHandler(reqWithCookie({ body: { template: t.id, to: 'sink@example.com' } }), r2);
+      const status = r2.statusCode;
+      assert(status !== 400, `${t.id} did not 400 (render OK; status=${status})`);
     }
 
     console.log('\n[5] endpoint: GET → 405');
