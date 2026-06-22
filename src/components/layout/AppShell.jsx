@@ -78,7 +78,15 @@ function AppShellInner() {
   // ?walkthrough=1 into the URL to override the dismissed state without
   // a full DB refetch round-trip.
   const walkthroughRequested = location.search.includes('walkthrough=1');
+  // Tight gate: don't auto-launch the walkthrough until we KNOW the
+  // workspace is active. Without the explicit isActive check, a brief
+  // window while ctx is still loading (or a stale ?walkthrough=1 in the
+  // URL on a still-incomplete workspace) renders the walkthrough modal
+  // on TOP of the paywall, blocking the user from starting their trial.
+  // The walkthrough naturally fires the moment they activate.
+  const subActive = ctx?.subscription?.isActive === true;
   const showWalkthrough = !needsPaywall
+    && subActive
     && walkthroughOverride !== false
     && (walkthroughOverride === true
         || walkthroughRequested

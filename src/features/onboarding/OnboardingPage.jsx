@@ -135,6 +135,7 @@ export default function OnboardingPage() {
   const [clientDraft, setClientDraft] = useState({ name: '', email: '', phone: '' });
   const [clientsCount, setClientsCount] = useState(0);
   const [websiteStatus, setWebsiteStatus] = useState(null);
+  const [websiteTemplate, setWebsiteTemplate] = useState('');
   // "About you" answers - preset ids + free text. Persisted to
   // workspace_profile; feeds Ivy personalization + admin aggregates.
   const [about, setAbout] = useState({
@@ -182,6 +183,9 @@ export default function OnboardingPage() {
       setClientsCount((clientsRes?.clients || []).length);
       setStripeStatus(stripeRes);
       setWebsiteStatus(webRes);
+      // Pre-select whatever template the workspace already has (e.g. a
+      // returning owner picked one previously) so the picker reflects state.
+      if (webRes?.website?.template) setWebsiteTemplate(webRes.website.template);
       const p = profileRes?.profile;
       if (p) {
         // Reconstruct the OTHER sentinel when a free-text answer was
@@ -359,7 +363,13 @@ export default function OnboardingPage() {
     try {
       await api.post('/onboarding/complete');
       try { localStorage.setItem('ivy_skip_onboarding_until', String(Date.now() + 24 * 3600_000)); } catch {}
-      nav('/dashboard?walkthrough=1', { replace: true });
+      // Plain /dashboard (no ?walkthrough=1). The hard paywall fires
+      // first now (funnel intent), and forcing the walkthrough to
+      // auto-launch via the URL would render the modal ON TOP of the
+      // paywall — blocking the very screen the user is meant to act on.
+      // The walkthrough still auto-launches naturally (see AppShell) once
+      // the trial starts and isActive flips true.
+      nav('/dashboard', { replace: true });
     } catch (e) {
       setErr(prettifyError(e));
       setBusy(false);
@@ -475,6 +485,18 @@ export default function OnboardingPage() {
     finally { setBusy(false); }
   };
 
+  // Saving the website step persists the template choice; sections and
+  // pages are filled in by the website system on first publish. Picking
+  // nothing is fine - the step is optional, so we just advance.
+  const saveWebsite = async () => {
+    setBusy(true); setErr(null);
+    try {
+      if (websiteTemplate) await api.put('/website', { template: websiteTemplate });
+      await goNext();
+    } catch (e) { setErr(prettifyError(e)); }
+    finally { setBusy(false); }
+  };
+
   const saveFirstClient = async () => {
     setBusy(true); setErr(null);
     try {
@@ -541,7 +563,7 @@ export default function OnboardingPage() {
         {currentStep === 'branding'     && <BrandingStep branding={branding} setBranding={setBranding}/>}
         {currentStep === 'first_client' && <FirstClientStep clientDraft={clientDraft} setClientDraft={setClientDraft}
           clientsCount={clientsCount}/>}
-        {currentStep === 'website'      && <WebsiteStep websiteStatus={websiteStatus}/>}
+        {currentStep === 'website'      && <WebsiteStep websiteStatus={websiteStatus} websiteTemplate={websiteTemplate} setWebsiteTemplate={setWebsiteTemplate}/>}
         {currentStep === 'tour'         && <TourStep/>}
         {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}
           trialEndsAt={ctx?.subscription?.trialEndsAt || null}/>}
@@ -586,7 +608,7 @@ export default function OnboardingPage() {
               if (currentStep === 'payments')     return goNext();
               if (currentStep === 'branding')     return saveBranding();
               if (currentStep === 'first_client') return saveFirstClient();
-              if (currentStep === 'website')      return goNext();
+              if (currentStep === 'website')      return saveWebsite();
               if (currentStep === 'tour')         return goNext();
               if (currentStep === 'done')         return finish();
             }}/>
@@ -812,16 +834,26 @@ function ServicesStep({ services, setServices, draft, setDraft, category }) {
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Add a service
         </div>
+        {/* Column labels — without these the "60" duration input reads
+            as an unexplained number once the placeholder is hidden by
+            its default value. */}
+        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8,
+                      fontSize: 10.5, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+          <div>Service name</div>
+          <div>Duration (min)</div>
+          <div>Price ($)</div>
+          <div></div>
+        </div>
         <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
           <input className="input" value={draft.name}
             onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            placeholder="Service name" style={inputStyle}/>
+            placeholder="e.g. 60-min consultation" style={inputStyle}/>
           <input className="input" type="number" min={15} step={15} value={draft.durationMinutes}
             onChange={(e) => setDraft({ ...draft, durationMinutes: Number(e.target.value) })}
-            placeholder="Minutes" style={inputStyle}/>
+            placeholder="60" aria-label="Duration in minutes" style={inputStyle}/>
           <input className="input" type="number" min={0} step="0.01" value={draft.price}
             onChange={(e) => setDraft({ ...draft, price: e.target.value })}
-            placeholder="$ price" style={inputStyle}/>
+            placeholder="0.00" aria-label="Price in dollars" style={inputStyle}/>
           <button onClick={addService} className="btn btn-primary" disabled={!draft.name.trim()}
             style={{ padding: '0 14px', fontSize: 13 }}>
             Add
@@ -1083,15 +1115,70 @@ function PaymentsStep({ stripeStatus }) {
 }
 
 function BrandingStep({ branding, setBranding }) {
+  const [uploading, setUploading] = useState(false);
+  const [upErr, setUpErr] = useState(null);
+
+  // Same blob-client-upload path the Account → Branding card uses.
+  const onPickLogo = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (file.size > 10 * 1024 * 1024) { setUpErr('Logo must be under 10 MB'); return; }
+    setUploading(true); setUpErr(null);
+    try {
+      const { upload } = await import('@vercel/blob/client');
+      const result = await upload(file.name, file, {
+        access: 'public',
+        handleUploadUrl: '/api/account/branding-logo-token',
+        contentType: file.type,
+      });
+      setBranding({ ...branding, logoUrl: result.url });
+    } catch (ex) {
+      setUpErr(ex?.message || 'Upload failed');
+    } finally {
+      setUploading(false);
+    }
+  };
+  const removeLogo = () => setBranding({ ...branding, logoUrl: '' });
+
   return (
     <>
       <StepHeader title="Make it yours"
         subtitle="Logo + an accent color so your booking page, invoices, and emails feel branded. Both optional - defaults look great too."/>
-      <Field label="Logo URL (optional)" hint="Paste a public URL or upload via Account → Branding. We'll wire upload here in the next pass.">
-        <input className="input" type="url" value={branding.logoUrl}
-          onChange={(e) => setBranding({ ...branding, logoUrl: e.target.value })}
-          placeholder="https://…" style={inputStyle}/>
+
+      <Field label="Logo (optional)" hint="PNG, JPG, WebP, or SVG. Up to 10 MB.">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+          <div style={{
+            width: 72, height: 72, borderRadius: 12, flexShrink: 0,
+            background: 'var(--surface-2)', border: '1px solid var(--border)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            overflow: 'hidden',
+          }}>
+            {branding.logoUrl
+              ? <img src={branding.logoUrl} alt="Logo preview" style={{ maxWidth: '85%', maxHeight: '85%', objectFit: 'contain' }}/>
+              : <Icons.Image size={26} stroke="var(--muted)"/>}
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <label className="btn btn-outline" style={{ cursor: uploading ? 'wait' : 'pointer', fontSize: 12 }}>
+              <Icons.Paperclip size={12}/>
+              {uploading ? 'Uploading…' : (branding.logoUrl ? 'Replace' : 'Upload from your device')}
+              <input type="file" accept="image/*" onChange={onPickLogo}
+                disabled={uploading} style={{ display: 'none' }}/>
+            </label>
+            {branding.logoUrl && !uploading && (
+              <button type="button" className="btn btn-ghost"
+                onClick={removeLogo}
+                style={{ color: 'var(--danger)', fontSize: 12 }}>
+                Remove
+              </button>
+            )}
+          </div>
+        </div>
+        {upErr && (
+          <div style={{ marginTop: 8, fontSize: 12, color: 'var(--danger)' }}>{upErr}</div>
+        )}
       </Field>
+
       <Field label="Accent color">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <input type="color" value={branding.accent || '#8E826A'}
@@ -1135,37 +1222,75 @@ function FirstClientStep({ clientDraft, setClientDraft, clientsCount }) {
   );
 }
 
-function WebsiteStep({ websiteStatus }) {
+// Inline template picker shown on the website step. Each card is a small
+// visual: a swatch of the template's signature look + a label + a one-line
+// vibe. We keep the picker to 6 of the 14 allowed templates - the most
+// distinct visual styles - so the choice is fast. The full set + every
+// section/page can be refined in /website later. Picking a template here
+// is enough to mark the step complete and keep momentum.
+const WEBSITE_TEMPLATES = [
+  { id: 'clean',         label: 'Clean',         vibe: 'Bright, airy, professional',  swatch: ['#FFFFFF', '#0B0C08'] },
+  { id: 'warm',          label: 'Warm',          vibe: 'Soft, friendly, inviting',    swatch: ['#F1E7D6', '#553C24'] },
+  { id: 'bold',          label: 'Bold',          vibe: 'High-contrast, confident',    swatch: ['#0D0E0C', '#CFFF50'] },
+  { id: 'editorial',     label: 'Editorial',     vibe: 'Magazine-style, refined',     swatch: ['#F8F4ED', '#1A1A1A'] },
+  { id: 'wellness',      label: 'Wellness',      vibe: 'Calm, organic, grounded',     swatch: ['#E5E0D0', '#3F4937'] },
+  { id: 'dark_premium',  label: 'Dark Premium',  vibe: 'Luxe, moody, after-hours',    swatch: ['#171717', '#D4AF37'] },
+];
+
+function WebsiteStep({ websiteStatus, websiteTemplate, setWebsiteTemplate }) {
   const launched = !!websiteStatus?.website?.launched;
+  const currentHandle = websiteStatus?.website?.handle;
+
   return (
     <>
-      <StepHeader title="Build your website (optional)"
-        subtitle="Pick a template, drag-edit your sections, and publish in 10 minutes. Skip if you already have a site - you can embed an Ivy OS booking widget onto it instead."/>
-      <div className="card" style={{
-        padding: 18, display: 'flex', flexDirection: 'column', gap: 12,
-        background: launched ? 'color-mix(in srgb, var(--ok) 8%, transparent)' : 'var(--surface-2)',
-        border: '1px solid ' + (launched ? 'color-mix(in srgb, var(--ok) 30%, transparent)' : 'var(--border)'),
-      }}>
-        {launched ? (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Icons.Check size={16} sw={2.4} stroke="var(--ok)"/>
-            <strong style={{ fontSize: 14 }}>Website is live</strong>
-          </div>
-        ) : (
-          <>
-            <div style={{ fontSize: 14 }}>
-              Templates included - Clean, Modern, Lush, Lean.
-              Build at <code style={{ background: 'var(--surface)', padding: '1px 5px', borderRadius: 4, fontSize: 12.5 }}>/website</code> any time.
-            </div>
-            <a href="/website" target="_blank" rel="noreferrer" className="btn btn-primary"
-              style={{ alignSelf: 'flex-start' }}>
-              <Icons.Arrow size={13} sw={1.8}/> Open Website builder
-            </a>
-            <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
-              Opens in a new tab so you can keep this onboarding open. Hit "Continue" here once you've published - or "Skip for now" if you already have a site.
-            </div>
-          </>
-        )}
+      <StepHeader title="Pick a template for your booking site"
+        subtitle="One click picks the look — your business name, services, and accent color are filled in automatically. You can refine every section, page, and color later in the full builder."/>
+
+      {launched && (
+        <div style={{
+          padding: 12, borderRadius: 10, marginBottom: 8,
+          background: 'color-mix(in srgb, var(--ok) 8%, transparent)',
+          border: '1px solid color-mix(in srgb, var(--ok) 30%, transparent)',
+          display: 'flex', alignItems: 'center', gap: 8, fontSize: 13,
+        }}>
+          <Icons.Check size={14} sw={2.4} stroke="var(--ok)"/>
+          <span><strong>Your site is live</strong>{currentHandle ? <> at <code style={{ background: 'var(--surface)', padding: '1px 6px', borderRadius: 4, fontSize: 12 }}>/book/{currentHandle}</code></> : ''}.</span>
+        </div>
+      )}
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 10 }}>
+        {WEBSITE_TEMPLATES.map((t) => {
+          const selected = websiteTemplate === t.id;
+          return (
+            <button key={t.id} type="button"
+              onClick={() => setWebsiteTemplate(selected ? '' : t.id)}
+              style={{
+                textAlign: 'left', padding: 0, cursor: 'pointer',
+                background: 'var(--surface-2)',
+                border: `2px solid ${selected ? 'var(--accent)' : 'var(--border)'}`,
+                borderRadius: 12, overflow: 'hidden',
+                transition: 'border-color 120ms ease, transform 120ms ease',
+                transform: selected ? 'translateY(-1px)' : 'none',
+              }}>
+              <div style={{
+                height: 64, display: 'flex',
+                background: `linear-gradient(135deg, ${t.swatch[0]} 0%, ${t.swatch[0]} 60%, ${t.swatch[1]} 60%, ${t.swatch[1]} 100%)`,
+              }}/>
+              <div style={{ padding: '10px 12px' }}>
+                <div style={{ fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6 }}>
+                  {t.label}
+                  {selected && <Icons.Check size={12} sw={2.4} stroke="var(--accent)"/>}
+                </div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2, lineHeight: 1.4 }}>{t.vibe}</div>
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
+        Skip if you already have a site — you can embed an Ivy OS booking widget onto it instead.
+        Want to fine-tune sections, pages, colors right now? <a href="/website" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Open the full builder</a> (you can come back to finish onboarding any time).
       </div>
     </>
   );

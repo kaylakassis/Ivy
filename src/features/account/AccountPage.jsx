@@ -1272,7 +1272,7 @@ function BrandingCard() {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file) return;
-    if (file.size > 2 * 1024 * 1024) { setErr(new Error('Logo must be under 2 MB')); return; }
+    if (file.size > 10 * 1024 * 1024) { setErr(new Error('Logo must be under 10 MB')); return; }
     setUploading(true); setErr(null);
     try {
       const { upload } = await import('@vercel/blob/client');
@@ -1320,7 +1320,7 @@ function BrandingCard() {
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 600, fontSize: 13.5, marginBottom: 4 }}>Logo</div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginBottom: 10 }}>
-            PNG, JPG, WebP, or SVG. Up to 2 MB. Renders at 42px tall in emails.
+            PNG, JPG, WebP, or SVG. Up to 10 MB. Renders at 42px tall in emails.
           </div>
           <div style={{ display: 'flex', gap: 8 }}>
             <label className="btn btn-outline" style={{ cursor: 'pointer', fontSize: 12 }}>

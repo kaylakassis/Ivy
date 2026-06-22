@@ -1,6 +1,6 @@
 // /api/account/branding-logo-token
 //   POST → mint a Vercel Blob client-upload token for the workspace
-//          owner's brand logo. Image-only, 2 MB cap.
+//          owner's brand logo. Image-only, 10 MB cap.
 //
 // After upload, the browser PATCHes /api/account/branding with the
 // returned URL + pathname so the row references the new logo.
@@ -12,7 +12,10 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const ALLOWED = ['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'];
-const MAX_BYTES = 2 * 1024 * 1024;
+// 10 MB. Comfortable for high-res PNG/JPG straight from a phone camera
+// (the most common upload path) without inviting truly outsized assets
+// that would bloat every email render + slow the booking-site load.
+const MAX_BYTES = 10 * 1024 * 1024;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
