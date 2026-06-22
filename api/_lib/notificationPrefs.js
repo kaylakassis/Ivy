@@ -27,6 +27,7 @@ export const EMAIL_NOTIFY_TYPES = [
   'messages',    // new message from owner / client reply
   'marketing',   // review prompts, announcements, gift-card receipts
   'billing',     // owner-only: subscription renewal, failure, cancellation
+  'reports',     // owner-only: weekly recap of bookings, revenue, etc.
 ];
 
 // Labels shown in the notification settings UI. Keep terse - the
@@ -38,6 +39,7 @@ export const EMAIL_NOTIFY_LABELS = {
   messages:  'Messages',
   marketing: 'Reviews & announcements',
   billing:   'Subscription billing',
+  reports:   'Weekly business recap',
 };
 
 // Critical sends bypass preferences. These are tied to account

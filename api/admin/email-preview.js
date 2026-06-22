@@ -21,6 +21,7 @@ import { renderTrialReminder, renderSubscriptionStarted, renderUpcomingRenewal,
          renderWinbackOffer, renderPaymentFailed, renderSubscriptionCancelled } from '../_lib/subscriptionNotify.js';
 import { renderSecurityAlert } from '../_lib/securityNotify.js';
 import { renderWelcome } from '../_lib/welcome-content.js';
+import { renderWeeklyRecap } from '../_lib/weeklyRecap.js';
 import * as R from '../_lib/emailRenderers.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -50,6 +51,9 @@ export const PREVIEW_CATALOGUE = [
   // Welcome
   { id: 'welcome_owner',             group: 'Welcome',     label: 'Welcome — business owner' },
   { id: 'welcome_client',            group: 'Welcome',     label: 'Welcome — client' },
+
+  // Reports (owner-facing recaps)
+  { id: 'weekly_recap',              group: 'Reports',     label: 'Weekly business recap (Monday digest)' },
 
   // Admin invites
   { id: 'admin_invite_sponsored',       group: 'Admin invites', label: 'Admin invite — Sponsored' },
@@ -126,6 +130,17 @@ function render(template) {
     // return { subject, html } so they slot in directly).
     case 'welcome_owner':             return renderWelcome({ name: SAMPLE.firstName, appUrl: appUrl(), variant: 'owner' });
     case 'welcome_client':            return renderWelcome({ name: SAMPLE.firstName, appUrl: appUrl(), variant: 'client' });
+
+    // Weekly recap (real renderer; preview feeds plausible sample stats).
+    case 'weekly_recap':
+      return renderWeeklyRecap({
+        firstName: SAMPLE.firstName, businessName: SAMPLE.businessName,
+        range: { from: new Date(Date.now() - 7 * 86400000), to: new Date() },
+        stats: {
+          newClients: 3, completedBookings: 8, upcomingBookings: 5,
+          revenuePaid: 2140, overdueInvoiceCount: 2, overdueInvoiceTotal: 380,
+        },
+      });
 
     // Admin invites
     case 'admin_invite_sponsored':       return R.renderAdminInviteSponsored({ firstName: SAMPLE.firstName, name: SAMPLE.firstName });

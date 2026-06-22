@@ -22,6 +22,7 @@
     { "path": "/api/cron/trial-reminders",       "schedule": "0 12 * * *" },
     { "path": "/api/cron/stripe-reconcile",      "schedule": "0 6 * * *" },
     { "path": "/api/cron/group-digest",          "schedule": "30 8 * * *" },
+    { "path": "/api/cron/owner-weekly-recap",    "schedule": "0 8 * * 1" },
     { "path": "/api/cron/ivy-nudges",            "schedule": "0 9,13,17 * * *" }
   ],
   "functions": {

@@ -202,6 +202,13 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_7d_sent_at    TIM
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_1d_sent_at    TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_expired_notice_sent_at TIMESTAMPTZ;
 
+-- Weekly owner recap (cron: owner-weekly-recap.js). One email per
+-- active-trialing-or-paid workspace per week, summarizing bookings,
+-- revenue, new clients, overdue invoices, etc. for the prior 7 days.
+-- Stamped to enforce a 6-day cooldown so a manually-triggered re-run
+-- can't double-send within the same week.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS weekly_recap_last_sent_at TIMESTAMPTZ;
+
 -- Powers the trial-reminders cron's daily scan: trialing workspaces
 -- ordered by when the trial ends. Partial on the status so it stays
 -- cheap as workspaces grows.

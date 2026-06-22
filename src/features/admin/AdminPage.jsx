@@ -2222,6 +2222,8 @@ function EmailPreviewCard() {
     // Welcome
     { group: 'Welcome',  id: 'welcome_owner',            label: 'Welcome — business owner' },
     { group: 'Welcome',  id: 'welcome_client',           label: 'Welcome — client' },
+    // Reports
+    { group: 'Reports',  id: 'weekly_recap',             label: 'Weekly business recap (Monday digest)' },
     // Admin invites
     { group: 'Admin invites', id: 'admin_invite_sponsored',       label: 'Admin invite — Sponsored' },
     { group: 'Admin invites', id: 'admin_invite_beta',            label: 'Admin invite — Beta' },
@@ -2291,7 +2293,7 @@ function EmailPreviewCard() {
           <select value={template} onChange={(e) => setTemplate(e.target.value)}
             style={{ padding: '9px 12px', borderRadius: 8, background: 'var(--surface-2)',
               border: '1px solid var(--border)', color: 'var(--fg)', fontSize: 13 }}>
-            {['Account', 'Welcome', 'Admin invites', 'Trial', 'Billing', 'Win-back', 'Security', 'End-customer'].map((g) => (
+            {['Account', 'Welcome', 'Reports', 'Admin invites', 'Trial', 'Billing', 'Win-back', 'Security', 'End-customer'].map((g) => (
               <optgroup key={g} label={g}>
                 {TEMPLATES.filter((t) => t.group === g).map((t) => (
                   <option key={t.id} value={t.id}>{t.label}</option>
