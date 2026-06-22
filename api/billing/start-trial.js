@@ -8,6 +8,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
+import { TRIAL_DAYS } from '../_lib/billing.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -61,7 +62,7 @@ export default async function handler(req, res) {
     const { rows } = await sql`
       UPDATE workspaces SET
         subscription_status = 'trialing',
-        trial_ends_at       = NOW() + INTERVAL '14 days'
+        trial_ends_at       = NOW() + (${TRIAL_DAYS}::int || ' days')::interval
       WHERE id = ${workspaceId}
       RETURNING subscription_status, trial_ends_at, subscription_period_end
     `;

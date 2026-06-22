@@ -18,6 +18,7 @@ import { hashPassword, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
+import { TRIAL_DAYS } from '../_lib/billing.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { createToken, KIND_RESET, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { recordAudit } from '../_lib/audit.js';
@@ -193,7 +194,7 @@ async function createUser(req, res) {
   } else if (userType === 'business-trial') {
     const w = await sql`
       INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
-      VALUES (${user.id}, 'trialing', NOW() + INTERVAL '14 days')
+      VALUES (${user.id}, 'trialing', NOW() + (${TRIAL_DAYS}::int || ' days')::interval)
       RETURNING id
     `;
     workspaceId = w.rows[0].id;
@@ -209,7 +210,7 @@ async function createUser(req, res) {
     // regular owner; their primary value is the referral code.
     const w = await sql`
       INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
-      VALUES (${user.id}, 'trialing', NOW() + INTERVAL '14 days')
+      VALUES (${user.id}, 'trialing', NOW() + (${TRIAL_DAYS}::int || ' days')::interval)
       RETURNING id
     `;
     workspaceId = w.rows[0].id;

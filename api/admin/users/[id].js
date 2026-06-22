@@ -35,6 +35,7 @@ import { hashPassword } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { requireSuperAdmin, emailIsSuperAdmin, getAdminActor } from '../../_lib/admin.js';
+import { TRIAL_DAYS } from '../../_lib/billing.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { createToken, invalidateUserTokens, KIND_RESET, KIND_VERIFY, appUrl } from '../../_lib/tokens.js';
 import { recordAudit } from '../../_lib/audit.js';
@@ -268,7 +269,7 @@ async function applyRole(u, role, req, actor) {
     await sql`
       UPDATE workspaces SET
         subscription_status     = 'trialing',
-        trial_ends_at           = NOW() + INTERVAL '14 days',
+        trial_ends_at           = NOW() + (${TRIAL_DAYS}::int || ' days')::interval,
         subscription_period_end = NULL
       WHERE owner_id = ${u.id}
     `;
@@ -283,8 +284,9 @@ async function applyRole(u, role, req, actor) {
   } else if ((u.user_type === 'sponsored' || u.user_type === 'beta')
              && role !== 'sponsored' && role !== 'beta') {
     // Leaving a comp'd type (sponsored/beta) back to regular/affiliate
-    // without an explicit billing role - give them a fresh 14-day trial
-    // unless they already have a Stripe sub doing the real billing.
+    // without an explicit billing role - give them a fresh trial
+    // (TRIAL_DAYS days) unless they already have a Stripe sub doing
+    // the real billing.
     await sql`
       UPDATE workspaces SET
         subscription_status     = CASE
@@ -297,7 +299,7 @@ async function applyRole(u, role, req, actor) {
         END,
         trial_ends_at           = CASE
           WHEN stripe_subscription_id IS NOT NULL THEN trial_ends_at
-          ELSE NOW() + INTERVAL '14 days'
+          ELSE NOW() + (${TRIAL_DAYS}::int || ' days')::interval
         END
       WHERE owner_id = ${u.id}
     `;

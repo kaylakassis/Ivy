@@ -53,7 +53,13 @@ async function setup() {
   const w = await sql`INSERT INTO workspaces (owner_id) VALUES (${ownerId}) RETURNING id`;
   workspaceId = w.rows[0].id;
   await sql`INSERT INTO finance_settings (workspace_id, currency) VALUES (${workspaceId}, 'USD')`;
-  const token = signSession({ id: ownerId, email });
+  // signSession(userId) — passing the id directly. The earlier
+  // { id, email } shape was a stale call (it signed a token with sub
+  // set to an OBJECT, which would 401 any auth-requiring assertion
+  // through requireUser). The tests in this file all hit DB / helper
+  // functions directly so they happened not to exercise that path,
+  // but the call shape was still wrong.
+  const token = signSession(ownerId);
   cookieHeader = `ivy_session=${token}`;
 }
 

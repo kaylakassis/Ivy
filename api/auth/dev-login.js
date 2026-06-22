@@ -31,6 +31,7 @@ import { hashPassword, signSession, setSessionCookie } from '../_lib/auth.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../_lib/legal.js';
+import { TRIAL_DAYS } from '../_lib/billing.js';
 import { serverError } from '../_lib/json.js';
 
 const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@getivyos.com').toLowerCase();
@@ -106,7 +107,7 @@ async function applyState(workspaceId, userId, state) {
     case 'trial':
       await sql`UPDATE workspaces SET
           subscription_status = 'trialing',
-          trial_ends_at = NOW() + INTERVAL '14 days',
+          trial_ends_at = NOW() + (${TRIAL_DAYS}::int || ' days')::interval,
           trial_started_at = NOW(), converted_at = NULL,
           subscription_period_end = NULL, onboarded_at = NOW()
         WHERE id = ${workspaceId}`;
