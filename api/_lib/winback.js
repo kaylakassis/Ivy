@@ -8,6 +8,20 @@
 // Both go through ensureWinbackOffer so the coupon terms, the
 // one-offer-per-workspace guarantee, and the race handling live in one
 // place.
+//
+// PROMO CODE STRATEGY — two modes:
+//   1. STATIC (preferred when env vars are set): operator pre-creates a
+//      single coupon + promotion code in the Stripe dashboard (e.g.
+//      "HEADSTART30") and points us at it via WINBACK_STRIPE_COUPON_ID +
+//      WINBACK_PROMO_CODE. We re-use that one code for every win-back
+//      email, never mint per-workspace. Simpler, easier to track, and
+//      the operator can edit the offer in Stripe without a redeploy.
+//   2. DYNAMIC (fallback): mint a fresh per-workspace coupon + promo
+//      code via the Stripe API every time. One-redemption-per-code so
+//      it can't be shared. Used when env vars aren't set.
+//
+// Either way, workspaces.winback_offer_sent_at is stamped so we still
+// honor the "one offer per workspace, ever" rule.
 import { sql } from './db.js';
 import { createWinbackCoupon } from './stripe.js';
 
@@ -24,6 +38,15 @@ export const WINBACK = {
   // so the API-call cost matters; this is a daily ceiling.
   MAX_PER_RUN:      1000,
 };
+
+// Static-code mode is on when BOTH env vars are set. Either one missing
+// → fall back to per-workspace minting (the old behavior).
+function staticOffer() {
+  const couponId = (process.env.WINBACK_STRIPE_COUPON_ID || '').trim();
+  const promoCode = (process.env.WINBACK_PROMO_CODE || '').trim();
+  if (!couponId || !promoCode) return null;
+  return { couponId, promoCode };
+}
 
 // Idempotently ensure a win-back offer exists for this workspace and
 // return it. Shapes:
@@ -54,12 +77,23 @@ export async function ensureWinbackOffer({ secretKey, workspaceId }) {
   // Already offered once (even if now expired) → one-and-done.
   if (row.winback_offer_sent_at) return null;
 
-  // Never offered: mint + stamp.
-  const { couponId, promoCode } = await createWinbackCoupon({
-    secretKey, workspaceId,
-    percentOff: WINBACK.PERCENT_OFF,
-    durationMonths: WINBACK.DURATION_MONTHS,
-  });
+  // STATIC mode — re-use the operator-configured coupon. No Stripe API
+  // call needed; just stamp the workspace + return.
+  const fixed = staticOffer();
+  let couponId, promoCode;
+  if (fixed) {
+    couponId  = fixed.couponId;
+    promoCode = fixed.promoCode;
+  } else {
+    // DYNAMIC mode — mint per-workspace coupon + single-use promo code.
+    const minted = await createWinbackCoupon({
+      secretKey, workspaceId,
+      percentOff: WINBACK.PERCENT_OFF,
+      durationMonths: WINBACK.DURATION_MONTHS,
+    });
+    couponId  = minted.couponId;
+    promoCode = minted.promoCode;
+  }
   const expiresAt = new Date(Date.now() + WINBACK.OFFER_VALID_DAYS * 86_400_000);
   const stamped = await sql`
     UPDATE workspaces SET
