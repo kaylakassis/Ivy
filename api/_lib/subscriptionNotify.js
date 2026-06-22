@@ -78,7 +78,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
     preheader = `Keep your clients, data, and Ivy before your trial ends.`;
     heading = 'You\'ve got 7 days left';
     body = `<p>Hi ${fn},</p>
-      <p>You're one week out from the end of your Ivy OS trial — and you've already set up the kind of system most owners pay three different tools for.</p>
+      <p>You're one week out from the end of your Ivy OS trial — and you've already set up the kind of system most owners overpay for and scatter across multiple disconnected tools.</p>
       <p>Right now, inside <strong>${biz}</strong>, you have:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         <li>Your client list, pipeline, and history in one place</li>
