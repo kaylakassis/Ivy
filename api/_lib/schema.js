@@ -2154,6 +2154,14 @@ CREATE TABLE IF NOT EXISTS workspace_profile (
   created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Multi-select arrays. The single-value columns above are kept in sync
+-- with the FIRST array entry so legacy readers (admin Overview aggregates,
+-- workspaceContext for Ivy) keep working without a refactor. New readers
+-- should use the *_ids arrays.
+ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS goal_ids       JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS challenge_ids  JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS heard_from_ids JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE workspace_profile ADD COLUMN IF NOT EXISTS stage_ids      JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 -- ─── Performance indexes added 2026-05 after a query audit ───────────
 -- Each one targets a frequently-run query that was either doing a

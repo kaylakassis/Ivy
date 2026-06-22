@@ -138,9 +138,16 @@ export default function OnboardingPage() {
   const [websiteTemplate, setWebsiteTemplate] = useState('');
   // "About you" answers - preset ids + free text. Persisted to
   // workspace_profile; feeds Ivy personalization + admin aggregates.
+  // Multi-select arrays for the About step. Each *Ids array can hold one
+  // or more preset values; the legacy single-string fields above (kept
+  // populated server-side from arr[0]) are still around for back-compat
+  // with admin aggregates + Ivy's workspaceContext.
   const [about, setAbout] = useState({
-    goal: null, goalOther: '', challenge: null, challengeOther: '',
-    idealClient: '', heardFrom: null, heardFromOther: '', stage: null,
+    goalIds: [], goalOther: '',
+    challengeIds: [], challengeOther: '',
+    idealClient: '',
+    heardFromIds: [], heardFromOther: '',
+    stageIds: [],
   });
 
   const [busy, setBusy] = useState(false);
@@ -188,15 +195,24 @@ export default function OnboardingPage() {
       if (webRes?.website?.template) setWebsiteTemplate(webRes.website.template);
       const p = profileRes?.profile;
       if (p) {
-        // Reconstruct the OTHER sentinel when a free-text answer was
-        // stored without a preset (the server stores them as preset=null
-        // + *_other text).
+        // Hydrate from the *Ids arrays the server returns. When a
+        // free-text "Other" answer is stored without any preset, push
+        // the OTHER sentinel so the picker shows the Other chip + text
+        // input pre-filled (mirrors the legacy single-value behavior).
+        const withOther = (ids, other) => {
+          const a = Array.isArray(ids) ? [...ids] : [];
+          if (other && !a.includes(OTHER)) a.push(OTHER);
+          return a;
+        };
         setAbout({
-          goal: p.goal || (p.goalOther ? OTHER : null), goalOther: p.goalOther || '',
-          challenge: p.challenge || (p.challengeOther ? OTHER : null), challengeOther: p.challengeOther || '',
-          idealClient: p.idealClient || '',
-          heardFrom: p.heardFrom || (p.heardFromOther ? OTHER : null), heardFromOther: p.heardFromOther || '',
-          stage: p.stage || null,
+          goalIds:      withOther(p.goalIds,      p.goalOther),
+          goalOther:    p.goalOther || '',
+          challengeIds: withOther(p.challengeIds, p.challengeOther),
+          challengeOther: p.challengeOther || '',
+          idealClient:  p.idealClient || '',
+          heardFromIds: withOther(p.heardFromIds, p.heardFromOther),
+          heardFromOther: p.heardFromOther || '',
+          stageIds:     Array.isArray(p.stageIds) ? p.stageIds : [],
         });
       }
       setStateLoaded(true);
@@ -404,24 +420,35 @@ export default function OnboardingPage() {
   // why; rejection rate is tiny in practice (two clicks).
   const saveAbout = async () => {
     setErr(null);
-    const hasGoal = about.goal && (about.goal !== OTHER || (about.goalOther || '').trim());
-    const hasChallenge = about.challenge && (about.challenge !== OTHER || (about.challengeOther || '').trim());
+    // "Has at least one selection that COUNTS" — a chip is picked AND if
+    // it's the Other sentinel, the free-text field is non-empty. Same
+    // sunk-cost rule as before, just over arrays now.
+    const counts = (ids, other) => (ids || []).some((id) => id !== OTHER || (other || '').trim());
+    const hasGoal = counts(about.goalIds, about.goalOther);
+    const hasChallenge = counts(about.challengeIds, about.challengeOther);
     if (!hasGoal || !hasChallenge) {
       setErr(!hasGoal && !hasChallenge
-        ? 'Pick your #1 goal and biggest challenge so Ivy can tailor your advice. The rest is optional.'
+        ? 'Pick at least one #1 goal and biggest challenge so Ivy can tailor your advice. The rest is optional.'
         : !hasGoal
-          ? 'Pick your #1 goal so Ivy knows what to optimize for.'
-          : 'Pick your biggest challenge so Ivy knows where to focus.');
+          ? 'Pick at least one goal so Ivy knows what to optimize for.'
+          : 'Pick at least one challenge so Ivy knows where to focus.');
       return;
     }
+    // Strip the OTHER sentinel from the arrays we send (the server's
+    // preset allowlist would drop it anyway); the *_other free text
+    // carries the user's custom answer instead.
+    const stripOther = (ids) => (ids || []).filter((id) => id !== OTHER);
     setBusy(true);
     try {
       await api.patch('/onboarding/profile', {
-        goal: about.goal, goalOther: about.goalOther,
-        challenge: about.challenge, challengeOther: about.challengeOther,
-        idealClient: about.idealClient,
-        heardFrom: about.heardFrom, heardFromOther: about.heardFromOther,
-        stage: about.stage,
+        goalIds:        stripOther(about.goalIds),
+        goalOther:      about.goalOther,
+        challengeIds:   stripOther(about.challengeIds),
+        challengeOther: about.challengeOther,
+        idealClient:    about.idealClient,
+        heardFromIds:   stripOther(about.heardFromIds),
+        heardFromOther: about.heardFromOther,
+        stageIds:       stripOther(about.stageIds),
       });
       await goNext();
     } catch (e) { setErr(prettifyError(e)); }
@@ -1484,29 +1511,39 @@ function ProgressRow({ steps, currentStep, completed, skipped, onJump }) {
 // admin aggregates; the free-text + answers feed Ivy's personalization.
 function AboutStep({ about, setAbout }) {
   const set = (patch) => setAbout((a) => ({ ...a, ...patch }));
+  // Toggle helper: add `id` to the array if missing, remove if present.
+  // Used as the onToggle handler for every multi-select ChoiceField on
+  // this step.
+  const toggle = (key) => (id) => setAbout((a) => {
+    const cur = a[key] || [];
+    const next = cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id];
+    return { ...a, [key]: next };
+  });
   return (
     <>
       <StepHeader
         title="A little about you"
-        subtitle="Two quick picks so Ivy - your built-in AI assistant - can give advice that actually fits. The rest is optional."
+        subtitle="A few quick picks so Ivy - your built-in AI assistant - can give advice that actually fits. Tap as many as apply."
       />
 
       <ChoiceField
-        label="What's your #1 goal with Ivy OS? *"
+        label="What are your goals with Ivy OS? *"
+        hint="Pick all that apply."
         options={[
           { id: 'grow_revenue', label: 'Grow revenue' },
           { id: 'more_clients', label: 'Get more clients' },
           { id: 'save_time',    label: 'Save time on admin' },
           { id: 'look_pro',     label: 'Look more professional' },
         ]}
-        value={about.goal} other={about.goalOther}
-        onPick={(id) => set({ goal: id, goalOther: '' })}
-        onOther={() => set({ goal: OTHER })}
+        values={about.goalIds} other={about.goalOther}
+        onToggle={toggle('goalIds')}
+        onOtherToggle={() => toggle('goalIds')(OTHER)}
         onOtherText={(v) => set({ goalOther: v })}
       />
 
       <ChoiceField
-        label="What's your biggest challenge right now? *"
+        label="What are your biggest challenges right now? *"
+        hint="Pick all that apply."
         options={[
           { id: 'leads',        label: 'Not enough leads' },
           { id: 'no_shows',     label: 'No-shows & cancellations' },
@@ -1514,9 +1551,9 @@ function AboutStep({ about, setAbout }) {
           { id: 'organized',    label: 'Staying organized' },
           { id: 'marketing',    label: 'Marketing myself' },
         ]}
-        value={about.challenge} other={about.challengeOther}
-        onPick={(id) => set({ challenge: id, challengeOther: '' })}
-        onOther={() => set({ challenge: OTHER })}
+        values={about.challengeIds} other={about.challengeOther}
+        onToggle={toggle('challengeIds')}
+        onOtherToggle={() => toggle('challengeIds')(OTHER)}
         onOtherText={(v) => set({ challengeOther: v })}
       />
 
@@ -1530,57 +1567,67 @@ function AboutStep({ about, setAbout }) {
 
       <ChoiceField
         label="How did you hear about us?"
+        hint="Pick all that apply."
         options={[
           { id: 'instagram', label: 'Instagram' },
           { id: 'tiktok',    label: 'TikTok' },
           { id: 'google',    label: 'Google' },
           { id: 'referral',  label: 'Friend / referral' },
         ]}
-        value={about.heardFrom} other={about.heardFromOther}
-        onPick={(id) => set({ heardFrom: id, heardFromOther: '' })}
-        onOther={() => set({ heardFrom: OTHER })}
+        values={about.heardFromIds} other={about.heardFromOther}
+        onToggle={toggle('heardFromIds')}
+        onOtherToggle={() => toggle('heardFromIds')(OTHER)}
         onOtherText={(v) => set({ heardFromOther: v })}
       />
 
       <ChoiceField
         label="Where's your business at?"
+        hint="Pick all that apply."
         options={[
           { id: 'starting',    label: 'Just starting out' },
           { id: 'side_hustle', label: 'Side hustle' },
           { id: 'established', label: 'Established & steady' },
           { id: 'scaling',     label: 'Ready to scale' },
         ]}
-        value={about.stage}
-        onPick={(id) => set({ stage: id })}
+        values={about.stageIds}
+        onToggle={toggle('stageIds')}
       />
     </>
   );
 }
 
-// Preset chips with an optional "Other" free-text. When onOther is
-// provided, an "Other" chip toggles a text input; selecting it parks the
-// OTHER sentinel in `value` so exactly one choice is ever active.
-function ChoiceField({ label, hint, options, value, other, onPick, onOther, onOtherText }) {
-  const otherActive = value === OTHER;
+// Preset chips with multi-select. `values` is the array of selected ids;
+// `onToggle(id)` flips a chip's state. The optional "Other" chip pushes
+// the OTHER sentinel into the same array and reveals a free-text input.
+function ChoiceField({ label, hint, options, values, other, onToggle, onOtherToggle, onOtherText }) {
+  const selected = Array.isArray(values) ? values : [];
+  const otherActive = selected.includes(OTHER);
   return (
     <Field label={label} hint={hint}>
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 7 }}>
-        {options.map((o) => (
-          <button key={o.id} type="button" onClick={() => onPick(o.id)}
-            className={`btn ${value === o.id ? 'btn-primary' : 'btn-outline'}`}
-            style={{ padding: '7px 13px', fontSize: 12.5 }}>
-            {o.label}
-          </button>
-        ))}
-        {onOther && (
-          <button type="button" onClick={onOther}
+        {options.map((o) => {
+          const on = selected.includes(o.id);
+          return (
+            <button key={o.id} type="button" onClick={() => onToggle(o.id)}
+              aria-pressed={on}
+              className={`btn ${on ? 'btn-primary' : 'btn-outline'}`}
+              style={{ padding: '7px 13px', fontSize: 12.5 }}>
+              {on && <span style={{ marginRight: 6, fontWeight: 700 }}>✓</span>}
+              {o.label}
+            </button>
+          );
+        })}
+        {onOtherToggle && (
+          <button type="button" onClick={onOtherToggle}
+            aria-pressed={otherActive}
             className={`btn ${otherActive ? 'btn-primary' : 'btn-outline'}`}
             style={{ padding: '7px 13px', fontSize: 12.5 }}>
+            {otherActive && <span style={{ marginRight: 6, fontWeight: 700 }}>✓</span>}
             Other
           </button>
         )}
       </div>
-      {onOther && otherActive && (
+      {onOtherToggle && otherActive && (
         <input className="input" autoFocus style={{ ...inputStyle, marginTop: 8 }}
           value={other || ''}
           onChange={(e) => onOtherText(e.target.value.slice(0, 500))}
