@@ -19,8 +19,10 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { platformStripeSecret } from '../_lib/stripe.js';
 import { ensureWinbackOffer } from '../_lib/winback.js';
+import { notifyWinbackOffer } from '../_lib/subscriptionNotify.js';
 import { isWorkspaceActive } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { reportError } from '../_lib/monitoring.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -52,6 +54,23 @@ export default async function handler(req, res) {
 
     const offer = await ensureWinbackOffer({ secretKey, workspaceId });
     if (!offer) return ok(res, { eligible: false });
+
+    // Fire the win-back email immediately on the fresh-mint path so the
+    // owner gets the 30%-off code in their inbox seconds after abandoning
+    // checkout - not on tomorrow's cron run. fresh=false means a prior
+    // mint (cron or earlier abandon) already emailed; don't double-send.
+    if (offer.fresh) {
+      notifyWinbackOffer({
+        workspaceId,
+        percentOff: offer.percentOff,
+        durationMonths: offer.durationMonths,
+        promoCode: offer.promoCode,
+        expiresAt: offer.expiresAt,
+      }).catch((err) => {
+        console.error('[winback-offer] email send failed:', err.message);
+        reportError(err, { extra: { workspaceId, path: 'on-demand-winback' } });
+      });
+    }
 
     // Don't leak couponId to the client - checkout.js reads it
     // server-side from the row. The wall only needs display terms.
