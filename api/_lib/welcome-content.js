@@ -184,7 +184,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                       Kayla Kassis, Founder of Ivy OS.
                     </p>
                     <p style="margin:0;padding:0;font-size:13px;color:#9ca3af;line-height:1.55;font-style:italic;margin-top:8px">
-                      Finish setup, then start your 14-day free trial - after that it's $49/month, cancel anytime.
+                      Finish setup, then start your 14-day free trial - after that it's $49 every 4 weeks, cancel anytime.
                     </p>
                     ${renderFooter(appUrl)}
                   </td>

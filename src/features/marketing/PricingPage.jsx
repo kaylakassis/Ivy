@@ -51,7 +51,7 @@ const PLAN = {
 const FAQ = [
   {
     q: 'How much does Ivy OS cost?',
-    a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${IVY_PRICE}/mo, or $${IVY_PRICE_ANNUAL}/yr billed annually (2 months free - save $${ANNUAL_SAVINGS}). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
+    a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${IVY_PRICE}/4 weeks, or $${IVY_PRICE_ANNUAL}/yr billed annually (save $${ANNUAL_SAVINGS}/yr). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
   },
   {
     q: 'Do you take a cut of my payments?',
@@ -83,7 +83,7 @@ export default function PricingPage() {
   useEffect(() => {
     document.title = 'Pricing - Ivy OS';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, $0 today. Then $${IVY_PRICE}/mo.`);
+    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, $0 today. Then $${IVY_PRICE} every 4 weeks.`);
   }, []);
 
   return (
@@ -114,7 +114,7 @@ export default function PricingPage() {
           }}>
             Replace your full stack - CRM, scheduler, invoicing, contracts, website,
             email, AI - with one subscription. {TRIAL_DAYS}-day free trial, $0 today.
-            Then a simple ${IVY_PRICE}/mo when you're ready.
+            Then a simple ${IVY_PRICE}/4 weeks when you're ready.
           </p>
         </section>
 
@@ -125,7 +125,7 @@ export default function PricingPage() {
         }}>
           <StateChip label={`${TRIAL_DAYS} days free`} sub="the whole product, $0 today" active/>
           <Icons.Arrow size={16} sw={2} style={{ color: 'var(--muted)' }}/>
-          <StateChip label="Active" sub={`$${IVY_PRICE}/mo when subscribed`}/>
+          <StateChip label="Active" sub={`$${IVY_PRICE}/4 weeks when subscribed`}/>
         </section>
 
         {/* Single plan card */}

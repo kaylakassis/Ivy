@@ -118,7 +118,7 @@ const FAQ = [
   },
   {
     q: "What's pricing going to look like?",
-    a: `Start with a ${TRIAL_DAYS}-day free trial - $0 today, cancel anytime - then one simple subscription at $${IVY_PRICE}/mo. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use Ivy OS.`,
+    a: `Start with a ${TRIAL_DAYS}-day free trial - $0 today, cancel anytime - then one simple subscription at $${IVY_PRICE} every 4 weeks. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use Ivy OS.`,
   },
   {
     q: 'Is there a mobile app?',
@@ -741,7 +741,7 @@ function TrustStrip() {
     'Stripe-verified · no transaction fees',
     'Cancel anytime · no contract',
     'Export your data any time',
-    `${TRIAL_DAYS}-day free trial · $0 today · then $${IVY_PRICE}/mo`,
+    `${TRIAL_DAYS}-day free trial · $0 today · then $${IVY_PRICE}/4 weeks`,
   ];
   return (
     <section style={{

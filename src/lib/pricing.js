@@ -34,15 +34,21 @@ export const IVY_PRICE = 49;
 // in the trial length only happens in one place.
 export const TRIAL_DAYS = 14;
 
-// Annual plan ("Active, billed yearly"). Priced at 10× the monthly
-// rate so a year of Ivy OS costs the same as ten months paid monthly -
-// i.e. "2 months free" versus 12 × $49 = $588. Surfaced as the
-// highlighted LTV option on the paywall + pricing page; monthly stays
+// Billing cadence for the "Active" plan. We bill every 4 weeks (28 days),
+// not calendar-monthly — so 365/28 ≈ 13.04 cycles per year. All
+// savings/equivalence math below is derived from this so a future cadence
+// change (e.g. back to calendar-monthly) only requires updating CYCLES_PER_YEAR.
+export const BILLING_CYCLE_DAYS = 28;
+export const CYCLES_PER_YEAR = 365 / BILLING_CYCLE_DAYS;
+
+// Annual plan ("Active, billed yearly"). Priced lower than 13 × the
+// per-cycle rate so it's a genuine discount. Surfaced as the highlighted
+// LTV option on the paywall + pricing page; the per-4-week plan stays
 // the honest default.
 export const IVY_PRICE_ANNUAL = 490;
 
 // Derived once so copy never hardcodes the math (same discipline as
-// STACK_TOTAL): the yearly saving vs paying monthly, and the effective
-// monthly rate when billed annually.
-export const ANNUAL_SAVINGS = IVY_PRICE * 12 - IVY_PRICE_ANNUAL;          // $98
-export const ANNUAL_MONTHLY_EQUIV = Math.round((IVY_PRICE_ANNUAL / 12) * 100) / 100; // $40.83
+// STACK_TOTAL): the yearly saving vs paying per-cycle, and the per-4-week
+// equivalent of the annual rate.
+export const ANNUAL_SAVINGS = Math.round(IVY_PRICE * CYCLES_PER_YEAR - IVY_PRICE_ANNUAL);  // ≈ $149
+export const ANNUAL_CYCLE_EQUIV = Math.round((IVY_PRICE_ANNUAL / CYCLES_PER_YEAR) * 100) / 100;  // ≈ $37.58 per 4 weeks

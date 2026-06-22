@@ -27,7 +27,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos } from '../../lib/platform.js';
 import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
-import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_MONTHLY_EQUIV, TRIAL_DAYS } from '../../lib/pricing.js';
+import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_CYCLE_EQUIV, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
 // We deliberately do NOT fabricate star ratings or user counts (Ivy OS
@@ -253,7 +253,7 @@ export default function Paywall({ ctx, onRefresh }) {
   const canTrial = !everTrialed;
   const syncing  = busy === 'syncing';
   // Price string for the subscribe CTAs, reflecting the selected period.
-  const priceLabel = plan === 'annual' ? `$${IVY_PRICE_ANNUAL}/yr` : `$${IVY_PRICE}/mo`;
+  const priceLabel = plan === 'annual' ? `$${IVY_PRICE_ANNUAL}/yr` : `$${IVY_PRICE}/4 weeks`;
 
   // Show the 2 trust-building "priming" screens only for trial-eligible
   // owners; win-back / reactivation / expired flows jump straight to the
@@ -368,8 +368,8 @@ export default function Paywall({ ctx, onRefresh }) {
                   display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 2,
                 }}>
                   {[
-                    { key: 'monthly', label: 'Monthly', sub: `$${IVY_PRICE}/mo` },
-                    { key: 'annual',  label: 'Annual',  sub: `$${IVY_PRICE_ANNUAL}/yr`, tag: '2 months free' },
+                    { key: 'monthly', label: 'Every 4 weeks', sub: `$${IVY_PRICE}/4 weeks` },
+                    { key: 'annual',  label: 'Annual',         sub: `$${IVY_PRICE_ANNUAL}/yr`, tag: `Save $${ANNUAL_SAVINGS}/yr` },
                   ].map((opt) => {
                     const active = plan === opt.key;
                     return (
@@ -410,7 +410,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   padding: '2px 10px', borderRadius: 99,
                   background: 'var(--accent)', color: 'var(--accent-ink)',
                   fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
-                }}>{canTrial ? `${TRIAL_DAYS} days free` : (plan === 'annual' ? '2 months free' : 'Full access')}</div>
+                }}>{canTrial ? `${TRIAL_DAYS} days free` : (plan === 'annual' ? `Save $${ANNUAL_SAVINGS}/yr` : 'Full access')}</div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>Active</span>
@@ -418,16 +418,16 @@ export default function Paywall({ ctx, onRefresh }) {
                     fontFamily: 'var(--font-num)', fontSize: 28, fontWeight: 600,
                     color: 'var(--fg)', letterSpacing: '-0.02em',
                   }}>${plan === 'annual' ? IVY_PRICE_ANNUAL : IVY_PRICE}</span>
-                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plan === 'annual' ? '/yr' : '/mo'}</span>
+                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plan === 'annual' ? '/yr' : '/4 weeks'}</span>
                 </div>
                 <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
                   {plan === 'annual'
                     ? (canTrial
-                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) - save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
-                        : `$${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_MONTHLY_EQUIV}/mo) · save $${ANNUAL_SAVINGS}/yr vs monthly. Cancel anytime.`)
+                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_CYCLE_EQUIV}/4 weeks) - save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
+                        : `$${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_CYCLE_EQUIV}/4 weeks) · save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`)
                     : (canTrial
-                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE}/mo. Cancel anytime.`
-                        : `$${IVY_PRICE}/mo · one plan, no per-seat fees. Cancel anytime.`)}
+                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE} every 4 weeks. Cancel anytime.`
+                        : `$${IVY_PRICE}/4 weeks · one plan, no per-seat fees. Cancel anytime.`)}
                 </div>
               </div>
 
@@ -497,7 +497,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   className="btn btn-primary"
                   style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
                   {busy === 'subscribe' ? 'Redirecting…'
-                    : winback ? `Claim ${winback.percentOff}% off - $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo`
+                    : winback ? `Claim ${winback.percentOff}% off - $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/4 weeks`
                     : `Subscribe - ${priceLabel}`}
                   {busy !== 'subscribe' && <Icons.Arrow size={14} sw={2.2}/>}
                 </button>

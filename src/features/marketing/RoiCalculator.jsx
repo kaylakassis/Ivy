@@ -89,7 +89,7 @@ export default function RoiCalculator() {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Ivy OS is <strong>${IVY_PRICE}/mo</strong>, and you start with a {TRIAL_DAYS}-day free trial ($0 today). The
+        Ivy OS is <strong>${IVY_PRICE}/4 weeks</strong>, and you start with a {TRIAL_DAYS}-day free trial ($0 today). The
         math is deliberately conservative: a $75/hr billable rate, Ivy OS automating
         60% of your admin time, and an 8% no-show rate that reminders + card-on-file
         recover. Your real numbers are usually higher.
