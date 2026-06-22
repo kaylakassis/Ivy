@@ -82,9 +82,10 @@ export async function ensureActiveWorkspace(user, req, res) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
   }
-  // Sponsored accounts skip the gate - they're comp'd by the platform
-  // and we never want a billing read to lock them out.
-  if (user.user_type === 'sponsored') {
+  // Sponsored AND beta accounts skip the gate - they're comp'd by the
+  // platform (sponsored = permanent comp, beta = beta-program access).
+  // We never want a billing read to lock them out.
+  if (user.user_type === 'sponsored' || user.user_type === 'beta') {
     return ensureWorkspace(user.id);
   }
 

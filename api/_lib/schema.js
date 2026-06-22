@@ -391,7 +391,7 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB NOT NULL DEF
 -- play nicer with our naive migration runner than a DO block would.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_type_check;
 ALTER TABLE users ADD CONSTRAINT users_user_type_check
-  CHECK (user_type IN ('regular', 'sponsored', 'affiliate', 'super_admin'));
+  CHECK (user_type IN ('regular', 'sponsored', 'beta', 'affiliate', 'super_admin'));
 CREATE INDEX IF NOT EXISTS idx_users_user_type ON users(user_type)
   WHERE user_type <> 'regular';
 

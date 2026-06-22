@@ -28,7 +28,7 @@ import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const SEGMENTS = new Set([
   'all', 'business-active', 'business-trial',
-  'sponsored', 'affiliate', 'client-only',
+  'sponsored', 'beta', 'affiliate', 'client-only',
 ]);
 const MAX_BLAST = 2000;
 // Cooldown between blasts to prevent fat-finger double-sends + protect
@@ -164,6 +164,13 @@ async function loadSegment(segment) {
     const r = await sql`
       SELECT id, email, name FROM users
       WHERE user_type = 'sponsored' AND email_verified_at IS NOT NULL
+    `;
+    return r.rows;
+  }
+  if (segment === 'beta') {
+    const r = await sql`
+      SELECT id, email, name FROM users
+      WHERE user_type = 'beta' AND email_verified_at IS NOT NULL
     `;
     return r.rows;
   }

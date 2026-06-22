@@ -26,8 +26,10 @@ import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/
 const PAGE_SIZE = 50;
 // Internally we surface 'business-trial' / 'business-active' as creation
 // shortcuts even though they're not stored on users.user_type. They
-// translate into the workspace's subscription_status.
-const CREATE_TYPES = new Set(['regular', 'sponsored', 'affiliate', 'business-trial', 'business-active']);
+// translate into the workspace's subscription_status. 'beta' IS a real
+// user_type (like 'sponsored') and bypasses the paywall via
+// workspaceGate + clientPortal.
+const CREATE_TYPES = new Set(['regular', 'sponsored', 'beta', 'affiliate', 'business-trial', 'business-active']);
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -57,7 +59,7 @@ async function listUsers(req, res) {
     params.push(`%${q}%`);
     where.push(`(LOWER(u.email) LIKE $${params.length} OR LOWER(COALESCE(u.name, '')) LIKE $${params.length})`);
   }
-  if (filter === 'sponsored' || filter === 'affiliate' || filter === 'regular') {
+  if (filter === 'sponsored' || filter === 'beta' || filter === 'affiliate' || filter === 'regular') {
     params.push(filter);
     where.push(`u.user_type = $${params.length}`);
   } else if (filter === 'business-active') {
@@ -127,6 +129,7 @@ async function listUsers(req, res) {
 
 function classify(row) {
   if (row.user_type === 'sponsored') return 'Sponsored';
+  if (row.user_type === 'beta')      return 'Beta';
   if (row.user_type === 'affiliate') return 'Affiliate';
   if (row.subscription_status === 'active') return 'Business-Active';
   if (row.subscription_status === 'trialing'
@@ -158,7 +161,7 @@ async function createUser(req, res) {
   const pw = password || Math.random().toString(36).slice(2, 14) + 'A1!';
   const password_hash = await hashPassword(pw);
 
-  const dbUserType = (userType === 'sponsored' || userType === 'affiliate') ? userType : 'regular';
+  const dbUserType = (userType === 'sponsored' || userType === 'beta' || userType === 'affiliate') ? userType : 'regular';
   const ins = await sql`
     INSERT INTO users (email, password_hash, name, user_type, email_verified_at)
     VALUES (${email}, ${password_hash}, ${name}, ${dbUserType}, NOW())
@@ -170,8 +173,20 @@ async function createUser(req, res) {
   let workspaceId = null;
   if (userType === 'sponsored') {
     const w = await sql`
-      INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at, subscription_period_end)
-      VALUES (${user.id}, 'active', NULL, NOW() + INTERVAL '100 years')
+      INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at, subscription_period_end, onboarded_at)
+      VALUES (${user.id}, 'active', NULL, NOW() + INTERVAL '100 years', NULL)
+      RETURNING id
+    `;
+    workspaceId = w.rows[0].id;
+  } else if (userType === 'beta') {
+    // Beta: full app access, no card, no subscription. Same shape as
+    // sponsored - the user_type alone bypasses the paywall (see
+    // workspaceGate + clientPortal). Workspace row gets the same
+    // always-active shape as a safety net in case any read-path
+    // check skips the user_type bypass.
+    const w = await sql`
+      INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at, subscription_period_end, onboarded_at)
+      VALUES (${user.id}, 'active', NULL, NOW() + INTERVAL '100 years', NULL)
       RETURNING id
     `;
     workspaceId = w.rows[0].id;
@@ -254,6 +269,7 @@ async function createUser(req, res) {
 
 function classifyByCreate(t) {
   if (t === 'sponsored')        return 'Sponsored';
+  if (t === 'beta')             return 'Beta';
   if (t === 'affiliate')        return 'Affiliate';
   if (t === 'business-trial')   return 'Business-Trial';
   if (t === 'business-active')  return 'Business-Active';
@@ -281,6 +297,7 @@ function randomCode() {
 function subjectFor(type) {
   switch (type) {
     case 'sponsored':       return "You've got a sponsored Ivy OS account";
+    case 'beta':            return "You're invited to the Ivy OS beta";
     case 'affiliate':       return "Welcome to the Ivy OS affiliate program";
     case 'business-trial':  return "Your Ivy OS account is ready - 14-day trial activated";
     case 'business-active': return "Your Ivy OS account is ready";
@@ -298,6 +315,16 @@ function bodyFor(type, name) {
         needed. Treat it like the paid version: the calendar, clients,
         invoicing, AI coach, all of it. Set your password below and
         you're in.</p>`;
+    case 'beta':
+      return `<p>You've been invited to the <strong>Ivy OS beta</strong> — early
+        access to the full app with no subscription and no card needed. You
+        get the same toolset paying customers do (clients, calendar, invoicing,
+        documents, messaging, Ivy your AI coach, the whole thing), free for
+        the duration of the beta.</p>
+        <p>In return, we'd love your honest feedback as you use it — what
+        works, what's broken, what's missing. Just reply to any Ivy OS email
+        and it reaches a real person.</p>
+        <p>Set your password below to get started.</p>`;
     case 'affiliate':
       return `<p>Welcome to the Ivy OS affiliate program. You've got a
         referral code that earns you credit on every business that signs

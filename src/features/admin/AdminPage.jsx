@@ -1003,6 +1003,7 @@ const USER_FILTERS = [
   { id: 'business-active',  label: 'Business · Active' },
   { id: 'business-trial',   label: 'Business · Trial' },
   { id: 'sponsored',        label: 'Sponsored' },
+  { id: 'beta',             label: 'Beta' },
   { id: 'affiliate',        label: 'Affiliate' },
   { id: 'client-only',      label: 'Client-only' },
 ];
@@ -1233,6 +1234,7 @@ function CreateUserModal({ onClose, onCreated }) {
             <option value="business-active">Business - Active (paying)</option>
             <option value="business-trial">Business - Trial (14-day)</option>
             <option value="sponsored">Sponsored (comp full access)</option>
+            <option value="beta">Beta (free, no card, no subscription)</option>
             <option value="affiliate">Affiliate (with referral code)</option>
             <option value="regular">Regular (no workspace)</option>
           </select>
@@ -1268,6 +1270,7 @@ const ROLES = [
   { id: 'business-trial',  label: 'Business · Trial', desc: '14-day full-access trial.' },
   { id: 'business-active', label: 'Business · Active', desc: 'Manually flag as paying.' },
   { id: 'sponsored',       label: 'Sponsored',        desc: 'Comp full access, no sub.' },
+  { id: 'beta',            label: 'Beta',             desc: 'Beta-program full access, no card.' },
   { id: 'affiliate',       label: 'Affiliate',        desc: 'Auto-creates a referral code.' },
 ];
 
@@ -1277,6 +1280,7 @@ const ROLES = [
 // if their workspace also happens to be 'active'.
 function currentRole(user) {
   if (user.userType === 'sponsored') return 'sponsored';
+  if (user.userType === 'beta')      return 'beta';
   if (user.userType === 'affiliate') return 'affiliate';
   const ws = user.workspace;
   if (ws?.status === 'active')   return 'business-active';
@@ -1775,6 +1779,7 @@ const BLAST_SEGMENTS = [
   { id: 'business-active', label: 'Business - Active' },
   { id: 'business-trial',  label: 'Business - Trial' },
   { id: 'sponsored',       label: 'Sponsored' },
+  { id: 'beta',            label: 'Beta' },
   { id: 'affiliate',       label: 'Affiliates' },
   { id: 'client-only',     label: 'Client-only' },
   { id: 'all',             label: 'Everyone' },

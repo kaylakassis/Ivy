@@ -47,15 +47,15 @@ import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } fr
 export const config = { maxDuration: 30 };
 
 const VALID_ROLES = new Set([
-  'regular', 'sponsored', 'affiliate',
+  'regular', 'sponsored', 'beta', 'affiliate',
   'business-trial', 'business-active',
 ]);
 
 // Roles that map directly onto users.user_type. The remaining two
 // ('business-trial', 'business-active') only flip workspace state;
 // user_type stays whatever it was (or reverts to 'regular' if the
-// caller is leaving 'sponsored').
-const TYPE_ROLES = new Set(['regular', 'sponsored', 'affiliate']);
+// caller is leaving 'sponsored'/'beta').
+const TYPE_ROLES = new Set(['regular', 'sponsored', 'beta', 'affiliate']);
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -253,7 +253,10 @@ async function applyRole(u, role, req, actor) {
   }
 
   // Subscription-state side effects keyed off the requested role.
-  if (role === 'sponsored') {
+  if (role === 'sponsored' || role === 'beta') {
+    // Same shape: free, full-access, no card, no expiry. The user_type
+    // bypass in workspaceGate is the real enforcement; setting the row
+    // to 'active' with a 100yr period_end is the belt-and-suspenders.
     await sql`
       UPDATE workspaces SET
         subscription_status     = 'active',
@@ -277,10 +280,11 @@ async function applyRole(u, role, req, actor) {
         trial_ends_at           = NULL
       WHERE owner_id = ${u.id}
     `;
-  } else if (u.user_type === 'sponsored' && role !== 'sponsored') {
-    // Leaving sponsored back to regular/affiliate without an explicit
-    // billing role - give them a fresh 14-day trial unless they already
-    // have a Stripe sub doing the real billing.
+  } else if ((u.user_type === 'sponsored' || u.user_type === 'beta')
+             && role !== 'sponsored' && role !== 'beta') {
+    // Leaving a comp'd type (sponsored/beta) back to regular/affiliate
+    // without an explicit billing role - give them a fresh 14-day trial
+    // unless they already have a Stripe sub doing the real billing.
     await sql`
       UPDATE workspaces SET
         subscription_status     = CASE

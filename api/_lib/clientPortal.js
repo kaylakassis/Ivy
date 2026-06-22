@@ -205,12 +205,13 @@ export async function userContext(user) {
     myClientIds(user),
   ]);
 
-  // Sponsored accounts are comp'd by the platform - we synthesize an
-  // always-active subscription so the Paywall renders nothing for them
-  // even if their workspace row's columns drift from the admin endpoint.
-  const isSponsored = user.user_type === 'sponsored';
+  // Sponsored and beta accounts are comp'd by the platform - we
+  // synthesize an always-active subscription so the Paywall renders
+  // nothing for them even if their workspace row's columns drift from
+  // the admin endpoint.
+  const isCompd = user.user_type === 'sponsored' || user.user_type === 'beta';
   let subscription = workspace?.subscription || null;
-  if (isSponsored && workspace) {
+  if (isCompd && workspace) {
     subscription = {
       status: 'active',
       isActive: true,
@@ -218,7 +219,8 @@ export async function userContext(user) {
       trialEndsAt: null,
       periodEndsAt: null,
       daysRemaining: null,
-      sponsored: true,
+      sponsored: user.user_type === 'sponsored',
+      beta:      user.user_type === 'beta',
     };
   }
 
