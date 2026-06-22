@@ -2348,8 +2348,17 @@ function PushTestCard() {
       if (r?.ok === false && r?.reason === 'not configured') {
         setErr('Web push is not configured on this deploy - set VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, VAPID_SUBJECT in Vercel and redeploy.');
       } else if ((r?.sent || 0) === 0 && (r?.devices?.length || 0) === 0) {
-        const who = r?.target?.isSelf ? "This account doesn't" : `${r?.target?.email || 'That user'} doesn't`;
-        setMsg(`Sent to 0 devices. ${who} have any push subscriptions yet - they need to enable notifications in /account first.`);
+        // Most common cause when this fires for SELF: the operator has
+        // toggled their email-notification PREFERENCES on in /account
+        // (which doesn't enroll any browser for push) and never clicked
+        // the actual 'Enable push notifications' button — which has to
+        // be done IN EACH BROWSER they want notifications on. Push
+        // subscriptions are per-browser-per-device, not per-account.
+        const who = r?.target?.isSelf ? 'your account' : (r?.target?.email || 'that user');
+        const action = r?.target?.isSelf
+          ? <>Open <a href="/account?tab=notifications#notifications" style={{ color: 'var(--accent)' }}>Account → Notifications</a> and click <strong>Enable push notifications</strong> in this browser. (You'll see a browser permission prompt — accept it.) Then come back here and resend the test.</>
+          : <>Ask them to open <code>/account → Notifications</code> and click <strong>Enable push notifications</strong> in the browser they want pings on.</>;
+        setMsg(<><strong>Sent to 0 devices.</strong> No push subscriptions are registered for {who} on ANY browser. {action} <em style={{ color: 'var(--muted)' }}>Note: push enrollment is per-browser — even if you enabled it in another browser, you need to enable it again here.</em></>);
       } else if ((r?.sent || 0) === 0) {
         setMsg(`Sent to 0 of ${r?.devices?.length || 0} devices. All subscriptions appear dead - they may have been cleared just now (see device list below).`);
       } else {
