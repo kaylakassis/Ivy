@@ -26,10 +26,10 @@ export default function RoiCalculator() {
 
   const calc = useMemo(() => {
     // 1. Tool savings - a FIXED, always-positive number: Ivy OS
-    //    replaces the whole stack ($122) for one price ($49). The old
-    //    calculator let you drag your current spend BELOW Ivy OS's
-    //    price, which showed "$0 savings vs the $122 stack" - a
-    //    contradiction. This is the honest, appealing framing.
+    //    replaces the whole stack (STACK_TOTAL, ~$153) for one price
+    //    ($49). The old calculator let you drag your current spend
+    //    BELOW Ivy OS's price, which showed "$0 savings vs the stack"
+    //    - a contradiction. This is the honest, appealing framing.
     const toolSavings = Math.max(0, STACK_TOTAL - IVY_PRICE);
 
     // 2. Admin hours reclaimed - the HOURS slider drives this.
