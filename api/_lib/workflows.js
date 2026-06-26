@@ -442,15 +442,22 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
 // the workflows cron alongside evaluateScheduledWorkflows. Each pending
 // row resumes execution from next_action_index against the captured
 // client_snapshot (not the live client row - see schema comment).
-export async function resumeWaitingWorkflows({ limit = 200 } = {}) {
-  const { rows: pending } = await sql`
-    SELECT p.*, w.* FROM workflow_pending_runs p
-    JOIN workflows w ON w.id = p.workflow_id
-    WHERE p.resume_at <= NOW()
-      AND w.enabled = TRUE
-    ORDER BY p.resume_at ASC
-    LIMIT ${Math.max(1, Math.min(500, limit))}
-  `;
+// `shardFilter` (on w.workspace_id) is REQUIRED to be consistent with
+// evaluateScheduledWorkflows' shard when the cron fans out — otherwise
+// two shards would both fetch the same pending run, both runWorkflow it
+// (double-send!), and both DELETE it. `prune` gates the >7d cleanup so
+// only one shard does it (the others would race a harmless idempotent
+// DELETE, but skipping is cleaner).
+export async function resumeWaitingWorkflows({ limit = 200, shardFilter = '', prune = true } = {}) {
+  const { rows: pending } = await sql.query(
+    `SELECT p.*, w.* FROM workflow_pending_runs p
+     JOIN workflows w ON w.id = p.workflow_id
+     WHERE p.resume_at <= NOW()
+       AND w.enabled = TRUE
+       ${shardFilter}
+     ORDER BY p.resume_at ASC
+     LIMIT ${Math.max(1, Math.min(500, limit))}`,
+  );
   let resumed = 0;
   for (const row of pending) {
     // The JOIN aliased some columns - rebuild the workflow object
@@ -491,37 +498,63 @@ export async function resumeWaitingWorkflows({ limit = 200 } = {}) {
   // missing recipient, etc.) and would otherwise re-fail forever every
   // cron tick. The owner can rebuild a fresh workflow if they care.
   // Logs a count so a sudden spike is visible in operational logs.
-  try {
-    const pruned = await sql`
-      DELETE FROM workflow_pending_runs
-      WHERE resume_at <= NOW() - INTERVAL '7 days'
-      RETURNING id
-    `;
-    if (pruned.rows.length > 0) {
-      console.warn(`[resumeWaitingWorkflows] pruned ${pruned.rows.length} stale pending runs (>7d)`);
+  // Global cleanup — run by exactly one shard (prune=true) so a fan-out
+  // doesn't have N shards race the same DELETE.
+  if (prune) {
+    try {
+      const pruned = await sql`
+        DELETE FROM workflow_pending_runs
+        WHERE resume_at <= NOW() - INTERVAL '7 days'
+        RETURNING id
+      `;
+      if (pruned.rows.length > 0) {
+        console.warn(`[resumeWaitingWorkflows] pruned ${pruned.rows.length} stale pending runs (>7d)`);
+      }
+    } catch (pruneErr) {
+      console.error('[resumeWaitingWorkflows] prune failed:', pruneErr.message);
     }
-  } catch (pruneErr) {
-    console.error('[resumeWaitingWorkflows] prune failed:', pruneErr.message);
   }
 
   return { resumed };
 }
 
-export async function evaluateScheduledWorkflows({ limit = 500 } = {}) {
-  const { rows: workflows } = await sql`
-    SELECT * FROM workflows
-     WHERE enabled = TRUE
-       AND trigger_type IN ('client_inactive', 'booking_completed')
-     ORDER BY created_at ASC
-  `;
+// Evaluate every enabled time-based workflow. Two scaling concerns the
+// previous shape got wrong:
+//
+//   1. STARVATION. It passed each workflow a SHARED, decrementing budget
+//      (`limit - total`), so the first workflow in created_at order with
+//      many matches could consume the entire 500-fire budget and every
+//      later workflow got zero that tick — forever, since the daily
+//      dedupe means workflow #1 re-presents its batch every run. Now
+//      each workflow gets its OWN fixed `perWorkflowCap` (inner-capped
+//      at 100 by the per-trigger queries), so no single workflow can
+//      starve the rest.
+//
+//   2. HARD GLOBAL CAP. A flat 500-fire ceiling silently skipped
+//      workflows past it at scale. Now the outer loop is deadline-driven
+//      (stops near the function timeout) instead of count-capped, and
+//      `shardFilter` lets the cron fan out across N concurrent entries
+//      keyed on workspace_id hash.
+export async function evaluateScheduledWorkflows({
+  shardFilter = '', deadline = Infinity, perWorkflowCap = 200,
+} = {}) {
+  const { rows: workflows } = await sql.query(
+    `SELECT * FROM workflows
+      WHERE enabled = TRUE
+        AND trigger_type IN ('client_inactive', 'booking_completed')
+        ${shardFilter}
+      ORDER BY created_at ASC`,
+  );
   let total = 0;
+  let evaluated = 0;
   for (const wf of workflows) {
-    if (total >= limit) break;
+    if (Date.now() >= deadline) break;
     // eslint-disable-next-line no-await-in-loop
-    const fired = await evaluateScheduledForWorkflow(wf, limit - total);
+    const fired = await evaluateScheduledForWorkflow(wf, perWorkflowCap);
     total += fired;
+    evaluated += 1;
   }
-  return { fired: total };
+  return { fired: total, evaluated, workflows: workflows.length };
 }
 
 async function evaluateScheduledForWorkflow(wf, remaining) {

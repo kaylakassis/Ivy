@@ -25,6 +25,7 @@ import { isSuperAdminBySession } from '../_lib/admin.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
 
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
@@ -36,16 +37,42 @@ async function handler(req, res) {
 
   try {
     await ensureSchemaApplied();
-    const scheduled = await evaluateScheduledWorkflows({ limit: 500 });
-    const resumed   = await resumeWaitingWorkflows({ limit: 200 });
-    // Flip "smart" tasks whose triggering activity has occurred (message
-    // sent / invoice sent / document sent) to done. Best-effort.
-    const autoTasks = await autoCompleteSmartTasks().catch((e) => {
-      // eslint-disable-next-line no-console
-      console.error('[cron/workflows] autoCompleteSmartTasks failed:', e.message);
-      return 0;
+
+    const { shard, shards } = shardFromReq(req);
+    // evaluateScheduledWorkflows selects from `workflows` unaliased;
+    // resumeWaitingWorkflows aliases it `w`. Same workspace_id hash, so
+    // a given workspace's scheduled fires AND its pending resumes land
+    // on the same shard — no cross-shard double-processing.
+    const evalFilter   = shardClause({ shard, shards }, 'workspace_id');
+    const resumeFilter = shardClause({ shard, shards }, 'w.workspace_id');
+
+    let scheduled = { fired: 0, evaluated: 0, workflows: 0 };
+    let resumed = { resumed: 0 };
+    await withDeadline(async (deadline) => {
+      scheduled = await evaluateScheduledWorkflows({ shardFilter: evalFilter, deadline });
+      // prune only on shard 0 so a fan-out doesn't race the global
+      // >7d cleanup DELETE.
+      resumed = await resumeWaitingWorkflows({ shardFilter: resumeFilter, prune: shard === 0 });
     });
-    return ok(res, { fired: scheduled.fired, resumed: resumed.resumed, autoCompletedTasks: autoTasks });
+
+    // Flip "smart" tasks whose triggering activity has occurred (message
+    // sent / invoice sent / document sent) to done. Global + idempotent,
+    // so run it on a single shard to avoid redundant full-table work.
+    const autoTasks = (shard === 0)
+      ? await autoCompleteSmartTasks().catch((e) => {
+          // eslint-disable-next-line no-console
+          console.error('[cron/workflows] autoCompleteSmartTasks failed:', e.message);
+          return 0;
+        })
+      : 0;
+    return ok(res, {
+      shard, shards,
+      fired: scheduled.fired,
+      workflowsEvaluated: scheduled.evaluated,
+      workflowsTotal: scheduled.workflows,
+      resumed: resumed.resumed,
+      autoCompletedTasks: autoTasks,
+    });
   } catch (err) {
     return serverError(res, err);
   }

@@ -4,7 +4,7 @@
 //   POST → create a booking via the public link. Body:
 //          { serviceId, date, startMin, endMin, clientName, clientEmail, notes? }
 
-import { sql } from '../../_lib/db.js';
+import { sql, warmupDbOnce } from '../../_lib/db.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { requireSameOrigin } from '../../_lib/security.js';
@@ -29,6 +29,12 @@ import {
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
+  // Public endpoint never goes through requireUser (which warms the DB
+  // on login). A viral booking link is often the FIRST hit on a
+  // cold-started / Neon-autosuspended instance — wake the connection
+  // before the schema probe + queries so we don't hard-500 the visitor.
+  // Memoized per instance, so warm instances pay ~nothing.
+  await warmupDbOnce();
   // Public endpoint never goes through requireUser, so bootstrap the
   // schema here on cold-start to self-heal columns/tables added in
   // recent deploys (e.g. services.visibility).

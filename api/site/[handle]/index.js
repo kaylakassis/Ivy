@@ -7,6 +7,7 @@
 // gets replaced by React on render - that's fine, the static markup is
 // only there for crawlers and for the millisecond before JS runs.
 
+import { warmupDbOnce } from '../../_lib/db.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { loadPublicSite } from '../../_lib/publicSite.js';
 import { renderSiteHtml } from '../../_lib/siteHtml.js';
@@ -18,6 +19,10 @@ export default async function handler(req, res) {
     return res.end('Method Not Allowed');
   }
   try {
+    // Public SSR is a common cold-instance first-hit (crawler / social
+    // card / first visitor). Wake the DB before the schema probe so a
+    // Neon autosuspend doesn't 500 the page. Memoized per instance.
+    await warmupDbOnce();
     await ensureSchemaApplied();
     const { handle } = req.query;
     const result = await loadPublicSite({ handle, slug: '' });

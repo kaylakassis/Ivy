@@ -134,3 +134,26 @@ export async function warmupDb({ retries = 3, baseDelayMs = 150 } = {}) {
   e.dbUnavailable = true;
   throw e;
 }
+
+// Once-per-function-instance warmup. The first request to land on a
+// freshly cold-started (or Neon-autosuspended) function instance pays
+// the connection wake; every subsequent request on that warm instance
+// is a single memoized boolean check — NO per-request SELECT 1 overhead.
+// This is the right tradeoff for HIGH-TRAFFIC PUBLIC endpoints (booking
+// pages, site SSR): they're the most likely first-hit after a quiet
+// period, and converting a cold-start 503 into a wait-and-succeed is a
+// real UX win, while at scale (DB always warm) the cost is ~nothing.
+//
+// On warmup FAILURE the memo is reset so the next request retries rather
+// than caching a rejected promise forever. Callers should treat a
+// rejection the same as any DB-unavailable condition (the surrounding
+// serverError() already maps it to a retryable 503).
+let _warmOncePromise = null;
+export function warmupDbOnce(opts) {
+  if (_warmOncePromise) return _warmOncePromise;
+  _warmOncePromise = warmupDb(opts).catch((err) => {
+    _warmOncePromise = null;   // allow the next request to retry the wake
+    throw err;
+  });
+  return _warmOncePromise;
+}

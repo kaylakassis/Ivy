@@ -2,6 +2,7 @@
 // multi-page published site. Same logic as the home-page route, just
 // with a non-empty slug. See api/site/[handle].js for the why.
 
+import { warmupDbOnce } from '../../_lib/db.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { loadPublicSite } from '../../_lib/publicSite.js';
 import { renderSiteHtml } from '../../_lib/siteHtml.js';
@@ -13,6 +14,9 @@ export default async function handler(req, res) {
     return res.end('Method Not Allowed');
   }
   try {
+    // See index.js — wake the DB once per cold instance before the
+    // schema probe so a public sub-page render doesn't 500 on autosuspend.
+    await warmupDbOnce();
     await ensureSchemaApplied();
     const { handle, slug } = req.query;
     // Reserved sub-paths (sitemap.xml, robots.txt) have their own
