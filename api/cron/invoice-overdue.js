@@ -18,11 +18,14 @@ import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
 
 const REPEAT_AFTER_HOURS = 24 * 7;
-// Sized for ~100K active workspaces; sendEmail throttle (~8/sec) gates
-// real throughput within the 300s cron budget.
-const MAX_PER_RUN = 1500;
+// Per-batch fetch. Each row = 1 email + push + 1 stamp UPDATE. 250
+// keeps the deadline check responsive without thrashing the candidate
+// query. The stamp UPDATE excludes the row from the next batch, so the
+// loop drains the candidate set cleanly.
+const BATCH_SIZE = 250;
 
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
@@ -40,78 +43,95 @@ async function handler(req, res) {
       await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_overdue_reminder_at TIMESTAMPTZ`;
     } catch {}
 
-    const { rows } = await sql.query(
-      `SELECT
-         i.id, i.workspace_id, i.client_id, i.client_name, i.client_email,
-         i.number, i.due_date,
-         EXTRACT(DAY FROM NOW() - i.due_date::timestamp)::int AS days_overdue
-       FROM invoices i
-       WHERE i.status = 'sent'
-         AND i.due_date IS NOT NULL
-         AND i.due_date < CURRENT_DATE
-         AND i.client_email IS NOT NULL
-         AND (
-           i.last_overdue_reminder_at IS NULL
-           OR i.last_overdue_reminder_at <= NOW() - ($1 || ' hours')::interval
-         )
-       ORDER BY i.due_date ASC
-       LIMIT ${MAX_PER_RUN}`,
-      [String(REPEAT_AFTER_HOURS)],
-    );
+    const { shard, shards } = shardFromReq(req);
+    const shardFilter = shardClause({ shard, shards }, 'i.workspace_id');
 
-    let pinged = 0;
-    for (const r of rows) {
-      try {
-        const days = Math.max(1, r.days_overdue || 1);
-        // Mint a fresh view link so the email lands cleanly even if
-        // the prior token was misplaced.
-        const raw = generateRawToken(32);
-        const hash = crypto.createHash('sha256').update(raw).digest('hex');
-        await sql`UPDATE invoices SET view_token_hash = ${hash} WHERE id = ${r.id}`;
-        const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
-        await notifyInvoiceOverdue({
-          workspaceId: r.workspace_id,
-          invoiceId: r.id,
-          daysOverdue: days,
-          viewUrl,
-        });
-        if (r.client_id) {
-          await notifyClientSafe({
-            clientId: r.client_id,
-            type: 'payments',
-            payload: {
-              title: 'Invoice overdue',
-              body: `Invoice ${r.number} is ${days} day${days === 1 ? '' : 's'} past due.`,
-              url: '/me/billing',
-              tag: `inv-overdue-${r.id}`,
-            },
-          });
+    let scanned = 0, pinged = 0, batches = 0;
+
+    await withDeadline(async (deadline) => {
+      while (Date.now() < deadline) {
+        // eslint-disable-next-line no-await-in-loop
+        const { rows } = await sql.query(
+          `SELECT
+             i.id, i.workspace_id, i.client_id, i.client_name, i.client_email,
+             i.number, i.due_date,
+             EXTRACT(DAY FROM NOW() - i.due_date::timestamp)::int AS days_overdue
+           FROM invoices i
+           WHERE i.status = 'sent'
+             AND i.due_date IS NOT NULL
+             AND i.due_date < CURRENT_DATE
+             AND i.client_email IS NOT NULL
+             AND (
+               i.last_overdue_reminder_at IS NULL
+               OR i.last_overdue_reminder_at <= NOW() - ($1 || ' hours')::interval
+             )
+             ${shardFilter}
+           ORDER BY i.due_date ASC
+           LIMIT ${BATCH_SIZE}`,
+          [String(REPEAT_AFTER_HOURS)],
+        );
+        if (rows.length === 0) break;
+        scanned += rows.length;
+        batches += 1;
+        for (const r of rows) {
+          try {
+            const days = Math.max(1, r.days_overdue || 1);
+            // Mint a fresh view link so the email lands cleanly even if
+            // the prior token was misplaced.
+            const raw = generateRawToken(32);
+            const hash = crypto.createHash('sha256').update(raw).digest('hex');
+            // eslint-disable-next-line no-await-in-loop
+            await sql`UPDATE invoices SET view_token_hash = ${hash} WHERE id = ${r.id}`;
+            const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
+            // eslint-disable-next-line no-await-in-loop
+            await notifyInvoiceOverdue({
+              workspaceId: r.workspace_id,
+              invoiceId: r.id,
+              daysOverdue: days,
+              viewUrl,
+            });
+            if (r.client_id) {
+              // eslint-disable-next-line no-await-in-loop
+              await notifyClientSafe({
+                clientId: r.client_id,
+                type: 'payments',
+                payload: {
+                  title: 'Invoice overdue',
+                  body: `Invoice ${r.number} is ${days} day${days === 1 ? '' : 's'} past due.`,
+                  url: '/me/billing',
+                  tag: `inv-overdue-${r.id}`,
+                },
+              });
+            }
+            notifyOwnerSafe({
+              workspaceId: r.workspace_id,
+              type: 'payments',
+              payload: {
+                title: 'Invoice still unpaid',
+                body: `${r.number} · ${r.client_name || 'client'} · ${days} day${days === 1 ? '' : 's'} overdue`,
+                url: `/finance?invoice=${r.id}`,
+                tag: `inv-overdue-owner-${r.id}`,
+              },
+            });
+            // Stamp AFTER the sends so a mid-batch failure doesn't mute
+            // the row for a week — it'll be re-attempted on the next
+            // cron tick.
+            // eslint-disable-next-line no-await-in-loop
+            await sql`
+              UPDATE invoices SET last_overdue_reminder_at = NOW()
+              WHERE id = ${r.id}
+            `;
+            pinged++;
+          } catch (err) {
+            console.warn('[invoice-overdue] failed for invoice', r.id, err.message);
+            reportError(err, { extra: { invoiceId: r.id, workspaceId: r.workspace_id } });
+          }
+          if (Date.now() >= deadline) break;
         }
-        // Owner push so they know the chase is active without checking
-        // Finance manually. Daily cadence is governed by the
-        // last_overdue_reminder_at UPDATE below, so this won't spam.
-        notifyOwnerSafe({
-          workspaceId: r.workspace_id,
-          type: 'payments',
-          payload: {
-            title: 'Invoice still unpaid',
-            body: `${r.number} · ${r.client_name || 'client'} · ${days} day${days === 1 ? '' : 's'} overdue`,
-            url: `/finance?invoice=${r.id}`,
-            tag: `inv-overdue-owner-${r.id}`,
-          },
-        });
-        await sql`
-          UPDATE invoices SET last_overdue_reminder_at = NOW()
-          WHERE id = ${r.id}
-        `;
-        pinged++;
-      } catch (err) {
-        console.warn('[invoice-overdue] failed for invoice', r.id, err.message);
-        reportError(err, { extra: { invoiceId: r.id, workspaceId: r.workspace_id } });
       }
-    }
+    });
 
-    return ok(res, { ok: true, scanned: rows.length, pinged });
+    return ok(res, { ok: true, shard, shards, batches, scanned, pinged });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);

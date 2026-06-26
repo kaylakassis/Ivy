@@ -23,12 +23,16 @@ import { notifyClientSafe } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
 
-// Per-run cap so a backlog (cron paused for a day, etc.) doesn't blow
-// past Resend's rate limit on resume. The next tick catches the rest.
-// Cron now fires every 10 min (see vercel.json), so 1000/tick = ~6K/hour
-// throughput, comfortably covering 10K owners worth of daily reminders.
-const MAX_PER_RUN = 1000;
+// Soft per-run safety ceiling. The deadline loop is the primary brake —
+// it stops calling fetchDueBookings the moment we approach Vercel's 300s
+// function cap, well before Resend's per-account rate limit becomes the
+// bottleneck. This cap remains as a paranoia rail in case a deadline
+// miscalculation lets a runaway loop slip through. Real per-tick
+// throughput is ~250 sends/min sustained (8/sec Resend throttle × 4min
+// usable budget = ~2000) so this is generous.
+const SAFETY_PER_RUN = 8000;
 
 // Window constants (minutes). The lookback covers a couple of skipped
 // runs (an outage of up to ~20 minutes self-heals at the new 10-min
@@ -49,7 +53,13 @@ const SQL_LOOKAHEAD_MIN = 15;
 // time lands in a generous window around now. Keyset cursor over
 // (date, start_min, id) so paging is stable and complete. Replaces the old
 // single LIMIT 5000 scan that silently truncated busy installs.
-export async function fetchDueBookings(cursor) {
+//
+// `shardFilter` is the SQL fragment from shardClause() — empty string
+// when unsharded (default) or ` AND ((hashtext(b.workspace_id::text) %
+// N + N) % N) = K` when running under `?shard=K&shards=N`. The shard
+// boundary is applied at fetch time so a fan-out of N cron entries
+// processes disjoint workspace slices without overlap.
+export async function fetchDueBookings(cursor, shardFilter = '') {
   const params = [];
   let cursorClause = '';
   if (cursor) {
@@ -89,6 +99,7 @@ export async function fetchDueBookings(cursor) {
                   AND NOW() + make_interval(mins => ${SQL_LOOKAHEAD_MIN})
       )
       ${cursorClause}
+      ${shardFilter}
     ORDER BY b.date, b.start_min, b.id
     LIMIT ${SCAN_BATCH}
   `;
@@ -108,34 +119,40 @@ async function handler(req, res) {
     await ensureSchemaApplied();
     const now = Date.now();
 
+    const { shard, shards } = shardFromReq(req);
+    const shardFilter = shardClause({ shard, shards }, 'b.workspace_id');
+
     let sent = 0;
     let scanned = 0;
     let failed = 0;
+    let batches = 0;
     // Memoize branding per workspace for this run - many reminders share
     // the same handful of workspaces.
     const getBranding = makeBrandingCache();
 
-    // Keyset-paginate the candidate set instead of a single LIMIT 5000
-    // scan. The old hard cap silently dropped reminders for every booking
-    // past the first 5000 in the 8-day window once an install got busy -
-    // entire tenants never got reminded. We now page through ALL due
-    // bookings (bounded only by MAX_PER_RUN *sends*). fetchDueBookings
-    // pre-filters in SQL to bookings with a beat landing in a generous
-    // window around now, so each page stays small; the precise per-beat
-    // ±window check below still runs in JS, so the wide SQL pre-filter can
-    // never drop a booking we'd actually remind.
+    // Keyset-paginate the candidate set across as many pages as the
+    // deadline allows. The old code hard-stopped at MAX_PER_RUN sends so
+    // an install with >1K reminders in a single 10-min window silently
+    // dropped the tail; now the loop processes pages until either (a)
+    // the candidate set drains, (b) the function approaches its 5min
+    // Vercel cap (deadline), or (c) the paranoia ceiling SAFETY_PER_RUN
+    // is reached (last-line defense against a runaway loop).
     let cursor = null;
     let more = true;
-    while (more && sent < MAX_PER_RUN) {
-      // eslint-disable-next-line no-await-in-loop
-      const { rows } = await fetchDueBookings(cursor);
-      if (rows.length === 0) break;
-      const last = rows[rows.length - 1];
-      cursor = { date: last.date, startMin: last.start_min, id: last.id };
-      more = rows.length === SCAN_BATCH;
+    let stop = false;
+    await withDeadline(async (deadline) => {
+      while (more && sent < SAFETY_PER_RUN && !stop && Date.now() < deadline) {
+        // eslint-disable-next-line no-await-in-loop
+        const { rows } = await fetchDueBookings(cursor, shardFilter);
+        if (rows.length === 0) break;
+        const last = rows[rows.length - 1];
+        cursor = { date: last.date, startMin: last.start_min, id: last.id };
+        more = rows.length === SCAN_BATCH;
+        batches += 1;
 
-      for (const r of rows) {
-      if (sent >= MAX_PER_RUN) break;
+        for (const r of rows) {
+          if (sent >= SAFETY_PER_RUN) { stop = true; break; }
+          if (Date.now() >= deadline) { stop = true; break; }
       scanned++;
       const dateISO = r.date instanceof Date ? r.date.toISOString().slice(0, 10) : r.date;
       const startMs = slotEpochMs(dateISO, r.start_min, r.timezone || null);
@@ -150,7 +167,7 @@ async function handler(req, res) {
       const emailEligible = !!(r.client_email);
 
       for (const mins of reminderMinutes) {
-        if (sent >= MAX_PER_RUN) break;
+        if (sent >= SAFETY_PER_RUN || Date.now() >= deadline) { stop = true; break; }
         const minsNum = Number(mins);
         if (!Number.isFinite(minsNum) || minsNum <= 0) continue;
         const key = String(minsNum);
@@ -267,9 +284,10 @@ async function handler(req, res) {
         }
       }
       }
-    }
+      }
+    });
 
-    return ok(res, { ok: true, scanned, sent, failed });
+    return ok(res, { ok: true, shard, shards, batches, scanned, sent, failed });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);

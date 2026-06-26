@@ -24,11 +24,15 @@ import { notifyWeeklyRecap } from '../_lib/weeklyRecap.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
 
-// Sized for ~100K active workspaces. The 6-day cooldown distributes
-// owners across the week naturally; this is the maximum we'll send in
-// any single cron invocation.
-const MAX_PER_RUN = 2000;
+// Per-batch fetch size. Each batch is one round-trip to Postgres + N
+// sequential email sends (gated by Resend's 8/sec throttle). 250 is the
+// sweet spot: small enough that we re-check the deadline often, large
+// enough that the query overhead amortizes across many sends. The
+// outer loop in withDeadline keeps pulling batches until the candidate
+// set drains or the function nears its 5min Vercel cap.
+const BATCH_SIZE = 250;
 const REPEAT_AFTER_HOURS = 6 * 24; // 6 days
 
 async function handler(req, res) {
@@ -46,29 +50,8 @@ async function handler(req, res) {
       await sql`ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS weekly_recap_last_sent_at TIMESTAMPTZ`;
     } catch {}
 
-    // Sweep candidates. The eligibility window matches the comment
-    // above; isWorkspaceActive's semantics are inlined as SQL so the
-    // query stays cheap (one indexed scan rather than per-row JS).
-    const { rows } = await sql.query(
-      `SELECT w.id, w.owner_id
-         FROM workspaces w
-         JOIN users u ON u.id = w.owner_id
-        WHERE w.onboarded_at IS NOT NULL
-          AND COALESCE(u.user_type, 'regular') NOT IN ('beta', 'sponsored')
-          AND u.deleted_at IS NULL
-          AND (
-            (w.subscription_status = 'trialing' AND w.trial_ends_at > NOW())
-            OR (w.subscription_status = 'active' AND (w.subscription_period_end IS NULL OR w.subscription_period_end > NOW()))
-            OR (w.subscription_status = 'past_due')
-          )
-          AND (
-            w.weekly_recap_last_sent_at IS NULL
-            OR w.weekly_recap_last_sent_at <= NOW() - ($1 || ' hours')::interval
-          )
-        ORDER BY w.created_at ASC
-        LIMIT ${MAX_PER_RUN}`,
-      [String(REPEAT_AFTER_HOURS)],
-    );
+    const { shard, shards } = shardFromReq(req);
+    const shardFilter = shardClause({ shard, shards }, 'w.id');
 
     // Past 7 days: [now - 7d, now). Calendar week alignment isn't
     // required — what we want is "the last week's worth of activity at
@@ -76,27 +59,62 @@ async function handler(req, res) {
     const to = new Date();
     const from = new Date(Date.now() - 7 * 86400000);
 
-    let sent = 0;
-    let muted = 0;
-    for (const r of rows) {
-      try {
-        // Stamp-then-send: stamp first so a retried cron run can't
-        // double-send. The send itself is best-effort (the stamp
-        // sticks regardless), which is the right tradeoff for a
-        // weekly digest.
-        // eslint-disable-next-line no-await-in-loop
-        await sql`UPDATE workspaces SET weekly_recap_last_sent_at = NOW() WHERE id = ${r.id}`;
-        // eslint-disable-next-line no-await-in-loop
-        const result = await notifyWeeklyRecap({ workspaceId: r.id, from, to });
-        if (result?.sent) sent++;
-        else if (result?.reason === 'muted') muted++;
-      } catch (err) {
-        console.warn('[owner-weekly-recap] failed for workspace', r.id, err.message);
-        reportError(err, { extra: { workspaceId: r.id } });
-      }
-    }
+    let scanned = 0, sent = 0, muted = 0, batches = 0;
 
-    return ok(res, { ok: true, scanned: rows.length, sent, muted });
+    // Deadline-driven loop: keep pulling batches until the candidate
+    // set drains or we approach the function timeout. The stamp-then-
+    // send pattern means a row stamped in batch N never re-appears in
+    // batch N+1's candidate query, so the loop naturally terminates
+    // even on a million-row backlog (limited only by wall-clock budget).
+    await withDeadline(async (deadline) => {
+      while (Date.now() < deadline) {
+        // eslint-disable-next-line no-await-in-loop
+        const { rows } = await sql.query(
+          `SELECT w.id, w.owner_id
+             FROM workspaces w
+             JOIN users u ON u.id = w.owner_id
+            WHERE w.onboarded_at IS NOT NULL
+              AND COALESCE(u.user_type, 'regular') NOT IN ('beta', 'sponsored')
+              AND u.deleted_at IS NULL
+              AND (
+                (w.subscription_status = 'trialing' AND w.trial_ends_at > NOW())
+                OR (w.subscription_status = 'active' AND (w.subscription_period_end IS NULL OR w.subscription_period_end > NOW()))
+                OR (w.subscription_status = 'past_due')
+              )
+              AND (
+                w.weekly_recap_last_sent_at IS NULL
+                OR w.weekly_recap_last_sent_at <= NOW() - ($1 || ' hours')::interval
+              )
+              ${shardFilter}
+            ORDER BY w.created_at ASC
+            LIMIT ${BATCH_SIZE}`,
+          [String(REPEAT_AFTER_HOURS)],
+        );
+        if (rows.length === 0) break;
+        scanned += rows.length;
+        batches += 1;
+        for (const r of rows) {
+          try {
+            // Stamp-then-send: stamp first so a retried cron run can't
+            // double-send. The send itself is best-effort (the stamp
+            // sticks regardless), which is the right tradeoff for a
+            // weekly digest.
+            // eslint-disable-next-line no-await-in-loop
+            await sql`UPDATE workspaces SET weekly_recap_last_sent_at = NOW() WHERE id = ${r.id}`;
+            // eslint-disable-next-line no-await-in-loop
+            const result = await notifyWeeklyRecap({ workspaceId: r.id, from, to });
+            if (result?.sent) sent++;
+            else if (result?.reason === 'muted') muted++;
+          } catch (err) {
+            console.warn('[owner-weekly-recap] failed for workspace', r.id, err.message);
+            reportError(err, { extra: { workspaceId: r.id } });
+          }
+          if (Date.now() >= deadline) break;
+        }
+      }
+    });
+
+    return ok(res, { ok: true, shard, shards, batches, scanned, sent, muted });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);

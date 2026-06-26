@@ -47,7 +47,30 @@ export default async function handler(req, res) {
     // window which still drives signups + revenue.
     const PLATFORM_LOOKBACK_DAYS = 90;
 
-    // Parallelize. Each query is independent.
+    // Cache reads first. The 7-key 'totals' rollup and the
+    // platformImpact aggregates are date-INDEPENDENT, refreshed every
+    // 15 min by api/cron/refresh-admin-analytics.js. Reading them from
+    // a 2-row cache table replaces 13 of the parallel queries below
+    // (including the worst offenders: full-table COUNT(*) on users +
+    // workspaces, 90-day rolling joins across bookings + invoices). On
+    // first deploy (or if the cron hasn't run yet) the cache rows are
+    // absent — we fall back to live queries so the endpoint still
+    // works, just at the old cost.
+    const cacheRows = await sql`
+      SELECT key, value, computed_at
+        FROM admin_analytics_cache
+       WHERE key IN ('totals', 'platformImpact')
+    `;
+    const cachedTotals = cacheRows.rows.find((r) => r.key === 'totals')?.value || null;
+    const cachedPlatform = cacheRows.rows.find((r) => r.key === 'platformImpact')?.value || null;
+    const cacheComputedAt = cacheRows.rows.length
+      ? cacheRows.rows
+          .map((r) => new Date(r.computed_at).getTime())
+          .reduce((min, t) => Math.min(min, t), Infinity)
+      : null;
+
+    // Parallelize the WINDOW-DEPENDENT queries + a live fallback for
+    // any cache key that's missing. Each query is independent.
     const [
       usersRow,
       signupsRow,
@@ -81,27 +104,42 @@ export default async function handler(req, res) {
       onbHeardRows,             // acquisition-channel distribution
       onbStageRows,             // business-stage distribution
     ] = await Promise.all([
-      sql`SELECT COUNT(*)::int AS n FROM users`,
+      // ── Cached when available, live as a fallback. The fallback
+      // queries are the original ones from the historical analytics
+      // endpoint — kept verbatim so a missing cache row never breaks
+      // the admin UI.
+      cachedTotals
+        ? { rows: [{ n: cachedTotals.users }] }
+        : sql`SELECT COUNT(*)::int AS n FROM users`,
       sql.query(
         `SELECT COUNT(*)::int AS n FROM users WHERE created_at >= $1 AND created_at < $2`,
         [fromIso, toIso],
       ),
-      sql`SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'`,
-      sql`SELECT COUNT(*)::int AS n FROM workspaces
-            WHERE subscription_status = 'trialing'
-              AND trial_ends_at IS NOT NULL
-              AND trial_ends_at > NOW()`,
-      sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'sponsored'`,
-      sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'affiliate'`,
-      // "Client-only" - users who don't own a workspace but DO have at
-      // least one clients row claimed under their user_id. Avoids
-      // counting bare auth records that haven't been linked anywhere.
-      sql`SELECT COUNT(DISTINCT u.id)::int AS n
-            FROM users u
-            WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
-              AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`,
-      sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-          FROM invoices WHERE status = 'paid'`,
+      cachedTotals
+        ? { rows: [{ n: cachedTotals.businessActive }] }
+        : sql`SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'`,
+      cachedTotals
+        ? { rows: [{ n: cachedTotals.businessTrial }] }
+        : sql`SELECT COUNT(*)::int AS n FROM workspaces
+                WHERE subscription_status = 'trialing'
+                  AND trial_ends_at IS NOT NULL
+                  AND trial_ends_at > NOW()`,
+      cachedTotals
+        ? { rows: [{ n: cachedTotals.sponsored }] }
+        : sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'sponsored'`,
+      cachedTotals
+        ? { rows: [{ n: cachedTotals.affiliate }] }
+        : sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'affiliate'`,
+      cachedTotals
+        ? { rows: [{ n: cachedTotals.clientOnly }] }
+        : sql`SELECT COUNT(DISTINCT u.id)::int AS n
+                FROM users u
+                WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
+                  AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`,
+      cachedTotals
+        ? { rows: [{ total: cachedTotals.revenueAllTime }] }
+        : sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
+              FROM invoices WHERE status = 'paid'`,
       sql.query(
         `SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
           FROM invoices
@@ -128,8 +166,14 @@ export default async function handler(req, res) {
         [fromIso],
       ),
       // ─── Marketing aggregates (90-day rolling window) ────────────
-      // No-show + cancellation + total in one pass for ratio math.
-      sql.query(
+      // Nine queries precomputed in api/cron/refresh-admin-analytics.js
+      // and stored as the 'platformImpact' JSONB blob. When the cache
+      // row is present we skip every one of these by short-circuiting
+      // to a no-op promise; the response construction below detects the
+      // cache and inlines `cachedPlatform` directly. When it's absent
+      // (first deploy / cron hasn't run yet) the live queries run as
+      // before so the endpoint never breaks.
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `SELECT
            COUNT(*)::int                                    AS total,
            COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int  AS no_shows,
@@ -138,10 +182,7 @@ export default async function handler(req, res) {
           WHERE date >= CURRENT_DATE - ($1::int || ' days')::interval`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
-      // Completed bookings via completion_log JSONB - any key present
-      // counts the booking once. Denominator = past bookings that weren't
-      // cancelled or no-show'd. Compares completed vs unattended.
-      sql.query(
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `SELECT
            COUNT(*) FILTER (
              WHERE completion_log IS NOT NULL
@@ -157,9 +198,7 @@ export default async function handler(req, res) {
             AND date < CURRENT_DATE`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
-      // Average revenue per ACTIVE workspace (paid invoices in window /
-      // count of currently-active workspaces). Honest baseline number.
-      sql.query(
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `WITH active AS (
            SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'
          ),
@@ -175,8 +214,7 @@ export default async function handler(req, res) {
         `,
         [PLATFORM_LOOKBACK_DAYS],
       ),
-      // Average client base size per active workspace.
-      sql`
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         WITH active_ws AS (
           SELECT id FROM workspaces WHERE subscription_status = 'active'
         ),
@@ -191,8 +229,7 @@ export default async function handler(req, res) {
           COUNT(*)::int                       AS denom
           FROM counts
       `,
-      // Average booking count (last 90d) per active workspace.
-      sql.query(
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `WITH active_ws AS (
            SELECT id FROM workspaces WHERE subscription_status = 'active'
          ),
@@ -208,8 +245,7 @@ export default async function handler(req, res) {
            FROM counts`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
-      // % of active workspaces with at least one enabled workflow.
-      sql`
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         SELECT
           (SELECT COUNT(DISTINCT workspace_id)::int
              FROM workflows
@@ -218,8 +254,7 @@ export default async function handler(req, res) {
           ) AS adopters,
           (SELECT COUNT(*)::int FROM workspaces WHERE subscription_status = 'active') AS denom
       `,
-      // % of active workspaces that have engaged with Ivy (>=1 session).
-      sql`
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         SELECT
           (SELECT COUNT(DISTINCT workspace_id)::int
              FROM ivy_sessions
@@ -227,17 +262,14 @@ export default async function handler(req, res) {
           ) AS adopters,
           (SELECT COUNT(*)::int FROM workspaces WHERE subscription_status = 'active') AS denom
       `,
-      // Aggregate review count + average rating (live published reviews).
-      sql`
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         SELECT
           COUNT(*)::int                       AS count,
           COALESCE(AVG(rating)::numeric(3,2), 0) AS avg_rating
           FROM reviews
          WHERE status = 'visible'
       `,
-      // Activation rate: workspaces that took their first booking within
-      // 7 days of signup. Strong product-market-fit signal.
-      sql.query(
+      cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `WITH first_booking AS (
            SELECT b.workspace_id, MIN(b.created_at) AS first_at
              FROM bookings b
@@ -375,53 +407,71 @@ export default async function handler(req, res) {
     const ratePct = denom > 0 ? Math.round((cancelled / denom) * 1000) / 10 : 0;
 
     // ── Marketing aggregates ─────────────────────────────────────────
-    const bk = bookingTotalsRow.rows[0] || {};
-    const bkTotal = bk.total || 0;
-    const noShows = bk.no_shows || 0;
-    const cancelledBk = bk.cancelled || 0;
-    const noShowPct = bkTotal > 0 ? Math.round((noShows / bkTotal) * 1000) / 10 : 0;
-    const cancellationPct = bkTotal > 0 ? Math.round((cancelledBk / bkTotal) * 1000) / 10 : 0;
-
-    const comp = completedBookingsRow.rows[0] || {};
-    const completedBk = comp.completed || 0;
-    const pastAttendable = comp.past_attendable || 0;
-    const completionPct = pastAttendable > 0
-      ? Math.round((completedBk / pastAttendable) * 1000) / 10
-      : 0;
-
-    const arpw = avgRevPerActiveRow.rows[0] || {};
-    const activeCount = arpw.active_count || 0;
-    const lookbackRevenue = Number(arpw.revenue || 0);
-    const avgRevenuePerActive = activeCount > 0
-      ? Math.round((lookbackRevenue / activeCount) * 100) / 100
-      : 0;
-    // 90-day window → divide by 3 to get monthly approximation.
-    const avgMonthlyRevenuePerActive = activeCount > 0
-      ? Math.round((lookbackRevenue / activeCount / 3) * 100) / 100
-      : 0;
-
-    const avgClients = Number(avgClientsPerActiveRow.rows[0]?.avg_clients || 0);
-    const avgBookings = Number(avgBookingsPerActiveRow.rows[0]?.avg_bookings || 0);
-
-    const wfAdopt = workflowAdoptionRow.rows[0] || {};
-    const wfAdoptionPct = (wfAdopt.denom || 0) > 0
-      ? Math.round((wfAdopt.adopters / wfAdopt.denom) * 1000) / 10
-      : 0;
-    const ivyAdopt = ivyAdoptionRow.rows[0] || {};
-    const ivyAdoptionPct = (ivyAdopt.denom || 0) > 0
-      ? Math.round((ivyAdopt.adopters / ivyAdopt.denom) * 1000) / 10
-      : 0;
-
-    const reviews = reviewsRow.rows[0] || {};
-    const reviewCount = reviews.count || 0;
-    const avgRating = Number(reviews.avg_rating || 0);
-
-    const act = activationRow.rows[0] || {};
-    const activatedCount = act.activated || 0;
-    const eligibleCount = act.eligible || 0;
-    const activationPct = eligibleCount > 0
-      ? Math.round((activatedCount / eligibleCount) * 1000) / 10
-      : 0;
+    // When the cache is populated, the live queries above were skipped
+    // (Promise.resolve({rows:[]})) and we use the cached shape
+    // verbatim. When it's not, we derive from the live rows exactly
+    // the way the historical endpoint did. The two branches produce
+    // identical response shapes — same keys, same rounding, same null
+    // semantics — so admin code reads one structure either way.
+    const platformImpact = cachedPlatform || (() => {
+      const bk = bookingTotalsRow.rows[0] || {};
+      const bkTotal = bk.total || 0;
+      const noShows = bk.no_shows || 0;
+      const cancelledBk = bk.cancelled || 0;
+      const noShowPct = bkTotal > 0 ? Math.round((noShows / bkTotal) * 1000) / 10 : 0;
+      const cancellationPct = bkTotal > 0 ? Math.round((cancelledBk / bkTotal) * 1000) / 10 : 0;
+      const comp = completedBookingsRow.rows[0] || {};
+      const completedBk = comp.completed || 0;
+      const pastAttendable = comp.past_attendable || 0;
+      const completionPct = pastAttendable > 0
+        ? Math.round((completedBk / pastAttendable) * 1000) / 10
+        : 0;
+      const arpw = avgRevPerActiveRow.rows[0] || {};
+      const activeCount = arpw.active_count || 0;
+      const lookbackRevenue = Number(arpw.revenue || 0);
+      const avgRevenuePerActive = activeCount > 0
+        ? Math.round((lookbackRevenue / activeCount) * 100) / 100
+        : 0;
+      const avgMonthlyRevenuePerActive = activeCount > 0
+        ? Math.round((lookbackRevenue / activeCount / 3) * 100) / 100
+        : 0;
+      const avgClients = Number(avgClientsPerActiveRow.rows[0]?.avg_clients || 0);
+      const avgBookings = Number(avgBookingsPerActiveRow.rows[0]?.avg_bookings || 0);
+      const wfAdopt = workflowAdoptionRow.rows[0] || {};
+      const wfAdoptionPct = (wfAdopt.denom || 0) > 0
+        ? Math.round((wfAdopt.adopters / wfAdopt.denom) * 1000) / 10
+        : 0;
+      const ivyAdopt = ivyAdoptionRow.rows[0] || {};
+      const ivyAdoptionPct = (ivyAdopt.denom || 0) > 0
+        ? Math.round((ivyAdopt.adopters / ivyAdopt.denom) * 1000) / 10
+        : 0;
+      const reviews = reviewsRow.rows[0] || {};
+      const reviewCount = reviews.count || 0;
+      const avgRating = Number(reviews.avg_rating || 0);
+      const act = activationRow.rows[0] || {};
+      const activatedCount = act.activated || 0;
+      const eligibleCount = act.eligible || 0;
+      const activationPct = eligibleCount > 0
+        ? Math.round((activatedCount / eligibleCount) * 1000) / 10
+        : 0;
+      return {
+        lookbackDays: PLATFORM_LOOKBACK_DAYS,
+        bookingsCounted: bkTotal,
+        noShowRatePct: noShowPct,
+        cancellationRatePct: cancellationPct,
+        completionRatePct: completionPct,
+        avgRevenuePerActive,
+        avgMonthlyRevenuePerActive,
+        avgClientsPerActive: Math.round(avgClients * 10) / 10,
+        avgBookingsPerActive90d: Math.round(avgBookings * 10) / 10,
+        workflowAdoptionPct: wfAdoptionPct,
+        ivyAdoptionPct,
+        reviews: { count: reviewCount, avgRating: Math.round(avgRating * 100) / 100 },
+        activationPct,
+        activatedCount,
+        eligibleCount,
+      };
+    })();
 
     // ── Acquisition funnel ───────────────────────────────────────────
     // Raw cohort counts; the UI computes step-to-step + overall rates so
@@ -454,26 +504,14 @@ export default async function handler(req, res) {
       // or ratios across active workspaces - no per-workspace data
       // leaves this endpoint. Safe to drop into landing copy ("Ivy OS
       // users see an average no-show rate of X%"). Window: 90d rolling.
-      platformImpact: {
-        lookbackDays:    PLATFORM_LOOKBACK_DAYS,
-        bookingsCounted: bkTotal,
-        noShowRatePct:   noShowPct,
-        cancellationRatePct: cancellationPct,
-        completionRatePct:   completionPct,
-        avgRevenuePerActive: avgRevenuePerActive,        // 90-day total ÷ active count
-        avgMonthlyRevenuePerActive: avgMonthlyRevenuePerActive,
-        avgClientsPerActive: Math.round(avgClients * 10) / 10,
-        avgBookingsPerActive90d: Math.round(avgBookings * 10) / 10,
-        workflowAdoptionPct: wfAdoptionPct,
-        ivyAdoptionPct,
-        reviews: {
-          count:     reviewCount,
-          avgRating: Math.round(avgRating * 100) / 100,
-        },
-        activationPct,    // signup → first booking within 7 days
-        activatedCount,
-        eligibleCount,
-      },
+      // Served from the analytics-cache table (refreshed every 15 min)
+      // when the cron has populated it; otherwise computed live as a
+      // fallback. cacheComputedAt is the freshness signal — when null
+      // the values are real-time, when set it's the cache age.
+      platformImpact,
+      cacheComputedAt: cacheComputedAt && Number.isFinite(cacheComputedAt)
+        ? new Date(cacheComputedAt).toISOString()
+        : null,
       // Acquisition funnel for the selected window's signup cohort.
       // Counts only - the UI renders the bars + computes the conversion
       // and drop-off percentages.

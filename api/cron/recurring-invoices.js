@@ -25,10 +25,12 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
 
-// Sized for ~100K active workspaces; sendEmail throttle (~8/sec) gates
-// real throughput within the 300s cron budget.
-const MAX_PER_RUN = 1000;
+// Per-batch fetch. Each row is one materializeOne() + an optional email
+// send via Resend (throttled to ~8/sec). 200 keeps the deadline check
+// timely without thrashing the candidate query.
+const BATCH_SIZE = 200;
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -45,86 +47,101 @@ async function handler(req, res) {
 
   try {
     await ensureSchemaApplied();
-    const due = await sql`
-      SELECT id FROM recurring_invoices
-       WHERE status = 'active'
-         AND next_run_at <= CURRENT_DATE
-       ORDER BY next_run_at ASC
-       LIMIT ${MAX_PER_RUN}
-    `;
-    let materialized = 0;
-    let sent = 0;
-    let errors = 0;
+
+    const { shard, shards } = shardFromReq(req);
+    const shardFilter = shardClause({ shard, shards }, 'workspace_id');
+
+    let considered = 0, materialized = 0, sent = 0, errors = 0, batches = 0;
     const getBranding = makeBrandingCache();
 
-    for (const r of due.rows) {
-      try {
-        const result = await materializeOne(r.id);
-        if (result.skipped) continue;
-        materialized++;
-
-        const { schedule, invoice } = result;
-        // Owner-side push: a new invoice just dropped into Finance -
-        // worth a heads-up even when auto_send delivered it to the
-        // client. Type 'payments' so it inherits the same per-user
-        // opt-out as paid-invoice pushes.
-        notifyOwnerSafe({
-          workspaceId: invoice.workspace_id,
-          type: 'payments',
-          payload: {
-            title: 'Recurring invoice issued',
-            body: `${invoice.number} · ${schedule.client_name || schedule.client_email || 'a client'}`,
-            url: `/finance?invoice=${invoice.id}`,
-            tag: `recurring-issued-${invoice.id}`,
-          },
-        });
-
-        if (!schedule.auto_send) continue;
-        // Auto-send: skip if no email on file. Unsent invoices stay
-        // 'draft' so the owner can review + send manually.
-        if (!schedule.client_email) continue;
-        try {
-          await autoSendInvoice({ schedule, invoice, getBranding });
-          sent++;
-        } catch (sendErr) {
-          // eslint-disable-next-line no-console
-          console.error('[cron/recurring] send failed:', sendErr.message);
-          errors++;
-          // Revert the invoice from 'sent' back to 'draft' so the owner
-          // sees it as undelivered (autoSendInvoice flips status + mints
-          // a token before sending). Without this, a Resend outage
-          // leaves a forever-pending "sent" invoice that the owner thinks
-          // landed in the client's inbox. Best-effort - if the rollback
-          // itself fails we've still logged the original send error.
+    // Deadline-driven loop: process batches until the candidate set
+    // drains or we approach the function timeout. materializeOne()
+    // advances next_run_at past today on success, so re-running the
+    // candidate query naturally yields fresh rows each batch.
+    await withDeadline(async (deadline) => {
+      while (Date.now() < deadline) {
+        // eslint-disable-next-line no-await-in-loop
+        const due = await sql.query(
+          `SELECT id FROM recurring_invoices
+            WHERE status = 'active'
+              AND next_run_at <= CURRENT_DATE
+              ${shardFilter}
+            ORDER BY next_run_at ASC
+            LIMIT ${BATCH_SIZE}`,
+        );
+        if (due.rows.length === 0) break;
+        batches += 1;
+        considered += due.rows.length;
+        for (const r of due.rows) {
           try {
-            await sql`
-              UPDATE invoices SET
-                status = 'draft',
-                view_token_hash = NULL,
-                sent_at = NULL,
-                updated_at = NOW()
-              WHERE id = ${invoice.id} AND workspace_id = ${invoice.workspace_id}
-                AND status = 'sent'
-            `;
-          } catch (rollbackErr) {
-            // eslint-disable-next-line no-console
-            console.error('[cron/recurring] rollback also failed:', rollbackErr.message);
-          }
-        }
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[cron/recurring] materialize failed:', err.message);
-        errors++;
-        try { reportError(err); } catch { /* ignore */ }
-      }
-    }
+            // eslint-disable-next-line no-await-in-loop
+            const result = await materializeOne(r.id);
+            if (result.skipped) continue;
+            materialized++;
 
-    return ok(res, {
-      considered: due.rows.length,
-      materialized,
-      sent,
-      errors,
+            const { schedule, invoice } = result;
+            // Owner-side push: a new invoice just dropped into Finance -
+            // worth a heads-up even when auto_send delivered it to the
+            // client. Type 'payments' so it inherits the same per-user
+            // opt-out as paid-invoice pushes.
+            notifyOwnerSafe({
+              workspaceId: invoice.workspace_id,
+              type: 'payments',
+              payload: {
+                title: 'Recurring invoice issued',
+                body: `${invoice.number} · ${schedule.client_name || schedule.client_email || 'a client'}`,
+                url: `/finance?invoice=${invoice.id}`,
+                tag: `recurring-issued-${invoice.id}`,
+              },
+            });
+
+            if (!schedule.auto_send) continue;
+            // Auto-send: skip if no email on file. Unsent invoices stay
+            // 'draft' so the owner can review + send manually.
+            if (!schedule.client_email) continue;
+            try {
+              // eslint-disable-next-line no-await-in-loop
+              await autoSendInvoice({ schedule, invoice, getBranding });
+              sent++;
+            } catch (sendErr) {
+              // eslint-disable-next-line no-console
+              console.error('[cron/recurring] send failed:', sendErr.message);
+              errors++;
+              // Revert the invoice from 'sent' back to 'draft' so the
+              // owner sees it as undelivered (autoSendInvoice flips
+              // status + mints a token before sending). Without this, a
+              // Resend outage leaves a forever-pending "sent" invoice
+              // that the owner thinks landed in the client's inbox.
+              // Best-effort - if the rollback itself fails we've still
+              // logged the original send error.
+              try {
+                // eslint-disable-next-line no-await-in-loop
+                await sql`
+                  UPDATE invoices SET
+                    status = 'draft',
+                    view_token_hash = NULL,
+                    sent_at = NULL,
+                    updated_at = NOW()
+                  WHERE id = ${invoice.id} AND workspace_id = ${invoice.workspace_id}
+                    AND status = 'sent'
+                `;
+              } catch (rollbackErr) {
+                // eslint-disable-next-line no-console
+                console.error('[cron/recurring] rollback also failed:', rollbackErr.message);
+              }
+            }
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[cron/recurring] materialize failed:', err.message);
+            errors++;
+            try { reportError(err); } catch { /* ignore */ }
+          }
+          if (Date.now() >= deadline) break;
+        }
+      }
     });
+
+    return ok(res, { shard, shards, batches, considered, materialized, sent, errors });
   } catch (err) {
     return serverError(res, err);
   }

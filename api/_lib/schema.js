@@ -350,6 +350,23 @@ CREATE TABLE IF NOT EXISTS rate_limits (
 );
 CREATE INDEX IF NOT EXISTS idx_rate_limits_key_time ON rate_limits(key, attempted_at DESC);
 
+-- Cached rollups for /api/admin/analytics. Without this, the admin
+-- dashboard fires 23 parallel COUNT(*) queries on every pageview —
+-- several of them full-table scans (users, workspaces, invoices, etc.).
+-- At 100K+ rows per table that saturates DB CPU. The refresh cron
+-- (api/cron/refresh-admin-analytics.js) computes the slow,
+-- date-independent rollups every 15 min and writes a JSONB blob here;
+-- the endpoint reads from this cache for those rollups and only fires
+-- live queries for the date-range-dependent metrics (funnel cohorts,
+-- onboarding aggregates, window revenue/churn). Single-row table by
+-- design — we keep just the latest snapshot; the freshness timestamp
+-- is surfaced in the response so the admin can see staleness.
+CREATE TABLE IF NOT EXISTS admin_analytics_cache (
+  key          TEXT PRIMARY KEY,
+  value        JSONB NOT NULL,
+  computed_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS auth_tokens (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

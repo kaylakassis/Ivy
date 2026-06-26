@@ -20,12 +20,13 @@ import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
 
 // How many days before due_date the heads-up goes out.
 const DUE_SOON_DAYS = 3;
-// Sized for ~100K active workspaces; sendEmail throttle (~8/sec) gates
-// real throughput within the 300s cron budget.
-const MAX_PER_RUN = 1500;
+// Per-batch fetch. The due_soon_reminder_sent_at UPDATE excludes the row
+// from the next batch so the loop drains naturally.
+const BATCH_SIZE = 250;
 
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
@@ -43,58 +44,74 @@ async function handler(req, res) {
       await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS due_soon_reminder_sent_at TIMESTAMPTZ`;
     } catch {}
 
-    const { rows } = await sql.query(
-      `SELECT
-         i.id, i.workspace_id, i.client_id, i.client_name, i.client_email,
-         i.number, i.due_date,
-         GREATEST(0, EXTRACT(DAY FROM i.due_date::timestamp - NOW())::int) AS days_until_due
-       FROM invoices i
-       WHERE i.status = 'sent'
-         AND i.due_date IS NOT NULL
-         AND i.due_date >= CURRENT_DATE
-         AND i.due_date <= CURRENT_DATE + ($1::int)
-         AND i.client_email IS NOT NULL
-         AND i.due_soon_reminder_sent_at IS NULL
-       ORDER BY i.due_date ASC
-       LIMIT ${MAX_PER_RUN}`,
-      [DUE_SOON_DAYS],
-    );
+    const { shard, shards } = shardFromReq(req);
+    const shardFilter = shardClause({ shard, shards }, 'i.workspace_id');
 
-    let pinged = 0;
-    for (const r of rows) {
-      try {
-        // Mint a fresh view link so the client can pay straight from the email.
-        const raw = generateRawToken(32);
-        const hash = crypto.createHash('sha256').update(raw).digest('hex');
-        await sql`UPDATE invoices SET view_token_hash = ${hash} WHERE id = ${r.id}`;
-        const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
-        await notifyInvoiceDueSoon({
-          workspaceId: r.workspace_id,
-          invoiceId: r.id,
-          daysUntilDue: r.days_until_due,
-          viewUrl,
-        });
-        if (r.client_id) {
-          await notifyClientSafe({
-            clientId: r.client_id,
-            type: 'payments',
-            payload: {
-              title: 'Invoice due soon',
-              body: `Invoice ${r.number} is due in ${r.days_until_due} day${r.days_until_due === 1 ? '' : 's'}.`,
-              url: '/me/billing',
-              tag: `inv-due-soon-${r.id}`,
-            },
-          });
+    let scanned = 0, pinged = 0, batches = 0;
+
+    await withDeadline(async (deadline) => {
+      while (Date.now() < deadline) {
+        // eslint-disable-next-line no-await-in-loop
+        const { rows } = await sql.query(
+          `SELECT
+             i.id, i.workspace_id, i.client_id, i.client_name, i.client_email,
+             i.number, i.due_date,
+             GREATEST(0, EXTRACT(DAY FROM i.due_date::timestamp - NOW())::int) AS days_until_due
+           FROM invoices i
+           WHERE i.status = 'sent'
+             AND i.due_date IS NOT NULL
+             AND i.due_date >= CURRENT_DATE
+             AND i.due_date <= CURRENT_DATE + ($1::int)
+             AND i.client_email IS NOT NULL
+             AND i.due_soon_reminder_sent_at IS NULL
+             ${shardFilter}
+           ORDER BY i.due_date ASC
+           LIMIT ${BATCH_SIZE}`,
+          [DUE_SOON_DAYS],
+        );
+        if (rows.length === 0) break;
+        scanned += rows.length;
+        batches += 1;
+        for (const r of rows) {
+          try {
+            const raw = generateRawToken(32);
+            const hash = crypto.createHash('sha256').update(raw).digest('hex');
+            // eslint-disable-next-line no-await-in-loop
+            await sql`UPDATE invoices SET view_token_hash = ${hash} WHERE id = ${r.id}`;
+            const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
+            // eslint-disable-next-line no-await-in-loop
+            await notifyInvoiceDueSoon({
+              workspaceId: r.workspace_id,
+              invoiceId: r.id,
+              daysUntilDue: r.days_until_due,
+              viewUrl,
+            });
+            if (r.client_id) {
+              // eslint-disable-next-line no-await-in-loop
+              await notifyClientSafe({
+                clientId: r.client_id,
+                type: 'payments',
+                payload: {
+                  title: 'Invoice due soon',
+                  body: `Invoice ${r.number} is due in ${r.days_until_due} day${r.days_until_due === 1 ? '' : 's'}.`,
+                  url: '/me/billing',
+                  tag: `inv-due-soon-${r.id}`,
+                },
+              });
+            }
+            // eslint-disable-next-line no-await-in-loop
+            await sql`UPDATE invoices SET due_soon_reminder_sent_at = NOW() WHERE id = ${r.id}`;
+            pinged++;
+          } catch (err) {
+            console.warn('[invoice-due-soon] failed for invoice', r.id, err.message);
+            reportError(err, { extra: { invoiceId: r.id, workspaceId: r.workspace_id } });
+          }
+          if (Date.now() >= deadline) break;
         }
-        await sql`UPDATE invoices SET due_soon_reminder_sent_at = NOW() WHERE id = ${r.id}`;
-        pinged++;
-      } catch (err) {
-        console.warn('[invoice-due-soon] failed for invoice', r.id, err.message);
-        reportError(err, { extra: { invoiceId: r.id, workspaceId: r.workspace_id } });
       }
-    }
+    });
 
-    return ok(res, { ok: true, scanned: rows.length, pinged });
+    return ok(res, { ok: true, shard, shards, batches, scanned, pinged });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);
