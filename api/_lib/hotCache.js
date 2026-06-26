@@ -32,6 +32,20 @@ const CACHE_MAX      = 500;      // bounded LRU; ~500 * ~1KB = ~500KB
 const _store = new Map();        // insertion-ordered, used as LRU
 const _expiry = new Map();       // key → epoch ms when it goes stale
 
+// Integration tests mutate the DB out-of-band between handler calls
+// (e.g. promote a user to super_admin via direct SQL, then re-invoke an
+// admin handler) — a pattern fundamentally incompatible with a TTL
+// cache that has no knowledge of those writes. Production never does
+// this: every state change goes through an endpoint that calls the
+// matching invalidate*(). So in the test harness we bypass the cache
+// entirely (set IVY_DISABLE_HOTCACHE=1 in tests/bootstrap.mjs) and let
+// every read hit the DB fresh. The cache primitives themselves are
+// still covered by tests/hot-cache.test.mjs, which clears this flag.
+// Checked at call-time (not import-time) so a test can toggle it.
+function bypassed() {
+  return process.env.IVY_DISABLE_HOTCACHE === '1';
+}
+
 function evictIfNeeded() {
   while (_store.size > CACHE_MAX) {
     const oldestKey = _store.keys().next().value;
@@ -46,6 +60,7 @@ function evictIfNeeded() {
 // almost always wrap a row-or-null lookup and an absent row should
 // re-check the DB rather than cache the absence indefinitely.
 export function get(key) {
+  if (bypassed()) return undefined;
   const exp = _expiry.get(key);
   if (exp === undefined) return undefined;
   if (Date.now() > exp) {
@@ -84,6 +99,9 @@ export function invalidate(key) {
 // same Promise so we don't herd N parallel DB hits during a cold burst.
 const _inflight = new Map();
 export async function getOrSet(key, ttlMs, loader) {
+  // Bypass: run the loader fresh every time, no store, no in-flight
+  // sharing. Keeps integration tests reading real DB state.
+  if (bypassed()) return loader();
   const cached = get(key);
   if (cached !== undefined) return cached;
   const existing = _inflight.get(key);

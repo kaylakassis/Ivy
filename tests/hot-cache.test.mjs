@@ -4,6 +4,13 @@
 
 import { get, set, invalidate, getOrSet, _resetForTests } from '../api/_lib/hotCache.js';
 
+// This file tests the cache PRIMITIVES, so it must run with the cache
+// ENABLED. The shared bootstrap sets IVY_DISABLE_HOTCACHE=1 to bypass
+// the cache for every OTHER (integration) test; clear it here so get/
+// set/getOrSet actually store + serve. Checked at call-time inside
+// hotCache, so deleting it before the first call is sufficient.
+delete process.env.IVY_DISABLE_HOTCACHE;
+
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
 

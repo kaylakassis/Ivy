@@ -16,3 +16,11 @@ process.env.PUBLIC_HOST ||= 'localhost:3001';
 // handlers don't refuse on missing-config branches.
 process.env.RESEND_API_KEY ||= '__test__';
 process.env.EMAIL_FROM ||= 'Ivy OS <test@example.com>';
+// Bypass the in-process hot cache (api/_lib/hotCache.js) for integration
+// tests. Tests mutate the DB out-of-band between handler calls (e.g.
+// promote a user to super_admin via raw SQL, then call an admin
+// handler) — incompatible with a TTL cache that only invalidates on
+// endpoint writes. With the cache off, every read hits the DB fresh, so
+// tests see the state they just wrote. The cache's own unit test
+// (tests/hot-cache.test.mjs) clears this flag to exercise the primitives.
+process.env.IVY_DISABLE_HOTCACHE ||= '1';
