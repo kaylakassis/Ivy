@@ -61,11 +61,13 @@ export default async function handler(req, res) {
       }
     }
 
-    // Bookings rollup. Treat any booking with no_show_at set as a
-    // no-show; cancelled_at as cancelled. "Completed" = non-cancelled,
-    // non-no-show booking whose end time is in the past.
-    const { rows: agg } = windowDays
-      ? await sql`
+    // Bookings rollup + signed documents fired in parallel — neither
+    // depends on the other. Cuts client-drawer load latency roughly in
+    // half on a cold function instance. The conditional per-booking
+    // `dates` query below still has to wait for the agg result (it's
+    // gated on totalBookings >= 3) so it remains sequential.
+    const aggQuery = windowDays
+      ? sql`
           SELECT
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int AS no_shows,
@@ -82,7 +84,7 @@ export default async function handler(req, res) {
           WHERE workspace_id = ${workspaceId} AND client_id = ${id}
             AND date >= (CURRENT_DATE - (${windowDays}::int || ' days')::interval)
         `
-      : await sql`
+      : sql`
           SELECT
             COUNT(*)::int AS total,
             COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int AS no_shows,
@@ -98,6 +100,28 @@ export default async function handler(req, res) {
           FROM bookings
           WHERE workspace_id = ${workspaceId} AND client_id = ${id}
         `;
+    const docsQuery = sql`
+      SELECT id, name, signed_at FROM (
+        SELECT d.id, d.name, d.completed_at AS signed_at
+        FROM documents d
+        WHERE d.workspace_id = ${workspaceId}
+          AND d.recipient_client_id = ${id}
+          AND d.status = 'completed'
+          AND d.completed_at IS NOT NULL
+        UNION
+        SELECT d.id, d.name, ds.signed_at
+        FROM documents d
+        JOIN document_signers ds ON ds.document_id = d.id
+        WHERE d.workspace_id = ${workspaceId}
+          AND ds.client_id = ${id}
+          AND ds.signed_at IS NOT NULL
+      ) merged
+      ORDER BY signed_at DESC
+      LIMIT 50
+    `;
+    const [aggRes, docsRes] = await Promise.all([aggQuery, docsQuery]);
+    const agg = aggRes.rows;
+    const docs = docsRes.rows;
     const a = agg[0] || {};
     const totalBookings    = a.total || 0;
     const noShowBookings   = a.no_shows || 0;
@@ -130,30 +154,8 @@ export default async function handler(req, res) {
       }
     }
 
-    // Signed documents tied to this client. Two source paths:
-    //   • Legacy single-signer flow: documents.recipient_client_id + completed_at
-    //   • New multi-signer flow:     document_signers.client_id   + signed_at
-    // Union both so the drawer reflects every signed doc regardless of
-    // which sending path the owner used.
-    const { rows: docs } = await sql`
-      SELECT id, name, signed_at FROM (
-        SELECT d.id, d.name, d.completed_at AS signed_at
-        FROM documents d
-        WHERE d.workspace_id = ${workspaceId}
-          AND d.recipient_client_id = ${id}
-          AND d.status = 'completed'
-          AND d.completed_at IS NOT NULL
-        UNION
-        SELECT d.id, d.name, ds.signed_at
-        FROM documents d
-        JOIN document_signers ds ON ds.document_id = d.id
-        WHERE d.workspace_id = ${workspaceId}
-          AND ds.client_id = ${id}
-          AND ds.signed_at IS NOT NULL
-      ) merged
-      ORDER BY signed_at DESC
-      LIMIT 50
-    `;
+    // (Signed-documents query is now part of the Promise.all above so
+    // it runs alongside the bookings agg — saves a round-trip.)
 
     return ok(res, {
       totalBookings,

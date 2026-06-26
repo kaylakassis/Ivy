@@ -111,3 +111,27 @@ export async function withDeadline(fn, { budgetMs = DEFAULT_BUDGET_MS, safetyMs 
   const deadline = Date.now() + Math.max(1_000, budget - safety);
   return fn(deadline);
 }
+
+// Termination-reason helper. Each cron's response includes one of these
+// strings so the admin cron-health view can see WHY a run stopped:
+//   'empty'    — candidate set drained, healthy steady state
+//   'deadline' — function approaching Vercel's 300s cap, work still
+//                pending. Operator should add a shard entry to vercel.json.
+//   'cap'      — safety per-run ceiling hit (a paranoia rail). Almost
+//                certainly indicates a runaway loop or a misconfigured
+//                cron — investigate before adding capacity.
+//
+// Usage at the bottom of a cron handler:
+//   const terminatedBy = terminationReason({
+//     emptied: !more,
+//     hitCap:  sent >= SAFETY_PER_RUN,
+//   });
+//   return ok(res, { ..., terminatedBy });
+//
+// trackCron's extractMetrics picks up the string into the metrics JSONB
+// automatically — no further plumbing needed.
+export function terminationReason({ emptied, hitCap }) {
+  if (emptied) return 'empty';
+  if (hitCap)  return 'cap';
+  return 'deadline';
+}

@@ -20,7 +20,7 @@ import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
-import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
+import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 
 const NUDGE_REPLY_HOURS = 24;
 const NUDGE_QUIET_DAYS  = 14;
@@ -58,6 +58,7 @@ async function handler(req, res) {
 
     let awaitingScanned = 0, awaitingFired = 0, awaitingBatches = 0;
     let quietScanned = 0, quietFired = 0, quietBatches = 0;
+    let awaitingEmptied = false, quietEmptied = false;
 
     // Each detector loops to deadline. We split the budget so a giant
     // "awaiting" backlog can't starve the "quiet" detector and vice
@@ -92,7 +93,7 @@ async function handler(req, res) {
             LIMIT ${BATCH_SIZE}`,
           [String(NUDGE_REPLY_HOURS)],
         );
-        if (rows.length === 0) break;
+        if (rows.length === 0) { awaitingEmptied = true; break; }
         awaitingScanned += rows.length;
         awaitingBatches += 1;
         for (const r of rows) {
@@ -175,7 +176,7 @@ async function handler(req, res) {
             LIMIT ${BATCH_SIZE}`,
           [String(ACTIVE_WINDOW_DAYS), String(NUDGE_QUIET_DAYS)],
         );
-        if (rows.length === 0) break;
+        if (rows.length === 0) { quietEmptied = true; break; }
         quietScanned += rows.length;
         quietBatches += 1;
         for (const r of rows) {
@@ -206,10 +207,18 @@ async function handler(req, res) {
       }
     }, { budgetMs: HALF_BUDGET_MS });
 
+    // Combined termination signal: a run is fully "empty" only when
+    // BOTH detectors drained. If either bumped the deadline we want the
+    // admin signal to be 'deadline' so the operator knows to shard.
+    const terminatedBy = terminationReason({
+      emptied: awaitingEmptied && quietEmptied,
+      hitCap:  false,
+    });
     return ok(res, {
       shard, shards,
       awaitingBatches, awaitingScanned, awaitingFired,
       quietBatches, quietScanned, quietFired,
+      terminatedBy,
     });
   } catch (err) {
     return serverError(res, err);

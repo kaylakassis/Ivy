@@ -43,6 +43,7 @@ import {
   notifyPaymentFailed,
   notifySubscriptionCancelled,
 } from '../_lib/subscriptionNotify.js';
+import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
@@ -211,6 +212,11 @@ export default async function handler(req, res) {
       // eslint-disable-next-line no-console
       console.warn('[revenuecat-webhook] notify failed:', notifyErr?.message);
     }
+
+    // Bust the ownsWorkspace hot-cache so the iOS app's next /api/me
+    // refresh sees the new subscription state immediately (no 30s
+    // delay between StoreKit purchase and the wall dropping).
+    invalidateOwnerWorkspaceByWorkspaceId(workspaceId).catch(() => {});
 
     return ok(res, { received: true, type: event.type, status: nextStatus });
   } catch (err) {

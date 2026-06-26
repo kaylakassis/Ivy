@@ -7,6 +7,7 @@
 // the Paywall can swap into "trial active" view without re-fetching.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { TRIAL_DAYS } from '../_lib/billing.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -67,6 +68,7 @@ export default async function handler(req, res) {
       RETURNING subscription_status, trial_ends_at, subscription_period_end
     `;
     const after = rows[0];
+    invalidateOwnerWorkspace(user.id);
     return ok(res, {
       ok: true,
       alreadyActive: false,

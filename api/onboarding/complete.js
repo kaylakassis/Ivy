@@ -3,6 +3,7 @@
 // never appears again. Idempotent - safe to call from "Skip" buttons too.
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
+import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -18,6 +19,9 @@ export default async function handler(req, res) {
       UPDATE workspaces SET onboarded_at = COALESCE(onboarded_at, NOW())
       WHERE id = ${workspaceId}
     `;
+    // Bust the hot-cache so the next /api/me sees onboardedAt set and
+    // the RoleRouter stops bouncing the user to /onboarding.
+    invalidateOwnerWorkspace(user.id);
     return ok(res, { ok: true });
   } catch (err) {
     return serverError(res, err);

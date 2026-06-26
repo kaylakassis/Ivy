@@ -23,7 +23,7 @@ import { notifyClientSafe } from '../_lib/push.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
-import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
+import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 
 // Soft per-run safety ceiling. The deadline loop is the primary brake —
 // it stops calling fetchDueBookings the moment we approach Vercel's 300s
@@ -287,7 +287,14 @@ async function handler(req, res) {
       }
     });
 
-    return ok(res, { ok: true, shard, shards, batches, scanned, sent, failed });
+    // `more=false` after the last fetch means we drained the candidate
+    // set; if `more` is still true AND we stopped, it was either the
+    // deadline or the safety cap. The cap path also sets stop=true.
+    const terminatedBy = terminationReason({
+      emptied: !more,
+      hitCap:  sent >= SAFETY_PER_RUN,
+    });
+    return ok(res, { ok: true, shard, shards, batches, scanned, sent, failed, terminatedBy });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);

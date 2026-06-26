@@ -15,6 +15,7 @@ import { fetchCheckoutSession, fetchSubscription, platformStripeSecret } from '.
 import { mapStripeStatus } from '../_lib/billing.js';
 import { attributePayment, monthlyValueCents } from '../_lib/affiliateAttribution.js';
 import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
+import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const PAYING_STATUSES = new Set(['active', 'past_due']);
@@ -92,8 +93,13 @@ export default async function handler(req, res) {
     }
     // Drop the per-lambda positive cache so the very next gated
     // request sees the fresh paying state, not a pre-checkout snapshot.
-    // No-op when the cache is empty.
+    // No-op when the cache is empty. Also drop the ownsWorkspace
+    // hot-cache for the same reason: the immediate /api/me refresh
+    // after Stripe redirect must see the workspace as paying or the
+    // paywall will flash back on for a TTL window after a successful
+    // checkout.
     evictWorkspaceGateCache(workspaceId);
+    invalidateOwnerWorkspace(user.id);
     return ok(res, {
       synced: true,
       status: mapped,

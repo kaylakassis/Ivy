@@ -1,9 +1,19 @@
 // Shared calendar helpers: slot computation, availability check, format helpers.
 // Used by both the owner-side API (validate booking before insert) and frontend.
 import { sql } from './db.js';
+import { getOrSet, invalidate as cacheInvalidate } from './hotCache.js';
 
 const HANDLE_RE = /^[a-z0-9](?:[a-z0-9-]{0,38}[a-z0-9])?$/;
 export const VALID_HANDLE = HANDLE_RE;
+
+// Cache TTL for calendar_settings. Hot read on every public booking
+// page load + every cron iteration; rarely changes in steady state.
+// Short enough that a settings edit (biz_name, availability hours,
+// new tagline) becomes visible within ~30s even without explicit
+// invalidation — the calendar PATCH endpoint calls
+// invalidateCalendarSettings after each write so the change is
+// instant in practice.
+const CAL_SETTINGS_TTL_MS = 30_000;
 
 export function ensureCalendarSettings(workspaceId) {
   // Create default settings row if one doesn't exist; return the row.
@@ -12,6 +22,29 @@ export function ensureCalendarSettings(workspaceId) {
     ON CONFLICT (workspace_id) DO UPDATE SET workspace_id = EXCLUDED.workspace_id
     RETURNING *
   `.then((r) => r.rows[0]);
+}
+
+// Cache-backed read for the calendar_settings row. Returns the raw row
+// (so callers can pass it to serializeSettings or pluck individual
+// columns) or null when the workspace has no settings row yet (the
+// caller should fall back to ensureCalendarSettings to create the
+// default). null is cached so a brand-new workspace isn't re-queried
+// every hit.
+export async function fetchCalendarSettings(workspaceId) {
+  if (!workspaceId) return null;
+  return getOrSet(`cs:${workspaceId}`, CAL_SETTINGS_TTL_MS, async () => {
+    const { rows } = await sql`
+      SELECT * FROM calendar_settings WHERE workspace_id = ${workspaceId} LIMIT 1
+    `;
+    return rows[0] || null;
+  });
+}
+
+// Call from any write path that mutates calendar_settings (calendar
+// PATCH, branding, slug rename) so the next read picks up the change
+// without waiting for the TTL.
+export function invalidateCalendarSettings(workspaceId) {
+  if (workspaceId) cacheInvalidate(`cs:${workspaceId}`);
 }
 
 export function serializeSettings(row) {

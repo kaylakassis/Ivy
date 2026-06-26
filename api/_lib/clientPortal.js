@@ -12,6 +12,7 @@
 // - every read is filtered through `myClientIds()` so a malicious request
 // can't peek at someone else's data.
 import { sql } from './db.js';
+import { getOrSet, invalidate as cacheInvalidate } from './hotCache.js';
 
 // Returns the IDs of every `clients` row this user owns, across workspaces.
 // Matches by user_id first, then auto-claims any rows with the same email
@@ -78,7 +79,54 @@ export function ids(memberships) {
 // back to a minimal lookup so /api/me still returns a usable context. The
 // user can then onboard normally - the alternative is a 500 that leaves
 // them stuck on the sign-in screen with no recovery.
+// Cache TTL for ownsWorkspace. Short enough that a Stripe checkout
+// completion / subscription state change becomes visible within ~30s
+// even if the explicit invalidate() call misfires; long enough to
+// absorb a navigation burst (5-10 /api/me hits in the first second of
+// a page load) on warm function instances. The write paths that
+// matter — billing webhook, sync endpoint, RevenueCat webhook,
+// onboarding/complete, calendar PATCH — call invalidateOwnerWorkspace
+// after they commit so the change is visible immediately, not after
+// the TTL.
+const OWNS_WORKSPACE_TTL_MS = 30_000;
+
 export async function ownsWorkspace(userId) {
+  if (!userId) return null;
+  return getOrSet(`owns:${userId}`, OWNS_WORKSPACE_TTL_MS, () => ownsWorkspaceFromDb(userId));
+}
+
+// Invalidate the cached ownsWorkspace blob for the given userId. Cheap
+// (Map.delete). Call after any write that changes a field returned by
+// the SELECT above — subscription_status, trial_ends_at,
+// subscription_period_end, stripe_customer_id, onboarded_at, biz_name,
+// slug, business_type — so the next /api/me read picks up the change
+// without waiting for the TTL.
+export function invalidateOwnerWorkspace(userId) {
+  if (userId) cacheInvalidate(`owns:${userId}`);
+}
+
+// Convenience overload for write paths that only know the workspaceId
+// (Stripe webhook, RevenueCat webhook). One extra indexed lookup
+// (owner_id is the unique key) then invalidates. Returns the userId so
+// the caller can use it for related cache busts.
+export async function invalidateOwnerWorkspaceByWorkspaceId(workspaceId) {
+  if (!workspaceId) return null;
+  try {
+    const { rows } = await sql`SELECT owner_id FROM workspaces WHERE id = ${workspaceId} LIMIT 1`;
+    const ownerId = rows[0]?.owner_id;
+    if (ownerId) invalidateOwnerWorkspace(ownerId);
+    return ownerId || null;
+  } catch (err) {
+    // Cache invalidation is best-effort — a missed bust just means a
+    // ≤30s lag for the next /api/me read. Log + swallow so a transient
+    // DB blip never breaks the webhook handler that called us.
+    // eslint-disable-next-line no-console
+    console.warn('[clientPortal] invalidateOwnerWorkspaceByWorkspaceId lookup failed:', err.message);
+    return null;
+  }
+}
+
+async function ownsWorkspaceFromDb(userId) {
   try {
     const { rows } = await sql`
       SELECT w.id, w.onboarded_at, w.business_type,

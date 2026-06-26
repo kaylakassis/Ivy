@@ -25,7 +25,7 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 import { trackCron } from '../_lib/cronMetrics.js';
-import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
+import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 
 // Per-batch fetch. Each row is one materializeOne() + an optional email
 // send via Resend (throttled to ~8/sec). 200 keeps the deadline check
@@ -52,6 +52,7 @@ async function handler(req, res) {
     const shardFilter = shardClause({ shard, shards }, 'workspace_id');
 
     let considered = 0, materialized = 0, sent = 0, errors = 0, batches = 0;
+    let emptied = false;
     const getBranding = makeBrandingCache();
 
     // Deadline-driven loop: process batches until the candidate set
@@ -69,7 +70,7 @@ async function handler(req, res) {
             ORDER BY next_run_at ASC
             LIMIT ${BATCH_SIZE}`,
         );
-        if (due.rows.length === 0) break;
+        if (due.rows.length === 0) { emptied = true; break; }
         batches += 1;
         considered += due.rows.length;
         for (const r of due.rows) {
@@ -141,7 +142,8 @@ async function handler(req, res) {
       }
     });
 
-    return ok(res, { shard, shards, batches, considered, materialized, sent, errors });
+    const terminatedBy = terminationReason({ emptied, hitCap: false });
+    return ok(res, { shard, shards, batches, considered, materialized, sent, errors, terminatedBy });
   } catch (err) {
     return serverError(res, err);
   }

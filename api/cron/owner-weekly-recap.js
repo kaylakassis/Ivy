@@ -24,7 +24,7 @@ import { notifyWeeklyRecap } from '../_lib/weeklyRecap.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
-import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
+import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 
 // Per-batch fetch size. Each batch is one round-trip to Postgres + N
 // sequential email sends (gated by Resend's 8/sec throttle). 250 is the
@@ -60,6 +60,7 @@ async function handler(req, res) {
     const from = new Date(Date.now() - 7 * 86400000);
 
     let scanned = 0, sent = 0, muted = 0, batches = 0;
+    let emptied = false;
 
     // Deadline-driven loop: keep pulling batches until the candidate
     // set drains or we approach the function timeout. The stamp-then-
@@ -90,7 +91,7 @@ async function handler(req, res) {
             LIMIT ${BATCH_SIZE}`,
           [String(REPEAT_AFTER_HOURS)],
         );
-        if (rows.length === 0) break;
+        if (rows.length === 0) { emptied = true; break; }
         scanned += rows.length;
         batches += 1;
         for (const r of rows) {
@@ -114,7 +115,8 @@ async function handler(req, res) {
       }
     });
 
-    return ok(res, { ok: true, shard, shards, batches, scanned, sent, muted });
+    const terminatedBy = terminationReason({ emptied, hitCap: false });
+    return ok(res, { ok: true, shard, shards, batches, scanned, sent, muted, terminatedBy });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);

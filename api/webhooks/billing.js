@@ -23,6 +23,7 @@ import {
   notifySubscriptionStarted, notifyUpcomingRenewal,
   notifyPaymentFailed, notifySubscriptionCancelled,
 } from '../_lib/subscriptionNotify.js';
+import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 // Stripe statuses that count as "this user is paying us". Trialing is
@@ -151,6 +152,9 @@ async function onCheckoutCompleted(session, secretKey) {
     amountCents: sub?.items?.data?.[0]?.price?.unit_amount,
     currency:    sub?.items?.data?.[0]?.price?.currency || 'usd',
   });
+  // Bust the ownsWorkspace hot-cache so the next /api/me sees the
+  // newly-active subscription instead of a pre-checkout snapshot.
+  invalidateOwnerWorkspaceByWorkspaceId(workspaceId).catch(() => {});
 }
 
 // Mid-life updates: renewals, plan changes, cancellations. Match by
@@ -214,6 +218,9 @@ async function onSubscriptionChanged(sub, eventType) {
       workspaceId: resolvedWorkspaceId,
       endsAt: periodEnd,
     });
+  }
+  if (resolvedWorkspaceId) {
+    invalidateOwnerWorkspaceByWorkspaceId(resolvedWorkspaceId).catch(() => {});
   }
 }
 
@@ -322,5 +329,8 @@ async function onInvoiceEvent(invoice, type, secretKey) {
       nextAttemptAt: invoice.next_payment_attempt
         ? new Date(invoice.next_payment_attempt * 1000) : null,
     });
+  }
+  if (r.rows[0]?.id) {
+    invalidateOwnerWorkspaceByWorkspaceId(r.rows[0].id).catch(() => {});
   }
 }

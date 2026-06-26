@@ -16,7 +16,11 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
 
-    const [rev, cli, booked, hours, exp, today, recentInv, recentBk, taskRows] = await Promise.all([
+    // Move finance_settings into the parallel batch — was sequential
+    // (an extra round-trip per dashboard load) for no reason. 10
+    // parallel reads with the same connection pool finish in roughly
+    // the time of the slowest single one.
+    const [rev, cli, booked, hours, exp, today, recentInv, recentBk, taskRows, fsRow] = await Promise.all([
       sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS v FROM invoices
            WHERE workspace_id = ${workspaceId} AND status = 'paid'
              AND paid_at >= date_trunc('month', NOW())`,
@@ -46,9 +50,9 @@ export default async function handler(req, res) {
            WHERE workspace_id = ${workspaceId}
            ORDER BY created_at DESC LIMIT 6`,
       listTasksWithProgress(workspaceId, 'false'),
+      sql`SELECT currency FROM finance_settings WHERE workspace_id = ${workspaceId}`,
     ]);
 
-    const fsRow = await sql`SELECT currency FROM finance_settings WHERE workspace_id = ${workspaceId}`;
     const currency = fsRow.rows[0]?.currency || 'USD';
 
     // Merge a small recent-activity feed (newest first).

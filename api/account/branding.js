@@ -12,6 +12,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { isValidAccent, invalidateBranding } from '../_lib/branding.js';
+import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -87,9 +88,13 @@ export default async function handler(req, res) {
       `;
       const { rows } = await sql.query(queryText, values);
       const row = rows[0] || {};
-      // Bust the hot-cache entry so the next email send picks up the
-      // change immediately instead of waiting for the 60s TTL.
+      // Bust the hot-cache entries so the next email send + the next
+      // /api/me read both pick up the change immediately instead of
+      // waiting for the TTL. ownsWorkspace returns biz_name + slug from
+      // calendar_settings, so a biz_name change here is observable on
+      // the workspace cache too.
       invalidateBranding(workspaceId);
+      invalidateOwnerWorkspace(user.id);
       return ok(res, {
         branding: {
           businessName:    row.biz_name || '',

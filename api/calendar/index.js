@@ -9,7 +9,9 @@ import { readBody } from '../_lib/body.js';
 import {
   ensureCalendarSettings, serializeSettings, serializeService, serializeBlock,
   serializeBooking, VALID_HANDLE, DISCOVER_CATEGORY_SET,
+  invalidateCalendarSettings,
 } from '../_lib/calendar.js';
+import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 
@@ -212,6 +214,12 @@ export default async function handler(req, res) {
       const { rows } = await sql.query(queryText, values);
       // For availability we casted via JSON.stringify; ensure jsonb column accepts it.
       // (Postgres parses string into jsonb implicitly via parameter type.)
+      // Bust the hot-caches so the next read (public booking page,
+      // /api/me, an outgoing email) picks up the change immediately.
+      // biz_name + slug live in calendar_settings but appear in
+      // ownsWorkspace's SELECT, so both keys need eviction.
+      invalidateCalendarSettings(workspaceId);
+      invalidateOwnerWorkspace(user.id);
       return ok(res, { settings: serializeSettings(rows[0]) });
     }
 

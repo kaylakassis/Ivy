@@ -18,7 +18,7 @@ import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
-import { shardFromReq, shardClause, withDeadline } from '../_lib/cronShard.js';
+import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 
 const REPEAT_AFTER_HOURS = 24 * 7;
 // Per-batch fetch. Each row = 1 email + push + 1 stamp UPDATE. 250
@@ -47,6 +47,7 @@ async function handler(req, res) {
     const shardFilter = shardClause({ shard, shards }, 'i.workspace_id');
 
     let scanned = 0, pinged = 0, batches = 0;
+    let emptied = false;
 
     await withDeadline(async (deadline) => {
       while (Date.now() < deadline) {
@@ -70,7 +71,7 @@ async function handler(req, res) {
            LIMIT ${BATCH_SIZE}`,
           [String(REPEAT_AFTER_HOURS)],
         );
-        if (rows.length === 0) break;
+        if (rows.length === 0) { emptied = true; break; }
         scanned += rows.length;
         batches += 1;
         for (const r of rows) {
@@ -131,7 +132,8 @@ async function handler(req, res) {
       }
     });
 
-    return ok(res, { ok: true, shard, shards, batches, scanned, pinged });
+    const terminatedBy = terminationReason({ emptied, hitCap: false });
+    return ok(res, { ok: true, shard, shards, batches, scanned, pinged, terminatedBy });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);
