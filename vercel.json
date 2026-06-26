@@ -60,9 +60,21 @@
       ]
     },
     {
-      "source": "/api/((?!site/|marketing-sitemap\\.xml).*)",
+      "source": "/api/((?!site/|marketing-sitemap\\.xml|calendar/public/|businesses/).*)",
       "headers": [
         { "key": "Cache-Control", "value": "no-store" }
+      ]
+    },
+    {
+      "source": "/api/calendar/public/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=30, stale-while-revalidate=120" }
+      ]
+    },
+    {
+      "source": "/api/businesses/(.*)",
+      "headers": [
+        { "key": "Cache-Control", "value": "public, s-maxage=60, stale-while-revalidate=300" }
       ]
     },
     {

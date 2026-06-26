@@ -2804,4 +2804,47 @@ ALTER TABLE services ADD COLUMN IF NOT EXISTS availability JSONB;
 ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_client_packages_stripe_session
   ON client_packages(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
+
+-- ─── pg_trgm GIN search indexes ──────────────────────────────────────
+-- /api/search runs LOWER(col) LIKE '%q%' against ~8 entity tables. At
+-- low scale these are sequential scans on a few thousand rows each —
+-- fast. At 1M+ users with 50M+ rows per table, sequential scans become
+-- multi-second queries that saturate DB CPU on every Cmd+K hit.
+--
+-- pg_trgm builds a trigram index that supports LIKE / ILIKE / %-prefix
+-- patterns natively via the gin_trgm_ops operator class. The planner
+-- picks it for any LIKE with at least 2 non-wildcard characters in the
+-- pattern, which covers every realistic search query.
+--
+-- We index the hot, small-text columns only (names, numbers,
+-- titles) — NOT the free-text columns (notes, last_message_preview,
+-- intake answers) which would cost significant disk for marginal
+-- benefit. The search still falls back to seq-scan on those, which is
+-- fine since they're usually narrowed by the GIN-indexed columns in
+-- the same OR clause.
+--
+-- Each CREATE INDEX IF NOT EXISTS ... USING gin (... gin_trgm_ops) is
+-- additive — running it twice is a no-op, no risk to existing data.
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX IF NOT EXISTS idx_clients_name_trgm
+  ON clients USING gin (LOWER(name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_clients_email_trgm
+  ON clients USING gin (LOWER(email) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_services_name_trgm
+  ON services USING gin (LOWER(name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_invoices_number_trgm
+  ON invoices USING gin (LOWER(number) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_invoices_client_name_trgm
+  ON invoices USING gin (LOWER(client_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_quotes_number_trgm
+  ON quotes USING gin (LOWER(number) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_quotes_client_name_trgm
+  ON quotes USING gin (LOWER(client_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_bookings_client_name_trgm
+  ON bookings USING gin (LOWER(client_name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_documents_name_trgm
+  ON documents USING gin (LOWER(name) gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_tasks_title_trgm
+  ON tasks USING gin (LOWER(title) gin_trgm_ops);
 `;

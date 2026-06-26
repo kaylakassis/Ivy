@@ -11,7 +11,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { isValidAccent } from '../_lib/branding.js';
+import { isValidAccent, invalidateBranding } from '../_lib/branding.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -87,6 +87,9 @@ export default async function handler(req, res) {
       `;
       const { rows } = await sql.query(queryText, values);
       const row = rows[0] || {};
+      // Bust the hot-cache entry so the next email send picks up the
+      // change immediately instead of waiting for the 60s TTL.
+      invalidateBranding(workspaceId);
       return ok(res, {
         branding: {
           businessName:    row.biz_name || '',
