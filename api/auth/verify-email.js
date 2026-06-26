@@ -11,6 +11,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { findValidToken, consumeToken, KIND_VERIFY } from '../_lib/tokens.js';
+import { invalidateUserCache } from '../_lib/auth.js';
 import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -55,6 +56,10 @@ export default async function handler(req, res) {
       UPDATE users SET email_verified_at = COALESCE(email_verified_at, NOW())
       WHERE id = ${valid.userId}
     `;
+    // Bust the cached row so the next authed request sees the verified
+    // state immediately — the user just clicked the link and expects
+    // the "verify your email" banner to be gone.
+    invalidateUserCache(valid.userId);
     await consumeToken(valid.tokenId);
 
     // Re-read so the response carries the freshly-set email_verified_at.

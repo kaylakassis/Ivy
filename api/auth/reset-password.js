@@ -1,7 +1,7 @@
 // POST /api/auth/reset-password  { token, password }
 // Verifies the reset token, sets a new password, signs the user in.
 import { sql } from '../_lib/db.js';
-import { hashPassword, signSession, setSessionCookie } from '../_lib/auth.js';
+import { hashPassword, signSession, setSessionCookie, invalidateUserCache } from '../_lib/auth.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -43,6 +43,12 @@ export default async function handler(req, res) {
         updated_at = NOW()
       WHERE id = ${valid.userId}
     `;
+
+    // Bust the cached user row so requireUser sees the new
+    // password_changed_at immediately — without this, any session
+    // running on a warm function instance that has the old row cached
+    // would survive for up to the cache TTL after the reset.
+    invalidateUserCache(valid.userId);
 
     // Burn this token, plus any other live reset tokens for the user.
     await consumeToken(valid.tokenId);

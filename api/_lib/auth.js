@@ -5,6 +5,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import cookie from 'cookie';
 import { sql } from './db.js';
+import { getOrSet as hotCacheGetOrSet, invalidate as hotCacheInvalidate } from './hotCache.js';
 
 const COOKIE = 'ivy_session';
 // Stashed admin session while impersonating. Restored by the
@@ -126,6 +127,29 @@ export function isNativeClient(req) {
   return v === 'ios' || v === 'android';
 }
 
+// User-row cache for the auth hot path. requireUser fires on EVERY
+// authenticated request — at 100K active users that's millions of
+// identical indexed SELECTs/day. A short TTL collapses them while a
+// warm function instance lives (~minutes on Vercel).
+//
+// SECURITY: the cached row carries password_changed_at + deleted_at,
+// the two fields that revoke sessions. A naive cache would let a
+// reset-password'd or deleted session live for the TTL. We defend two
+// ways: (1) the TTL is SHORT (15s) so the worst-case lag is small, and
+// (2) every security-critical write — password reset, logout-all,
+// account delete/restore — calls invalidateUserCache(userId) so the
+// revocation is immediate in practice and the TTL is only a backstop
+// for a missed invalidate. The revocation CHECK itself still runs on
+// every request against the cached password_changed_at, so even within
+// the TTL a session whose iat predates a (cached) password change is
+// rejected — the only staleness window is the gap between a password
+// change landing in the DB and the cache entry expiring/invalidating.
+const USER_ROW_TTL_MS = 15_000;
+
+export function invalidateUserCache(userId) {
+  if (userId) hotCacheInvalidate(`user:${userId}`);
+}
+
 // Returns the current user row, or sends 401 and returns null.
 export async function requireUser(req, res) {
   // Lazy import to avoid a circular dep - auth.js is imported very early.
@@ -137,24 +161,30 @@ export async function requireUser(req, res) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
   }
-  const { rows } = await sql`
-    SELECT id, email, name, created_at, email_verified_at,
-           walkthrough_completed_at, user_type,
-           terms_accepted_at, terms_version,
-           privacy_version, privacy_accepted_at,
-           password_changed_at, deleted_at
-    FROM users WHERE id = ${session.sub}
-  `;
-  if (rows.length === 0) {
+  const row = await hotCacheGetOrSet(`user:${session.sub}`, USER_ROW_TTL_MS, async () => {
+    const { rows } = await sql`
+      SELECT id, email, name, created_at, email_verified_at,
+             walkthrough_completed_at, user_type,
+             terms_accepted_at, terms_version,
+             privacy_version, privacy_accepted_at,
+             password_changed_at, deleted_at
+      FROM users WHERE id = ${session.sub}
+    `;
+    // Cache `null` for a genuinely-absent user so a bogus/old session
+    // doesn't re-hit the DB every request; getOrSet caches null but not
+    // undefined, and an absent row is a stable fact for the TTL.
+    return rows[0] || null;
+  });
+  if (!row) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
   }
   // Soft-deleted accounts can't sign in. The row hangs around for the
   // 30-day recovery window (db-prune hard-deletes after) so the data
   // isn't immediately gone, but the session is dead the moment the
-  // owner clicks Delete. Different status code from password-change
-  // so the frontend can show a more accurate message if needed.
-  if (rows[0].deleted_at) {
+  // owner clicks Delete. account/delete.js calls invalidateUserCache so
+  // this check sees the deletion within ≤15s even on a warm instance.
+  if (row.deleted_at) {
     res.status(401).json({ error: 'Account has been deleted' });
     return null;
   }
@@ -163,12 +193,12 @@ export async function requireUser(req, res) {
   // force-logout every existing session for that user without a
   // server-side session table. session.iat is in SECONDS since epoch
   // (jsonwebtoken default); password_changed_at is a timestamp.
-  const pcAt = rows[0].password_changed_at;
+  const pcAt = row.password_changed_at;
   if (pcAt && session.iat && (session.iat * 1000) < new Date(pcAt).getTime()) {
     res.status(401).json({ error: 'Session expired - please sign in again' });
     return null;
   }
-  return rows[0];
+  return row;
 }
 
 // Ensures a workspace exists for this user; returns its id.

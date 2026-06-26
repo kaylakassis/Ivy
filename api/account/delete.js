@@ -14,7 +14,8 @@
 //
 // After delete we clear the session cookie so the browser is signed out.
 import { sql } from '../_lib/db.js';
-import { requireUser, clearSessionCookie } from '../_lib/auth.js';
+import { requireUser, clearSessionCookie, invalidateUserCache } from '../_lib/auth.js';
+import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
@@ -112,6 +113,11 @@ export default async function handler(req, res) {
     `;
 
     clearSessionCookie(res);
+    // Kill the cached user row + workspace blob so any in-flight
+    // session on a warm function instance sees deleted_at immediately
+    // and gets 401'd, rather than living for up to the cache TTL.
+    invalidateUserCache(user.id);
+    invalidateOwnerWorkspace(user.id);
 
     // Confirmation email - bypasses prefs since the user opted in by
     // running the destructive action. Best-effort; deletion already

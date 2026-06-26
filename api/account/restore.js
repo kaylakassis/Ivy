@@ -19,7 +19,7 @@
 //
 // Public endpoint: no requireUser. The token is the proof.
 import { sql } from '../_lib/db.js';
-import { signSession, setSessionCookie, isNativeClient } from '../_lib/auth.js';
+import { signSession, setSessionCookie, isNativeClient, invalidateUserCache } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -108,6 +108,10 @@ export default async function handler(req, res) {
         updated_at = NOW()
       WHERE id = ${u.id}
     `;
+    // Drop the cached (deleted) user row so requireUser sees the
+    // restored, non-deleted state on the very next request rather than
+    // continuing to 401 for up to the cache TTL.
+    invalidateUserCache(u.id);
     await consumeToken(valid.tokenId);
     // Burn any other live recovery tokens for this user so a second copy
     // of the email (or a leaked one) can't be replayed.

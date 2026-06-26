@@ -31,7 +31,7 @@
 //   Hard-delete the user. Cascades through the FK chain (workspaces,
 //   clients, etc.) - see schema. Refuses to delete super-admins.
 import { sql } from '../../_lib/db.js';
-import { hashPassword } from '../../_lib/auth.js';
+import { hashPassword, invalidateUserCache } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { requireSuperAdmin, emailIsSuperAdmin, getAdminActor } from '../../_lib/admin.js';
@@ -207,6 +207,10 @@ async function patchUser(u, req, res) {
     }
   }
 
+  // Any of the above (role flip, name, password, etc.) mutates fields
+  // carried in the cached user row. Bust it so the change is live on
+  // the target user's next request rather than after the cache TTL.
+  invalidateUserCache(u.id);
   return ok(res, { ok: true });
 }
 
