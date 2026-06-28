@@ -22,11 +22,18 @@
 //     applies the schema on first request. We detect this as "zero
 //     statements applied" (a connectivity failure makes EVERY statement
 //     fail; the runner stops after one zero-progress pass).
-//   • A genuine broken-schema failure   → exit 1, which FAILS the build so
-//     a broken schema never ships. This is the case where SOME statements
-//     applied but one or more permanently fail (syntax/type/constraint
-//     error) — a real bug, distinguishable from a connectivity blip
-//     because partial progress was made.
+//   • A data-backfill (INSERT/UPDATE/DELETE) statement fails → warn +
+//     exit 0. These one-time data migrations are guarded + idempotent
+//     (e.g. `... WHERE onboarded_at IS NULL`) but can choke on a single
+//     malformed row in a populated database while passing on an empty one.
+//     They do NOT change the schema STRUCTURE (every table/column still
+//     exists), the app runs fine without the backfill, and the RUNTIME
+//     ensureSchemaApplied() already swallows the same failure (it catches
+//     and continues). So a data-statement failure must not block the
+//     deploy — matching the runtime's own tolerance.
+//   • A STRUCTURAL DDL statement fails (CREATE/ALTER/DROP/DO/INDEX) →
+//     exit 1, which FAILS the build so a broken schema never ships. This
+//     is a genuine bug: a table/column the app needs won't exist.
 //
 // Idempotent: safe to run on every deploy (every statement is IF NOT
 // EXISTS / idempotent UPSERT).
@@ -34,6 +41,11 @@
 // Manual run: `npm run migrate` (uses the same DATABASE_URL from env).
 
 import { runSchemaMigration } from '../api/_lib/ensureSchema.js';
+
+// A statement is "data" (vs "structural DDL") iff it's an INSERT/UPDATE/
+// DELETE. Only structural DDL failures are allowed to fail the build —
+// data backfills are non-fatal (see header).
+const isDataStatement = (s) => /^\s*(INSERT|UPDATE|DELETE)\b/i.test(s || '');
 
 if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
   console.warn('[migrate] DATABASE_URL not set — skipping deploy-step migration (frontend-only build).');
@@ -71,11 +83,34 @@ try {
     process.exit(0);
   }
 
-  // Partial progress + a permanently-failed statement = a real broken-schema
+  // Some statements applied, others permanently failed. Split them: a
+  // STRUCTURAL DDL failure (a table/column the app needs won't exist) must
+  // fail the build; a DATA-backfill (INSERT/UPDATE/DELETE) failure must NOT
+  // — it can choke on one malformed row in a populated DB, doesn't change
+  // the schema structure, and the runtime ensureSchemaApplied() tolerates
+  // the same failure (catches + continues).
+  const failures = Array.isArray(err.failures) ? err.failures : [];
+  const structural = failures.filter((f) => !isDataStatement(f.stmt || f.preview));
+  const dataOnly = failures.filter((f) => isDataStatement(f.stmt || f.preview));
+
+  if (structural.length === 0 && failures.length > 0) {
+    // Only data-backfill statements failed → schema structure is intact.
+    console.warn(
+      `[migrate] ${dataOnly.length} data-backfill statement(s) failed against the `
+      + 'live database, but the schema STRUCTURE is fully applied — not failing the '
+      + 'deploy (these one-time backfills are idempotent + retried at runtime). '
+      + 'Failed backfills:',
+    );
+    for (const f of dataOnly) {
+      console.warn(`  - stmt #${f.origIndex + 1}: ${f.message} | ${f.preview}`);
+    }
+    process.exit(0);
+  }
+
+  // A structural DDL statement permanently failed = a real broken-schema
   // bug. Fail the build so a broken schema never ships.
   console.error(`[migrate] FAILED — broken schema, failing the build (${appliedCount} statement(s) applied before the failure):`, err.message);
-  const failures = Array.isArray(err.failures) ? err.failures : [];
-  for (const f of failures) {
+  for (const f of structural) {
     console.error(`  - stmt #${f.origIndex + 1}: ${f.message} | ${f.preview}`);
   }
   process.exit(1);
