@@ -107,11 +107,30 @@ try {
     process.exit(0);
   }
 
-  // A structural DDL statement permanently failed = a real broken-schema
-  // bug. Fail the build so a broken schema never ships.
-  console.error(`[migrate] FAILED — broken schema, failing the build (${appliedCount} statement(s) applied before the failure):`, err.message);
+  // A structural DDL statement permanently failed. This is the only case
+  // that can indicate a genuinely broken schema (a table/column the app
+  // needs won't exist) — BUT it can also be a data-dependent DDL statement
+  // (a UNIQUE INDEX / CHECK constraint / SET NOT NULL) that an EXISTING
+  // row in a populated database violates, which a clean DB never hits.
+  //
+  // Gate by environment:
+  //   • PRODUCTION → exit 1. A broken schema must never ship to prod; the
+  //     operator investigates the logged statement.
+  //   • PREVIEW / branch / dev → warn + exit 0. A preview deploy must not
+  //     be blocked by the state of whatever database the build env points
+  //     at; the runtime ensureSchemaApplied() applies the schema (and
+  //     tolerates the same failure). The failing statement is logged loudly
+  //     so it's never silent.
+  const isProduction = process.env.VERCEL_ENV === 'production';
+  const label = isProduction ? 'FAILED' : 'WARNING';
+  console[isProduction ? 'error' : 'warn'](
+    `[migrate] ${label} — ${structural.length} structural statement(s) failed `
+    + `(${appliedCount} applied before the failure)`
+    + (isProduction ? ' — failing the production build:' : ' — NOT failing this non-production deploy (runtime will apply the schema):'),
+    err.message,
+  );
   for (const f of structural) {
-    console.error(`  - stmt #${f.origIndex + 1}: ${f.message} | ${f.preview}`);
+    console[isProduction ? 'error' : 'warn'](`  - stmt #${f.origIndex + 1}: ${f.message} | ${f.preview}`);
   }
-  process.exit(1);
+  process.exit(isProduction ? 1 : 0);
 }
