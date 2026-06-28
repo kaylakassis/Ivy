@@ -279,13 +279,19 @@ async function runFullLocked() {
     }
     // eslint-disable-next-line no-console
     console.log(`[bootstrap] pass ${pass}: ${pending.length - failures.length}/${pending.length} succeeded, ${failures.length} pending`);
+    // Record this pass's failures BEFORE the zero-progress break so the
+    // thrown error always carries them — otherwise a total failure (every
+    // statement throwing, e.g. the DB is unreachable) would surface with
+    // an EMPTY err.failures, hiding the cause.
+    lastFailures = failures;
     if (failures.length === pending.length) {
-      // Zero progress on this pass — the remaining statements are
-      // permanently broken, not just out of order. Stop and report.
+      // Zero progress on this pass — the remaining statements either are
+      // permanently broken (a real schema bug) OR the database is
+      // unreachable (every statement throws a connection error). The
+      // caller distinguishes the two via err.appliedCount.
       break;
     }
     pending = failures.map((f) => ({ stmt: f.stmt, origIndex: f.origIndex }));
-    lastFailures = failures;
   }
 
   if (pending.length > 0) {
@@ -296,6 +302,10 @@ async function runFullLocked() {
     }
     const err = new Error(`schema bootstrap left ${pending.length} permanently-failed statement(s) after ${pass} passes`);
     err.failures = lastFailures;
+    err.totalCount = allStatements.length;
+    // How many statements EVER applied across all passes. Zero means the
+    // database was never usable (connectivity/auth) — NOT a broken schema.
+    err.appliedCount = allStatements.length - pending.length;
     throw err;
   }
 
