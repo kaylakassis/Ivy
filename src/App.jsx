@@ -77,6 +77,7 @@ const BlogPostPage    = lazy(() => import('./features/marketing/BlogPostPage.jsx
 const SecurityPage    = lazy(() => import('./features/marketing/SecurityPage.jsx'));
 const MobilePage      = lazy(() => import('./features/marketing/MobilePage.jsx'));
 const IntegrationsPage = lazy(() => import('./features/marketing/IntegrationsPage.jsx'));
+const WaitlistPage    = lazy(() => import('./features/auth/WaitlistPage.jsx'));
 
 // Centered, low-key spinner. Avoids blank-flash but doesn't fight the
 // destination page's own loader for visual real estate. Lives inside
@@ -180,6 +181,11 @@ export default function App() {
             secondary flows (forgot/reset/verify) load lazily. */}
         <Route path="/signin"          element={<EarlyAccessGate><AuthPage mode="signin" /></EarlyAccessGate>} />
         <Route path="/signup"          element={<EarlyAccessGate><AuthPage mode="signup" /></EarlyAccessGate>} />
+        {/* Directly-linkable waitlist landing (for marketing/social). "/"
+            also renders this for logged-out visitors when launch mode is
+            'waitlist' (see RootRouter), which passes the real beta-password
+            availability. The direct link shows join only. */}
+        <Route path="/waitlist"        element={<WaitlistPage />} />
         <Route path="/forgot-password" element={<ForgotPasswordPage />} />
         <Route path="/reset-password"  element={<ResetPasswordPage />} />
         <Route path="/verify-email"    element={<VerifyEmailPage />} />
