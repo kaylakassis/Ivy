@@ -55,12 +55,10 @@ export default async function handler(req, res) {
   // cookie). Beta testers + select users sail through to normal signup +
   // onboarding; everyone else is steered to the waitlist landing page.
   if (await getLaunchMode() === 'waitlist' && !(await hasBypassCookie(req))) {
-    res.statusCode = 403;
-    res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify({
+    res.status(403).json({
       error: 'Signups open at launch — join the waitlist to get notified.',
       code:  'waitlist_only',
-    }));
+    });
     return;
   }
   try {
