@@ -12,7 +12,7 @@ import { api } from '../../lib/api.js';
 import AuthShell from './AuthShell.jsx';
 import WaitlistPage from './WaitlistPage.jsx';
 
-export default function EarlyAccessGate({ children }) {
+export default function EarlyAccessGate({ children, mode }) {
   // null while we're checking; objects after.
   const [status, setStatus] = useState(null);
   const [password, setPassword] = useState('');
@@ -33,10 +33,13 @@ export default function EarlyAccessGate({ children }) {
     return null;
   }
 
-  // Controlled launch: in waitlist mode, a visitor who hasn't entered the
-  // beta bypass sees the waitlist landing page instead of signup/signin.
-  // The page itself hosts the "beta access code" field (when configured).
-  if (status.launchMode === 'waitlist' && !status.bypassed) {
+  // Controlled launch: in waitlist mode, a NEW-SIGNUP visitor who hasn't
+  // entered the beta bypass sees the waitlist landing page. But /signin
+  // (mode==='signin') is NEVER waitlisted — existing users and the operator
+  // must always be able to log in, otherwise logging out would lock you out
+  // of your own app behind the waitlist. The waitlist only holds back new
+  // sign-ups (and signup.js blocks account creation server-side anyway).
+  if (mode !== 'signin' && status.launchMode === 'waitlist' && !status.bypassed) {
     return <WaitlistPage hasBetaPassword={!!status.hasBetaPassword} />;
   }
 

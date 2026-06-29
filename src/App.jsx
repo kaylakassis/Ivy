@@ -202,7 +202,7 @@ export default function App() {
 
         {/* Auth - primary entry pages are eager (first paint); the
             secondary flows (forgot/reset/verify) load lazily. */}
-        <Route path="/signin"          element={<EarlyAccessGate><AuthPage mode="signin" /></EarlyAccessGate>} />
+        <Route path="/signin"          element={<EarlyAccessGate mode="signin"><AuthPage mode="signin" /></EarlyAccessGate>} />
         <Route path="/signup"          element={<EarlyAccessGate><AuthPage mode="signup" /></EarlyAccessGate>} />
         {/* Directly-linkable waitlist landing (for marketing/social). "/"
             also renders this for logged-out visitors when launch mode is
