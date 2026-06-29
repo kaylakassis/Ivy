@@ -10,7 +10,7 @@ import { hashPassword, signSession, setSessionCookie, validEmail } from '../_lib
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { requireGate } from '../_lib/earlyAccess.js';
+import { requireGate, getLaunchMode, hasBypassCookie } from '../_lib/earlyAccess.js';
 import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { renderWelcome } from '../_lib/welcome-content.js';
@@ -49,6 +49,19 @@ export default async function handler(req, res) {
   // Temporary early-access gate: blocks new signups when the operator
   // has turned it on in /admin → Settings.
   if (!(await requireGate(req, res))) return;
+  // Controlled launch: in waitlist mode, signup is blocked unless the
+  // visitor entered the beta-bypass password (which sets the ea_pass
+  // cookie). Beta testers + select users sail through to normal signup +
+  // onboarding; everyone else is steered to the waitlist landing page.
+  if (await getLaunchMode() === 'waitlist' && !(await hasBypassCookie(req))) {
+    res.statusCode = 403;
+    res.setHeader('Content-Type', 'application/json; charset=utf-8');
+    res.end(JSON.stringify({
+      error: 'Signups open at launch — join the waitlist to get notified.',
+      code:  'waitlist_only',
+    }));
+    return;
+  }
   try {
     // Critical: this endpoint has no requireUser() to trigger the
     // schema bootstrap, but it INSERTs into 4 tables (users,
@@ -142,6 +155,25 @@ export default async function handler(req, res) {
 
       if (role === 'owner') {
         await sql`INSERT INTO workspaces (owner_id) VALUES (${user.id})`;
+        // Waitlist discount: if this owner's email is on the pre-launch
+        // waitlist, stamp the workspace eligible for the shared 20%/12mo
+        // coupon (applied later at checkout). This server-side email
+        // match IS the exclusivity — the discount can't be granted via a
+        // shareable code. Best-effort: never break signup over it.
+        try {
+          const wl = await sql`SELECT 1 FROM waitlist_signups WHERE LOWER(email) = ${emailKey} LIMIT 1`;
+          if (wl.rows.length > 0) {
+            await sql`UPDATE workspaces SET waitlist_discount_at = NOW() WHERE owner_id = ${user.id}`;
+            await sql`
+              UPDATE waitlist_signups
+                 SET status = 'converted', converted_user_id = ${user.id}, converted_at = NOW()
+               WHERE LOWER(email) = ${emailKey}
+            `;
+          }
+        } catch (wlErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[signup] waitlist discount stamp failed:', wlErr.message);
+        }
       } else {
         // Client signup: claim every existing `clients` row that already
         // matches this email so they immediately see their data when they

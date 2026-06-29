@@ -11,6 +11,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { createSubscriptionCheckoutSession, platformStripeSecret } from '../_lib/stripe.js';
+import { getWaitlistCouponId } from '../_lib/waitlistCoupon.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -29,13 +30,19 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     const { rows } = await sql`
-      SELECT stripe_customer_id, subscription_status
+      SELECT stripe_customer_id, subscription_status, waitlist_discount_at
       FROM workspaces WHERE id = ${workspaceId}
     `;
     const w = rows[0];
     if (w?.subscription_status === 'active') {
       return badRequest(res, 'You already have an active subscription. Open the billing portal to manage it.');
     }
+
+    // Waitlist launch discount (20% off, 12 months): pre-applied when this
+    // workspace was stamped eligible at signup (its email matched the
+    // waitlist). The coupon is minted once + cached, and is never exposed
+    // as a typed code — the server-side email match is the exclusivity.
+    const couponId = w?.waitlist_discount_at ? await getWaitlistCouponId() : null;
 
     const base = appUrl();
     const session = await createSubscriptionCheckoutSession({
@@ -45,6 +52,7 @@ export default async function handler(req, res) {
       workspaceId,
       successUrl: `${base}/?subscribed=1&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl:  `${base}/?subscribed=cancelled`,
+      couponId,
     });
 
     return ok(res, { url: session.url });

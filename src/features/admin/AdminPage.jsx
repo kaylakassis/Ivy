@@ -25,6 +25,7 @@ const TABS = [
   { id: 'bugs',       label: 'Bug reports', icon: 'Spark' },
   { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
+  { id: 'waitlist',   label: 'Waitlist',   icon: 'Mail' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
   { id: 'export',     label: 'Export',     icon: 'Doc' },
   { id: 'settings',   label: 'Settings',   icon: 'Settings' },
@@ -119,6 +120,7 @@ export default function AdminPage() {
       {tab === 'bugs'       && <BugsTab/>}
       {tab === 'appeals'    && <AppealsTab/>}
       {tab === 'blast'      && <BlastTab/>}
+      {tab === 'waitlist'   && <WaitlistTab/>}
       {tab === 'audit'      && <AuditTab/>}
       {tab === 'export'     && <ExportTab/>}
       {tab === 'settings'   && <SettingsTab/>}
@@ -1921,7 +1923,203 @@ function SettingsTab() {
         {err && <ErrCard msg={err}/>}
       </div>
 
+      <LaunchControlCard/>
       <PushTestCard/>
+    </div>
+  );
+}
+
+// Controlled-launch switch. 'waitlist' = pre-launch (public sees the
+// waitlist landing page, signup blocked except beta-bypass); 'open' =
+// launched. The beta-bypass password is the early-access password set
+// in the card above. Flipping to 'open' lazily mints the shared coupon.
+function LaunchControlCard() {
+  const [state, setState] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState(null);
+  const [err, setErr] = useState(null);
+
+  const load = async () => {
+    try { setState(await api.get('/admin/launch')); }
+    catch (e) { setErr(e.message || 'Load failed'); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const flip = async (launchMode) => {
+    setBusy(true); setErr(null); setMsg(null);
+    try {
+      const r = await api.patch('/admin/launch', { launchMode });
+      setState(r);
+      setMsg(launchMode === 'waitlist' ? 'Pre-launch waitlist is live' : "You're launched 🎉");
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e) {
+      setErr(e.message || 'Save failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  if (!state) return <div className="card" style={{ padding: 20, fontSize: 13, color: 'var(--muted)' }}>Loading launch settings…</div>;
+
+  const isWaitlist = state.launchMode === 'waitlist';
+  return (
+    <div className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div>
+        <h3 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>App launch</h3>
+        <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, maxWidth: 600 }}>
+          In <b>waitlist</b> mode, the public site shows the waitlist landing page and
+          signups are blocked — except beta testers who enter the early-access password above.
+          Flip to <b>launched</b> to open signups; anyone who signs up with a waitlisted email
+          automatically gets 20% off for 12 months.
+        </p>
+      </div>
+
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 14, padding: '12px 14px', borderRadius: 10,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+      }}>
+        <div style={{ flex: 1 }}>
+          <div style={{ fontSize: 14, fontWeight: 500 }}>
+            {isWaitlist ? 'Pre-launch (waitlist mode)' : 'Launched (open signups)'}
+          </div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+            {state.waitlistCount} on the waitlist · discount coupon {state.couponReady ? 'ready' : 'not yet created'}
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => flip(isWaitlist ? 'open' : 'waitlist')}
+          disabled={busy}
+          className={`btn ${isWaitlist ? 'btn-primary' : 'btn-outline'}`}
+        >
+          {isWaitlist ? 'Launch now' : 'Switch to waitlist'}
+        </button>
+      </div>
+
+      {msg && <div style={{ fontSize: 12, color: 'var(--ok)' }}>✓ {msg}</div>}
+      {err && <ErrCard msg={err}/>}
+    </div>
+  );
+}
+
+// ---------- Waitlist tab ----------
+// Lists waitlist signups (paginated + searchable), exports CSV, and
+// sends the launch announcement to everyone not yet notified.
+function WaitlistTab() {
+  const [data, setData] = useState(null);
+  const [page, setPage] = useState(1);
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState('');
+  const [err, setErr] = useState(null);
+  const [announceBusy, setAnnounceBusy] = useState(false);
+  const [announceMsg, setAnnounceMsg] = useState(null);
+
+  const load = async () => {
+    setErr(null);
+    try {
+      const params = new URLSearchParams({ page: String(page) });
+      if (q) params.set('q', q);
+      if (status) params.set('status', status);
+      setData(await api.get(`/admin/waitlist?${params.toString()}`));
+    } catch (e) {
+      setErr(e.message || 'Load failed');
+    }
+  };
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [page, status]);
+
+  const announce = async (dryRun) => {
+    setAnnounceBusy(true); setAnnounceMsg(null); setErr(null);
+    try {
+      const r = await api.post('/admin/waitlist-announce', { dryRun });
+      if (dryRun) {
+        setAnnounceMsg(`${r.recipients} people would be emailed.`);
+      } else {
+        setAnnounceMsg(`Sent ${r.sent}/${r.recipients} announcements${r.failed ? ` (${r.failed} failed)` : ''}.`);
+        load();
+      }
+    } catch (e) {
+      setErr(e.message || 'Announce failed');
+    } finally {
+      setAnnounceBusy(false);
+    }
+  };
+
+  const totalPages = data ? Math.max(1, Math.ceil(data.total / data.pageSize)) : 1;
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>
+            Waitlist {data ? `· ${data.total}` : ''}
+          </h3>
+          <a className="btn btn-outline" href="/api/admin/waitlist?format=csv" style={{ fontSize: 13 }}>Export CSV</a>
+          <button className="btn btn-outline" disabled={announceBusy} onClick={() => announce(true)} style={{ fontSize: 13 }}>
+            Preview announcement
+          </button>
+          <button className="btn btn-primary" disabled={announceBusy} onClick={() => announce(false)} style={{ fontSize: 13 }}>
+            {announceBusy ? 'Sending…' : 'Send launch announcement'}
+          </button>
+        </div>
+        {announceMsg && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>✓ {announceMsg}</div>}
+
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <form onSubmit={(e) => { e.preventDefault(); setPage(1); load(); }} style={{ flex: '1 1 220px', display: 'flex', gap: 6 }}>
+            <input className="input" value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search email or name" style={{ flex: 1, padding: '8px 11px', fontSize: 13 }} />
+            <button type="submit" className="btn" style={{ fontSize: 13 }}>Search</button>
+          </form>
+          <select className="input" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} style={{ padding: '8px 11px', fontSize: 13 }}>
+            <option value="">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="notified">Notified</option>
+            <option value="converted">Converted</option>
+          </select>
+        </div>
+      </div>
+
+      {err && <ErrCard msg={err}/>}
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {!data ? (
+          <div style={{ padding: 18, fontSize: 13, color: 'var(--muted)' }}>Loading…</div>
+        ) : data.items.length === 0 ? (
+          <EmptyNote icon="Mail" title="No waitlist signups yet" />
+        ) : (
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <thead>
+              <tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                <th style={{ padding: '10px 14px' }}>Email</th>
+                <th style={{ padding: '10px 14px' }}>Name</th>
+                <th style={{ padding: '10px 14px' }}>Status</th>
+                <th style={{ padding: '10px 14px' }}>Joined</th>
+              </tr>
+            </thead>
+            <tbody>
+              {data.items.map((r) => (
+                <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td style={{ padding: '10px 14px' }}>{r.email}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--muted)' }}>{r.name || '—'}</td>
+                  <td style={{ padding: '10px 14px' }}>
+                    <span style={{
+                      fontSize: 11.5, padding: '2px 8px', borderRadius: 999,
+                      background: 'var(--surface-2)', color: 'var(--fg-2)',
+                    }}>{r.status}</span>
+                  </td>
+                  <td style={{ padding: '10px 14px', color: 'var(--muted)' }}>{new Date(r.createdAt).toLocaleDateString()}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {data && totalPages > 1 && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 12, fontSize: 13 }}>
+          <button className="btn btn-outline" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Prev</button>
+          <span style={{ color: 'var(--muted)' }}>Page {page} / {totalPages}</span>
+          <button className="btn btn-outline" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</button>
+        </div>
+      )}
     </div>
   );
 }

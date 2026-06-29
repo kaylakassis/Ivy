@@ -11,10 +11,14 @@ import { Navigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
 import MarketingHome from './MarketingHome.jsx';
+import WaitlistPage from '../auth/WaitlistPage.jsx';
 
 export default function RootRouter() {
   const { user, loading: authLoading } = useAuth();
   const [decision, setDecision] = useState(null); // 'business' | 'client' | null
+  // Launch state for logged-out visitors: null while loading, then the
+  // /early-access/status payload. Only matters when logged out.
+  const [launch, setLaunch] = useState(null);
 
   useEffect(() => {
     if (!user) { setDecision(null); return; }
@@ -32,8 +36,33 @@ export default function RootRouter() {
     return () => { live = false; };
   }, [user]);
 
-  // Logged-out → marketing.
-  if (!authLoading && !user) return <MarketingHome/>;
+  // Logged-out visitors: check the controlled-launch switch so "/" shows
+  // the waitlist page pre-launch instead of the marketing home.
+  useEffect(() => {
+    if (user) return;
+    let live = true;
+    api.get('/early-access/status')
+      .then((r) => { if (live) setLaunch(r); })
+      .catch(() => { if (live) setLaunch({ launchMode: 'open', bypassed: true }); });
+    return () => { live = false; };
+  }, [user]);
+
+  // Logged-out → waitlist (pre-launch) or marketing (launched). Wait for
+  // the launch check so we don't flash the marketing home first.
+  if (!authLoading && !user) {
+    if (launch === null) {
+      return (
+        <div style={{
+          minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          color: 'var(--muted)', fontSize: 13, background: 'var(--page)',
+        }}>Loading…</div>
+      );
+    }
+    if (launch.launchMode === 'waitlist' && !launch.bypassed) {
+      return <WaitlistPage hasBetaPassword={!!launch.hasBetaPassword} />;
+    }
+    return <MarketingHome/>;
+  }
 
   // Initial /api/me still pending → keep the marketing chrome until we know,
   // because flashing a sign-in screen first would feel like a redirect bug.
