@@ -22,7 +22,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 
-export default function WaitlistPage({ hasBetaPassword = false }) {
+export default function WaitlistPage() {
   const [tweaks] = useTweaks();
   const [email, setEmail] = useState('');
   const [hp, setHp] = useState(''); // honeypot - real users never fill this
@@ -150,8 +150,10 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
             )}
             {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
 
-            {/* Beta access bypass (only shown when a password is configured). */}
-            {hasBetaPassword && !joined && (
+            {/* Beta access bypass. Always shown on the waitlist screen so the
+                affordance is never missing; if no password is configured yet
+                the server returns a clear "no beta access set" message. */}
+            {!joined && (
               <div style={{ marginTop: 22 }}>
                 {!showBeta ? (
                   <button
