@@ -35,7 +35,7 @@ export async function myClientIds(user) {
       await sql`
         UPDATE clients
         SET user_id = ${user.id}
-        WHERE email = ${user.email.toLowerCase()}
+        WHERE LOWER(email) = ${user.email.toLowerCase()}
           AND (user_id IS NULL OR user_id <> ${user.id})
       `;
     }

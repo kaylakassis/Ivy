@@ -675,6 +675,12 @@ CREATE INDEX IF NOT EXISTS idx_clients_workspace_stage ON clients(workspace_id, 
 CREATE INDEX IF NOT EXISTS idx_clients_workspace_email
   ON clients(workspace_id, lower(email))
   WHERE email IS NOT NULL;
+-- Cross-workspace email match for the portal claim in api/_lib/clientPortal.js
+-- (myClientIds): it links a signed-in user to ALL their clients rows by
+-- LOWER(email) with no workspace_id filter, so the composite index above
+-- can't serve it. Without this standalone functional index that UPDATE
+-- seq-scans the entire clients table on every /api/me for verified users.
+CREATE INDEX IF NOT EXISTS idx_clients_email_lower ON clients(LOWER(email)) WHERE email IS NOT NULL;
 ALTER TABLE clients ADD COLUMN IF NOT EXISTS referred_by_client_id UUID REFERENCES clients(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_clients_referred_by ON clients(referred_by_client_id);
 -- Phone + per-client SMS consent. sms_consent_at NULL means "not opted in"
@@ -2870,7 +2876,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_client_packages_stripe_session
 --
 -- Each CREATE INDEX IF NOT EXISTS ... USING gin (... gin_trgm_ops) is
 -- additive — running it twice is a no-op, no risk to existing data.
-CREATE EXTENSION IF NOT EXISTS pg_trgm;
+-- (pg_trgm is already enabled higher up; a second CREATE EXTENSION here
+-- would be a byte-identical statement, which collides in the migration
+-- ledger's batched ON CONFLICT upsert — so it's intentionally omitted.)
 
 CREATE INDEX IF NOT EXISTS idx_clients_name_trgm
   ON clients USING gin (LOWER(name) gin_trgm_ops);
