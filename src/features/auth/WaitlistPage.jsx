@@ -1,19 +1,29 @@
-// Pre-launch waitlist landing page. Shown at "/", "/signin", "/signup"
-// when launch_mode === 'waitlist' (and the visitor hasn't entered the
-// beta bypass). Split-hero: brand + headline + tagline + inline email
+// Pre-launch waitlist screen. Shown by EarlyAccessGate on "/signin" and
+// "/signup" (and the public "/waitlist" route) when launch_mode ===
+// 'waitlist' and the visitor hasn't entered the beta bypass. The marketing
+// home stays public; this only appears when a visitor clicks "Start free
+// trial" / "Sign up". Split-hero: brand + headline + tagline + inline email
 // capture on the left, a product visual on the right.
+//
+// Themed like the rest of the app: it self-wraps in `app-root dir-${dir}`
+// so the design tokens (--accent, --page, --surface, --fg, --font-display…)
+// resolve and the shared .btn/.input/.card primitives render correctly —
+// without this wrapper the tokens are undefined and the page renders
+// unstyled (no button fill, borderless input).
 //
 // Two actions:
 //   • Join the waitlist  → POST /api/waitlist/join (honeypot + rate-limited)
 //   • Beta access code    → POST /api/waitlist/verify; on success the
-//     ea_pass cookie is set and we reload, dropping the visitor into the
-//     normal signup/app flow (onboarding etc. unchanged).
+//     ea_pass cookie is set and we go to /signup, dropping the visitor into
+//     the normal signup/app flow (onboarding etc. unchanged).
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { useTweaks } from '../../lib/tweaks.js';
 
 export default function WaitlistPage({ hasBetaPassword = false }) {
+  const [tweaks] = useTweaks();
   const [email, setEmail] = useState('');
   const [hp, setHp] = useState(''); // honeypot - real users never fill this
   const [busy, setBusy] = useState(false);
@@ -50,8 +60,8 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
     setBetaBusy(true);
     try {
       const r = await api.post('/waitlist/verify', { password: betaPw });
-      // Cookie is set server-side; reload so the gate/router re-checks
-      // status, sees `bypassed: true`, and renders the normal app.
+      // Cookie is set server-side; go to /signup so the gate re-checks
+      // status, sees `bypassed: true`, and renders the normal signup flow.
       if (r.unlocked) window.location.assign('/signup');
     } catch (e2) {
       setBetaErr(e2.message || 'Wrong code');
@@ -60,7 +70,7 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
   };
 
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--page)', color: 'var(--ink)' }}>
+    <div className={`app-root dir-${tweaks.direction}`} style={{ minHeight: '100vh', background: 'var(--page)', color: 'var(--fg)' }}>
       <div style={{
         maxWidth: 1180, margin: '0 auto', padding: '28px clamp(20px, 5vw, 64px)',
         display: 'flex', flexDirection: 'column', minHeight: '100vh',
@@ -68,13 +78,13 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
         {/* Brand */}
         <Link to="/" style={{ display: 'inline-flex', alignItems: 'center', gap: 10, textDecoration: 'none', color: 'inherit' }}>
           <div style={{
-            width: 34, height: 34, borderRadius: 9,
-            background: 'var(--accent)', color: 'var(--accent-ink, #fff)',
+            width: 34, height: 34, borderRadius: 'var(--radius-sm, 9px)',
+            background: 'var(--accent)', color: 'var(--accent-ink)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
           }}>
             <Icons.Logo size={21} color="currentColor"/>
           </div>
-          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 20, letterSpacing: '-0.015em' }}>
+          <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, letterSpacing: '-0.015em' }}>
             THRYVE
           </span>
         </Link>
@@ -95,7 +105,7 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
               Private beta · launching soon
             </span>
 
-            <h1 style={{
+            <h1 className="page-title" style={{
               fontFamily: 'var(--font-display)', fontSize: 'clamp(38px, 6vw, 60px)',
               lineHeight: 1.04, letterSpacing: '-0.02em', margin: '0 0 20px', fontWeight: 600,
             }}>
@@ -104,14 +114,14 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
 
             <p style={{ margin: '0 0 28px', color: 'var(--muted)', fontSize: 17, lineHeight: 1.55 }}>
               Booking, payments, clients, and an AI copilot — in one place.
-              Join the waitlist and lock in <b style={{ color: 'var(--ink)' }}>20% off your first 12 months</b> 👀
+              Join the waitlist and lock in <b style={{ color: 'var(--fg)' }}>20% off your first 12 months</b> 👀
             </p>
 
             {joined ? (
               <div style={{
                 display: 'flex', alignItems: 'center', gap: 10,
                 background: 'var(--accent-soft)', color: 'var(--accent)',
-                padding: '16px 18px', borderRadius: 12, fontSize: 15, fontWeight: 500,
+                padding: '16px 18px', borderRadius: 'var(--radius, 12px)', fontSize: 15, fontWeight: 500,
               }}>
                 <Icons.Check size={18} sw={2}/>
                 You're on the list — we'll email you the moment we launch 🎉
@@ -161,7 +171,7 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
                       className="input"
                       style={{ flex: '1 1 200px', padding: '11px 13px', fontSize: 14 }}
                     />
-                    <button type="submit" className="btn" disabled={betaBusy} style={{ padding: '11px 16px', fontSize: 14 }}>
+                    <button type="submit" className="btn btn-outline" disabled={betaBusy} style={{ padding: '11px 16px', fontSize: 14 }}>
                       {betaBusy ? 'Checking…' : 'Enter'}
                     </button>
                     {betaErr && <div style={{ color: 'var(--danger)', fontSize: 12.5, flexBasis: '100%' }}>{betaErr}</div>}
@@ -174,23 +184,23 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
           {/* Right: product visual (CSS mock so it needs no image asset). */}
           <div aria-hidden="true" style={{ display: 'flex', justifyContent: 'center' }}>
             <div style={{
-              width: '100%', maxWidth: 420, aspectRatio: '4 / 5', borderRadius: 22,
-              background: 'linear-gradient(160deg, var(--accent-soft), var(--card, #fff))',
-              border: '1px solid var(--border, rgba(0,0,0,0.06))',
-              boxShadow: '0 24px 60px -28px rgba(46,49,104,0.45)',
+              width: '100%', maxWidth: 420, aspectRatio: '4 / 5', borderRadius: 'var(--radius-lg, 22px)',
+              background: 'linear-gradient(160deg, var(--accent-soft), var(--surface))',
+              border: '1px solid var(--border)',
+              boxShadow: 'var(--shadow)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               padding: 28,
             }}>
-              <div style={{
-                width: '100%', borderRadius: 14, background: 'var(--card, #fff)',
-                border: '1px solid var(--border, rgba(0,0,0,0.06))', overflow: 'hidden',
-                boxShadow: '0 10px 30px -18px rgba(0,0,0,0.3)',
+              <div className="card" style={{
+                width: '100%', borderRadius: 'var(--radius, 14px)', background: 'var(--surface)',
+                border: '1px solid var(--border)', overflow: 'hidden', padding: 0,
+                boxShadow: 'var(--shadow-sm)',
               }}>
                 <div style={{
                   display: 'flex', alignItems: 'center', gap: 8, padding: '11px 14px',
-                  borderBottom: '1px solid var(--border, rgba(0,0,0,0.06))',
+                  borderBottom: '1px solid var(--border)',
                 }}>
-                  <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--accent)', color: 'var(--accent-ink, #fff)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 26, height: 26, borderRadius: 7, background: 'var(--accent)', color: 'var(--accent-ink)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <Icons.Spark size={14} sw={2}/>
                   </div>
                   <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 14 }}>Ivy</span>
@@ -204,11 +214,11 @@ export default function WaitlistPage({ hasBetaPassword = false }) {
                 ].map((row, i) => {
                   const Ico = Icons[row.c] || Icons.Check;
                   return (
-                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderTop: i ? '1px solid var(--border, rgba(0,0,0,0.05))' : 'none' }}>
+                    <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 11, padding: '12px 14px', borderTop: i ? '1px solid var(--border)' : 'none' }}>
                       <div style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                         <Ico size={15} sw={1.8}/>
                       </div>
-                      <span style={{ fontSize: 13, color: 'var(--ink)' }}>{row.t}</span>
+                      <span style={{ fontSize: 13, color: 'var(--fg)' }}>{row.t}</span>
                     </div>
                   );
                 })}
