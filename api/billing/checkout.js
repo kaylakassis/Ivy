@@ -12,6 +12,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { readBody } from '../_lib/body.js';
 import { createSubscriptionCheckoutSession, platformStripeSecret } from '../_lib/stripe.js';
+import { getWaitlistCouponId } from '../_lib/waitlistCoupon.js';
 import { TRIAL_DAYS } from '../_lib/billing.js';
 import { appUrl } from '../_lib/tokens.js';
 import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
@@ -78,7 +79,7 @@ export default async function handler(req, res) {
 
     const { rows } = await sql`
       SELECT stripe_customer_id, subscription_status,
-             winback_coupon_id, winback_expires_at,
+             winback_coupon_id, winback_expires_at, waitlist_discount_at,
              trial_started_at, trial_ends_at, converted_at
         FROM workspaces WHERE id = ${workspaceId}
     `;
@@ -110,6 +111,16 @@ export default async function handler(req, res) {
       && new Date(w.winback_expires_at).getTime() > Date.now()
     ) ? w.winback_coupon_id : null;
 
+    // Waitlist launch discount (20% off, 12 months): pre-applied when this
+    // workspace was stamped eligible at signup (its email matched the
+    // waitlist). Minted once + cached; never exposed as a typed code - the
+    // server-side email match is the exclusivity. Unlike the monthly-only
+    // win-back, this applies to both monthly and annual (12 repeating
+    // months covers either cleanly). Win-back wins if both are present:
+    // it's time-boxed/expiring, the waitlist boolean is durable and waits.
+    const waitlistCoupon = w?.waitlist_discount_at ? await getWaitlistCouponId() : null;
+    const couponId = winbackCoupon ?? waitlistCoupon;
+
     const base = appUrl();
     const session = await createSubscriptionCheckoutSession({
       secretKey, priceId,
@@ -118,7 +129,7 @@ export default async function handler(req, res) {
       workspaceId,
       successUrl: `${base}/?subscribed=1&session_id={CHECKOUT_SESSION_ID}`,
       cancelUrl:  `${base}/?subscribed=cancelled`,
-      couponId:   winbackCoupon,
+      couponId,
       // First-timers start a card-on-file free trial; winback (already-trialed)
       // and returning users go straight to a paid subscription.
       trialDays:  eligibleForTrial ? TRIAL_DAYS : undefined,

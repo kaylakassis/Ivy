@@ -38,6 +38,70 @@ export async function getGateSettings() {
   }
 }
 
+// Controlled-launch mode (orthogonal to the password gate). Returns
+// 'open' or 'waitlist'. Fails open to 'open' if the column/table doesn't
+// exist yet (pre-migration first request) so a cold start never traps
+// signups in waitlist mode by accident.
+export async function getLaunchMode() {
+  try {
+    const { rows } = await sql`SELECT launch_mode FROM app_settings WHERE id = 1`;
+    const mode = rows[0]?.launch_mode;
+    return mode === 'waitlist' ? 'waitlist' : 'open';
+  } catch {
+    return 'open';
+  }
+}
+
+// Admin: flip the launch switch. Only 'open' | 'waitlist' are valid.
+export async function setLaunchMode(mode) {
+  const next = mode === 'waitlist' ? 'waitlist' : 'open';
+  await sql`
+    UPDATE app_settings
+       SET launch_mode = ${next},
+           launch_mode_updated_at = NOW()
+     WHERE id = 1
+  `;
+  return next;
+}
+
+// Beta-tester bypass for waitlist mode. The early-access password
+// (early_access_password_hash) doubles as the bypass key: a select user
+// who enters it on the waitlist screen gets the same ea_pass cookie and
+// can sign up normally (onboarding + everything downstream untouched).
+//
+// Unlike isGateUnlocked(), this is INDEPENDENT of early_access_enabled:
+// in waitlist mode the standalone early-access gate is usually off, but
+// the password still needs to act as a bypass. Returns true only when a
+// password is configured AND the request carries a cookie matching it.
+export async function hasBypassCookie(req) {
+  const settings = await getGateSettings();
+  if (!settings.passwordHash) return false; // no bypass password set -> nobody bypasses
+  const cookieVal = parseCookie(req, COOKIE_NAME);
+  if (!cookieVal) return false;
+  const expected = signCookieValue(settings.passwordHash);
+  if (cookieVal.length !== expected.length) return false;
+  try {
+    return crypto.timingSafeEqual(Buffer.from(cookieVal, 'hex'), Buffer.from(expected, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+// Validate a beta-bypass password attempt and, on success, return the
+// cookie value the waitlist verify endpoint should set. Independent of
+// early_access_enabled (see hasBypassCookie) - the configured password
+// is the bypass key whether or not the standalone gate is toggled on.
+export async function attemptBypass(plaintext) {
+  const settings = await getGateSettings();
+  if (!settings.passwordHash) return { ok: false, reason: 'no_password_set' };
+  if (typeof plaintext !== 'string' || plaintext.length === 0) {
+    return { ok: false, reason: 'empty' };
+  }
+  const matched = await bcrypt.compare(plaintext, settings.passwordHash);
+  if (!matched) return { ok: false, reason: 'bad_password' };
+  return { ok: true, cookieValue: signCookieValue(settings.passwordHash) };
+}
+
 // Cookie value is the HMAC of the current password hash. Rotating the
 // password invalidates every previously-issued cookie automatically.
 function signCookieValue(passwordHash) {

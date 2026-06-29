@@ -377,6 +377,29 @@ export async function createWinbackCoupon({
   return { couponId: coupon.id, promoCode: promo.code };
 }
 
+// Waitlist launch discount: ONE shared coupon (20% off, repeating N
+// months) reused for every waitlist signup. There's no per-workspace
+// promo code - the discount is auto-applied server-side at checkout only
+// when the workspace was stamped eligible (its signup email matched the
+// waitlist). The coupon id is never sent to the browser, so exclusivity
+// lives entirely in that email match. Idempotent: a fixed idempotency
+// key means repeated calls return the same coupon; the caller caches the
+// id in app_settings so this round-trip happens at most once.
+export async function createWaitlistCoupon({ secretKey, percentOff = 20, durationMonths = 12 }) {
+  const coupon = await stripeFetch('/coupons', {
+    method: 'POST', secretKey,
+    body: {
+      duration: 'repeating',
+      duration_in_months: String(durationMonths),
+      percent_off: String(percentOff),
+      name: `THRYVE waitlist ${percentOff}% / ${durationMonths}mo`,
+      'metadata[kind]': 'waitlist',
+    },
+    idempotencyKey: `waitlist-coupon-${percentOff}x${durationMonths}-v1`,
+  });
+  return { couponId: coupon.id };
+}
+
 // Stripe Customer Portal - self-serve cancel / update card / view invoices.
 // Owner clicks "Manage subscription" on the Account page.
 export async function createBillingPortalSession({

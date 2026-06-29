@@ -1973,6 +1973,51 @@ CREATE TABLE IF NOT EXISTS app_settings (
 );
 INSERT INTO app_settings (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 
+-- Controlled-launch switch (separate from the early-access password gate).
+--   'open'     - normal: anyone can sign up.
+--   'waitlist' - pre-launch: signup is blocked; the public site shows the
+--                waitlist landing page and captures emails only. Beta
+--                testers bypass via the early-access password.
+-- Default 'open' so existing + CI environments are unaffected until an
+-- admin deliberately flips to 'waitlist' from /admin -> Settings.
+-- waitlist_coupon_id caches the single shared Stripe coupon (20% off,
+-- 12 months) minted once and reused for every waitlist signup - the
+-- discount's exclusivity comes from the server-side email match at
+-- signup, not from the coupon id being secret.
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS launch_mode TEXT NOT NULL DEFAULT 'open'
+  CHECK (launch_mode IN ('open','waitlist'));
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS launch_mode_updated_at TIMESTAMPTZ;
+ALTER TABLE app_settings ADD COLUMN IF NOT EXISTS waitlist_coupon_id TEXT;
+
+-- Pre-launch waitlist signups. One row per email captured on the public
+-- waitlist landing page. Email is stored lower-cased; the functional
+-- unique index dedupes case-insensitively and the public join endpoint
+-- upserts (re-submitting the same email is a no-op success).
+--   status: 'pending'   - captured, not yet emailed
+--           'notified'  - received the launch announcement
+--           'converted' - signed up for an account with this email
+CREATE TABLE IF NOT EXISTS waitlist_signups (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL,
+  name TEXT,
+  source TEXT,
+  ip TEXT,
+  user_agent TEXT,
+  status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','notified','converted')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  notified_at TIMESTAMPTZ,
+  converted_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  converted_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_signups_email ON waitlist_signups(LOWER(email));
+CREATE INDEX IF NOT EXISTS idx_waitlist_signups_status_time ON waitlist_signups(status, created_at DESC);
+
+-- Stamped when an owner signs up with an email that's on the waitlist.
+-- billing/checkout.js reads this to pre-apply the shared 20%/12mo coupon.
+-- A durable timestamp (not a boolean) so it doubles as "when granted" and
+-- never expires - a waitlisted user who subscribes weeks later still gets it.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS waitlist_discount_at TIMESTAMPTZ;
+
 -- Project / engagement layer. Groups bookings + invoices + quotes +
 -- documents under a named engagement so project-based service providers
 -- (photographers, designers, consultants) can see "Smith wedding" as

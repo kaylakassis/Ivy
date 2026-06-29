@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import AuthShell from './AuthShell.jsx';
+import WaitlistPage from './WaitlistPage.jsx';
 
 export default function EarlyAccessGate({ children }) {
   // null while we're checking; objects after.
@@ -22,7 +23,7 @@ export default function EarlyAccessGate({ children }) {
     let live = true;
     api.get('/early-access/status')
       .then((r) => { if (live) setStatus(r); })
-      .catch(() => { if (live) setStatus({ enabled: false, unlocked: true }); });
+      .catch(() => { if (live) setStatus({ enabled: false, unlocked: true, launchMode: 'open', bypassed: true }); });
     return () => { live = false; };
   }, []);
 
@@ -30,6 +31,13 @@ export default function EarlyAccessGate({ children }) {
     // Don't flash the children - show nothing while we figure out
     // whether the gate is on. The check is fast (single SELECT).
     return null;
+  }
+
+  // Controlled launch: in waitlist mode, a visitor who hasn't entered the
+  // beta bypass sees the waitlist landing page instead of signup/signin.
+  // The page itself hosts the "beta access code" field (when configured).
+  if (status.launchMode === 'waitlist' && !status.bypassed) {
+    return <WaitlistPage hasBetaPassword={!!status.hasBetaPassword} />;
   }
 
   if (!status.enabled || status.unlocked) return children;
