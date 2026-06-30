@@ -41,7 +41,10 @@ export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) 
   const valueByField = new Map();
   for (const s of signers) {
     for (const fv of (s.field_values || [])) {
-      valueByField.set(fv.id, { value: fv.value || '', signer: s });
+      // Skip empty values so a later signer's blank can't clobber an
+      // earlier signer's real value (keeps the flattened PDF consistent
+      // with the completion_hash, which is computed from non-empty values).
+      if (fv.value) valueByField.set(fv.id, { value: fv.value, signer: s });
     }
   }
 

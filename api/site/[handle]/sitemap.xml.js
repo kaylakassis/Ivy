@@ -19,7 +19,7 @@ export default async function handler(req, res) {
       return res.end('Not Found');
     }
     const { rows } = await sql`
-      SELECT handle, pages, updated_at, published_at
+      SELECT handle, COALESCE(published_pages, pages) AS pages, updated_at, published_at
       FROM websites
       WHERE handle = ${handle.toLowerCase()}
         AND published_at IS NOT NULL

@@ -3,10 +3,12 @@ import React, { useState } from 'react';
 import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { useAuth } from '../../lib/auth.jsx';
 import { PasswordInput } from './AuthPage.jsx';
 import AuthShell from './AuthShell.jsx';
 
 export default function ResetPasswordPage() {
+  const { refresh } = useAuth();
   const [params] = useSearchParams();
   const nav = useNavigate();
   const token = params.get('token') || '';
@@ -27,7 +29,11 @@ export default function ResetPasswordPage() {
     setBusy(true);
     try {
       await api.post('/auth/reset-password', { token, password });
-      nav('/', { replace: true });  // they're now signed in
+      // The server set a fresh session cookie — sync the auth context before
+      // navigating so RootRouter sees the logged-in user instead of flashing
+      // the logged-out marketing home.
+      await refresh();
+      nav('/', { replace: true });
     } catch (ex) {
       setErr(ex.message || 'Something went wrong');
     } finally {

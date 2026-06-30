@@ -450,7 +450,11 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
 // DELETE, but skipping is cleaner).
 export async function resumeWaitingWorkflows({ limit = 200, shardFilter = '', prune = true } = {}) {
   const { rows: pending } = await sql.query(
-    `SELECT p.*, w.* FROM workflow_pending_runs p
+    // p.id AS pending_id: p and w both have an `id` column and the driver
+    // keeps the LAST duplicate, so a bare row.id would be the WORKFLOW id,
+    // making the cleanup DELETE below match zero pending rows → the run
+    // re-fires every cron tick for 7 days. Alias it so it survives.
+    `SELECT p.*, w.*, p.id AS pending_id FROM workflow_pending_runs p
      JOIN workflows w ON w.id = p.workflow_id
      WHERE p.resume_at <= NOW()
        AND w.enabled = TRUE
@@ -483,11 +487,11 @@ export async function resumeWaitingWorkflows({ limit = 200, shardFilter = '', pr
         isResume: true,
       });
       // eslint-disable-next-line no-await-in-loop
-      await sql`DELETE FROM workflow_pending_runs WHERE id = ${row.id}`;
+      await sql`DELETE FROM workflow_pending_runs WHERE id = ${row.pending_id}`;
       resumed++;
     } catch (err) {
       // eslint-disable-next-line no-console
-      console.error(`[resumeWaitingWorkflows] pending=${row.id} failed:`, err.message);
+      console.error(`[resumeWaitingWorkflows] pending=${row.pending_id} failed:`, err.message);
       // Leave the row in place; next cron pass retries. Auto-prune
       // happens below at the end of every run.
     }

@@ -52,8 +52,10 @@ export function AuthProvider({ children }) {
   }, []);
 
   const signOut = useCallback(async () => {
-    await api.post('/auth/logout');
-    setUser(null);
+    // Always clear local auth state even if the network call fails, so the
+    // user is never stuck "logged in" with no feedback when offline / on a 5xx.
+    try { await api.post('/auth/logout'); }
+    finally { setUser(null); setImpersonating(null); setTerms(null); }
   }, []);
 
   // Refresh the user (e.g. after email verification) so UI flips immediately.

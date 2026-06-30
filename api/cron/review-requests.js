@@ -104,7 +104,7 @@ async function handler(req, res) {
           `<a href="${link}?rating=${n}" style="text-decoration:none;font-size:28px;line-height:1;padding:0 4px;color:#E0B645;">${'★'.repeat(n)}${'☆'.repeat(5 - n)}</a>`
         ).join('<br/>');
 
-        await sendEmailToClient({
+        const sendRes = await sendEmailToClient({
           clientId: r.client_id, type: 'marketing',
           to: r.client_email,
           subject: `How was your ${r.service_name || 'session'}?`,
@@ -126,14 +126,22 @@ async function handler(req, res) {
           }),
         });
 
+        // Only mark the booking "asked" when the email actually went out.
+        // A transient workspace-quota-exceeded skip leaves the row so a later
+        // pass retries; a genuine opt-out ('muted') is stamped (stop asking)
+        // but mints no usable token. Without this, a suppressed send burned
+        // the booking forever and the client was never actually asked.
+        if (sendRes?.reason === 'workspace-quota-exceeded') {
+          continue;
+        }
         await sql`
           UPDATE bookings SET
-            review_request_token_hash = ${hash},
+            review_request_token_hash = ${sendRes?.sent ? hash : null},
             review_requested_at = NOW(),
             updated_at = NOW()
           WHERE id = ${r.id}
         `;
-        sent++;
+        if (sendRes?.sent) sent++;
       } catch (err) {
         // eslint-disable-next-line no-console
         console.error('[cron/review-requests] failed for booking', r.id, err.message);

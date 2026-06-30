@@ -52,6 +52,7 @@ export default async function handler(req, res) {
     if (!inv) return { status: 400, body: { error: 'Invoice not found' } };
     if (inv.status === 'paid')   return { status: 400, body: { error: 'Already paid' } };
     if (inv.status === 'voided') return { status: 400, body: { error: 'Voided - restore first' } };
+    if (inv.status === 'refunded') return { status: 400, body: { error: 'Refunded - cannot be re-sent as payable' } };
 
     // Resolve recipient. Allow override clientId in body, otherwise use stored.
     let clientId = body.clientId ? String(body.clientId) : inv.client_id;

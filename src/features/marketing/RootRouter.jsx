@@ -22,8 +22,14 @@ export default function RootRouter() {
     api.get('/me')
       .then((r) => {
         if (!live) return;
-        // Owner who hasn't finished onboarding → wizard.
-        if (r.isOwner && !r.onboardedAt) { setDecision('onboarding'); return; }
+        // Owner who hasn't finished onboarding → wizard, UNLESS they used the
+        // "Save & exit" escape hatch (ivy_skip_onboarding_until), which
+        // RoleRouter also honors. Without this, navigating to "/" after
+        // skipping bounces them back into onboarding — the loop the flag prevents.
+        let skipUntil = 0;
+        try { skipUntil = Number(localStorage.getItem('ivy_skip_onboarding_until')) || 0; } catch { /* ignore */ }
+        const skipping = skipUntil > Date.now();
+        if (r.isOwner && !r.onboardedAt && !skipping) { setDecision('onboarding'); return; }
         if (r.isOwner) setDecision('business');
         else if (r.isClient) setDecision('client');
         else setDecision('business'); // workspace got auto-created on signup

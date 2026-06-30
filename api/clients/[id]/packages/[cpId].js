@@ -49,7 +49,7 @@ export default async function handler(req, res) {
         const newTotal = n > 0 ? cur.credits_total + n : cur.credits_total;
         push('credits_remaining', newRemaining);
         push('credits_total', newTotal);
-        if (newRemaining > 0 && cur.status === 'exhausted') push('status', 'active');
+        if (newRemaining > 0 && (cur.status === 'exhausted' || cur.status === 'cancelled')) push('status', 'active');
       }
       if ('extendDays' in body) {
         const n = Number(body.extendDays);

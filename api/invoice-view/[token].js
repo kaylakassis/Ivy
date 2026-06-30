@@ -52,7 +52,7 @@ export async function isPaymentReady(workspaceId) {
     SELECT payment_provider,
            stripe_connect_user_id, stripe_secret_encrypted, stripe_webhook_secret_encrypted,
            square_merchant_id, square_credentials_encrypted,
-           paypal_merchant_id
+           paypal_merchant_id, paypal_payments_enabled
       FROM finance_settings WHERE workspace_id = ${workspaceId} LIMIT 1
   `;
   if (rows.length === 0) return false;
@@ -61,7 +61,11 @@ export async function isPaymentReady(workspaceId) {
     case 'square':
       return !!(fs.square_merchant_id && fs.square_credentials_encrypted);
     case 'paypal':
-      return !!fs.paypal_merchant_id;
+      // Hide the Pay button only when PayPal explicitly reports the merchant
+      // can't receive payments yet (payments_enabled === false). NULL (legacy
+      // connections before this flag) is treated as receivable to avoid
+      // hiding the button for already-working merchants.
+      return !!fs.paypal_merchant_id && fs.paypal_payments_enabled !== false;
     case 'stripe':
     default:
       // Account-Links acct (auto-mark via platform webhook) OR legacy

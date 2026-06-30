@@ -21,6 +21,7 @@ export default function PublicInvoice() {
   const [error, setError]     = useState(null);
   const [submitted, setSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [markPaidErr, setMarkPaidErr] = useState(null);
   const [paying, setPaying]       = useState(false);
   const [payErr, setPayErr]       = useState(null);
 
@@ -60,15 +61,21 @@ export default function PublicInvoice() {
 
   const markPaid = async () => {
     setSubmitting(true);
+    setMarkPaidErr(null);
     try {
-      await fetch('/api/invoice-view/' + encodeURIComponent(token), {
+      const res = await fetch('/api/invoice-view/' + encodeURIComponent(token), {
         method: 'POST',
         credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),
       });
+      // Don't claim success on a failed request — the seller never got
+      // notified, so telling the payer "thanks" would be a lie.
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       setSubmitted(true);
-    } catch { /* noop */ }
+    } catch {
+      setMarkPaidErr('Could not notify the sender — please try again.');
+    }
     finally { setSubmitting(false); }
   };
 
@@ -311,6 +318,9 @@ export default function PublicInvoice() {
               {!submitting && <Icons.Check size={14} sw={2.2}/>}
             </button>
           </>
+        )}
+        {markPaidErr && (
+          <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--danger)' }}>{markPaidErr}</div>
         )}
       </div>
     </PageWrap>

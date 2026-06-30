@@ -52,6 +52,7 @@ export default async function handler(req, res) {
     if (inv.status === 'paid')   return { status: 400, body: { error: 'Already paid - nothing to resend' } };
     if (inv.status === 'voided') return { status: 400, body: { error: 'Voided - restore before resending' } };
     if (inv.status === 'draft')  return { status: 400, body: { error: 'Draft hasn\'t been sent yet - use Send instead' } };
+    if (inv.status === 'refunded') return { status: 400, body: { error: 'Refunded - cannot be re-sent as payable' } };
     if (!inv.client_email)       return { status: 400, body: { error: 'No recipient email on file' } };
 
     const rawToken = generateRawToken(32);

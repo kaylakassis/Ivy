@@ -20,10 +20,11 @@ export default function AddClientModal({ onClose, onAdd }) {
   const trimmedName = name.trim();
   const trimmedEmail = email.trim();
   const trimmedPhone = phone.trim();
-  // All three are required. Email validity is a loose check - the
-  // server runs the strict one and rejects if needed.
+  // Name + email required; phone is OPTIONAL (the API treats it as optional —
+  // SMS features simply degrade to email-only when no phone is on file). Only
+  // validate phone format when a value is actually entered.
   const emailLooksValid = /\S+@\S+\.\S+/.test(trimmedEmail);
-  const phoneLooksValid = trimmedPhone.replace(/\D/g, '').length >= 7;
+  const phoneLooksValid = trimmedPhone.length === 0 || trimmedPhone.replace(/\D/g, '').length >= 7;
   const canAdd = trimmedName.length > 0 && emailLooksValid && phoneLooksValid;
 
   const submit = async (e) => {
@@ -76,7 +77,7 @@ export default function AddClientModal({ onClose, onAdd }) {
           <Field label="Phone">
             <input value={phone} onChange={(e) => setPhone(e.target.value)}
               type="tel" inputMode="tel" autoComplete="tel"
-              placeholder="(555) 555-5555" required style={inputS}/>
+              placeholder="(555) 555-5555 (optional)" style={inputS}/>
           </Field>
           <Field label="Source">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
