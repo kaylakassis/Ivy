@@ -15,7 +15,6 @@ import { readRawBody } from '../../_lib/body.js';
 import { verifyTwilioSignature } from '../../_lib/twilio.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
-import { appUrl } from '../../_lib/tokens.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -37,7 +36,12 @@ export default async function handler(req, res) {
     const params = Object.fromEntries(new URLSearchParams(raw));
 
     // Verify the request really came from Twilio (HMAC over URL + params).
-    const url = `${appUrl()}/api/webhooks/twilio/sms`;
+    // Reconstruct the EXACT public URL Twilio signed against from the request
+    // headers — matching the proven legacy api/sms/inbound.js handler. appUrl()
+    // can diverge from the configured webhook URL (host/proto/path/query) and
+    // would then 403 every inbound message.
+    const proto = req.headers['x-forwarded-proto'] || 'https';
+    const url = `${proto}://${req.headers.host}${req.url || '/api/webhooks/twilio/sms'}`;
     if (!verifyTwilioSignature({ url, params, signature: req.headers['x-twilio-signature'] })) {
       res.statusCode = 403;
       return res.end('Invalid signature');

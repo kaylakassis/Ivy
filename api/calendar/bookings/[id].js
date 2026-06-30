@@ -105,7 +105,13 @@ export default async function handler(req, res) {
           }
         }
 
+        // Honor the workspace's minimum buffer between appointments, matching
+        // the public/portal booking paths (the owner reschedule path used to
+        // ignore it). Hoisted so the race-recheck below uses the same value.
+        let bufferMin = 0;
         if (!skipConflict) {
+          const csBuf = await sql`SELECT buffer_minutes FROM calendar_settings WHERE workspace_id = ${workspaceId}`;
+          bufferMin = Math.max(0, Number(csBuf.rows[0]?.buffer_minutes || 0));
           const conflict = await hasConflict({
             workspaceId,
             dateISO: newDate,
@@ -114,6 +120,7 @@ export default async function handler(req, res) {
             serviceId: booking.service_id,
             capacity,
             excludeBookingId: booking.id,
+            bufferMin,
           });
           if (conflict) {
             return badRequest(res, capacity > 1
@@ -146,7 +153,7 @@ export default async function handler(req, res) {
         if (!skipConflict) {
           const lost = await losesBookingRace({
             workspaceId, dateISO: newDate, start: newStart, end: newEnd,
-            serviceId: booking.service_id, capacity,
+            serviceId: booking.service_id, capacity, bufferMin,
             bookingId: booking.id, createdAt: updated.rows[0].created_at,
           }).catch((e) => {
             // eslint-disable-next-line no-console

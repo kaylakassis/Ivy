@@ -9,7 +9,6 @@
 import crypto from 'node:crypto';
 import { sql } from '../api/_lib/db.js';
 import { signSession } from '../api/_lib/auth.js';
-import { appUrl } from '../api/_lib/tokens.js';
 import inbound from '../api/webhooks/twilio/sms.js';
 import threadHandler from '../api/messages/[id].js';
 
@@ -37,7 +36,11 @@ async function run() {
     process.env.IVY_TWILIO_ACCOUNT_SID = 'ACtest';
     process.env.IVY_TWILIO_AUTH_TOKEN = 'twilio-test-token';
     process.env.IVY_TWILIO_FROM_NUMBER = '+15550000000';
-    const url = `${appUrl()}/api/webhooks/twilio/sms`;
+    // The handler reconstructs the signed URL from request host/proto/path,
+    // so sign against that exact URL and pass matching headers below.
+    const reqPath = '/api/webhooks/twilio/sms';
+    const reqHost = 'test.host';
+    const url = `https://${reqHost}${reqPath}`;
 
     const u = await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
       VALUES (${`sms-${Date.now()}@example.com`}, 'x', '2026-05-05', NOW()) RETURNING id`;
@@ -59,7 +62,7 @@ async function run() {
 
     // Valid signature → routed.
     r = webhookRes();
-    await inbound({ method: 'POST', headers: { 'x-twilio-signature': sigFor(process.env.IVY_TWILIO_AUTH_TOKEN, url, params) }, body: rawBody }, r);
+    await inbound({ method: 'POST', url: reqPath, headers: { 'x-twilio-signature': sigFor(process.env.IVY_TWILIO_AUTH_TOKEN, url, params), host: reqHost, 'x-forwarded-proto': 'https' }, body: rawBody }, r);
     assert(r.statusCode === 200 && r.body.includes('<Response>'), 'valid inbound returns 200 TwiML');
 
     const thr = (await sql`SELECT * FROM message_threads WHERE workspace_id = ${wid} AND client_id = ${cid}`).rows[0];

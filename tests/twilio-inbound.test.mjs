@@ -28,7 +28,7 @@ async function inbound(params, { badSig = false } = {}) {
   const raw = new URLSearchParams(params).toString();
   const signature = badSig ? 'nope' : sign(params);
   const res = mockRes();
-  await handler({ method: 'POST', body: raw, headers: { 'x-twilio-signature': signature, host: 'localhost:5173' } }, res);
+  await handler({ method: 'POST', url: '/api/webhooks/twilio/sms', body: raw, headers: { 'x-twilio-signature': signature, host: 'localhost:5173', 'x-forwarded-proto': 'http' } }, res);
   return res;
 }
 

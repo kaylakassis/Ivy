@@ -65,8 +65,9 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS totp_backup_codes_hashed JSONB;
 -- the feed, owners closing the tab lose every alert. read_at = NULL
 -- counts as unread for the bell badge. tag is the same coalescing
 -- key push uses so a re-fired notification (e.g. five new messages
--- from the same client) doesn't drown the feed; we de-dupe on (user_id,
--- tag) inserts. db-prune trims rows > 60 days.
+-- from the same client) doesn't drown the feed. De-dupe is APPLICATION-level
+-- (an UPDATE-by-(user_id, tag)-then-INSERT in push.js) — there is NO
+-- UNIQUE(user_id, tag) DB constraint. db-prune trims rows > 60 days.
 CREATE TABLE IF NOT EXISTS notifications (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,

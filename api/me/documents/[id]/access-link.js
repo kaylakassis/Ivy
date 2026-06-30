@@ -25,7 +25,7 @@ export default async function handler(req, res) {
     // Look up the document AND verify the user has standing to access
     // it - either as the legacy recipient OR as a multi-signer.
     const docRows = await sql.query(
-      `SELECT id, status FROM documents
+      `SELECT id, status, final_pdf_url FROM documents
         WHERE id = $1
           AND (
             recipient_client_id = ANY($2)
@@ -41,6 +41,14 @@ export default async function handler(req, res) {
     const status = docRows.rows[0].status;
     if (status === 'voided')   return badRequest(res, 'This document has been voided');
     if (status === 'declined') return badRequest(res, 'This document was declined');
+    // Completed docs: there's nothing left to sign and resolveByToken rejects
+    // a sign token for a non-'sent' doc (→ a dead "view signed copy" link).
+    // Return the flattened signed PDF for viewing instead of minting a token.
+    if (status === 'completed') {
+      const finalUrl = docRows.rows[0].final_pdf_url;
+      if (finalUrl) return ok(res, { url: finalUrl, completed: true });
+      return badRequest(res, 'This document is complete — the signed copy is still being prepared.');
+    }
 
     // Find the user's signer row, if any. Used to:
     //   • For multi-signer docs: mint the token onto THEIR signer row

@@ -82,15 +82,21 @@ export default async function handler(req, res) {
 
     // Conflict check (owner can override with skipConflictCheck=true to handle
     // edge cases like double-booking by request).
+    // bufferMin = the workspace's minimum gap between appointments. The public
+    // + portal booking paths already honor it; the owner create/race-recheck
+    // paths previously ignored it, so the owner could stack bookings tighter
+    // than the buffer (and the two paths disagreed about what "conflicts").
+    let bufferMin = 0;
     if (!skipConflictCheck) {
       const weekday = new Date(date + 'T00:00:00Z').getUTCDay();
-      const settings = await sql`SELECT availability FROM calendar_settings WHERE workspace_id = ${workspaceId}`;
+      const settings = await sql`SELECT availability, buffer_minutes FROM calendar_settings WHERE workspace_id = ${workspaceId}`;
+      bufferMin = Math.max(0, Number(settings.rows[0]?.buffer_minutes || 0));
       if (settings.rows.length > 0 && !withinAvailability(settings.rows[0].availability, weekday, start, end, serviceAvailability)) {
         return badRequest(res, serviceAvailability
           ? 'That slot is outside this service’s availability - toggle Override to book anyway'
           : 'That slot is outside your availability - toggle Override to book anyway');
       }
-      if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity })) {
+      if (await hasConflict({ workspaceId, dateISO: date, start, end, serviceId, capacity: serviceCapacity, bufferMin })) {
         return badRequest(res, serviceCapacity > 1
           ? 'That class is full or the slot conflicts with another booking'
           : 'That slot conflicts with an existing booking or block');
@@ -198,7 +204,7 @@ export default async function handler(req, res) {
     if (!skipConflictCheck) {
       const lost = await losesBookingRace({
         workspaceId, dateISO: date, start, end, serviceId,
-        capacity: serviceCapacity,
+        capacity: serviceCapacity, bufferMin,
         bookingId: insert.rows[0].id, createdAt: insert.rows[0].created_at,
       }).catch((e) => {
         // If the recheck itself errors, don't undo a real booking over a
