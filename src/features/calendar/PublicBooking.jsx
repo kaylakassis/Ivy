@@ -811,7 +811,12 @@ export default function PublicBooking({ embedded = false }) {
                       // Drop into the details step in waitlist mode -
                       // the primary button becomes "Join the waitlist"
                       // and the submit goes straight to the queue.
-                      const first = allSlots[0];
+                      // Seed the waitlist with the first slot that could
+                      // actually open up — i.e. a future, fully-booked slot —
+                      // NOT a past / too-soon / too-far slot (allSlots[0] is
+                      // the first GENERATED slot, which may be in the past).
+                      const first = allSlots.find((s) => s.reason !== 'Past' && s.reason !== 'Too soon' && s.reason !== 'Too far')
+                        || allSlots[0];
                       if (!first) return;
                       setSlot({ dateISO: fmtDateISO(d), start: first.start, end: first.end });
                       setWaitlistMode(true);

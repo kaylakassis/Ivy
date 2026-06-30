@@ -26,6 +26,31 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
 
   const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
   const paidAmount = amountCents != null ? Math.round(Number(amountCents)) / 100 : totals.total;
+
+  // Guard against an UNDER-payment flipping the invoice to fully paid (e.g. the
+  // invoice amount was edited up after the Checkout session was created for the
+  // old, lower amount). Mirror the Square/PayPal apply paths: record the
+  // partial payment but leave the invoice open. Stripe-Tax can make the charged
+  // amount EXCEED the base total — that's expected, so only under-payment is a
+  // problem (1¢ tolerance for rounding).
+  if (amountCents != null && paidAmount < totals.total - 0.01) {
+    const partialActivity = [
+      ...(inv.activity || []),
+      { ts: new Date().toISOString(), kind: 'partial-payment',
+        text: `Partial card payment · ${fmtMoney(paidAmount)} of ${fmtMoney(totals.total)}` },
+    ];
+    await sql`
+      UPDATE invoices SET
+        paid_amount           = ${paidAmount},
+        paid_method           = ${method},
+        stripe_payment_intent = ${paymentIntent || null},
+        activity              = ${JSON.stringify(partialActivity)}::jsonb,
+        updated_at            = NOW()
+      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
+    `;
+    return 'partial-payment';
+  }
+
   const newActivity = [
     ...(inv.activity || []),
     { ts: new Date().toISOString(), kind: 'paid', text: `Paid by card · ${fmtMoney(paidAmount)}` },

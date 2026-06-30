@@ -38,8 +38,13 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
   }
 
   const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
+  // Cap refunds against what was ACTUALLY collected (paid_amount), not the
+  // recomputed invoice total. With Stripe Tax, paid_amount can exceed the
+  // base total (so the tax portion must be refundable); for legacy rows with
+  // no paid_amount, fall back to the total.
+  const refundBasis = inv.paid_amount != null ? Number(inv.paid_amount) : totals.total;
   const alreadyRefunded = Number(inv.refunded_amount || 0);
-  const remaining = Math.max(0, totals.total - alreadyRefunded);
+  const remaining = Math.max(0, refundBasis - alreadyRefunded);
   if (remaining <= 0) throw new Error('This invoice has already been fully refunded');
 
   let amount = amountIn == null ? remaining : Number(amountIn);
@@ -91,7 +96,7 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
   }
 
   const newRefunded = alreadyRefunded + amount;
-  const fullyRefunded = newRefunded >= totals.total - 0.001;
+  const fullyRefunded = newRefunded >= refundBasis - 0.001;
   const newStatus = fullyRefunded ? 'refunded' : 'paid';
 
   const activityEntry = {
@@ -120,7 +125,7 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
     const curRefunded = Number(current?.refunded_amount || 0);
     return {
       invoice: serializeInvoice(current),
-      refund: { amount, method, fullyRefunded: curRefunded >= totals.total - 0.001, stripeRefundId, deduped: true },
+      refund: { amount, method, fullyRefunded: curRefunded >= refundBasis - 0.001, stripeRefundId, deduped: true },
     };
   }
 

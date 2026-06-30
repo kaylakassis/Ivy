@@ -268,6 +268,10 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
       if (smsMode && r && r.smsSent === false) {
         setSmsNote(`Saved to chat, but the text wasn't sent (${r.smsReason || 'no phone/consent'}).`);
       } else { setSmsNote(null); }
+    } catch (err) {
+      // Surface send failures (offline / 5xx) instead of silently dropping
+      // them. The input text is preserved so the user can retry.
+      setSmsNote(err?.message || "Couldn't send — check your connection and try again.");
     } finally {
       setSending(false);
     }

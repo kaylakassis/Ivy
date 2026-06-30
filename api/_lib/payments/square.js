@@ -273,7 +273,7 @@ export async function createRefund({
   };
 }
 
-// Webhook signature: HMAC-SHA1 of (notification_url + raw_body) with
+// Webhook signature: HMAC-SHA256 of (notification_url + raw_body) with
 // the signature key from the Square Developer Dashboard. Returns the
 // parsed event JSON; throws on mismatch / missing key.
 export function verifyWebhook({ rawBody, headers, notificationUrl }) {

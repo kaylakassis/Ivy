@@ -201,7 +201,6 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     return { ok: false, reason: `list failed: ${err.message}` };
   }
 
-  const ivyCalId = r.google_calendar_id;
   const seenIds = [];
   let kept = 0, skipped = 0;
 
@@ -209,10 +208,13 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     if (ev.status === 'cancelled') continue;
     // Don't block on events the user already marked as available.
     if (ev.transparency === 'transparent') { skipped++; continue; }
-    // Skip events from our own dedicated Ivy OS calendar - those are
-    // bookings we pushed; double-counting them would block our own
-    // future slots from existing bookings.
-    if (ev.organizer?.email === r.google_email && ev.calendarId === ivyCalId) continue;
+    // Skip events WE pushed (our own bookings) — they carry an
+    // ivy_booking_id extended property (set in bookingToEvent). The previous
+    // organizer/calendarId check was dead code (neither field is fetched in
+    // listEvents' field mask, and the list response has no per-event
+    // calendarId), so in primary-calendar mode our own bookings were mirrored
+    // back as busy blocks and self-blocked their own future slots.
+    if (ev.extendedProperties?.private?.ivy_booking_id) continue;
     // FreeBusy-style: only need start + end.
     const start = ev.start?.dateTime;
     const end = ev.end?.dateTime;

@@ -10,6 +10,7 @@
 // comes from the orderId being one we created for this workspace's
 // merchant; capture is a no-op for anything else.
 import { captureOrder } from '../_lib/payments/paypal.js';
+import { applyPaymentToInvoice } from '../_lib/paypalApply.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
 
@@ -34,7 +35,37 @@ export default async function handler(req, res) {
 
   try {
     if (!orderId || !ws) throw new Error('Missing order or workspace');
-    await captureOrder({ orderId, workspaceId: ws });
+    const cap = await captureOrder({ orderId, workspaceId: ws });
+    // The money has now actually moved. Apply it to the invoice synchronously
+    // here instead of relying solely on the PAYMENT.CAPTURE.COMPLETED webhook
+    // (which owners frequently never configure) — otherwise the buyer is
+    // charged but the invoice stays unpaid forever. Build the same `parsed`
+    // shape the webhook produces from the capture response. Idempotent
+    // (applyPaymentToInvoice guards on status<>'paid' + matching capture id),
+    // so a later webhook can't double-apply. Best-effort: never block the
+    // redirect on it.
+    try {
+      const captureObj = cap?.raw?.purchase_units?.[0]?.payments?.captures?.[0]
+        || cap?.raw?.purchase_units?.[0] || {};
+      const pu = cap?.raw?.purchase_units?.[0] || {};
+      const customId = captureObj.custom_id || pu.custom_id || '';
+      let metadata = {};
+      try { metadata = customId ? JSON.parse(customId) : {}; } catch { /* not JSON */ }
+      const amountCents = captureObj.amount?.value
+        ? Math.round(Number(captureObj.amount.value) * 100) : 0;
+      await applyPaymentToInvoice({
+        workspaceId: ws,
+        parsed: {
+          paymentId:   captureObj.id || cap?.captureId || null,
+          amountCents,
+          currency:    (captureObj.amount?.currency_code || 'USD').toUpperCase(),
+          metadata,
+        },
+      });
+    } catch (applyErr) {
+      // eslint-disable-next-line no-console
+      console.error('[paypal-return] apply-to-invoice failed (webhook is the backstop):', applyErr.message);
+    }
     dest.searchParams.set('paid', '1');
   } catch (err) {
     // eslint-disable-next-line no-console

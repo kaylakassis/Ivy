@@ -247,7 +247,7 @@ export async function listEvents({ accessToken, calendarId = 'primary', timeMin,
     singleEvents: 'true',          // expand recurring instances
     orderBy: 'startTime',
     maxResults: String(maxResults),
-    fields: 'items(id,summary,start,end,status,transparency)',
+    fields: 'items(id,summary,start,end,status,transparency,extendedProperties)',
   });
   const r = await calApi(`/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, {
     method: 'GET', accessToken,
