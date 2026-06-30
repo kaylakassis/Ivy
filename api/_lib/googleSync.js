@@ -32,6 +32,21 @@ async function loadConnection(workspaceId) {
   catch (err) {
     // eslint-disable-next-line no-console
     console.warn('[google-sync] refresh token failed:', err.message);
+    // A revoked/expired refresh token (invalid_grant) is PERMANENT — clear it
+    // so the connection flips to disconnected (status derives from the token
+    // being non-null) and the user is prompted to reconnect, instead of the
+    // sync silently no-op'ing forever. Transient errors are left intact so the
+    // next cron pass retries.
+    if (/invalid_grant/i.test(err.message || '')) {
+      try {
+        await sql`
+          UPDATE calendar_settings
+             SET google_refresh_token_encrypted = NULL,
+                 google_connected_at = NULL
+           WHERE workspace_id = ${workspaceId}
+        `;
+      } catch { /* best-effort cleanup */ }
+    }
     return null;
   }
   return { accessToken, calendarId: r.google_calendar_id };

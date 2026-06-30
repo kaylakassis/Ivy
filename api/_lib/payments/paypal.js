@@ -34,15 +34,19 @@ export function paypalApiBase(env = paypalEnv()) {
 
 // Cache one access token in module scope per cold start (PayPal access
 // tokens last ~9 hours). Refresh on 401.
-let _platformToken = null;
-let _platformTokenExpires = 0;
-async function platformAccessToken() {
-  if (_platformToken && Date.now() < _platformTokenExpires - 30_000) return _platformToken;
+// Token cache keyed by ENVIRONMENT. A sandbox token is only valid against the
+// sandbox API and a live token only against live — caching a single token and
+// reusing it across envs sends the wrong-env token (→ 401) for any workspace
+// whose paypal_environment differs from the platform default.
+const _tokenCache = new Map(); // env → { token, expires }
+async function platformAccessToken(env = paypalEnv()) {
+  const cached = _tokenCache.get(env);
+  if (cached && Date.now() < cached.expires - 30_000) return cached.token;
   const id = process.env.PAYPAL_CLIENT_ID;
   const secret = process.env.PAYPAL_CLIENT_SECRET;
   if (!id || !secret) throw new Error('PayPal platform credentials are not configured');
   const auth = Buffer.from(`${id}:${secret}`).toString('base64');
-  const res = await fetch(`${paypalApiBase()}/v1/oauth2/token`, {
+  const res = await fetch(`${paypalApiBase(env)}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${auth}`,
@@ -55,9 +59,8 @@ async function platformAccessToken() {
     throw new Error(`PayPal token mint failed (${res.status}): ${text.slice(0, 240)}`);
   }
   const j = await res.json();
-  _platformToken = j.access_token;
-  _platformTokenExpires = Date.now() + (j.expires_in || 32400) * 1000;
-  return _platformToken;
+  _tokenCache.set(env, { token: j.access_token, expires: Date.now() + (j.expires_in || 32400) * 1000 });
+  return j.access_token;
 }
 
 // PayPal-Auth-Assertion is a JWT-shaped header that lets the platform
@@ -166,8 +169,8 @@ export async function createCheckoutSession({
   const fs = settings || await fetchFinanceSettings(workspaceId);
   if (!fs?.paypalMerchantId) throw new Error('PayPal is not connected for this workspace');
 
-  const token = await platformAccessToken();
   const env = fs.paypalEnvironment || paypalEnv();
+  const token = await platformAccessToken(env);
   const body = {
     intent: 'CAPTURE',
     purchase_units: [{
@@ -228,8 +231,8 @@ export async function captureOrder({ orderId, workspaceId, settings }) {
   if (!orderId) throw new Error('orderId is required');
   const fs = settings || await fetchFinanceSettings(workspaceId);
   if (!fs?.paypalMerchantId) throw new Error('PayPal is not connected for this workspace');
-  const token = await platformAccessToken();
   const env = fs.paypalEnvironment || paypalEnv();
+  const token = await platformAccessToken(env);
   const res = await fetch(`${paypalApiBase(env)}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
     method: 'POST',
     headers: {
@@ -271,8 +274,8 @@ export async function createRefund({
   const fs = settings || await fetchFinanceSettings(workspaceId);
   if (!fs?.paypalMerchantId) throw new Error('PayPal is not connected for this workspace');
 
-  const token = await platformAccessToken();
   const env = fs.paypalEnvironment || paypalEnv();
+  const token = await platformAccessToken(env);
   const body = {};
   if (amountCents != null) {
     body.amount = {

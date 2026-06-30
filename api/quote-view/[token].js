@@ -130,6 +130,14 @@ export default async function handler(req, res) {
       const due = new Date(); due.setDate(due.getDate() + 14);
       const dueDate = due.toISOString().slice(0, 10);
 
+      // Clamp a fixed discount to the SELECTED subtotal. The proposal discount
+      // was sized for the full option list; if the client deselected options,
+      // copying it verbatim could exceed the reduced subtotal and zero out the
+      // invoice (and its tax) — giving away more than intended.
+      const includedSubtotal = invoiceItems.reduce(
+        (s, it) => s + (Number(it.quantity) || 0) * (Number(it.rate) || 0), 0);
+      const clampedDiscount = Math.min(Math.max(0, Number(row.discount) || 0), includedSubtotal);
+
       let newInvoice;
       try {
         const num = await nextInvoiceNumber(row.workspace_id);
@@ -144,7 +152,7 @@ export default async function handler(req, res) {
             ${row.client_id}, ${row.client_name}, ${row.client_email},
             ${issueDate}, ${dueDate},
             ${JSON.stringify(invoiceItems)}::jsonb,
-            ${row.tax_rate}, ${row.discount}, ${row.notes},
+            ${row.tax_rate}, ${clampedDiscount}, ${row.notes},
             'draft',
             ${JSON.stringify([{ ts: new Date().toISOString(), kind: 'auto-created', text: `Created from accepted estimate ${row.number}` }])}::jsonb,
             COALESCE((SELECT currency FROM finance_settings WHERE workspace_id = ${row.workspace_id}), 'USD')
