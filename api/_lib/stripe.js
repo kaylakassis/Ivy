@@ -57,11 +57,14 @@ export function platformWebhookSecret() {
 // different Stripe endpoint URL than the Connect platform webhook
 // (/api/webhooks/stripe-platform). Stripe issues a separate signing
 // secret per endpoint, so the two cannot share STRIPE_WEBHOOK_SECRET.
-// Falls back to the platform secret only when the dedicated var is
-// unset - useful for single-endpoint dev setups.
+// In PRODUCTION this must be the dedicated billing secret — falling back to
+// the platform secret would cross-wire verification (validly-signed platform
+// events would pass the billing handler). Only allow the fallback in
+// non-production (single-endpoint dev setups); fail closed in prod.
 export function billingWebhookSecret() {
-  return process.env.IVY_BILLING_WEBHOOK_SECRET
-    || platformWebhookSecret();
+  if (process.env.IVY_BILLING_WEBHOOK_SECRET) return process.env.IVY_BILLING_WEBHOOK_SECRET;
+  if (process.env.VERCEL_ENV === 'production') return null;
+  return platformWebhookSecret();
 }
 export function platformPublishableKey() {
   return process.env.STRIPE_PUBLISHABLE_KEY

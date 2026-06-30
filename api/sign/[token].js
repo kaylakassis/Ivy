@@ -215,6 +215,13 @@ async function signDoc(req, res) {
         return badRequest(res, `Please fill in "${f.label || f.type}"`);
       }
     }
+    // A multi-signer must own at least one field — otherwise a recipient with
+    // no assigned fields would be recorded as "signed" with no signature at
+    // all (the per-signer scoping makes the required-field loop trivially pass
+    // for them). The sender should assign them a signature field instead.
+    if (isMulti && !merged.some((f) => (Number.isInteger(f.signerIndex) ? f.signerIndex : 0) === myIdx)) {
+      return badRequest(res, 'No fields are assigned to you to sign on this document. Please contact the sender.');
+    }
 
     if (isMulti) {
       // Stamp this signer complete.

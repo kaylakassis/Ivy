@@ -67,20 +67,36 @@ export default async function handler(req, res) {
       client = ins.rows[0];
     }
 
-    // Add to the group + bump usage counter atomically-ish. ON CONFLICT
-    // means re-redeem is idempotent for the same user (they end up a
-    // member either way; usage counter still increments to make repeat
-    // clicks discourageable).
+    // Already an active member? This is an idempotent re-click — don't burn a
+    // use (the old code incremented used_count on every click).
+    const alreadyMember = (await sql`
+      SELECT 1 FROM group_thread_members
+       WHERE thread_id = ${invite.thread_id} AND client_id = ${client.id}
+         AND left_at IS NULL
+       LIMIT 1
+    `).rows[0];
+
+    if (!alreadyMember) {
+      // Atomically CLAIM one use BEFORE adding the member, so two concurrent
+      // redeems of a max_uses=1 invite can't both succeed (the previous
+      // read-then-write let both pass the quota check and both be added).
+      const claim = await sql`
+        UPDATE group_invite_tokens SET used_count = used_count + 1
+         WHERE id = ${invite.id} AND used_count < max_uses
+           AND revoked_at IS NULL
+           AND (expires_at IS NULL OR expires_at > NOW())
+        RETURNING id
+      `;
+      if (claim.rows.length === 0) return badRequest(res, 'This invite is fully claimed');
+    }
+
+    // Add to the group (idempotent for a rejoin).
     await sql`
       INSERT INTO group_thread_members (thread_id, client_id, workspace_id)
       VALUES (${invite.thread_id}, ${client.id}, ${invite.workspace_id})
       ON CONFLICT (thread_id, client_id) DO UPDATE
         SET left_at = NULL,
             unread_count = 0
-    `;
-    await sql`
-      UPDATE group_invite_tokens SET used_count = used_count + 1
-       WHERE id = ${invite.id} AND used_count < max_uses
     `;
     await sql`
       INSERT INTO group_messages (thread_id, workspace_id, sender, kind, text)

@@ -27,7 +27,10 @@ export default async function handler(req, res) {
     try {
       event = await verifyWebhook({ rawBody, headers: req.headers });
     } catch (e) {
-      return res.status(400).json({ error: e.message });
+      // Confirmed signature mismatch → 400; verify-infra/config failure → 500
+      // so PayPal retries instead of dropping an authentic event.
+      const mismatch = /signature mismatch/i.test(e.message || '');
+      return res.status(mismatch ? 400 : 500).json({ error: e.message });
     }
 
     // Dedup BEFORE processing. PayPal retries for ~25h on non-2xx
