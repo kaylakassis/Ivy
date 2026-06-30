@@ -2430,6 +2430,23 @@ function LaunchControlCard() {
         </button>
       </div>
 
+      {/* Live preview of the public waitlist screen. The /waitlist route
+          renders WaitlistPage directly (no gate, no bypass-cookie check),
+          so this always shows exactly what a logged-out visitor sees —
+          even though your own browser is bypassed/logged in. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <a
+          href="/waitlist" target="_blank" rel="noopener noreferrer"
+          className="btn btn-outline"
+          style={{ fontSize: 13, padding: '8px 14px', textDecoration: 'none' }}
+        >
+          Preview waitlist ↗
+        </a>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+          Opens the public waitlist screen in a new tab — ignores your login/bypass cookie.
+        </span>
+      </div>
+
       {msg && <div style={{ fontSize: 12, color: 'var(--ok)' }}>✓ {msg}</div>}
       {err && <ErrCard msg={err}/>}
     </div>
