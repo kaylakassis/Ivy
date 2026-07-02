@@ -156,11 +156,21 @@ export default function Sidebar({ direction, variant = 'full' }) {
       </button>
 
       <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-        {visibleNav.map(item => {
+        {visibleNav.map((item, i) => {
           const IconComp = Icons[item.icon] || Icons.Home;
+          // Section label the first time a new section appears (NAV is ordered
+          // by section). Purely visual grouping; every route stays reachable.
+          const showHeader = item.section && item.section !== visibleNav[i - 1]?.section;
           return (
+            <React.Fragment key={item.id}>
+              {showHeader && (
+                <div style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--muted)',
+                  padding: '12px 12px 4px', opacity: 0.75,
+                }}>{item.section}</div>
+              )}
             <NavLink
-              key={item.id}
               to={item.to}
               end={item.to === '/'}
               data-tour={`nav-${item.id}`}
@@ -179,6 +189,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
                 </>
               )}
             </NavLink>
+            </React.Fragment>
           );
         })}
       </nav>

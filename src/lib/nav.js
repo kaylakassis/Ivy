@@ -10,21 +10,29 @@
 // to a candle-maker / retailer. Sidebar.jsx pulls business_type from
 // useUserContext() and drops these. The route still exists in App.jsx
 // so deep links + manual navigation still work.
+// `section` groups items under a small label in the sidebar so the 13-item
+// list reads as a few calm sections instead of a flat wall. Purely visual —
+// every route stays reachable and deep-linkable. Items without a section
+// (Dashboard, Ivy Pro, Admin) render pinned above the groups.
 export const NAV = [
   { id: 'dashboard', to: '/dashboard',  label: 'Dashboard',      icon: 'Home' },
-  { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users' },
-  { id: 'projects',  to: '/projects',   label: 'Projects',       icon: 'Doc' },
-  { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar', productOnlyHidden: true },
-  { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar' },
-  { id: 'goals',     to: '/goals',      label: 'Goals & Tasks',  icon: 'Check' },
-  { id: 'workflows', to: '/workflows',  label: 'Workflows',      icon: 'Spark' },
-  { id: 'rewards',   to: '/rewards',    label: 'Rewards',        icon: 'Gift' },
-  { id: 'reviews',   to: '/reviews',    label: 'Reviews',        icon: 'Heart' },
-  { id: 'comms',     to: '/messages',   label: 'Messages',       icon: 'Chat' },
-  { id: 'campaigns', to: '/campaigns',  label: 'Campaigns',      icon: 'Mail' },
-  { id: 'docs',      to: '/documents',  label: 'Documents',      icon: 'Doc' },
-  { id: 'website',   to: '/website',    label: 'Website',        icon: 'Globe' },
   { id: 'ivy',       to: '/ivy',        label: 'Ivy Pro',        icon: 'Spark', accent: true },
+  // Run — the day-to-day.
+  { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users',    section: 'Run' },
+  { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar', section: 'Run', productOnlyHidden: true },
+  { id: 'comms',     to: '/messages',   label: 'Messages',       icon: 'Chat',     section: 'Run' },
+  { id: 'projects',  to: '/projects',   label: 'Projects',       icon: 'Doc',      section: 'Run' },
+  // Money.
+  { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar',   section: 'Money' },
+  // Grow.
+  { id: 'campaigns', to: '/campaigns',  label: 'Campaigns',      icon: 'Mail',     section: 'Grow' },
+  { id: 'reviews',   to: '/reviews',    label: 'Reviews',        icon: 'Heart',    section: 'Grow' },
+  { id: 'rewards',   to: '/rewards',    label: 'Rewards',        icon: 'Gift',     section: 'Grow' },
+  { id: 'website',   to: '/website',    label: 'Website',        icon: 'Globe',    section: 'Grow' },
+  { id: 'workflows', to: '/workflows',  label: 'Workflows',      icon: 'Spark',    section: 'Grow' },
+  // Tools.
+  { id: 'docs',      to: '/documents',  label: 'Documents',      icon: 'Doc',      section: 'Tools' },
+  { id: 'goals',     to: '/goals',      label: 'Goals & Tasks',  icon: 'Check',    section: 'Tools' },
   { id: 'admin',     to: '/admin',      label: 'Admin',          icon: 'Settings', superAdminOnly: true },
 ];
 

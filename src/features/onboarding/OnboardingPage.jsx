@@ -31,6 +31,7 @@ import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { publicOrigin } from '../../lib/publicUrl.js';
 import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
+import IvyGuidedSetup from './IvyGuidedSetup.jsx';
 import { TRIAL_DAYS, IVY_PRICE } from '../../lib/pricing.js';
 
 // Step set per business type. 'both' keeps every step so existing
@@ -115,6 +116,10 @@ export default function OnboardingPage() {
   const [completedSteps, setCompletedSteps] = useState([]);
   const [skippedSteps, setSkippedSteps]     = useState([]);
   const [businessType, setBusinessType]     = useState('both');
+  // "Let Ivy set me up": the guided conversational first run. When true we
+  // render IvyGuidedSetup instead of the manual wizard chrome. The wizard
+  // stays as the "I'll set it up myself" fallback.
+  const [ivyMode, setIvyMode] = useState(false);
   // First-product draft (only used when businessType !== 'service').
   const [productDraft, setProductDraft]     = useState({ name: '', price: '', description: '' });
   const [productCreated, setProductCreated] = useState(false);
@@ -552,6 +557,23 @@ export default function OnboardingPage() {
     );
   }
 
+  // "Let Ivy set me up" path: Ivy runs the setup conversationally and lands the
+  // coach on their live booking link. She calls /onboarding/complete herself,
+  // so onDone just navigates to the dashboard.
+  if (ivyMode) {
+    return (
+      <Shell tweaks={tweaks}>
+        <div className="card" style={{ padding: '28px 30px', marginTop: 18 }}>
+          <IvyGuidedSetup
+            user={user}
+            onExit={() => setIvyMode(false)}
+            onDone={() => nav('/dashboard', { replace: true })}
+          />
+        </div>
+      </Shell>
+    );
+  }
+
   return (
     <Shell tweaks={tweaks}>
       <StripeBounceBanner search={location.search} nav={nav}/>
@@ -569,8 +591,21 @@ export default function OnboardingPage() {
         padding: '32px 36px', marginTop: 18,
         display: 'flex', flexDirection: 'column', gap: 18,
       }}>
-        {currentStep === 'welcome'      && <WelcomeStep user={user}
-          businessType={businessType} setBusinessType={setBusinessType}/>}
+        {currentStep === 'welcome'      && (
+          <>
+            {/* Primary path for coaches: let Ivy do the setup. */}
+            <button type="button" onClick={() => setIvyMode(true)}
+              className="btn btn-primary"
+              style={{ width: '100%', justifyContent: 'center', gap: 9, padding: '14px 18px', fontSize: 15.5 }}>
+              <Icons.Spark size={17} sw={2}/> Let Ivy set me up
+            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, color: 'var(--muted)', fontSize: 12, margin: '2px 0' }}>
+              <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/> or set it up yourself <div style={{ flex: 1, height: 1, background: 'var(--border)' }}/>
+            </div>
+            <WelcomeStep user={user}
+              businessType={businessType} setBusinessType={setBusinessType}/>
+          </>
+        )}
         {currentStep === 'business'     && <BusinessStep
           bizName={bizName} setBizName={setBizName}
           slug={slug} setSlug={setSlug} setSlugTouched={setSlugTouched}
@@ -590,7 +625,6 @@ export default function OnboardingPage() {
         {currentStep === 'first_client' && <FirstClientStep clientDraft={clientDraft} setClientDraft={setClientDraft}
           clientsCount={clientsCount}/>}
         {currentStep === 'website'      && <WebsiteStep websiteStatus={websiteStatus} websiteTemplate={websiteTemplate} setWebsiteTemplate={setWebsiteTemplate}/>}
-        {currentStep === 'tour'         && <TourStep/>}
         {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}
           trialEndsAt={ctx?.subscription?.trialEndsAt || null}/>}
 
