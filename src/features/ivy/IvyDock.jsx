@@ -559,7 +559,7 @@ function IconBtn({ label, onClick, icon, render }) {
       title={label}
       onClick={onClick}
       style={{
-        width: 32, height: 32, borderRadius: 8,
+        width: 40, height: 40, borderRadius: 8,
         border: 'none', background: 'transparent', color: 'var(--muted)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         cursor: 'pointer',

@@ -6,6 +6,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useInvoices } from './state.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
+import { useViewport } from '../../lib/viewport.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
@@ -288,6 +289,9 @@ function InvoicesSection({
   setOpenId, setSending, update, remove, send, resend, markPaid, voidInvoice, refund,
   hasMore, loadMore, loadingMore,
 }) {
+  // On phones the 7-column invoice grid forces sideways scrolling to see
+  // status/total. Below this width we render each invoice as a stacked card.
+  const { isMobile } = useViewport();
   return (
     <>
       <PaymentProviderCard/>
@@ -339,18 +343,20 @@ function InvoicesSection({
         ))}
       </div>
 
-      {/* Table */}
-      <div className="card table-scroll" style={{ overflow: 'auto' }}>
+      {/* Table (desktop) / stacked cards (mobile) */}
+      <div className="card table-scroll" style={{ overflow: isMobile ? 'visible' : 'auto' }}>
         <div>
-          <div style={{
-            display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
-            padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
-            fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
-            background: 'var(--surface-2)',
-          }}>
-            <div>Number</div><div>Client</div><div>Status</div><div>Issued</div><div>Due</div>
-            <div style={{ textAlign: 'right' }}>Total</div><div/>
-          </div>
+          {!isMobile && (
+            <div style={{
+              display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
+              padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
+              fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
+              background: 'var(--surface-2)',
+            }}>
+              <div>Number</div><div>Client</div><div>Status</div><div>Issued</div><div>Due</div>
+              <div style={{ textAlign: 'right' }}>Total</div><div/>
+            </div>
+          )}
           {rows.length === 0 ? (
             <div style={{ padding: 48 }}>
               <EmptyNote
@@ -362,7 +368,7 @@ function InvoicesSection({
               />
             </div>
           ) : rows.map((i, idx) => (
-            <InvoiceRow key={i.id} invoice={i} first={idx === 0} onOpen={() => setOpenId(i.id)}/>
+            <InvoiceRow key={i.id} invoice={i} first={idx === 0} isMobile={isMobile} onOpen={() => setOpenId(i.id)}/>
           ))}
 
           {/* Load more - only when the server reports a page past
@@ -408,8 +414,46 @@ function InvoicesSection({
   );
 }
 
-function InvoiceRow({ invoice, first, onOpen }) {
+function InvoiceRow({ invoice, first, onOpen, isMobile }) {
   const meta = STATUS_META[invoice.status] || STATUS_META.draft;
+  const statusPill = (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 99,
+      fontSize: 11, fontWeight: 600,
+      background: 'var(--surface-2)', border: '1px solid var(--border)', color: meta.color,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
+    </span>
+  );
+
+  if (isMobile) {
+    // Stacked card: number + status on top, client, then due date + total.
+    // Min 44px tall for a comfortable tap target.
+    return (
+      <div onClick={onOpen} style={{
+        padding: '14px 16px', cursor: 'pointer', minHeight: 44,
+        borderTop: first ? 'none' : '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column', gap: 6,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span className="mono-num" style={{ fontSize: 13, fontWeight: 600 }}>{invoice.number}</span>
+          <span style={{ marginLeft: 'auto' }}>{statusPill}</span>
+        </div>
+        <div style={{ fontSize: 13.5, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          {invoice.clientName || <span style={{ color: 'var(--muted-2)' }}>No client yet</span>}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
+          <span style={{ fontSize: 11.5, color: invoice.status === 'overdue' ? 'var(--danger)' : 'var(--muted)' }}>
+            {invoice.dueDate ? `Due ${new Date(invoice.dueDate).toLocaleDateString()}` : 'No due date'}
+          </span>
+          <span className="mono-num" style={{ marginLeft: 'auto', fontSize: 15, fontWeight: 700 }}>
+            {fmtMoney(invoice.total, invoice.currency)}
+          </span>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div onClick={onOpen} style={{
       display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',

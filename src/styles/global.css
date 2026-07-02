@@ -115,6 +115,12 @@ textarea.input::placeholder {
   letter-spacing: -0.005em;
   text-decoration: none;
 }
+/* On touch/narrow screens the sidebar is hidden and these render in the
+   mobile drawer - give them a comfortable 44px tap height (Apple/Material
+   minimum). Desktop density is untouched. */
+@media (max-width: 720px) {
+  .nav-item { min-height: 44px; }
+}
 .nav-item:hover { opacity: 1; background: rgba(0,0,0,0.04); }
 .dir-bold .nav-item:hover { background: rgba(255,255,255,0.04); }
 .nav-item.active {
