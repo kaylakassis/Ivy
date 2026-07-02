@@ -158,10 +158,46 @@ export default async function handler(req, res) {
         // (Stripe trial-with-card on web / Apple intro offer on iOS). Override
         // the schema defaults explicitly so this doesn't silently regress if
         // the column defaults change.
-        await sql`
+        const wsIns = await sql`
           INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
           VALUES (${user.id}, 'incomplete', NULL)
+          RETURNING id
         `;
+        const newWorkspaceId = wsIns.rows[0].id;
+        // Seed a LIVE booking handle immediately so /book/<slug> works the
+        // moment they sign up (the natural shareable "aha") — instead of
+        // 404'ing until they manually type a handle deep in onboarding.
+        // Best-effort: never break signup. Derive a valid unique handle from
+        // their name (matching VALID_HANDLE); retry with a random suffix on a
+        // slug collision; fall back to coach-<rand> if the name yields nothing.
+        try {
+          const baseHandle = ((cleanName || emailKey.split('@')[0] || 'coach')
+            .toLowerCase()
+            .replace(/[^a-z0-9]+/g, '-')
+            .replace(/^-+|-+$/g, '')
+            .slice(0, 32)
+            .replace(/^-+|-+$/g, '')) || 'coach';
+          const seed = baseHandle.length >= 2 ? baseHandle : `coach-${baseHandle}`;
+          for (let attempt = 0; attempt < 5; attempt++) {
+            const candidate = attempt === 0
+              ? seed
+              : `${seed.slice(0, 30)}-${Math.random().toString(36).slice(2, 6)}`;
+            try {
+              await sql`
+                INSERT INTO calendar_settings (workspace_id, biz_name, slug)
+                VALUES (${newWorkspaceId}, ${cleanName.slice(0, 120)}, ${candidate})
+                ON CONFLICT (workspace_id) DO NOTHING
+              `;
+              break; // seeded (or the row already existed) — done
+            } catch (slugErr) {
+              if (/duplicate|unique/i.test(slugErr.message || '') && attempt < 4) continue;
+              throw slugErr;
+            }
+          }
+        } catch (seedErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[signup] booking-handle seed failed:', seedErr.message);
+        }
         // Waitlist discount: if this owner's email is on the pre-launch
         // waitlist, stamp the workspace eligible for the shared 20%/12mo
         // coupon (applied later at checkout). This server-side email

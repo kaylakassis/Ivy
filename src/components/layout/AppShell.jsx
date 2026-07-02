@@ -85,12 +85,14 @@ function AppShellInner() {
   // on TOP of the paywall, blocking the user from starting their trial.
   // The walkthrough naturally fires the moment they activate.
   const subActive = ctx?.subscription?.isActive === true;
+  // Opt-in only: the 12-step spotlight tour no longer auto-launches after
+  // onboarding (it stacked on top of the new Ivy-led first run and overwhelmed
+  // new users). It fires only on an explicit request — AccountPage's "Replay
+  // tour" button (?walkthrough=1) or a programmatic override.
   const showWalkthrough = !needsPaywall
     && subActive
     && walkthroughOverride !== false
-    && (walkthroughOverride === true
-        || walkthroughRequested
-        || (ctx?.isOwner && ctx?.onboardedAt && !ctx?.walkthroughCompletedAt));
+    && (walkthroughOverride === true || walkthroughRequested);
 
   // Mirror the direction class onto <body> so React portals (dropdowns, modals)
   // rendered into document.body inherit the same CSS variables we use everywhere.

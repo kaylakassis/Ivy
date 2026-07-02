@@ -63,7 +63,6 @@ function stepsFor(businessType) {
     { id: 'branding',     label: 'Branding',        optional: true  },
     { id: 'first_client', label: 'First client',    optional: true  },
     { id: 'website',      label: 'Website',         optional: true  },
-    { id: 'tour',         label: 'Quick tour',      optional: false },
     { id: 'done',         label: 'Done',            optional: false },
   );
   return base;
