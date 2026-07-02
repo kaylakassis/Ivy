@@ -8,6 +8,7 @@
 import { sql } from './db.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
+import { celebrateFirstPayment } from './milestones.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
 
@@ -24,6 +25,9 @@ function escapeHtml(s) {
 }
 
 export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, method = 'card' }) {
+  // First-payment milestone - owner-facing, independent of whether the invoice
+  // has a client email (so it fires even for a walk-in receipt-less sale).
+  await celebrateFirstPayment(workspaceId);
   try {
     const { rows } = await sql`
       SELECT i.id, i.number, i.client_id, i.client_name, i.client_email,

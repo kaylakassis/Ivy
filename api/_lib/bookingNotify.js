@@ -12,6 +12,7 @@
 import { sql } from './db.js';
 import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
 import { buildBookingInvite } from './ical.js';
+import { celebrateFirstBooking } from './milestones.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
@@ -68,6 +69,9 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     const branding = await fetchBranding(workspaceId);
 
     const tasks = [];
+
+    // 0. First-booking milestone - a one-time celebration in the owner's feed.
+    tasks.push(celebrateFirstBooking(workspaceId));
 
     // 1. Thread + system message - only if the booking is tied to a client
     //    record. Walk-ins with no client linkage skip this.
