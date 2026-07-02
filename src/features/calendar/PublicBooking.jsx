@@ -52,6 +52,26 @@ export default function PublicBooking({ embedded = false }) {
   // Video room URL returned from the confirmed booking response. Shown
   // on the success screen for virtual services.
   const [confirmedVideoUrl, setConfirmedVideoUrl] = useState(null);
+  // After a deposit checkout redirect (?deposit=paid|cancelled) we land back
+  // here on a FRESH page load with no slot/email in memory. Show a standalone
+  // thank-you (paid) or a reassuring note (cancelled) instead of dumping the
+  // visitor back on the empty booking form - the old dead-end.
+  const [depositNotice, setDepositNotice] = useState(null); // 'paid' | 'cancelled' | null
+  // Days the visitor expanded to see every available time (default shows the
+  // first 8 so a busy day doesn't run the column off-screen). Keyed by ISO date.
+  const [expandedDays, setExpandedDays] = useState(() => new Set());
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const d = params.get('deposit');
+    if (d !== 'paid' && d !== 'cancelled') return;
+    setDepositNotice(d);
+    if (d === 'paid') setStep('deposit-paid');
+    // Strip the param so a refresh doesn't re-trigger the notice.
+    params.delete('deposit');
+    const qs = params.toString();
+    window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+  }, []);
 
   // "Have a question?" prospect-message modal state. Lets a visitor
   // talk to the business before committing to a slot.
@@ -270,6 +290,28 @@ export default function PublicBooking({ embedded = false }) {
         <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
       )}
 
+      {/* Deposit checkout was cancelled - reassure the visitor their slot
+          is still held so they don't think they lost it, and let them try
+          the deposit again from the booking flow. */}
+      {depositNotice === 'cancelled' && step === 'pick' && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '11px 14px', borderRadius: 10, marginBottom: 14,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+          fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5,
+        }}>
+          <Icons.Clock size={15} stroke="var(--accent)"/>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            Your deposit payment was cancelled, but your spot is still reserved.
+            {' '}{cal.settings.bizName || 'The business'} will follow up about the deposit.
+          </span>
+          <button type="button" onClick={() => setDepositNotice(null)}
+            aria-label="Dismiss" className="btn btn-ghost" style={{ padding: 2, color: 'var(--muted)' }}>
+            <Icons.X size={13}/>
+          </button>
+        </div>
+      )}
+
       {/* "Have a question?" CTA - pinned just under the header on the
           slot picker step. We hide it on the success/confirmed/details
           steps to avoid distracting from the active booking flow.
@@ -439,6 +481,20 @@ export default function PublicBooking({ embedded = false }) {
               </div>
             </div>
           )}
+        </div>
+      ) : step === 'deposit-paid' ? (
+        <div className="card" style={{ padding: 36 }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{
+              width: 56, height: 56, borderRadius: 99, background: 'var(--ok)', color: '#fff',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+            }}><Icons.Check size={26} sw={2.4}/></div>
+            <h2 className="page-title" style={{ fontSize: 24, margin: '0 0 8px' }}>Deposit received - you're all set.</h2>
+            <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
+              Thank you! Your spot with <b style={{ color: 'var(--fg-2)' }}>{cal?.settings?.bizName || 'us'}</b> is
+              confirmed and your deposit is paid. A confirmation email with all the details is on its way.
+            </p>
+          </div>
         </div>
       ) : step === 'details' ? (
         <div className="card" style={{ padding: 28 }}>
@@ -793,6 +849,17 @@ export default function PublicBooking({ embedded = false }) {
               // windows existed but every slot is taken (gets a waitlist CTA).
               const isClosed     = allSlots.length === 0;
               const isFullyBooked = allSlots.length > 0 && slots.length === 0;
+              // Show the first 8 times by default; let the visitor expand a
+              // busy day to see the rest (previously the extras were simply
+              // dropped - hidden availability).
+              const dateISO = fmtDateISO(d);
+              const dayExpanded = expandedDays.has(dateISO);
+              const shownSlots = dayExpanded ? slots : slots.slice(0, 8);
+              const toggleDay = () => setExpandedDays((prev) => {
+                const next = new Set(prev);
+                if (next.has(dateISO)) next.delete(dateISO); else next.add(dateISO);
+                return next;
+              });
               return (
                 <div key={i} className="card" style={{
                   padding: 10, display: 'flex', flexDirection: 'column', gap: 6,
@@ -831,7 +898,7 @@ export default function PublicBooking({ embedded = false }) {
                     }}>
                       Fully booked<br/><span style={{ fontWeight: 500 }}>Join waitlist →</span>
                     </button>
-                  ) : slots.slice(0, 8).map((s, si) => (
+                  ) : shownSlots.map((s, si) => (
                     <button key={si} onClick={() => {
                       setSlot({ dateISO: fmtDateISO(d), start: s.start, end: s.end });
                       setStep('details');
@@ -853,7 +920,13 @@ export default function PublicBooking({ embedded = false }) {
                     </button>
                   ))}
                   {slots.length > 8 && (
-                    <div style={{ fontSize: 10, color: 'var(--muted)', textAlign: 'center' }}>+{slots.length - 8} more</div>
+                    <button type="button" onClick={toggleDay} style={{
+                      fontSize: 10, fontWeight: 600, color: 'var(--accent)',
+                      background: 'transparent', border: 'none', cursor: 'pointer',
+                      padding: '2px 0', textAlign: 'center',
+                    }}>
+                      {dayExpanded ? 'Show less' : `+${slots.length - 8} more`}
+                    </button>
                   )}
                 </div>
               );

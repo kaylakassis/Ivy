@@ -45,7 +45,7 @@ export async function selectDueReviewRequests() {
     SELECT b.id, b.workspace_id, b.client_id, b.client_name, b.client_email,
            b.service_id, b.date, b.start_min,
            s.name AS service_name,
-           cs.biz_name,
+           cs.biz_name, cs.slug,
            (SELECT MAX(k::date)
               FROM jsonb_object_keys(b.completion_log) AS k
              WHERE k::date BETWEEN CURRENT_DATE - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
@@ -97,6 +97,9 @@ async function handler(req, res) {
         const dateLabel = (occDate instanceof Date ? occDate : new Date(occDate + 'T00:00:00Z'))
           .toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC' });
         const link = `${appUrl()}/review/${encodeURIComponent(raw)}`;
+        // A "book again" nudge turns the review email into repeat business
+        // for owners who have a public booking page.
+        const rebookUrl = r.slug ? `${appUrl()}/book/${encodeURIComponent(r.slug)}` : null;
 
         // Pre-rated quick-action links - clicking a star on the email
         // takes them straight to the form with that rating selected.
@@ -118,7 +121,10 @@ async function handler(req, res) {
               <p style="text-align:center;margin:24px 0 8px;font-size:14px;color:#85827B;">Tap to rate:</p>
               <p style="text-align:center;line-height:1.7;">
                 <a href="${link}?rating=5" style="text-decoration:none;font-size:30px;letter-spacing:4px;color:#E0B645;">★ ★ ★ ★ ★</a>
-              </p>`,
+              </p>${rebookUrl ? `
+              <p style="text-align:center;margin:22px 0 0;font-size:14px;color:#85827B;">
+                Ready to come back? <a href="${rebookUrl}" style="color:#4E63C7;font-weight:600;text-decoration:none;">Book your next ${escapeHtml(r.service_name || 'visit')}</a>.
+              </p>` : ''}`,
             ctaText: 'Leave a review',
             ctaUrl: link,
             footer: `One-time link - once you submit, this email's link won't work again. Your review is published to ${escapeHtml(business)}'s public profile.`,
