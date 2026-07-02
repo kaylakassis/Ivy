@@ -347,6 +347,9 @@ body.app-walled .view-toggle { display: none; }
 }
 @media (max-width: 900px) {
   .split-2 { grid-template-columns: 1fr; }
+  /* On mobile a coach opens the app to see their day — hoist "Today" above the
+     chart it normally sits beside, so the first thing in view is what's next. */
+  .hoist-mobile { order: -1; }
 }
 
 /* Three-column splits that stack on mobile */

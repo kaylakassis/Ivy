@@ -1,9 +1,10 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useUserContext } from '../../lib/userContext.jsx';
+import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import InviteFriendCard from './InviteFriendCard.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
 
@@ -343,14 +344,16 @@ export default function Dashboard() {
   const { ctx } = useUserContext();
   const businessType = ctx?.owns?.businessType || 'both';
 
-  useEffect(() => {
-    let cancelled = false;
-    api.get('/dashboard')
-      .then((r) => { if (!cancelled) setData(r); })
-      .catch(() => { /* leave panels in their empty state */ })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+  const loadDashboard = useCallback(async () => {
+    try { const r = await api.get('/dashboard'); setData(r); }
+    catch { /* leave panels in their empty state */ }
+    finally { setLoading(false); }
   }, []);
+  useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  // Keep the dashboard LIVE: refresh every 30s while the tab is visible (and on
+  // re-focus). A solo owner watching revenue tick up or a new booking land
+  // without a manual refresh is a core "the app feels alive" moment.
+  useIntervalWhenVisible(loadDashboard, 30000);
 
   const currency = data?.currency || 'USD';
   const today    = data?.today || [];
@@ -365,7 +368,7 @@ export default function Dashboard() {
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SetupChecklist/>
-        <SampleDataCard empty={empty}/>
+        <SampleDataCard empty={empty} onChanged={loadDashboard}/>
         <InviteFriendCard/>
         <div className="grid-auto">
           {metricsFor(businessType).map((m) => (
@@ -383,7 +386,7 @@ export default function Dashboard() {
               <RevenueExpenses revenue={rve.revenue} expenses={rve.expenses} currency={currency}/>
             )}
           </div>
-          <div className="card" style={{ padding: 20 }}>
+          <div className="card hoist-mobile" style={{ padding: 20 }}>
             <div className="metric-label" style={{ marginBottom: 10 }}>Today</div>
             {today.length === 0 ? (
               <EmptyNote icon="Calendar" title="No appointments" hint="Share a booking link or add one manually." />

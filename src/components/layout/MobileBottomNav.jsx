@@ -9,8 +9,11 @@ import { useAuth } from '../../lib/auth.jsx';
 
 const PRIMARY = [
   { id: 'dashboard', to: '/dashboard', icon: 'Home',     label: 'Home' },
-  { id: 'clients',   to: '/clients',   icon: 'Users',    label: 'Clients' },
   { id: 'calendar',  to: '/calendar',  icon: 'Calendar', label: 'Calendar' },
+  // Getting paid is a top daily action for a solo owner — keep Finance one tap
+  // away instead of buried in the drawer. Clients stays reachable via the
+  // drawer and from Calendar/Messages context.
+  { id: 'finance',   to: '/finance',   icon: 'Dollar',   label: 'Money' },
   { id: 'comms',     to: '/messages',  icon: 'Chat',     label: 'Messages' },
   { id: 'ivy',       to: '/ivy',       icon: 'Spark',    label: 'Ivy' },
 ];

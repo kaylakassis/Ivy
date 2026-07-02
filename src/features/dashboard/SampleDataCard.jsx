@@ -6,7 +6,7 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
-export default function SampleDataCard({ empty }) {
+export default function SampleDataCard({ empty, onChanged }) {
   const [exists, setExists] = useState(null); // null=loading
   const [busy, setBusy] = useState(false);
 
@@ -22,10 +22,14 @@ export default function SampleDataCard({ empty }) {
   // Nothing to show once the owner has their own real data (and no demo on).
   if (!exists && !empty) return null;
 
-  const run = async (fn) => {
+  const run = async (nextExists, fn) => {
     setBusy(true);
-    try { await fn(); window.location.reload(); }   // reload so every tile/panel reflects the change
-    catch { setBusy(false); }
+    try {
+      await fn();
+      setExists(nextExists);
+      onChanged?.();   // refresh the dashboard tiles/panels in place (no white-flash reload)
+    } catch { /* leave state as-is */ }
+    finally { setBusy(false); }
   };
 
   if (exists) {
@@ -35,7 +39,7 @@ export default function SampleDataCard({ empty }) {
         <span style={{ flex: 1, fontSize: 13.5, color: 'var(--muted)' }}>
           Sample data is on your dashboard so you can see how everything looks.
         </span>
-        <button type="button" onClick={() => run(() => api.del('/onboarding/sample-data'))} disabled={busy}
+        <button type="button" onClick={() => run(false, () => api.del('/onboarding/sample-data'))} disabled={busy}
           className="btn btn-outline" style={{ fontSize: 13 }}>
           {busy ? 'Removing…' : 'Remove sample data'}
         </button>
@@ -56,7 +60,7 @@ export default function SampleDataCard({ empty }) {
         <div style={{ fontSize: 14.5, fontWeight: 600 }}>New here? See it in action</div>
         <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>Add a sample client, booking &amp; invoice — remove it anytime.</div>
       </div>
-      <button type="button" onClick={() => run(() => api.post('/onboarding/sample-data'))} disabled={busy}
+      <button type="button" onClick={() => run(true, () => api.post('/onboarding/sample-data'))} disabled={busy}
         className="btn btn-primary" style={{ gap: 8 }}>
         {busy ? 'Adding…' : 'Add sample data'}
       </button>
