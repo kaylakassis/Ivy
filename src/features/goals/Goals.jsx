@@ -1,7 +1,9 @@
 // Goals & Tasks: header, stats, two columns (Tasks | Goals).
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import SuccessToast from '../../components/SuccessToast.jsx';
+import { fireConfetti } from '../../lib/celebrate.js';
 import { useGoals } from './state.js';
 import { api } from '../../lib/api.js';
 
@@ -381,6 +383,19 @@ function GoalCard({ goal, onUpdate, onRemove }) {
 
   const reached = pct >= 100;
 
+  // Confetti moment the moment a goal crosses the line (the payoff the Goals
+  // tutorial promises). Fire only on the false→true transition, never on a
+  // reload of an already-hit goal.
+  const wasReached = useRef(reached);
+  const [wonToast, setWonToast] = useState(null);
+  useEffect(() => {
+    if (reached && !wasReached.current) {
+      fireConfetti();
+      setWonToast('Goal reached 🎉');
+    }
+    wasReached.current = reached;
+  }, [reached]);
+
   return (
     <div className={reached ? 'glow-ready' : ''} style={{
       padding: 14, borderRadius: 12,
@@ -444,6 +459,7 @@ function GoalCard({ goal, onUpdate, onRemove }) {
           {goal.notes}
         </div>
       )}
+      <SuccessToast text={wonToast} onDone={() => setWonToast(null)}/>
     </div>
   );
 }

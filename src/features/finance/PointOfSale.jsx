@@ -6,6 +6,7 @@ import React, { useMemo, useState, useRef } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import QRCodeModal from '../../components/QRCodeModal.jsx';
+import { fireConfetti } from '../../lib/celebrate.js';
 import { useProducts } from './posState.js';
 
 const money = (n) => '$' + Number(n || 0).toFixed(2);
@@ -73,6 +74,7 @@ export default function PointOfSale() {
       setResult(r.paid
         ? { paid: true, receiptEmailed: !!r.receiptEmailed }
         : { payUrl: r.payUrl });
+      if (r.paid) fireConfetti(); // money in the door — mark the moment
       setCart([]); setClientName(''); setClientEmail('');
       saleKeyRef.current = null; // success - next sale gets a fresh key
     } catch (e) {
