@@ -59,10 +59,11 @@ async function handler(req, res) {
              i.number, i.due_date,
              GREATEST(0, EXTRACT(DAY FROM i.due_date::timestamp - NOW())::int) AS days_until_due
            FROM invoices i
+           LEFT JOIN calendar_settings cs ON cs.workspace_id = i.workspace_id
            WHERE i.status = 'sent'
              AND i.due_date IS NOT NULL
-             AND i.due_date >= CURRENT_DATE
-             AND i.due_date <= CURRENT_DATE + ($1::int)
+             AND i.due_date >= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
+             AND i.due_date <= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date + ($1::int)
              AND i.client_email IS NOT NULL
              AND i.due_soon_reminder_sent_at IS NULL
              ${shardFilter}

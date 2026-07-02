@@ -90,8 +90,8 @@ export async function fetchDueBookings(cursor, shardFilter = '') {
         (b.client_email IS NOT NULL AND b.client_email <> '')
         OR (COALESCE(b.client_phone, c.phone) IS NOT NULL AND c.sms_consent_at IS NOT NULL)
       )
-      AND b.date BETWEEN CURRENT_DATE - INTERVAL '1 day'
-                     AND CURRENT_DATE + INTERVAL '8 days'
+      AND b.date BETWEEN (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - INTERVAL '1 day'
+                     AND (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date + INTERVAL '8 days'
       AND EXISTS (
         SELECT 1 FROM unnest(COALESCE(s.reminder_minutes, ARRAY[]::int[])) AS m
         WHERE (${startTs} - make_interval(mins => m))

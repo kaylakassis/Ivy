@@ -49,7 +49,7 @@ async function handler(req, res) {
     await ensureSchemaApplied();
 
     const { shard, shards } = shardFromReq(req);
-    const shardFilter = shardClause({ shard, shards }, 'workspace_id');
+    const shardFilter = shardClause({ shard, shards }, 'ri.workspace_id');
 
     let considered = 0, materialized = 0, sent = 0, errors = 0, batches = 0;
     let emptied = false;
@@ -63,11 +63,12 @@ async function handler(req, res) {
       while (Date.now() < deadline) {
         // eslint-disable-next-line no-await-in-loop
         const due = await sql.query(
-          `SELECT id FROM recurring_invoices
-            WHERE status = 'active'
-              AND next_run_at <= CURRENT_DATE
+          `SELECT ri.id FROM recurring_invoices ri
+            LEFT JOIN calendar_settings cs ON cs.workspace_id = ri.workspace_id
+            WHERE ri.status = 'active'
+              AND ri.next_run_at <= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
               ${shardFilter}
-            ORDER BY next_run_at ASC
+            ORDER BY ri.next_run_at ASC
             LIMIT ${BATCH_SIZE}`,
         );
         if (due.rows.length === 0) { emptied = true; break; }

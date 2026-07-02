@@ -48,8 +48,8 @@ export async function selectDueReviewRequests() {
            cs.biz_name, cs.slug,
            (SELECT MAX(k::date)
               FROM jsonb_object_keys(b.completion_log) AS k
-             WHERE k::date BETWEEN CURRENT_DATE - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
-                               AND CURRENT_DATE - ${MIN_DAYS_AFTER} * INTERVAL '1 day'
+             WHERE k::date BETWEEN (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
+                               AND (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MIN_DAYS_AFTER} * INTERVAL '1 day'
            ) AS completed_date
       FROM bookings b
       LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
@@ -61,8 +61,8 @@ export async function selectDueReviewRequests() {
        AND b.completion_log <> '{}'::jsonb
        AND EXISTS (
              SELECT 1 FROM jsonb_object_keys(b.completion_log) AS k
-              WHERE k::date BETWEEN CURRENT_DATE - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
-                                AND CURRENT_DATE - ${MIN_DAYS_AFTER} * INTERVAL '1 day'
+              WHERE k::date BETWEEN (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
+                                AND (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MIN_DAYS_AFTER} * INTERVAL '1 day'
            )
        AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = b.id)
      ORDER BY completed_date DESC

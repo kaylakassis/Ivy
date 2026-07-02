@@ -58,9 +58,10 @@ async function handler(req, res) {
              i.number, i.due_date,
              EXTRACT(DAY FROM NOW() - i.due_date::timestamp)::int AS days_overdue
            FROM invoices i
+           LEFT JOIN calendar_settings cs ON cs.workspace_id = i.workspace_id
            WHERE i.status = 'sent'
              AND i.due_date IS NOT NULL
-             AND i.due_date < CURRENT_DATE
+             AND i.due_date < (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
              AND i.client_email IS NOT NULL
              AND (
                i.last_overdue_reminder_at IS NULL
