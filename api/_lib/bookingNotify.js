@@ -45,6 +45,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         s.name AS service_name, s.location_type, s.location_label,
         cs.biz_name,
         cs.slug,
+        cs.timezone,
         w.owner_id,
         u.email AS owner_email,
         u.name AS owner_name
@@ -101,6 +102,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         dateISO,
         startMin: ctx.start_min,
         endMin: ctx.end_min,
+        timezone: ctx.timezone || null,
         notes: ctx.notes,
         videoRoomUrl: ctx.location_type === 'virtual' && ctx.location_label
           ? ctx.location_label
@@ -189,7 +191,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, bookingId, dateISO, startMin, endMin }) {
+async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, bookingId, dateISO, startMin, endMin, timezone }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
   // bookers go to /signup with the email pre-filled - hitting /me
@@ -248,6 +250,7 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
         startMin,
         endMin,
         bookingId,
+        timezone,
         locationAddress: videoRoomUrl || locationAddress || null,
         description: videoRoomUrl
           ? `Booked with ${businessName} via Ivy OS. Join: ${videoRoomUrl}`

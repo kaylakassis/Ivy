@@ -63,6 +63,7 @@ export function serializeSettings(row) {
     leadInstantReplyEnabled: row.lead_instant_reply_enabled !== false,
     leadInstantReplyMessage: row.lead_instant_reply_message || '',
     category:       row.category || null,
+    timezone:       row.timezone || null,
     addressLabel:   row.address_label || '',
     lat:            row.lat == null ? null : Number(row.lat),
     lng:            row.lng == null ? null : Number(row.lng),

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import Drawer, { TimeInput } from './Drawer.jsx';
 import { WEEKDAYS_LONG, minToHM } from './utils.js';
+import { timezoneOptions, browserTimeZone } from '../../lib/timezones.js';
 
 const NOTICE_OPTIONS = [
   { v: 0,   label: 'No minimum - same-day OK' },
@@ -63,12 +64,16 @@ const selectStyle = {
   color: 'var(--fg)', fontSize: 14,
 };
 
-export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDays, slotMinutes, slotFitService, bufferMinutes, onSave, onClose }) {
+export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDays, slotMinutes, slotFitService, bufferMinutes, timezone, onSave, onClose }) {
   const [avail, setAvail] = useState(initial || {});
   const [notice, setNotice] = useState(noticeHours == null ? 24 : Number(noticeHours));
   const [advance, setAdvance] = useState(maxAdvanceDays == null ? 60 : Number(maxAdvanceDays));
   const [startMode, setStartMode] = useState(slotFitService ? 'service' : String(slotMinutes || 30));
   const [buffer, setBuffer] = useState(bufferMinutes == null ? 0 : Number(bufferMinutes));
+  // Default an unset timezone to the browser's guess so a new owner's booking
+  // page is right without them ever opening this drawer.
+  const [tz, setTz] = useState(timezone || browserTimeZone() || 'UTC');
+  const tzOpts = timezoneOptions(timezone);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
@@ -85,6 +90,7 @@ export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDay
         maxAdvanceDays: advance,
         slotFitService: fit,
         bufferMinutes: buffer,
+        timezone: tz,
         ...(fit ? {} : { slotMinutes: Number(startMode) }),
       });
       onClose();
@@ -97,6 +103,19 @@ export default function AvailabilityDrawer({ initial, noticeHours, maxAdvanceDay
 
   return (
     <Drawer title="Weekly availability" subtitle="Clients can only book inside these hours" onClose={onClose}>
+      <div style={cardStyle}>
+        <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="tz">
+          Your timezone
+        </label>
+        <div style={{ fontSize: 12, color: 'var(--muted)', margin: '2px 0 8px' }}>
+          The zone your hours are in. Your booking page shows times in this zone,
+          so a client anywhere sees the right time.
+        </div>
+        <select id="tz" value={tz} onChange={(e) => setTz(e.target.value)} style={selectStyle}>
+          {tzOpts.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+        </select>
+      </div>
+
       <div style={cardStyle}>
         <label style={{ fontWeight: 600, fontSize: 14, display: 'block' }} htmlFor="start-times">
           Appointment start times

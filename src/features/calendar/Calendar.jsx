@@ -494,6 +494,7 @@ export default function Calendar() {
           slotMinutes={cal?.settings?.slotMinutes}
           slotFitService={cal?.settings?.slotFitService}
           bufferMinutes={cal?.settings?.bufferMinutes}
+          timezone={cal?.settings?.timezone}
           onSave={saveAvailability}
           onClose={() => setDrawer(null)}
         />

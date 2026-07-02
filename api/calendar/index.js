@@ -12,6 +12,7 @@ import {
   invalidateCalendarSettings,
 } from '../_lib/calendar.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
+import { isValidTimeZone } from '../_lib/tz.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 
@@ -160,6 +161,14 @@ export default async function handler(req, res) {
           return badRequest(res, 'Invalid category');
         }
         push('category', c || null);
+      }
+      if ('timezone' in body) {
+        // IANA name (e.g. "America/New_York"). Drives every "today"/slot/.ics
+        // computation; a bad value would silently mis-date bookings, so reject
+        // it rather than store garbage. null clears it (callers fall back to UTC).
+        const tz = body.timezone == null || body.timezone === '' ? null : String(body.timezone).trim();
+        if (tz && !isValidTimeZone(tz)) return badRequest(res, 'Invalid timezone');
+        push('timezone', tz);
       }
       if ('addressLabel' in body) {
         const a = body.addressLabel == null ? null : String(body.addressLabel).trim().slice(0, 140);

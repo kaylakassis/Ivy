@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     const tokenHash = hashToken(rawToken);
 
     const { rows: csRows } = await sql`
-      SELECT workspace_id, biz_name FROM calendar_settings
+      SELECT workspace_id, biz_name, timezone FROM calendar_settings
       WHERE ical_feed_token_hash = ${tokenHash}
       LIMIT 1
     `;
@@ -66,6 +66,7 @@ export default async function handler(req, res) {
       bizName:  cs.biz_name,
       bookings: bookingRes.rows,
       services: serviceRes.rows,
+      timezone: cs.timezone || null,
     });
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8');

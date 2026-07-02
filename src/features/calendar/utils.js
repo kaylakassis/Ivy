@@ -1,4 +1,5 @@
 // Time + slot helpers shared by the calendar feature.
+import { zonedTimeToUtcMs, zonedParts } from '../../lib/tz.js';
 
 // Intersect two lists of {start, end} windows. Mirrors the server-side
 // helper in api/_lib/calendar.js so the slot grid and the booking-validation
@@ -109,13 +110,22 @@ export function slotsForDate(cal, date, serviceOrDur) {
   // portal reschedule both call this; the owner's calendar does not.
   const minNoticeMin = Math.max(0, Number(cal.settings?.minNoticeHours ?? 24) * 60);
   const cutoffMs = Date.now() + minNoticeMin * 60 * 1000;
+  // Booking timezone: past/too-soon/too-far are judged against "now in the
+  // WORKSPACE zone," not the viewer's browser. When unset, zonedTimeToUtcMs
+  // falls back to browser-local, preserving the pre-timezone behavior exactly.
+  const tz = cal.settings?.timezone || null;
   // Booking horizon: slots beyond (today + maxAdvanceDays) aren't bookable.
-  // 0 = no limit. Inclusive of the whole final day.
+  // 0 = no limit. Inclusive of the whole final day, in the workspace zone.
   const maxAdvanceDays = Math.max(0, Number(cal.settings?.maxAdvanceDays ?? 60));
   const horizonMs = maxAdvanceDays > 0
-    ? (() => { const h = new Date(); h.setHours(0, 0, 0, 0); h.setDate(h.getDate() + maxAdvanceDays); h.setHours(23, 59, 59, 999); return h.getTime(); })()
+    ? (() => {
+        const t = zonedParts(tz); // today in the workspace zone
+        const base = new Date(Date.UTC(t.y, t.m - 1, t.d));
+        base.setUTCDate(base.getUTCDate() + maxAdvanceDays);
+        const horizonISO = `${base.getUTCFullYear()}-${String(base.getUTCMonth() + 1).padStart(2, '0')}-${String(base.getUTCDate()).padStart(2, '0')}`;
+        return zonedTimeToUtcMs(horizonISO, 24 * 60 - 1, tz); // end of that day
+      })()
     : Infinity;
-  const dayBaseMs = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 0, 0, 0, 0).getTime();
   // Buffer between appointments: the workspace minimum gap + this service's
   // travel time. Widens the conflict window so a slot too close to an
   // existing booking/block is greyed out (matches the server's hasConflict).
@@ -155,10 +165,13 @@ export function slotsForDate(cal, date, serviceOrDur) {
           seatsTaken++;
         }
       }
-      if (!reason && (dayBaseMs + start * 60000) < cutoffMs) {
+      // Absolute instant of this slot's start in the workspace zone, so the
+      // past/too-soon/too-far checks are DST-correct and match the server.
+      const slotStartMs = zonedTimeToUtcMs(dateISO, start, tz);
+      if (!reason && slotStartMs < cutoffMs) {
         reason = minNoticeMin > 0 ? 'Too soon' : 'Past';
       }
-      if (!reason && (dayBaseMs + start * 60000) > horizonMs) {
+      if (!reason && slotStartMs > horizonMs) {
         reason = 'Too far';
       }
       const available = !reason && seatsTaken < capacity;

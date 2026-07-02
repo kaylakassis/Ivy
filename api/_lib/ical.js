@@ -1,6 +1,7 @@
 // iCalendar (RFC 5545) serializer. Just enough of the spec to emit a
 // subscribable feed of Ivy OS bookings - VCALENDAR + VEVENT, with RRULE
 // for recurring bookings and EXDATE for cancelled occurrences.
+import { zonedTimeToUtcMs } from './tz.js';
 //
 // Privacy: SUMMARY uses the service name + the client's first name only.
 // Email / phone / notes never appear in the feed because the URL is
@@ -45,12 +46,17 @@ function escText(s) {
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
-// "20260101T140000Z" - UTC, basic format. We treat Ivy OS booking
-// times as the workspace's local time, but since we don't have per-
-// workspace tz wired through the schema yet, emit floating local time
-// (no Z suffix). Calendar apps will treat that as the user's local
-// zone, which matches the owner's mental model.
-function fmtLocal(dateStr, mins) {
+// Ivy OS booking times are the workspace's wall-clock time. When we know the
+// workspace timezone, emit an absolute UTC instant ("…Z") so the event lands at
+// the right moment in whatever zone the recipient's calendar is set to. Without
+// a tz we fall back to FLOATING local time (no Z) — the legacy behavior, which
+// calendar apps treat as the viewer's own zone.
+function fmtDT(dateStr, mins, tz) {
+  if (tz) {
+    const d = new Date(zonedTimeToUtcMs(dateStr, mins, tz));
+    return `${d.getUTCFullYear()}${pad(d.getUTCMonth() + 1)}${pad(d.getUTCDate())}`
+      + `T${pad(d.getUTCHours())}${pad(d.getUTCMinutes())}00Z`;
+  }
   const [y, m, d] = dateStr.split('-').map(Number);
   const h = Math.floor(mins / 60);
   const mn = mins % 60;
@@ -98,11 +104,12 @@ function firstName(s) {
 // client can one-tap "add to calendar" (a proven no-show reducer). Unlike
 // buildICalFeed (a read-only mirror of ALL the owner's bookings), this is a
 // client-facing invite: SUMMARY names the business, and it carries the
-// location + a friendly description. Floating local time, same as the feed
-// (per-workspace tz isn't wired through yet).
+// location + a friendly description. When the workspace timezone is known the
+// times are absolute UTC ("…Z") so the event lands correctly in the client's
+// own calendar zone; without it we fall back to floating local (legacy).
 export function buildBookingInvite({
   bizName, serviceName, date, startMin, endMin, bookingId,
-  locationAddress, description, url,
+  locationAddress, description, url, timezone,
 }) {
   const stamp = fmtUtcStamp();
   const summary = serviceName
@@ -118,8 +125,8 @@ export function buildBookingInvite({
     'BEGIN:VEVENT',
     fold(`UID:${uid}`),
     `DTSTAMP:${stamp}`,
-    `DTSTART:${fmtLocal(date, startMin)}`,
-    `DTEND:${fmtLocal(date, endMin)}`,
+    `DTSTART:${fmtDT(date, startMin, timezone)}`,
+    `DTEND:${fmtDT(date, endMin, timezone)}`,
     fold(`SUMMARY:${escText(summary)}`),
     'STATUS:CONFIRMED',
     'TRANSP:OPAQUE',
@@ -132,7 +139,7 @@ export function buildBookingInvite({
   return lines.join('\r\n') + '\r\n';
 }
 
-export function buildICalFeed({ bizName, bookings, services }) {
+export function buildICalFeed({ bizName, bookings, services, timezone }) {
   const serviceById = new Map((services || []).map((s) => [s.id, s]));
   const stamp = fmtUtcStamp();
   const lines = [
@@ -150,8 +157,8 @@ export function buildICalFeed({ bizName, bookings, services }) {
     if (b.cancelled_at) continue;
     const svc = serviceById.get(b.service_id);
     const summary = `${svc?.name || 'Appointment'} - ${firstName(b.client_name)}`;
-    const dtstart = fmtLocal(b.date, b.start_min);
-    const dtend   = fmtLocal(b.date, b.end_min);
+    const dtstart = fmtDT(b.date, b.start_min, timezone);
+    const dtend   = fmtDT(b.date, b.end_min, timezone);
     const uid     = `${b.id}@getivyos.com`;
     const rrule   = rruleFor(b.recurrence_rule, b.recurrence_until);
     const ex      = exDates(b.cancelled_occurrences);

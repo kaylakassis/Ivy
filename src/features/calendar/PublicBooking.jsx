@@ -12,6 +12,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useEmbedResize } from '../../lib/embedResize.js';
+import { tzDisplay } from '../../lib/timezones.js';
 import {
   addDays, fmtDateISO, minToHM, parseISO, slotsForDate, startOfToday, WEEKDAYS_SHORT,
 } from './utils.js';
@@ -934,7 +935,9 @@ export default function PublicBooking({ embedded = false }) {
           </div>
 
           <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 20 }}>
-            Times in your local timezone · Free cancellation up to 24h before
+            {cal.settings.timezone
+              ? `Times shown in ${tzDisplay(cal.settings.timezone)}`
+              : 'Times in the business’s local timezone'} · Free cancellation up to 24h before
           </div>
         </>
       )}

@@ -40,5 +40,17 @@ const bare = buildBookingInvite({ date: '2026-01-02', startMin: 600, endMin: 660
 assert(/SUMMARY:Appointment/.test(bare), 'falls back to "Appointment" with no names');
 assert(!/LOCATION:/.test(bare), 'no LOCATION line when none given');
 
+console.log('\n[4] timezone → absolute UTC instant');
+// 09:30 on 2026-08-14 in New York (EDT, UTC-4) == 13:30 UTC.
+const tzIcs = buildBookingInvite({
+  bizName: 'Bright & Co.', serviceName: 'Massage',
+  date: '2026-08-14', startMin: 9 * 60 + 30, endMin: 10 * 60 + 30,
+  bookingId: 'tz1', timezone: 'America/New_York',
+});
+assert(tzIcs.includes('DTSTART:20260814T133000Z'), 'DTSTART is absolute UTC (13:30Z) with tz');
+assert(tzIcs.includes('DTEND:20260814T143000Z'), 'DTEND is absolute UTC (14:30Z) with tz');
+// No tz → floating local (legacy), no Z suffix.
+assert(/DTSTART:20260814T093000(?!Z)/.test(ics), 'no-tz stays floating local (no Z)');
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail > 0 ? 1 : 0);

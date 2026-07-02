@@ -11,6 +11,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { browserTimeZone } from '../../lib/timezones.js';
 import BookingWin from './BookingWin.jsx';
 
 const slugify = (s) => String(s || '')
@@ -104,9 +105,13 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
       });
       finishLast();
 
-      // 3) Availability.
+      // 3) Availability. Seed the booking timezone from the owner's browser so
+      // their page shows correct times without them ever opening settings.
       mark(`Setting your hours — ${PRESETS[presetKey].label}…`);
-      await api.patch('/calendar', { availability: PRESETS[presetKey].avail });
+      await api.patch('/calendar', {
+        availability: PRESETS[presetKey].avail,
+        ...(browserTimeZone() ? { timezone: browserTimeZone() } : {}),
+      });
       finishLast();
 
       // 4) Mark onboarding complete + read back the final live slug.
