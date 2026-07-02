@@ -7,6 +7,7 @@
 // each workspace's conversation isolated.
 import Anthropic from '@anthropic-ai/sdk';
 import { sql } from './db.js';
+import { workspaceTimeZone } from './calendar.js';
 import { IVY_TOOLS, executeIvyTool } from './ivyTools.js';
 
 // Single shared client. Reads ANTHROPIC_API_KEY from env automatically.
@@ -64,6 +65,7 @@ export async function workspaceContext(workspaceId) {
   // sync by a DB trigger) exactly like the /api/finance dashboard,
   // instead of re-expanding jsonb_array_elements per invoice - same
   // number everywhere, far cheaper at scale.
+  const tz = await workspaceTimeZone(workspaceId); // "this month"/"upcoming" in the owner's zone
   const [
     { rows: r1 }, { rows: r2 }, { rows: r3 }, { rows: r4 }, { rows: r5 }, { rows: r6 },
   ] = await Promise.all([
@@ -72,7 +74,7 @@ export async function workspaceContext(workspaceId) {
       FROM invoices
       WHERE workspace_id = ${workspaceId}
         AND status = 'paid'
-        AND paid_at >= date_trunc('month', NOW())
+        AND paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}
     `,
     sql`
       SELECT
@@ -88,8 +90,8 @@ export async function workspaceContext(workspaceId) {
       SELECT COUNT(*)::int AS upcoming FROM bookings
       WHERE workspace_id = ${workspaceId}
         AND cancelled_at IS NULL
-        AND date >= CURRENT_DATE
-        AND date <  (CURRENT_DATE + INTERVAL '7 days')::date
+        AND date >= (NOW() AT TIME ZONE ${tz})::date
+        AND date <  ((NOW() AT TIME ZONE ${tz})::date + INTERVAL '7 days')::date
     `,
     sql`
       SELECT COUNT(*)::int AS quiet FROM clients c
@@ -143,13 +145,14 @@ export async function workspaceContext(workspaceId) {
 // Time-of-day ("Good morning") is intentionally left to the client, which
 // knows the owner's local clock; the server (UTC) must not guess it.
 export async function buildBriefing(workspaceId) {
+  const tz = await workspaceTimeZone(workspaceId); // "today" in the owner's zone
   const [today, invoices, quiet, biz] = await Promise.all([
     sql`
       SELECT b.start_min, b.client_name, s.name AS service_name
         FROM bookings b
         LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        WHERE b.workspace_id = ${workspaceId}
-         AND b.date = CURRENT_DATE
+         AND b.date = (NOW() AT TIME ZONE ${tz})::date
          AND b.cancelled_at IS NULL
        ORDER BY b.start_min ASC
     `,

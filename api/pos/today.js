@@ -10,6 +10,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
+import { workspaceTimeZone } from '../_lib/calendar.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -20,13 +21,15 @@ export default async function handler(req, res) {
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
 
+    // "Today's drawer" is today in the owner's timezone, not the server's UTC.
+    const tz = await workspaceTimeZone(workspaceId);
     const r = await sql`
       SELECT
-        COUNT(*) FILTER (WHERE status = 'paid'                AND DATE(issue_date) = CURRENT_DATE)::int AS paid_count,
-        COALESCE(SUM(paid_amount) FILTER (WHERE status = 'paid' AND DATE(issue_date) = CURRENT_DATE), 0)::numeric AS paid_total,
-        COUNT(*) FILTER (WHERE status = 'paid' AND paid_method = 'cash' AND DATE(issue_date) = CURRENT_DATE)::int AS cash_count,
-        COALESCE(SUM(paid_amount) FILTER (WHERE status = 'paid' AND paid_method = 'cash' AND DATE(issue_date) = CURRENT_DATE), 0)::numeric AS cash_total,
-        COUNT(*) FILTER (WHERE status IN ('sent','overdue') AND DATE(issue_date) = CURRENT_DATE)::int AS open_count
+        COUNT(*) FILTER (WHERE status = 'paid'                AND issue_date = (NOW() AT TIME ZONE ${tz})::date)::int AS paid_count,
+        COALESCE(SUM(paid_amount) FILTER (WHERE status = 'paid' AND issue_date = (NOW() AT TIME ZONE ${tz})::date), 0)::numeric AS paid_total,
+        COUNT(*) FILTER (WHERE status = 'paid' AND paid_method = 'cash' AND issue_date = (NOW() AT TIME ZONE ${tz})::date)::int AS cash_count,
+        COALESCE(SUM(paid_amount) FILTER (WHERE status = 'paid' AND paid_method = 'cash' AND issue_date = (NOW() AT TIME ZONE ${tz})::date), 0)::numeric AS cash_total,
+        COUNT(*) FILTER (WHERE status IN ('sent','overdue') AND issue_date = (NOW() AT TIME ZONE ${tz})::date)::int AS open_count
       FROM invoices
       WHERE workspace_id = ${workspaceId}
     `;

@@ -1,5 +1,6 @@
 // Shared serializers + helpers for tasks and goals.
 import { sql } from './db.js';
+import { workspaceTimeZone } from './calendar.js';
 
 export const VALID_TASK_TYPES = new Set(['generic', 'message-client', 'send-invoice', 'send-document']);
 export const VALID_GOAL_TYPES = new Set(['revenue', 'clients', 'sessions', 'custom']);
@@ -110,6 +111,10 @@ export function serializeGoal(row, current) {
 export async function computeGoalCurrent(workspaceId, type) {
   if (type === 'custom') return null; // caller falls back to current_manual
 
+  // "This month" is the owner's calendar month in their timezone, so a goal's
+  // progress matches what the dashboard shows.
+  const tz = await workspaceTimeZone(workspaceId);
+
   if (type === 'revenue') {
     // Read the materialized invoices.total column - the SAME source the
     // finance dashboard uses (api/finance/index.js, switched in cae9800).
@@ -122,7 +127,7 @@ export async function computeGoalCurrent(workspaceId, type) {
       FROM invoices
       WHERE workspace_id = ${workspaceId}
         AND status = 'paid'
-        AND paid_at >= date_trunc('month', NOW())
+        AND paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}
     `;
     return Number(rows[0].total || 0);
   }
@@ -140,8 +145,8 @@ export async function computeGoalCurrent(workspaceId, type) {
       SELECT COUNT(*)::int AS n FROM bookings
       WHERE workspace_id = ${workspaceId}
         AND cancelled_at IS NULL
-        AND date >= date_trunc('month', NOW())::date
-        AND date <  (date_trunc('month', NOW()) + INTERVAL '1 month')::date
+        AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date
+        AND date <  (date_trunc('month', NOW() AT TIME ZONE ${tz}) + INTERVAL '1 month')::date
     `;
     return Number(rows[0].n || 0);
   }

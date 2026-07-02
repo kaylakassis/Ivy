@@ -14,6 +14,7 @@
 // re-mark unpaid). If we want a confirmation step later, we can have
 // the loop emit `tool_pending` blocks the UI surfaces as buttons.
 import { sql } from './db.js';
+import { workspaceTimeZone } from './calendar.js';
 import { sendEmail, emailShell } from './email.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
@@ -891,16 +892,17 @@ async function list_quiet_clients({ workspaceId, args }) {
 
 async function list_overdue_invoices({ workspaceId, args }) {
   const limit = clampInt(args.limit, 20, 1, 100);
+  const tz = await workspaceTimeZone(workspaceId);
   const { rows } = await sql.query(
     `SELECT id, number, status, client_id, client_name, client_email,
             issue_date, due_date, total
        FROM invoices
        WHERE workspace_id = $1
          AND status IN ('sent', 'overdue')
-         AND (due_date IS NULL OR due_date <= CURRENT_DATE)
+         AND (due_date IS NULL OR due_date <= (NOW() AT TIME ZONE $3)::date)
        ORDER BY due_date ASC NULLS LAST, issue_date ASC
        LIMIT $2`,
-    [workspaceId, limit],
+    [workspaceId, limit, tz],
   );
   const total = rows.reduce((s, r) => s + Number(r.total || 0), 0);
   return {
@@ -918,6 +920,7 @@ async function list_overdue_invoices({ workspaceId, args }) {
 async function list_upcoming_bookings({ workspaceId, args }) {
   const days = clampInt(args.days_ahead, 7, 1, 60);
   const limit = clampInt(args.limit, 30, 1, 100);
+  const tz = await workspaceTimeZone(workspaceId);
   const { rows } = await sql.query(
     `SELECT b.id, b.client_id, b.client_name, b.client_email,
             b.date, b.start_min, b.end_min, b.notes,
@@ -926,11 +929,11 @@ async function list_upcoming_bookings({ workspaceId, args }) {
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
        WHERE b.workspace_id = $1
          AND b.cancelled_at IS NULL
-         AND b.date BETWEEN CURRENT_DATE
-                        AND CURRENT_DATE + ($2 || ' days')::interval
+         AND b.date BETWEEN (NOW() AT TIME ZONE $4)::date
+                        AND ((NOW() AT TIME ZONE $4)::date + ($2 || ' days')::interval)
        ORDER BY b.date, b.start_min
        LIMIT $3`,
-    [workspaceId, String(days), limit],
+    [workspaceId, String(days), limit, tz],
   );
   return {
     days_ahead: days,
@@ -1264,6 +1267,7 @@ async function search_bookings({ workspaceId, args }) {
 }
 
 async function get_dashboard_summary({ workspaceId }) {
+  const tz = await workspaceTimeZone(workspaceId); // "this month"/"upcoming" in the owner's zone
   const [revenue, clients, bookings, invoices, ltv] = await Promise.all([
     // Revenue this month (sum of paid invoice totals).
     sql`SELECT COALESCE(SUM(
@@ -1277,7 +1281,7 @@ async function get_dashboard_summary({ workspaceId }) {
         FROM invoices
         WHERE workspace_id = ${workspaceId}
           AND status = 'paid'
-          AND COALESCE(paid_at, issue_date) >= date_trunc('month', CURRENT_DATE)`,
+          AND COALESCE(paid_at, issue_date::timestamptz) >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}`,
     sql`SELECT
           COUNT(*) FILTER (WHERE stage = 'active')::int AS active,
           COUNT(*) FILTER (WHERE stage = 'lead')::int   AS leads,
@@ -1286,8 +1290,8 @@ async function get_dashboard_summary({ workspaceId }) {
     sql`SELECT COUNT(*)::int AS upcoming FROM bookings
         WHERE workspace_id = ${workspaceId}
           AND cancelled_at IS NULL
-          AND date >= CURRENT_DATE
-          AND date < CURRENT_DATE + 7`,
+          AND date >= (NOW() AT TIME ZONE ${tz})::date
+          AND date < (NOW() AT TIME ZONE ${tz})::date + 7`,
     sql`SELECT
           COUNT(*) FILTER (WHERE status IN ('sent','overdue'))::int AS open_count,
           COALESCE(SUM(

@@ -47,6 +47,16 @@ export function invalidateCalendarSettings(workspaceId) {
   if (workspaceId) cacheInvalidate(`cs:${workspaceId}`);
 }
 
+// The workspace's IANA timezone, or 'UTC' when unset. Cheap (cache-backed via
+// fetchCalendarSettings) and always non-null so it's safe to interpolate into
+// `... AT TIME ZONE ${tz}` — a NULL there would blow up the whole expression.
+// This is THE source of the tz used by every "today/this-month" rollup.
+export async function workspaceTimeZone(workspaceId) {
+  if (!workspaceId) return 'UTC';
+  const s = await fetchCalendarSettings(workspaceId);
+  return (s && s.timezone) || 'UTC';
+}
+
 export function serializeSettings(row) {
   if (!row) return null;
   return {

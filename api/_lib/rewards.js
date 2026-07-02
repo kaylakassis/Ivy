@@ -1,5 +1,6 @@
 // Shared serializers + helpers for the rewards feature.
 import { sql } from './db.js';
+import { workspaceTimeZone } from './calendar.js';
 
 export const VALID_RULE_TYPES = new Set(['visit', 'spend', 'referral', 'custom']);
 export const VALID_REDEMPTION_STATUSES = new Set(['issued', 'used', 'dismissed']);
@@ -116,7 +117,7 @@ function progressQueryForType(type) {
     return `
       SELECT c.id AS client_id, c.name, c.email,
              COUNT(b.id) FILTER (
-               WHERE b.cancelled_at IS NULL AND b.date <= CURRENT_DATE
+               WHERE b.cancelled_at IS NULL AND b.date <= (NOW() AT TIME ZONE $2)::date
              )::numeric AS current
       FROM clients c
       LEFT JOIN bookings b
@@ -159,7 +160,13 @@ function progressQueryForType(type) {
 export async function clientProgressForRule(workspaceId, rule) {
   const q = progressQueryForType(rule.type);
   if (!q) return [];
-  const { rows } = await sql.query(q, [workspaceId]);
+  // The 'visit' query counts sessions up to "today" in the owner's zone ($2);
+  // spend/referral don't reference a date, so only bind tz when it's used
+  // (Postgres errors on an unused extra bind parameter).
+  const params = q.includes('$2')
+    ? [workspaceId, await workspaceTimeZone(workspaceId)]
+    : [workspaceId];
+  const { rows } = await sql.query(q, params);
   return rows.map((r) => ({
     clientId: r.client_id,
     clientName: r.name,

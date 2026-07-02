@@ -5,9 +5,8 @@
 import { sql } from './_lib/db.js';
 import { requireUser, ensureWorkspace } from './_lib/auth.js';
 import { listTasksWithProgress } from './_lib/goals.js';
+import { workspaceTimeZone } from './_lib/calendar.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
-
-const MONTH_START = "date_trunc('month', NOW())";
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -15,6 +14,9 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res);
     if (!user) return;
     const workspaceId = await ensureWorkspace(user.id);
+    // All "today"/"this month" windows below are anchored to the owner's
+    // timezone, not the server's UTC. tz is always a valid name ('UTC' fallback).
+    const tz = await workspaceTimeZone(workspaceId);
 
     // Move finance_settings into the parallel batch — was sequential
     // (an extra round-trip per dashboard load) for no reason. 10
@@ -23,24 +25,24 @@ export default async function handler(req, res) {
     const [rev, cli, booked, hours, exp, today, recentInv, recentBk, taskRows, fsRow] = await Promise.all([
       sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS v FROM invoices
            WHERE workspace_id = ${workspaceId} AND status = 'paid'
-             AND paid_at >= date_trunc('month', NOW())`,
+             AND paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}`,
       sql`SELECT COUNT(*)::int AS v FROM clients
            WHERE workspace_id = ${workspaceId} AND stage = 'active'`,
       sql`SELECT COUNT(*)::int AS v FROM bookings
            WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
-             AND date >= date_trunc('month', NOW())::date
-             AND date <  (date_trunc('month', NOW()) + INTERVAL '1 month')::date`,
+             AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date
+             AND date <  (date_trunc('month', NOW() AT TIME ZONE ${tz}) + INTERVAL '1 month')::date`,
       sql`SELECT COALESCE(SUM(end_min - start_min), 0)::int AS m FROM bookings
            WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
-             AND date >= date_trunc('month', NOW())::date
-             AND date <  (date_trunc('month', NOW()) + INTERVAL '1 month')::date`,
+             AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date
+             AND date <  (date_trunc('month', NOW() AT TIME ZONE ${tz}) + INTERVAL '1 month')::date`,
       sql`SELECT COALESCE(SUM(amount), 0)::numeric AS v FROM expenses
-           WHERE workspace_id = ${workspaceId} AND date >= date_trunc('month', NOW())::date`,
+           WHERE workspace_id = ${workspaceId} AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date`,
       sql`SELECT b.id, b.start_min, b.end_min, b.client_name, b.no_show_at, b.completion_log,
                  s.name AS service_name
             FROM bookings b
             LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
-           WHERE b.workspace_id = ${workspaceId} AND b.date = CURRENT_DATE
+           WHERE b.workspace_id = ${workspaceId} AND b.date = (NOW() AT TIME ZONE ${tz})::date
              AND b.cancelled_at IS NULL
            ORDER BY b.start_min ASC LIMIT 20`,
       sql`SELECT number, client_name, paid_at FROM invoices
