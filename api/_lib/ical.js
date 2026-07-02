@@ -94,6 +94,44 @@ function firstName(s) {
   return String(s).trim().split(/\s+/)[0] || 'client';
 }
 
+// A single-event .ics for a booking confirmation email attachment, so the
+// client can one-tap "add to calendar" (a proven no-show reducer). Unlike
+// buildICalFeed (a read-only mirror of ALL the owner's bookings), this is a
+// client-facing invite: SUMMARY names the business, and it carries the
+// location + a friendly description. Floating local time, same as the feed
+// (per-workspace tz isn't wired through yet).
+export function buildBookingInvite({
+  bizName, serviceName, date, startMin, endMin, bookingId,
+  locationAddress, description, url,
+}) {
+  const stamp = fmtUtcStamp();
+  const summary = serviceName
+    ? `${serviceName}${bizName ? ` with ${bizName}` : ''}`
+    : (bizName ? `Appointment with ${bizName}` : 'Appointment');
+  const uid = `${bookingId || 'booking'}@getivyos.com`;
+  const lines = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Ivy OS//Booking invite//EN',
+    'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
+    'BEGIN:VEVENT',
+    fold(`UID:${uid}`),
+    `DTSTAMP:${stamp}`,
+    `DTSTART:${fmtLocal(date, startMin)}`,
+    `DTEND:${fmtLocal(date, endMin)}`,
+    fold(`SUMMARY:${escText(summary)}`),
+    'STATUS:CONFIRMED',
+    'TRANSP:OPAQUE',
+  ];
+  if (locationAddress) lines.push(fold(`LOCATION:${escText(locationAddress)}`));
+  if (url) lines.push(fold(`URL:${escText(url)}`));
+  lines.push(fold(`DESCRIPTION:${escText(description || 'Booked via Ivy OS.')}`));
+  lines.push('END:VEVENT');
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n') + '\r\n';
+}
+
 export function buildICalFeed({ bizName, bookings, services }) {
   const serviceById = new Map((services || []).map((s) => [s.id, s]));
   const stamp = fmtUtcStamp();

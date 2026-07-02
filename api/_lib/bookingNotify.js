@@ -11,6 +11,7 @@
 // reported to Sentry but don't surface to the caller.
 import { sql } from './db.js';
 import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
+import { buildBookingInvite } from './ical.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
@@ -91,6 +92,11 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         serviceName,
         dateLabel,
         timeLabel,
+        // Raw fields for the add-to-calendar .ics attachment.
+        bookingId: ctx.id,
+        dateISO,
+        startMin: ctx.start_min,
+        endMin: ctx.end_min,
         notes: ctx.notes,
         videoRoomUrl: ctx.location_type === 'virtual' && ctx.location_label
           ? ctx.location_label
@@ -179,7 +185,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress }) {
+async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, bookingId, dateISO, startMin, endMin }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
   // bookers go to /signup with the email pre-filled - hitting /me
@@ -225,9 +231,36 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
     footer: `If you didn't make this booking, please reach out to ${escapeHtml(businessName)} directly.`,
     branding,
   });
+  // Add-to-calendar attachment - lets the client one-tap save the booking to
+  // their own calendar (a well-established no-show reducer). Best-effort: if
+  // we're missing the raw date/time we just skip it rather than fail the send.
+  let attachments;
+  if (dateISO && startMin != null && endMin != null) {
+    try {
+      const ics = buildBookingInvite({
+        bizName: businessName,
+        serviceName,
+        date: dateISO,
+        startMin,
+        endMin,
+        bookingId,
+        locationAddress: videoRoomUrl || locationAddress || null,
+        description: videoRoomUrl
+          ? `Booked with ${businessName} via Ivy OS. Join: ${videoRoomUrl}`
+          : `Booked with ${businessName} via Ivy OS.`,
+      });
+      attachments = [{
+        filename: 'booking.ics',
+        content: Buffer.from(ics, 'utf8').toString('base64'),
+        contentType: 'text/calendar; method=PUBLISH; charset=UTF-8',
+      }];
+    } catch { /* skip the attachment, still send the email */ }
+  }
+
   await sendEmailToClient({
     clientId, type: 'bookings',
     to, subject: `Booking confirmed - ${dateLabel}`, html, replyTo: branding?.replyTo,
+    attachments,
   });
 }
 

@@ -512,7 +512,7 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
 // Send a categorized email to a client (lookup by clients.id). The
 // workspace scoping is baked into clients.id (clients are workspace-
 // scoped), so prefs are naturally per-workspace.
-export async function sendEmailToClient({ clientId, type, to, subject, html, text, replyTo, headers, timeoutMs }) {
+export async function sendEmailToClient({ clientId, type, to, subject, html, text, replyTo, headers, attachments, timeoutMs }) {
   if (type && !(await clientAllowsEmail(clientId, type))) {
     return { ok: true, sent: false, reason: 'muted' };
   }
@@ -523,7 +523,7 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
     ? unsubscribeUrlFor({ scope: 'client', id: clientId, type })
     : null;
   try {
-    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl });
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     // Same rationale as sendEmailToUser above - log loud on failure so
