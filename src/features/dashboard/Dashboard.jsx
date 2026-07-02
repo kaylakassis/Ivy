@@ -5,6 +5,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useUserContext } from '../../lib/userContext.jsx';
 import InviteFriendCard from './InviteFriendCard.jsx';
+import SampleDataCard from './SampleDataCard.jsx';
 
 // Dashboard tiles per business type. 'both' is the default and shows
 // the original service-centric mix so existing workspaces look the
@@ -356,12 +357,15 @@ export default function Dashboard() {
   const activity = data?.activity || [];
   const tasks    = data?.tasks || [];
   const rve      = data?.revenueVsExpenses;
+  // "Empty" workspace: no real clients or bookings yet → offer sample data.
+  const empty = !!data && (data.clients || 0) === 0 && (data.booked || 0) === 0;
 
   return (
     <div>
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SetupChecklist/>
+        <SampleDataCard empty={empty}/>
         <InviteFriendCard/>
         <div className="grid-auto">
           {metricsFor(businessType).map((m) => (
