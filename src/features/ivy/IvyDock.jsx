@@ -21,6 +21,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { useIvy } from './state.jsx';
+import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 
 const HIDE_PREFIXES = [
@@ -165,7 +166,7 @@ function IvyMark({ size = 22 }) {
 // ── Panel ──────────────────────────────────────────────────────────
 
 function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
-  const { messages, thinking, send, mode, modeError, context, activeId } = ivy;
+  const { messages, thinking, send, mode, modeError, context, briefing, activeId } = ivy;
   const [draft, setDraft] = useState('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -268,6 +269,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
         {showSuggestions ? (
           <Welcome
             context={context}
+            briefing={briefing}
             suggestions={suggestions}
             onPick={(prompt) => submit(prompt)}
           />
@@ -358,7 +360,8 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
 
 // ── Welcome / suggestions ──────────────────────────────────────────
 
-function Welcome({ context, suggestions, onPick }) {
+function Welcome({ context, briefing, suggestions, onPick }) {
+  const showBriefing = hasBriefing(briefing);
   return (
     <div style={{ padding: '6px 4px 12px' }}>
       <div style={{
@@ -366,11 +369,21 @@ function Welcome({ context, suggestions, onPick }) {
         fontSize: 22, lineHeight: 1.2, color: 'var(--fg)',
         marginBottom: 6,
       }}>
-        Hi - I'm Ivy.
+        {showBriefing ? greetingLine(briefing.bizName) : "Hi - I'm Ivy."}
       </div>
       <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 14, lineHeight: 1.5 }}>
-        Ask me anything, or pick something to get started. I can pull data, draft outreach, and send messages or invoices for you.
+        {showBriefing
+          ? "Here's where things stand. Tap any item and I'll take it from there."
+          : 'Ask me anything, or pick something to get started. I can pull data, draft outreach, and send messages or invoices for you.'}
       </div>
+
+      {showBriefing && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginBottom: 14 }}>
+          {briefing.items.map((it, i) => (
+            <BriefingRow key={i} item={it} onPick={onPick}/>
+          ))}
+        </div>
+      )}
 
       {suggestions.length > 0 && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 14 }}>
@@ -396,6 +409,45 @@ function Welcome({ context, suggestions, onPick }) {
         </div>
       )}
     </div>
+  );
+}
+
+// One line of the morning briefing: an at-a-glance fact with a colored icon.
+// If it carries a `prompt`, the whole row is tappable and hands that job to
+// Ivy (e.g. "Draft a payment reminder").
+function BriefingRow({ item, onPick }) {
+  const Icon = Icons[item.icon] || Icons.Spark;
+  const tappable = !!item.prompt;
+  const inner = (
+    <>
+      <span style={{
+        flex: '0 0 auto',
+        width: 26, height: 26, borderRadius: 8,
+        background: 'var(--accent-soft)', color: 'var(--accent)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}>
+        <Icon size={14}/>
+      </span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.35 }}>
+        {item.text}
+      </span>
+      {tappable && <Icons.Arrow size={13} color="var(--muted)"/>}
+    </>
+  );
+  const base = {
+    width: '100%', textAlign: 'left',
+    background: 'var(--surface)', border: '1px solid var(--border)',
+    borderRadius: 10, padding: '9px 11px',
+    display: 'flex', alignItems: 'center', gap: 10,
+  };
+  if (!tappable) return <div style={base}>{inner}</div>;
+  return (
+    <button type="button" onClick={() => onPick(item.prompt)}
+      style={{ ...base, cursor: 'pointer', transition: 'border-color .15s ease' }}
+      onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+      onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
+      {inner}
+    </button>
   );
 }
 

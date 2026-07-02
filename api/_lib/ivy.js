@@ -134,6 +134,99 @@ export async function workspaceContext(workspaceId) {
   };
 }
 
+// A short, proactive "here's your day" briefing Ivy greets the owner with
+// when they open a fresh chat. Deterministic (no LLM call) so it's instant,
+// free, and reliable. Returns the raw facts plus a ready-to-render list of
+// 0-3 prioritized action items, each carrying a `prompt` the owner can tap to
+// hand the job straight to Ivy. Empty items[] on a brand-new workspace, so a
+// first-time owner sees the calm default greeting, not manufactured urgency.
+// Time-of-day ("Good morning") is intentionally left to the client, which
+// knows the owner's local clock; the server (UTC) must not guess it.
+export async function buildBriefing(workspaceId) {
+  const [today, invoices, quiet, biz] = await Promise.all([
+    sql`
+      SELECT b.start_min, b.client_name, s.name AS service_name
+        FROM bookings b
+        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
+       WHERE b.workspace_id = ${workspaceId}
+         AND b.date = CURRENT_DATE
+         AND b.cancelled_at IS NULL
+       ORDER BY b.start_min ASC
+    `,
+    sql`
+      SELECT COUNT(*)::int AS n, COALESCE(SUM(total), 0)::numeric AS owed
+        FROM invoices
+       WHERE workspace_id = ${workspaceId}
+         AND status IN ('sent', 'overdue')
+    `,
+    sql`
+      SELECT c.name FROM clients c
+       WHERE c.workspace_id = ${workspaceId}
+         AND c.stage = 'active'
+         AND NOT EXISTS (
+           SELECT 1 FROM message_threads mt
+           JOIN messages m ON m.thread_id = mt.id
+           WHERE mt.workspace_id = c.workspace_id
+             AND mt.client_id = c.id
+             AND m.created_at >= NOW() - INTERVAL '21 days'
+         )
+       ORDER BY c.created_at DESC
+       LIMIT 5
+    `,
+    sql`SELECT biz_name FROM calendar_settings WHERE workspace_id = ${workspaceId}`,
+  ]);
+
+  const todayRows = today.rows || [];
+  const first = todayRows[0] || null;
+  const overdueN = Number(invoices.rows[0]?.n || 0);
+  const overdueOwed = Number(invoices.rows[0]?.owed || 0);
+  const quietN = (quiet.rows || []).length;
+
+  const fmtTime = (m) => {
+    if (m == null) return '';
+    const h = Math.floor(m / 60); const mm = m % 60;
+    const ap = h < 12 ? 'am' : 'pm';
+    const h12 = h % 12 === 0 ? 12 : h % 12;
+    return `${h12}:${String(mm).padStart(2, '0')}${ap}`;
+  };
+
+  const items = [];
+  if (todayRows.length > 0) {
+    const nextBit = first
+      ? `, first is ${fmtTime(first.start_min)}${first.client_name ? ` with ${first.client_name}` : ''}`
+      : '';
+    items.push({
+      icon: 'Calendar',
+      text: `${todayRows.length} ${todayRows.length === 1 ? 'session' : 'sessions'} today${nextBit}`,
+      prompt: "What's on my calendar today?",
+    });
+  }
+  if (overdueN > 0) {
+    items.push({
+      icon: 'Dollar',
+      text: `${overdueN} unpaid ${overdueN === 1 ? 'invoice' : 'invoices'}`
+        + (overdueOwed > 0 ? ` ($${Math.round(overdueOwed).toLocaleString()} outstanding)` : ''),
+      prompt: 'Draft a friendly payment reminder for my overdue invoices.',
+    });
+  }
+  if (quietN > 0) {
+    items.push({
+      icon: 'Chat',
+      text: `${quietN} ${quietN === 1 ? 'client has' : 'clients have'} gone quiet`,
+      prompt: "Help me reconnect with the clients who've gone quiet.",
+    });
+  }
+
+  return {
+    bizName: biz.rows[0]?.biz_name || null,
+    todaySessions: todayRows.length,
+    overdueInvoices: overdueN,
+    overdueTotal: overdueOwed,
+    quietClients: quietN,
+    items,
+  };
+}
+
 // Human-readable phrasings for the preset profile ids so Ivy reads
 // natural language, not raw enum keys. Free-text "_other" answers are
 // passed through verbatim.

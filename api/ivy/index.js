@@ -9,7 +9,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
-  serializeSession, serializeMessage, workspaceContext,
+  serializeSession, serializeMessage, workspaceContext, buildBriefing,
   generateReply, fetchOwnedSession, getDailyUsage, sanitizeUserText,
   stripInlineMarkdown, IVY_MODEL,
 } from '../_lib/ivy.js';
@@ -55,6 +55,9 @@ export default async function handler(req, res) {
         LIMIT 100
       `, { rows: [] });
       const context = await safe(workspaceContext(workspaceId), {});
+      // Proactive "here's your day" the UI greets the owner with. Best-effort:
+      // a briefing failure must never break loading the chat.
+      const briefing = await safe(buildBriefing(workspaceId), null);
       // Cheap env-var probe so the UI can show a "mock mode" warning even
       // before the user has sent their first message. Doesn't actually
       // call Anthropic - that happens on POST.
@@ -63,6 +66,7 @@ export default async function handler(req, res) {
       return ok(res, {
         sessions: sessions.rows.map((r) => serializeSession(r)),
         context,
+        briefing,
         mode: hasKey ? 'live' : 'mock',
         modeError: hasKey ? null : 'no-api-key',
         model: IVY_MODEL,

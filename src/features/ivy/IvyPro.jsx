@@ -8,6 +8,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { useIvy } from './state.jsx';
+import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 
 export default function IvyPro() {
@@ -15,7 +16,7 @@ export default function IvyPro() {
   const direction = tweaks.direction;
   const { isMobile, isTablet } = useViewport();
   const {
-    sessions, activeId, messages, context,
+    sessions, activeId, messages, context, briefing,
     loading, thinking, error, mode, modeError, model, usage,
     openSession, newChat, send, removeSession,
   } = useIvy();
@@ -141,7 +142,7 @@ export default function IvyPro() {
             </div>
           )}
           {!activeId && messages.length === 0 ? (
-            <WelcomePanel onPrompt={submit} direction={direction}/>
+            <WelcomePanel onPrompt={submit} direction={direction} briefing={briefing}/>
           ) : (
             <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
               {messages.map((m) => <ChatBubble key={m.id} msg={m}/>)}
@@ -387,7 +388,8 @@ function pickInsight(ctx) {
   };
 }
 
-function WelcomePanel({ onPrompt, direction }) {
+function WelcomePanel({ onPrompt, direction, briefing }) {
+  const showBriefing = hasBriefing(briefing);
   const prompts = [
     { icon: <Icons.Dollar size={16} sw={1.8}/>,   title: 'Revenue analysis',    body: 'Where is my money coming from this month?',  tone: '#0A8A4B' },
     { icon: <Icons.Users size={16} sw={1.8}/>,    title: 'Client retention',    body: 'Which clients are at risk of churning?',     tone: '#4E63C7' },
@@ -403,11 +405,50 @@ function WelcomePanel({ onPrompt, direction }) {
         <div style={{ display: 'inline-flex', marginBottom: 16 }}>
           <SparkBadge direction={direction} size={56}/>
         </div>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Welcome to Ivy Pro</h2>
+        <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>
+          {showBriefing ? greetingLine(briefing.bizName) : 'Welcome to Ivy Pro'}
+        </h2>
         <div style={{ fontSize: 14, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>
-          Your AI business coach. Ask anything or start with a prompt below.
+          {showBriefing
+            ? "Here's where things stand today. Tap an item and I'll take it from there."
+            : 'Your AI business coach. Ask anything or start with a prompt below.'}
         </div>
       </div>
+
+      {showBriefing && (
+        <div style={{ maxWidth: 520, margin: '0 auto 28px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {briefing.items.map((it, i) => {
+            const Icon = Icons[it.icon] || Icons.Spark;
+            const tappable = !!it.prompt;
+            const body = (
+              <>
+                <span style={{
+                  width: 30, height: 30, borderRadius: 8, flexShrink: 0,
+                  background: 'var(--accent-soft)', color: 'var(--accent)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                }}><Icon size={15} sw={1.8}/></span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, color: 'var(--fg)', textAlign: 'left' }}>{it.text}</span>
+                {tappable && <Icons.Arrow size={14} color="var(--muted)"/>}
+              </>
+            );
+            const base = {
+              display: 'flex', alignItems: 'center', gap: 12, width: '100%',
+              padding: '12px 14px', borderRadius: 12,
+              background: 'var(--surface)', border: '1px solid var(--border)',
+            };
+            return tappable ? (
+              <button key={i} type="button" onClick={() => onPrompt(it.prompt)}
+                style={{ ...base, cursor: 'pointer', transition: 'border-color .12s' }}
+                onMouseEnter={(e) => { e.currentTarget.style.borderColor = 'var(--border-strong)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.borderColor = 'var(--border)'; }}>
+                {body}
+              </button>
+            ) : (
+              <div key={i} style={base}>{body}</div>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 12 }}>
         {prompts.map((p, i) => (

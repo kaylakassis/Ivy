@@ -44,6 +44,7 @@ function useIvyState() {
   const [activeId, setActiveId]   = useState(null);
   const [messages, setMessages]   = useState([]);
   const [context, setContext]     = useState(EMPTY_CTX);
+  const [briefing, setBriefing]   = useState(null);
   const [loading, setLoading]     = useState(true);
   const [thinking, setThinking]   = useState(false);
   const [error, setError]         = useState(null);
@@ -62,6 +63,7 @@ function useIvyState() {
         if (!live) return;
         setSessions(r.sessions || []);
         setContext(r.context || EMPTY_CTX);
+        setBriefing(r.briefing || null);
         if (r.mode) setMode(r.mode);
         setModeError(r.modeError || null);
         if (r.model) setModel(r.model);
@@ -150,7 +152,7 @@ function useIvyState() {
   }, [activeId]);
 
   return {
-    sessions, activeId, messages, context,
+    sessions, activeId, messages, context, briefing,
     loading, thinking, error, mode, modeError, model, usage,
     openSession, newChat, send, removeSession,
   };
