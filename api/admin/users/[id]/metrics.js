@@ -15,6 +15,7 @@
 import { sql } from '../../../_lib/db.js';
 import { requireSameOrigin } from '../../../_lib/security.js';
 import { requireSuperAdmin } from '../../../_lib/admin.js';
+import { workspaceTimeZone } from '../../../_lib/calendar.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -56,6 +57,9 @@ export default async function handler(req, res) {
       });
     }
 
+    // Day-boundary windows use the workspace's own timezone (fallback UTC).
+    const tz = await workspaceTimeZone(wsId);
+
     // Parallel aggregate queries - none return PII. Every WHERE clause
     // scopes by workspace_id so a single workspace's data is read.
     const [
@@ -73,9 +77,9 @@ export default async function handler(req, res) {
       sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${wsId}`,
       sql`SELECT COUNT(*)::int AS n FROM bookings WHERE workspace_id = ${wsId}`,
       sql`SELECT COUNT(*)::int AS n FROM bookings
-           WHERE workspace_id = ${wsId} AND date >= CURRENT_DATE - INTERVAL '30 days'`,
+           WHERE workspace_id = ${wsId} AND date >= (NOW() AT TIME ZONE ${tz})::date - INTERVAL '30 days'`,
       sql`SELECT COUNT(*)::int AS n FROM bookings
-           WHERE workspace_id = ${wsId} AND date >= CURRENT_DATE - INTERVAL '90 days'`,
+           WHERE workspace_id = ${wsId} AND date >= (NOW() AT TIME ZONE ${tz})::date - INTERVAL '90 days'`,
       sql`SELECT COUNT(*)::int AS n FROM bookings
            WHERE workspace_id = ${wsId} AND no_show_at IS NOT NULL`,
       sql`SELECT COUNT(*)::int AS n FROM bookings
@@ -87,7 +91,7 @@ export default async function handler(req, res) {
       sql`SELECT COUNT(*)::int AS n FROM bookings
            WHERE workspace_id = ${wsId}
              AND cancelled_at IS NULL
-             AND date >= CURRENT_DATE`,
+             AND date >= (NOW() AT TIME ZONE ${tz})::date`,
       sql`SELECT COUNT(*)::int AS n FROM invoices WHERE workspace_id = ${wsId}`,
       sql`SELECT COUNT(*)::int AS n FROM invoices WHERE workspace_id = ${wsId} AND status = 'paid'`,
       sql`SELECT COUNT(*)::int AS n FROM invoices WHERE workspace_id = ${wsId} AND status = 'sent'`,
@@ -95,7 +99,7 @@ export default async function handler(req, res) {
            WHERE workspace_id = ${wsId}
              AND status = 'sent'
              AND due_date IS NOT NULL
-             AND due_date < CURRENT_DATE`,
+             AND due_date < (NOW() AT TIME ZONE ${tz})::date`,
       sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
            FROM invoices WHERE workspace_id = ${wsId} AND status = 'paid'`,
       sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total

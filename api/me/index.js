@@ -44,9 +44,12 @@ async function loadSummary(clientIds) {
       [clientIds],
     ),
     sql.query(
-      `SELECT COUNT(*)::int AS n FROM bookings
-         WHERE client_id = ANY($1) AND cancelled_at IS NULL
-         AND date >= CURRENT_DATE`,
+      // "Upcoming" is judged in each booking's OWN business timezone (a client
+      // can belong to businesses in different zones), falling back to UTC.
+      `SELECT COUNT(*)::int AS n FROM bookings b
+         LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+         WHERE b.client_id = ANY($1) AND b.cancelled_at IS NULL
+         AND b.date >= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date`,
       [clientIds],
     ),
     sql.query(
@@ -61,10 +64,11 @@ async function loadSummary(clientIds) {
     ),
     sql.query(
       `SELECT COUNT(*)::int AS n FROM bookings b
+         LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
          WHERE b.client_id = ANY($1)
            AND b.cancelled_at IS NULL
-           AND b.date >= CURRENT_DATE - INTERVAL '60 days'
-           AND b.date <= CURRENT_DATE
+           AND b.date >= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - INTERVAL '60 days'
+           AND b.date <= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
            AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = b.id)`,
       [clientIds],
     ),

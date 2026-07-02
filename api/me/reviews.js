@@ -37,10 +37,12 @@ export default async function handler(req, res) {
 
     // Booking must be the user's, past, not cancelled.
     const found = await sql.query(
-      `SELECT id, workspace_id, client_id, date, cancelled_at
-       FROM bookings
-       WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL
-         AND date <= CURRENT_DATE`,
+      // "Past" is judged in the business's timezone (fallback UTC).
+      `SELECT b.id, b.workspace_id, b.client_id, b.date, b.cancelled_at
+       FROM bookings b
+       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+       WHERE b.id = $1 AND b.client_id = ANY($2) AND b.cancelled_at IS NULL
+         AND b.date <= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date`,
       [bookingId, myIds],
     );
     if (found.rows.length === 0) {

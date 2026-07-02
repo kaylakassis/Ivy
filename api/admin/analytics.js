@@ -166,6 +166,12 @@ export default async function handler(req, res) {
         [fromIso],
       ),
       // ─── Marketing aggregates (90-day rolling window) ────────────
+      // These are PLATFORM-WIDE, cross-tenant rollups (every workspace at
+      // once), so the CURRENT_DATE windows here stay anchored to UTC on
+      // purpose - there is no single "owner timezone" to convert to, and a
+      // stable UTC boundary keeps the numbers comparable run-to-run.
+      // (Per-workspace, owner-facing surfaces DO use the workspace tz.)
+      //
       // Nine queries precomputed in api/cron/refresh-admin-analytics.js
       // and stored as the 'platformImpact' JSONB blob. When the cache
       // row is present we skip every one of these by short-circuiting

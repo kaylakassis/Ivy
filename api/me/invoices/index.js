@@ -129,7 +129,7 @@ export default async function handler(req, res) {
            LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
           WHERE b.client_id = ANY($1)
             AND b.cancelled_at IS NULL
-            AND b.date >= CURRENT_DATE
+            AND b.date >= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
           ORDER BY b.date ASC, b.start_min ASC
           LIMIT 1`,
         [myIds],
@@ -177,11 +177,12 @@ export default async function handler(req, res) {
         // even though they'd technically be in the same year - "Sessions
         // this year" means "you've already had this many."
         `SELECT COUNT(*)::int AS n
-           FROM bookings
-          WHERE client_id = ANY($1)
-            AND cancelled_at IS NULL
-            AND date >= DATE_TRUNC('year', CURRENT_DATE)
-            AND date < CURRENT_DATE`,
+           FROM bookings b
+           LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+          WHERE b.client_id = ANY($1)
+            AND b.cancelled_at IS NULL
+            AND b.date >= DATE_TRUNC('year', (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date)
+            AND b.date < (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date`,
         [myIds],
       ), { rows: [] }),
     ]);

@@ -28,6 +28,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
+import { workspaceTimeZone } from '../_lib/calendar.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
@@ -61,6 +62,10 @@ export default async function handler(req, res) {
       }
     }
 
+    // The trailing window and the "already happened" check both resolve
+    // against the owner's timezone, not the server's UTC.
+    const tz = await workspaceTimeZone(workspaceId);
+
     // Bookings rollup + signed documents fired in parallel — neither
     // depends on the other. Cuts client-drawer load latency roughly in
     // half on a cold function instance. The conditional per-booking
@@ -75,14 +80,14 @@ export default async function handler(req, res) {
             COUNT(*) FILTER (
               WHERE no_show_at IS NULL
                 AND cancelled_at IS NULL
-                AND (date + (end_min || ' minutes')::interval) < NOW()
+                AND ((date + (end_min || ' minutes')::interval) AT TIME ZONE ${tz}) < NOW()
             )::int AS completed,
             MIN(date) AS first_at,
             MAX(date) AS last_at,
             SUM(booking_total)::numeric AS total_revenue
           FROM bookings
           WHERE workspace_id = ${workspaceId} AND client_id = ${id}
-            AND date >= (CURRENT_DATE - (${windowDays}::int || ' days')::interval)
+            AND date >= ((NOW() AT TIME ZONE ${tz})::date - (${windowDays}::int || ' days')::interval)
         `
       : sql`
           SELECT
@@ -92,7 +97,7 @@ export default async function handler(req, res) {
             COUNT(*) FILTER (
               WHERE no_show_at IS NULL
                 AND cancelled_at IS NULL
-                AND (date + (end_min || ' minutes')::interval) < NOW()
+                AND ((date + (end_min || ' minutes')::interval) AT TIME ZONE ${tz}) < NOW()
             )::int AS completed,
             MIN(date) AS first_at,
             MAX(date) AS last_at,

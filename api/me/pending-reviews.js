@@ -31,10 +31,11 @@ export default async function handler(req, res) {
               s.name AS service_name
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id
+       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
        WHERE b.client_id = ANY($1)
          AND b.cancelled_at IS NULL
-         AND b.date >= CURRENT_DATE - INTERVAL '60 days'
-         AND b.date <= CURRENT_DATE
+         AND b.date >= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - INTERVAL '60 days'
+         AND b.date <= (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
          AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = b.id)
        ORDER BY b.date DESC, b.start_min DESC
        LIMIT 50`,
