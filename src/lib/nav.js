@@ -50,7 +50,7 @@ export const TITLES = {
   campaigns: { title: 'Campaigns',     subtitle: 'Newsletters & announcements' },
   docs:      { title: 'Documents',     subtitle: 'Notes & files' },
   website:   { title: 'Website',       subtitle: 'Public presence' },
-  ivy:       { title: 'Ivy Pro',       subtitle: 'Your AI coach' },
+  ivy:       { title: 'Ivy Pro',       subtitle: 'Your AI copilot' },
   admin:     { title: 'Admin',         subtitle: 'Operator console' },
   // /account isn't in NAV (it's reached from the sidebar profile menu)
   // but it has its own tutorial and Topbar title block, so it needs an

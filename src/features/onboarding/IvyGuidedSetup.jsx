@@ -1,4 +1,5 @@
-// "Let Ivy set me up" — the guided first run for coaches. Ivy asks 3 things,
+// "Let Ivy set me up" — the guided first run for solo service businesses (any
+// industry). Ivy asks 3 things,
 // then DOES the setup by calling the same validated endpoints the manual
 // wizard uses (PATCH /calendar, PUT /calendar/services, POST /onboarding/
 // complete), narrating each step as a completed line. Ends on BookingWin with
@@ -92,10 +93,10 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
       // 2) Your main session as a bookable service.
       const priceNum = Number(svc.price) || 0;
       const durNum = Math.max(5, Number(svc.durationMinutes) || 60);
-      mark(`Adding "${svc.name.trim() || 'Session'}" — ${durNum} min, $${priceNum}…`);
+      mark(`Adding "${svc.name.trim() || 'Service'}" — ${durNum} min, $${priceNum}…`);
       await api.put('/calendar/services', {
         services: [{
-          name: svc.name.trim() || 'Discovery Call',
+          name: svc.name.trim() || 'Consultation',
           durationMinutes: durNum,
           price: priceNum,
           visibility: 'public',
@@ -148,15 +149,15 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
         <IvyBubble>Hi {firstName}! I'm Ivy 👋 I'll get you set up in about a minute — just answer a few things and I'll do the rest.</IvyBubble>
 
         {/* Q1 */}
-        <IvyBubble>First — what should we call your coaching business?</IvyBubble>
+        <IvyBubble>First — what should we call your business?</IvyBubble>
         {phase !== 'q1' && <AnswerLine text={bizName.trim()} />}
 
         {/* Q2 */}
         {(phase === 'q2' || phase === 'q3' || phase === 'working') && (
-          <IvyBubble>Great. What's your main session — its name, length, and price?</IvyBubble>
+          <IvyBubble>Great. What's the main service you offer — its name, length, and price?</IvyBubble>
         )}
         {(phase === 'q3' || phase === 'working') && (
-          <AnswerLine text={`${svc.name.trim() || 'Session'} · ${svc.durationMinutes} min · $${Number(svc.price) || 0}`} />
+          <AnswerLine text={`${svc.name.trim() || 'Service'} · ${svc.durationMinutes} min · $${Number(svc.price) || 0}`} />
         )}
 
         {/* Q3 */}
@@ -187,7 +188,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
           {phase === 'q1' && (
             <form onSubmit={(e) => { e.preventDefault(); if (q1Valid) setPhase('q2'); }} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <input className="input" autoFocus value={bizName} onChange={(e) => setBizName(e.target.value)}
-                placeholder="e.g. Jordan Rivera Coaching" style={{ flex: '1 1 240px', padding: '12px 14px', fontSize: 15 }} />
+                placeholder="e.g. Bright & Co." style={{ flex: '1 1 240px', padding: '12px 14px', fontSize: 15 }} />
               <button type="submit" className="btn btn-primary" disabled={!q1Valid} style={{ padding: '12px 20px' }}>Next</button>
             </form>
           )}
@@ -195,7 +196,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
           {phase === 'q2' && (
             <form onSubmit={(e) => { e.preventDefault(); if (q2Valid) setPhase('q3'); }} style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               <input className="input" autoFocus value={svc.name} onChange={(e) => setSvc({ ...svc, name: e.target.value })}
-                placeholder="Session name — e.g. Discovery Call" style={{ padding: '12px 14px', fontSize: 15 }} />
+                placeholder="Service name — e.g. Consultation" style={{ padding: '12px 14px', fontSize: 15 }} />
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <label style={{ flex: '1 1 120px', fontSize: 12.5, color: 'var(--muted)' }}>
                   Minutes

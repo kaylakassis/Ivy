@@ -4,7 +4,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useUserContext } from '../../lib/userContext.jsx';
-import InviteCoachCard from './InviteCoachCard.jsx';
+import InviteFriendCard from './InviteFriendCard.jsx';
 
 // Dashboard tiles per business type. 'both' is the default and shows
 // the original service-centric mix so existing workspaces look the
@@ -362,7 +362,7 @@ export default function Dashboard() {
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SetupChecklist/>
-        <InviteCoachCard/>
+        <InviteFriendCard/>
         <div className="grid-auto">
           {metricsFor(businessType).map((m) => (
             <MetricCard key={m.k} label={m.label} kind={m.kind} to={m.to}

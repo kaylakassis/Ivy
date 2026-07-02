@@ -1,4 +1,4 @@
-// The "aha" finish screen: hands the new coach their LIVE, shareable booking
+// The "aha" finish screen: hands the new owner their LIVE, shareable booking
 // link (copy / QR / open) instead of dropping them onto an empty dashboard.
 // Reused at the end of the Ivy-guided setup and available as a standalone win
 // moment. Themed with the app tokens; reuses the shared QRCodeModal.

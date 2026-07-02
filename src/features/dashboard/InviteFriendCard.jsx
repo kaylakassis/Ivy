@@ -1,13 +1,14 @@
-// "Invite a fellow coach" — surfaces the existing free-month referral loop
+// "Invite a friend" — surfaces the existing free-month referral loop
 // (api/referrals) that was otherwise buried in Settings, to drive beta
-// participation. Renders NOTHING when the endpoint is unavailable (the referral
-// program is under the active-subscription paywall), so it degrades quietly
-// for trial accounts instead of erroring.
+// participation. Evergreen across every service-based industry. Renders NOTHING
+// when the endpoint is unavailable (the referral program is under the
+// active-subscription paywall), so it degrades quietly for trial accounts
+// instead of erroring.
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 
-export default function InviteCoachCard() {
+export default function InviteFriendCard() {
   const [state, setState] = useState(undefined); // undefined=loading · null=unavailable · {code,link}
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -34,7 +35,7 @@ export default function InviteCoachCard() {
   const mint = async () => {
     setBusy(true);
     try {
-      const code = `COACH${Math.random().toString(36).slice(2, 6).toUpperCase()}`;
+      const code = Math.random().toString(36).slice(2, 8).toUpperCase();
       const r = await api.put('/referrals', { code });
       setState(r);
     } catch { /* leave state; the user can set a code in Settings → Referrals */ }
@@ -54,7 +55,7 @@ export default function InviteCoachCard() {
           <Icons.Gift size={17} sw={1.8}/>
         </div>
         <div>
-          <div style={{ fontSize: 14.5, fontWeight: 600 }}>Invite a fellow coach</div>
+          <div style={{ fontSize: 14.5, fontWeight: 600 }}>Invite a friend</div>
           <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>You both get a free month when they subscribe.</div>
         </div>
       </div>

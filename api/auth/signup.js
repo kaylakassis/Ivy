@@ -169,15 +169,15 @@ export default async function handler(req, res) {
         // 404'ing until they manually type a handle deep in onboarding.
         // Best-effort: never break signup. Derive a valid unique handle from
         // their name (matching VALID_HANDLE); retry with a random suffix on a
-        // slug collision; fall back to coach-<rand> if the name yields nothing.
+        // slug collision; fall back to biz-<rand> if the name yields nothing.
         try {
-          const baseHandle = ((cleanName || emailKey.split('@')[0] || 'coach')
+          const baseHandle = ((cleanName || emailKey.split('@')[0] || 'biz')
             .toLowerCase()
             .replace(/[^a-z0-9]+/g, '-')
             .replace(/^-+|-+$/g, '')
             .slice(0, 32)
-            .replace(/^-+|-+$/g, '')) || 'coach';
-          const seed = baseHandle.length >= 2 ? baseHandle : `coach-${baseHandle}`;
+            .replace(/^-+|-+$/g, '')) || 'biz';
+          const seed = baseHandle.length >= 2 ? baseHandle : `biz-${baseHandle}`;
           for (let attempt = 0; attempt < 5; attempt++) {
             const candidate = attempt === 0
               ? seed
