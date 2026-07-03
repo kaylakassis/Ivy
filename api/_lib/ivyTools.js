@@ -684,6 +684,11 @@ export const IVY_TOOLS = [
     },
   },
   {
+    name: 'complete_onboarding',
+    description: "Mark the owner's setup as complete and publish them into the main app. Call this ONLY after the essentials exist — a business name, at least one service, and weekly availability (use update_settings / create_service / set_availability to create anything missing) — and the owner is happy with their booking page. Idempotent (safe to call more than once).",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'block_calendar_time',
     description: 'Block off a calendar slot so no one can book during it - vacation, focus time, a personal appointment. Pass a date (YYYY-MM-DD) plus either all_day=true OR start_min/end_min (minutes-since-midnight, 0-1440). Confirm WITH THE OWNER before calling.',
     input_schema: {
@@ -763,6 +768,7 @@ export const HANDLERS = {
   update_settings,
   set_availability,
   update_booking_rules,
+  complete_onboarding,
   block_calendar_time,
 };
 
@@ -2240,6 +2246,17 @@ async function update_booking_rules({ workspaceId, args }) {
   const updated = await applySettingsPatch(workspaceId, r.patch);
   if (updated === 0) return { ok: true, updated: 0, note: 'No booking-rule fields supplied; nothing changed.' };
   return { ok: true, updated, changed: Object.keys(r.patch) };
+}
+
+async function complete_onboarding({ workspaceId }) {
+  // Mirrors api/onboarding/complete.js: idempotent stamp + owner-workspace
+  // cache bust so /api/me sees onboardedAt and stops routing to /onboarding.
+  const { rows } = await sql`
+    UPDATE workspaces SET onboarded_at = COALESCE(onboarded_at, NOW())
+     WHERE id = ${workspaceId}
+     RETURNING owner_id, onboarded_at`;
+  if (rows[0]?.owner_id) invalidateOwnerWorkspace(rows[0].owner_id);
+  return { ok: true, onboarded_at: rows[0]?.onboarded_at || null };
 }
 
 async function block_calendar_time({ workspaceId, args }) {

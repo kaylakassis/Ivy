@@ -75,6 +75,15 @@ async function run() {
     r = await executeIvyTool('update_settings', { confirm: true, timezone: 'Not/AZone' }, ctx);
     assert(typeof r.error === 'string' && /timezone/i.test(r.error), 'bad IANA timezone rejected');
 
+    console.log('\n[8] complete_onboarding (routine, idempotent)');
+    assert(!SENSITIVE_TOOLS.has('complete_onboarding'), 'complete_onboarding is NOT gated (routine)');
+    r = await executeIvyTool('complete_onboarding', {}, ctx);
+    assert(r.ok === true && r.onboarded_at, 'sets onboarded_at');
+    const firstStamp = (await sql`SELECT onboarded_at FROM workspaces WHERE id = ${workspaceId}`).rows[0].onboarded_at;
+    r = await executeIvyTool('complete_onboarding', {}, ctx);
+    const secondStamp = (await sql`SELECT onboarded_at FROM workspaces WHERE id = ${workspaceId}`).rows[0].onboarded_at;
+    assert(String(firstStamp) === String(secondStamp), 'idempotent - onboarded_at not overwritten on a second call');
+
     // Cleanup
     await sql`DELETE FROM calendar_settings WHERE workspace_id = ${workspaceId}`;
     await sql`DELETE FROM workspaces WHERE id = ${workspaceId}`;
