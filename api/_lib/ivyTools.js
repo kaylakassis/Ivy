@@ -14,7 +14,9 @@
 // re-mark unpaid). If we want a confirmation step later, we can have
 // the loop emit `tool_pending` blocks the UI surfaces as buttons.
 import { sql } from './db.js';
-import { workspaceTimeZone } from './calendar.js';
+import { workspaceTimeZone, VALID_HANDLE, invalidateCalendarSettings } from './calendar.js';
+import { invalidateOwnerWorkspace } from './clientPortal.js';
+import { validateAvailability, availabilityFromPreset, validateBookingRules, validateBusinessBasics, AVAILABILITY_PRESETS } from './settingsValidation.js';
 import { sendEmail, emailShell } from './email.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
@@ -631,13 +633,15 @@ export const IVY_TOOLS = [
   },
   {
     name: 'update_settings',
-    description: "Update workspace settings the owner would normally edit in Account/Calendar/Share. Covers business name + slug, the booking-page tagline, slot/buffer minutes, lead-reply behavior, AND email branding (logo URL, accent color, signature). Only the fields supplied are changed - omit fields you don't want to touch. Use sparingly: confirm WITH THE OWNER what you're changing before calling, especially for slug (changes their public /book/{slug} URL).",
+    description: "Update the business's identity + booking-page settings the owner would normally edit in Account/Calendar/Share: business name, slug, tagline, TIMEZONE, Discover category, slot/buffer minutes, lead-reply behavior, and email branding (logo URL, accent color, signature). Only the fields supplied are changed. For booking RULES (min-notice, how far ahead, back-to-back) use update_booking_rules; for weekly hours use set_availability. Confirm WITH THE OWNER what you're changing before calling, especially slug (renames their public /book/{slug} URL) and timezone.",
     input_schema: {
       type: 'object',
       properties: {
         business_name:        { type: 'string', description: 'Visible on booking page, invoices, and emails.' },
-        slug:                 { type: 'string', description: 'Public booking handle (lowercase, hyphens, 1-40 chars). Renames /book/{slug}.' },
+        slug:                 { type: 'string', description: 'Public booking handle (lowercase letters/digits/hyphens, 1-40 chars, no leading/trailing/double hyphen). Renames /book/{slug}.' },
         tagline:              { type: 'string', description: 'One-line pitch under the business name on the booking page.' },
+        timezone:             { type: 'string', description: 'IANA timezone, e.g. America/New_York. Drives every booking time + "today".' },
+        category:             { type: 'string', description: 'Discover category (e.g. Wellness, Beauty, Fitness, Home, Pet, Professional).' },
         slot_minutes:         { type: 'integer', enum: [5, 10, 15, 20, 30, 45, 60] },
         buffer_minutes:       { type: 'integer', minimum: 0, maximum: 240 },
         accent_color:         { type: 'string', description: 'Hex color, e.g. #2E3168.' },
@@ -646,6 +650,36 @@ export const IVY_TOOLS = [
         lead_instant_reply_enabled: { type: 'boolean' },
         lead_instant_reply_message: { type: 'string' },
         confirm:              { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+    },
+  },
+  {
+    name: 'set_availability',
+    description: "Set the weekly hours clients can book. Pass EITHER a preset ('weekdays' = Mon-Fri 9-5, 'everyday' = every day 9-5, 'weekends' = Sat+Sun 9-5) OR an explicit `availability` object mapping weekdays to time windows. This REPLACES the whole weekly schedule. Changes the public booking page, so confirm WITH THE OWNER first.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        preset:       { type: 'string', enum: ['weekdays', 'everyday', 'weekends'], description: 'A quick starting schedule (all 9am-5pm).' },
+        availability: {
+          type: 'object',
+          description: 'Weekday -> array of {start,end} windows in minutes since midnight (e.g. {"monday":[{"start":540,"end":1020}]} for Mon 9-5). Keys may be day names or 0-6 (0=Sunday). Omitted days are closed.',
+        },
+        confirm:      { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
+      },
+    },
+  },
+  {
+    name: 'update_booking_rules',
+    description: "Update how the booking page behaves (not the hours themselves): slot_minutes (start-time spacing), buffer_minutes (gap between appointments), min_notice_hours (how far ahead a client must book), max_advance_days (how far out they can book; 0 = no limit), slot_fit_service (true = back-to-back, pack by each service's length). Only supplied fields change. Confirm WITH THE OWNER first.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        slot_minutes:    { type: 'integer', enum: [5, 10, 15, 20, 30, 45, 60] },
+        buffer_minutes:  { type: 'integer', minimum: 0, maximum: 240 },
+        min_notice_hours: { type: 'integer', minimum: 0, maximum: 720 },
+        max_advance_days: { type: 'integer', minimum: 0, maximum: 730 },
+        slot_fit_service: { type: 'boolean' },
+        confirm:         { type: 'boolean', description: 'Only set true AFTER the owner approves in their own message.' },
       },
     },
   },
@@ -727,6 +761,8 @@ export const HANDLERS = {
   refund_invoice,
   // Settings + calendar control
   update_settings,
+  set_availability,
+  update_booking_rules,
   block_calendar_time,
 };
 
@@ -748,8 +784,11 @@ export const SENSITIVE_TOOLS = new Set([
   'refund_invoice',
   // Settings + calendar control: never auto-execute. Renaming a slug
   // breaks the public booking URL; blocking time stops bookings; logo /
-  // branding affects every outbound email. Always confirm with the owner.
+  // branding affects every outbound email; availability + booking rules
+  // reshape the whole public booking page. Always confirm with the owner.
   'update_settings',
+  'set_availability',
+  'update_booking_rules',
   'block_calendar_time',
 ]);
 
@@ -794,6 +833,8 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       if (a.business_name != null) parts.push(`business name → "${String(a.business_name).slice(0, 60)}"`);
       if (a.slug != null) parts.push(`booking handle → /book/${a.slug} (changes the public URL)`);
       if (a.tagline != null) parts.push(`tagline → "${String(a.tagline).slice(0, 60)}"`);
+      if (a.timezone != null) parts.push(`timezone → ${a.timezone}`);
+      if (a.category != null) parts.push(`category → ${a.category}`);
       if (a.slot_minutes != null) parts.push(`slot minutes → ${a.slot_minutes}`);
       if (a.buffer_minutes != null) parts.push(`buffer minutes → ${a.buffer_minutes}`);
       if (a.accent_color != null) parts.push(`accent color → ${a.accent_color}`);
@@ -802,6 +843,34 @@ async function describeSensitiveAction(name, a, ctx = {}) {
       if (a.lead_instant_reply_enabled != null) parts.push(`instant lead reply → ${a.lead_instant_reply_enabled ? 'on' : 'off'}`);
       if (a.lead_instant_reply_message != null) parts.push(`lead-reply message updated`);
       return `Update settings: ${parts.length ? parts.join('; ') : '(no fields supplied)'}`;
+    }
+    case 'set_availability': {
+      const DAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      let avail = null;
+      if (a.preset) {
+        avail = AVAILABILITY_PRESETS[String(a.preset).toLowerCase()] || null;
+        if (!avail) return `Set weekly availability from preset "${a.preset}"`;
+      } else if (a.availability && typeof a.availability === 'object') {
+        const v = validateAvailability(a.availability);
+        avail = v.error ? null : v.value;
+        if (!avail) return `Set weekly availability (couldn't preview: ${v.error})`;
+      }
+      if (!avail) return 'Set weekly availability';
+      const lines = Object.keys(avail).sort().map((k) => {
+        const idx = Number(k);
+        const wins = (avail[k] || []).map((w) => `${fmtMinAsTime(w.start)}-${fmtMinAsTime(w.end)}`).join(', ');
+        return `${DAY[idx] || k}: ${wins}`;
+      });
+      return `Replace the weekly booking hours with — ${lines.join(' · ')}. Days not listed are closed. This changes the public booking page.`;
+    }
+    case 'update_booking_rules': {
+      const parts = [];
+      if (a.slot_minutes != null) parts.push(`start-time spacing → every ${a.slot_minutes} min`);
+      if (a.buffer_minutes != null) parts.push(`buffer between appointments → ${a.buffer_minutes} min`);
+      if (a.min_notice_hours != null) parts.push(`minimum notice → ${a.min_notice_hours}h`);
+      if (a.max_advance_days != null) parts.push(`book up to → ${a.max_advance_days === 0 ? 'no limit' : `${a.max_advance_days} days ahead`}`);
+      if (a.slot_fit_service != null) parts.push(`back-to-back scheduling → ${a.slot_fit_service ? 'on' : 'off'}`);
+      return `Update booking rules: ${parts.length ? parts.join('; ') : '(no fields supplied)'}`;
     }
     case 'block_calendar_time': {
       const when = a.all_day
@@ -2058,65 +2127,119 @@ async function refund_invoice({ workspaceId, args }) {
 // Settings update covering business info + booking config + email
 // branding. We hand-build the SET clause (rather than slamming every
 // column in one big UPDATE) so omitted fields are left untouched.
-async function update_settings({ workspaceId, args }) {
-  const sets = [];
-  const values = [];
-  const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };
+// Every calendar_settings write MUST call this so the change is visible
+// immediately (the row is hot-cached 30s; biz_name/slug also live in the
+// owner-workspace cache). owner_id is resolved from the workspace since the
+// tool loop only passes { workspaceId }.
+async function afterSettingsWrite(workspaceId) {
+  invalidateCalendarSettings(workspaceId);
+  try {
+    const { rows } = await sql`SELECT owner_id FROM workspaces WHERE id = ${workspaceId} LIMIT 1`;
+    if (rows[0]?.owner_id) invalidateOwnerWorkspace(rows[0].owner_id);
+  } catch { /* cache bust is best-effort */ }
+}
 
-  if (typeof args.business_name === 'string') {
-    const v = args.business_name.trim().slice(0, 120);
-    if (!v) throw new Error('business_name cannot be empty');
-    push('biz_name', v);
-  }
+// Upsert the settings row, apply a { column: value } patch, and bust caches.
+async function applySettingsPatch(workspaceId, patch) {
+  const cols = Object.keys(patch);
+  if (cols.length === 0) return 0;
+  await sql`INSERT INTO calendar_settings (workspace_id) VALUES (${workspaceId})
+            ON CONFLICT (workspace_id) DO NOTHING`;
+  const sets = []; const values = [];
+  for (const c of cols) { values.push(patch[c]); sets.push(`${c} = $${values.length}`); }
+  sets.push('updated_at = NOW()');
+  values.push(workspaceId);
+  await sql.query(`UPDATE calendar_settings SET ${sets.join(', ')} WHERE workspace_id = $${values.length}`, values);
+  await afterSettingsWrite(workspaceId);
+  return cols.length;
+}
+
+async function update_settings({ workspaceId, args }) {
+  const patch = {};
+
+  // Business identity (name/tagline/timezone/category) via the shared validator.
+  const basics = {};
+  if (typeof args.business_name === 'string') basics.bizName = args.business_name;
+  if (typeof args.tagline === 'string') basics.tagline = args.tagline;
+  if (typeof args.timezone === 'string') basics.timezone = args.timezone;
+  if (typeof args.category === 'string') basics.category = args.category;
+  const b = validateBusinessBasics(basics);
+  if (b.error) throw new Error(b.error);
+  Object.assign(patch, b.patch);
+
+  // Slug — canonical VALID_HANDLE + uniqueness (the old inline regex drifted).
   if (typeof args.slug === 'string') {
     const slug = args.slug.toLowerCase().trim();
-    if (!/^[a-z0-9-]{1,40}$/.test(slug)) throw new Error('slug must be 1-40 chars: lowercase letters, digits, hyphens');
+    if (!VALID_HANDLE.test(slug)) throw new Error('slug must be 1-40 chars: lowercase letters, digits, hyphens; no leading/trailing/double hyphen');
     const clash = await sql`SELECT 1 FROM calendar_settings WHERE slug = ${slug} AND workspace_id <> ${workspaceId} LIMIT 1`;
     if (clash.rows.length > 0) throw new Error('that slug is already taken by another business');
-    push('slug', slug);
+    patch.slug = slug;
   }
-  if (typeof args.tagline === 'string') {
-    push('tagline', args.tagline.trim().slice(0, 140) || null);
-  }
-  if (Number.isInteger(args.slot_minutes)) {
-    if (![5, 10, 15, 20, 30, 45, 60].includes(args.slot_minutes)) throw new Error('slot_minutes must be one of 5, 10, 15, 20, 30, 45, 60');
-    push('slot_minutes', args.slot_minutes);
-  }
-  if (Number.isInteger(args.buffer_minutes)) {
-    if (args.buffer_minutes < 0 || args.buffer_minutes > 240) throw new Error('buffer_minutes must be 0-240');
-    push('buffer_minutes', args.buffer_minutes);
-  }
+
+  // Booking rules (slot/buffer) via the shared validator.
+  const rules = validateBookingRules({ slotMinutes: args.slot_minutes, bufferMinutes: args.buffer_minutes });
+  if (rules.error) throw new Error(rules.error);
+  Object.assign(patch, rules.patch);
+
+  // Branding + lead-reply (kept here; not part of the shared calendar module).
   if (typeof args.accent_color === 'string') {
     const c = args.accent_color.trim();
     if (!/^#[0-9a-fA-F]{6}$/.test(c)) throw new Error('accent_color must be a 6-digit hex like #2E3168');
-    push('brand_accent_color', c);
+    patch.brand_accent_color = c;
   }
   if (typeof args.logo_url === 'string') {
     const u = args.logo_url.trim();
     if (u && !/^https:\/\//.test(u)) throw new Error('logo_url must be an https URL (or empty to remove)');
-    push('brand_logo_url', u || null);
+    patch.brand_logo_url = u || null;
   }
   if (typeof args.email_signature === 'string') {
-    push('brand_email_signature', args.email_signature.trim().slice(0, 2000) || null);
+    patch.brand_email_signature = args.email_signature.trim().slice(0, 2000) || null;
   }
   if (typeof args.lead_instant_reply_enabled === 'boolean') {
-    push('lead_instant_reply_enabled', args.lead_instant_reply_enabled);
+    patch.lead_instant_reply_enabled = args.lead_instant_reply_enabled;
   }
   if (typeof args.lead_instant_reply_message === 'string') {
-    push('lead_instant_reply_message', args.lead_instant_reply_message.trim().slice(0, 2000) || null);
+    patch.lead_instant_reply_message = args.lead_instant_reply_message.trim().slice(0, 2000) || null;
   }
-  if (sets.length === 0) return { ok: true, updated: 0, note: 'No supported fields supplied; nothing changed.' };
 
-  // Ensure the row exists, then patch.
+  const updated = await applySettingsPatch(workspaceId, patch);
+  if (updated === 0) return { ok: true, updated: 0, note: 'No supported fields supplied; nothing changed.' };
+  return { ok: true, updated, changed_fields: Object.keys(patch) };
+}
+
+async function set_availability({ workspaceId, args }) {
+  let avail;
+  if (args.preset) {
+    const r = availabilityFromPreset(args.preset);
+    if (r.error) throw new Error(r.error);
+    avail = r.value;
+  } else if (args.availability && typeof args.availability === 'object') {
+    const r = validateAvailability(args.availability);
+    if (r.error) throw new Error(r.error);
+    avail = r.value;
+  } else {
+    throw new Error('provide either a preset (weekdays / everyday / weekends) or an explicit availability object');
+  }
   await sql`INSERT INTO calendar_settings (workspace_id) VALUES (${workspaceId})
             ON CONFLICT (workspace_id) DO NOTHING`;
-  sets.push('updated_at = NOW()');
-  values.push(workspaceId);
-  await sql.query(
-    `UPDATE calendar_settings SET ${sets.join(', ')} WHERE workspace_id = $${values.length}`,
-    values,
-  );
-  return { ok: true, updated: sets.length - 1, changed_fields: Object.keys(args).filter((k) => k !== 'confirm') };
+  await sql`UPDATE calendar_settings SET availability = ${JSON.stringify(avail)}::jsonb, updated_at = NOW()
+            WHERE workspace_id = ${workspaceId}`;
+  await afterSettingsWrite(workspaceId);
+  return { ok: true, days_open: Object.keys(avail).length, availability: avail };
+}
+
+async function update_booking_rules({ workspaceId, args }) {
+  const r = validateBookingRules({
+    slotMinutes: args.slot_minutes,
+    bufferMinutes: args.buffer_minutes,
+    minNoticeHours: args.min_notice_hours,
+    maxAdvanceDays: args.max_advance_days,
+    slotFitService: args.slot_fit_service,
+  });
+  if (r.error) throw new Error(r.error);
+  const updated = await applySettingsPatch(workspaceId, r.patch);
+  if (updated === 0) return { ok: true, updated: 0, note: 'No booking-rule fields supplied; nothing changed.' };
+  return { ok: true, updated, changed: Object.keys(r.patch) };
 }
 
 async function block_calendar_time({ workspaceId, args }) {

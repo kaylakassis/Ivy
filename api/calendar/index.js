@@ -13,6 +13,7 @@ import {
 } from '../_lib/calendar.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { isValidTimeZone } from '../_lib/tz.js';
+import { validateAvailability } from '../_lib/settingsValidation.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 
@@ -193,18 +194,11 @@ export default async function handler(req, res) {
         }
       }
       if ('availability' in body) {
-        const a = body.availability;
-        if (!a || typeof a !== 'object') return badRequest(res, 'availability must be an object');
-        for (const day of Object.keys(a)) {
-          if (!/^[0-6]$/.test(day)) return badRequest(res, 'availability keys must be 0..6');
-          if (!Array.isArray(a[day])) return badRequest(res, `availability[${day}] must be an array`);
-          for (const w of a[day]) {
-            if (!w || typeof w !== 'object') return badRequest(res, `availability window malformed`);
-            if (!Number.isInteger(w.start) || !Number.isInteger(w.end)) return badRequest(res, 'window start/end must be ints');
-            if (w.start < 0 || w.end > 24 * 60 || w.start >= w.end) return badRequest(res, 'window has invalid range');
-          }
-        }
-        push('availability', JSON.stringify(a));
+        // Shared validator (api/_lib/settingsValidation.js) — same source of
+        // truth Ivy's set_availability tool uses, so they can never drift.
+        const r = validateAvailability(body.availability);
+        if (r.error) return badRequest(res, r.error);
+        push('availability', JSON.stringify(r.value));
       }
 
       // Make sure a row exists, then patch.

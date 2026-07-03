@@ -53,7 +53,7 @@ async function run() {
     res = await executeIvyTool('update_settings', { confirm: true, accent_color: 'red' }, { workspaceId });
     assert(res?.error && /accent_color must be/i.test(res.error), 'invalid accent_color rejected');
     res = await executeIvyTool('update_settings', { confirm: true, slot_minutes: 7 }, { workspaceId });
-    assert(res?.error && /slot_minutes must be/i.test(res.error), 'invalid slot_minutes rejected');
+    assert(res?.error && /slot.?minutes must be/i.test(res.error), 'invalid slot_minutes rejected');
 
     console.log('\n[5] block_calendar_time without confirm is gated');
     r = await executeIvyTool('block_calendar_time', { date: '2099-01-15', all_day: true, label: 'Vacation' }, { workspaceId });
