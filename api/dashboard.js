@@ -6,6 +6,7 @@ import { sql } from './_lib/db.js';
 import { requireUser, ensureWorkspace } from './_lib/auth.js';
 import { listTasksWithProgress } from './_lib/goals.js';
 import { workspaceTimeZone } from './_lib/calendar.js';
+import { touchStreak } from './_lib/streak.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 export default async function handler(req, res) {
@@ -72,8 +73,13 @@ export default async function handler(req, res) {
       .slice(0, 8)
       .map((a) => ({ ...a, ts: a.ts instanceof Date ? a.ts.toISOString() : a.ts }));
 
+    // Advance the daily-return streak (the dashboard is the canonical daily
+    // surface). Idempotent within a day; never blocks the load.
+    const streak = await touchStreak(workspaceId);
+
     return ok(res, {
       currency,
+      streak: { days: streak.days, milestone: streak.milestone },
       metrics: {
         mrr:     Number(rev.rows[0].v || 0),
         clients: Number(cli.rows[0].v || 0),

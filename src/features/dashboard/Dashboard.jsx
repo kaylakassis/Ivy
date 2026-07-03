@@ -1,10 +1,12 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
+import { fireConfetti } from '../../lib/celebrate.js';
+import SuccessToast from '../../components/SuccessToast.jsx';
 import InviteFriendCard from './InviteFriendCard.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
 import NotifyPrompt from '../../components/NotifyPrompt.jsx';
@@ -356,6 +358,19 @@ export default function Dashboard() {
   // without a manual refresh is a core "the app feels alive" moment.
   useIntervalWhenVisible(loadDashboard, 30000);
 
+  // Celebrate a streak milestone once (the server returns `milestone` only on
+  // the first load of the day it's crossed; guard against the 30s re-poll).
+  const [streakToast, setStreakToast] = useState(null);
+  const celebratedMs = useRef(null);
+  useEffect(() => {
+    const ms = data?.streak?.milestone;
+    if (ms && celebratedMs.current !== ms) {
+      celebratedMs.current = ms;
+      fireConfetti();
+      setStreakToast(`🔥 ${ms}-day streak!`);
+    }
+  }, [data?.streak?.milestone]);
+
   const currency = data?.currency || 'USD';
   const today    = data?.today || [];
   const activity = data?.activity || [];
@@ -368,6 +383,17 @@ export default function Dashboard() {
     <div>
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        {data?.streak?.days >= 2 && (
+          <div style={{ display: 'flex' }}>
+            <span style={{
+              display: 'inline-flex', alignItems: 'center', gap: 7,
+              padding: '5px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+            }} title="Days in a row you've shown up. Keep it going!">
+              🔥 {data.streak.days}-day streak
+            </span>
+          </div>
+        )}
         <SetupChecklist/>
         <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
@@ -454,6 +480,7 @@ export default function Dashboard() {
           </div>
         </div>
       </div>
+      <SuccessToast text={streakToast} onDone={() => setStreakToast(null)}/>
     </div>
   );
 }

@@ -51,11 +51,16 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
   const overdueCount = s.overdueInvoiceCount || 0;
   const overdueTotal = s.overdueInvoiceTotal || 0;
 
+  // A "quiet week" (no sessions, no new clients) is the moment to re-activate,
+  // not just report — so its copy + closing block push a concrete next step
+  // instead of a passive "here's what's on deck."
+  const quietWeek = completed === 0 && newClients === 0;
+
   // One-line "the headline" depending on the week's shape. Lets the
   // email feel personal even though the data is the same query.
   const headline =
-    completed === 0 && newClients === 0
-      ? `A quiet one for ${biz} last week. Here's what's on deck.`
+    quietWeek
+      ? `Last week was quiet at ${biz}. Let's line up the week ahead.`
     : revenue > 0
       ? `Last week at ${biz}: ${fmtMoney(revenue)} earned across ${completed} session${completed === 1 ? '' : 's'}.`
       : `${completed} session${completed === 1 ? '' : 's'} wrapped up at ${biz} last week.`;
@@ -95,9 +100,17 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
       </table>
       ${overdueBlock}
       ${upcomingBlock}
-      <p style="margin-top:24px;font-size:13.5px;line-height:1.6;color:#C9CAC3;">
-        Open the dashboard for the full picture — Ivy can break any of this down further if you ask.
-      </p>`,
+      ${quietWeek
+        ? `<p style="margin-top:24px;font-size:13.5px;line-height:1.6;color:#F3F3EE;">
+            Two quick ways to turn the week around:
+          </p>
+          <p style="margin:8px 0;font-size:13.5px;line-height:1.6;color:#C9CAC3;">
+            • <a href="${appUrl()}/calendar?share=1" style="color:#CFFF50;text-decoration:underline;">Share your booking link</a> — the fastest way to fill open slots.<br/>
+            • <a href="${appUrl()}/ivy?prompt=${encodeURIComponent('Plan my week and suggest who to reach out to')}" style="color:#CFFF50;text-decoration:underline;">Ask Ivy to plan your week</a> — she'll suggest who to follow up with.
+          </p>`
+        : `<p style="margin-top:24px;font-size:13.5px;line-height:1.6;color:#C9CAC3;">
+            Open the dashboard for the full picture — Ivy can break any of this down further if you ask.
+          </p>`}`,
     ctaText: 'Open dashboard',
     ctaUrl: `${appUrl()}/`,
     footer: `You're getting this as the owner of ${biz}. Don't want the weekly recap? Adjust your email preferences in <a href="${appUrl()}/account?tab=notifications" style="color:#CFFF50;text-decoration:underline;">Account → Notifications</a>. — The Ivy OS Team`,
