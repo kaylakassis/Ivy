@@ -7,6 +7,7 @@ import { useUserContext } from '../../lib/userContext.jsx';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import InviteFriendCard from './InviteFriendCard.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
+import NotifyPrompt from '../../components/NotifyPrompt.jsx';
 
 // Dashboard tiles per business type. 'both' is the default and shows
 // the original service-centric mix so existing workspaces look the
@@ -368,6 +369,7 @@ export default function Dashboard() {
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SetupChecklist/>
+        <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
         <InviteFriendCard/>
         <div className="grid-auto">

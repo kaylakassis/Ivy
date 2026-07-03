@@ -18,6 +18,8 @@ import { sql } from './db.js';
 import { sendEmailToUser, emailShell } from './email.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
+import { workspaceTimeZone } from './calendar.js';
+import { notifyOwnerSafe } from './push.js';
 
 const PLAN_NAME = 'Ivy OS Pro';
 
@@ -141,6 +143,69 @@ export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt }) {
   } catch (err) {
     console.error('[subscriptionNotify.trialReminder] failed:', err.message);
     reportError(err, { extra: { workspaceId, stage } });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Dormant-owner re-engagement (usage churn, not billing churn)
+// ─────────────────────────────────────────────────────────────────────
+// Fired by api/cron/owner-reengage.js for a subscribed/trialing owner who
+// stopped logging in. Leads with what's concretely waiting for them (upcoming
+// sessions + money to collect) so the pull is "pick up where you left off,"
+// not "we miss you." Email (type 'reports', respects opt-out) + push/feed.
+export async function notifyDormantOwner({ workspaceId }) {
+  try {
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const tz = await workspaceTimeZone(workspaceId);
+    const [upRes, invRes] = await Promise.all([
+      sql`SELECT COUNT(*)::int AS n FROM bookings
+            WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL
+              AND date >= (NOW() AT TIME ZONE ${tz})::date
+              AND date <  (NOW() AT TIME ZONE ${tz})::date + 7`,
+      sql`SELECT COUNT(*)::int AS n, COALESCE(SUM(total), 0)::numeric AS owed FROM invoices
+            WHERE workspace_id = ${workspaceId} AND status IN ('sent', 'overdue')`,
+    ]);
+    const upcoming = Number(upRes.rows[0]?.n || 0);
+    const unpaidN = Number(invRes.rows[0]?.n || 0);
+    const owed = Number(invRes.rows[0]?.owed || 0);
+
+    const biz = escapeHtml(o.biz_name || 'your business');
+    const bits = [];
+    if (upcoming > 0) bits.push(`<strong>${upcoming}</strong> session${upcoming === 1 ? '' : 's'} coming up this week`);
+    if (unpaidN > 0) bits.push(`<strong>${unpaidN}</strong> unpaid invoice${unpaidN === 1 ? '' : 's'}${owed > 0 ? ` ($${Math.round(owed).toLocaleString()} to collect)` : ''}`);
+    // Only worth reaching out if there's something concrete to return to.
+    if (bits.length === 0) return;
+    const waiting = bits.length === 2 ? `${bits[0]} and ${bits[1]}` : bits[0];
+
+    const html = emailShell({
+      heading: `You've got things waiting at ${biz}`,
+      body: `<p>Hi ${escapeHtml(firstName(o.name))},</p>
+        <p>It's been a little while. Here's what's waiting for you: ${waiting}.</p>
+        <p>Ivy can knock most of it out for you, just pick up where you left off.</p>`,
+      ctaText: 'Open my dashboard',
+      ctaUrl: `${appUrl()}/dashboard`,
+      footer: `You're getting this because your ${PLAN_NAME} account has been quiet. Manage email preferences from Account → Notifications.`,
+    });
+    await sendEmailToUser({
+      userId: o.owner_id, type: 'reports',
+      to: o.email, subject: `A few things are waiting for you at ${o.biz_name || 'your business'}`, html,
+    });
+    // Push + bell, so it lands even without an open tab.
+    notifyOwnerSafe({
+      workspaceId,
+      payload: {
+        title: 'Things are waiting for you',
+        body: bits.length === 2
+          ? `${upcoming} session${upcoming === 1 ? '' : 's'} this week · ${unpaidN} unpaid invoice${unpaidN === 1 ? '' : 's'}`
+          : (upcoming > 0 ? `${upcoming} session${upcoming === 1 ? '' : 's'} coming up` : `${unpaidN} unpaid invoice${unpaidN === 1 ? '' : 's'} to collect`),
+        url: '/dashboard',
+        tag: 'owner-reengage',
+      },
+    });
+  } catch (err) {
+    console.error('[subscriptionNotify.dormantOwner] failed:', err.message);
+    reportError(err, { extra: { workspaceId } });
   }
 }
 
