@@ -103,6 +103,10 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
 -- load. Lives on the workspace because the day boundary is per-workspace tz.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_days     INT NOT NULL DEFAULT 0;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_last_day DATE;
+-- One-shot guard for the out-of-app setup-completion nudge (api/cron/
+-- setup-nudge.js) so an owner who finished the wizard but left a required
+-- setup item open gets exactly one reminder.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS setup_nudge_sent_at TIMESTAMPTZ;
 
 -- Business type - drives onboarding flow, sidebar (Calendar hidden
 -- for product-only), dashboard tiles (orders vs bookings), and the

@@ -10,6 +10,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { serializeClient, VALID_STAGES } from '../_lib/clients.js';
 import { normalizePhone } from '../_lib/sms.js';
 import { sendClientInvite } from '../_lib/clientNotify.js';
+import { celebrateFirstClient } from '../_lib/milestones.js';
 import { triggerWorkflow } from '../_lib/workflows.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -132,6 +133,8 @@ export default async function handler(req, res) {
       if (rows[0]?.email) {
         sendClientInvite({ workspaceId, clientId: rows[0].id });
       }
+      // First-client milestone (best-effort, one-time, ignores demo data).
+      celebrateFirstClient(workspaceId).catch(() => {});
       // Fire workflows: client_created always; lead_created when stage='lead'.
       // Awaited so action results land before we respond - keeps the
       // "Just-now triggered" run visible in the workflow runs list when

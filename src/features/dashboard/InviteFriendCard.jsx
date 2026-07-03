@@ -1,9 +1,9 @@
 // "Invite a friend" — surfaces the existing free-month referral loop
-// (api/referrals) that was otherwise buried in Settings, to drive beta
-// participation. Evergreen across every service-based industry. Renders NOTHING
-// when the endpoint is unavailable (the referral program is under the
-// active-subscription paywall), so it degrades quietly for trial accounts
-// instead of erroring.
+// (api/referrals) that was otherwise buried in Settings, to drive
+// participation. Evergreen across every service-based industry. Now shows for
+// TRIAL owners too (the honeymoon cohort most likely to share); the reward only
+// pays out once a referred owner subscribes. Renders NOTHING when the endpoint
+// is unavailable (fully-lapsed / never-started owners), so it degrades quietly.
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
@@ -17,7 +17,7 @@ export default function InviteFriendCard() {
     let live = true;
     api.get('/referrals')
       .then((r) => { if (live) setState(r); })
-      .catch(() => { if (live) setState(null); }); // paywalled / not active → hide the card
+      .catch(() => { if (live) setState(null); }); // lapsed / not eligible → hide the card
     return () => { live = false; };
   }, []);
 

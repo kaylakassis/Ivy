@@ -52,6 +52,10 @@ const EXEMPT_FILES = [
   'api/account/export.js',
   'api/account/delete.js',
   'api/dashboard.js',
+  // Referral is intentionally open to TRIAL owners (the honeymoon cohort most
+  // likely to share); the reward only pays out once a referred owner
+  // subscribes. It gates on subscription_status itself instead of the paywall.
+  'api/referrals/index.js',
   'api/health.js',
   'api/public-stats.js',
   'api/geocode.js',

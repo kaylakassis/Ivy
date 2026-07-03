@@ -55,3 +55,41 @@ export async function celebrateFirstPayment(workspaceId) {
     });
   } catch { /* never break the payment */ }
 }
+
+export async function celebrateFirstClient(workspaceId) {
+  try {
+    if (!workspaceId) return;
+    // Excludes the sample/demo client so poking at demo data doesn't burn it.
+    const { rows } = await sql`
+      SELECT COUNT(*)::int AS n FROM clients
+       WHERE workspace_id = ${workspaceId} AND (source IS DISTINCT FROM 'demo')
+    `;
+    if (Number(rows[0]?.n) !== 1) return;
+    await notifyOwnerSafe({
+      workspaceId, type: 'support',
+      payload: {
+        title: '🌱 Your first client!',
+        body: "That's the start of your book of business. Nice work.",
+        url: '/clients',
+        tag: 'milestone-first-client',
+      },
+    });
+  } catch { /* never break client creation */ }
+}
+
+export async function celebrateFirstReview(workspaceId) {
+  try {
+    if (!workspaceId) return;
+    const { rows } = await sql`SELECT COUNT(*)::int AS n FROM reviews WHERE workspace_id = ${workspaceId}`;
+    if (Number(rows[0]?.n) !== 1) return;
+    await notifyOwnerSafe({
+      workspaceId, type: 'support',
+      payload: {
+        title: '⭐ Your first review!',
+        body: 'Social proof that wins the next client. It shows on your booking page now.',
+        url: '/reviews',
+        tag: 'milestone-first-review',
+      },
+    });
+  } catch { /* never break review submit */ }
+}
