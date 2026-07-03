@@ -22,11 +22,13 @@ import { sql } from './db.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
+import { createDraftInvoice } from './finance.js';
 import { appUrl } from './tokens.js';
 
 const VALID_TRIGGERS = new Set(['lead_created', 'client_created', 'client_inactive', 'booking_completed']);
 const VALID_ACTIONS  = new Set([
   'send_email', 'send_sms', 'create_task', 'send_document',
+  'create_invoice', // DRAFT an invoice for the client from fixed line items (never auto-sends)
   'wait',           // pause N days/hours, resume from the next action via cron
   'if_has_tag',     // skip remaining actions if client.tags does NOT include cfg.tag
   'if_lacks_tag',   // skip remaining actions if client.tags DOES include cfg.tag
@@ -71,6 +73,27 @@ export function validateWorkflowShape(body) {
     }
     if (a.type === 'send_document') {
       if (!cfg.templateId) throw new Error(`Action ${i + 1}: pick a document template`);
+    }
+    if (a.type === 'create_invoice') {
+      // Fixed line items the owner defines up front — deterministic + reviewable.
+      // Draft-only; never auto-sends. Each item needs a description and a rate.
+      const items = Array.isArray(cfg.items) ? cfg.items : [];
+      if (items.length === 0) throw new Error(`Action ${i + 1}: add at least one invoice line item`);
+      if (items.length > 50) throw new Error(`Action ${i + 1}: too many line items`);
+      for (const it of items) {
+        if (!it || typeof it !== 'object') throw new Error(`Action ${i + 1}: each line item must be an object`);
+        if (!String(it.description || '').trim()) throw new Error(`Action ${i + 1}: each line item needs a description`);
+        const rate = Number(it.rate);
+        if (!Number.isFinite(rate) || rate < 0) throw new Error(`Action ${i + 1}: each line item needs a non-negative rate`);
+      }
+      if (cfg.taxRate != null) {
+        const t = Number(cfg.taxRate);
+        if (!Number.isFinite(t) || t < 0 || t > 100) throw new Error(`Action ${i + 1}: taxRate must be 0-100`);
+      }
+      if (cfg.dueInDays != null) {
+        const d = Number(cfg.dueInDays);
+        if (!Number.isInteger(d) || d < 0 || d > 365) throw new Error(`Action ${i + 1}: dueInDays must be 0-365`);
+      }
     }
     if (a.type === 'wait') {
       const d = Number(cfg.days || 0);
@@ -427,6 +450,30 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
       RETURNING id
     `;
     return { documentId: ins.rows[0].id };
+  }
+
+  if (action.type === 'create_invoice') {
+    // DRAFT an invoice for the triggering client from the owner's fixed line
+    // items. Descriptions support {{tokens}}. NEVER auto-sends — the owner
+    // reviews + sends it from Finance (a create_task/send_email step can chase
+    // it). This is why auto-billing is safe: nothing leaves without a human.
+    if (!client?.id) throw new Error('No client to invoice');
+    const items = (Array.isArray(cfg.items) ? cfg.items : []).map((it) => ({
+      description: renderTokens(String(it.description || ''), tokens),
+      quantity: it.quantity,
+      rate: it.rate,
+    }));
+    const invoice = await createDraftInvoice({
+      workspaceId: workflow.workspace_id,
+      clientId: client.id,
+      clientName: client.name || null,
+      clientEmail: client.email || null,
+      items,
+      taxRate: cfg.taxRate != null ? Number(cfg.taxRate) : null,
+      notes: cfg.notes ? renderTokens(String(cfg.notes), tokens) : null,
+      dueInDays: cfg.dueInDays != null ? Number(cfg.dueInDays) : 14,
+    });
+    return { invoiceId: invoice.id, number: invoice.number, status: 'draft' };
   }
 
   throw new Error('Unknown action type: ' + action.type);

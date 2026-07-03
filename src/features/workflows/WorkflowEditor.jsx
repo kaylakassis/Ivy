@@ -34,6 +34,7 @@ const ACTIONS = [
   { id: 'send_sms',      label: 'Send SMS' },
   { id: 'create_task',   label: 'Create a task' },
   { id: 'send_document', label: 'Send a document for signing' },
+  { id: 'create_invoice', label: 'Draft an invoice' },
   { id: 'wait',          label: 'Wait (N days / hours)' },
   { id: 'if_has_tag',    label: 'Only continue if client HAS tag' },
   { id: 'if_lacks_tag',  label: 'Only continue if client LACKS tag' },
@@ -257,6 +258,9 @@ function defaultAction(type) {
   if (type === 'send_document') return {
     type, config: { templateId: '' },
   };
+  if (type === 'create_invoice') return {
+    type, config: { items: [{ description: '', quantity: 1, rate: 0 }], dueInDays: 14 },
+  };
   if (type === 'wait') return {
     type, config: { days: 3, hours: 0 },
   };
@@ -365,6 +369,54 @@ function ActionEditor({ index, action, templates, canMoveUp, canMoveDown, onMove
               Manage templates in <a href="/documents" style={{ color: 'var(--accent)' }}>/documents</a> → Templates.
               We'll clone the template into a draft for this client; you review + send from Documents.
             </div>
+          </Sub>
+        </>
+      )}
+
+      {action.type === 'create_invoice' && (
+        <>
+          <Sub label="Line items"
+               hint="Ivy drafts this invoice for the client — you review + send it from Finance. It never sends on its own. Descriptions support {{clientName}} etc.">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              {(action.config.items || []).map((it, i) => (
+                <div key={i} style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+                  <input className="input" style={{ ...inputStyle, flex: 1 }}
+                    value={it.description || ''}
+                    placeholder="Onboarding fee for {{clientName}}"
+                    onChange={(e) => {
+                      const items = (action.config.items || []).map((x, j) => j === i ? { ...x, description: e.target.value } : x);
+                      onUpdate({ items });
+                    }}/>
+                  <input className="input" type="number" min={0} step="0.5" style={{ ...inputStyle, width: 64 }}
+                    value={it.quantity ?? 1} title="Quantity"
+                    onChange={(e) => {
+                      const items = (action.config.items || []).map((x, j) => j === i ? { ...x, quantity: Number(e.target.value) } : x);
+                      onUpdate({ items });
+                    }}/>
+                  <input className="input" type="number" min={0} step="0.01" style={{ ...inputStyle, width: 90 }}
+                    value={it.rate ?? 0} title="Rate ($)"
+                    onChange={(e) => {
+                      const items = (action.config.items || []).map((x, j) => j === i ? { ...x, rate: Number(e.target.value) } : x);
+                      onUpdate({ items });
+                    }}/>
+                  <button type="button" style={{ ...iconBtn, color: 'var(--danger)' }}
+                    disabled={(action.config.items || []).length <= 1}
+                    onClick={() => onUpdate({ items: (action.config.items || []).filter((_, j) => j !== i) })}>
+                    <Icons.X size={12}/>
+                  </button>
+                </div>
+              ))}
+              <button type="button" className="btn btn-ghost" style={{ alignSelf: 'flex-start', fontSize: 12.5, padding: '4px 10px' }}
+                onClick={() => onUpdate({ items: [...(action.config.items || []), { description: '', quantity: 1, rate: 0 }] })}>
+                + Add line item
+              </button>
+            </div>
+          </Sub>
+          <Sub label="Due in N days">
+            <input className="input" type="number" min={0} max={365}
+              style={{ ...inputStyle, width: 90 }}
+              value={action.config.dueInDays ?? 14}
+              onChange={(e) => onUpdate({ dueInDays: Number(e.target.value) })}/>
           </Sub>
         </>
       )}

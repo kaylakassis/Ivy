@@ -137,6 +137,43 @@ export function cleanItems(input) {
   return out;
 }
 
+// Create a DRAFT invoice for a client — the single source of truth used by the
+// Ivy create_invoice tool AND the create_invoice workflow action. Mints the
+// number the canonical way (`INV-<n>`), sanitizes items, inherits the workspace
+// default tax rate when none is given, and leaves it as a draft (never sends).
+// The invoices_compute_total trigger fills in `total`.
+export async function createDraftInvoice({
+  workspaceId, clientId = null, clientName = null, clientEmail = null,
+  items, taxRate = null, discount = 0, notes = null, dueInDays = 14,
+}) {
+  const cleaned = cleanItems(items);
+  if (cleaned.length === 0) throw new Error('At least one line item is required');
+  let tax = taxRate == null ? null : Number(taxRate);
+  if (tax == null || !Number.isFinite(tax)) {
+    const r = await sql`SELECT default_tax_rate FROM finance_settings WHERE workspace_id = ${workspaceId}`;
+    tax = Number(r.rows[0]?.default_tax_rate || 0);
+  }
+  const num = await nextInvoiceNumber(workspaceId);
+  const number = `INV-${num}`;
+  const issueDate = new Date().toISOString().slice(0, 10);
+  const d = Number(dueInDays);
+  const due = new Date();
+  due.setDate(due.getDate() + (Number.isFinite(d) && d >= 0 ? d : 14));
+  const dueDate = due.toISOString().slice(0, 10);
+  const { rows } = await sql`
+    INSERT INTO invoices (
+      workspace_id, number, client_id, client_name, client_email,
+      issue_date, due_date, items, tax_rate, discount, notes, status
+    ) VALUES (
+      ${workspaceId}, ${number}, ${clientId}, ${clientName}, ${clientEmail},
+      ${issueDate}, ${dueDate}, ${JSON.stringify(cleaned)}::jsonb, ${tax},
+      ${Number(discount) || 0}, ${notes ? String(notes).slice(0, 4000) : null}, 'draft'
+    )
+    RETURNING id, number
+  `;
+  return rows[0];
+}
+
 // Allocate the next invoice number for this workspace, atomically.
 export async function nextInvoiceNumber(workspaceId) {
   // Ensure a settings row exists.

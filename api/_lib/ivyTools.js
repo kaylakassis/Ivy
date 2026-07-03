@@ -298,7 +298,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'create_workflow',
-    description: "Create an automation workflow. The owner describes the rule in natural language; you translate it to triggers + actions and confirm the structure before creating. Triggers: 'lead_created', 'client_created', 'client_inactive' (config: daysInactive), 'booking_completed' (config: daysAfter). Actions: 'send_email' (subject+body), 'send_sms' (body), 'create_task' (title+dueInDays), 'send_document' (templateId), 'wait' (days+hours), 'if_has_tag' (tag), 'if_lacks_tag' (tag). Tokens {{firstName}} {{clientName}} {{businessName}} {{ownerName}} substitute at runtime.",
+    description: "Create an automation workflow. The owner describes the rule in natural language; you translate it to triggers + actions and confirm the structure before creating. Triggers: 'lead_created', 'client_created', 'client_inactive' (config: daysInactive), 'booking_completed' (config: daysAfter). Actions: 'send_email' (subject+body), 'send_sms' (body), 'create_task' (title+dueInDays), 'send_document' (templateId), 'create_invoice' (config.items:[{description,quantity,rate}], optional taxRate+dueInDays — DRAFTS an invoice for the client; the owner reviews+sends it, it never auto-sends; only use fixed amounts the owner states), 'wait' (days+hours), 'if_has_tag' (tag), 'if_lacks_tag' (tag). Tokens {{firstName}} {{clientName}} {{businessName}} {{ownerName}} substitute at runtime (including in invoice line descriptions).",
     input_schema: {
       type: 'object',
       properties: {
@@ -1453,41 +1453,18 @@ async function create_invoice({ workspaceId, args }) {
   }
   const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${args.client_id} AND workspace_id = ${workspaceId}`;
   if (cl.rows.length === 0) throw new Error('Unknown client');
-  const items = args.items.map((it, i) => ({
-    id: 'li_' + (i + 1),
-    description: String(it.description || '').slice(0, 500),
-    quantity:    Number.isFinite(Number(it.quantity)) ? Number(it.quantity) : 1,
-    rate:        Number(it.rate || 0),
-  }));
-  // Inherit workspace default tax rate when caller didn't supply one.
-  let taxRate = args.tax_rate != null ? Number(args.tax_rate) : null;
-  if (taxRate == null) {
-    const fs = await sql`SELECT default_tax_rate FROM finance_settings WHERE workspace_id = ${workspaceId}`;
-    taxRate = Number(fs.rows[0]?.default_tax_rate || 0);
-  }
-  // Allocate the next invoice number from the workspace sequence.
-  const { rows: numRows } = await sql`
-    UPDATE finance_settings SET next_invoice_number = next_invoice_number + 1
-     WHERE workspace_id = ${workspaceId}
-     RETURNING next_invoice_number
-  `;
-  const seq = numRows[0]?.next_invoice_number;
-  const number = seq ? `INV-${String(seq - 1).padStart(4, '0')}` : `INV-${Date.now().toString().slice(-6)}`;
-  const issueDate = new Date().toISOString().slice(0, 10);
-  const due = new Date(); due.setDate(due.getDate() + 14);
-  const dueDate = due.toISOString().slice(0, 10);
-  const { rows } = await sql`
-    INSERT INTO invoices (
-      workspace_id, number, client_id, client_name, client_email,
-      issue_date, due_date, items, tax_rate, notes, status
-    ) VALUES (
-      ${workspaceId}, ${number}, ${args.client_id}, ${cl.rows[0].name}, ${cl.rows[0].email},
-      ${issueDate}, ${dueDate}, ${JSON.stringify(items)}::jsonb, ${taxRate},
-      ${args.notes ? String(args.notes).slice(0, 4000) : null}, 'draft'
-    )
-    RETURNING id, number
-  `;
-  return { invoice: rows[0] };
+  // Shared draft-invoice creation (canonical number, tax default, trigger total).
+  const { createDraftInvoice } = await import('./finance.js');
+  const invoice = await createDraftInvoice({
+    workspaceId,
+    clientId: args.client_id,
+    clientName: cl.rows[0].name,
+    clientEmail: cl.rows[0].email,
+    items: args.items,
+    taxRate: args.tax_rate != null ? Number(args.tax_rate) : null,
+    notes: args.notes,
+  });
+  return { invoice };
 }
 
 async function create_task({ workspaceId, args }) {
