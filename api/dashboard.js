@@ -7,6 +7,7 @@ import { requireUser, ensureWorkspace } from './_lib/auth.js';
 import { listTasksWithProgress } from './_lib/goals.js';
 import { workspaceTimeZone } from './_lib/calendar.js';
 import { touchStreak } from './_lib/streak.js';
+import { detectWorkflowSuggestion } from './_lib/workflowSuggest.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 export default async function handler(req, res) {
@@ -77,9 +78,16 @@ export default async function handler(req, res) {
     // surface). Idempotent within a day; never blocks the load.
     const streak = await touchStreak(workspaceId);
 
+    // "Ivy noticed a pattern" — suggest automating a repeated new-client
+    // follow-up. Best-effort; skips ones the owner has dismissed.
+    const workflowSuggestion = await detectWorkflowSuggestion(workspaceId, {
+      dismissed: user.ui_prefs?.dismissedWorkflowSuggestions || [],
+    });
+
     return ok(res, {
       currency,
       streak: { days: streak.days, milestone: streak.milestone },
+      workflowSuggestion,
       metrics: {
         mrr:     Number(rev.rows[0].v || 0),
         clients: Number(cli.rows[0].v || 0),

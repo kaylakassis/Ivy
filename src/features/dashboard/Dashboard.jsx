@@ -9,6 +9,7 @@ import { fireConfetti } from '../../lib/celebrate.js';
 import SuccessToast from '../../components/SuccessToast.jsx';
 import InviteFriendCard from './InviteFriendCard.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
+import WorkflowSuggestionCard from './WorkflowSuggestionCard.jsx';
 import NotifyPrompt from '../../components/NotifyPrompt.jsx';
 
 // Dashboard tiles per business type. 'both' is the default and shows
@@ -396,6 +397,9 @@ export default function Dashboard() {
         )}
         <SetupChecklist/>
         <NotifyPrompt/>
+        {data?.workflowSuggestion && (
+          <WorkflowSuggestionCard suggestion={data.workflowSuggestion} onChanged={loadDashboard}/>
+        )}
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
         <InviteFriendCard/>
         <div className="grid-auto">
