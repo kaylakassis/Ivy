@@ -462,6 +462,17 @@ function Overview() {
             <Stat label="Client-only"            value={fmtN(data.totals.clientOnly)}/>
           </div>
           <div className="grid-auto" style={{ gap: 12 }}>
+            <Stat label="Active owners - today" value={fmtN(data.totals.activeOwnersDay)} accent
+              hint="Owners who used the app in the last 24h (last_active_at)"/>
+            <Stat label="Active owners - 7d"    value={fmtN(data.totals.activeOwnersWeek)}
+              hint="Weekly active owners"/>
+            <Stat label="Active owners - 30d"   value={fmtN(data.totals.activeOwnersMonth)}
+              hint="Monthly active owners"/>
+            <Stat label="Stickiness (DAU/MAU)"
+              value={data.totals.activeOwnersMonth ? `${Math.round((data.totals.activeOwnersDay / data.totals.activeOwnersMonth) * 100)}%` : '—'}
+              hint="Daily-active ÷ monthly-active — higher = more habitual"/>
+          </div>
+          <div className="grid-auto" style={{ gap: 12 }}>
             <Stat label="Revenue (window)"  value={fmtMoney(data.totals.revenueWindow)}  accent/>
             <Stat label="Revenue (all time)" value={fmtMoney(data.totals.revenueAllTime)}/>
             <Stat label="Cancelled (window)" value={fmtN(data.churn.cancelledInWindow)}/>

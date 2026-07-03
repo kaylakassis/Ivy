@@ -45,6 +45,7 @@ async function handler(req, res) {
       usersRow, bizActiveRow, bizTrialRow,
       sponsoredRow, affiliateRow, clientOnlyRow,
       revenueAllRow,
+      dauRow, wauRow, mauRow,
     ] = await Promise.all([
       sql`SELECT COUNT(*)::int AS n FROM users`,
       sql`SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'`,
@@ -60,6 +61,18 @@ async function handler(req, res) {
               AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`,
       sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
             FROM invoices WHERE status = 'paid'`,
+      // Owner usage-recency (real DAU/WAU/MAU) from last_active_at. Owner = a
+      // user who owns a workspace. UTC windows are correct for a platform
+      // cross-tenant rollup (see api/admin/analytics.js note).
+      sql`SELECT COUNT(*)::int AS n FROM users u
+            WHERE u.last_active_at >= NOW() - INTERVAL '1 day'
+              AND EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`,
+      sql`SELECT COUNT(*)::int AS n FROM users u
+            WHERE u.last_active_at >= NOW() - INTERVAL '7 days'
+              AND EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`,
+      sql`SELECT COUNT(*)::int AS n FROM users u
+            WHERE u.last_active_at >= NOW() - INTERVAL '30 days'
+              AND EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`,
     ]);
 
     const totals = {
@@ -70,6 +83,9 @@ async function handler(req, res) {
       affiliate:       affiliateRow.rows[0]?.n || 0,
       clientOnly:      clientOnlyRow.rows[0]?.n || 0,
       revenueAllTime:  Number(revenueAllRow.rows[0]?.total || 0),
+      activeOwnersDay:   dauRow.rows[0]?.n || 0,
+      activeOwnersWeek:  wauRow.rows[0]?.n || 0,
+      activeOwnersMonth: mauRow.rows[0]?.n || 0,
     };
 
     // ─── Platform-impact aggregates (rolling 90d window) ───────────

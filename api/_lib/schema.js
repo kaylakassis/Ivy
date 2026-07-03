@@ -97,6 +97,12 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
 -- any pre-existing workspace that already has clients or services is marked
 -- onboarded so existing users don't get bumped through the wizard.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+-- Daily-return streak (habit loop). streak_last_day is the last calendar day
+-- (in the workspace timezone) the owner was active; streak_days is the current
+-- consecutive-day count. Maintained by touchStreak() on the daily dashboard
+-- load. Lives on the workspace because the day boundary is per-workspace tz.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_days     INT NOT NULL DEFAULT 0;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_last_day DATE;
 
 -- Business type - drives onboarding flow, sidebar (Calendar hidden
 -- for product-only), dashboard tiles (orders vs bookings), and the
@@ -385,6 +391,15 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS email_verified_at TIMESTAMPTZ;
 -- user logging in). Surfaced in the admin Users view so operators can see
 -- who's actually returning.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
+-- Usage recency (retention). Unlike last_login_at (login only), last_active_at
+-- is stamped by requireUser on ANY authenticated request, throttled to ≤1
+-- write / 10 min / user. Powers DAU/WAU/MAU + the dormant-owner re-engagement
+-- cron. dormant_nudge_sent_at is a one-shot-per-episode guard: set when the
+-- re-engagement nudge fires, cleared when the owner returns (in the stamp path)
+-- so a later dormancy episode can re-fire.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS dormant_nudge_sent_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active_at);
 -- Device fingerprints (sha256 of the user agent, capped) we've seen this
 -- user sign in from. Powers the "new sign-in" security alert: a sign-in
 -- from a fingerprint not in this list is treated as a new device. The

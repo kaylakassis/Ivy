@@ -146,6 +146,11 @@ export function isNativeClient(req) {
 // change landing in the DB and the cache entry expiring/invalidating.
 const USER_ROW_TTL_MS = 15_000;
 
+// Usage-recency stamp throttle. requireUser runs on every authenticated
+// request; we only write last_active_at when the (cached) value is older than
+// this, so it's ≤1 write / 10 min / active owner even at scale.
+const ACTIVITY_STAMP_THROTTLE_MS = 10 * 60 * 1000;
+
 export function invalidateUserCache(userId) {
   if (userId) hotCacheInvalidate(`user:${userId}`);
 }
@@ -167,7 +172,7 @@ export async function requireUser(req, res) {
              walkthrough_completed_at, user_type,
              terms_accepted_at, terms_version,
              privacy_version, privacy_accepted_at,
-             password_changed_at, deleted_at
+             password_changed_at, deleted_at, last_active_at
       FROM users WHERE id = ${session.sub}
     `;
     // Cache `null` for a genuinely-absent user so a bogus/old session
@@ -197,6 +202,21 @@ export async function requireUser(req, res) {
   if (pcAt && session.iat && (session.iat * 1000) < new Date(pcAt).getTime()) {
     res.status(401).json({ error: 'Session expired - please sign in again' });
     return null;
+  }
+  // Usage-recency stamp (retention). Best-effort, non-blocking, throttled: only
+  // write when the (cached) last_active_at is stale. Mutate the cached row in
+  // place FIRST so other requests in this 15s cache window don't also fire the
+  // write. Clearing dormant_nudge_sent_at here means a returning owner becomes
+  // eligible to be re-nudged on a FUTURE dormancy episode.
+  const la = row.last_active_at ? new Date(row.last_active_at).getTime() : 0;
+  if (Date.now() - la > ACTIVITY_STAMP_THROTTLE_MS) {
+    row.last_active_at = new Date().toISOString(); // optimistic; dedupes within the window
+    sql`
+      UPDATE users
+         SET last_active_at = NOW(), dormant_nudge_sent_at = NULL
+       WHERE id = ${row.id}
+         AND (last_active_at IS NULL OR last_active_at < NOW() - INTERVAL '10 minutes')
+    `.catch(() => { /* never block auth on the stamp */ });
   }
   return row;
 }

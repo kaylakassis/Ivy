@@ -488,6 +488,25 @@ export default async function handler(req, res) {
     // comment).
     const fn = funnelRow.rows[0] || {};
 
+    // Owner usage-recency (real DAU/WAU/MAU from last_active_at). Served from
+    // the precomputed cache when present; otherwise computed live. Owner = a
+    // user who owns a workspace.
+    const activeOwners = (cachedTotals && cachedTotals.activeOwnersMonth != null)
+      ? {
+          day:   cachedTotals.activeOwnersDay || 0,
+          week:  cachedTotals.activeOwnersWeek || 0,
+          month: cachedTotals.activeOwnersMonth || 0,
+        }
+      : await (async () => {
+          const [d, w, m] = await Promise.all([1, 7, 30].map((days) => sql.query(
+            `SELECT COUNT(*)::int AS n FROM users u
+               WHERE u.last_active_at >= NOW() - ($1::int || ' days')::interval
+                 AND EXISTS (SELECT 1 FROM workspaces ws WHERE ws.owner_id = u.id)`,
+            [days],
+          )));
+          return { day: d.rows[0]?.n || 0, week: w.rows[0]?.n || 0, month: m.rows[0]?.n || 0 };
+        })();
+
     return ok(res, {
       range: { from: fromIso, to: toIso },
       totals: {
@@ -500,6 +519,9 @@ export default async function handler(req, res) {
         clientOnly:      clientOnlyRow.rows[0]?.n || 0,
         revenueAllTime:  Number(revenueAllRow.rows[0]?.total || 0),
         revenueWindow:   Number(revenueWindowRow.rows[0]?.total || 0),
+        activeOwnersDay:   activeOwners.day,
+        activeOwnersWeek:  activeOwners.week,
+        activeOwnersMonth: activeOwners.month,
       },
       churn: {
         cancelledInWindow:   cancelled,
