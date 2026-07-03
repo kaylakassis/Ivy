@@ -36,6 +36,34 @@ export const NAV = [
   { id: 'admin',     to: '/admin',      label: 'Admin',          icon: 'Settings', superAdminOnly: true },
 ];
 
+// Tabs an owner can never hide from their own nav: the home landing and the
+// flagship copilot. Everything else is theirs to customize (Settings ->
+// Navigation). `admin` isn't here because it's already super-admin-only.
+export const ALWAYS_VISIBLE_NAV = new Set(['dashboard', 'ivy']);
+
+// The set of tabs the Navigation settings card lets an owner hide/show:
+// everything except the always-visible anchors and the super-admin console.
+export function hideableNav() {
+  return NAV.filter((n) => !n.superAdminOnly && !ALWAYS_VISIBLE_NAV.has(n.id));
+}
+
+// THE single source of truth for which nav items a given user sees. Composes
+// three rules (union of everything hidden):
+//   • superAdminOnly  — hidden unless the user is a super-admin
+//   • productOnlyHidden — hidden for product-only businesses (e.g. Calendar)
+//   • hiddenNav        — the owner's own per-account hide list (ui_prefs)
+// An always-visible id (dashboard/ivy) is never dropped, even if it somehow
+// appears in hiddenNav. Used by Sidebar, MobileDrawer, and CommandPalette.
+export function visibleNavFor({ isSuperAdmin = false, businessType = 'both', hiddenNav = [] } = {}) {
+  const hidden = new Set(Array.isArray(hiddenNav) ? hiddenNav : []);
+  return NAV.filter((n) => {
+    if (n.superAdminOnly && !isSuperAdmin) return false;
+    if (n.productOnlyHidden && businessType === 'product') return false;
+    if (hidden.has(n.id) && !ALWAYS_VISIBLE_NAV.has(n.id)) return false;
+    return true;
+  });
+}
+
 export const TITLES = {
   dashboard: { title: 'Dashboard',     subtitle: 'Home' },
   clients:   { title: 'Clients',       subtitle: 'Your people' },

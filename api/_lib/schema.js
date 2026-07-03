@@ -440,6 +440,10 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS user_type TEXT NOT NULL DEFAULT 'regu
 -- separate column per type so we can add new types later without a
 -- schema change.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS notification_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;
+-- Per-account UI preferences bag (customizable navigation, etc.). Currently
+-- holds { hiddenNav: [navId, …] } — tabs the owner has hidden from their own
+-- sidebar. Rides the requireUser SELECT so every nav surface can read it.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS ui_prefs JSONB NOT NULL DEFAULT '{}'::jsonb;
 -- Idempotent constraint via DROP IF EXISTS + ADD. Two plain statements
 -- play nicer with our naive migration runner than a DO block would.
 ALTER TABLE users DROP CONSTRAINT IF EXISTS users_user_type_check;

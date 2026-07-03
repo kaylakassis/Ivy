@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
-import { NAV } from '../../lib/nav.js';
+import { visibleNavFor } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import ReportBugModal from '../ReportBugModal.jsx';
@@ -20,15 +20,14 @@ export default function Sidebar({ direction, variant = 'full' }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [bugOpen, setBugOpen]   = useState(false);
   const compact = variant === 'compact';
-  // Filter out super-admin-only items unless the user qualifies.
-  // Also hide product-only-hidden items (currently just Calendar) when
-  // the workspace is product-only - a candle maker doesn't take
-  // appointments. The route still exists in App.jsx so deep links work.
+  // Super-admin-only + product-only-hidden + the owner's own hidden tabs
+  // (Settings -> Navigation). Composed in one place so every nav surface
+  // agrees. Hidden routes still exist in App.jsx so deep links work.
   const businessType = ctx?.owns?.businessType || 'both';
-  const visibleNav = NAV.filter((n) => {
-    if (n.superAdminOnly && !user?.isSuperAdmin) return false;
-    if (n.productOnlyHidden && businessType === 'product') return false;
-    return true;
+  const visibleNav = visibleNavFor({
+    isSuperAdmin: user?.isSuperAdmin,
+    businessType,
+    hiddenNav: user?.ui_prefs?.hiddenNav,
   });
   // Workspace badge values. Real biz_name when the owner finished
   // onboarding, otherwise a CTA. Either way clicking takes them to

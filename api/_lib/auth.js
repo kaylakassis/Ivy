@@ -172,7 +172,7 @@ export async function requireUser(req, res) {
              walkthrough_completed_at, user_type,
              terms_accepted_at, terms_version,
              privacy_version, privacy_accepted_at,
-             password_changed_at, deleted_at, last_active_at
+             password_changed_at, deleted_at, last_active_at, ui_prefs
       FROM users WHERE id = ${session.sub}
     `;
     // Cache `null` for a genuinely-absent user so a bogus/old session

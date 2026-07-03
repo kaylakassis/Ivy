@@ -13,7 +13,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from './Icons.jsx';
 import { api } from '../lib/api.js';
-import { NAV } from '../lib/nav.js';
+import { visibleNavFor } from '../lib/nav.js';
 import { useAuth } from '../lib/auth.jsx';
 
 export default function CommandPalette() {
@@ -62,12 +62,12 @@ export default function CommandPalette() {
       api.get('/search?q=' + encodeURIComponent(trimmed))
         .then((r) => {
           setGroups([
-            ...localNavGroup(trimmed, !!user?.isSuperAdmin),
+            ...localNavGroup(trimmed, !!user?.isSuperAdmin, user?.ui_prefs?.hiddenNav),
             ...(r.groups || []),
           ]);
           setActive(0);
         })
-        .catch(() => setGroups(localNavGroup(trimmed, !!user?.isSuperAdmin)))
+        .catch(() => setGroups(localNavGroup(trimmed, !!user?.isSuperAdmin, user?.ui_prefs?.hiddenNav)))
         .finally(() => setLoading(false));
     }, 120);
     return () => clearTimeout(id);
@@ -146,7 +146,7 @@ export default function CommandPalette() {
           )}
           {!loading && !q.trim() && (
             <div style={{ padding: 18 }}>
-              <Group label="Jump to" items={NAV.filter((n) => !n.superAdminOnly || user?.isSuperAdmin)
+              <Group label="Jump to" items={visibleNavFor({ isSuperAdmin: user?.isSuperAdmin, hiddenNav: user?.ui_prefs?.hiddenNav })
                 .map((n) => ({ id: 'page:' + n.id, title: n.label, subtitle: n.to, url: n.to, icon: n.icon }))}
                 go={go} flatStart={0} active={active}/>
             </div>
@@ -244,11 +244,10 @@ const kbd = {
 // "Jump to" pages always show even with no query (or as a header group)
 // when q is non-empty so the user can navigate without typing the page
 // name perfectly. Filters by case-insensitive match.
-function localNavGroup(q, isSuperAdmin) {
+function localNavGroup(q, isSuperAdmin, hiddenNav) {
   const lc = q.toLowerCase();
-  const matches = NAV.filter((n) =>
-    (n.label.toLowerCase().includes(lc) || n.to.toLowerCase().includes(lc))
-      && (!n.superAdminOnly || isSuperAdmin),
+  const matches = visibleNavFor({ isSuperAdmin, hiddenNav }).filter((n) =>
+    n.label.toLowerCase().includes(lc) || n.to.toLowerCase().includes(lc),
   );
   if (matches.length === 0) return [];
   return [{

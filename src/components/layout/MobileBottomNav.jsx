@@ -22,7 +22,11 @@ const ADMIN_ITEM = { id: 'admin', to: '/admin', icon: 'Settings', label: 'Admin'
 
 export default function MobileBottomNav() {
   const { user } = useAuth();
-  const items = user?.isSuperAdmin ? [...PRIMARY, ADMIN_ITEM] : PRIMARY;
+  // Honor the owner's hidden tabs so the bottom bar stays consistent with the
+  // rest of the nav. Home + Ivy are never hideable, so the bar keeps anchors.
+  const hidden = new Set(user?.ui_prefs?.hiddenNav || []);
+  const primary = PRIMARY.filter((i) => !hidden.has(i.id));
+  const items = user?.isSuperAdmin ? [...primary, ADMIN_ITEM] : primary;
   return (
     <nav className="mobile-nav" aria-label="Primary">
       {items.map((item) => {

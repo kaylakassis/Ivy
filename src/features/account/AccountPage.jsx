@@ -11,6 +11,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { api } from '../../lib/api.js';
+import { hideableNav } from '../../lib/nav.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
 import {
@@ -95,6 +96,8 @@ export default function AccountPage() {
       <ReferralCard/>
 
       <NotificationsCard/>
+
+      <NavigationCard/>
 
       <SupportCard/>
 
@@ -1066,6 +1069,111 @@ function Switch({ checked, disabled, onChange }) {
         boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
       }}/>
     </button>
+  );
+}
+
+// Navigation customization. Lets an owner hide sidebar tabs they don't use
+// (and re-add them here). Persists to users.ui_prefs.hiddenNav via
+// /api/me/nav-prefs; after each save we refresh the auth user so the sidebar,
+// mobile drawer, bottom bar, and command palette all update immediately.
+// Dashboard + Ivy Pro are always shown (not listed here). Hiding is cosmetic:
+// the routes still work via deep links + the command palette (⌘K).
+function NavigationCard() {
+  const { user, refresh } = useAuth();
+  const items = hideableNav();
+  const [hidden, setHidden] = useState(() => new Set(user?.ui_prefs?.hiddenNav || []));
+  const [busy, setBusy] = useState(null); // nav id currently saving
+  const [err, setErr] = useState(null);
+
+  const persist = async (nextSet, savingId) => {
+    setBusy(savingId); setErr(null);
+    const prev = hidden;
+    setHidden(nextSet); // optimistic
+    try {
+      await api.patch('/me/nav-prefs', { hiddenNav: [...nextSet] });
+      await refresh(); // re-read the auth user so every nav surface updates
+    } catch (e) {
+      setHidden(prev); // rollback
+      setErr(e.message || 'Could not save');
+    } finally { setBusy(null); }
+  };
+
+  const toggle = (id) => {
+    const next = new Set(hidden);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    persist(next, id);
+  };
+  const showAll = () => { if (hidden.size) persist(new Set(), '__all__'); };
+
+  const hiddenCount = hidden.size;
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', gap: 10, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0, fontSize: 16 }}>Navigation</h2>
+        <span style={{ fontSize: 12.5, color: 'var(--muted)' }}>
+          Show only the tabs you use. Hidden tabs still work from search (⌘K) and direct links.
+        </span>
+        {hiddenCount > 0 && (
+          <button type="button" onClick={showAll} disabled={busy === '__all__'}
+            className="btn btn-ghost" style={{ marginLeft: 'auto', fontSize: 12.5, padding: '4px 10px' }}>
+            {busy === '__all__' ? 'Resetting…' : 'Show all'}
+          </button>
+        )}
+      </div>
+
+      {err && (
+        <div style={{
+          marginTop: 12, padding: '6px 10px', borderRadius: 8, fontSize: 12,
+          background: 'rgba(155,44,44,0.08)', color: 'var(--danger)', border: '1px solid rgba(155,44,44,0.25)',
+        }}>{err}</div>
+      )}
+
+      <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <NavToggleRow icon="Home" label="Dashboard" section="Home" locked/>
+        <NavToggleRow icon="Spark" label="Ivy Pro" section="Home" locked/>
+        {items.map((n) => (
+          <NavToggleRow key={n.id} icon={n.icon} label={n.label} section={n.section}
+            visible={!hidden.has(n.id)} busy={busy === n.id} onToggle={() => toggle(n.id)}/>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function NavToggleRow({ icon, label, section, visible = true, locked = false, busy = false, onToggle }) {
+  const Icon = Icons[icon] || Icons.More;
+  return (
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '9px 10px', borderRadius: 10,
+      background: 'var(--surface-2)', border: '1px solid var(--border)',
+    }}>
+      <span style={{
+        width: 28, height: 28, borderRadius: 8, flexShrink: 0,
+        background: 'var(--surface)', color: visible || locked ? 'var(--accent)' : 'var(--muted-2)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+      }}><Icon size={15} sw={1.8}/></span>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: 13.5, fontWeight: 600 }}>{label}</span>
+        {section && <span style={{ fontSize: 11, color: 'var(--muted)', marginLeft: 8 }}>{section}</span>}
+      </span>
+      {locked ? (
+        <span style={{ fontSize: 11.5, color: 'var(--muted)', fontWeight: 600 }}>Always on</span>
+      ) : (
+        <button type="button" role="switch" aria-checked={visible} aria-label={`${visible ? 'Hide' : 'Show'} ${label}`}
+          onClick={onToggle} disabled={busy}
+          style={{
+            width: 42, height: 24, borderRadius: 999, position: 'relative', flexShrink: 0,
+            border: 'none', cursor: busy ? 'wait' : 'pointer', transition: 'background .15s',
+            background: visible ? 'var(--accent)' : 'var(--border-strong)', opacity: busy ? 0.6 : 1,
+          }}>
+          <span style={{
+            position: 'absolute', top: 3, left: visible ? 21 : 3, width: 18, height: 18, borderRadius: 999,
+            background: '#fff', transition: 'left .15s',
+          }}/>
+        </button>
+      )}
+    </div>
   );
 }
 

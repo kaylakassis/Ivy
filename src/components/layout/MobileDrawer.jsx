@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
-import { NAV } from '../../lib/nav.js';
+import { visibleNavFor } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
 
 function initialsOf(user) {
@@ -17,8 +17,12 @@ export default function MobileDrawer({ direction, onClose }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
-  // Match Sidebar's filter - non-super-admins don't see the Admin link.
-  const visibleNav = NAV.filter((n) => !n.superAdminOnly || user?.isSuperAdmin);
+  // Match Sidebar's filter (super-admin + the owner's own hidden tabs). The
+  // drawer has no useUserContext, so business-type gating stays at its default.
+  const visibleNav = visibleNavFor({
+    isSuperAdmin: user?.isSuperAdmin,
+    hiddenNav: user?.ui_prefs?.hiddenNav,
+  });
   // Mirror the floating ViewToggle's URL-based logic so the drawer
   // version of the switcher stays in sync without needing /api/me.
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
