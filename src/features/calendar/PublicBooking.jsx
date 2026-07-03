@@ -13,6 +13,7 @@ import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useEmbedResize } from '../../lib/embedResize.js';
 import { tzDisplay } from '../../lib/timezones.js';
+import { haptic } from '../../lib/celebrate.js';
 import {
   addDays, fmtDateISO, minToHM, parseISO, slotsForDate, startOfToday, WEEKDAYS_SHORT,
 } from './utils.js';
@@ -278,6 +279,7 @@ export default function PublicBooking({ embedded = false }) {
       }
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
+      haptic(); // a little "done!" tap on the client's phone
     } catch (e) {
       setBookErr(e.message || 'Could not confirm - try another slot.');
     } finally {
@@ -286,9 +288,9 @@ export default function PublicBooking({ embedded = false }) {
   };
 
   return (
-    <PageWrap tweaks={tweaks} embedded={embedded}>
+    <PageWrap tweaks={tweaks} embedded={embedded} accentColor={cal.settings.brandAccentColor}>
       {!embedded && (
-        <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline}/>
+        <Header bizName={cal.settings.bizName} tagline={cal.settings.tagline} logoUrl={cal.settings.brandLogoUrl}/>
       )}
 
       {/* Deposit checkout was cancelled - reassure the visitor their slot
@@ -1024,29 +1026,58 @@ function Stars({ rating, size = 12 }) {
   );
 }
 
-function PageWrap({ tweaks, embedded, children }) {
+// Only accept a plain 3/6/8-digit hex so an owner's stored value can never
+// inject arbitrary CSS. Returns null when it doesn't match.
+function safeHex(c) {
+  return typeof c === 'string' && /^#[0-9a-fA-F]{3}([0-9a-fA-F]{3}([0-9a-fA-F]{2})?)?$/.test(c.trim())
+    ? c.trim() : null;
+}
+// Readable ink (text) color on top of a given accent, by luminance.
+function inkFor(hex) {
+  let h = hex.replace('#', '');
+  if (h.length === 3) h = h.split('').map((x) => x + x).join('');
+  const r = parseInt(h.slice(0, 2), 16), g = parseInt(h.slice(2, 4), 16), b = parseInt(h.slice(4, 6), 16);
+  const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return lum > 0.6 ? '#111111' : '#ffffff';
+}
+
+function PageWrap({ tweaks, embedded, accentColor, children }) {
   // Embed mode: transparent background + tight padding so the host
   // site's container styling shows through. Non-embed: full-page bg,
   // generous padding, owns the whole viewport.
+  //
+  // Owner branding: when a valid accent color is set we override the theme
+  // --accent (and a readable --accent-ink) for the whole booking page, so the
+  // buttons/highlights match the owner's brand.
+  const accent = safeHex(accentColor);
+  const brandVars = accent ? { '--accent': accent, '--accent-ink': inkFor(accent) } : null;
   return (
     <div className={`app-root dir-${tweaks.direction}`} style={{
       minHeight: embedded ? 'auto' : '100vh',
       padding: embedded ? '14px 16px 18px' : '40px 24px 80px',
       background: embedded ? 'transparent' : 'var(--page)',
+      ...brandVars,
     }}>
       <div style={{ maxWidth: 820, margin: '0 auto' }}>{children}</div>
     </div>
   );
 }
 
-function Header({ bizName, tagline }) {
+function Header({ bizName, tagline, logoUrl }) {
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 14, marginBottom: 28 }}>
-      <div style={{
-        width: 52, height: 52, borderRadius: 14, background: 'var(--accent)', color: 'var(--accent-ink)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22,
-      }}>{(bizName || 'T')[0].toUpperCase()}</div>
+      {logoUrl ? (
+        <img src={logoUrl} alt={bizName || 'Logo'} style={{
+          width: 52, height: 52, borderRadius: 14, objectFit: 'cover', flexShrink: 0,
+          border: '1px solid var(--border)', background: 'var(--surface)',
+        }}/>
+      ) : (
+        <div style={{
+          width: 52, height: 52, borderRadius: 14, background: 'var(--accent)', color: 'var(--accent-ink)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 22, flexShrink: 0,
+        }}>{(bizName || 'T')[0].toUpperCase()}</div>
+      )}
       <div style={{ minWidth: 0 }}>
         <div className="metric-label">Book an appointment</div>
         <h1 className="page-title" style={{ margin: '4px 0 0', fontSize: 28 }}>{bizName || 'Your business'}</h1>

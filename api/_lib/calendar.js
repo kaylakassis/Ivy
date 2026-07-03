@@ -74,6 +74,8 @@ export function serializeSettings(row) {
     leadInstantReplyMessage: row.lead_instant_reply_message || '',
     category:       row.category || null,
     timezone:       row.timezone || null,
+    brandLogoUrl:     row.brand_logo_url || null,
+    brandAccentColor: row.brand_accent_color || null,
     addressLabel:   row.address_label || '',
     lat:            row.lat == null ? null : Number(row.lat),
     lng:            row.lng == null ? null : Number(row.lng),

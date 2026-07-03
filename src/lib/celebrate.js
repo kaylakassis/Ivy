@@ -10,6 +10,19 @@ const COLORS = ['#7c5cff', '#22c55e', '#f59e0b', '#ec4899', '#38bdf8', '#facc15'
 
 let lastFire = 0;
 
+// A short haptic tap for confirm/paid/charge moments. Uses the Vibration API
+// (Android/Chrome; iOS Safari ignores it, which is a silent no-op — the app is
+// a PWA, there's no native Capacitor layer). Honors reduced-motion. `pattern`
+// is ms or an array of on/off ms (default a single light 15ms tap).
+export function haptic(pattern = 15) {
+  if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
+  try {
+    if (typeof window !== 'undefined' && window.matchMedia
+        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    navigator.vibrate(pattern);
+  } catch { /* unsupported — ignore */ }
+}
+
 export function fireConfetti(opts = {}) {
   if (typeof document === 'undefined' || typeof window === 'undefined') return;
   // Respect reduced-motion: no surprise animation for people who opt out.

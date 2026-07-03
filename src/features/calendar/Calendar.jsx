@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelPageHeader, SkelBlock } from '../../components/Skeleton.jsx';
 import { useCalendar } from './state.js';
 import { useViewport } from '../../lib/viewport.js';
 import {
@@ -180,7 +181,12 @@ export default function Calendar() {
   useEffect(() => { localStorage.setItem(VIEW_KEY, view); }, [view]);
 
   if (loading) {
-    return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading your calendar…</div>;
+    return (
+      <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <SkelPageHeader/>
+        <SkelBlock height={420}/>
+      </div>
+    );
   }
   if (error) {
     return (

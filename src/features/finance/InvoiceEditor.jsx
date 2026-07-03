@@ -5,7 +5,7 @@ import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from './CollectInPersonModal.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
-import { fireConfetti } from '../../lib/celebrate.js';
+import { fireConfetti, haptic } from '../../lib/celebrate.js';
 
 export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund }) {
   const [collectOpen, setCollectOpen] = useState(false);
@@ -282,7 +282,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
               <button className="btn btn-primary" disabled={busy}
                 onClick={async () => {
                   setBusy(true); setErr(null);
-                  try { await onMarkPaid(paidMethod); fireConfetti(); setConfirm(null); }
+                  try { await onMarkPaid(paidMethod); fireConfetti(); haptic(); setConfirm(null); }
                   catch (e) { setErr(e.message || 'Mark-paid failed'); }
                   finally { setBusy(false); }
                 }}>

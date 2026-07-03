@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelPageHeader, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
 import { useInvoices } from './state.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -142,7 +143,15 @@ export default function Finance() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search]);
 
-  if (loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading finance…</div>;
+  if (loading) {
+    return (
+      <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+        <SkelPageHeader/>
+        <SkelStatGrid count={4}/>
+        <SkelRowList rows={6}/>
+      </div>
+    );
+  }
   if (error) {
     return (
       <div style={{ padding: 48 }}>

@@ -4,6 +4,7 @@ import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { SkelRowList } from '../../components/Skeleton.jsx';
 import { useClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
@@ -215,7 +216,7 @@ export default function Clients() {
           </div>
         )}
         {loading ? (
-          <div style={{ padding: 48, textAlign: 'center', color: 'var(--muted)', fontSize: 13 }}>Loading…</div>
+          <div style={{ padding: 16 }}><SkelRowList rows={8} withAvatar/></div>
         ) : rows.length === 0 ? (
           <div style={{ padding: 48 }}>
             <EmptyNote

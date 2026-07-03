@@ -12,6 +12,7 @@
 import { sql } from './db.js';
 import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
 import { buildBookingInvite } from './ical.js';
+import { sendClientSms } from './sms.js';
 import { celebrateFirstBooking } from './milestones.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
@@ -42,6 +43,8 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         b.id, b.client_id, b.client_name, b.client_email,
         b.date, b.start_min, b.end_min, b.notes,
         b.video_room_url, b.location_address,
+        b.client_phone,
+        c.sms_consent_at,
         s.name AS service_name, s.location_type, s.location_label,
         cs.biz_name,
         cs.slug,
@@ -52,6 +55,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
       FROM bookings b
       LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+      LEFT JOIN clients c ON c.id = b.client_id
       LEFT JOIN workspaces w ON w.id = b.workspace_id
       LEFT JOIN users u ON u.id = w.owner_id
       WHERE b.id = ${bookingId}
@@ -114,6 +118,20 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         source,
         branding,
       }));
+    }
+
+    // 2b. Confirmation SMS to the client - only when they gave a phone AND
+    //     opted in (sms_consent_at). Transactional, so it ignores quiet hours.
+    //     No-ops safely when Twilio isn't configured. Best-effort.
+    if (ctx.client_phone && ctx.sms_consent_at) {
+      const smsBody = `${businessName}: your booking for ${serviceName} on ${dateLabel} at ${fmtTime(ctx.start_min)} is confirmed.`;
+      tasks.push(sendClientSms({
+        phone: ctx.client_phone,
+        consentAt: ctx.sms_consent_at,
+        body: smsBody,
+        workspaceId,
+        respectQuietHours: false,
+      }).catch((e) => console.error('[booking] confirm SMS failed:', e?.message)));
     }
 
     // 3. Notification email to owner - only for public bookings (owner
