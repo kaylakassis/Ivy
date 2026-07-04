@@ -20,12 +20,13 @@ async function newWorkspace(tag) {
   return { uid, ws };
 }
 // Add N clients, each with an invoice created right now (within the 48h window).
-async function addClientsWithInvoices(ws, n, tag) {
+// itemsFor(i) returns the invoice's line items (default: empty = amount unknown).
+async function addClientsWithInvoices(ws, n, tag, itemsFor = () => []) {
   const ids = [];
   for (let i = 0; i < n; i++) {
     const cid = (await sql`INSERT INTO clients (workspace_id, name, stage) VALUES (${ws}, ${`C${i}`}, 'active') RETURNING id`).rows[0].id;
     await sql`INSERT INTO invoices (workspace_id, number, client_id, client_name, items, status)
-      VALUES (${ws}, ${`${tag}-INV-${i}`}, ${cid}, ${`C${i}`}, '[]'::jsonb, 'draft')`;
+      VALUES (${ws}, ${`${tag}-INV-${i}`}, ${cid}, ${`C${i}`}, ${JSON.stringify(itemsFor(i))}::jsonb, 'draft')`;
     ids.push(cid);
   }
   return ids;
@@ -48,6 +49,26 @@ async function run() {
     // The proposal must be a valid workflow the create endpoint accepts.
     let threw = false; try { validateWorkflowShape(s.workflow); } catch { threw = true; }
     assert(!threw, 'proposed workflow passes validateWorkflowShape');
+
+    console.log('\n[1b] CONSISTENT fixed fee → proposes a real create_invoice action');
+    const c = await newWorkspace(`${tag}-c`);
+    await addClientsWithInvoices(c.ws, 6, `${tag}c`, () => [{ description: 'Onboarding', quantity: 1, rate: 250 }]);
+    let sc = await detectWorkflowSuggestion(c.ws);
+    assert(!!sc, 'suggestion returned');
+    const invAction = sc.workflow.actions.find((x) => x.type === 'create_invoice');
+    assert(!!invAction, 'proposes a create_invoice action (not a task) when the fee is consistent');
+    assert(Number(invAction.config.items[0].rate) === 250, `drafts at the consistent $250 rate (got ${invAction?.config.items[0].rate})`);
+    assert(invAction.config.items[0].description === 'Onboarding', 'reuses the owner’s own line description');
+    threw = false; try { validateWorkflowShape(sc.workflow); } catch { threw = true; }
+    assert(!threw, 'the create_invoice proposal is a valid workflow');
+
+    console.log('\n[1c] VARYING amounts → falls back to a task reminder (never guesses)');
+    const d = await newWorkspace(`${tag}-d`);
+    await addClientsWithInvoices(d.ws, 6, `${tag}d`, (i) => [{ description: 'Work', quantity: 1, rate: 100 + i * 25 }]);
+    const sd = await detectWorkflowSuggestion(d.ws);
+    assert(!!sd, 'suggestion returned');
+    assert(sd.workflow.actions.every((x) => x.type !== 'create_invoice'), 'no auto-invoice when amounts vary');
+    assert(sd.workflow.actions.some((x) => x.type === 'create_task' && /Send invoice/i.test(x.config.title)), 'task reminder instead');
 
     console.log('\n[2] add a reused document template → send_document action');
     const tmplId = (await sql`INSERT INTO documents (workspace_id, name, is_template) VALUES (${a.ws}, 'Contract', TRUE) RETURNING id`).rows[0].id;
@@ -77,7 +98,7 @@ async function run() {
     assert(s === null, '3 clients is below the sample minimum');
 
     // Cleanup
-    for (const w of [a, b]) {
+    for (const w of [a, b, c, d]) {
       await sql`DELETE FROM workflows WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM documents WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM invoices WHERE workspace_id = ${w.ws}`;
