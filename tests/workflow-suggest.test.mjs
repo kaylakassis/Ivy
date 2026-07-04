@@ -31,6 +31,18 @@ async function addClientsWithInvoices(ws, n, tag, itemsFor = () => []) {
   }
   return ids;
 }
+// Add N clients, each sent a document right now (within the window). nameFor(i)
+// gives the document's name; templateId optionally links it (intake-style).
+async function addClientsWithDocs(ws, n, nameFor, templateId = null) {
+  const ids = [];
+  for (let i = 0; i < n; i++) {
+    const cid = (await sql`INSERT INTO clients (workspace_id, name, stage) VALUES (${ws}, ${`D${i}`}, 'active') RETURNING id`).rows[0].id;
+    await sql`INSERT INTO documents (workspace_id, name, recipient_client_id, status, sent_at, template_id)
+      VALUES (${ws}, ${nameFor(i)}, ${cid}, 'sent', NOW(), ${templateId})`;
+    ids.push(cid);
+  }
+  return ids;
+}
 
 async function run() {
   try {
@@ -81,6 +93,28 @@ async function run() {
     assert(s.workflow.actions.some((x) => x.type === 'send_document' && x.config.templateId === tmplId),
       'proposes send_document with the reused template id');
 
+    console.log('\n[2b] consistent doc NAME (no template_id link) → send_document via name match');
+    const e = await newWorkspace(`${tag}-e`);
+    // A template exists; the sent docs aren't linked to it (template_id NULL) but
+    // share its base name — mimicking send_document's "<Template> - <Client>" clones.
+    const eTmpl = (await sql`INSERT INTO documents (workspace_id, name, is_template) VALUES (${e.ws}, 'Coaching Agreement', TRUE) RETURNING id`).rows[0].id;
+    await addClientsWithDocs(e.ws, 6, (i) => `Coaching Agreement - D${i}`);
+    const se = await detectWorkflowSuggestion(e.ws);
+    assert(!!se && se.signature === 'client_created:document', `doc-only signature (got ${se?.signature})`);
+    const sendAction = se.workflow.actions.find((x) => x.type === 'send_document');
+    assert(!!sendAction && sendAction.config.templateId === eTmpl, 'proposes send_document with the name-matched template');
+    threw = false; try { validateWorkflowShape(se.workflow); } catch { threw = true; }
+    assert(!threw, 'the send_document proposal is a valid workflow');
+
+    console.log('\n[2c] consistent doc NAME but NO matching template → task names the document');
+    const f = await newWorkspace(`${tag}-f`);
+    await addClientsWithDocs(f.ws, 6, () => 'Welcome Packet'); // no template with this name
+    const sf = await detectWorkflowSuggestion(f.ws);
+    assert(!!sf, 'suggestion returned');
+    assert(sf.workflow.actions.every((x) => x.type !== 'send_document'), 'no send_document without a template to send');
+    assert(sf.workflow.actions.some((x) => x.type === 'create_task' && /Welcome Packet/.test(x.config.title)),
+      'the task reminder names the actual document');
+
     console.log('\n[3] dismissed signature → null');
     s = await detectWorkflowSuggestion(a.ws, { dismissed: ['client_created:invoice+document'] });
     assert(s === null, 'a dismissed signature suppresses the suggestion');
@@ -98,7 +132,7 @@ async function run() {
     assert(s === null, '3 clients is below the sample minimum');
 
     // Cleanup
-    for (const w of [a, b, c, d]) {
+    for (const w of [a, b, c, d, e, f]) {
       await sql`DELETE FROM workflows WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM documents WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM invoices WHERE workspace_id = ${w.ws}`;

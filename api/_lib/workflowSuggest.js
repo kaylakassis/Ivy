@@ -6,10 +6,12 @@
 // majority match. Suppressed once an owner already has a client_created
 // workflow, or once they dismiss the suggestion (signature stored in ui_prefs).
 //
-// The engine has no invoice action today, so the "invoice" habit is proposed as
-// a create_task reminder ("Send invoice to {client}") — a nudge, not auto-
-// billing. A "contract/document" habit maps to a real send_document action when
-// a reused template is identifiable, else to a task.
+// The "invoice" habit auto-drafts a create_invoice when the fee is consistent
+// (see consistentNewClientFee), else a create_task reminder — a nudge, never
+// auto-billing. A "contract/document" habit maps to a real send_document action
+// when a reused template is identifiable (by template_id or a consistent name
+// that matches a template); when the name is consistent but matches no template
+// it becomes a task that names the document, else a generic task.
 import { sql } from './db.js';
 import { validateWorkflowShape } from './workflows.js';
 
@@ -100,26 +102,23 @@ export async function detectWorkflowSuggestion(workspaceId, { dismissed = [] } =
 
     if (docHabit) {
       sigParts.push('document');
-      habits.push('send a document');
-      // Prefer a real send_document action when a reused template is clear.
-      const tmpl = await sql`
-        SELECT d.template_id AS id, COUNT(*)::int AS n
-          FROM clients c
-          JOIN documents d ON d.recipient_client_id = c.id AND d.workspace_id = ${workspaceId}
-          JOIN documents t ON t.id = d.template_id AND t.workspace_id = ${workspaceId} AND t.is_template = TRUE
-         WHERE c.workspace_id = ${workspaceId}
-           AND (c.source IS DISTINCT FROM 'demo')
-           AND c.created_at > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
-           AND d.status IN ('sent', 'completed')
-           AND COALESCE(d.sent_at, d.created_at) BETWEEN c.created_at
-                                          AND c.created_at + (${WINDOW_HOURS} || ' hours')::interval
-         GROUP BY d.template_id
-         ORDER BY n DESC
-         LIMIT 1`;
-      const templateId = tmpl.rows[0]?.id || null;
-      if (templateId) {
-        actions.push({ type: 'send_document', config: { templateId } });
+      // Prefer a real send_document action when the same document is clearly
+      // reused — either linked by template_id (intake forms) or by a consistent
+      // name that matches one of the owner's templates. When the name is
+      // consistent but no template matches, name it in the task reminder so it's
+      // specific; otherwise fall back to a generic reminder.
+      const doc = await consistentNewClientDocument(workspaceId, Number(docN));
+      if (doc?.templateId) {
+        habits.push('send a document');
+        actions.push({ type: 'send_document', config: { templateId: doc.templateId } });
+      } else if (doc?.name) {
+        habits.push(`send your ${doc.name}`);
+        actions.push({
+          type: 'create_task',
+          config: { title: `Send {{clientName}} your ${doc.name}`, dueInDays: 1 },
+        });
       } else {
+        habits.push('send a document');
         actions.push({
           type: 'create_task',
           config: { title: 'Send {{clientName}} your usual document', dueInDays: 1 },
@@ -208,4 +207,96 @@ async function consistentNewClientFee(workspaceId, invoicedCount) {
     // otherwise a neutral, client-personalized default.
     description: top.common_descr || 'Services for {{clientName}}',
   };
+}
+
+// At least this many recently-doc'd new clients must share the same template /
+// document before we propose sending it automatically (on top of MAJORITY).
+const DOC_CONSISTENT_MIN = 3;
+
+// Returns { templateId } when the owner reuses the SAME document for new clients
+// — strongest when linked by template_id (intake forms), else when the sent
+// documents share a consistent NAME that matches one of their templates. When
+// the name is consistent but matches no template, returns { name } so the
+// reminder can name it. Returns null when documents vary. Looks at each recent
+// new client's FIRST in-window sent document.
+async function consistentNewClientDocument(workspaceId, docCount) {
+  const need = Math.max(DOC_CONSISTENT_MIN, Math.ceil(Number(docCount) * MAJORITY));
+
+  // 1) Strongest signal: the same template reused via template_id (e.g. intake
+  //    forms). Count DISTINCT clients so multiple docs per client don't inflate.
+  const byId = await sql`
+    WITH rc AS (
+      SELECT id, created_at FROM clients
+       WHERE workspace_id = ${workspaceId}
+         AND (source IS DISTINCT FROM 'demo')
+         AND created_at > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
+       ORDER BY created_at DESC
+       LIMIT 20
+    )
+    SELECT d.template_id AS id, COUNT(DISTINCT rc.id)::int AS n
+      FROM rc
+      JOIN documents d ON d.recipient_client_id = rc.id AND d.workspace_id = ${workspaceId}
+      JOIN documents t ON t.id = d.template_id AND t.workspace_id = ${workspaceId} AND t.is_template = TRUE
+     WHERE d.status IN ('sent', 'completed')
+       AND COALESCE(d.sent_at, d.created_at) BETWEEN rc.created_at
+                                          AND rc.created_at + (${WINDOW_HOURS} || ' hours')::interval
+     GROUP BY d.template_id
+     ORDER BY n DESC
+     LIMIT 1`;
+  if (byId.rows[0]?.id && Number(byId.rows[0].n) >= need) {
+    return { templateId: byId.rows[0].id };
+  }
+
+  // 2) Fallback: a consistent document NAME across those first docs. Strip a
+  //    trailing " - <client name>" (how send_document names its clones) to get
+  //    the base name, then match it to one of the owner's templates if present.
+  const byName = await sql`
+    WITH rc AS (
+      SELECT id, name, created_at FROM clients
+       WHERE workspace_id = ${workspaceId}
+         AND (source IS DISTINCT FROM 'demo')
+         AND created_at > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
+       ORDER BY created_at DESC
+       LIMIT 20
+    ), firstdoc AS (
+      SELECT rc.name AS client_name, fd.name AS doc_name
+        FROM rc
+        JOIN LATERAL (
+          SELECT d.name
+            FROM documents d
+           WHERE d.workspace_id = ${workspaceId} AND d.recipient_client_id = rc.id
+             AND d.status IN ('sent', 'completed')
+             AND COALESCE(d.sent_at, d.created_at) BETWEEN rc.created_at
+                                          AND rc.created_at + (${WINDOW_HOURS} || ' hours')::interval
+           ORDER BY COALESCE(d.sent_at, d.created_at) ASC
+           LIMIT 1
+        ) fd ON TRUE
+    ), base AS (
+      SELECT btrim(
+               CASE WHEN client_name IS NOT NULL AND btrim(client_name) <> ''
+                         AND doc_name LIKE ('% - ' || client_name)
+                    THEN left(doc_name, length(doc_name) - length(' - ' || client_name))
+                    ELSE doc_name END
+             ) AS base_name
+        FROM firstdoc
+    ), grp AS (
+      SELECT lower(base_name) AS norm, MAX(base_name) AS display, COUNT(*)::int AS n
+        FROM base
+       WHERE base_name <> ''
+       GROUP BY lower(base_name)
+       ORDER BY n DESC
+       LIMIT 1
+    )
+    SELECT g.display AS name, g.n,
+           (SELECT t.id FROM documents t
+             WHERE t.workspace_id = ${workspaceId} AND t.is_template = TRUE
+               AND lower(btrim(t.name)) = g.norm
+             ORDER BY t.created_at DESC
+             LIMIT 1) AS template_id
+      FROM grp g`;
+  const top = byName.rows[0];
+  if (!top || Number(top.n) < need) return null;
+  if (top.template_id) return { templateId: top.template_id };
+  const name = String(top.name || '').trim();
+  return name ? { name } : null;
 }
