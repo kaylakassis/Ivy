@@ -79,7 +79,9 @@ export default function WorkflowSuggestionCard({ suggestion, onChanged }) {
         <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.5 }}>{suggestion.detail}</div>
 
         <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--muted)' }}>
-          Every time you add a client, Ivy will:
+          {wf.triggerType === 'booking_completed'
+            ? 'Every time a booking wraps, Ivy will:'
+            : 'Every time you add a client, Ivy will:'}
         </div>
         <ul style={{ margin: '4px 0 0', paddingLeft: 18, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.6 }}>
           {actions.map((a, i) => <li key={i}>{describeAction(a)}</li>)}

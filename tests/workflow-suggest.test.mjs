@@ -43,6 +43,26 @@ async function addClientsWithDocs(ws, n, nameFor, templateId = null) {
   }
   return ids;
 }
+// Add N completed bookings (marked complete ~1h ago), each for a distinct
+// client. followFor(i) => also post a biz message right after completion (the
+// owner's manual follow-up).
+async function addCompletedBookings(ws, n, followFor = () => true) {
+  const completedAt = new Date(Date.now() - 3600 * 1000).toISOString();
+  const dayKey = completedAt.slice(0, 10);
+  const ids = [];
+  for (let i = 0; i < n; i++) {
+    const cid = (await sql`INSERT INTO clients (workspace_id, name, stage) VALUES (${ws}, ${`B${i}`}, 'active') RETURNING id`).rows[0].id;
+    await sql`INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min, completion_log)
+      VALUES (${ws}, ${cid}, ${`B${i}`}, ${`b${i}@x.com`}, CURRENT_DATE, 540, 600,
+              ${JSON.stringify({ [dayKey]: { completedAt } })}::jsonb)`;
+    if (followFor(i)) {
+      const tid = (await sql`INSERT INTO message_threads (workspace_id, client_id) VALUES (${ws}, ${cid}) RETURNING id`).rows[0].id;
+      await sql`INSERT INTO messages (thread_id, sender, text) VALUES (${tid}, 'biz', 'Thanks for coming in!')`;
+    }
+    ids.push(cid);
+  }
+  return ids;
+}
 
 async function run() {
   try {
@@ -131,9 +151,38 @@ async function run() {
     s = await detectWorkflowSuggestion(b.ws);
     assert(s === null, '3 clients is below the sample minimum');
 
+    console.log('\n[6] booking_completed follow-up habit → task-reminder suggestion');
+    const g = await newWorkspace(`${tag}-g`);
+    await addCompletedBookings(g.ws, 6, () => true); // owner messaged after every session
+    const sg = await detectWorkflowSuggestion(g.ws);
+    assert(!!sg, 'suggestion returned when the owner followed up after sessions');
+    assert(sg.signature === 'booking_completed:followup', `booking signature (got ${sg?.signature})`);
+    assert(sg.workflow.triggerType === 'booking_completed', 'trigger is booking_completed');
+    assert(Number(sg.workflow.triggerConfig.daysAfter) >= 1, 'carries a daysAfter trigger config');
+    assert(sg.workflow.actions.some((x) => x.type === 'create_task' && /Follow up/i.test(x.config.title)),
+      'proposes a follow-up task (no auto-sent message)');
+    threw = false; try { validateWorkflowShape(sg.workflow); } catch { threw = true; }
+    assert(!threw, 'the booking proposal is a valid workflow');
+
+    console.log('\n[6b] completed bookings but NO follow-ups → null');
+    const h = await newWorkspace(`${tag}-h`);
+    await addCompletedBookings(h.ws, 6, () => false);
+    const sh = await detectWorkflowSuggestion(h.ws);
+    assert(sh === null, 'no suggestion when sessions had no follow-up messages');
+
+    console.log('\n[6c] suppressed once a booking_completed workflow exists');
+    await sql`INSERT INTO workflows (workspace_id, name, trigger_type, trigger_config, actions, enabled)
+      VALUES (${g.ws}, 'wf', 'booking_completed', ${JSON.stringify({ daysAfter: 1 })}::jsonb,
+              ${JSON.stringify([{ type: 'create_task', config: { title: 't' } }])}::jsonb, TRUE)`;
+    const sg2 = await detectWorkflowSuggestion(g.ws);
+    assert(sg2 === null, 'no booking suggestion when the owner already automates booking_completed');
+
     // Cleanup
-    for (const w of [a, b, c, d, e, f]) {
+    for (const w of [a, b, c, d, e, f, g, h]) {
       await sql`DELETE FROM workflows WHERE workspace_id = ${w.ws}`;
+      await sql`DELETE FROM messages WHERE thread_id IN (SELECT id FROM message_threads WHERE workspace_id = ${w.ws})`;
+      await sql`DELETE FROM message_threads WHERE workspace_id = ${w.ws}`;
+      await sql`DELETE FROM bookings WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM documents WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM invoices WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM clients WHERE workspace_id = ${w.ws}`;

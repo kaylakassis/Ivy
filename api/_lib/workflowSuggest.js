@@ -1,10 +1,12 @@
 // "Ivy noticed a pattern" — detects that an owner repeats the same manual
-// follow-up after adding a client (e.g. always sends an invoice + a contract),
-// and proposes a client_created workflow that automates it. Deterministic SQL
-// over the domain tables (there's no event log) — joins the last N clients to
-// the invoices/documents created within 48h of each, and fires when a strong
-// majority match. Suppressed once an owner already has a client_created
-// workflow, or once they dismiss the suggestion (signature stored in ui_prefs).
+// follow-up and proposes a workflow that automates it. Deterministic SQL over
+// the domain tables (there's no event log). Two triggers, tried in order:
+//   • client_created  — an invoice / a document within 48h of a new client.
+//   • booking_completed — a message to the client within 48h of a session being
+//     marked complete (a personal thank-you / follow-up).
+// Each fires when a strong majority of the last N match. Suppressed for a
+// trigger once the owner already has an enabled workflow of that type, or once
+// they dismiss the suggestion (signature stored in ui_prefs).
 //
 // The "invoice" habit auto-drafts a create_invoice when the fee is consistent
 // (see consistentNewClientFee), else a create_task reminder — a nudge, never
@@ -21,9 +23,27 @@ const SAMPLE_MIN = 5;         // need enough new clients to call it a pattern
 const MAJORITY = 0.7;         // ≥70% of them got the same follow-up
 
 // Returns a suggestion object { signature, headline, detail, workflow } or null.
+// Tries the client_created habit first (invoice / document), then the
+// booking_completed habit (a manual post-session follow-up). One card at a
+// time; a dismissed signature falls through to the next trigger.
 export async function detectWorkflowSuggestion(workspaceId, { dismissed = [] } = {}) {
   if (!workspaceId) return null;
-  try {
+  for (const detect of [detectClientCreatedSuggestion, detectBookingCompletedSuggestion]) {
+    try {
+      const s = await detect(workspaceId);
+      if (s && !dismissed.includes(s.signature)) return s;
+    } catch {
+      // A suggestion is a nicety — never break the dashboard over it.
+    }
+  }
+  return null;
+}
+
+// The client_created habit: an invoice and/or a document within WINDOW_HOURS of
+// a new client. Returns a suggestion or null (caller applies the dismissal).
+async function detectClientCreatedSuggestion(workspaceId) {
+  if (!workspaceId) return null;
+  {
     // Already automated new-client follow-ups? Don't nag.
     const has = await sql`
       SELECT EXISTS (
@@ -127,7 +147,6 @@ export async function detectWorkflowSuggestion(workspaceId, { dismissed = [] } =
     }
 
     const signature = `client_created:${sigParts.join('+')}`;
-    if (dismissed.includes(signature)) return null;
 
     const workflow = {
       name: 'New-client follow-up',
@@ -147,10 +166,85 @@ export async function detectWorkflowSuggestion(workspaceId, { dismissed = [] } =
       detail: `You ${habitText} for ${Math.max(invN, docN)} of your last ${total} new clients. Want Ivy to do it automatically every time you add one?`,
       workflow,
     };
-  } catch {
-    // A suggestion is a nicety — never break the dashboard over it.
-    return null;
   }
+}
+
+// The booking_completed habit: the owner personally follows up (a message in the
+// client's thread) within WINDOW_HOURS after a booking is marked complete.
+// Review requests are already automated app-wide (see cron/review-requests.js),
+// so we only surface the MANUAL follow-up. The message wording varies, so we
+// propose a task reminder rather than auto-sending invented content — the owner
+// can upgrade it to an automatic email in Workflows.
+async function detectBookingCompletedSuggestion(workspaceId) {
+  if (!workspaceId) return null;
+  const has = await sql`
+    SELECT EXISTS (
+      SELECT 1 FROM workflows
+       WHERE workspace_id = ${workspaceId} AND trigger_type = 'booking_completed' AND enabled
+    ) AS has`;
+  if (has.rows[0]?.has) return null;
+
+  // Recent completed bookings (a completion_log entry within LOOKBACK_DAYS), not
+  // cancelled / no-show, tied to a client thread. For each, did the owner send a
+  // message (sender='biz') within WINDOW_HOURS after the latest completion?
+  const agg = await sql`
+    WITH rb AS (
+      SELECT b.id, b.client_id,
+             MAX((e.value->>'completedAt')::timestamptz) AS completed_at
+        FROM bookings b
+        CROSS JOIN LATERAL jsonb_each(b.completion_log) AS e(key, value)
+       WHERE b.workspace_id = ${workspaceId}
+         AND b.cancelled_at IS NULL
+         AND b.no_show_at IS NULL
+         AND b.client_id IS NOT NULL
+         AND b.completion_log <> '{}'::jsonb
+         AND (e.value->>'completedAt') IS NOT NULL
+       GROUP BY b.id, b.client_id
+      HAVING MAX((e.value->>'completedAt')::timestamptz) > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
+       ORDER BY completed_at DESC
+       LIMIT 20
+    ), fb AS (
+      SELECT rb.id,
+        EXISTS (
+          SELECT 1 FROM message_threads mt
+            JOIN messages m ON m.thread_id = mt.id
+           WHERE mt.workspace_id = ${workspaceId} AND mt.client_id = rb.client_id
+             AND m.sender = 'biz'
+             AND m.created_at BETWEEN rb.completed_at
+                                  AND rb.completed_at + (${WINDOW_HOURS} || ' hours')::interval
+        ) AS followed
+        FROM rb
+    )
+    SELECT COUNT(*)::int AS total, COUNT(*) FILTER (WHERE followed)::int AS followed_n
+      FROM fb`;
+  const { total, followed_n: followedN } = agg.rows[0] || { total: 0, followed_n: 0 };
+  if (Number(total) < SAMPLE_MIN) return null;
+  if (Number(followedN) < Math.ceil(Number(total) * MAJORITY)) return null;
+
+  const workflow = {
+    name: 'Post-session follow-up',
+    description: 'Suggested by Ivy from your recent habits.',
+    triggerType: 'booking_completed',
+    triggerConfig: { daysAfter: 1 },
+    actions: [{
+      type: 'create_task',
+      config: {
+        title: 'Follow up with {{clientName}} after their session',
+        notes: 'Ivy set this up because you message clients after their sessions. Turn it into an automatic email in Workflows if you’d like Ivy to send it for you.',
+        dueInDays: 1,
+      },
+    }],
+    enabled: true,
+  };
+  // Defensive: never surface a proposal the create endpoint would reject.
+  try { validateWorkflowShape(workflow); } catch { return null; }
+
+  return {
+    signature: 'booking_completed:followup',
+    headline: 'Ivy noticed a pattern',
+    detail: `You followed up with ${followedN} of your last ${total} clients after their session. Want Ivy to remind you every time a booking wraps?`,
+    workflow,
+  };
 }
 
 // At least this many recently-invoiced new clients must share the SAME amount
