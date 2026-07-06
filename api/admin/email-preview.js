@@ -147,6 +147,9 @@ function render(template) {
         stats: {
           newClients: 3, completedBookings: 8, upcomingBookings: 5,
           revenuePaid: 2140, overdueInvoiceCount: 2, overdueInvoiceTotal: 380,
+          // Prior week lower than current so the preview shows the up-deltas.
+          prior: { newClients: 1, completedBookings: 5, revenuePaid: 1600 },
+          bestDay: { date: '2026-06-30', amount: 640 },
         },
       });
 

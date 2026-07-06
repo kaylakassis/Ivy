@@ -76,6 +76,49 @@ async function run() {
     assert(quiet.html.includes('quiet one') || quiet.html.includes('quiet'), 'quiet week gets a softer headline');
     assert(quiet.html.includes('No sessions on the books') || quiet.html.includes('Empty calendar'), 'quiet week names the empty calendar');
 
+    const range = { from: new Date(Date.now() - 7 * 86400000), to: new Date() };
+
+    console.log('\n[2b] week-over-week UP delta + best-day highlight');
+    const up = renderWeeklyRecap({
+      firstName: 'Casey', businessName: 'Casey & Co', range,
+      stats: {
+        newClients: 3, completedBookings: 8, upcomingBookings: 5, revenuePaid: 2140,
+        overdueInvoiceCount: 0, overdueInvoiceTotal: 0,
+        prior: { newClients: 1, completedBookings: 5, revenuePaid: 1600 },
+        bestDay: { date: '2026-06-30', amount: 640 },
+      },
+    });
+    assert(up.html.includes('up from'), 'up week shows an up-delta');
+    assert(up.html.includes('$1,600'), 'the delta names the prior-week revenue');
+    assert(up.html.includes('best day') && up.html.includes('$640'), 'best-day highlight is rendered');
+
+    console.log('\n[2c] DOWN week is neutral, never punishing');
+    const down = renderWeeklyRecap({
+      firstName: 'Casey', businessName: 'Casey & Co', range,
+      stats: {
+        newClients: 1, completedBookings: 3, upcomingBookings: 2, revenuePaid: 900,
+        overdueInvoiceCount: 0, overdueInvoiceTotal: 0,
+        prior: { newClients: 4, completedBookings: 8, revenuePaid: 1600 },
+        bestDay: null,
+      },
+    });
+    assert(down.html.includes('down from'), 'down week shows a neutral down-delta');
+    assert(!/slipped|falling|worse|bad week|failing/i.test(down.html), 'no punishing language on a down week');
+
+    console.log('\n[2d] no prior week → never "up from $0", best-day omitted when null');
+    const noPrior = renderWeeklyRecap({
+      firstName: 'Casey', businessName: 'Casey & Co', range,
+      stats: {
+        newClients: 2, completedBookings: 3, upcomingBookings: 1, revenuePaid: 500,
+        overdueInvoiceCount: 0, overdueInvoiceTotal: 0,
+        prior: { newClients: 0, completedBookings: 0, revenuePaid: 0 },
+        bestDay: null,
+      },
+    });
+    assert(!noPrior.html.includes('up from $0'), 'never renders "up from $0"');
+    assert(!noPrior.html.includes('best day'), 'best-day block omitted when null');
+    assert(noPrior.html.includes('First paid week'), 'celebratory line for first revenue after a dry spell');
+
     console.log('\n[3] cron eligibility — active trialing owner is picked up + stamped');
     const live = await mkOwner({ userType: 'regular', subStatus: 'trialing', trialDaysAhead: 7, onboarded: true });
     created.push(live);

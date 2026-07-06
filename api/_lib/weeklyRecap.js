@@ -26,6 +26,25 @@ function fmtRange({ from, to }) {
   const t = to.toLocaleDateString('en-US',   { month: 'short', day: 'numeric' });
   return `${f} – ${t}`;
 }
+// A YYYY-MM-DD string → "Tue, Jun 30" (UTC, matching the recap's window).
+function fmtDay(iso) {
+  if (!iso) return '';
+  const d = new Date(`${String(iso).slice(0, 10)}T00:00:00Z`);
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' });
+}
+// Week-over-week delta line for a stat tile's sub slot. Returns null (omit the
+// line) when there's no meaningful comparison — crucially never "up from $0".
+// Non-punishing on a down week; neutral wording only.
+function deltaSub(curr, prior, { money = false } = {}) {
+  const c = Number(curr || 0);
+  const p = Number(prior || 0);
+  if (p <= 0) return null;          // no prior → don't compare (avoids "up from $0")
+  const fmt = (n) => (money ? fmtMoney(n) : String(n));
+  if (c === p) return 'Same as last week';
+  return c > p
+    ? `▲ up from ${fmt(p)} last week`
+    : `▼ down from ${fmt(p)} last week`;
+}
 
 // Stat tile used in the body grid. Keeps the layout consistent and the
 // copy short — every tile is one number + one label, with optional
@@ -50,6 +69,14 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
   const revenue      = s.revenuePaid || 0;
   const overdueCount = s.overdueInvoiceCount || 0;
   const overdueTotal = s.overdueInvoiceTotal || 0;
+  const prior        = s.prior || {};
+  const bestDay      = s.bestDay || null;
+
+  // Week-over-week delta lines for the two window-scoped tiles. A big up-week
+  // from nothing gets a celebratory line instead of a bare number.
+  const revenueDelta = deltaSub(revenue, prior.revenuePaid, { money: true })
+    || (revenue > 0 && (prior.revenuePaid || 0) === 0 ? 'First paid week in a while' : null);
+  const clientsDelta = deltaSub(newClients, prior.newClients);
 
   // A "quiet week" (no sessions, no new clients) is the moment to re-activate,
   // not just report — so its copy + closing block push a concrete next step
@@ -82,6 +109,13 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
         <a href="${appUrl()}/calendar?share=1" style="color:#CFFF50;text-decoration:underline;">Share your booking link →</a>
       </p>`;
 
+  // A single standout day — a concrete high point to anchor the week's momentum.
+  const bestDayBlock = bestDay && bestDay.amount > 0
+    ? `<p style="margin:18px 0 4px;font-size:14px;color:#F3F3EE;">
+        <strong>Your best day: ${escapeHtml(fmtDay(bestDay.date))}</strong> · ${fmtMoney(bestDay.amount)} came in.
+      </p>`
+    : '';
+
   const html = emailShell({
     heading: `Your week at ${businessName || 'your business'}`,
     preheader: `${rangeLabel} · ${completed} session${completed === 1 ? '' : 's'}, ${fmtMoney(revenue)} earned, ${newClients} new client${newClients === 1 ? '' : 's'}.`,
@@ -90,8 +124,8 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
       ${rangeLabel ? `<p style="font-size:12px;letter-spacing:0.04em;text-transform:uppercase;color:#8A8D85;margin:18px 0 8px;">${escapeHtml(rangeLabel)}</p>` : ''}
       <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="border-collapse:separate;border-spacing:8px;margin:8px -8px;">
         <tr>
-          ${statTile('Revenue',         fmtMoney(revenue),        completed ? `${completed} session${completed === 1 ? '' : 's'} completed` : null)}
-          ${statTile('New clients',     newClients,               newClients ? 'Welcome them onboard' : null)}
+          ${statTile('Revenue',         fmtMoney(revenue),        revenueDelta || (completed ? `${completed} session${completed === 1 ? '' : 's'} completed` : null))}
+          ${statTile('New clients',     newClients,               clientsDelta || (newClients ? 'Welcome them onboard' : null))}
         </tr>
         <tr>
           ${statTile('Coming up',       upcoming,                 upcoming ? 'In the next 7 days' : 'Empty calendar')}
@@ -99,6 +133,7 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
         </tr>
       </table>
       ${overdueBlock}
+      ${bestDayBlock}
       ${upcomingBlock}
       ${quietWeek
         ? `<p style="margin-top:24px;font-size:13.5px;line-height:1.6;color:#F3F3EE;">
@@ -122,26 +157,26 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
   };
 }
 
-// Collect the snapshot for one workspace over a [from, to] window.
-// All queries are wrapped in defensive safe() so a missing column or
-// table degrades the value to 0 rather than throwing the whole recap.
-async function buildStats({ workspaceId, from, to }) {
-  const safe = async (p, fallback) => { try { return await p; } catch { return fallback; } };
+const safeQ = async (p, fallback) => { try { return await p; } catch { return fallback; } };
+
+// The three WINDOW-SCOPED metrics for one [from, to) period. Factored out so we
+// can run it for the current week AND the prior week (same SQL, shifted dates)
+// to compute week-over-week deltas. Each leg degrades to 0 rather than throwing.
+async function periodStats({ workspaceId, from, to }) {
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
-
-  const [newClients, completed, upcoming, revenue, overdue] = await Promise.all([
-    safe(sql`
+  const [newClients, completed, revenue] = await Promise.all([
+    safeQ(sql`
       SELECT COUNT(*)::int AS n
         FROM clients
        WHERE workspace_id = ${workspaceId}
          AND created_at >= ${fromIso}::timestamptz
          AND created_at <  ${toIso}::timestamptz
     `, { rows: [{ n: 0 }] }),
-    // Bookings whose date is in the past week. We count rows that
-    // weren't cancelled regardless of completion-log state — for the
-    // summary, that's close enough to "happened."
-    safe(sql`
+    // Bookings whose date is in the window. We count rows that weren't
+    // cancelled regardless of completion-log state — for the summary, that's
+    // close enough to "happened."
+    safeQ(sql`
       SELECT COUNT(*)::int AS n
         FROM bookings
        WHERE workspace_id = ${workspaceId}
@@ -149,9 +184,40 @@ async function buildStats({ workspaceId, from, to }) {
          AND date >= ${from.toISOString().slice(0, 10)}::date
          AND date <  ${to.toISOString().slice(0, 10)}::date
     `, { rows: [{ n: 0 }] }),
-    // Bookings in the NEXT 7 days. Re-uses the same source so we don't
-    // need a separate cron beat for the upcoming list.
-    safe(sql.query(
+    // Revenue: invoices marked paid in the window. paid_at is set by the Stripe
+    // webhook + the manual mark-paid endpoint.
+    safeQ(sql`
+      SELECT COALESCE(SUM(paid_amount), 0)::numeric AS total
+        FROM invoices
+       WHERE workspace_id = ${workspaceId}
+         AND status = 'paid'
+         AND paid_at >= ${fromIso}::timestamptz
+         AND paid_at <  ${toIso}::timestamptz
+    `, { rows: [{ total: 0 }] }),
+  ]);
+  return {
+    newClients:        newClients.rows[0]?.n || 0,
+    completedBookings: completed.rows[0]?.n || 0,
+    revenuePaid:       Number(revenue.rows[0]?.total || 0),
+  };
+}
+
+// Collect the snapshot for one workspace over a [from, to] window, plus the
+// PRIOR 7-day window (for deltas) and the single best revenue day (for a
+// highlight). The non-window metrics (upcoming, overdue) are "right now"
+// snapshots and fire once. All queries degrade to 0/null rather than throwing.
+async function buildStats({ workspaceId, from, to }) {
+  const priorTo = from;
+  const priorFrom = new Date(from.getTime() - 7 * 86400000);
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
+
+  const [current, prior, upcoming, overdue, bestDay] = await Promise.all([
+    periodStats({ workspaceId, from, to }),
+    periodStats({ workspaceId, from: priorFrom, to: priorTo }),
+    // Bookings in the NEXT 7 days. Re-uses the same source so we don't need a
+    // separate cron beat for the upcoming list.
+    safeQ(sql.query(
       `SELECT COUNT(*)::int AS n
          FROM bookings
         WHERE workspace_id = $1
@@ -160,17 +226,7 @@ async function buildStats({ workspaceId, from, to }) {
           AND date <  CURRENT_DATE + INTERVAL '7 days'`,
       [workspaceId],
     ), { rows: [{ n: 0 }] }),
-    // Revenue: invoices marked paid in the window. paid_at is set by
-    // the Stripe webhook + the manual mark-paid endpoint.
-    safe(sql`
-      SELECT COALESCE(SUM(paid_amount), 0)::numeric AS total
-        FROM invoices
-       WHERE workspace_id = ${workspaceId}
-         AND status = 'paid'
-         AND paid_at >= ${fromIso}::timestamptz
-         AND paid_at <  ${toIso}::timestamptz
-    `, { rows: [{ total: 0 }] }),
-    safe(sql`
+    safeQ(sql`
       SELECT COUNT(*)::int AS n, COALESCE(SUM(total), 0)::numeric AS total
         FROM invoices
        WHERE workspace_id = ${workspaceId}
@@ -178,15 +234,35 @@ async function buildStats({ workspaceId, from, to }) {
          AND due_date IS NOT NULL
          AND due_date < CURRENT_DATE
     `, { rows: [{ n: 0, total: 0 }] }),
+    // Best revenue day in the window. paid_at::date buckets in UTC, matching the
+    // recap's UTC rolling window — a deliberate simplification (mixing in the
+    // workspace tz could push the "best day" outside the window bounds). May be
+    // off by one calendar day for owners far from UTC; fine for a weekly digest.
+    safeQ(sql`
+      SELECT paid_at::date AS d, COALESCE(SUM(paid_amount), 0)::numeric AS amount
+        FROM invoices
+       WHERE workspace_id = ${workspaceId}
+         AND status = 'paid'
+         AND paid_at >= ${fromIso}::timestamptz
+         AND paid_at <  ${toIso}::timestamptz
+       GROUP BY paid_at::date
+       ORDER BY amount DESC
+       LIMIT 1
+    `, { rows: [] }),
   ]);
 
+  const bd = bestDay.rows[0];
   return {
-    newClients:           newClients.rows[0]?.n || 0,
-    completedBookings:    completed.rows[0]?.n || 0,
+    newClients:           current.newClients,
+    completedBookings:    current.completedBookings,
     upcomingBookings:     upcoming.rows[0]?.n || 0,
-    revenuePaid:          Number(revenue.rows[0]?.total || 0),
+    revenuePaid:          current.revenuePaid,
     overdueInvoiceCount:  overdue.rows[0]?.n || 0,
     overdueInvoiceTotal:  Number(overdue.rows[0]?.total || 0),
+    prior,
+    bestDay: bd && Number(bd.amount) > 0
+      ? { date: bd.d instanceof Date ? bd.d.toISOString().slice(0, 10) : String(bd.d).slice(0, 10), amount: Number(bd.amount) }
+      : null,
   };
 }
 
