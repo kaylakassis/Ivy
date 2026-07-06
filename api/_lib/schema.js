@@ -107,6 +107,12 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_last_day DATE;
 -- setup-nudge.js) so an owner who finished the wizard but left a required
 -- setup item open gets exactly one reminder.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS setup_nudge_sent_at TIMESTAMPTZ;
+-- Once-per-day dedupe guards for the daily-return push loop (api/cron/
+-- daily-return.js): a morning briefing push and an evening streak-at-risk push.
+-- Compared against a >20h interval (not a same-day compare) so a DST fall-back
+-- hour-repeat or a retried run can't double-send within one beat.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_push_last_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_push_last_sent_at   TIMESTAMPTZ;
 
 -- Business type - drives onboarding flow, sidebar (Calendar hidden
 -- for product-only), dashboard tiles (orders vs bookings), and the

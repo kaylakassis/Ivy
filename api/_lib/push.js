@@ -42,7 +42,7 @@ export function publicVapidKey() {
 // /account → Notifications card and /api/me/notifications. Each
 // sendPushToUser call passes one of these so the user's per-type
 // opt-out is honored.
-export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support'];
+export const NOTIFY_TYPES = ['messages', 'bookings', 'documents', 'payments', 'support', 'engagement'];
 
 // Returns true if the user hasn't opted out of `type`. Missing key →
 // enabled by default. Failure to look up → enabled (don't drop a

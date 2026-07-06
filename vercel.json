@@ -26,6 +26,7 @@
     { "path": "/api/cron/owner-reengage",        "schedule": "0 15 * * *" },
     { "path": "/api/cron/setup-nudge",           "schedule": "0 16 * * *" },
     { "path": "/api/cron/ivy-nudges",            "schedule": "0 9,13,17 * * *" },
+    { "path": "/api/cron/daily-return",          "schedule": "0 * * * *" },
     { "path": "/api/cron/refresh-admin-analytics", "schedule": "*/15 * * * *" }
   ],
   "functions": {

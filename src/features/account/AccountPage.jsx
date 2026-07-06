@@ -908,6 +908,7 @@ const PUSH_LABELS = {
   documents: { label: 'Documents', hint: 'Documents to sign, signatures completed, overdue reminders.' },
   payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
   support:   { label: 'Support',   hint: 'When Ivy OS Support replies to your conversation.' },
+  engagement: { label: 'Daily nudges', hint: 'Your morning briefing (today\'s sessions, unpaid invoices, quiet clients) and an evening reminder to keep your streak going.' },
 };
 const EMAIL_LABELS = {
   bookings:  { label: 'Booking alerts',  hint: 'Whether confirmation / reminder / cancellation emails are sent. (Reminder timing is per service in Calendar → Services.)' },
