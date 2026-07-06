@@ -25,7 +25,7 @@ function openPalette() {
   }));
 }
 
-export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, tabId, children }) {
+export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClick, tabId, paywalled, children }) {
   const compact = isMobile || isTablet;
   const navigate = useNavigate();
   const tutorial = useTutorial();
@@ -37,6 +37,11 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
   useEffect(() => {
     if (!hasTutorial) return;
     if (!tutorial.ready) return;
+    // Never pop the tutorial on top of the hard paywall - it would cover the
+    // "Start your free trial" screen and block the owner from subscribing.
+    // Left BEFORE lastAutoTabRef is stamped so it re-fires once the wall clears
+    // (paywalled flips false the moment they activate → this effect re-runs).
+    if (paywalled) return;
     if (tutorial.seen(tabId)) return;
     if (lastAutoTabRef.current === tabId) return; // don't reopen if user just dismissed
     lastAutoTabRef.current = tabId;
@@ -44,7 +49,7 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
     // of an empty surface feels jarring.
     const t = setTimeout(() => tutorial.open(tabId), 350);
     return () => clearTimeout(t);
-  }, [tabId, tutorial.ready, hasTutorial]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [tabId, tutorial.ready, hasTutorial, paywalled]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <header style={{

@@ -144,6 +144,7 @@ function AppShellInner() {
             isMobile={viewport.isMobile}
             isTablet={viewport.isTablet}
             onMenuClick={() => setDrawerOpen(true)}
+            paywalled={needsPaywall}
           />
           {/* Bottom padding reserves space for the floating ViewToggle
               pill (sits at bottom: 18, ~50px tall) so it can never
@@ -214,8 +215,10 @@ function AppShellInner() {
       {!needsPaywall && !showWalkthrough && <IvyDock/>}
       {/* Per-tab tutorial overlay. Reads activeTabId from TutorialProvider;
           renders nothing until a tab is opened (auto-trigger from Topbar
-          on first visit, or manual via the (i) button). */}
-      <TutorialOverlay/>
+          on first visit, or manual via the (i) button). Gated on the paywall
+          (like IvyDock above) so it can never cover the "Start your trial"
+          wall — the tutorial appears once the owner is past it. */}
+      {!needsPaywall && <TutorialOverlay/>}
     </div>
   );
 }
