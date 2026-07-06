@@ -13,6 +13,22 @@ function toISO(d) {
   return d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
 }
 
+// Read the streak counters WITHOUT advancing them — for surfaces that only
+// display the streak (Ivy's briefing/chat context) and must never mutate it.
+// (touchStreak does the day-boundary UPDATE, so calling it for a mere read would
+// corrupt the habit loop.) Best-effort → zeros on any error.
+export async function readStreak(workspaceId) {
+  if (!workspaceId) return { days: 0, best: 0 };
+  try {
+    const { rows } = await sql`
+      SELECT streak_days, streak_best FROM workspaces WHERE id = ${workspaceId}`;
+    const r = rows[0] || {};
+    return { days: Number(r.streak_days || 0), best: Number(r.streak_best || 0) };
+  } catch {
+    return { days: 0, best: 0 };
+  }
+}
+
 // Returns { days, best, isNewDay, milestone } — milestone is the threshold just
 // crossed today (for a one-time celebration) or null; best is the longest streak
 // ever reached (a "beat your record" hook once a streak breaks).

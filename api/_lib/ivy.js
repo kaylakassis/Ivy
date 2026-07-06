@@ -12,6 +12,8 @@ import { IVY_TOOLS, executeIvyTool } from './ivyTools.js';
 import {
   detectWorkflowSuggestion, dismissedWorkflowSuggestions, describeSuggestionActions,
 } from './workflowSuggest.js';
+import { listGoalsWithProgress } from './goals.js';
+import { readStreak } from './streak.js';
 
 // Single shared client. Reads ANTHROPIC_API_KEY from env automatically.
 let _client = null;
@@ -141,6 +143,15 @@ export async function workspaceContext(workspaceId) {
     }
   } catch { /* no nudge this turn */ }
 
+  // Streak + closest goal so Ivy can celebrate momentum / tie advice to the
+  // owner's actual target. Each independently best-effort — a hiccup omits it.
+  const streak = await readStreak(workspaceId).catch(() => ({ days: 0, best: 0 }));
+  let topGoal = null;
+  try {
+    const g = (await listGoalsWithProgress(workspaceId, { limit: 1 }))[0];
+    if (g) topGoal = { title: g.title, pct: g.pct, target: g.target, current: g.current, type: g.type };
+  } catch { /* no goal context this turn */ }
+
   return {
     revenueThisMonth: Number(r1[0].revenue || 0),
     openInvoices:     Number(r2[0].open_invoices || 0),
@@ -155,6 +166,8 @@ export async function workspaceContext(workspaceId) {
       stage:       IVY_PROFILE_LABELS.stage[p.stage] || null,
     },
     workflowSuggestion,
+    streak,
+    topGoal,
   };
 }
 
@@ -168,7 +181,7 @@ export async function workspaceContext(workspaceId) {
 // knows the owner's local clock; the server (UTC) must not guess it.
 export async function buildBriefing(workspaceId) {
   const tz = await workspaceTimeZone(workspaceId); // "today" in the owner's zone
-  const [today, invoices, quiet, biz] = await Promise.all([
+  const [today, invoices, quiet, biz, goals, streak] = await Promise.all([
     sql`
       SELECT b.start_min, b.client_name, s.name AS service_name
         FROM bookings b
@@ -199,6 +212,10 @@ export async function buildBriefing(workspaceId) {
        LIMIT 5
     `,
     sql`SELECT biz_name FROM calendar_settings WHERE workspace_id = ${workspaceId}`,
+    // Streak + the closest-to-done goal, so Ivy can coach toward them. Both
+    // best-effort — a hiccup just omits the goal item / streak facts.
+    listGoalsWithProgress(workspaceId, { limit: 1 }).catch(() => []),
+    readStreak(workspaceId).catch(() => ({ days: 0, best: 0 })),
   ]);
 
   const todayRows = today.rows || [];
@@ -241,6 +258,18 @@ export async function buildBriefing(workspaceId) {
       prompt: "Help me reconnect with the clients who've gone quiet.",
     });
   }
+  // A goal-progress coaching item. APPENDED (never prepended) and capped below
+  // to ≤3 — the morning push (api/cron/daily-return.js) sends items[0], so this
+  // must not displace a time-urgent item; it only surfaces on a calm day with a
+  // free slot, which is exactly when a coaching nudge lands well.
+  const topGoal = (goals || []).find((g) => Number(g.pct) < 100);
+  if (topGoal) {
+    items.push({
+      icon: 'Trending',
+      text: `${topGoal.title}: ${topGoal.pct}% there`,
+      prompt: `How do I hit my "${topGoal.title}" goal? Give me a concrete plan.`,
+    });
+  }
 
   return {
     bizName: biz.rows[0]?.biz_name || null,
@@ -248,7 +277,9 @@ export async function buildBriefing(workspaceId) {
     overdueInvoices: overdueN,
     overdueTotal: overdueOwed,
     quietClients: quietN,
-    items,
+    streakDays: streak?.days || 0,
+    streakBest: streak?.best || 0,
+    items: items.slice(0, 3),
   };
 }
 
@@ -816,6 +847,28 @@ function fmtCtx(ctx) {
   if (p.stage)        profileLines.push(`- Business stage: ${p.stage}`);
   if (profileLines.length) {
     lines.push('', 'About this business (owner-stated during onboarding - tailor your advice to it):', ...profileLines);
+  }
+
+  // Momentum: the daily-return streak + the goal they're closest to. Emit only
+  // when meaningful (no "0 days / no goal" noise), with a soft instruction so
+  // Ivy weaves it in naturally rather than reciting it every turn.
+  const momentum = [];
+  const streak = c.streak || {};
+  if (Number(streak.days) > 0) {
+    momentum.push(`- Daily-return streak: ${streak.days} day${streak.days === 1 ? '' : 's'} in a row`
+      + (Number(streak.best) > Number(streak.days) ? ` (personal best ${streak.best})` : ' (a personal best)') + '.');
+  }
+  const tg = c.topGoal;
+  if (tg && tg.title) {
+    const gf = (n) => (tg.type === 'revenue' ? fmt$(n) : Number(n || 0).toLocaleString());
+    momentum.push(`- Closest goal: "${tg.title}" at ${tg.pct ?? 0}% (${gf(tg.current)} of ${gf(tg.target)}).`);
+  }
+  if (momentum.length) {
+    lines.push(
+      '',
+      'Momentum (reference only when it genuinely fits what they asked - celebrate a streak or tie advice to the goal; never force it or repeat it every turn):',
+      ...momentum,
+    );
   }
 
   // A repeated manual habit Ivy can offer to automate. Surface it gently and at

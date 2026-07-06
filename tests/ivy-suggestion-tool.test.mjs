@@ -45,6 +45,14 @@ async function run() {
     assert(Array.isArray(sug.actions) && sug.actions.length >= 1, 'carries plain-English action lines');
     assert(sug.actions.every((x) => !/[0-9a-f]{8}-[0-9a-f]{4}/i.test(x)), 'action lines leak no raw UUIDs');
 
+    // Streak + closest goal also flow into the context so Ivy can coach toward them.
+    await sql`UPDATE workspaces SET streak_days = 4, streak_best = 9 WHERE id = ${a.ws}`;
+    await sql`INSERT INTO goals (workspace_id, title, type, target, current_manual)
+      VALUES (${a.ws}, 'Big month', 'custom', 10000, 4000)`;
+    ctx = await workspaceContext(a.ws);
+    assert(ctx.streak && ctx.streak.days === 4 && ctx.streak.best === 9, `ctx.streak carries the streak (got ${JSON.stringify(ctx.streak)})`);
+    assert(ctx.topGoal && ctx.topGoal.title === 'Big month' && ctx.topGoal.pct === 40, `ctx.topGoal carries the closest goal (got ${JSON.stringify(ctx.topGoal)})`);
+
     console.log('\n[2] stale signature → the tool declines');
     let r = await executeIvyTool('create_suggested_workflow', { signature: 'client_created:bogus' }, { workspaceId: a.ws });
     assert(r.created === false, 'a mismatched signature is not created');

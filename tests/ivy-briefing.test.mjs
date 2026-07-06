@@ -60,6 +60,23 @@ async function run() {
     assert(/9:00am/.test(b1.items[0].text) && /Booking Bob/.test(b1.items[0].text),
       `calendar line shows time + client (got "${b1.items[0].text}")`);
 
+    console.log('\n[3] a calm day surfaces a goal-coaching item + streak facts');
+    const uid2 = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
+      VALUES (${`${tag}-2@example.com`}, 'x', '2026-05-05', NOW()) RETURNING id`).rows[0].id;
+    const ws2 = (await sql`INSERT INTO workspaces (owner_id, streak_days, streak_best) VALUES (${uid2}, 4, 9) RETURNING id`).rows[0].id;
+    // No bookings/invoices/quiet clients → the goal item is the only item.
+    await sql`INSERT INTO goals (workspace_id, title, type, target, current_manual)
+      VALUES (${ws2}, '$5k month', 'custom', 5000, 2500)`;
+    const b2 = await buildBriefing(ws2);
+    assert(b2.streakDays === 4 && b2.streakBest === 9, `streak facts carried (got ${b2.streakDays}/${b2.streakBest})`);
+    const goalItem = b2.items.find((i) => i.icon === 'Trending');
+    assert(!!goalItem, 'a goal-coaching item is present on a calm day');
+    assert(/\$5k month/.test(goalItem.text) && /50%/.test(goalItem.text), `goal item shows title + pct (got "${goalItem?.text}")`);
+    assert(/\$5k month/.test(goalItem.prompt), 'the prompt names the goal');
+    await sql`DELETE FROM goals WHERE workspace_id = ${ws2}`;
+    await sql`DELETE FROM workspaces WHERE id = ${ws2}`;
+    await sql`DELETE FROM users WHERE id = ${uid2}`;
+
     // Cleanup
     await sql`DELETE FROM invoices WHERE workspace_id = ${ws}`;
     await sql`DELETE FROM bookings WHERE workspace_id = ${ws}`;
