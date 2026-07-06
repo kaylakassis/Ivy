@@ -394,3 +394,42 @@ async function consistentNewClientDocument(workspaceId, docCount) {
   const name = String(top.name || '').trim();
   return name ? { name } : null;
 }
+
+// The owner's dismissed suggestion signatures (stored on the workspace owner's
+// users.ui_prefs). Best-effort — an empty list on any error so a lookup problem
+// never suppresses a real suggestion nor throws into a caller.
+export async function dismissedWorkflowSuggestions(workspaceId) {
+  if (!workspaceId) return [];
+  try {
+    const { rows } = await sql`
+      SELECT u.ui_prefs->'dismissedWorkflowSuggestions' AS d
+        FROM workspaces w JOIN users u ON u.id = w.owner_id
+       WHERE w.id = ${workspaceId}`;
+    const d = rows[0]?.d;
+    return Array.isArray(d) ? d : [];
+  } catch {
+    return [];
+  }
+}
+
+// Plain-English, ID-free one-liners for a suggestion's actions — safe to hand to
+// Ivy's context or show the owner. Mirrors the dashboard card's describeAction
+// but never leaks a template_id or other internal identifier.
+export function describeSuggestionActions(actions = []) {
+  return (Array.isArray(actions) ? actions : []).map((a) => {
+    const c = (a && a.config) || {};
+    switch (a && a.type) {
+      case 'create_task':   return `add a task ("${c.title || 'Follow up'}")`;
+      case 'send_document': return 'send your usual document';
+      case 'create_invoice': {
+        const rate = Number(c.items?.[0]?.rate);
+        return Number.isFinite(rate) && rate > 0
+          ? `draft a $${rate.toLocaleString()} invoice (you review + send)`
+          : 'draft their invoice (you review + send)';
+      }
+      case 'send_email': return `email them ("${c.subject || 'a message'}")`;
+      case 'send_sms':   return 'text them';
+      default:           return String((a && a.type) || 'do something');
+    }
+  });
+}

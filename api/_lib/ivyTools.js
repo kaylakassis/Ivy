@@ -323,6 +323,16 @@ export const IVY_TOOLS = [
     },
   },
   {
+    name: 'create_suggested_workflow',
+    description: "Create the automation Ivy already detected from the owner's recent habits (surfaced in your context as an \"Automation opportunity\"). Call with no arguments once the owner agrees to that specific automation - the server re-derives and creates exactly the detected workflow (draft/reminder actions only, nothing auto-sends). Returns { created:false } when there's no current suggestion. Never use this to build an arbitrary workflow - that's create_workflow.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        signature: { type: 'string', description: 'Optional. The suggestion signature from your context; if it no longer matches, the server declines rather than creating a stale automation.' },
+      },
+    },
+  },
+  {
     name: 'create_document_from_template',
     description: 'Clone a document template into a draft for a specific client. Owner reviews + sends from /documents.',
     input_schema: {
@@ -741,6 +751,7 @@ export const HANDLERS = {
   create_task,
   create_project,
   create_workflow,
+  create_suggested_workflow,
   create_document_from_template,
   // Writes - updates
   update_client,
@@ -1547,6 +1558,45 @@ async function create_workflow({ workspaceId, args }) {
     RETURNING id, name, trigger_type, enabled
   `;
   return { workflow: rows[0] };
+}
+
+// Create the automation the detector already surfaced in Ivy's context. The
+// server re-derives it (deterministic SQL over the owner's own data) so the
+// exact template/amount is used — the model never has to reconstruct it, and no
+// internal IDs are exposed. Draft/reminder actions only; nothing auto-sends.
+async function create_suggested_workflow({ workspaceId, args }) {
+  const { detectWorkflowSuggestion, dismissedWorkflowSuggestions } = await import('./workflowSuggest.js');
+  const { validateWorkflowShape } = await import('./workflows.js');
+  const dismissed = await dismissedWorkflowSuggestions(workspaceId);
+  const suggestion = await detectWorkflowSuggestion(workspaceId, { dismissed });
+  if (!suggestion) {
+    return { created: false, reason: 'There is no automation suggestion for this workspace right now.' };
+  }
+  // Guard against acting on a stale suggestion: if the model passes the
+  // signature it saw and it no longer matches, decline rather than create
+  // something the owner didn't actually agree to.
+  if (args?.signature && String(args.signature) !== suggestion.signature) {
+    return { created: false, reason: 'The suggestion has changed since it was shown; re-check with the owner before creating.' };
+  }
+  let clean;
+  try {
+    clean = validateWorkflowShape(suggestion.workflow);
+  } catch (err) {
+    throw new Error('Suggested workflow invalid: ' + err.message);
+  }
+  const { rows } = await sql`
+    INSERT INTO workflows (
+      workspace_id, name, description, trigger_type, trigger_config, actions, enabled
+    ) VALUES (
+      ${workspaceId}, ${clean.name}, ${clean.description},
+      ${clean.triggerType},
+      ${JSON.stringify(clean.triggerConfig)}::jsonb,
+      ${JSON.stringify(clean.actions)}::jsonb,
+      ${clean.enabled}
+    )
+    RETURNING id, name, trigger_type, enabled
+  `;
+  return { created: true, workflow: rows[0], signature: suggestion.signature };
 }
 
 async function create_document_from_template({ workspaceId, args }) {

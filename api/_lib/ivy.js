@@ -9,6 +9,9 @@ import Anthropic from '@anthropic-ai/sdk';
 import { sql } from './db.js';
 import { workspaceTimeZone } from './calendar.js';
 import { IVY_TOOLS, executeIvyTool } from './ivyTools.js';
+import {
+  detectWorkflowSuggestion, dismissedWorkflowSuggestions, describeSuggestionActions,
+} from './workflowSuggest.js';
 
 // Single shared client. Reads ANTHROPIC_API_KEY from env automatically.
 let _client = null;
@@ -120,6 +123,24 @@ export async function workspaceContext(workspaceId) {
   ]);
 
   const p = r6[0] || {};
+
+  // A repeated manual habit Ivy has spotted (invoice/document after a new
+  // client, or a follow-up after a session) that she can offer to automate.
+  // Best-effort and dismissal-aware — a detection hiccup must never break the
+  // chat, so any failure just omits the nudge.
+  let workflowSuggestion = null;
+  try {
+    const dismissed = await dismissedWorkflowSuggestions(workspaceId);
+    const s = await detectWorkflowSuggestion(workspaceId, { dismissed });
+    if (s) {
+      workflowSuggestion = {
+        signature: s.signature,
+        detail: s.detail,
+        actions: describeSuggestionActions(s.workflow?.actions),
+      };
+    }
+  } catch { /* no nudge this turn */ }
+
   return {
     revenueThisMonth: Number(r1[0].revenue || 0),
     openInvoices:     Number(r2[0].open_invoices || 0),
@@ -133,6 +154,7 @@ export async function workspaceContext(workspaceId) {
       idealClient: p.ideal_client || null,
       stage:       IVY_PROFILE_LABELS.stage[p.stage] || null,
     },
+    workflowSuggestion,
   };
 }
 
@@ -449,6 +471,12 @@ create DRAFTS or internal records; nothing leaves the building):
   ("I'll set up: when a lead is created, send X email, then wait 3 days,
   then create a follow-up task"), then call the tool.
 - toggle_workflow - turn an existing workflow on/off.
+- create_suggested_workflow - Ivy sometimes detects a repeated manual habit and
+  surfaces it in your context as an "Automation opportunity". When the owner
+  says yes to THAT specific automation, call this (no arguments) - it creates
+  exactly what the server detected. Do NOT rebuild it with create_workflow: you
+  don't have the underlying template/amount details and would guess wrong.
+  Mention the opportunity at most once, gently, only when it fits; never nag.
 - complete_onboarding - mark setup done + publish into the app. Call ONLY once
   a business name, at least one service, and weekly availability all exist and
   the owner is happy. You can BUILD a whole booking page for a new owner:
@@ -784,6 +812,24 @@ function fmtCtx(ctx) {
   if (p.stage)        profileLines.push(`- Business stage: ${p.stage}`);
   if (profileLines.length) {
     lines.push('', 'About this business (owner-stated during onboarding - tailor your advice to it):', ...profileLines);
+  }
+
+  // A repeated manual habit Ivy can offer to automate. Surface it gently and at
+  // most once - it is an opportunity, not an alert.
+  const s = c.workflowSuggestion;
+  if (s && s.detail) {
+    lines.push(
+      '',
+      'Automation opportunity Ivy has spotted from their recent habits (offer this naturally and AT MOST ONCE, only when it fits the conversation - never force it, and skip it if you already raised it earlier in this chat):',
+      `- What Ivy noticed: ${s.detail}`,
+    );
+    if (Array.isArray(s.actions) && s.actions.length) {
+      lines.push('- Set up as a one-tap automation, every time it triggers Ivy would:',
+        ...s.actions.map((a) => `  • ${a}`));
+    }
+    lines.push(
+      '- If the owner wants it, call create_suggested_workflow (no arguments) to set up exactly this automation. Every action is a draft or reminder the owner reviews - nothing is auto-sent or auto-charged. They can also tap "Automate this" on their dashboard.',
+    );
   }
   return lines.join('\n');
 }
