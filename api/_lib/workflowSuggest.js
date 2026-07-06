@@ -412,6 +412,124 @@ export async function dismissedWorkflowSuggestions(workspaceId) {
   }
 }
 
+// The concrete evidence behind the CURRENT suggestion — the actual clients /
+// sessions, counts, and how consistent it is — so Ivy (or the owner) can see WHY
+// a pattern was flagged instead of taking it on faith. Returns null when there's
+// no suggestion. ID-free: names and dates only, never a raw row id. Examples are
+// capped so the payload stays small.
+export async function explainWorkflowSuggestion(workspaceId, { dismissed = [] } = {}) {
+  const suggestion = await detectWorkflowSuggestion(workspaceId, { dismissed });
+  if (!suggestion) return null;
+  const trigger = suggestion.workflow?.triggerType;
+  const base = { signature: suggestion.signature, trigger, detail: suggestion.detail, windowHours: WINDOW_HOURS, habits: [] };
+
+  if (trigger === 'client_created') {
+    const { rows } = await sql`
+      WITH rc AS (
+        SELECT id, name, created_at FROM clients
+         WHERE workspace_id = ${workspaceId}
+           AND (source IS DISTINCT FROM 'demo')
+           AND created_at > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
+         ORDER BY created_at DESC
+         LIMIT 20
+      )
+      SELECT rc.name AS client,
+             inv.number AS inv_number, inv.total AS inv_total, inv.rate AS inv_rate, inv.dt AS inv_dt,
+             doc.name AS doc_name, doc.dt AS doc_dt
+        FROM rc
+        LEFT JOIN LATERAL (
+          SELECT i.number, i.total,
+                 CASE WHEN jsonb_array_length(i.items) = 1 THEN (i.items->0->>'rate')::numeric END AS rate,
+                 to_char(i.created_at, 'Mon FMDD') AS dt
+            FROM invoices i
+           WHERE i.workspace_id = ${workspaceId} AND i.client_id = rc.id
+             AND i.created_at BETWEEN rc.created_at
+                                  AND rc.created_at + (${WINDOW_HOURS} || ' hours')::interval
+           ORDER BY i.created_at ASC LIMIT 1
+        ) inv ON TRUE
+        LEFT JOIN LATERAL (
+          SELECT d.name, to_char(COALESCE(d.sent_at, d.created_at), 'Mon FMDD') AS dt
+            FROM documents d
+           WHERE d.workspace_id = ${workspaceId} AND d.recipient_client_id = rc.id
+             AND d.status IN ('sent', 'completed')
+             AND COALESCE(d.sent_at, d.created_at) BETWEEN rc.created_at
+                                  AND rc.created_at + (${WINDOW_HOURS} || ' hours')::interval
+           ORDER BY COALESCE(d.sent_at, d.created_at) ASC LIMIT 1
+        ) doc ON TRUE`;
+    const considered = rows.length;
+    base.considered = considered;
+    base.consideredLabel = 'most recent new clients';
+
+    if (suggestion.signature.includes('invoice')) {
+      const inv = rows.filter((r) => r.inv_number != null);
+      const rates = [...new Set(inv.map((r) => (r.inv_rate == null ? null : Number(r.inv_rate))).filter((x) => x != null && x > 0))];
+      const habit = {
+        kind: 'invoice',
+        label: 'sent an invoice within 48h of adding the client',
+        matched: inv.length,
+        of: considered,
+        sharePct: considered ? Math.round((inv.length / considered) * 100) : 0,
+        examples: inv.slice(0, 4).map((r) => `${r.client} — ${r.inv_number}${r.inv_total != null ? `, $${Number(r.inv_total).toLocaleString()}` : ''} (${r.inv_dt})`),
+      };
+      if (rates.length === 1) habit.note = `every one was for $${rates[0].toLocaleString()} — a consistent fee, which is why Ivy can safely auto-draft it`;
+      else if (rates.length > 1) habit.note = 'the amounts vary, so Ivy proposes a reminder to send it rather than guessing a total';
+      base.habits.push(habit);
+    }
+    if (suggestion.signature.includes('document')) {
+      const docs = rows.filter((r) => r.doc_name != null);
+      base.habits.push({
+        kind: 'document',
+        label: 'sent a document within 48h of adding the client',
+        matched: docs.length,
+        of: considered,
+        sharePct: considered ? Math.round((docs.length / considered) * 100) : 0,
+        examples: docs.slice(0, 4).map((r) => `${r.client} — “${r.doc_name}” (${r.doc_dt})`),
+      });
+    }
+  } else if (trigger === 'booking_completed') {
+    const { rows } = await sql`
+      WITH rb AS (
+        SELECT b.id, b.client_id, b.client_name,
+               MAX((e.value->>'completedAt')::timestamptz) AS completed_at
+          FROM bookings b
+          CROSS JOIN LATERAL jsonb_each(b.completion_log) AS e(key, value)
+         WHERE b.workspace_id = ${workspaceId}
+           AND b.cancelled_at IS NULL AND b.no_show_at IS NULL
+           AND b.client_id IS NOT NULL AND b.completion_log <> '{}'::jsonb
+           AND (e.value->>'completedAt') IS NOT NULL
+         GROUP BY b.id, b.client_id, b.client_name
+        HAVING MAX((e.value->>'completedAt')::timestamptz) > NOW() - (${LOOKBACK_DAYS} || ' days')::interval
+         ORDER BY completed_at DESC
+         LIMIT 20
+      )
+      SELECT rb.client_name AS client,
+             to_char(rb.completed_at, 'Mon FMDD') AS dt,
+             EXISTS (
+               SELECT 1 FROM message_threads mt
+                 JOIN messages m ON m.thread_id = mt.id
+                WHERE mt.workspace_id = ${workspaceId} AND mt.client_id = rb.client_id
+                  AND m.sender = 'biz'
+                  AND m.created_at BETWEEN rb.completed_at
+                                       AND rb.completed_at + (${WINDOW_HOURS} || ' hours')::interval
+             ) AS followed
+        FROM rb`;
+    const considered = rows.length;
+    const followed = rows.filter((r) => r.followed);
+    base.considered = considered;
+    base.consideredLabel = 'most recent completed sessions';
+    base.habits.push({
+      kind: 'followup',
+      label: 'messaged the client within 48h of the session being marked complete',
+      matched: followed.length,
+      of: considered,
+      sharePct: considered ? Math.round((followed.length / considered) * 100) : 0,
+      examples: followed.slice(0, 4).map((r) => `${r.client} (session ${r.dt})`),
+    });
+  }
+
+  return base;
+}
+
 // Plain-English, ID-free one-liners for a suggestion's actions — safe to hand to
 // Ivy's context or show the owner. Mirrors the dashboard card's describeAction
 // but never leaks a template_id or other internal identifier.

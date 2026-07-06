@@ -21,11 +21,12 @@ async function newWorkspace(tag) {
   const ws = (await sql`INSERT INTO workspaces (owner_id) VALUES (${uid}) RETURNING id`).rows[0].id;
   return { uid, ws };
 }
-async function addInvoicedClients(ws, n, tag) {
+async function addInvoicedClients(ws, n, tag, rate = null) {
+  const items = rate == null ? [] : [{ description: 'Onboarding', quantity: 1, rate }];
   for (let i = 0; i < n; i++) {
     const cid = (await sql`INSERT INTO clients (workspace_id, name, stage) VALUES (${ws}, ${`C${i}`}, 'active') RETURNING id`).rows[0].id;
     await sql`INSERT INTO invoices (workspace_id, number, client_id, client_name, items, status)
-      VALUES (${ws}, ${`${tag}-INV-${i}`}, ${cid}, ${`C${i}`}, '[]'::jsonb, 'draft')`;
+      VALUES (${ws}, ${`${tag}-INV-${i}`}, ${cid}, ${`C${i}`}, ${JSON.stringify(items)}::jsonb, 'draft')`;
   }
 }
 
@@ -74,8 +75,28 @@ async function run() {
     r = await executeIvyTool('create_suggested_workflow', {}, { workspaceId: b.ws });
     assert(r.created === false, 'dismissed → the tool creates nothing');
 
+    console.log('\n[6] explain_workflow_suggestion returns real evidence (why)');
+    const c = await newWorkspace(`${tag}-c`);
+    await addInvoicedClients(c.ws, 6, `${tag}c`, 250); // consistent $250 onboarding fee
+    r = await executeIvyTool('explain_workflow_suggestion', {}, { workspaceId: c.ws });
+    assert(r.available === true, 'evidence is available when a suggestion exists');
+    assert(r.trigger === 'client_created', 'reports the trigger');
+    assert(r.considered >= 6, `reports how many were considered (got ${r.considered})`);
+    const invHabit = (r.habits || []).find((h) => h.kind === 'invoice');
+    assert(!!invHabit, 'includes the invoice habit');
+    assert(invHabit.matched === 6 && invHabit.sharePct === 100, `6/6 = 100% (got ${invHabit?.matched}/${invHabit?.of})`);
+    assert(Array.isArray(invHabit.examples) && invHabit.examples.length >= 1 && /C\d/.test(invHabit.examples[0]),
+      'cites real client examples');
+    assert(invHabit.examples.some((x) => /\$250/.test(x)), 'examples show the actual invoiced amount');
+    assert(typeof invHabit.note === 'string' && /250/.test(invHabit.note), 'flags the consistent $250 fee in the note');
+
+    console.log('\n[7] explain → unavailable when there is no suggestion');
+    const d = await newWorkspace(`${tag}-d`); // empty workspace, no habit
+    r = await executeIvyTool('explain_workflow_suggestion', {}, { workspaceId: d.ws });
+    assert(r.available === false, 'nothing to explain on an empty workspace');
+
     // Cleanup
-    for (const w of [a, b]) {
+    for (const w of [a, b, c, d]) {
       await sql`DELETE FROM workflows WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM invoices WHERE workspace_id = ${w.ws}`;
       await sql`DELETE FROM clients WHERE workspace_id = ${w.ws}`;

@@ -477,6 +477,10 @@ create DRAFTS or internal records; nothing leaves the building):
   exactly what the server detected. Do NOT rebuild it with create_workflow: you
   don't have the underlying template/amount details and would guess wrong.
   Mention the opportunity at most once, gently, only when it fits; never nag.
+- explain_workflow_suggestion - read-only. If the owner asks WHY you suggested
+  that automation (or wants to see the pattern before committing), call this
+  FIRST and explain from the real clients/sessions + counts it returns. Never
+  invent the specifics.
 - complete_onboarding - mark setup done + publish into the app. Call ONLY once
   a business name, at least one service, and weekly availability all exist and
   the owner is happy. You can BUILD a whole booking page for a new owner:
@@ -829,6 +833,7 @@ function fmtCtx(ctx) {
     }
     lines.push(
       '- If the owner wants it, call create_suggested_workflow (no arguments) to set up exactly this automation. Every action is a draft or reminder the owner reviews - nothing is auto-sent or auto-charged. They can also tap "Automate this" on their dashboard.',
+      '- If they ask WHY, or want to see the pattern before committing, call explain_workflow_suggestion first and answer from the real clients/counts it returns - never invent specifics.',
     );
   }
   return lines.join('\n');

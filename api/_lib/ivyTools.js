@@ -333,6 +333,11 @@ export const IVY_TOOLS = [
     },
   },
   {
+    name: 'explain_workflow_suggestion',
+    description: "Read-only. Return the concrete evidence behind the automation Ivy detected (surfaced in your context as an \"Automation opportunity\") — the actual clients/sessions, how many of the recent sample matched, the share %, and whether amounts are consistent. Call this BEFORE explaining WHY you suggested the automation so you cite real specifics instead of guessing. Returns { available:false } when there's no current suggestion.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'create_document_from_template',
     description: 'Clone a document template into a draft for a specific client. Owner reviews + sends from /documents.',
     input_schema: {
@@ -752,6 +757,7 @@ export const HANDLERS = {
   create_project,
   create_workflow,
   create_suggested_workflow,
+  explain_workflow_suggestion,
   create_document_from_template,
   // Writes - updates
   update_client,
@@ -1597,6 +1603,16 @@ async function create_suggested_workflow({ workspaceId, args }) {
     RETURNING id, name, trigger_type, enabled
   `;
   return { created: true, workflow: rows[0], signature: suggestion.signature };
+}
+
+// Read-only "why did you suggest this?" — the concrete clients/sessions +
+// counts behind the current suggestion, so Ivy explains with real evidence.
+async function explain_workflow_suggestion({ workspaceId }) {
+  const { explainWorkflowSuggestion, dismissedWorkflowSuggestions } = await import('./workflowSuggest.js');
+  const dismissed = await dismissedWorkflowSuggestions(workspaceId);
+  const evidence = await explainWorkflowSuggestion(workspaceId, { dismissed });
+  if (!evidence) return { available: false, reason: 'There is no automation suggestion to explain right now.' };
+  return { available: true, ...evidence };
 }
 
 async function create_document_from_template({ workspaceId, args }) {
