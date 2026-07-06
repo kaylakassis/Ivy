@@ -4,7 +4,7 @@
 // schedule, a recent-activity feed, and open tasks, all workspace-scoped.
 import { sql } from './_lib/db.js';
 import { requireUser, ensureWorkspace } from './_lib/auth.js';
-import { listTasksWithProgress } from './_lib/goals.js';
+import { listTasksWithProgress, listGoalsWithProgress } from './_lib/goals.js';
 import { workspaceTimeZone } from './_lib/calendar.js';
 import { touchStreak } from './_lib/streak.js';
 import { detectWorkflowSuggestion } from './_lib/workflowSuggest.js';
@@ -95,11 +95,16 @@ export default async function handler(req, res) {
       if (b?.items?.length) briefing = { items: b.items };
     } catch { /* no "today" card this load */ }
 
+    // Goal momentum on the home surface — the highest-intent retention object,
+    // which otherwise only lived on /goals. Best-effort; [] on any hiccup.
+    const goals = await listGoalsWithProgress(workspaceId, { limit: 3 });
+
     return ok(res, {
       currency,
-      streak: { days: streak.days, milestone: streak.milestone },
+      streak: { days: streak.days, best: streak.best, milestone: streak.milestone },
       workflowSuggestion,
       briefing,
+      goals,
       metrics: {
         mrr:     Number(rev.rows[0].v || 0),
         clients: Number(cli.rows[0].v || 0),

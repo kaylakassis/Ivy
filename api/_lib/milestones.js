@@ -93,3 +93,90 @@ export async function celebrateFirstReview(workspaceId) {
     });
   } catch { /* never break review submit */ }
 }
+
+// ── Repeat / mid-journey milestones ──────────────────────────────────────────
+// The firsts above are the "this works" moment for a NEW owner. These keep an
+// ESTABLISHED owner getting celebratory feed activity past their firsts. Each
+// tier's notification tag embeds the threshold (e.g. milestone-bookings-25), so
+// tag-coalescing fires it exactly once, ever - no separate fired-log table.
+// Count-based tiers use exact-equality (the count increments one at a time at
+// the call site, same as the firsts); the revenue tier uses >= because a single
+// payment can jump several tiers at once.
+const BOOKING_MILESTONES = [10, 25, 50, 100, 250, 500, 1000];
+const REVIEW_MILESTONES  = [5, 10, 25, 50, 100];
+const MONTH_REVENUE_MILESTONES = [1000, 5000, 10000, 25000, 50000];
+
+// Fired alongside celebrateFirstBooking when a completed (non-demo) booking
+// count lands exactly on a tier.
+export async function celebrateBookingMilestones(workspaceId) {
+  try {
+    if (!workspaceId) return;
+    const { rows } = await sql`
+      SELECT COUNT(*)::int AS n
+        FROM bookings b
+        LEFT JOIN clients c ON c.id = b.client_id
+       WHERE b.workspace_id = ${workspaceId}
+         AND b.cancelled_at IS NULL
+         AND (c.source IS DISTINCT FROM 'demo')`;
+    const n = Number(rows[0]?.n);
+    if (!BOOKING_MILESTONES.includes(n)) return;
+    await notifyOwnerSafe({
+      workspaceId, type: 'bookings',
+      payload: {
+        title: `🎉 ${n.toLocaleString()} bookings!`,
+        body: `That's ${n.toLocaleString()} sessions on the books. The momentum is real.`,
+        url: '/calendar',
+        tag: `milestone-bookings-${n}`,
+      },
+    });
+  } catch { /* never break the booking */ }
+}
+
+export async function celebrateReviewMilestones(workspaceId) {
+  try {
+    if (!workspaceId) return;
+    const { rows } = await sql`SELECT COUNT(*)::int AS n FROM reviews WHERE workspace_id = ${workspaceId}`;
+    const n = Number(rows[0]?.n);
+    if (!REVIEW_MILESTONES.includes(n)) return;
+    await notifyOwnerSafe({
+      workspaceId, type: 'support',
+      payload: {
+        title: `⭐ ${n} reviews!`,
+        body: `${n} clients have vouched for you. That's the proof that closes the next booking.`,
+        url: '/reviews',
+        tag: `milestone-reviews-${n}`,
+      },
+    });
+  } catch { /* never break review submit */ }
+}
+
+// Fired after celebrateFirstPayment: the first time ANY calendar month's paid
+// revenue reaches a tier. We look at the best month ever (max over months) so a
+// mid-month payment that crosses the line fires immediately, and only surface
+// the single HIGHEST newly-reached tier so a big jump is one celebration, not
+// three. Tag dedup means each tier fires once in the workspace's lifetime.
+export async function celebrateRevenueMonthMilestone(workspaceId) {
+  try {
+    if (!workspaceId) return;
+    const { rows } = await sql`
+      SELECT COALESCE(MAX(m), 0)::numeric AS best FROM (
+        SELECT SUM(total - COALESCE(refunded_amount, 0)) AS m
+          FROM invoices
+         WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL
+         GROUP BY date_trunc('month', paid_at)
+      ) t`;
+    const best = Number(rows[0]?.best || 0);
+    const reached = MONTH_REVENUE_MILESTONES.filter((t) => best >= t);
+    if (reached.length === 0) return;
+    const top = reached[reached.length - 1];
+    await notifyOwnerSafe({
+      workspaceId, type: 'invoices',
+      payload: {
+        title: `💰 Your first $${top.toLocaleString()} month!`,
+        body: `You crossed $${top.toLocaleString()} collected in a single month. That's a real business.`,
+        url: '/finance',
+        tag: `milestone-revenue-month-${top}`,
+      },
+    });
+  } catch { /* never break the payment */ }
+}

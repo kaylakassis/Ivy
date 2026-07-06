@@ -49,6 +49,9 @@ async function run() {
     // An unpaid invoice → the "unpaid invoices" briefing item (date-independent).
     await sql`INSERT INTO invoices (workspace_id, number, client_name, items, status)
       VALUES (${a.ws}, 'INV-1', 'C', '[]'::jsonb, 'sent')`;
+    // A goal with deterministic progress → the momentum strip.
+    await sql`INSERT INTO goals (workspace_id, title, type, target, current_manual)
+      VALUES (${a.ws}, 'Save $5k', 'custom', 5000, 4000)`;
     const res = mkRes();
     await dashboard(reqFor(a.uid), res);
     assert(res.statusCode === 200, `dashboard 200 (got ${res.statusCode})`);
@@ -58,6 +61,10 @@ async function run() {
     assert(!!inv, 'includes the unpaid-invoice item');
     assert(typeof inv.prompt === 'string' && inv.prompt.length > 0, 'each item carries an Ivy prompt (tap-to-act)');
     assert(items.every((x) => !/[0-9a-f]{8}-[0-9a-f]{4}/i.test(JSON.stringify(x))), 'items leak no raw UUIDs');
+    const goals = res.body?.goals;
+    assert(Array.isArray(goals) && goals.length === 1, 'goals surfaced on the dashboard');
+    assert(goals[0].title === 'Save $5k' && goals[0].pct === 80, `goal carries live pct (got ${goals[0]?.pct})`);
+    assert(res.body?.streak && typeof res.body.streak.best === 'number', 'streak payload carries personal best');
 
     console.log('\n[2] no signal → briefing is null (card hidden)');
     const b = await mkWorkspace(`${tag}-b`); created.push(b); // no invoices/bookings/clients

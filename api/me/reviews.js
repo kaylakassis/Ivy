@@ -12,7 +12,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { myClientIds, ids } from '../_lib/clientPortal.js';
 import { serializeReview } from '../_lib/reviews.js';
-import { celebrateFirstReview } from '../_lib/milestones.js';
+import { celebrateFirstReview, celebrateReviewMilestones } from '../_lib/milestones.js';
 import { badRequest, created, methodNotAllowed, notFound, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -66,8 +66,9 @@ export default async function handler(req, res) {
         )
         RETURNING *
       `;
-      // First-review milestone (best-effort, one-time).
+      // Review milestones (best-effort, one-time each): the first, then tiers.
       celebrateFirstReview(booking.workspace_id).catch(() => {});
+      celebrateReviewMilestones(booking.workspace_id).catch(() => {});
       return created(res, { review: serializeReview(r.rows[0], { includeBookingId: true }) });
     } catch (err) {
       // Hit the UNIQUE (booking_id) constraint - reviewed already.

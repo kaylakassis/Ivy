@@ -103,6 +103,9 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
 -- load. Lives on the workspace because the day boundary is per-workspace tz.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_days     INT NOT NULL DEFAULT 0;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_last_day DATE;
+-- Personal best (longest streak ever reached). Lets a broken streak become a
+-- "beat your record" hook instead of a dead end. Maintained by touchStreak().
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_best     INT NOT NULL DEFAULT 0;
 -- One-shot guard for the out-of-app setup-completion nudge (api/cron/
 -- setup-nudge.js) so an owner who finished the wizard but left a required
 -- setup item open gets exactly one reminder.

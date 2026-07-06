@@ -13,7 +13,7 @@ import { sql } from './db.js';
 import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
 import { buildBookingInvite } from './ical.js';
 import { sendClientSms } from './sms.js';
-import { celebrateFirstBooking } from './milestones.js';
+import { celebrateFirstBooking, celebrateBookingMilestones } from './milestones.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
@@ -75,8 +75,10 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
 
     const tasks = [];
 
-    // 0. First-booking milestone - a one-time celebration in the owner's feed.
+    // 0. Booking milestones - a one-time celebration in the owner's feed for
+    //    the first booking, then again at each mid-journey tier (10, 25, ...).
     tasks.push(celebrateFirstBooking(workspaceId));
+    tasks.push(celebrateBookingMilestones(workspaceId));
 
     // 1. Thread + system message - only if the booking is tied to a client
     //    record. Walk-ins with no client linkage skip this.

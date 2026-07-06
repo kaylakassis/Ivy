@@ -14,7 +14,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
-import { celebrateFirstReview } from '../_lib/milestones.js';
+import { celebrateFirstReview, celebrateReviewMilestones } from '../_lib/milestones.js';
 import crypto from 'node:crypto';
 
 function hashToken(raw) {
@@ -108,8 +108,9 @@ export default async function handler(req, res) {
           tag: `review-${row.booking_id}`,
         },
       });
-      // First-review milestone (best-effort, one-time).
+      // Review milestones (best-effort, one-time each): the first, then tiers.
       celebrateFirstReview(row.workspace_id).catch(() => {});
+      celebrateReviewMilestones(row.workspace_id).catch(() => {});
 
       return ok(res, { ok: true });
     }

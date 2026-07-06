@@ -13,21 +13,23 @@ function toISO(d) {
   return d instanceof Date ? d.toISOString().slice(0, 10) : String(d).slice(0, 10);
 }
 
-// Returns { days, isNewDay, milestone } — milestone is the threshold just
-// crossed today (for a one-time celebration) or null.
+// Returns { days, best, isNewDay, milestone } — milestone is the threshold just
+// crossed today (for a one-time celebration) or null; best is the longest streak
+// ever reached (a "beat your record" hook once a streak breaks).
 export async function touchStreak(workspaceId) {
-  if (!workspaceId) return { days: 0, isNewDay: false, milestone: null };
+  if (!workspaceId) return { days: 0, best: 0, isNewDay: false, milestone: null };
   try {
     const tz = await workspaceTimeZone(workspaceId);
     const { rows } = await sql`
-      SELECT streak_days, streak_last_day, (NOW() AT TIME ZONE ${tz})::date AS today
+      SELECT streak_days, streak_last_day, streak_best, (NOW() AT TIME ZONE ${tz})::date AS today
         FROM workspaces WHERE id = ${workspaceId}`;
     const r = rows[0];
-    if (!r) return { days: 0, isNewDay: false, milestone: null };
+    if (!r) return { days: 0, best: 0, isNewDay: false, milestone: null };
+    const bestSoFar = Number(r.streak_best || 0);
     const today = toISO(r.today);
     const last = toISO(r.streak_last_day);
     if (last === today) {
-      return { days: r.streak_days || 0, isNewDay: false, milestone: null };
+      return { days: r.streak_days || 0, best: Math.max(bestSoFar, r.streak_days || 0), isNewDay: false, milestone: null };
     }
     // First active day of a new calendar day: extend if yesterday, else reset.
     let days;
@@ -37,10 +39,13 @@ export async function touchStreak(workspaceId) {
     } else {
       days = 1;
     }
-    await sql`UPDATE workspaces SET streak_days = ${days}, streak_last_day = ${today}::date WHERE id = ${workspaceId}`;
-    return { days, isNewDay: true, milestone: MILESTONES.includes(days) ? days : null };
+    const best = Math.max(bestSoFar, days);
+    await sql`UPDATE workspaces
+                SET streak_days = ${days}, streak_last_day = ${today}::date, streak_best = ${best}
+              WHERE id = ${workspaceId}`;
+    return { days, best, isNewDay: true, milestone: MILESTONES.includes(days) ? days : null };
   } catch {
     // A streak hiccup must never break the dashboard load.
-    return { days: 0, isNewDay: false, milestone: null };
+    return { days: 0, best: 0, isNewDay: false, milestone: null };
   }
 }

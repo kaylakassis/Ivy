@@ -154,6 +154,42 @@ export async function computeGoalCurrent(workspaceId, type) {
   return 0;
 }
 
+// Goals with their live `current` + a `pct` (0-100), for a momentum surface
+// like the dashboard. Sorted closest-to-done first so the most motivating goal
+// ("80% there!") leads, capped at `limit`. Best-effort: returns [] on any error
+// so it never breaks a page it rides on. Reuses computeGoalCurrent (cached
+// per-type per call) exactly like the /api/goals list.
+export async function listGoalsWithProgress(workspaceId, { limit = 3 } = {}) {
+  if (!workspaceId) return [];
+  try {
+    const { rows } = await sql`
+      SELECT * FROM goals WHERE workspace_id = ${workspaceId}
+      ORDER BY deadline NULLS LAST, created_at`;
+    const cache = new Map();
+    const out = [];
+    for (const r of rows) {
+      let current;
+      if (r.type === 'custom') {
+        current = Number(r.current_manual || 0);
+      } else {
+        if (!cache.has(r.type)) {
+          // eslint-disable-next-line no-await-in-loop
+          cache.set(r.type, await computeGoalCurrent(workspaceId, r.type));
+        }
+        current = cache.get(r.type);
+      }
+      const g = serializeGoal(r, current);
+      g.pct = g.target > 0 ? Math.min(100, Math.round((g.current / g.target) * 100)) : 0;
+      out.push(g);
+    }
+    // Closest-to-done first — the most motivating goal leads the strip.
+    out.sort((a, b) => b.pct - a.pct);
+    return out.slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
 export async function fetchOwnedTask({ id, workspaceId }) {
   if (!id) return null;
   const { rows } = await sql`SELECT * FROM tasks WHERE id = ${id} AND workspace_id = ${workspaceId}`;

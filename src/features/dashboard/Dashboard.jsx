@@ -387,6 +387,43 @@ function TodayWithIvyCard({ items }) {
   );
 }
 
+// Goal momentum on the home surface. The highest-intent retention object
+// (revenue / clients / sessions goals with live progress) used to live only on
+// /goals; a compact "you're 80% there" strip on the dashboard keeps the target
+// in front of the owner every day. Hidden when they haven't set any goals.
+function GoalsMomentum({ goals, currency }) {
+  if (!Array.isArray(goals) || goals.length === 0) return null;
+  const fmt = (type, n) => (type === 'revenue'
+    ? new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(n || 0))
+    : Number(n || 0).toLocaleString());
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+        <div className="metric-label">Your goals</div>
+        <Link to="/goals" style={{ fontSize: 12.5, color: 'var(--muted)', textDecoration: 'none' }}>All goals →</Link>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        {goals.map((g) => (
+          <Link key={g.id} to="/goals" style={{ textDecoration: 'none', color: 'inherit' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 5 }}>
+              <span style={{ fontSize: 13, fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.title}</span>
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: g.pct >= 100 ? 'var(--ok, var(--accent))' : 'var(--accent)', flexShrink: 0 }}>
+                {g.pct >= 100 ? 'Reached 🎉' : `${g.pct}%`}
+              </span>
+            </div>
+            <div style={{ height: 7, borderRadius: 999, background: 'var(--surface-2)', overflow: 'hidden' }}>
+              <div style={{ height: '100%', width: `${g.pct}%`, borderRadius: 999, background: 'var(--accent)' }}/>
+            </div>
+            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
+              {fmt(g.type, g.current)} / {fmt(g.type, g.target)}
+            </div>
+          </Link>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -430,7 +467,7 @@ export default function Dashboard() {
       <HeroBand />
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         {data?.streak?.days >= 2 && (
-          <div style={{ display: 'flex' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
             <span style={{
               display: 'inline-flex', alignItems: 'center', gap: 7,
               padding: '5px 12px', borderRadius: 999, fontSize: 13, fontWeight: 600,
@@ -438,6 +475,12 @@ export default function Dashboard() {
             }} title="Days in a row you've shown up. Keep it going!">
               🔥 {data.streak.days}-day streak
             </span>
+            {data.streak.best > data.streak.days && (
+              <span style={{ fontSize: 12, color: 'var(--muted)' }}
+                title="Your longest streak so far - beat it!">
+                Personal best: {data.streak.best} days
+              </span>
+            )}
           </div>
         )}
         <TodayWithIvyCard items={data?.briefing?.items}/>
@@ -454,6 +497,7 @@ export default function Dashboard() {
               value={data?.metrics?.[m.k]} currency={currency} loading={loading}/>
           ))}
         </div>
+        <GoalsMomentum goals={data?.goals} currency={currency}/>
         <div className="split-2">
           <div className="card" style={{ padding: 24 }}>
             <div className="metric-label" style={{ marginBottom: 14 }}>Revenue vs expenses · this month</div>
