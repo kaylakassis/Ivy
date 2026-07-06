@@ -342,6 +342,51 @@ function HeroBand() {
   );
 }
 
+// "Today with Ivy" — the deterministic briefing (today's sessions / unpaid
+// invoices / quiet clients) that used to live only in the Ivy dock, surfaced on
+// the highest-traffic screen. Each row hands the job straight to Ivy via a
+// pre-filled, auto-sent prompt (/ivy?prompt=…&send=1), so the dashboard becomes
+// a place to ACT, not just read numbers. Hidden when there's nothing to say.
+function TodayWithIvyCard({ items }) {
+  if (!Array.isArray(items) || items.length === 0) return null;
+  return (
+    <div className="card" style={{ padding: 18 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+        <div style={{
+          width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+          background: 'var(--accent)', color: 'var(--accent-ink)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+        }}>
+          <Icons.Spark size={15} sw={1.9}/>
+        </div>
+        <div style={{ fontSize: 14.5, fontWeight: 700 }}>Today with Ivy</div>
+      </div>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {items.map((item, i) => {
+          const Icon = Icons[item.icon] || Icons.Spark;
+          return (
+            <Link key={i} to={`/ivy?prompt=${encodeURIComponent(item.prompt)}&send=1`} style={{
+              display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px',
+              borderRadius: 9, border: '1px solid var(--border)',
+              background: 'var(--surface)', textDecoration: 'none', color: 'inherit',
+            }}>
+              <span style={{
+                width: 26, height: 26, borderRadius: 7, flexShrink: 0,
+                background: 'var(--accent-soft)', color: 'var(--accent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}>
+                <Icon size={15} sw={1.9}/>
+              </span>
+              <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, fontWeight: 550 }}>{item.text}</span>
+              <span style={{ fontSize: 12, color: 'var(--accent)', fontWeight: 600, flexShrink: 0 }}>Ask Ivy →</span>
+            </Link>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -395,11 +440,12 @@ export default function Dashboard() {
             </span>
           </div>
         )}
-        <SetupChecklist/>
-        <NotifyPrompt/>
+        <TodayWithIvyCard items={data?.briefing?.items}/>
         {data?.workflowSuggestion && (
           <WorkflowSuggestionCard suggestion={data.workflowSuggestion} onChanged={loadDashboard}/>
         )}
+        <SetupChecklist/>
+        <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
         <InviteFriendCard/>
         <div className="grid-auto">

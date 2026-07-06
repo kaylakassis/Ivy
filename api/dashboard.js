@@ -8,6 +8,7 @@ import { listTasksWithProgress } from './_lib/goals.js';
 import { workspaceTimeZone } from './_lib/calendar.js';
 import { touchStreak } from './_lib/streak.js';
 import { detectWorkflowSuggestion } from './_lib/workflowSuggest.js';
+import { buildBriefing } from './_lib/ivy.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 export default async function handler(req, res) {
@@ -84,10 +85,21 @@ export default async function handler(req, res) {
       dismissed: user.ui_prefs?.dismissedWorkflowSuggestions || [],
     });
 
+    // "Today with Ivy" — surface the same deterministic briefing items (today's
+    // sessions / unpaid invoices / quiet clients, each a tap-to-act Ivy prompt)
+    // that live in the Ivy dock, on the highest-traffic surface. Best-effort:
+    // a briefing hiccup must never break the dashboard.
+    let briefing = null;
+    try {
+      const b = await buildBriefing(workspaceId);
+      if (b?.items?.length) briefing = { items: b.items };
+    } catch { /* no "today" card this load */ }
+
     return ok(res, {
       currency,
       streak: { days: streak.days, milestone: streak.milestone },
       workflowSuggestion,
+      briefing,
       metrics: {
         mrr:     Number(rev.rows[0].v || 0),
         clients: Number(cli.rows[0].v || 0),
