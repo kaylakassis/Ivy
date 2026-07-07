@@ -3,7 +3,8 @@
 // What this does:
 //   • Sweeps workspaces still on a LIVE trial (subscription_status =
 //     'trialing') and emails a stage-appropriate nudge as trial_ends_at
-//     approaches: ~7 days out, ~1 day out, and at expiry.
+//     approaches: ~7 days out, ~2 days out (the heads-up the paywall
+//     promises), ~1 day out, and at expiry.
 //   • Each stage stamps its own column (trial_reminder_7d_sent_at, …) so
 //     a workspace gets each nudge AT MOST ONCE. The stamp is written
 //     before the (async) send so a retry or overlapping run can't double
@@ -12,8 +13,8 @@
 // Relationship to win-back: these fire DURING the trial; the win-back
 // cron fires only AFTER a workspace has lapsed (3 days past
 // paywall_first_seen_at, never converted). The two never overlap, so the
-// owner sees: 7-day nudge → 1-day nudge → expiry notice → (if still no
-// sub) win-back offer. No double-sends.
+// owner sees: 7-day nudge → 2-day heads-up → 1-day nudge → expiry notice →
+// (if still no sub) win-back offer. No double-sends.
 //
 // Rollout safety: the 'expired' stage is bounded to trials that ended
 // within the last 3 days, so turning this on does NOT blast every
@@ -32,13 +33,22 @@ import { ok, serverError, unauthorized } from '../_lib/json.js';
 const MAX_PER_RUN = 1000;
 
 // Disjoint windows keyed off trial_ends_at. Literals are trusted (no user
-// input) so they're inlined directly into the SQL.
+// input) so they're inlined directly into the SQL. The bounds are kept fully
+// disjoint (7d: >2d..7d, 2d: >1d..2d, 1d: >now..1d) so a trial can't match two
+// stages on the same run and get two emails at once.
 const STAGES = [
   {
     stage: '7d',
     stampCol: 'trial_reminder_7d_sent_at',
-    window: `w.trial_ends_at > NOW() + INTERVAL '1 day'
+    window: `w.trial_ends_at > NOW() + INTERVAL '2 days'
              AND w.trial_ends_at <= NOW() + INTERVAL '7 days'`,
+  },
+  {
+    // The heads-up the paywall promises: ~2 days before the trial ends.
+    stage: '2d',
+    stampCol: 'trial_reminder_2d_sent_at',
+    window: `w.trial_ends_at > NOW() + INTERVAL '1 day'
+             AND w.trial_ends_at <= NOW() + INTERVAL '2 days'`,
   },
   {
     stage: '1d',

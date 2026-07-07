@@ -219,6 +219,10 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS winback_expires_at    TIMESTAMPT
 -- sending. Distinct from the win-back columns above: these fire DURING
 -- the live trial; win-back fires only AFTER it lapses.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_7d_sent_at    TIMESTAMPTZ;
+-- The 2-day heads-up promised on the paywall ("two days before your trial
+-- wraps up, we'll send a heads-up email"). Its own stamp column so it fires
+-- exactly once, independently of the 7d/1d nudges.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_2d_sent_at    TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_reminder_1d_sent_at    TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS trial_expired_notice_sent_at TIMESTAMPTZ;
 

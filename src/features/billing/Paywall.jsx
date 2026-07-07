@@ -609,7 +609,7 @@ function PrimingStep({ step, setStep, canTrial }) {
     {
       icon: 'Bell',
       title: "We'll remind you before the trial ends.",
-      body: `Two days before your trial wraps up, we'll send a heads-up email so you can decide. No surprise charges. Cancel in one tap from your account, anytime.`,
+      body: `A couple of days before your trial wraps up, we'll send a heads-up email so you can decide. No surprise charges. Cancel in one tap from your account, anytime.`,
       cta: 'See the plan',
     },
   ];

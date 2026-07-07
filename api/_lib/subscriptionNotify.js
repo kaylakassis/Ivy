@@ -90,6 +90,17 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
       </ul>
       <p>When your trial ends on <strong>${endDate}</strong>, you keep your account — but the business features above pause until you choose a plan. Lock everything in now and don't lose a beat.</p>`;
     ctaText = 'Choose my plan →';
+  } else if (stage === '2d') {
+    // The heads-up promised on the paywall: ~2 days out, so the owner has time
+    // to decide with no surprise charges.
+    subject = 'Your Ivy OS trial ends in 2 days';
+    preheader = `A quick heads-up so there are no surprises, ${fnPlain}.`;
+    heading = 'Your trial ends in 2 days';
+    body = `<p>Hi ${fn},</p>
+      <p>Just so it's not a surprise: your Ivy OS trial ends in <strong>2 days, on ${endDate}</strong>.</p>
+      <p>If you're getting value from <strong>${biz}</strong>, pick a plan and everything keeps running without a break. If it's not for you, no charge — cancel in one tap from your account, anytime.</p>
+      <p>Either way, you're in control. We just didn't want the date to sneak up on you.</p>`;
+    ctaText = 'Choose my plan →';
   } else if (stage === '1d') {
     subject = 'Your Ivy OS trial ends tomorrow';
     preheader = `One step to keep ${businessName || 'your business'} running.`;
