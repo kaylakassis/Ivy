@@ -39,6 +39,53 @@ const TOOL_LOOP_CAP = 8;
 const DAILY_REQUEST_CAP = 200;
 const DAILY_OUTPUT_TOKEN_CAP = 100_000;
 
+// PLATFORM-WIDE daily ceiling — a cost/abuse backstop ON TOP of the per-
+// workspace caps. The per-workspace cap can't stop a botnet that scripts many
+// signups (each a fresh workspace with its own 200-request budget) from running
+// up aggregate Opus spend; this caps the sum across all workspaces for the day.
+// Env-tunable; defaults are generous "runaway" levels far above any legitimate
+// early-stage usage. Set them to your actual daily budget once known; 0 (or
+// blank) disables that check. Read per-call so ops can retune without a redeploy.
+function globalIvyCaps() {
+  return {
+    token:   Number(process.env.IVY_GLOBAL_DAILY_TOKEN_CAP   ?? 25_000_000),
+    request: Number(process.env.IVY_GLOBAL_DAILY_REQUEST_CAP ?? 500_000),
+  };
+}
+
+// Cached read of today's platform-wide Ivy usage. Refreshed at most every 60s
+// per instance so the check adds ~one aggregate query/min, not one per message
+// (the SUM scans today's ivy_usage — indexed by day). A stale-by-≤60s value is
+// fine for a cost guardrail: worst case we overshoot by a minute of traffic.
+let _globalUsageCache = { at: 0, requests: 0, outputTokens: 0 };
+async function globalDailyIvyUsage() {
+  const now = Date.now();
+  if (now - _globalUsageCache.at < 60_000) return _globalUsageCache;
+  try {
+    const { rows } = await sql`
+      SELECT COALESCE(SUM(request_count), 0)::bigint AS requests,
+             COALESCE(SUM(output_tokens), 0)::bigint AS output_tokens
+        FROM ivy_usage WHERE day = CURRENT_DATE`;
+    _globalUsageCache = {
+      at: now,
+      requests: Number(rows[0]?.requests || 0),
+      outputTokens: Number(rows[0]?.output_tokens || 0),
+    };
+  } catch { /* keep the last value; a read error must never block Ivy */ }
+  return _globalUsageCache;
+}
+
+// Whether the platform-wide ceiling is currently tripped. Exported for testing
+// (the generateReply path early-returns a mock when there's no API key, so the
+// cap logic is validated here against seeded ivy_usage instead).
+export async function globalIvyCapStatus() {
+  const caps = globalIvyCaps();
+  const g = await globalDailyIvyUsage();
+  const tokenCapped   = caps.token   > 0 && g.outputTokens >= caps.token;
+  const requestCapped = caps.request > 0 && g.requests     >= caps.request;
+  return { capped: tokenCapped || requestCapped, tokenCapped, requestCapped, ...g };
+}
+
 export function serializeSession(row, lastPreview) {
   if (!row) return null;
   return {
@@ -348,6 +395,19 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   const client = anthropic();
   if (!client) {
     return { text: sanitizeIvyReply(mockReply(text, ctx, attachment)), mode: 'mock', error: 'no-api-key' };
+  }
+
+  // Platform-wide ceiling first — a runaway/abuse backstop across ALL
+  // workspaces. If tripped, no Anthropic call happens for anyone until the
+  // day rolls over (or ops raises the env cap).
+  const globalCap = await globalIvyCapStatus();
+  if (globalCap.capped) {
+    console.error('[ivy] GLOBAL daily cap reached — pausing live replies', globalCap);
+    return {
+      text: sanitizeIvyReply("Ivy is at capacity for today across Ivy OS and is taking a short breather. Live answers are back tomorrow — in the meantime, your dashboard has your latest numbers."),
+      mode: 'mock',
+      error: 'global-cap',
+    };
   }
 
   // Enforce daily cap. If exceeded we explicitly tell the user (rather than

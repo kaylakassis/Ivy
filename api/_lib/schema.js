@@ -2001,6 +2001,10 @@ CREATE TABLE IF NOT EXISTS ivy_usage (
   PRIMARY KEY (workspace_id, day, model)
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_usage_workspace ON ivy_usage(workspace_id, day DESC);
+-- Platform-wide daily usage roll-up (Ivy global spend ceiling) sums today's
+-- rows across every workspace; leading with the day column lets that SUM
+-- index-seek instead of scanning the whole table.
+CREATE INDEX IF NOT EXISTS idx_ivy_usage_day ON ivy_usage(day);
 
 -- Global platform settings. Singleton row (id = 1) holds toggles that
 -- aren't workspace-scoped - currently just the temporary "early access"

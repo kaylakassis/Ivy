@@ -107,7 +107,16 @@ export default async function handler(req, res) {
     const rateRule = role === 'client'
       ? { key: `signup:client:ip:${ip}`, max: 30, windowSeconds: 10 * 60 }
       : { key: `signup:ip:${ip}`,        max: 5,  windowSeconds: 10 * 60 };
-    const blocked = await enforce(req, res, [rateRule]);
+    // Global backstop: per-IP limits don't stop a botnet spread across many
+    // IPs, and each new OWNER workspace comes with its own Ivy (Opus) budget —
+    // so a signup flood converts straight into LLM spend. Cap total owner
+    // signups/hour platform-wide at a ceiling no legitimate growth reaches
+    // (env-tunable). Applied only to owner signups (client signups are the
+    // owners' customers and scale with real businesses).
+    const globalRule = role === 'client'
+      ? null
+      : { key: 'signup:owner:global', max: Number(process.env.SIGNUP_GLOBAL_HOURLY_MAX ?? 500), windowSeconds: 60 * 60 };
+    const blocked = await enforce(req, res, [rateRule, ...(globalRule ? [globalRule] : [])]);
     if (blocked) return;
 
     const emailKey = email.toLowerCase();
