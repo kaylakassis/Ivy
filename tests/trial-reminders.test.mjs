@@ -7,7 +7,7 @@
 
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
-import { renderTrialReminder } from '../api/_lib/subscriptionNotify.js';
+import { renderTrialReminder, notifyTrialReminder } from '../api/_lib/subscriptionNotify.js';
 
 process.env.CRON_SECRET = process.env.CRON_SECRET || 'test-cron';
 const { default: trialReminders } = await import('../api/cron/trial-reminders.js');
@@ -71,7 +71,15 @@ async function run() {
     await trialReminders(cronReq(), mkRes());
     assert(String((await stamps(w2.ws)).d2) === String(before), 'the 2-day stamp is unchanged on a re-run');
 
-    console.log('\n[4] auth gate');
+    console.log('\n[4] a push + bell row fires alongside the email');
+    const wp = track(await mkTrial(`${tag}-push`, 2));
+    await notifyTrialReminder({ workspaceId: wp.ws, stage: '2d', trialEndsAt: new Date(Date.now() + 2 * 86400000) });
+    const row = (await sql`SELECT type, url, title FROM notifications WHERE user_id = ${wp.uid} AND tag = 'trial-reminder-2d' LIMIT 1`).rows[0];
+    assert(!!row, 'a bell-feed row is written for the trial reminder');
+    assert(row && row.type === 'payments', `push rides the payments opt-out (got ${row?.type})`);
+    assert(row && row.url === '/account?tab=billing', `deep-links to billing (got ${row?.url})`);
+
+    console.log('\n[5] auth gate');
     const noAuth = mkRes();
     await trialReminders({ method: 'POST', headers: {} }, noAuth);
     assert(noAuth.statusCode === 401, `no cron secret → 401 (got ${noAuth.statusCode})`);

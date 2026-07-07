@@ -138,6 +138,19 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
   return { subject, html, preheader };
 }
 
+// Short push copy per stage, so a trialing owner who lives in the installed PWA
+// and ignores email still gets the heads-up before their tools switch off.
+// Returns null for a stage with no email (keeps push + email in lockstep).
+function trialPushPayload(stage) {
+  const map = {
+    '7d': { title: '7 days left on your trial', body: 'Lock in your plan before the trial ends — keep everything running.' },
+    '2d': { title: 'Your trial ends in 2 days', body: 'A couple of days left. Pick a plan to keep your business tools on — no surprise charges.' },
+    '1d': { title: 'Your trial ends tomorrow', body: 'Last day to keep your client tools, scheduling, and Ivy switched on.' },
+    'expired': { title: 'Your trial has ended', body: 'Your data is safe. Reactivate to switch your business tools back on.' },
+  };
+  return map[stage] || null;
+}
+
 export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt }) {
   try {
     const o = await loadOwner(workspaceId);
@@ -151,6 +164,16 @@ export async function notifyTrialReminder({ workspaceId, stage, trialEndsAt }) {
       userId: o.owner_id, type: 'billing',
       to: o.email, subject: rendered.subject, html: rendered.html,
     });
+    // Push + bell alongside the email (mirrors subscription-dunning's billing
+    // push, type 'payments' so it rides the owner's payments opt-out). Deep-links
+    // to billing so one tap goes straight to picking a plan.
+    const push = trialPushPayload(stage);
+    if (push) {
+      await notifyOwnerSafe({
+        workspaceId, type: 'payments',
+        payload: { ...push, url: '/account?tab=billing', tag: `trial-reminder-${stage}` },
+      });
+    }
   } catch (err) {
     console.error('[subscriptionNotify.trialReminder] failed:', err.message);
     reportError(err, { extra: { workspaceId, stage } });
