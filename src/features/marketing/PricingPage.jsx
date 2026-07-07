@@ -15,17 +15,17 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import RoiCalculator from './RoiCalculator.jsx';
-import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS } from '../../lib/pricing.js';
+import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS_PCT } from '../../lib/pricing.js';
 
 // One plan, two states: a free trial while we're in beta, then a
-// single paid subscription ("Active") at $49/mo. We deliberately
-// don't sell team / multi-location tiers yet because they aren't
-// supported - one honest plan beats three aspirational ones.
+// single paid subscription ("Active") at $8.99 every week. We
+// deliberately don't sell team / multi-location tiers yet because they
+// aren't supported - one honest plan beats three aspirational ones.
 const PLAN = {
   name: 'Ivy OS',
   sub: 'Everything to run your business, in one place.',
   priceBeta: `${TRIAL_DAYS} days free`,
-  priceGA: `$${IVY_PRICE} / month`,
+  priceGA: `$${IVY_PRICE} / week`,
   cta: `Start your ${TRIAL_DAYS}-day free trial`,
   ctaTo: '/signup',
   features: [
@@ -51,7 +51,7 @@ const PLAN = {
 const FAQ = [
   {
     q: 'How much does Ivy OS cost?',
-    a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${IVY_PRICE}/4 weeks, or $${IVY_PRICE_ANNUAL}/yr billed annually (save $${ANNUAL_SAVINGS}/yr). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
+    a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${IVY_PRICE}/week, or $${IVY_PRICE_ANNUAL}/yr billed annually (save about ${ANNUAL_SAVINGS_PCT}%). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
   },
   {
     q: 'Do you take a cut of my payments?',
@@ -83,7 +83,7 @@ export default function PricingPage() {
   useEffect(() => {
     document.title = 'Pricing - Ivy OS';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, $0 today. Then $${IVY_PRICE} every 4 weeks.`);
+    if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, $0 today. Then $${IVY_PRICE} every week.`);
   }, []);
 
   return (
@@ -114,7 +114,7 @@ export default function PricingPage() {
           }}>
             Replace your full stack - CRM, scheduler, invoicing, contracts, website,
             email, AI - with one subscription. {TRIAL_DAYS}-day free trial, $0 today.
-            Then a simple ${IVY_PRICE}/4 weeks when you're ready.
+            Then a simple ${IVY_PRICE}/week when you're ready.
           </p>
         </section>
 
@@ -125,7 +125,7 @@ export default function PricingPage() {
         }}>
           <StateChip label={`${TRIAL_DAYS} days free`} sub="the whole product, $0 today" active/>
           <Icons.Arrow size={16} sw={2} style={{ color: 'var(--muted)' }}/>
-          <StateChip label="Active" sub={`$${IVY_PRICE}/4 weeks when subscribed`}/>
+          <StateChip label="Active" sub={`$${IVY_PRICE}/week when subscribed`}/>
         </section>
 
         {/* Single plan card */}
@@ -153,7 +153,7 @@ export default function PricingPage() {
                 then {PLAN.priceGA} once you subscribe. No per-seat math, no transaction fees.
               </div>
               <div style={{ fontSize: 12, opacity: 0.7, marginTop: 6 }}>
-                Or save with annual - <strong>${IVY_PRICE_ANNUAL}/yr</strong> (2 months free, save ${ANNUAL_SAVINGS}).
+                Or save with annual - <strong>${IVY_PRICE_ANNUAL}/yr</strong> (save about {ANNUAL_SAVINGS_PCT}%).
               </div>
             </div>
             <Link to={PLAN.ctaTo} className="btn btn-primary"
@@ -219,7 +219,7 @@ export default function PricingPage() {
               <span style={{
                 fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600,
                 color: 'var(--accent)', fontVariantNumeric: 'tabular-nums',
-              }}>${STACK_TOTAL}/mo → ${IVY_PRICE}/mo</span>
+              }}>${STACK_TOTAL}/mo → ${IVY_PRICE}/week</span>
             </div>
           </div>
         </section>

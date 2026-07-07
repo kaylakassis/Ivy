@@ -22,7 +22,7 @@ export default function ComparePage() {
     if (!c) return;
     document.title = `Ivy OS vs ${c.name} - switching guide`;
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `Switching from ${c.name} to Ivy OS? Side-by-side comparison, why solo owners switch, and a free data import. From $${IVY_PRICE}/4 weeks, AI included.`);
+    if (desc) desc.setAttribute('content', `Switching from ${c.name} to Ivy OS? Side-by-side comparison, why solo owners switch, and a free data import. From $${IVY_PRICE}/week, AI included.`);
   }, [c]);
 
   if (!c) return <Navigate to="/pricing" replace/>;
@@ -128,7 +128,7 @@ export default function ComparePage() {
                 })}
                 <tr style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)' }}>
                   <td style={{ padding: '12px 16px', fontWeight: 600 }}>Price</td>
-                  <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--accent)' }}>${IVY_PRICE}/4 weeks</td>
+                  <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600, color: 'var(--accent)' }}>${IVY_PRICE}/week</td>
                   <td style={{ padding: '12px 16px', textAlign: 'center', fontFamily: 'var(--font-display)', fontWeight: 600 }}>{c.theirPrice}</td>
                 </tr>
               </tbody>

@@ -14,8 +14,10 @@
 import { sql } from './db.js';
 import { platformStripeSecret, applyCustomerCredit } from './stripe.js';
 
-// One month's credit, in cents. Mirrors the affiliate fallback +
-// pricing ($49/mo). Override via env if pricing changes.
+// Referral credit, in cents. NOTE: this is a payout amount (a business
+// decision), not a display of the plan price — the plan is now $8.99/week.
+// Set IVY_PLAN_MONTHLY_CENTS to whatever credit a referral should grant; the
+// 4900 (=$49) default predates the weekly pricing and likely wants revisiting.
 const REWARD_CENTS = parseInt(process.env.IVY_PLAN_MONTHLY_CENTS || '4900', 10);
 
 // Codes are uppercased, alphanumeric + dashes, 3-40 chars. Returns the

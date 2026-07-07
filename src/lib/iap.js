@@ -13,9 +13,10 @@
 //   • Our workspace_id is the RevenueCat `appUserId`. That's what we
 //     identify with after sign-in, so RC's customer = our workspace.
 //   • RC product identifiers must match what we register in App Store
-//     Connect. See docs/IOS_SUBMISSION.md for the exact strings:
-//       ivyos_monthly  → $49.99 / month
-//       ivyos_yearly   → $499.99 / year
+//     Connect. See docs/IOS_SUBMISSION.md for the exact strings. Weekly IS a
+//     native StoreKit duration, so iOS matches the web plan exactly:
+//       ivyos_weekly   → $8.99 / week   (recurring plan; RC packageType WEEKLY)
+//       ivyos_yearly   → $375 / year
 //   • Both products live in the "Ivy OS" subscription group so users
 //     can upgrade/downgrade between them and Apple proration applies.
 import { isIos } from './platform.js';
@@ -73,7 +74,7 @@ export async function getIapOfferings() {
     return cur.availablePackages.map((pkg) => ({
       identifier: pkg.identifier,
       // RC normalizes Apple's price strings into a localized
-      // priceString (e.g. "$49.99") so we don't have to format it.
+      // priceString (e.g. "$8.99") so we don't have to format it.
       priceString: pkg.product?.priceString || '',
       title: pkg.product?.title || '',
       // Period: 'MONTHLY' | 'ANNUAL' | … - RC exposes this on the

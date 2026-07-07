@@ -36,7 +36,7 @@ export const COMPETITORS = {
     name: 'HoneyBook',
     angle: 'Built for creative freelancers; expensive, no native AI.',
     headline: 'Leaving HoneyBook? Here\'s why solo owners switch to Ivy OS.',
-    sub: 'HoneyBook is great at proposals + contracts, but the all-in cost runs $39-$79/mo and there\'s no native AI. Ivy OS matches the workflow at $49/4 weeks with Ivy built in.',
+    sub: 'HoneyBook is great at proposals + contracts, but the all-in cost runs $39-$79/mo and there\'s no native AI. Ivy OS matches the workflow at $8.99/week with Ivy built in.',
     theirPrice: '$39 - $79 / mo',
     pains: [
       'Pricing climbs once you cross 6 active projects.',
@@ -72,7 +72,7 @@ export const COMPETITORS = {
     name: 'Vagaro',
     angle: 'Beauty + wellness focused; bloated, expensive add-ons.',
     headline: 'Why beauty + wellness pros switch from Vagaro to Ivy OS.',
-    sub: 'Vagaro dominates legacy salon software but charges extra for everything (text marketing, forms, online listing, multi-location). Ivy OS ships everything in $49/4 weeks with no add-on tax.',
+    sub: 'Vagaro dominates legacy salon software but charges extra for everything (text marketing, forms, online listing, multi-location). Ivy OS ships everything in $8.99/week with no add-on tax.',
     theirPrice: '$25 - $85 / mo (add-ons extra)',
     pains: [
       "Text marketing? Forms? Online listing? Multi-staff? Each is a separate add-on.",
@@ -108,7 +108,7 @@ export const COMPETITORS = {
     name: 'Acuity',
     angle: 'Great booking; nothing else built in.',
     headline: 'Acuity is just booking. Ivy OS is the whole business.',
-    sub: "Acuity has a clean booking page but stops there - you still need a CRM, an invoicer, a contract tool, and AI. Ivy OS matches Acuity's top tier at $49/4 weeks and gives you the whole stack instead of just scheduling.",
+    sub: "Acuity has a clean booking page but stops there - you still need a CRM, an invoicer, a contract tool, and AI. Ivy OS matches Acuity's top tier at $8.99/week and gives you the whole stack instead of just scheduling.",
     theirPrice: '$16 - $49 / mo',
     pains: [
       "Acuity is just booking - you still pay separately for invoicing, contracts, CRM.",
@@ -126,7 +126,7 @@ export const COMPETITORS = {
     name: 'Calendly',
     angle: 'Scheduling-only; everyone using it for solo business needs more.',
     headline: 'Calendly is scheduling. Ivy OS schedules - and bills, signs, messages, and runs your AI.',
-    sub: "Calendly does scheduling well. But if you're using it to run a business, you're stitching it to 4 other tools. Ivy OS replaces the whole stack at $49/4 weeks.",
+    sub: "Calendly does scheduling well. But if you're using it to run a business, you're stitching it to 4 other tools. Ivy OS replaces the whole stack at $8.99/week.",
     theirPrice: '$10 - $16 / mo',
     pains: [
       "You're already paying for Stripe, QuickBooks, Mailchimp, and a CRM next to it.",

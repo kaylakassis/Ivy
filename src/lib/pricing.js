@@ -25,8 +25,9 @@ export const TOOL_STACK = [
 
 export const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);
 
-// The single paid subscription ("Active").
-export const IVY_PRICE = 49;
+// The single paid subscription ("Active"). Matches the Stripe price the
+// checkout charges (IVY_STRIPE_PRICE_ID) — keep them in lockstep.
+export const IVY_PRICE = 8.99;
 
 // Trial length granted at signup. Matches the workspaces.trial_ends_at
 // default (api/_lib/schema.js) - the hard paywall flips the wall on
@@ -34,21 +35,22 @@ export const IVY_PRICE = 49;
 // in the trial length only happens in one place.
 export const TRIAL_DAYS = 14;
 
-// Billing cadence for the "Active" plan. We bill every 4 weeks (28 days),
-// not calendar-monthly — so 365/28 ≈ 13.04 cycles per year. All
-// savings/equivalence math below is derived from this so a future cadence
-// change (e.g. back to calendar-monthly) only requires updating CYCLES_PER_YEAR.
-export const BILLING_CYCLE_DAYS = 28;
+// Billing cadence for the "Active" plan. We bill every WEEK (7 days) — so
+// 365/7 ≈ 52.14 cycles per year. All savings/equivalence math below is derived
+// from this so a future cadence change only requires updating CYCLES_PER_YEAR.
+export const BILLING_CYCLE_DAYS = 7;
 export const CYCLES_PER_YEAR = 365 / BILLING_CYCLE_DAYS;
 
-// Annual plan ("Active, billed yearly"). Priced lower than 13 × the
-// per-cycle rate so it's a genuine discount. Surfaced as the highlighted
-// LTV option on the paywall + pricing page; the per-4-week plan stays
-// the honest default.
-export const IVY_PRICE_ANNUAL = 490;
+// Annual plan ("Active, billed yearly"). Priced below ~52 × the weekly rate so
+// it's a genuine discount. Surfaced as the highlighted LTV option on the paywall
+// + pricing page; the weekly plan stays the honest default.
+export const IVY_PRICE_ANNUAL = 375;
 
 // Derived once so copy never hardcodes the math (same discipline as
-// STACK_TOTAL): the yearly saving vs paying per-cycle, and the per-4-week
+// STACK_TOTAL): the yearly saving vs paying weekly, and the per-week
 // equivalent of the annual rate.
-export const ANNUAL_SAVINGS = Math.round(IVY_PRICE * CYCLES_PER_YEAR - IVY_PRICE_ANNUAL);  // ≈ $149
-export const ANNUAL_CYCLE_EQUIV = Math.round((IVY_PRICE_ANNUAL / CYCLES_PER_YEAR) * 100) / 100;  // ≈ $37.58 per 4 weeks
+export const ANNUAL_SAVINGS = Math.round(IVY_PRICE * CYCLES_PER_YEAR - IVY_PRICE_ANNUAL);  // ≈ $94
+export const ANNUAL_CYCLE_EQUIV = Math.round((IVY_PRICE_ANNUAL / CYCLES_PER_YEAR) * 100) / 100;  // ≈ $7.19 per week
+// Percent saved by paying annually vs per-cycle. Comes out to ~20% but NOT
+// exactly, so every surface prefixes it with "~" / "about" — never a bare 20%.
+export const ANNUAL_SAVINGS_PCT = Math.round((1 - IVY_PRICE_ANNUAL / (IVY_PRICE * CYCLES_PER_YEAR)) * 100);  // ≈ 20

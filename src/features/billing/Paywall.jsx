@@ -27,7 +27,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos } from '../../lib/platform.js';
 import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
-import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_SAVINGS, ANNUAL_CYCLE_EQUIV, TRIAL_DAYS } from '../../lib/pricing.js';
+import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
 // We deliberately do NOT fabricate star ratings or user counts (Ivy OS
@@ -49,9 +49,11 @@ export default function Paywall({ ctx, onRefresh }) {
   const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
   const [winback, setWinback] = useState(null); // {percentOff, durationMonths, promoCode, expiresAt}
-  // Billing period. Monthly is the honest default; annual is the
-  // highlighted LTV option (2 months free). Flows into the checkout call.
-  const [plan, setPlan]   = useState('monthly'); // 'monthly' | 'annual'
+  // Billing period. Weekly is the honest default; annual is the highlighted
+  // LTV option (saves ~20%). Flows into the checkout call. (The internal key
+  // stays 'monthly' — it just selects the non-annual Stripe price — but the
+  // plan bills weekly.)
+  const [plan, setPlan]   = useState('monthly'); // 'monthly' = the weekly plan | 'annual'
   // Multi-step trust-building "priming" flow shown only for trial-eligible
   // users (and never during a win-back, where we want one strong claim
   // screen). Step 1: "$0 today". Step 2: "we'll remind you before it ends".
@@ -145,10 +147,14 @@ export default function Paywall({ ctx, onRefresh }) {
         // resulting webhook carries our workspace id as app_user_id.
         if (ctx?.workspace?.id) await identifyIapUser(ctx.workspace.id);
         const offerings = await getIapOfferings();
-        // Match by package type so the user's toggle (monthly vs annual)
-        // picks the right Apple product.
-        const wantedType = plan === 'annual' ? 'ANNUAL' : 'MONTHLY';
-        const pkg = offerings.find((o) => o.period === wantedType) || offerings[0];
+        // Match by package type so the user's toggle picks the right Apple
+        // product: the annual toggle → the ANNUAL package; otherwise the first
+        // non-annual package (the recurring plan, currently WEEKLY). Matching
+        // "not annual" rather than a hardcoded 'MONTHLY' keeps this correct
+        // across billing-period changes (weekly/monthly).
+        const pkg = plan === 'annual'
+          ? (offerings.find((o) => o.period === 'ANNUAL') || offerings[0])
+          : (offerings.find((o) => o.period !== 'ANNUAL') || offerings[0]);
         if (!pkg) {
           setErr('In-app purchase isn\'t available right now. Please try again in a moment.');
           setBusy(null);
@@ -253,7 +259,7 @@ export default function Paywall({ ctx, onRefresh }) {
   const canTrial = !everTrialed;
   const syncing  = busy === 'syncing';
   // Price string for the subscribe CTAs, reflecting the selected period.
-  const priceLabel = plan === 'annual' ? `$${IVY_PRICE_ANNUAL}/yr` : `$${IVY_PRICE}/4 weeks`;
+  const priceLabel = plan === 'annual' ? `$${IVY_PRICE_ANNUAL}/yr` : `$${IVY_PRICE}/week`;
 
   // Show the 2 trust-building "priming" screens only for trial-eligible
   // owners; win-back / reactivation / expired flows jump straight to the
@@ -360,16 +366,16 @@ export default function Paywall({ ctx, onRefresh }) {
               </ul>
 
               {/* ─── BILLING PERIOD TOGGLE ───────────────────────────
-                  Monthly (honest default) vs Annual (highlighted LTV
-                  option - 2 months free). Hidden while a monthly-only
+                  Every week (honest default) vs Annual (highlighted LTV
+                  option - saves ~20%). Hidden while a monthly-only
                   win-back offer is showing. */}
               {!winback && (
                 <div role="tablist" aria-label="Billing period" style={{
                   display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 2,
                 }}>
                   {[
-                    { key: 'monthly', label: 'Every 4 weeks', sub: `$${IVY_PRICE}/4 weeks` },
-                    { key: 'annual',  label: 'Annual',         sub: `$${IVY_PRICE_ANNUAL}/yr`, tag: `Save $${ANNUAL_SAVINGS}/yr` },
+                    { key: 'monthly', label: 'Every week', sub: `$${IVY_PRICE}/week` },
+                    { key: 'annual',  label: 'Annual',         sub: `$${IVY_PRICE_ANNUAL}/yr`, tag: `Save ~${ANNUAL_SAVINGS_PCT}%` },
                   ].map((opt) => {
                     const active = plan === opt.key;
                     return (
@@ -410,7 +416,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   padding: '2px 10px', borderRadius: 99,
                   background: 'var(--accent)', color: 'var(--accent-ink)',
                   fontSize: 10.5, fontWeight: 700, letterSpacing: '0.05em', textTransform: 'uppercase',
-                }}>{canTrial ? `${TRIAL_DAYS} days free` : (plan === 'annual' ? `Save $${ANNUAL_SAVINGS}/yr` : 'Full access')}</div>
+                }}>{canTrial ? `${TRIAL_DAYS} days free` : (plan === 'annual' ? `Save ~${ANNUAL_SAVINGS_PCT}%` : 'Full access')}</div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
                   <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>Active</span>
@@ -418,16 +424,16 @@ export default function Paywall({ ctx, onRefresh }) {
                     fontFamily: 'var(--font-num)', fontSize: 28, fontWeight: 600,
                     color: 'var(--fg)', letterSpacing: '-0.02em',
                   }}>${plan === 'annual' ? IVY_PRICE_ANNUAL : IVY_PRICE}</span>
-                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plan === 'annual' ? '/yr' : '/4 weeks'}</span>
+                  <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plan === 'annual' ? '/yr' : '/week'}</span>
                 </div>
                 <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--muted)' }}>
                   {plan === 'annual'
                     ? (canTrial
-                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_CYCLE_EQUIV}/4 weeks) - save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`
-                        : `$${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_CYCLE_EQUIV}/4 weeks) · save $${ANNUAL_SAVINGS}/yr. Cancel anytime.`)
+                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_CYCLE_EQUIV}/week) - save about ${ANNUAL_SAVINGS_PCT}%. Cancel anytime.`
+                        : `$${IVY_PRICE_ANNUAL}/yr (~$${ANNUAL_CYCLE_EQUIV}/week) · save about ${ANNUAL_SAVINGS_PCT}%. Cancel anytime.`)
                     : (canTrial
-                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE} every 4 weeks. Cancel anytime.`
-                        : `$${IVY_PRICE}/4 weeks · one plan, no per-seat fees. Cancel anytime.`)}
+                        ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE} every week. Cancel anytime.`
+                        : `$${IVY_PRICE}/week · one plan, no per-seat fees. Cancel anytime.`)}
                 </div>
               </div>
 
@@ -450,7 +456,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   </div>
                   <div style={{ marginTop: 4, fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.45 }}>
                     That's <strong style={{ color: 'var(--fg)' }}>
-                      ${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/mo
+                      ${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/week
                     </strong> for {winback.durationMonths} months. The discount applies automatically at
                     checkout{winback.promoCode ? <> - or use code <strong>{winback.promoCode}</strong></> : null}.
                     {winback.expiresAt && (
@@ -497,7 +503,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   className="btn btn-primary"
                   style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
                   {busy === 'subscribe' ? 'Redirecting…'
-                    : winback ? `Claim ${winback.percentOff}% off - $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/4 weeks`
+                    : winback ? `Claim ${winback.percentOff}% off - $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/week`
                     : `Subscribe - ${priceLabel}`}
                   {busy !== 'subscribe' && <Icons.Arrow size={14} sw={2.2}/>}
                 </button>

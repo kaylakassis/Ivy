@@ -1448,7 +1448,7 @@ function TrialTimeline({ trialEndsAt }) {
     { when: fmt(remind), icon: 'Bell',
       text: "We'll email you a friendly heads-up that your trial is ending - no surprises." },
     { when: fmt(ends), icon: 'Clock',
-      text: `Your ${TRIAL_DAYS}-day trial ends. Keep everything running for $${IVY_PRICE}/mo, or cancel anytime - your data's always yours.` },
+      text: `Your ${TRIAL_DAYS}-day trial ends. Keep everything running for $${IVY_PRICE}/week, or cancel anytime - your data's always yours.` },
   ];
 
   return (

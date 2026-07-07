@@ -162,7 +162,7 @@ export default async function handler(req, res) {
     }
     if (!process.env.IVY_STRIPE_PRICE_ID) {
       checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'fail',
-        "Set to the price_xxx from Stripe → Products → your $49/mo product. Without it, new signups can't reach Stripe Checkout — checkout.js falls back to a no-card trial, so the card-up-front funnel is NOT engaged."));
+        "Set to the price_xxx from Stripe → Products → your $8.99/week product. Without it, new signups can't reach Stripe Checkout — checkout.js falls back to a no-card trial, so the card-up-front funnel is NOT engaged."));
     } else {
       checks.push(check('stripe_price', 'IVY_STRIPE_PRICE_ID', 'ok'));
     }

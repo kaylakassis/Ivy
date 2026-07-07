@@ -104,10 +104,10 @@ RevenueCat dashboard:
 - [ ] **Create or rename project** → "Ivy OS".
 - [ ] **Add an iOS app** with bundle id **`com.getivyos.app`**.
 - [ ] **Add two products** with exact ids:
-  - `ivyos_monthly` ($49.99 / month)
-  - `ivyos_yearly` ($499.99 / year)
+  - `ivyos_weekly` ($8.99 / week)
+  - `ivyos_yearly` ($375 / year)
 - [ ] **Create one entitlement** called `pro`; attach both products.
-- [ ] **Create the default offering** with a "Monthly" package linked to `ivyos_monthly` and an "Annual" package linked to `ivyos_yearly`. Order Annual first.
+- [ ] **Create the default offering** with a "Weekly" package linked to `ivyos_weekly` and an "Annual" package linked to `ivyos_yearly`. Order Annual first.
 - [ ] **Copy the iOS public SDK key** into `VITE_REVENUECAT_PUBLIC_KEY_IOS` in Vercel.
 - [ ] **Add a webhook**:
   - URL: `https://getivyos.com/api/billing/revenuecat-webhook`
@@ -118,7 +118,7 @@ RevenueCat dashboard:
 
 - [ ] **Register the bundle id `com.getivyos.app`** (Apple Developer → Identifiers → +).
 - [ ] **Create the App Store Connect app record** with that bundle id, name "Ivy OS".
-- [ ] **Subscription group** called `ivyos`. Add the two auto-renewable subscriptions with ids matching RevenueCat: `ivyos_monthly` and `ivyos_yearly`.
+- [ ] **Subscription group** called `ivyos`. Add the two auto-renewable subscriptions with ids matching RevenueCat: `ivyos_weekly` and `ivyos_yearly`.
 - [ ] In Xcode (`capacitor.config.ts` already has the new appId), enable capabilities: **In-App Purchase**, **Sign in with Apple**, **Push Notifications**.
 - [ ] Full step-by-step is in `docs/IOS_SUBMISSION.md`.
 

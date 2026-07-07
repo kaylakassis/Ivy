@@ -27,7 +27,7 @@ export default function RoiCalculator() {
   const calc = useMemo(() => {
     // 1. Tool savings - a FIXED, always-positive number: Ivy OS
     //    replaces the whole stack (STACK_TOTAL, ~$153) for one price
-    //    ($49). The old calculator let you drag your current spend
+    //    ($8.99). The old calculator let you drag your current spend
     //    BELOW Ivy OS's price, which showed "$0 savings vs the stack"
     //    - a contradiction. This is the honest, appealing framing.
     const toolSavings = Math.max(0, STACK_TOTAL - IVY_PRICE);
@@ -89,7 +89,7 @@ export default function RoiCalculator() {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Ivy OS is <strong>${IVY_PRICE}/4 weeks</strong>, and you start with a {TRIAL_DAYS}-day free trial ($0 today). The
+        Ivy OS is <strong>${IVY_PRICE}/week</strong>, and you start with a {TRIAL_DAYS}-day free trial ($0 today). The
         math is deliberately conservative: a $75/hr billable rate, Ivy OS automating
         60% of your admin time, and an 8% no-show rate that reminders + card-on-file
         recover. Your real numbers are usually higher.
