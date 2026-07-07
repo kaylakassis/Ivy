@@ -15,8 +15,27 @@ import { notifyOwnerSafe } from '../_lib/push.js';
 import { appUrl } from '../_lib/tokens.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 
-const MAX_PER_RUN = 200;
+// Per-batch fetch size. The candidate query only selects workspaces that still
+// have a REQUIRED item missing (the same conditions firstMissing checks), so
+// every selected row gets stamped and drops out of the next batch — the drain
+// loop terminates. (A naive drain that re-selected already-complete rows would
+// loop forever, since those are skipped without stamping.)
+const BATCH_SIZE = 200;
+
+// SQL mirror of firstMissing(): true when ANY required setup item is still open.
+// Keep in lockstep with firstMissing so the loop only ever fetches stampable rows.
+const HAS_MISSING_ITEM = `(
+  u.email_verified_at IS NULL
+  OR cs.biz_name IS NULL OR btrim(cs.biz_name) = ''
+  OR cs.slug IS NULL OR btrim(cs.slug) = ''
+  OR NOT EXISTS (SELECT 1 FROM services s WHERE s.workspace_id = w.id)
+  OR NOT EXISTS (
+       SELECT 1 FROM jsonb_each(COALESCE(cs.availability, '{}'::jsonb)) e
+        WHERE jsonb_typeof(e.value) = 'array' AND jsonb_array_length(e.value) > 0
+     )
+)`;
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -44,59 +63,74 @@ async function handler(req, res) {
   if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
-    const { rows } = await sql.query(
-      `SELECT w.id AS workspace_id, w.owner_id, u.email, u.name, u.email_verified_at,
-              cs.biz_name, cs.slug, cs.availability,
-              (SELECT COUNT(*)::int FROM services s WHERE s.workspace_id = w.id) AS svc_count
-         FROM workspaces w
-         JOIN users u ON u.id = w.owner_id
-         LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
-        WHERE w.subscription_status IN ('trialing', 'active')
-          AND w.onboarded_at IS NOT NULL
-          AND w.onboarded_at < NOW() - INTERVAL '2 days'
-          AND w.onboarded_at > NOW() - INTERVAL '30 days'
-          AND w.setup_nudge_sent_at IS NULL
-          AND u.email IS NOT NULL
-          AND COALESCE(u.user_type, 'regular') <> 'sponsored'
-        ORDER BY w.onboarded_at ASC
-        LIMIT $1`,
-      [MAX_PER_RUN],
-    );
+    const { shard, shards } = shardFromReq(req);
+    const shardFilter = shardClause({ shard, shards }, 'w.id');
 
-    let sent = 0;
-    for (const r of rows) {
-      const miss = firstMissing(r);
-      if (!miss) continue; // required setup already complete — leave for a later scan
-      // Stamp under the guard first so a retry / concurrent run can't double-send.
-      // eslint-disable-next-line no-await-in-loop
-      const upd = await sql.query(
-        `UPDATE workspaces SET setup_nudge_sent_at = NOW()
-           WHERE id = $1 AND setup_nudge_sent_at IS NULL RETURNING id`,
-        [r.workspace_id],
-      );
-      if (upd.rows.length === 0) continue;
-      sent++;
+    let scanned = 0, sent = 0, emptied = false;
+    await withDeadline(async (deadline) => {
+      while (Date.now() < deadline) {
+        // eslint-disable-next-line no-await-in-loop
+        const { rows } = await sql.query(
+          `SELECT w.id AS workspace_id, w.owner_id, u.email, u.name, u.email_verified_at,
+                  cs.biz_name, cs.slug, cs.availability,
+                  (SELECT COUNT(*)::int FROM services s WHERE s.workspace_id = w.id) AS svc_count
+             FROM workspaces w
+             JOIN users u ON u.id = w.owner_id
+             LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
+            WHERE w.subscription_status IN ('trialing', 'active')
+              AND w.onboarded_at IS NOT NULL
+              AND w.onboarded_at < NOW() - INTERVAL '2 days'
+              AND w.onboarded_at > NOW() - INTERVAL '30 days'
+              AND w.setup_nudge_sent_at IS NULL
+              AND u.email IS NOT NULL
+              AND COALESCE(u.user_type, 'regular') <> 'sponsored'
+              AND ${HAS_MISSING_ITEM}
+              ${shardFilter}
+            ORDER BY w.onboarded_at ASC
+            LIMIT $1`,
+          [BATCH_SIZE],
+        );
+        if (rows.length === 0) { emptied = true; break; }
+        scanned += rows.length;
+        for (const r of rows) {
+          const miss = firstMissing(r);
+          if (!miss) continue; // defensive: HAS_MISSING_ITEM guarantees one, but never loop on a stray
+          // Stamp under the guard first so a retry / concurrent run can't double-send.
+          // eslint-disable-next-line no-await-in-loop
+          const upd = await sql.query(
+            `UPDATE workspaces SET setup_nudge_sent_at = NOW()
+               WHERE id = $1 AND setup_nudge_sent_at IS NULL RETURNING id`,
+            [r.workspace_id],
+          );
+          if (upd.rows.length === 0) continue;
+          sent++;
 
-      const fn = escapeHtml((r.name || '').split(/\s+/)[0] || 'there');
-      const html = emailShell({
-        heading: "You're one step from taking bookings",
-        body: `<p>Hi ${fn},</p>
-          <p>Your Ivy OS account is set up, but there's one thing left before your
-          booking page can take a booking: <strong>${escapeHtml(miss.label)}</strong>.</p>
-          <p>It takes about a minute, and Ivy can help you do it.</p>`,
-        ctaText: 'Finish setup',
-        ctaUrl: `${appUrl()}${miss.href}`,
-        footer: 'Manage email preferences from Account → Notifications.',
-      });
-      // eslint-disable-next-line no-await-in-loop
-      await sendEmailToUser({ userId: r.owner_id, type: 'reports', to: r.email, subject: "One step left to start taking bookings", html })
-        .catch((e) => console.error('[setup-nudge] email failed:', r.workspace_id, e?.message));
-      notifyOwnerSafe({
-        workspaceId: r.workspace_id,
-        payload: { title: 'One step left to take bookings', body: `Finish: ${miss.label}.`, url: miss.href, tag: 'setup-nudge' },
-      });
-    }
-    return ok(res, { scanned: rows.length, sent });
+          const fn = escapeHtml((r.name || '').split(/\s+/)[0] || 'there');
+          const html = emailShell({
+            heading: "You're one step from taking bookings",
+            body: `<p>Hi ${fn},</p>
+              <p>Your Ivy OS account is set up, but there's one thing left before your
+              booking page can take a booking: <strong>${escapeHtml(miss.label)}</strong>.</p>
+              <p>It takes about a minute, and Ivy can help you do it.</p>`,
+            ctaText: 'Finish setup',
+            ctaUrl: `${appUrl()}${miss.href}`,
+            footer: 'Manage email preferences from Account → Notifications.',
+          });
+          // eslint-disable-next-line no-await-in-loop
+          await sendEmailToUser({ userId: r.owner_id, type: 'reports', to: r.email, subject: "One step left to start taking bookings", html })
+            .catch((e) => console.error('[setup-nudge] email failed:', r.workspace_id, e?.message));
+          // eslint-disable-next-line no-await-in-loop
+          await notifyOwnerSafe({
+            workspaceId: r.workspace_id,
+            payload: { title: 'One step left to take bookings', body: `Finish: ${miss.label}.`, url: miss.href, tag: 'setup-nudge' },
+          });
+          if (Date.now() >= deadline) break;
+        }
+      }
+    });
+
+    const terminatedBy = terminationReason({ emptied, hitCap: false });
+    return ok(res, { shard, shards, scanned, sent, terminatedBy });
   } catch (err) {
     return serverError(res, err);
   }

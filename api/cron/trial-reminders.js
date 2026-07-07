@@ -25,12 +25,16 @@ import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyTrialReminder } from '../_lib/subscriptionNotify.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
 
-// Per-run, per-stage ceiling so a large backfill can't burst a flood of
-// emails in one run; the rest roll to the next day's run.
-// Per STAGE (7d/1d/expired), so the effective daily ceiling is 3×.
-// Sized for ~100K active trialing workspaces.
-const MAX_PER_RUN = 1000;
+// Per-batch fetch size. Each stage DRAINS its backlog across batches until it
+// empties or the (shared) function deadline is hit — so a backlog bigger than
+// one batch is worked through rather than silently truncated at a hard cap (the
+// old MAX_PER_RUN=1000/stage dropped everyone past #1000 for that window, and
+// since the window then moves on, those trials were skipped FOR THAT STAGE, not
+// deferred). Sends are awaited so we don't spawn unbounded concurrent emails;
+// `shardFilter` lets the cron fan out horizontally when the Resend tier allows.
+const BATCH_SIZE = 500;
 
 // Disjoint windows keyed off trial_ends_at. Literals are trusted (no user
 // input) so they're inlined directly into the SQL. The bounds are kept fully
@@ -65,38 +69,47 @@ const STAGES = [
   },
 ];
 
-async function processStage({ stage, stampCol, window }) {
-  const { rows } = await sql.query(
-    `SELECT w.id AS workspace_id, w.trial_ends_at
-       FROM workspaces w
-       JOIN users u ON u.id = w.owner_id
-      WHERE w.subscription_status = 'trialing'
-        AND ${window}
-        AND w.${stampCol} IS NULL
-        AND u.email IS NOT NULL
-        AND COALESCE(u.user_type, 'regular') <> 'sponsored'
-      ORDER BY w.trial_ends_at ASC
-      LIMIT $1`,
-    [MAX_PER_RUN],
-  );
-
-  let sent = 0;
-  for (const r of rows) {
-    // Stamp first under the IS NULL guard; a lost race (another run /
-    // retry) returns zero rows and we skip without re-sending.
+// Drain one stage's backlog (stamp-then-send means processed rows drop out of
+// the next batch), sharing the run's `deadline` with the other stages.
+async function drainStage({ stage, stampCol, window, shardFilter, deadline }) {
+  let scanned = 0, sent = 0;
+  while (Date.now() < deadline) {
     // eslint-disable-next-line no-await-in-loop
-    const upd = await sql.query(
-      `UPDATE workspaces SET ${stampCol} = NOW()
-        WHERE id = $1 AND ${stampCol} IS NULL
-        RETURNING id`,
-      [r.workspace_id],
+    const { rows } = await sql.query(
+      `SELECT w.id AS workspace_id, w.trial_ends_at
+         FROM workspaces w
+         JOIN users u ON u.id = w.owner_id
+        WHERE w.subscription_status = 'trialing'
+          AND ${window}
+          AND w.${stampCol} IS NULL
+          AND u.email IS NOT NULL
+          AND COALESCE(u.user_type, 'regular') <> 'sponsored'
+          ${shardFilter}
+        ORDER BY w.trial_ends_at ASC
+        LIMIT $1`,
+      [BATCH_SIZE],
     );
-    if (upd.rows.length === 0) continue;
-    sent++;
-    notifyTrialReminder({ workspaceId: r.workspace_id, stage, trialEndsAt: r.trial_ends_at })
-      .catch((e) => console.error(`[trial-reminders] ${stage} email failed:`, r.workspace_id, e?.message));
+    if (rows.length === 0) break;
+    scanned += rows.length;
+    for (const r of rows) {
+      // Stamp first under the IS NULL guard; a lost race (another run /
+      // retry) returns zero rows and we skip without re-sending.
+      // eslint-disable-next-line no-await-in-loop
+      const upd = await sql.query(
+        `UPDATE workspaces SET ${stampCol} = NOW()
+          WHERE id = $1 AND ${stampCol} IS NULL
+          RETURNING id`,
+        [r.workspace_id],
+      );
+      if (upd.rows.length === 0) continue;
+      sent++;
+      // eslint-disable-next-line no-await-in-loop
+      await notifyTrialReminder({ workspaceId: r.workspace_id, stage, trialEndsAt: r.trial_ends_at })
+        .catch((e) => console.error(`[trial-reminders] ${stage} email failed:`, r.workspace_id, e?.message));
+      if (Date.now() >= deadline) break;
+    }
   }
-  return { scanned: rows.length, sent };
+  return { scanned, sent };
 }
 
 async function handler(req, res) {
@@ -111,20 +124,30 @@ async function handler(req, res) {
   if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
 
   try {
+    const { shard, shards } = shardFromReq(req);
+    const shardFilter = shardClause({ shard, shards }, 'w.id');
+
     let scanned = 0;
-    const byStage = {};
-    for (const cfg of STAGES) {
-      // eslint-disable-next-line no-await-in-loop
-      const r = await processStage(cfg);
-      scanned += r.scanned;
-      byStage[cfg.stage] = r.sent;
-    }
+    // All stages share ONE run deadline so 4 back-to-back drains can't each
+    // burn the full function budget. Pre-seed every stage to 0 for the metrics.
+    const byStage = Object.fromEntries(STAGES.map((s) => [s.stage, 0]));
+    let emptied = true;
+    await withDeadline(async (deadline) => {
+      for (const cfg of STAGES) {
+        if (Date.now() >= deadline) { emptied = false; break; }
+        // eslint-disable-next-line no-await-in-loop
+        const r = await drainStage({ ...cfg, shardFilter, deadline });
+        scanned += r.scanned;
+        byStage[cfg.stage] = r.sent;
+      }
+    });
     const sent = Object.values(byStage).reduce((a, b) => a + b, 0);
+    const terminatedBy = terminationReason({ emptied, hitCap: false });
     // Metrics get captured by the trackCron wrapper from this response
     // body. extractMetrics keeps top-level scalars and drops nested
     // objects, so we spread byStage's per-stage counts into the top level
     // instead of nesting them under a `byStage` key.
-    return ok(res, { scanned, sent, ...byStage });
+    return ok(res, { shard, shards, scanned, sent, terminatedBy, ...byStage });
   } catch (err) {
     return serverError(res, err);
   }
