@@ -226,7 +226,12 @@ export async function workspaceContext(workspaceId) {
 // first-time owner sees the calm default greeting, not manufactured urgency.
 // Time-of-day ("Good morning") is intentionally left to the client, which
 // knows the owner's local clock; the server (UTC) must not guess it.
-export async function buildBriefing(workspaceId) {
+// `opts.goals` / `opts.streak` let a caller that ALREADY fetched them (the
+// dashboard reads goals for its momentum strip and streak via touchStreak) pass
+// them in, so buildBriefing doesn't re-read the same rows — 2 fewer round-trips
+// on the hottest surface. When omitted (e.g. /api/ivy calling standalone) they
+// fetch in parallel with the other reads, exactly as before.
+export async function buildBriefing(workspaceId, { goals: goalsIn, streak: streakIn } = {}) {
   const tz = await workspaceTimeZone(workspaceId); // "today" in the owner's zone
   const [today, invoices, quiet, biz, goals, streak] = await Promise.all([
     sql`
@@ -259,10 +264,11 @@ export async function buildBriefing(workspaceId) {
        LIMIT 5
     `,
     sql`SELECT biz_name FROM calendar_settings WHERE workspace_id = ${workspaceId}`,
-    // Streak + the closest-to-done goal, so Ivy can coach toward them. Both
+    // Streak + the closest-to-done goal, so Ivy can coach toward them. Reuse a
+    // caller-provided value (skips the read) or fetch it in parallel. Both
     // best-effort — a hiccup just omits the goal item / streak facts.
-    listGoalsWithProgress(workspaceId, { limit: 1 }).catch(() => []),
-    readStreak(workspaceId).catch(() => ({ days: 0, best: 0 })),
+    goalsIn !== undefined ? Promise.resolve(goalsIn) : listGoalsWithProgress(workspaceId, { limit: 1 }).catch(() => []),
+    streakIn !== undefined ? Promise.resolve(streakIn) : readStreak(workspaceId).catch(() => ({ days: 0, best: 0 })),
   ]);
 
   const todayRows = today.rows || [];

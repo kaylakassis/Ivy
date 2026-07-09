@@ -85,19 +85,20 @@ export default async function handler(req, res) {
       dismissed: user.ui_prefs?.dismissedWorkflowSuggestions || [],
     });
 
-    // "Today with Ivy" — surface the same deterministic briefing items (today's
-    // sessions / unpaid invoices / quiet clients, each a tap-to-act Ivy prompt)
-    // that live in the Ivy dock, on the highest-traffic surface. Best-effort:
-    // a briefing hiccup must never break the dashboard.
-    let briefing = null;
-    try {
-      const b = await buildBriefing(workspaceId);
-      if (b?.items?.length) briefing = { items: b.items };
-    } catch { /* no "today" card this load */ }
-
     // Goal momentum on the home surface — the highest-intent retention object,
     // which otherwise only lived on /goals. Best-effort; [] on any hiccup.
     const goals = await listGoalsWithProgress(workspaceId, { limit: 3 });
+
+    // "Today with Ivy" — surface the same deterministic briefing items (today's
+    // sessions / unpaid invoices / quiet clients, each a tap-to-act Ivy prompt)
+    // that live in the Ivy dock, on the highest-traffic surface. Reuse the goals
+    // we just fetched + the streak from touchStreak so buildBriefing doesn't
+    // re-read them. Best-effort: a briefing hiccup must never break the dashboard.
+    let briefing = null;
+    try {
+      const b = await buildBriefing(workspaceId, { goals, streak });
+      if (b?.items?.length) briefing = { items: b.items };
+    } catch { /* no "today" card this load */ }
 
     return ok(res, {
       currency,
