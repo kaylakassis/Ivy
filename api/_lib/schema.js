@@ -2480,6 +2480,37 @@ CREATE INDEX IF NOT EXISTS idx_workflows_enabled_trigger
   ON workflows(trigger_type)
   WHERE enabled = TRUE;
 
+-- ─── Hot-path indexes (100k scale audit) ─────────────────────────────
+-- NOTE for future additions: these run fast because the tables are still
+-- small. Once bookings/invoices/messages are multi-million-row, a plain
+-- CREATE INDEX takes a write-blocking lock for the whole build — add new
+-- indexes on those tables with CREATE INDEX CONCURRENTLY (it can't run in a
+-- txn, which suits this no-transaction migration path) to avoid a deploy-time
+-- write outage.
+
+-- The "quiet clients" anti-join in ivy.js (workspaceContext + buildBriefing,
+-- run on every dashboard/Ivy load) resolves message_threads by
+-- (workspace_id, client_id); the only thread index leads with last_message_at,
+-- so the join degenerates to a scan. (The recency side is already served by
+-- idx_messages_thread(thread_id, created_at).)
+CREATE INDEX IF NOT EXISTS idx_threads_ws_client
+  ON message_threads(workspace_id, client_id);
+
+-- Messages tab + global search sort threads by
+-- COALESCE(last_message_at, created_at) DESC, which idx_threads_workspace_recent
+-- (a bare last_message_at index) can't serve — so a full per-workspace sort runs
+-- each load. Expression index matches the ORDER BY exactly.
+CREATE INDEX IF NOT EXISTS idx_threads_ws_last_activity
+  ON message_threads(workspace_id, (COALESCE(last_message_at, created_at)) DESC);
+
+-- "Recent" lists sort by created_at DESC with no matching index today, so each
+-- one sorts the workspace's whole row set: clients feeds the workflow-suggestion
+-- detector + briefing (LIMIT 20/5 recent), the dashboard/search feed recent
+-- bookings + invoices. Composite (workspace_id, created_at DESC) lets them seek.
+CREATE INDEX IF NOT EXISTS idx_clients_ws_created  ON clients(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_bookings_ws_created ON bookings(workspace_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_invoices_ws_created ON invoices(workspace_id, created_at DESC);
+
 -- ─── Webhook event deduplication (§2.7) ──────────────────────────────
 -- Today each webhook handler checks application state ("is the invoice
 -- already paid?") to decide whether to skip a duplicate event. Fine at
