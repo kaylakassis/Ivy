@@ -15,6 +15,12 @@
 //   rate_limits            > 7 days   - sliding-window rate-limiter
 //                                       only ever reads the LAST
 //                                       window's worth of rows.
+//   notifications          > 60 days  - the bell feed only renders the
+//                                       recent 50; older rows are dead
+//                                       weight (grows unbounded otherwise).
+//   ivy_usage              > 90 days  - per-workspace/day token counters;
+//                                       ~3 months is plenty for admin
+//                                       charts + the global cap roll-up.
 //
 // Each table is independent - a failure on one shouldn't abort the
 // others. Per-table try/catch with reportError on failure.
@@ -59,6 +65,17 @@ async function handler(req, res) {
 
     results.rateLimits = await prune('rate_limits',
       `attempted_at < NOW() - INTERVAL '7 days'`);
+
+    // In-app bell feed. The reader (api/me/notification-feed.js) only ever
+    // shows the recent 50; anything 60+ days old is unreachable weight and the
+    // table otherwise grows without bound.
+    results.notifications = await prune('notifications',
+      `created_at < NOW() - INTERVAL '60 days'`);
+
+    // Per-workspace/day Ivy token counters. ~3 months covers admin usage
+    // charts and the global-spend roll-up; older rows just bloat the table.
+    results.ivyUsage = await prune('ivy_usage',
+      `day < CURRENT_DATE - 90`);
 
     results.cronRuns = await prune('cron_runs',
       `finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '30 days'`);
