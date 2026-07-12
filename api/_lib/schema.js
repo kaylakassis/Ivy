@@ -503,9 +503,9 @@ CREATE INDEX IF NOT EXISTS idx_affiliate_uses_paid
 -- Distinct from the admin-managed affiliates program above. EVERY
 -- business owner gets a referral code they set themselves in Settings.
 -- When a new user signs up with that code AND becomes a paying owner,
--- the referrer gets one month credited to their Stripe customer
--- balance (next billing cycle effectively waived). Stacks: N
--- conversions = N free months.
+-- BOTH the referrer and the referred user get one free week credited to
+-- their Stripe customer balance (next weekly cycle effectively waived).
+-- Stacks: N conversions = N free weeks for the referrer.
 --
 -- referral_codes: one self-set code per owner (user). Code is stored
 -- uppercased; uniqueness is global so a link ?ref=CODE resolves to
@@ -519,25 +519,37 @@ CREATE TABLE IF NOT EXISTS referral_codes (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_referral_codes_code ON referral_codes(UPPER(code));
 
 -- referrals: one row per referred signup. converted_at stamps when the
--- referred user first becomes a paying owner; rewarded_at stamps when
--- the referrer actually received their free month (only granted while
--- the referrer is an active paying owner - see api/_lib/referrals.js).
+-- referred user first becomes a paying owner. rewarded_at stamps when the
+-- REFERRER received their free week (only granted while the referrer is an
+-- active paying owner). referred_rewarded_at stamps the REFERRED user's own
+-- free week (granted immediately at their first payment, since they are
+-- active by definition then). See api/_lib/referrals.js.
 CREATE TABLE IF NOT EXISTS referrals (
-  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  referrer_user_id  UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-  referred_user_id  UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
-  code              TEXT NOT NULL,
-  signed_up_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  converted_at      TIMESTAMPTZ,
-  rewarded_at       TIMESTAMPTZ,
-  reward_cents      INTEGER
+  id                    UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  referrer_user_id      UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  referred_user_id      UUID NOT NULL UNIQUE REFERENCES users(id) ON DELETE CASCADE,
+  code                  TEXT NOT NULL,
+  signed_up_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  converted_at          TIMESTAMPTZ,
+  rewarded_at           TIMESTAMPTZ,
+  reward_cents          INTEGER,
+  referred_rewarded_at  TIMESTAMPTZ,
+  referred_reward_cents INTEGER
 );
+-- Two-sided reward columns added after the initial single-sided release;
+-- ALTER so existing databases pick them up.
+ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_rewarded_at  TIMESTAMPTZ;
+ALTER TABLE referrals ADD COLUMN IF NOT EXISTS referred_reward_cents INTEGER;
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer ON referrals(referrer_user_id, signed_up_at DESC);
--- The sweep that grants pending rewards filters by (referrer, converted
--- but not yet rewarded).
+-- The sweep that grants pending REFERRER rewards filters by (referrer,
+-- converted but not yet rewarded).
 CREATE INDEX IF NOT EXISTS idx_referrals_pending
   ON referrals(referrer_user_id)
   WHERE converted_at IS NOT NULL AND rewarded_at IS NULL;
+-- The referred-user side: converted but not yet given their own free week.
+CREATE INDEX IF NOT EXISTS idx_referrals_referred_pending
+  ON referrals(referred_user_id)
+  WHERE converted_at IS NOT NULL AND referred_rewarded_at IS NULL;
 
 -- admin replies inline. Polling-based - realtime can come later. Mirrors
 -- the message_threads / messages pattern but a separate table so support

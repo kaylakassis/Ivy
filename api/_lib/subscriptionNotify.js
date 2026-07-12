@@ -294,6 +294,78 @@ export async function notifySubscriptionStarted({ workspaceId, periodEnd, amount
 }
 
 // ─────────────────────────────────────────────────────────────────────
+// Referral reward earned (refer a friend, you both get a free week)
+// ─────────────────────────────────────────────────────────────────────
+
+// variant: 'referrer' (their referral subscribed) or 'referred' (welcome
+// gift for signing up through a friend). Both get one free week as a Stripe
+// balance credit; this just tells them.
+export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, businessName }) {
+  const fn = escapeHtml(fnRaw || 'there');
+  const biz = escapeHtml(businessName || 'your business');
+  const wk = weeks === 1 ? 'a free week' : `${weeks} free weeks`;
+
+  if (variant === 'referred') {
+    const preheader = `Your first week is on us — welcome to ${PLAN_NAME}.`;
+    const html = emailShell({
+      heading: `Welcome — your first week's on us`,
+      preheader,
+      body: `<p>Hi ${fn},</p>
+        <p>Thanks for joining <strong>${PLAN_NAME}</strong> through a friend's invite. As a welcome gift, we've credited you <strong>${wk}</strong> — it comes straight off your next invoice, nothing to do.</p>
+        <p>Now go make running <strong>${biz}</strong> feel easy. Ask Ivy anything to get started.</p>`,
+      ctaText: 'Open my dashboard →',
+      ctaUrl: dashboardUrl(),
+      footer: `— The Ivy OS Team`,
+    });
+    return { subject: `Welcome to ${PLAN_NAME} — your first week's on us`, html, preheader };
+  }
+
+  // referrer
+  const preheader = `Someone you referred subscribed — you earned ${wk}.`;
+  const html = emailShell({
+    heading: `You earned ${wk} 🎉`,
+    preheader,
+    body: `<p>Hi ${fn},</p>
+      <p>Great news — someone you referred just subscribed to <strong>${PLAN_NAME}</strong>. You've earned <strong>${wk}</strong>, credited to your account so your next invoice is waived.</p>
+      <p>Keep sharing your link and keep earning — you both get a free week every time.</p>`,
+    ctaText: 'See my referrals →',
+    ctaUrl: `${appUrl()}/referrals`,
+    footer: `— The Ivy OS Team`,
+  });
+  return { subject: `You earned ${wk} — thanks for the referral`, html, preheader };
+}
+
+export async function notifyReferralReward({ workspaceId, variant, weeks = 1 }) {
+  try {
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const rendered = renderReferralReward({
+      variant, weeks,
+      firstName: firstName(o.name), businessName: o.biz_name,
+    });
+    await sendEmailToUser({
+      userId: o.owner_id, type: 'billing',
+      to: o.email, subject: rendered.subject, html: rendered.html,
+    });
+    const wk = weeks === 1 ? 'a free week' : `${weeks} free weeks`;
+    await notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: {
+        title: variant === 'referred' ? '🎉 Your first week is on us' : `🎉 You earned ${wk}`,
+        body: variant === 'referred'
+          ? 'Welcome gift credited to your account.'
+          : 'Someone you referred subscribed. Credit applied to your next invoice.',
+        url: variant === 'referred' ? '/' : '/referrals',
+        tag: `referral-reward-${variant}-${workspaceId}`,
+      },
+    });
+  } catch (err) {
+    console.error('[subscriptionNotify.referralReward] failed:', err.message);
+    reportError(err, { extra: { workspaceId, variant } });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
 // Upcoming renewal (Stripe invoice.upcoming, ~3 days out)
 // ─────────────────────────────────────────────────────────────────────
 

@@ -21,6 +21,7 @@ const TABS = [
   { id: 'readiness',  label: 'Readiness',  icon: 'Check' },
   { id: 'users',      label: 'Users',      icon: 'Users' },
   { id: 'affiliates', label: 'Affiliates', icon: 'Gift' },
+  { id: 'referrals',  label: 'Referrals',  icon: 'Users' },
   { id: 'support',    label: 'Support',    icon: 'Chat' },
   { id: 'bugs',       label: 'Bug reports', icon: 'Spark' },
   { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
@@ -116,6 +117,7 @@ export default function AdminPage() {
       {tab === 'readiness'  && <ReadinessTab/>}
       {tab === 'users'      && <UsersTab/>}
       {tab === 'affiliates' && <AffiliatesTab/>}
+      {tab === 'referrals' && <ReferralsTab/>}
       {tab === 'support'    && <SupportTab/>}
       {tab === 'bugs'       && <BugsTab/>}
       {tab === 'appeals'    && <AppealsTab/>}
@@ -1632,6 +1634,99 @@ function AffiliatesTab() {
         <EditAffiliateModal a={editing}
           onClose={() => setEditing(null)}
           onChanged={() => { setEditing(null); reload(); }}/>
+      )}
+    </div>
+  );
+}
+
+// ---------- Referrals tab (self-serve "refer a friend, you both get a free week") ----------
+
+function RefStat({ label, value }) {
+  return (
+    <div className="card" style={{ padding: '14px 18px', minWidth: 130 }}>
+      <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, fontWeight: 600, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 5 }}>{label}</div>
+    </div>
+  );
+}
+
+function ReferralsTab() {
+  const dr = useDateRange('30d');
+  const [data, setData] = useState(null);
+  const [err, setErr]   = useState(null);
+
+  const reload = () => {
+    setData(null); setErr(null);
+    api.get(`/admin/referrals?from=${encodeURIComponent(dr.range.from)}&to=${encodeURIComponent(dr.range.to)}`)
+      .then(setData).catch((e) => setErr(e.message));
+  };
+  useEffect(reload, [dr.range.from, dr.range.to]);
+
+  const t = data?.totals;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <DateRangeBar {...dr}/>
+      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
+        The self-serve program every owner can use — both sides get one free week
+        when a referred owner subscribes. Distinct from the paid Affiliates program.
+      </div>
+      {err && <ErrCard msg={err}/>}
+      {!data && !err && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
+
+      {t && (
+        <>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+            <RefStat label="Referrals (window)" value={t.referralsWindow}/>
+            <RefStat label="Converted (window)" value={t.convertedWindow}/>
+            <RefStat label="Conversion rate" value={`${t.conversionRate}%`}/>
+            <RefStat label="Free weeks paid" value={t.referrerRewarded + t.referredRewarded}/>
+            <RefStat label="Reward payout" value={fmtMoney((t.rewardCents || 0) / 100)}/>
+          </div>
+
+          <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+            <div style={{ padding: '12px 16px', fontWeight: 600, fontSize: 13 }}>Top referrers</div>
+            {(!data.topReferrers || data.topReferrers.length === 0) ? (
+              <div style={{ padding: '0 16px 16px' }}>
+                <EmptyNote icon="Users" title="No referrals yet" hint="Owners share their code from the Referrals page."/>
+              </div>
+            ) : (
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead style={{ background: 'var(--surface-2)' }}>
+                  <tr style={{ textAlign: 'left' }}><Th>Referrer</Th><Th>Referred</Th><Th>Subscribed</Th></tr>
+                </thead>
+                <tbody>
+                  {data.topReferrers.map((r, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                      <Td>{r.user?.email || '—'}</Td>
+                      <Td>{r.referred}</Td>
+                      <Td>{r.converted}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {data.recent && data.recent.length > 0 && (
+            <div className="card" style={{ padding: 0, overflow: 'auto' }}>
+              <div style={{ padding: '12px 16px', fontWeight: 600, fontSize: 13 }}>Recent conversions</div>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead style={{ background: 'var(--surface-2)' }}>
+                  <tr style={{ textAlign: 'left' }}><Th>When</Th><Th>Referred</Th><Th>Referrer</Th></tr>
+                </thead>
+                <tbody>
+                  {data.recent.map((r, i) => (
+                    <tr key={i} style={{ borderTop: '1px solid var(--border)' }}>
+                      <Td>{r.convertedAt ? new Date(r.convertedAt).toLocaleDateString() : '—'}</Td>
+                      <Td>{r.referred}</Td>
+                      <Td>{r.referrer}</Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

@@ -28,6 +28,7 @@ export const NAV = [
   { id: 'campaigns', to: '/campaigns',  label: 'Campaigns',      icon: 'Mail',     section: 'Grow' },
   { id: 'reviews',   to: '/reviews',    label: 'Reviews',        icon: 'Heart',    section: 'Grow' },
   { id: 'rewards',   to: '/rewards',    label: 'Rewards',        icon: 'Gift',     section: 'Grow' },
+  { id: 'referrals', to: '/referrals',  label: 'Referrals',      icon: 'Users',    section: 'Grow' },
   { id: 'website',   to: '/website',    label: 'Website',        icon: 'Globe',    section: 'Grow' },
   { id: 'workflows', to: '/workflows',  label: 'Workflows',      icon: 'Spark',    section: 'Grow' },
   // Tools.
@@ -73,6 +74,7 @@ export const TITLES = {
   goals:     { title: 'Goals & Tasks', subtitle: 'Stay on track' },
   workflows: { title: 'Workflows',     subtitle: 'Automations that run while you sleep' },
   rewards:   { title: 'Rewards',       subtitle: 'Loyalty & referrals' },
+  referrals: { title: 'Referrals',     subtitle: 'Refer a friend, you both get a free week' },
   reviews:   { title: 'Reviews',       subtitle: 'Publish & respond to client reviews' },
   comms:     { title: 'Messages',      subtitle: 'Inbox' },
   campaigns: { title: 'Campaigns',     subtitle: 'Newsletters & announcements' },

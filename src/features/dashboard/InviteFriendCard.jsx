@@ -1,4 +1,4 @@
-// "Invite a friend" — surfaces the existing free-month referral loop
+// "Invite a friend" — surfaces the existing free-week referral loop
 // (api/referrals) that was otherwise buried in Settings, to drive
 // participation. Evergreen across every service-based industry. Now shows for
 // TRIAL owners too (the honeymoon cohort most likely to share); the reward only
@@ -38,7 +38,7 @@ export default function InviteFriendCard() {
       const code = Math.random().toString(36).slice(2, 8).toUpperCase();
       const r = await api.put('/referrals', { code });
       setState(r);
-    } catch { /* leave state; the user can set a code in Settings → Referrals */ }
+    } catch { /* leave state; the user can set a code on the Referrals page */ }
     finally { setBusy(false); }
   };
 
@@ -56,7 +56,7 @@ export default function InviteFriendCard() {
         </div>
         <div>
           <div style={{ fontSize: 14.5, fontWeight: 600 }}>Invite a friend</div>
-          <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>You both get a free month when they subscribe.</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>You both get a free week when they subscribe.</div>
         </div>
       </div>
 

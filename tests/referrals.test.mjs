@@ -19,7 +19,9 @@ import {
   recordReferralSignup,
   markReferralConverted,
   grantPendingReferralCredits,
+  grantReferredUserReward,
   getReferralStats,
+  listReferrals,
   REWARD_CENTS,
 } from '../api/_lib/referrals.js';
 
@@ -205,6 +207,42 @@ async function run() {
     assert(retry.granted === 1, 'retry grants once Stripe recovers');
     stats4 = await getReferralStats(owner4);
     assert(stats4.rewarded === 1, 'reward recorded after successful retry');
+
+    console.log('\n[9] two-sided: the referred user also earns a free week');
+    stripeCalls = []; stripeShouldFail = false;
+    const owner9 = await mkUser('owner9');
+    await mkWorkspace(owner9, { active: true, customer: 'cus_owner9' });
+    await setCode(owner9, 'two-sided');
+    const referee9 = await mkUser('referee9');
+    // The referred user has their OWN active workspace + customer (they just paid).
+    await mkWorkspace(referee9, { active: true, customer: 'cus_referee9' });
+    await recordReferralSignup({ referredUserId: referee9, rawCode: 'two-sided' });
+    const conv9 = await markReferralConverted(referee9);
+    assert(conv9.converted === true, 'conversion stamped');
+    assert(stripeCalls.length === 2, 'two Stripe credits issued (referrer + referred)');
+    const credited = stripeCalls.map((c) => c.url).join(' ');
+    assert(credited.includes('cus_owner9') && credited.includes('cus_referee9'),
+      'both the referrer and the referred customer were credited');
+    const row9 = await sql`
+      SELECT rewarded_at, reward_cents, referred_rewarded_at, referred_reward_cents
+      FROM referrals WHERE referred_user_id = ${referee9}
+    `;
+    assert(row9.rows[0].rewarded_at !== null && row9.rows[0].referred_rewarded_at !== null,
+      'both reward timestamps stamped');
+    assert(row9.rows[0].reward_cents === REWARD_CENTS && row9.rows[0].referred_reward_cents === REWARD_CENTS,
+      'both reward amounts === REWARD_CENTS');
+
+    // Idempotent: re-running the referred grant does not double-credit.
+    stripeCalls = [];
+    const again9 = await grantReferredUserReward(referee9);
+    assert(again9.granted === 0, 'referred reward is idempotent (no second credit)');
+    assert(stripeCalls.length === 0, 'no extra Stripe call on replay');
+
+    console.log('\n[10] listReferrals masks identity + reports status');
+    const list9 = await listReferrals(owner9);
+    assert(Array.isArray(list9) && list9.length === 1, 'listReferrals returns the one referral');
+    assert(list9[0].status === 'rewarded', 'status reflects the rewarded state');
+    assert(/\*/.test(list9[0].name), 'identity is masked (name has no value, so email is asterisked)');
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;

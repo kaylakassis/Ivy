@@ -434,7 +434,7 @@ function SendTestEmailRow() {
 }
 
 // Referral panel - "refer one, get one." Owners set a custom code,
-// share their link, and earn a free month for every referred user who
+// share their link, and earn a free week for every referred user who
 // becomes paying. Renders for owners only.
 function ReferralCard() {
   const { ctx } = useUserContext();
@@ -448,7 +448,7 @@ function ReferralCard() {
     let live = true;
     api.get('/referrals')
       .then((r) => { if (live) { setData(r); setDraft(r.code || ''); } })
-      .catch(() => { if (live) setData({ code: null, stats: {}, rewardCents: 4900 }); });
+      .catch(() => { if (live) setData({ code: null, stats: {}, rewardCents: 899 }); });
     return () => { live = false; };
   }, []);
 
@@ -475,7 +475,7 @@ function ReferralCard() {
     } catch { /* clipboard blocked - ignore */ }
   };
 
-  const months = data?.stats?.rewarded || 0;
+  const weeks = data?.stats?.rewarded || 0;
   const inputStyle = {
     padding: '10px 12px', borderRadius: 10,
     border: '1px solid var(--border-strong)',
@@ -485,18 +485,18 @@ function ReferralCard() {
 
   return (
     <div className="card" style={{ padding: 22 }}>
-      <div className="metric-label" style={{ marginBottom: 8 }}>Refer a business, get a free month</div>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Refer a friend, you both get a free week</div>
       <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        Share your code with another business owner. When they subscribe, your
-        next billing cycle is on us - one free month for every business you
-        refer. It stacks.
+        Share your code with another business owner. When they subscribe, you
+        both get a free week - credited straight to your next invoice. One free
+        week for every business you refer, and it stacks.
       </p>
 
       {/* Stats */}
       <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginBottom: 18 }}>
         <Stat label="Referred"  value={data?.stats?.referred ?? 0}/>
         <Stat label="Subscribed" value={data?.stats?.converted ?? 0}/>
-        <Stat label="Free months earned" value={months}/>
+        <Stat label="Free weeks earned" value={weeks}/>
       </div>
 
       <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>

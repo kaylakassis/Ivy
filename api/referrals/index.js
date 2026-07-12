@@ -2,16 +2,16 @@
 //   GET  → the signed-in owner's referral code (if set) + program stats.
 //   PUT  → set / change the owner's referral code.  body: { code }
 //
-// Self-serve "refer one, get one": every paying owner can share their
-// code; each referred user who becomes paying earns the referrer one
-// free month (credited to their Stripe customer balance). See
-// api/_lib/referrals.js for the reward mechanics.
+// Self-serve "refer a friend, you both get a free week": every paying
+// owner can share their code; each referred user who becomes paying earns
+// BOTH the referrer and themselves one free week (credited to each one's
+// Stripe customer balance). See api/_lib/referrals.js for the mechanics.
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { appUrl } from '../_lib/tokens.js';
-import { getCode, setCode, getReferralStats, REWARD_CENTS } from '../_lib/referrals.js';
+import { getCode, setCode, getReferralStats, listReferrals, REWARD_CENTS } from '../_lib/referrals.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -35,15 +35,19 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      const [code, stats] = await Promise.all([
+      const [code, stats, referrals] = await Promise.all([
         getCode(user.id),
         getReferralStats(user.id),
+        listReferrals(user.id),
       ]);
       return ok(res, {
         code,
         link: code ? `${appUrl()}/signup?ref=${encodeURIComponent(code)}` : null,
         rewardCents: REWARD_CENTS,
         stats,
+        referrals,
+        weeksEarned: stats.rewarded || 0,
+        terms: { bothSides: true, rewardWeeks: 1 },
       });
     }
 
