@@ -1365,7 +1365,7 @@ function TourStep() {
     { tab: 'Messages',  icon: 'Chat',     desc: 'Text + email threads with each client. Voice memos auto-transcribe.' },
     { tab: 'Documents', icon: 'Doc',      desc: 'Contracts + intake forms. Send for e-signature, audit trail included.' },
     { tab: 'Workflows', icon: 'Spark',    desc: 'Automate follow-ups - birthday emails, win-back nudges, new-lead sequences. Build from /workflows.' },
-    { tab: 'Ivy Pro',   icon: 'Spark',    desc: 'Your AI business coach. Ask questions grounded in your real data: "why am I losing clients?"' },
+    { tab: 'Ivy',   icon: 'Spark',    desc: 'Your AI business coach. Ask questions grounded in your real data: "why am I losing clients?"' },
   ];
   return (
     <>

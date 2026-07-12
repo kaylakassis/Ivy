@@ -13,7 +13,7 @@ function initialsOf(user) {
   return (parts[0]?.[0] || '?').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
 }
 
-export default function MobileDrawer({ direction, onClose }) {
+export default function MobileDrawer({ onClose }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
@@ -65,7 +65,7 @@ export default function MobileDrawer({ direction, onClose }) {
               letterSpacing: '-0.01em', color: 'var(--sidebar-fg)',
             }}>Ivy</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {direction === 'bold' ? 'OS v2' : 'All-in-one for solopreneurs'}
+              All-in-one for solopreneurs
             </div>
           </div>
           <button onClick={onClose}

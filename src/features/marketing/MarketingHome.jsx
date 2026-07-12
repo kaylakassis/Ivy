@@ -508,7 +508,7 @@ function ProductPreview() {
 }
 
 function MockSidebar() {
-  const items = ['Dashboard', 'Clients', 'Projects', 'Calendar', 'Finance', 'Goals & Tasks', 'Workflows', 'Rewards', 'Messages', 'Documents', 'Website', 'Ivy Pro'];
+  const items = ['Dashboard', 'Clients', 'Projects', 'Calendar', 'Finance', 'Goals & Tasks', 'Workflows', 'Rewards', 'Messages', 'Documents', 'Website', 'Ivy'];
   return (
     <div style={{
       background: 'var(--surface-2)', padding: 14,

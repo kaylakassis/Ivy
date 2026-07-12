@@ -1,4 +1,4 @@
-// Ivy Pro: workspace data context + reply generation.
+// Ivy: workspace data context + reply generation.
 //
 // Reply path: try real Claude first (api/_lib/ivy.js → generateReply), fall
 // back to a deterministic mock if ANTHROPIC_API_KEY is missing or the API

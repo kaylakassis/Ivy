@@ -28,7 +28,7 @@ const RAISE_PREFIXES = [
   '/me/messages',  // client: 1:1 with each business
   '/me/groups',    // client: group chats
   '/me/dms',       // client: client-to-client DMs
-  '/ivy',          // Ivy Pro chat
+  '/ivy',          // Ivy chat
 ];
 
 // Anything that's not a logged-in shell route. Conservative allowlist would

@@ -13,7 +13,7 @@ function initialsOf(user) {
   return (parts[0]?.[0] || '?').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
 }
 
-export default function Sidebar({ direction, variant = 'full' }) {
+export default function Sidebar({ variant = 'full' }) {
   const { user, signOut } = useAuth();
   const { ctx } = useUserContext();
   const nav = useNavigate();
@@ -117,7 +117,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
             color: 'var(--sidebar-fg)',
           }}>Ivy</span>
           <span style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            {direction === 'bold' ? 'OS v2' : 'All-in-one for solopreneurs'}
+            All-in-one for solopreneurs
           </span>
         </div>
       </div>

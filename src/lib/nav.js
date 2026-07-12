@@ -13,10 +13,10 @@
 // `section` groups items under a small label in the sidebar so the 13-item
 // list reads as a few calm sections instead of a flat wall. Purely visual —
 // every route stays reachable and deep-linkable. Items without a section
-// (Dashboard, Ivy Pro, Admin) render pinned above the groups.
+// (Dashboard, Ivy, Admin) render pinned above the groups.
 export const NAV = [
   { id: 'dashboard', to: '/dashboard',  label: 'Dashboard',      icon: 'Home' },
-  { id: 'ivy',       to: '/ivy',        label: 'Ivy Pro',        icon: 'Spark', accent: true },
+  { id: 'ivy',       to: '/ivy',        label: 'Ivy',        icon: 'Spark', accent: true },
   // Run — the day-to-day.
   { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users',    section: 'Run' },
   { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar', section: 'Run', productOnlyHidden: true },
@@ -80,7 +80,7 @@ export const TITLES = {
   campaigns: { title: 'Campaigns',     subtitle: 'Newsletters & announcements' },
   docs:      { title: 'Documents',     subtitle: 'Notes & files' },
   website:   { title: 'Website',       subtitle: 'Public presence' },
-  ivy:       { title: 'Ivy Pro',       subtitle: 'Your AI copilot' },
+  ivy:       { title: 'Ivy',       subtitle: 'Your AI copilot' },
   admin:     { title: 'Admin',         subtitle: 'Operator console' },
   // /account isn't in NAV (it's reached from the sidebar profile menu)
   // but it has its own tutorial and Topbar title block, so it needs an

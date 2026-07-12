@@ -1077,7 +1077,7 @@ function Switch({ checked, disabled, onChange }) {
 // (and re-add them here). Persists to users.ui_prefs.hiddenNav via
 // /api/me/nav-prefs; after each save we refresh the auth user so the sidebar,
 // mobile drawer, bottom bar, and command palette all update immediately.
-// Dashboard + Ivy Pro are always shown (not listed here). Hiding is cosmetic:
+// Dashboard + Ivy are always shown (not listed here). Hiding is cosmetic:
 // the routes still work via deep links + the command palette (⌘K).
 function NavigationCard() {
   const { user, refresh } = useAuth();
@@ -1132,7 +1132,7 @@ function NavigationCard() {
 
       <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 4 }}>
         <NavToggleRow icon="Home" label="Dashboard" section="Home" locked/>
-        <NavToggleRow icon="Spark" label="Ivy Pro" section="Home" locked/>
+        <NavToggleRow icon="Spark" label="Ivy" section="Home" locked/>
         {items.map((n) => (
           <NavToggleRow key={n.id} icon={n.icon} label={n.label} section={n.section}
             visible={!hidden.has(n.id)} busy={busy === n.id} onToggle={() => toggle(n.id)}/>

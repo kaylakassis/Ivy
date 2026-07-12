@@ -21,7 +21,7 @@ import { reportError } from './monitoring.js';
 import { workspaceTimeZone } from './calendar.js';
 import { notifyOwnerSafe } from './push.js';
 
-const PLAN_NAME = 'Ivy Pro';
+const PLAN_NAME = 'Ivy';
 
 function fmtMoneyCents(cents, currency = 'USD') {
   if (cents == null) return '';
