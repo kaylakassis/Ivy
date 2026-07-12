@@ -439,13 +439,17 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   }
 
   try {
-    const { reply, aggregateUsage } = await claudeReply(client, text, ctx, history, attachment, workspaceId);
+    const { reply, aggregateUsage, pendingActions } = await claudeReply(client, text, ctx, history, attachment, workspaceId);
     // Record SUM of all turns toward the daily cap - tool loops can
     // burn many turns per user message.
     if (workspaceId && aggregateUsage) {
       await recordUsage(workspaceId, { usage: aggregateUsage }).catch(() => {});
     }
-    return { text: sanitizeIvyReply(reply), mode: 'live' };
+    return {
+      text: sanitizeIvyReply(reply),
+      mode: 'live',
+      ...(pendingActions && pendingActions.length ? { pendingActions } : {}),
+    };
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[ivy] Anthropic call failed, falling back to mock:', err?.message || err);
@@ -742,6 +746,13 @@ async function claudeReply(client, text, ctx, history, attachment, workspaceId) 
   let response = null;
   let totalIn = 0, totalOut = 0;
   let totalCacheRead = 0, totalCacheCreate = 0;
+  // Sensitive tools the model surfaced for approval this turn (send/void/etc).
+  // The confirm-gate returns needs_confirmation instead of executing; we
+  // collect those so the client can render one-tap Approve/Dismiss buttons
+  // instead of the owner having to type "yes". Approval still flows through
+  // the owner's own next message (see the client), so the security model is
+  // unchanged - this is a UI affordance over the existing gate.
+  const pendingActions = [];
 
   for (let i = 0; i < TOOL_LOOP_CAP; i++) {
     // eslint-disable-next-line no-await-in-loop
@@ -780,6 +791,9 @@ async function claudeReply(client, text, ctx, history, attachment, workspaceId) 
     for (const tu of toolUses) {
       // eslint-disable-next-line no-await-in-loop
       const result = await executeIvyTool(tu.name, tu.input || {}, { workspaceId });
+      if (result && result.needs_confirmation) {
+        pendingActions.push({ action: tu.name, summary: result.summary });
+      }
       toolResults.push({
         type: 'tool_result',
         tool_use_id: tu.id,
@@ -820,6 +834,7 @@ async function claudeReply(client, text, ctx, history, attachment, workspaceId) 
   return {
     reply,
     response,
+    pendingActions,
     aggregateUsage: {
       input_tokens: totalIn,
       output_tokens: totalOut,
