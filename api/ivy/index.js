@@ -152,9 +152,17 @@ export default async function handler(req, res) {
       `;
 
       const usage = await getDailyUsage(workspaceId);
+      // Surface any confirm-gated action Ivy proposed this turn on the Ivy
+      // message, so the client can render one-tap Approve/Dismiss buttons.
+      // Ephemeral to the live turn (not persisted) - reopening the session
+      // won't re-show a stale card.
+      const ivyMessage = serializeMessage(ivyMsg.rows[0]);
+      if (reply.pendingActions && reply.pendingActions.length) {
+        ivyMessage.pendingActions = reply.pendingActions;
+      }
       return ok(res, {
         session: serializeSession(upd.rows[0]),
-        messages: [serializeMessage(userMsg.rows[0]), serializeMessage(ivyMsg.rows[0])],
+        messages: [serializeMessage(userMsg.rows[0]), ivyMessage],
         context: ctx,
         mode: reply.mode,
         modeError: reply.error || null,

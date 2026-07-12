@@ -151,9 +151,26 @@ function useIvyState() {
     if (activeId === id) { setActiveId(null); setMessages([]); }
   }, [activeId]);
 
+  // One-tap approval for a confirm-gated action Ivy surfaced (send message,
+  // send invoice, change settings…). We clear the card first (so it can't be
+  // double-tapped), then send the owner's OWN explicit approval through the
+  // normal send() path — the model re-issues the tool with confirm:true,
+  // identical to the owner typing "yes". The confirm-gate's security model is
+  // therefore unchanged: prompt-injection can't self-approve because approval
+  // still requires this out-of-band owner action.
+  const approvePending = useCallback((messageId) => {
+    setMessages((xs) => xs.map((m) => (m.id === messageId ? { ...m, pendingActions: null } : m)));
+    return send('Yes, go ahead and do it.');
+  }, [send]);
+
+  const dismissPending = useCallback((messageId) => {
+    setMessages((xs) => xs.map((m) => (m.id === messageId ? { ...m, pendingActions: null } : m)));
+  }, []);
+
   return {
     sessions, activeId, messages, context, briefing,
     loading, thinking, error, mode, modeError, model, usage,
     openSession, newChat, send, removeSession,
+    approvePending, dismissPending,
   };
 }

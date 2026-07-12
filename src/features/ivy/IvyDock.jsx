@@ -23,6 +23,7 @@ import { useViewport } from '../../lib/viewport.js';
 import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
+import PendingActionCard from './PendingActionCard.jsx';
 
 const HIDE_PREFIXES = [
   // Don't render in places where the bubble would be noise / out of
@@ -166,7 +167,7 @@ function IvyMark({ size = 22 }) {
 // ── Panel ──────────────────────────────────────────────────────────
 
 function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
-  const { messages, thinking, send, mode, modeError, context, briefing, activeId } = ivy;
+  const { messages, thinking, send, mode, modeError, context, briefing, activeId, approvePending, dismissPending } = ivy;
   const [draft, setDraft] = useState('');
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -274,7 +275,8 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
             onPick={(prompt) => submit(prompt)}
           />
         ) : (
-          <MessageList messages={messages} thinking={thinking} />
+          <MessageList messages={messages} thinking={thinking}
+            onApprove={approvePending} onDismiss={dismissPending} />
         )}
       </div>
 
@@ -492,10 +494,18 @@ function SuggestionCard({ suggestion, onPick }) {
 
 // ── Messages ───────────────────────────────────────────────────────
 
-function MessageList({ messages, thinking }) {
+function MessageList({ messages, thinking, onApprove, onDismiss }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {messages.map((m) => <Bubble key={m.id} role={m.role} text={m.text}/>)}
+      {messages.map((m) => (
+        <div key={m.id}>
+          <Bubble role={m.role} text={m.text}/>
+          {m.pendingActions && m.pendingActions.length > 0 && (
+            <PendingActionCard actions={m.pendingActions} busy={thinking}
+              onApprove={() => onApprove?.(m.id)} onDismiss={() => onDismiss?.(m.id)}/>
+          )}
+        </div>
+      ))}
       {thinking && <ThinkingBubble/>}
     </div>
   );

@@ -10,6 +10,7 @@ import { useViewport } from '../../lib/viewport.js';
 import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
+import PendingActionCard from './PendingActionCard.jsx';
 
 export default function IvyPro() {
   const [tweaks] = useTweaks();
@@ -19,6 +20,7 @@ export default function IvyPro() {
     sessions, activeId, messages, context, briefing,
     loading, thinking, error, mode, modeError, model, usage,
     openSession, newChat, send, removeSession,
+    approvePending, dismissPending,
   } = useIvy();
 
   const [draft, setDraft] = useState('');
@@ -145,7 +147,15 @@ export default function IvyPro() {
             <WelcomePanel onPrompt={submit} direction={direction} briefing={briefing}/>
           ) : (
             <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {messages.map((m) => <ChatBubble key={m.id} msg={m}/>)}
+              {messages.map((m) => (
+                <div key={m.id}>
+                  <ChatBubble msg={m}/>
+                  {m.pendingActions && m.pendingActions.length > 0 && (
+                    <PendingActionCard actions={m.pendingActions} busy={thinking}
+                      onApprove={() => approvePending(m.id)} onDismiss={() => dismissPending(m.id)}/>
+                  )}
+                </div>
+              ))}
               {thinking && <ThinkingBubble/>}
             </div>
           )}
