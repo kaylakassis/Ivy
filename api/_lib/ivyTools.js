@@ -1877,11 +1877,17 @@ async function create_recurring_invoice({ workspaceId, args }) {
       ${s.taxRate ?? 0}, ${s.discount ?? 0}, ${s.notes || null},
       ${s.cadence}, ${s.nextRunAt}::date,
       ${s.endDate ? `${s.endDate}` : null}::date,
-      'active', ${s.autoSend !== false}
+      'active', false
     )
     RETURNING id, name, cadence, next_run_at
   `;
-  return { recurring_invoice: rows[0] };
+  // Security: Ivy-created recurring invoices are ALWAYS auto_send=false, even
+  // if the model passed auto_send:true. Auto-send would fire outbound email on
+  // every future cycle without ever passing the confirm-gate — an indirect
+  // outbound bypass and a contradiction of Ivy's own "recurring invoices are
+  // drafts" contract. The owner turns on auto-send from the recurring-invoice
+  // UI (a real human action), never Ivy.
+  return { recurring_invoice: rows[0], note: 'Created as a draft — turn on auto-send from Recurring invoices when you are ready.' };
 }
 
 async function create_campaign({ workspaceId, args }) {

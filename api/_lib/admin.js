@@ -16,8 +16,19 @@
 // promotes any user whose email matches the allowlist to user_type =
 // 'super_admin' on first login, so the operator never has to set this
 // manually.
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { requireUser, readSession } from './auth.js';
 import { sql } from './db.js';
+
+// Constant-time secret compare. Hash both sides to a fixed 32 bytes first so
+// timingSafeEqual gets equal-length buffers and the comparison never leaks
+// length or content via early-exit timing.
+function secretsMatch(provided, expected) {
+  if (typeof provided !== 'string' || typeof expected !== 'string' || !expected) return false;
+  const a = createHash('sha256').update(provided).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
+}
 
 export function superAdminEmails() {
   return new Set(
@@ -53,9 +64,9 @@ export async function ensureSuperAdminPromotion(user) {
 // `requireSameOrigin` is the caller's responsibility - this helper
 // only auths.
 export async function requireSuperAdmin(req, res) {
-  // Path 1: admin secret header
+  // Path 1: admin secret header (constant-time compare)
   const secret = process.env.ADMIN_SECRET;
-  if (secret && req.headers['x-admin-secret'] === secret) return true;
+  if (secret && secretsMatch(req.headers['x-admin-secret'], secret)) return true;
 
   // Path 2 & 3: authenticated user - check both email allowlist AND
   // the DB user_type column. Either path grants access.
