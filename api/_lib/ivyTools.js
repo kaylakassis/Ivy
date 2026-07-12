@@ -815,6 +815,18 @@ export const SENSITIVE_TOOLS = new Set([
   'block_calendar_time',
 ]);
 
+// Workflow action types that send OUTBOUND to clients. A create_workflow that
+// wires these up is an INDIRECT outbound path — the automation later fires on
+// every matching trigger without passing the confirm-gate — so we treat such a
+// create_workflow as sensitive and make Ivy get approval before building it.
+const OUTBOUND_WORKFLOW_ACTIONS = new Set(['send_email', 'send_sms', 'send_document']);
+
+function workflowHasOutboundActions(name, a) {
+  if (name !== 'create_workflow') return false;
+  const actions = Array.isArray(a?.actions) ? a.actions : [];
+  return actions.some((act) => OUTBOUND_WORKFLOW_ACTIONS.has(act?.type));
+}
+
 // Async so a few gated actions can resolve real context for the
 // confirmation card (e.g. how many clients a campaign will email). Scoped
 // to the workspace via ctx; never trusts caller-supplied workspace ids.
@@ -901,6 +913,12 @@ async function describeSensitiveAction(name, a, ctx = {}) {
         : `${a.date || '?'} ${fmtMinAsTime(a.start_min)}-${fmtMinAsTime(a.end_min)}`;
       return `Block off ${when}${a.label ? ` — "${a.label}"` : ''}. Clients can't book this window.`;
     }
+    case 'create_workflow': {
+      const acts = Array.isArray(a.actions) ? a.actions : [];
+      const outbound = acts.filter((x) => OUTBOUND_WORKFLOW_ACTIONS.has(x?.type))
+        .map((x) => x.type.replace(/_/g, ' '));
+      return `Create an automation "${a.name || '(unnamed)'}" that will ${outbound.join(' + ') || 'run actions'} to clients automatically whenever "${a.trigger_type || 'a trigger'}" fires — this sends outbound to clients on its own, without asking each time.`;
+    }
     default:
       return `Run ${name}`;
   }
@@ -919,8 +937,9 @@ export async function executeIvyTool(name, args, ctx) {
   const fn = HANDLERS[name];
   if (!fn) return { error: `Unknown tool: ${name}` };
   const a = args || {};
-  // Confirmation gate for outbound / irreversible actions.
-  if (SENSITIVE_TOOLS.has(name) && a.confirm !== true) {
+  // Confirmation gate for outbound / irreversible actions — including a
+  // create_workflow that wires up outbound sends (an indirect send path).
+  if ((SENSITIVE_TOOLS.has(name) || workflowHasOutboundActions(name, a)) && a.confirm !== true) {
     return {
       needs_confirmation: true,
       action: name,

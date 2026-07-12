@@ -397,6 +397,16 @@ export function stripInlineMarkdown(text) {
 // final user turn as an image / document / text block per the media type.
 // Returns `{ text, mode, error?, usage? }` so callers / the UI can surface
 // whether the reply came from real Claude or the local mock.
+// Is this a paying workspace (real customer)? Used to exempt them from the
+// shared platform-wide Ivy ceiling. Best-effort: on any error, treat as
+// not-paid so we fail toward the cap (cost safety) rather than away from it.
+async function isPaidWorkspace(workspaceId) {
+  try {
+    const r = await sql`SELECT 1 FROM workspaces WHERE id = ${workspaceId} AND subscription_status IN ('active','past_due') LIMIT 1`;
+    return r.rows.length > 0;
+  } catch { return false; }
+}
+
 export async function generateReply(text, ctx, history = [], workspaceId = null, attachment = null) {
   const client = anthropic();
   if (!client) {
@@ -407,7 +417,11 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   // workspaces. If tripped, no Anthropic call happens for anyone until the
   // day rolls over (or ops raises the env cap).
   const globalCap = await globalIvyCapStatus();
-  if (globalCap.capped) {
+  // Paying tenants (active/past_due) bypass the shared platform ceiling so a
+  // burst of free-signup abuse that trips the global cap can't degrade real
+  // customers to mock replies. Only free/trialing workspaces get throttled
+  // when the platform-wide cap is hit. (The await only runs when capped.)
+  if (globalCap.capped && !(workspaceId && await isPaidWorkspace(workspaceId))) {
     console.error('[ivy] GLOBAL daily cap reached — pausing live replies', globalCap);
     return {
       text: sanitizeIvyReply("Ivy is at capacity for today across Ivy and is taking a short breather. Live answers are back tomorrow — in the meantime, your dashboard has your latest numbers."),
