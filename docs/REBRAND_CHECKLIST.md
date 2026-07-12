@@ -42,7 +42,7 @@ In Vercel → Project → Settings → Environment Variables, for **each environ
   - `APP_URL` → `https://getivyos.com`
   - `VITE_APP_URL` → `https://getivyos.com`
   - `VITE_API_BASE_URL` (used by the iOS build) → `https://getivyos.com`
-  - `EMAIL_FROM` → `Ivy OS <hello@getivyos.com>`
+  - `EMAIL_FROM` → `Ivy <hello@getivyos.com>`
   - `EMAIL_REPLY_TO` → `hello@getivyos.com`
   - `VAPID_SUBJECT` → `mailto:hello@getivyos.com`
   - `WEBSITE_CNAME_TARGET` → `cname.getivyos.com` (if you've set it explicitly; otherwise the code default already points here)
@@ -69,7 +69,7 @@ The QA account is a plain owner (never an admin) and the `state` switch only eve
 
 In Stripe Dashboard, account-wide:
 
-- [ ] **Account name** → "Ivy OS" (Stripe → Settings → Public details). Shows on receipts and the customer portal.
+- [ ] **Account name** → "Ivy" (Stripe → Settings → Public details). Shows on receipts and the customer portal.
 - [ ] **Public business name / statement descriptor** → "IVY OS" (≤22 chars, appears on credit-card statements).
 - [ ] **Webhook endpoint URL** (Stripe → Developers → Webhooks → your "billing" endpoint) → `https://getivyos.com/api/webhooks/billing`. If you change the URL Stripe issues a new signing secret - update `IVY_BILLING_WEBHOOK_SECRET` in Vercel to match.
 - [ ] **Stripe Connect** (Stripe → Settings → Connect → Branding) - update the "Connect platform" name, logo, and **redirect URL** to `https://getivyos.com/api/finance/stripe-connect-callback`.
@@ -78,7 +78,7 @@ In Stripe Dashboard, account-wide:
 
 Square Developer Dashboard → your app:
 
-- [ ] **App name** → "Ivy OS".
+- [ ] **App name** → "Ivy".
 - [ ] **OAuth Redirect URL** → `https://getivyos.com/api/finance/square-oauth-callback`. Match `SQUARE_REDIRECT_URI` in Vercel.
 - [ ] **Webhook subscription URL** → `https://getivyos.com/api/webhooks/square/<workspaceId>` (the pattern handler routes by workspace).
 
@@ -86,7 +86,7 @@ Square Developer Dashboard → your app:
 
 PayPal Developer Dashboard → your app:
 
-- [ ] **App / partner display name** → "Ivy OS".
+- [ ] **App / partner display name** → "Ivy".
 - [ ] **Return URL after onboarding** → `https://getivyos.com/api/finance/paypal-onboard-return`.
 - [ ] **Webhook URL** → `https://getivyos.com/api/webhooks/paypal` (or the per-workspace path your handler uses).
 
@@ -95,13 +95,13 @@ PayPal Developer Dashboard → your app:
 Twilio Console:
 
 - [ ] **Voice / messaging webhook URLs** (if any) on your phone number → `https://getivyos.com/api/webhooks/twilio/...`.
-- [ ] **A2P 10DLC brand registration** (if you've done one) - update the brand name to "Ivy OS". Required for US SMS deliverability.
+- [ ] **A2P 10DLC brand registration** (if you've done one) - update the brand name to "Ivy". Required for US SMS deliverability.
 
 ## 8. RevenueCat (iOS in-app subscriptions)
 
 RevenueCat dashboard:
 
-- [ ] **Create or rename project** → "Ivy OS".
+- [ ] **Create or rename project** → "Ivy".
 - [ ] **Add an iOS app** with bundle id **`com.getivyos.app`**.
 - [ ] **Add two products** with exact ids:
   - `ivyos_weekly` ($8.99 / week)
@@ -117,7 +117,7 @@ RevenueCat dashboard:
 ## 9. Apple - App Store Connect + Developer
 
 - [ ] **Register the bundle id `com.getivyos.app`** (Apple Developer → Identifiers → +).
-- [ ] **Create the App Store Connect app record** with that bundle id, name "Ivy OS".
+- [ ] **Create the App Store Connect app record** with that bundle id, name "Ivy".
 - [ ] **Subscription group** called `ivyos`. Add the two auto-renewable subscriptions with ids matching RevenueCat: `ivyos_weekly` and `ivyos_yearly`.
 - [ ] In Xcode (`capacitor.config.ts` already has the new appId), enable capabilities: **In-App Purchase**, **Sign in with Apple**, **Push Notifications**.
 - [ ] Full step-by-step is in `docs/IOS_SUBMISSION.md`.
@@ -128,7 +128,7 @@ Google Cloud Console → APIs & Services → Credentials → your OAuth client:
 
 - [ ] **Authorized JavaScript origins** → `https://getivyos.com`.
 - [ ] **Authorized redirect URIs** → `https://getivyos.com/api/calendar/google/callback`.
-- [ ] **OAuth consent screen** → app name "Ivy OS", support email `support@getivyos.com`, app logo, app domain, privacy + terms URLs (`https://getivyos.com/privacy`, `https://getivyos.com/terms`).
+- [ ] **OAuth consent screen** → app name "Ivy", support email `support@getivyos.com`, app logo, app domain, privacy + terms URLs (`https://getivyos.com/privacy`, `https://getivyos.com/terms`).
 
 ## 11. Sentry
 
@@ -150,7 +150,7 @@ Google Cloud Console → APIs & Services → Credentials → your OAuth client:
 
 ## 15. Social handles (cosmetic but match the brand)
 
-- [ ] Twitter / X, Instagram, LinkedIn company page, etc. → update handle and bio to Ivy OS / getivyos.com.
+- [ ] Twitter / X, Instagram, LinkedIn company page, etc. → update handle and bio to Ivy / getivyos.com.
 
 ## 16. Deploy
 
@@ -158,7 +158,7 @@ Once 1–8 are done:
 
 - [ ] **Trigger a Vercel production deploy** (push to main, or redeploy). The build picks up the renamed env vars.
 - [ ] **Verify after deploy**:
-  - `https://getivyos.com` loads and shows the Ivy OS brand.
+  - `https://getivyos.com` loads and shows the Ivy brand.
   - Log in works (note: **every existing user is logged out**, because the session cookie was renamed `thryve_session` → `ivy_session`. They just sign in again.)
   - A test signup arrives by email from `hello@getivyos.com`.
   - Stripe Connect onboarding flow returns to the new redirect URL.

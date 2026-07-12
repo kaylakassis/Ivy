@@ -21,7 +21,7 @@ export function publicOrigin() {
   return CANONICAL;
 }
 
-// Hosts the Ivy OS app itself runs on, as opposed to a business owner's
+// Hosts the Ivy app itself runs on, as opposed to a business owner's
 // own custom domain. Used to decide whether the current page is the
 // platform (render the normal app) or a customer's connected domain
 // (render only that owner's published site, resolved by host).

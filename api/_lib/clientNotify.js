@@ -42,7 +42,7 @@ export async function sendClientInvite({ workspaceId, clientId }) {
     // Deliberately broad: every workspace-add gets one invite. The
     // signup path auto-claims existing clients-rows with matching
     // email at verification time, so the link works whether or not
-    // they already have an Ivy OS account.
+    // they already have an Ivy account.
     const base = appUrl();
     const signinHref  = `${base}/signin?email=${encodeURIComponent(c.email)}`;
     // mode=client so the signup form preselects the client role and the
@@ -61,16 +61,16 @@ export async function sendClientInvite({ workspaceId, clientId }) {
       // since the invite IS about future bookings.
       type: 'bookings',
       to: c.email,
-      subject: `${bizName} added you on Ivy OS`,
+      subject: `${bizName} added you on Ivy`,
       replyTo: branding.replyTo,
       html: emailShell({
-        heading: `${bizName} added you on Ivy OS`,
+        heading: `${bizName} added you on Ivy`,
         branding,
         body: `<p>Hi${firstName(c.name) ? ` ${escapeHtml(firstName(c.name))}` : ''},</p>
-          <p><strong>${escapeHtml(bizName)}</strong> added you to their Ivy OS
+          <p><strong>${escapeHtml(bizName)}</strong> added you to their Ivy
           account, which means you'll get bookings, invoices, and
           documents from them all in one place.</p>
-          <p>Create a free Ivy OS account (or sign in if you already have
+          <p>Create a free Ivy account (or sign in if you already have
           one) to see everything in your portal:</p>
           <ul style="margin:0 0 16px 16px;padding:0;">
             <li>Upcoming + past bookings</li>
@@ -79,13 +79,13 @@ export async function sendClientInvite({ workspaceId, clientId }) {
             <li>Direct messages with ${escapeHtml(bizName)}</li>
           </ul>
           <p style="font-size:13px;color:#85827B;">
-            The client portal on Ivy OS is always free.
+            The client portal on Ivy is always free.
             ${bookingHref ? `If you'd rather just book a session, use
               <a href="${bookingHref}" style="color:#2E3168;">${bookingHref}</a>.` : ''}
           </p>`,
         ctaText: 'Create my account',
         ctaUrl: signupHref,
-        footer: `Already have an Ivy OS account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> - we'll link you to ${escapeHtml(bizName)} automatically.`,
+        footer: `Already have an Ivy account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> - we'll link you to ${escapeHtml(bizName)} automatically.`,
       }),
     });
     } catch (sendErr) {

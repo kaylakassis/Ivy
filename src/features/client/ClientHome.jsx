@@ -48,7 +48,7 @@ export default function ClientHome() {
         </h2>
         <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
           {isClient
-            ? `${memberships.length} business${memberships.length === 1 ? '' : 'es'} on Ivy OS.`
+            ? `${memberships.length} business${memberships.length === 1 ? '' : 'es'} on Ivy.`
             : "You're not yet linked to any businesses."}
         </div>
       </div>
@@ -57,11 +57,11 @@ export default function ClientHome() {
         <div className="card" style={{ padding: 28, display: 'flex', flexDirection: 'column', gap: 16 }}>
           <EmptyNote icon="Users" title="No businesses yet"
             hint={user?.email_verified_at
-              ? `Once a business owner adds you as a client (or you book through their Ivy OS link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`
+              ? `Once a business owner adds you as a client (or you book through their Ivy link), they'll show up here. Make sure you signed up with the same email they have on file (${user?.email}).`
               : `If a business already added you, verify your email (${user?.email}) to link your account - businesses are matched to you by your verified email address. Check your inbox for the confirmation link, then refresh.`}/>
           <Link to="/me/discover" className="btn btn-primary"
             style={{ alignSelf: 'flex-start' }}>
-            <Icons.Globe size={13} sw={1.7}/> Browse businesses on Ivy OS
+            <Icons.Globe size={13} sw={1.7}/> Browse businesses on Ivy
           </Link>
         </div>
       )}
@@ -159,7 +159,7 @@ function FirstVisitWelcome() {
       </div>
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontSize: 15, fontWeight: 600, marginBottom: 4 }}>
-          Welcome to your Ivy OS portal
+          Welcome to your Ivy portal
         </div>
         <p style={{ margin: '0 0 10px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           This is your one place for everything across the businesses you

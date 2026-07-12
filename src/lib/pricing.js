@@ -1,4 +1,4 @@
-// Canonical Ivy OS pricing constants - the single source of truth shared
+// Canonical Ivy pricing constants - the single source of truth shared
 // by the marketing ROI calculator, the pricing page, and the in-app
 // paywall. Keeping them here (rather than inside a lazy-loaded marketing
 // component) means the always-loaded paywall can show the same numbers

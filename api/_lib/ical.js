@@ -1,5 +1,5 @@
 // iCalendar (RFC 5545) serializer. Just enough of the spec to emit a
-// subscribable feed of Ivy OS bookings - VCALENDAR + VEVENT, with RRULE
+// subscribable feed of Ivy bookings - VCALENDAR + VEVENT, with RRULE
 // for recurring bookings and EXDATE for cancelled occurrences.
 import { zonedTimeToUtcMs } from './tz.js';
 //
@@ -46,7 +46,7 @@ function escText(s) {
 
 function pad(n) { return String(n).padStart(2, '0'); }
 
-// Ivy OS booking times are the workspace's wall-clock time. When we know the
+// Ivy booking times are the workspace's wall-clock time. When we know the
 // workspace timezone, emit an absolute UTC instant ("…Z") so the event lands at
 // the right moment in whatever zone the recipient's calendar is set to. Without
 // a tz we fall back to FLOATING local time (no Z) — the legacy behavior, which
@@ -119,7 +119,7 @@ export function buildBookingInvite({
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Ivy OS//Booking invite//EN',
+    'PRODID:-//Ivy//Booking invite//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
     'BEGIN:VEVENT',
@@ -133,7 +133,7 @@ export function buildBookingInvite({
   ];
   if (locationAddress) lines.push(fold(`LOCATION:${escText(locationAddress)}`));
   if (url) lines.push(fold(`URL:${escText(url)}`));
-  lines.push(fold(`DESCRIPTION:${escText(description || 'Booked via Ivy OS.')}`));
+  lines.push(fold(`DESCRIPTION:${escText(description || 'Booked via Ivy.')}`));
   lines.push('END:VEVENT');
   lines.push('END:VCALENDAR');
   return lines.join('\r\n') + '\r\n';
@@ -145,11 +145,11 @@ export function buildICalFeed({ bizName, bookings, services, timezone }) {
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Ivy OS//Booking feed//EN',
+    'PRODID:-//Ivy//Booking feed//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    fold(`X-WR-CALNAME:${escText(`Bookings · ${bizName || 'Ivy OS'}`)}`),
-    fold(`X-WR-CALDESC:${escText('Read-only mirror of bookings managed in Ivy OS. Edits, reschedules, and cancellations happen in the Ivy OS app - this feed updates automatically.')}`),
+    fold(`X-WR-CALNAME:${escText(`Bookings · ${bizName || 'Ivy'}`)}`),
+    fold(`X-WR-CALDESC:${escText('Read-only mirror of bookings managed in Ivy. Edits, reschedules, and cancellations happen in the Ivy app - this feed updates automatically.')}`),
     'X-PUBLISHED-TTL:PT15M',
   ];
 
@@ -171,7 +171,7 @@ export function buildICalFeed({ bizName, bookings, services, timezone }) {
     lines.push(fold(`SUMMARY:${escText(summary)}`));
     lines.push('STATUS:CONFIRMED');
     lines.push('TRANSP:OPAQUE');
-    lines.push(fold(`DESCRIPTION:${escText('Manage in Ivy OS. Edits made in your calendar app will not sync back.')}`));
+    lines.push(fold(`DESCRIPTION:${escText('Manage in Ivy. Edits made in your calendar app will not sync back.')}`));
     if (rrule) lines.push(fold(`RRULE:${rrule}`));
     if (ex.length) lines.push(fold(`EXDATE;VALUE=DATE:${ex.join(',')}`));
     lines.push('END:VEVENT');

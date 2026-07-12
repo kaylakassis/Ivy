@@ -13,7 +13,7 @@
 //                        even when locked out of the app.
 //   • Log out          - escape that doesn't compromise the wall.
 //
-// isClient carve-out: an owner who's ALSO a client of another Ivy OS
+// isClient carve-out: an owner who's ALSO a client of another Ivy
 // business gets one labeled link "Go to {business} as a client" → /me.
 // Solo owners (isClient === false) get no /me link at all.
 //
@@ -30,7 +30,7 @@ import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUs
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
-// We deliberately do NOT fabricate star ratings or user counts (Ivy OS
+// We deliberately do NOT fabricate star ratings or user counts (Ivy
 // has no review corpus to quote); the stack-replacement savings is a
 // concrete claim we can stand behind.
 const MONTHLY_SAVINGS = Math.max(0, STACK_TOTAL - IVY_PRICE);
@@ -204,7 +204,7 @@ export default function Paywall({ ctx, onRefresh }) {
   };
 
   // Apple-required affordance: "Restore purchases" so a user who
-  // re-installs Ivy OS on a new device can recover their entitlements
+  // re-installs Ivy on a new device can recover their entitlements
   // without contacting support. Only shown in the iOS build.
   const restorePurchases = async () => {
     setBusy('restore'); setErr(null);
@@ -287,7 +287,7 @@ export default function Paywall({ ctx, onRefresh }) {
       }}>
         {/* ─── HERO BAND ─────────────────────────────────────────────
             Mirrors the top-earner format (bold icon + benefit headline
-            over a colored band) but uses Ivy OS's accent tint, so it
+            over a colored band) but uses Ivy's accent tint, so it
             reads on-brand in both Calm + Bold themes. */}
         <div style={{
           padding: '26px 28px 22px',

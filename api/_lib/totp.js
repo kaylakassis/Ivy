@@ -104,7 +104,7 @@ export function verifyTotp(secretBuf, code, { period = 30, drift = 1 } = {}) {
 // algorithm/digits/period are pinned to the defaults; including them
 // explicitly lets stricter apps (like Yubico Authenticator) accept
 // the URI without falling back to defaults that might mismatch ours.
-export function otpauthUrl({ secretBase32, label, issuer = 'Ivy OS' }) {
+export function otpauthUrl({ secretBase32, label, issuer = 'Ivy' }) {
   const encLabel = encodeURIComponent(`${issuer}:${label}`);
   const encIssuer = encodeURIComponent(issuer);
   return `otpauth://totp/${encLabel}?secret=${secretBase32}&issuer=${encIssuer}&algorithm=SHA1&digits=6&period=30`;

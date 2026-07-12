@@ -22,7 +22,7 @@ const BLOCKS = [
   },
   {
     kicker: 'The shape',
-    heading: "What Ivy OS actually is.",
+    heading: "What Ivy actually is.",
     paragraphs: [
       "One workspace where every part of the business lives. Bookings know about clients. Clients know about invoices. Invoices know about payments. Payments know about the AI coach. The coach knows about everything and can quietly nudge - \"Sarah hasn't booked in three weeks; want me to send a check-in?\"",
       "Every workspace is fully isolated. Your numbers, your messages, your clients are yours. The AI coach can only see your data - never anyone else's. You can export everything as JSON any time and walk away if it isn't working.",
@@ -32,15 +32,15 @@ const BLOCKS = [
     kicker: 'The shape (cont.)',
     heading: 'Built so the client portal is free, forever.',
     paragraphs: [
-      "Your clients shouldn't have to pay to interact with you. The portal - where they see their bookings, invoices, signed forms, and messages - is free for them and always will be. They sign up once and use the same portal across every business they work with on Ivy OS.",
-      `When Ivy OS charges, it charges the business owner only - one simple subscription after a ${TRIAL_DAYS}-day free trial. Early users get a meaningful discount locked in for life. No surprise bills, no rugpulls.`,
+      "Your clients shouldn't have to pay to interact with you. The portal - where they see their bookings, invoices, signed forms, and messages - is free for them and always will be. They sign up once and use the same portal across every business they work with on Ivy.",
+      `When Ivy charges, it charges the business owner only - one simple subscription after a ${TRIAL_DAYS}-day free trial. Early users get a meaningful discount locked in for life. No surprise bills, no rugpulls.`,
     ],
   },
   {
     kicker: 'The bet',
     heading: 'AI is a coach, not a chatbot.',
     paragraphs: [
-      "Ivy is built into Ivy OS because the coach matters more than the AI. She sees your real numbers - revenue this month, active clients, who's gone quiet, what's overdue - and answers in plain English with specific actions. Not \"consider engaging your top customers\" but \"send Sarah a check-in; she's 22 days quiet.\"",
+      "Ivy is built into Ivy because the coach matters more than the AI. She sees your real numbers - revenue this month, active clients, who's gone quiet, what's overdue - and answers in plain English with specific actions. Not \"consider engaging your top customers\" but \"send Sarah a check-in; she's 22 days quiet.\"",
       "She has tools. Tell her to draft a thank-you to a client who just paid and send it through the portal - she'll do all of it. The chat box is a deliberately small surface area for what's actually a working assistant.",
     ],
   },
@@ -48,7 +48,7 @@ const BLOCKS = [
     kicker: 'The team',
     heading: "Small, on purpose.",
     paragraphs: [
-      "Ivy OS is built by a business owner, for business owners. We answer support emails personally. We read every reply to every email we send. If you've used software where you couldn't reach a human and felt like your business was running someone else's roadmap, that's the opposite of what we want Ivy OS to be.",
+      "Ivy is built by a business owner, for business owners. We answer support emails personally. We read every reply to every email we send. If you've used software where you couldn't reach a human and felt like your business was running someone else's roadmap, that's the opposite of what we want Ivy to be.",
       "Find us in /account → Help → Contact support. Or reply to any email we send you. Every message hits a real inbox.",
     ],
   },
@@ -58,7 +58,7 @@ export default function AboutPage() {
   const [tweaks] = useTweaks();
 
   useEffect(() => {
-    document.title = 'About Ivy OS - the all-in-one business platform';
+    document.title = 'About Ivy - the all-in-one business platform';
     const upsert = (attr, key, value) => {
       let el = document.querySelector(`meta[${attr}="${key}"]`);
       if (!el) {
@@ -68,9 +68,9 @@ export default function AboutPage() {
       }
       el.setAttribute('content', value);
     };
-    upsert('name', 'description', "Why Ivy OS exists, what it actually is, and who's behind it. The all-in-one business platform for solo entrepreneurs.");
-    upsert('property', 'og:title', 'About Ivy OS');
-    upsert('property', 'og:description', "Why Ivy OS exists, what it actually is, and who's behind it.");
+    upsert('name', 'description', "Why Ivy exists, what it actually is, and who's behind it. The all-in-one business platform for solo entrepreneurs.");
+    upsert('property', 'og:title', 'About Ivy');
+    upsert('property', 'og:description', "Why Ivy exists, what it actually is, and who's behind it.");
   }, []);
 
   return (
@@ -86,7 +86,7 @@ export default function AboutPage() {
           margin: 0, fontSize: 17, color: 'var(--fg-2)', lineHeight: 1.6,
         }}>
           Most "all-in-one" tools are five mediocre ones bolted together with a
-          shared logo. Ivy OS is the opposite bet: one workspace where booking,
+          shared logo. Ivy is the opposite bet: one workspace where booking,
           invoicing, messaging, documents, and AI coaching share the same
           memory.
         </p>

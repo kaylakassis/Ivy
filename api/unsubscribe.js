@@ -1,7 +1,7 @@
 // GET/POST /api/unsubscribe?token=...
 //
 // Public, unauthenticated. Honors the List-Unsubscribe header that every
-// non-critical Ivy OS email carries — RFC 8058 one-click on POST (Gmail /
+// non-critical Ivy email carries — RFC 8058 one-click on POST (Gmail /
 // Apple Mail / Outlook inbox button), and a friendly confirmation page on
 // GET (link-click from inside the email body / footer).
 //
@@ -25,7 +25,7 @@ import { reportError } from './_lib/monitoring.js';
 const PAGE_OK = (label) => `<!doctype html>
 <html><head><meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Unsubscribed — Ivy OS</title>
+<title>Unsubscribed — Ivy</title>
 <style>
   body{margin:0;background:#0D0E0C;color:#F3F3EE;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,Arial,sans-serif;
        display:flex;align-items:center;justify-content:center;min-height:100vh;padding:20px;}
@@ -39,7 +39,7 @@ const PAGE_OK = (label) => `<!doctype html>
   <h1>You're unsubscribed</h1>
   <p>You won't receive any more ${label} from us.</p>
   <p>Changed your mind? <a href="${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications">Manage preferences</a>.</p>
-  <small>— Ivy OS</small>
+  <small>— Ivy</small>
 </div></body></html>`;
 
 const PAGE_BAD = `<!doctype html>

@@ -1,4 +1,4 @@
-// /me/discover - directory of Ivy OS businesses that have opted in to be
+// /me/discover - directory of Ivy businesses that have opted in to be
 // listed publicly. Filters compose server-side: category + price range +
 // service-name search + distance from the client's location are all
 // real DB queries (see /api/me/discover) so a search like "botox $10–50"
@@ -114,7 +114,7 @@ export default function ClientDiscover() {
           <span style={{ color: 'var(--muted)' }}>Book in two taps.</span>
         </h2>
         <p style={{ color: 'var(--fg-2)', fontSize: 15, maxWidth: 560, margin: 0, lineHeight: 1.5 }}>
-          Every business here runs on Ivy OS - appointments, payments, and
+          Every business here runs on Ivy - appointments, payments, and
           paperwork live in one place.
         </p>
       </div>

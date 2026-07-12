@@ -49,7 +49,7 @@ export default function AccountRecoverPage() {
           <>
             <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>Recovery link required</h1>
             <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-              Open the account-deletion email we sent you and click the <strong>Keep my account</strong> button to restore your Ivy OS account.
+              Open the account-deletion email we sent you and click the <strong>Keep my account</strong> button to restore your Ivy account.
             </p>
             <Link to="/" className="btn btn-outline" style={{ marginTop: 8 }}>
               Back to home
@@ -74,7 +74,7 @@ export default function AccountRecoverPage() {
               <Icons.Check size={20} sw={2}/> Welcome back
             </h1>
             <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-              Your Ivy OS account{restored?.email ? ` (${restored.email})` : ''} is restored. Your clients, bookings, invoices, and history are exactly where you left them.
+              Your Ivy account{restored?.email ? ` (${restored.email})` : ''} is restored. Your clients, bookings, invoices, and history are exactly where you left them.
             </p>
             <button type="button" className="btn btn-primary" onClick={() => nav('/', { replace: true })}>
               Go to my dashboard

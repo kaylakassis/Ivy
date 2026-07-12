@@ -147,7 +147,7 @@ function BrandMark({ direction, compact }) {
           <span style={{
             fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18,
             letterSpacing: '-0.01em', color: 'var(--sidebar-fg)',
-          }}>Ivy OS</span>
+          }}>Ivy</span>
           <span style={{
             fontSize: 10, color: 'var(--accent)', marginTop: 3,
             letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 600,

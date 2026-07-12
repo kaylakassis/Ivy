@@ -72,14 +72,14 @@ export default function PWAPrompts() {
     <div style={wrap}>
       {updateReg ? (
         <div className="card" style={banner} role="status">
-          <span style={text}>A new version of Ivy OS is ready.</span>
+          <span style={text}>A new version of Ivy is ready.</span>
           <button className="btn btn-primary" style={btn} onClick={() => applyUpdate(updateReg)}>
             Reload
           </button>
         </div>
       ) : showInstall ? (
         <div className="card" style={banner}>
-          <span style={text}>Install Ivy OS for a faster, full-screen app.</span>
+          <span style={text}>Install Ivy for a faster, full-screen app.</span>
           <span style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
             <button className="btn btn-outline" style={btn} onClick={dismissInstall}>Not now</button>
             <button className="btn btn-primary" style={btn} onClick={doInstall}>Install</button>
@@ -88,7 +88,7 @@ export default function PWAPrompts() {
       ) : showIos ? (
         <div className="card" style={banner}>
           <span style={text}>
-            Install Ivy OS: tap the Share icon{' '}
+            Install Ivy: tap the Share icon{' '}
             <span aria-hidden="true" style={{
               display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
               width: 15, height: 17, borderRadius: 3, border: '1.4px solid currentColor',

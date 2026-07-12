@@ -6,7 +6,7 @@
 // keeps the door open for per-workspace keys without surprises.
 //
 // `platformStripeSecret()` and `platformWebhookSecret()` resolve the
-// "Ivy OS's own Stripe account" credentials with a fallback chain so a
+// "Ivy's own Stripe account" credentials with a fallback chain so a
 // single Vercel-injected STRIPE_SECRET_KEY (from the Vercel Stripe
 // integration) covers every legacy variable name we used to read.
 import crypto from 'node:crypto';
@@ -53,7 +53,7 @@ export function platformWebhookSecret() {
     || process.env.IVY_STRIPE_WEBHOOK_SECRET
     || null;
 }
-// Ivy OS's own subscription webhook (/api/webhooks/billing) lives at a
+// Ivy's own subscription webhook (/api/webhooks/billing) lives at a
 // different Stripe endpoint URL than the Connect platform webhook
 // (/api/webhooks/stripe-platform). Stripe issues a separate signing
 // secret per endpoint, so the two cannot share STRIPE_WEBHOOK_SECRET.
@@ -300,7 +300,7 @@ export function verifyWebhookSignature({ payload, header, secret, tolerance = 30
   }
 }
 
-// ─── Subscription billing (Ivy OS itself charging workspace owners) ──
+// ─── Subscription billing (Ivy itself charging workspace owners) ──
 // These talk to *our* Stripe account, not the per-workspace one. Pass the
 // platform secret (process.env.IVY_STRIPE_SECRET).
 
@@ -355,7 +355,7 @@ export async function createWinbackCoupon({
     duration: 'repeating',
     duration_in_months: String(durationMonths),
     percent_off: String(percentOff),
-    name: `Ivy OS win-back ${percentOff}% / ${durationMonths}mo`,
+    name: `Ivy win-back ${percentOff}% / ${durationMonths}mo`,
     'metadata[workspace_id]': workspaceId,
     'metadata[kind]': 'winback',
   };
@@ -448,7 +448,7 @@ export async function applyCustomerCredit({ secretKey, customerId, amountCents, 
     body: {
       amount: -cents,            // negative = credit toward future invoices
       currency,
-      description: description || 'Ivy OS referral reward',
+      description: description || 'Ivy referral reward',
     },
   });
 }
@@ -663,7 +663,7 @@ export async function cancelSubscription({ secretKey, stripeAccount, subscriptio
 
 // Fetches a customer by id. Used by applySubscriptionState's reconcile
 // path to auto-provision a clients row when a Dashboard-originated
-// subscription arrives before the client has been seen in Ivy OS.
+// subscription arrives before the client has been seen in Ivy.
 export async function fetchStripeCustomer({ secretKey, stripeAccount, customerId }) {
   if (!customerId) throw new Error('customerId is required');
   return stripeFetch(`/customers/${encodeURIComponent(customerId)}`, { secretKey, stripeAccount });

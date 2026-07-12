@@ -17,7 +17,7 @@
 //     native StoreKit duration, so iOS matches the web plan exactly:
 //       ivyos_weekly   → $8.99 / week   (recurring plan; RC packageType WEEKLY)
 //       ivyos_yearly   → $375 / year
-//   • Both products live in the "Ivy OS" subscription group so users
+//   • Both products live in the "Ivy" subscription group so users
 //     can upgrade/downgrade between them and Apple proration applies.
 import { isIos } from './platform.js';
 

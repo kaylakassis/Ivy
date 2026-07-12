@@ -1,4 +1,4 @@
-// Server-side HTML renderer for published Ivy OS sites.
+// Server-side HTML renderer for published Ivy sites.
 //
 // What this gets us:
 //   1. <title> + <meta name="description"> + OG tags appear in the

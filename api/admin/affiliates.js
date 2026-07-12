@@ -132,7 +132,7 @@ async function uniqueCode() {
     const r = await sql`SELECT 1 FROM affiliates WHERE code = ${c}`;
     if (r.rows.length === 0) return c;
   }
-  return `Ivy OS-${Date.now().toString(36).toUpperCase()}`;
+  return `Ivy-${Date.now().toString(36).toUpperCase()}`;
 }
 function randomCode() {
   const a = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';

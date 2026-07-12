@@ -62,11 +62,11 @@ export default async function handler(req, res) {
         branding,
         body: `<p>Hi${firstName(client.name) ? ` ${escapeHtml(firstName(client.name))}` : ''},</p>
           <p>This is a quick reminder that <strong>${escapeHtml(bizName)}</strong> set you up with a
-          Ivy OS portal - it's where you'll see your bookings, invoices, and any messages from them.</p>
+          Ivy portal - it's where you'll see your bookings, invoices, and any messages from them.</p>
           <p>Create your free account (or sign in if you already have one) to get started.</p>`,
         ctaText: 'Create my account',
         ctaUrl: signupHref,
-        footer: `Already have an Ivy OS account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> - we'll link you to ${escapeHtml(bizName)} automatically.`,
+        footer: `Already have an Ivy account? <a href="${signinHref}" style="color:#2E3168;">Sign in instead</a> - we'll link you to ${escapeHtml(bizName)} automatically.`,
       }),
     });
 

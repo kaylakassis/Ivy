@@ -148,7 +148,7 @@ export function renderWeeklyRecap({ firstName: fnRaw, businessName, range, stats
           </p>`}`,
     ctaText: 'Open dashboard',
     ctaUrl: `${appUrl()}/`,
-    footer: `You're getting this as the owner of ${biz}. Don't want the weekly recap? Adjust your email preferences in <a href="${appUrl()}/account?tab=notifications" style="color:#CFFF50;text-decoration:underline;">Account → Notifications</a>. — The Ivy OS Team`,
+    footer: `You're getting this as the owner of ${biz}. Don't want the weekly recap? Adjust your email preferences in <a href="${appUrl()}/account?tab=notifications" style="color:#CFFF50;text-decoration:underline;">Account → Notifications</a>. — The Ivy Team`,
   });
   return {
     subject: `Your week at ${businessName || 'your business'}${rangeLabel ? ` · ${rangeLabel}` : ''}`,

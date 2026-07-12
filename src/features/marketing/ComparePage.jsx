@@ -20,9 +20,9 @@ export default function ComparePage() {
 
   useEffect(() => {
     if (!c) return;
-    document.title = `Ivy OS vs ${c.name} - switching guide`;
+    document.title = `Ivy vs ${c.name} - switching guide`;
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', `Switching from ${c.name} to Ivy OS? Side-by-side comparison, why solo owners switch, and a free data import. From $${IVY_PRICE}/week, AI included.`);
+    if (desc) desc.setAttribute('content', `Switching from ${c.name} to Ivy? Side-by-side comparison, why solo owners switch, and a free data import. From $${IVY_PRICE}/week, AI included.`);
   }, [c]);
 
   if (!c) return <Navigate to="/pricing" replace/>;
@@ -40,7 +40,7 @@ export default function ComparePage() {
             fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
             textTransform: 'uppercase', marginBottom: 16,
           }}>
-            Ivy OS vs {c.name}
+            Ivy vs {c.name}
           </div>
           <h1 style={{
             margin: 0, fontFamily: 'var(--font-display)',
@@ -110,7 +110,7 @@ export default function ComparePage() {
               <thead>
                 <tr style={{ background: 'var(--surface-2)' }}>
                   <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: 600, fontSize: 12, color: 'var(--muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>Capability</th>
-                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--accent)' }}>Ivy OS</th>
+                  <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600, color: 'var(--accent)' }}>Ivy</th>
                   <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 600 }}>{c.name}</th>
                 </tr>
               </thead>
@@ -156,7 +156,7 @@ export default function ComparePage() {
           </h2>
           <p style={{ margin: '10px 0 16px', color: 'var(--fg-2)', fontSize: 14.5, lineHeight: 1.6 }}>
             Export your client list, booking history, and invoices from {c.name} (or share read-only access),
-            and our team will import everything into your new Ivy OS workspace within a business day. No charge,
+            and our team will import everything into your new Ivy workspace within a business day. No charge,
             no catch.
           </p>
           <a href={`mailto:hello@getivyos.com?subject=${encodeURIComponent(`Switching from ${c.name}`)}`}

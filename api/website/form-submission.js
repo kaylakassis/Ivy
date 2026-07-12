@@ -1,7 +1,7 @@
 // POST /api/website/form-submission
 //
 // Public - no auth. Accepts contact form / newsletter submissions from
-// a published Ivy OS site, finds the owner's matching form destination
+// a published Ivy site, finds the owner's matching form destination
 // (email or webhook), and delivers. Every submission is also persisted
 // in `website_form_submissions` so owners see inbound traffic even when
 // the destination temporarily fails.

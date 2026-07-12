@@ -110,7 +110,7 @@ const TESTIMONIALS = [
 const FAQ = [
   {
     q: 'Do you take a cut of my payments?',
-    a: "No - we never touch your money. Payments go straight to your own Stripe account. The full toolkit (card on file, auto-charged deposits, late-cancel & no-show fees, tips) runs on Stripe. You just pay Stripe's standard fee; Ivy OS adds zero markup.",
+    a: "No - we never touch your money. Payments go straight to your own Stripe account. The full toolkit (card on file, auto-charged deposits, late-cancel & no-show fees, tips) runs on Stripe. You just pay Stripe's standard fee; Ivy adds zero markup.",
   },
   {
     q: 'Can I bring my existing clients in?',
@@ -118,11 +118,11 @@ const FAQ = [
   },
   {
     q: "What's pricing going to look like?",
-    a: `Start with a ${TRIAL_DAYS}-day free trial - $0 today, cancel anytime - then one simple subscription at $${IVY_PRICE} every week. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use Ivy OS.`,
+    a: `Start with a ${TRIAL_DAYS}-day free trial - $0 today, cancel anytime - then one simple subscription at $${IVY_PRICE} every week. No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life. The client portal is always free for clients - they never pay to use Ivy.`,
   },
   {
     q: 'Is there a mobile app?',
-    a: "Yes - Ivy OS is a Progressive Web App. Open the site on your phone, tap “Add to Home Screen”, and it behaves like a native app, including push notifications.",
+    a: "Yes - Ivy is a Progressive Web App. Open the site on your phone, tap “Add to Home Screen”, and it behaves like a native app, including push notifications.",
   },
   {
     q: 'Do you support SMS reminders?',
@@ -165,17 +165,17 @@ export default function MarketingHome() {
         else if (prev != null) el.setAttribute('content', prev);
       });
     };
-    document.title = 'Ivy OS - the all-in-one business platform for solo entrepreneurs';
+    document.title = 'Ivy - the all-in-one business platform for solo entrepreneurs';
     const desc = "Online booking, payments, a real website, client messaging, documents & e-sign, automations, reviews, and an AI that acts on your numbers - all in one workspace. Built for massage therapists, stylists, trainers, coaches, and anyone running a small business solo.";
     const url  = typeof window !== 'undefined' ? window.location.origin : 'https://getivyos.com';
     upsert('name', 'description',          desc);
-    upsert('property', 'og:title',         'Ivy OS - the all-in-one business platform');
+    upsert('property', 'og:title',         'Ivy - the all-in-one business platform');
     upsert('property', 'og:description',   desc);
     upsert('property', 'og:type',          'website');
     upsert('property', 'og:url',           url);
-    upsert('property', 'og:site_name',     'Ivy OS');
+    upsert('property', 'og:site_name',     'Ivy');
     upsert('name', 'twitter:card',         'summary_large_image');
-    upsert('name', 'twitter:title',        'Ivy OS - the business platform for solo entrepreneurs');
+    upsert('name', 'twitter:title',        'Ivy - the business platform for solo entrepreneurs');
     upsert('name', 'twitter:description',  desc);
     return () => cleanups.forEach((fn) => fn());
   }, []);
@@ -222,18 +222,18 @@ export default function MarketingHome() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Client audience view - what Ivy OS looks like for a client (the people
-// who book with / pay / message a business that runs on Ivy OS). Always
+// Client audience view - what Ivy looks like for a client (the people
+// who book with / pay / message a business that runs on Ivy). Always
 // free for them; one portal across every business they work with.
 // ──────────────────────────────────────────────────────────────────────
 
 const CLIENT_BENEFITS = [
-  { icon: 'Calendar', title: 'All your bookings in one place', body: "Every appointment with every business you work with on Ivy OS, on one calendar. Reschedule or cancel in a tap." },
+  { icon: 'Calendar', title: 'All your bookings in one place', body: "Every appointment with every business you work with on Ivy, on one calendar. Reschedule or cancel in a tap." },
   { icon: 'Dollar',   title: 'Pay + see every invoice',        body: 'Open invoices, paid receipts, and saved cards in one portal. No more digging through email for what you owe.' },
   { icon: 'Doc',      title: 'Sign documents fast',            body: 'Intake forms, waivers, agreements - review and e-sign from your phone, no printer required.' },
   { icon: 'Chat',     title: 'Message your providers',         body: 'A direct two-way thread with each business. Ask a question before you book, get reminders, keep the history.' },
   { icon: 'Bell',     title: 'Reminders so you never miss',    body: 'Automatic appointment reminders by email or text, set up by the businesses you book with.' },
-  { icon: 'Heart',    title: 'Always free for you',            body: 'Clients never pay to use Ivy OS. One login works across every business you visit - no per-business account.' },
+  { icon: 'Heart',    title: 'Always free for you',            body: 'Clients never pay to use Ivy. One login works across every business you visit - no per-business account.' },
 ];
 
 function ClientAudienceView() {
@@ -255,7 +255,7 @@ function ClientAudienceView() {
         <p style={{ margin: '20px auto 0', maxWidth: 600, fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)' }}>
           Bookings, payments, documents, and messages with all your providers in one
           place. You sign up once and use the same portal everywhere - and you never
-          pay to use Ivy OS.
+          pay to use Ivy.
         </p>
         <div style={{ display: 'flex', gap: 12, justifyContent: 'center', marginTop: 32, flexWrap: 'wrap' }}>
           <Link to="/signup?mode=client" className="btn btn-primary" style={{ padding: '14px 24px', fontSize: 15, gap: 10 }}>
@@ -298,11 +298,11 @@ function ClientAudienceView() {
             Run a business too?
           </h2>
           <p style={{ margin: '0 0 18px', fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.6 }}>
-            Ivy OS is also the all-in-one workspace for solo owners - booking,
+            Ivy is also the all-in-one workspace for solo owners - booking,
             invoicing, messaging, documents, and an AI coach in one place.
           </p>
           <Link to="/" className="btn btn-outline" style={{ padding: '12px 20px', fontSize: 14 }}>
-            See Ivy OS for owners <Icons.Arrow size={13} sw={2}/>
+            See Ivy for owners <Icons.Arrow size={13} sw={2}/>
           </Link>
         </div>
       </section>
@@ -373,7 +373,7 @@ function Brand() {
       <span style={{
         fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 19,
         letterSpacing: '-0.015em',
-      }}>Ivy OS</span>
+      }}>Ivy</span>
     </Link>
   );
 }
@@ -396,7 +396,7 @@ function Hero() {
         fontSize: 11.5, fontWeight: 600, letterSpacing: '0.04em',
         textTransform: 'uppercase', marginBottom: 24,
       }}>
-        <Icons.Spark size={12} sw={2}/> Native AI · only on Ivy OS
+        <Icons.Spark size={12} sw={2}/> Native AI · only on Ivy
       </div>
 
       <h1 className="page-title" style={{
@@ -526,7 +526,7 @@ function MockSidebar() {
         <span style={{
           fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 15,
           letterSpacing: '-0.01em',
-        }}>Ivy OS</span>
+        }}>Ivy</span>
       </div>
       {items.map((label, i) => (
         <div key={label} style={{
@@ -603,7 +603,7 @@ function MockRow({ primary, secondary }) {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// IvyHero - Ivy is Ivy OS's most defensible 2026 differentiator: an AI
+// IvyHero - Ivy is Ivy's most defensible 2026 differentiator: an AI
 // that doesn't just answer questions, it takes ACTIONS against the
 // owner's business (send invoice, message a quiet client, book a slot).
 // We promote it out of the 8-tile feature grid into its own band so
@@ -646,7 +646,7 @@ function IvyHero() {
             fontSize: 11, fontWeight: 600, letterSpacing: '0.06em',
             textTransform: 'uppercase', marginBottom: 14,
           }}>
-            Native AI · only on Ivy OS
+            Native AI · only on Ivy
           </div>
           <h2 style={{
             margin: 0, fontFamily: 'var(--font-display)',
@@ -813,7 +813,7 @@ function MobileBand() {
             Works on every device - including the one in your pocket.
           </h2>
           <p style={{ margin: '12px 0 0', color: 'var(--fg-2)', fontSize: 14.5, lineHeight: 1.6 }}>
-            Install Ivy OS as a phone app in two taps. Add a client between
+            Install Ivy as a phone app in two taps. Add a client between
             massages, send an invoice from a shoot, message a client from your
             car. No store download, no separate app.
           </p>
@@ -942,7 +942,7 @@ function Features() {
 // on long-tail queries like "booking software for massage therapists".
 // ──────────────────────────────────────────────────────────────────────
 
-// Wide list of service-business archetypes that Ivy OS actually fits.
+// Wide list of service-business archetypes that Ivy actually fits.
 // Don't trim aggressively - the whole point of this section is to
 // communicate "we are NOT limited to 5 verticals." Every entry is a
 // real type of solo service business that books, invoices, and
@@ -986,7 +986,7 @@ function BuiltFor() {
           fontSize: 15, lineHeight: 1.55, color: 'var(--fg-2)',
         }}>
           If you take appointments, send invoices, or manage clients -
-          Ivy OS fits. The same tool, every solo service business.
+          Ivy fits. The same tool, every solo service business.
         </p>
       </div>
 
@@ -1119,7 +1119,7 @@ function Testimonials() {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// What Ivy OS replaces. Job-to-be-done framing - names a category of
+// What Ivy replaces. Job-to-be-done framing - names a category of
 // tool ("your booking app", "your invoicing tool") rather than any
 // specific brand, so the page stays out of comparison-disparagement
 // territory and ages well as competitors come and go.
@@ -1149,7 +1149,7 @@ function Comparison() {
         </h2>
         <p style={{ margin: '10px auto 0', maxWidth: 580, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
           Most solo owners pay $15-$50 a month each for half a dozen
-          separate tools. Ivy OS rolls every job into one system that
+          separate tools. Ivy rolls every job into one system that
           actually talks to itself.
         </p>
       </div>
@@ -1261,7 +1261,7 @@ function FounderNote() {
           letterSpacing: '-0.015em',
         }}>
           Most "all-in-one" tools are five mediocre ones bolted together.
-          Ivy OS started because not only have I been through this myself, but
+          Ivy started because not only have I been through this myself, but
           I watched friends running solo businesses bleed hours a week to
           context-switching between booking, invoicing, messaging, and
           follow-up - and pay for the privilege. Or even worse, they didn't
@@ -1269,7 +1269,7 @@ function FounderNote() {
           respects your data and your time.
         </p>
         <div style={{ marginTop: 18, fontSize: 13, color: 'var(--fg-2)' }}>
-          - Kayla, founder of Ivy OS
+          - Kayla, founder of Ivy
         </div>
       </div>
     </section>
@@ -1394,7 +1394,7 @@ function Footer() {
         borderTop: '1px solid var(--border)',
         fontSize: 11, color: 'var(--muted-2)', textAlign: 'center',
       }}>
-        © {new Date().getFullYear()} Ivy OS.
+        © {new Date().getFullYear()} Ivy.
       </div>
     </footer>
   );

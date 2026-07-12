@@ -196,7 +196,7 @@ export default function ClientBilling() {
           <div className="card" style={{ padding: 32 }}>
             <EmptyNote icon="Heart"
               title="No memberships yet"
-              hint="Some businesses on Ivy OS offer monthly memberships - they'll show up on their booking page when they do."/>
+              hint="Some businesses on Ivy offer monthly memberships - they'll show up on their booking page when they do."/>
           </div>
         ) : (
           <div className="card" style={{ overflow: 'hidden' }}>

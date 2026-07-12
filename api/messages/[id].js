@@ -133,9 +133,9 @@ export default async function handler(req, res) {
       });
 
       // Email the client too. Critical for prospects who messaged
-      // through the public contact form before claiming an Ivy OS
+      // through the public contact form before claiming an Ivy
       // portal account - without this, owner replies would just sit
-      // in their Ivy OS inbox where the prospect can't see them.
+      // in their Ivy inbox where the prospect can't see them.
       // For clients with portal accounts the email also acts as a
       // backup channel (push may be disabled / dismissed).
       if (thread.client_email) {
@@ -158,7 +158,7 @@ export default async function handler(req, res) {
               body: `<p>Hi ${escapeHtml((thread.client_name || '').split(/\s+/)[0] || 'there')},</p>
                 <p><strong>${escapeHtml(branding.businessName || 'Your business')}</strong> sent you a message:</p>
                 <blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #C7BFA8;background:#F6F5F1;border-radius:6px;font-size:14px;line-height:1.55;color:#3F3D38;white-space:pre-wrap;">${escapeHtml(text)}</blockquote>
-                <p>You can reply by hitting Reply on this email${thread.client_user_id ? ' or by opening your Ivy OS portal' : ''}.</p>`,
+                <p>You can reply by hitting Reply on this email${thread.client_user_id ? ' or by opening your Ivy portal' : ''}.</p>`,
               ctaText: thread.client_user_id ? 'Open my portal' : 'Open in your portal',
               ctaUrl: portalUrl,
               footer: `Replying to this email reaches ${escapeHtml(branding.businessName || 'your business')} directly.`,

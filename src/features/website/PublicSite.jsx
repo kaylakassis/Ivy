@@ -49,7 +49,7 @@ export default function PublicSite({ byHost = false }) {
       const pageTitle = site.page?.title;
       document.title = pageTitle && pageTitle !== 'Home'
         ? `${pageTitle} · ${site.businessName || handle}`
-        : (site.businessName || `${handle} · Ivy OS`);
+        : (site.businessName || `${handle} · Ivy`);
     }
   }, [site, handle]);
 

@@ -288,7 +288,7 @@ export default async function handler(req, res) {
       const link = `${appUrl()}/verify-email?token=${encodeURIComponent(raw)}`;
       return sendEmail({
         to: emailKey,
-        subject: 'Confirm your email for Ivy OS',
+        subject: 'Confirm your email for Ivy',
         html: emailShell({
           heading: 'Confirm your email',
           body: `<p>${user.name ? `Hi ${escapeHtml(user.name)},` : 'Hi,'}</p>
@@ -296,7 +296,7 @@ export default async function handler(req, res) {
                  <p>This link expires in 24 hours.</p>`,
           ctaText: 'Confirm my email',
           ctaUrl: link,
-          footer: `If you didn't create an Ivy OS account, you can ignore this email.`,
+          footer: `If you didn't create an Ivy account, you can ignore this email.`,
         }),
       });
     });

@@ -67,7 +67,7 @@ export default function Referrals() {
     if (!data?.link || !navigator.share) return;
     try {
       await navigator.share({
-        title: 'Ivy OS',
+        title: 'Ivy',
         text: 'Run your whole business in one place. Use my link — we both get a free week.',
         url: data.link,
       });
@@ -82,7 +82,7 @@ export default function Referrals() {
       <div style={{ padding: 48 }}>
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Gift" title="Referrals unlock with your trial"
-            hint="Start your Ivy OS trial or subscribe and you can invite friends — you'll both get a free week." />
+            hint="Start your Ivy trial or subscribe and you can invite friends — you'll both get a free week." />
         </div>
       </div>
     );

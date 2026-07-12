@@ -1,7 +1,7 @@
 // GET /api/calendar/google/callback?code=...&state=...
 // OAuth redirect target. Verifies state against the cookie set by /connect,
 // exchanges the code for tokens, encrypts the refresh_token, creates a
-// dedicated "Ivy OS Bookings" calendar in the user's account, stores
+// dedicated "Ivy Bookings" calendar in the user's account, stores
 // everything on calendar_settings, and redirects back to /calendar with
 // a success/error flag.
 import { sql } from '../../_lib/db.js';
@@ -69,7 +69,7 @@ export default async function handler(req, res) {
       // If we can't create the dedicated calendar, fall back to the
       // user's primary so events still flow somewhere visible.
       // eslint-disable-next-line no-console
-      console.warn('[google] could not create Ivy OS calendar:', err.message);
+      console.warn('[google] could not create Ivy calendar:', err.message);
       calendarId = 'primary';
     }
 

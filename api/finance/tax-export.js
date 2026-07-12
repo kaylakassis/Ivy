@@ -106,7 +106,7 @@ export default async function handler(req, res) {
 
     // Build CSV.
     const lines = [];
-    lines.push(row(`Ivy OS - Tax export for ${bizName} - ${year}`));
+    lines.push(row(`Ivy - Tax export for ${bizName} - ${year}`));
     lines.push(row('Generated', new Date().toISOString()));
     lines.push('');
     lines.push(row('SUMMARY'));

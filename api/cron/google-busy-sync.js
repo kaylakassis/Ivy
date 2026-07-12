@@ -3,7 +3,7 @@
 // Google sync connected AND google_block_inbound enabled, mirroring
 // them into external_busy_blocks. The slot conflict check on the
 // public booking page consults those rows so a personal Google event
-// blocks the Ivy OS slot automatically.
+// blocks the Ivy slot automatically.
 //
 // Failures on individual workspaces are logged and stored on
 // google_inbound_last_error so the owner sees them in the SyncDrawer

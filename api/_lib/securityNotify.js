@@ -21,7 +21,7 @@ function escapeHtml(s) {
 function prettyDevice(ua = '') {
   const s = String(ua || '');
   if (!s) return 'an unknown device';
-  if (/Capacitor|IvyOS/i.test(s)) return 'the Ivy OS app';
+  if (/Capacitor|IvyOS/i.test(s)) return 'the Ivy app';
   let os = 'an unknown device';
   if (/iPhone|iPad|iPod|iOS/i.test(s)) os = 'iOS';
   else if (/Android/i.test(s)) os = 'Android';
@@ -62,26 +62,26 @@ export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, 
 
   let subject, preheader, heading, intro, decided;
   if (kind === 'new_signin') {
-    subject = 'New sign-in to your Ivy OS account';
+    subject = 'New sign-in to your Ivy account';
     preheader = 'Was this you?';
     heading = 'New sign-in to your account';
-    intro = `Your Ivy OS account was just signed into:`;
+    intro = `Your Ivy account was just signed into:`;
     decided = `<p><strong>If this was you, you're all set</strong> — no action needed.</p>
       <p>If you don't recognize this, secure your account right away by changing your password.</p>`;
   } else if (kind === 'password_changed') {
-    subject = 'Your Ivy OS password was changed';
+    subject = 'Your Ivy password was changed';
     preheader = `If this wasn't you, act now.`;
     heading = 'Your password was changed';
-    intro = `The password for your Ivy OS account was just changed:`;
+    intro = `The password for your Ivy account was just changed:`;
     decided = `<p><strong>If you made this change</strong>, no action is needed.</p>
       <p><strong>If you didn't</strong>, your account may be at risk. Reset your password immediately and contact us at <a href="mailto:${escapeHtml(supportAddr)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportAddr)}</a>.</p>`;
   } else if (kind === 'two_factor') {
     subject = enabled ? 'Two-factor authentication is on' : 'Two-factor authentication was turned off';
-    preheader = enabled ? 'Your Ivy OS account just got more secure.' : 'Your account is now protected by your password alone.';
+    preheader = enabled ? 'Your Ivy account just got more secure.' : 'Your account is now protected by your password alone.';
     heading = enabled ? 'Two-factor authentication is on' : 'Two-factor authentication was turned off';
     intro = enabled
-      ? `Two-factor authentication was turned on for your Ivy OS account. From now on, you'll confirm a code when you sign in — nice work locking things down.`
-      : `Two-factor authentication was turned off for your Ivy OS account. It is now protected by your password alone.`;
+      ? `Two-factor authentication was turned on for your Ivy account. From now on, you'll confirm a code when you sign in — nice work locking things down.`
+      : `Two-factor authentication was turned off for your Ivy account. It is now protected by your password alone.`;
     decided = `<p>If you didn't make this change, secure your account right away.</p>`;
   } else {
     return null;
@@ -102,7 +102,7 @@ export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, 
       ${decided}`,
     ctaText: kind === 'password_changed' ? 'Reset my password' : 'Review account security',
     ctaUrl: kind === 'password_changed' ? `${appUrl()}/forgot-password` : `${appUrl()}/account?tab=security`,
-    footer: `You're getting this because it affects your account's security. For your protection, these alerts can't be turned off. — The Ivy OS Team`,
+    footer: `You're getting this because it affects your account's security. For your protection, these alerts can't be turned off. — The Ivy Team`,
   });
   return { subject, html, preheader };
 }

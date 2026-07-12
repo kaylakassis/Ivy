@@ -53,7 +53,7 @@ export const TUTORIALS = {
     steps: [
       {
         title: 'Add your first client',
-        body: 'Tap "Add client" top-right. You only need a name to start; phone and email come highly recommended so you can text and email them through Ivy OS later.',
+        body: 'Tap "Add client" top-right. You only need a name to start; phone and email come highly recommended so you can text and email them through Ivy later.',
       },
       {
         title: 'Stages tell the story',
@@ -69,7 +69,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Import from anywhere',
-        body: "Got 50 clients in a spreadsheet? Tap Import (top-right) and drop a CSV. Ivy OS de-duplicates against existing emails so you don't double-add.",
+        body: "Got 50 clients in a spreadsheet? Tap Import (top-right) and drop a CSV. Ivy de-duplicates against existing emails so you don't double-add.",
       },
     ],
   },
@@ -116,7 +116,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Show up on Discover',
-        body: "Toggle 'List on Discover' inside Share. Clients in the Ivy OS marketplace can find you by service, price, distance, and rating. Free traffic.",
+        body: "Toggle 'List on Discover' inside Share. Clients in the Ivy marketplace can find you by service, price, distance, and rating. Free traffic.",
       },
     ],
   },
@@ -139,7 +139,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Recurring invoices',
-        body: 'Got a monthly retainer? Set up a recurring invoice once - Ivy OS auto-generates and sends it every cycle. Includes built-in failure handling and dunning if a card declines.',
+        body: 'Got a monthly retainer? Set up a recurring invoice once - Ivy auto-generates and sends it every cycle. Includes built-in failure handling and dunning if a card declines.',
       },
       {
         title: 'Track expenses for tax season',
@@ -200,7 +200,7 @@ export const TUTORIALS = {
     steps: [
       {
         title: 'Pick the rules that fit your business',
-        body: '"$5 off for every $100 spent." "Free service after 10 visits." "Referrer + new client both get $20 off." Toggle the rules that match how you already work; Ivy OS applies them automatically.',
+        body: '"$5 off for every $100 spent." "Free service after 10 visits." "Referrer + new client both get $20 off." Toggle the rules that match how you already work; Ivy applies them automatically.',
       },
       {
         title: 'Referrals track themselves',
@@ -288,11 +288,11 @@ export const TUTORIALS = {
 
   account: {
     title: 'Account',
-    intro: 'Your subscription, branding, team, integrations - everything that\'s about Ivy OS itself rather than your day-to-day work.',
+    intro: 'Your subscription, branding, team, integrations - everything that\'s about Ivy itself rather than your day-to-day work.',
     steps: [
       {
         title: 'Brand the experience',
-        body: 'Upload your logo and pick an accent color. Ivy OS re-skins every email, invoice, document, and booking page with that branding so clients see your business, not Ivy OS.',
+        body: 'Upload your logo and pick an accent color. Ivy re-skins every email, invoice, document, and booking page with that branding so clients see your business, not Ivy.',
       },
       {
         title: 'Manage your subscription',

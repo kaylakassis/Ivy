@@ -151,12 +151,12 @@ export default async function handler(req, res) {
           : `<p><strong>Changed your mind?</strong> Email <a href="mailto:${escapeText(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeText(supportEmail)}</a> before ${escapeText(finalDelete)} and we'll restore your account.</p>`;
         await sendEmail({
           to: userEmail,
-          subject: 'Your Ivy OS account deletion request',
+          subject: 'Your Ivy account deletion request',
           html: emailShell({
             heading: `Your account deletion request`,
             preheader: `Here's what happens — and how to cancel.`,
             body: `<p>Hi ${escapeText(fn)},</p>
-              <p>We've received your request to delete your Ivy OS account. Here's what happens next:</p>
+              <p>We've received your request to delete your Ivy account. Here's what happens next:</p>
               <ul style="padding-left:20px;margin:14px 0;">
                 <li>Your account is scheduled for permanent deletion on <strong>${escapeText(finalDelete)}</strong></li>
                 <li>Until then, it's deactivated but <strong>recoverable</strong></li>
@@ -166,7 +166,7 @@ export default async function handler(req, res) {
               <p>(Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>`,
             ctaText: recoverUrl ? 'Keep my account →' : undefined,
             ctaUrl:  recoverUrl || undefined,
-            footer: `Thanks for trying Ivy OS. If you have a moment, reply with what we could have done better. — The Ivy OS Team`,
+            footer: `Thanks for trying Ivy. If you have a moment, reply with what we could have done better. — The Ivy Team`,
           }),
         });
       } catch (mailErr) {

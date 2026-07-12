@@ -809,7 +809,7 @@ function NotificationsCard() {
           background: 'var(--surface-2)', color: 'var(--fg-2)',
         }}>
           This browser doesn't support push notifications. Try Chrome, Edge,
-          Firefox, or install Ivy OS to your home screen on iOS.
+          Firefox, or install Ivy to your home screen on iOS.
         </div>
       )}
 
@@ -820,7 +820,7 @@ function NotificationsCard() {
           color: 'var(--danger)',
         }}>
           Notifications are blocked for this site. Open your browser's site
-          settings, allow notifications for Ivy OS, and reload this page.
+          settings, allow notifications for Ivy, and reload this page.
         </div>
       )}
 
@@ -907,7 +907,7 @@ const PUSH_LABELS = {
   bookings:  { label: 'Booking alerts',  hint: 'Whether you GET notified about new bookings + session reminders. (How far ahead reminders fire is set per service in Calendar → Services.)' },
   documents: { label: 'Documents', hint: 'Documents to sign, signatures completed, overdue reminders.' },
   payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
-  support:   { label: 'Support',   hint: 'When Ivy OS Support replies to your conversation.' },
+  support:   { label: 'Support',   hint: 'When Ivy Support replies to your conversation.' },
   engagement: { label: 'Daily nudges', hint: 'Your morning briefing (today\'s sessions, unpaid invoices, quiet clients) and an evening reminder to keep your streak going.' },
 };
 const EMAIL_LABELS = {
@@ -1327,7 +1327,7 @@ function WalkthroughCard() {
         {seen ? 'Replay the walkthrough' : 'Take the walkthrough'}
       </h3>
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        A 1-minute tour through every section of Ivy OS. Doesn't touch any of
+        A 1-minute tour through every section of Ivy. Doesn't touch any of
         your data - start it any time you'd like a refresher.
       </p>
       <button onClick={replay} disabled={busy}
@@ -1341,7 +1341,7 @@ function WalkthroughCard() {
 // Branding: logo + accent color + email signature + business name.
 // Drives every client-facing email (invoices, documents, booking
 // reminders, etc.) so the recipient sees the OWNER'S brand instead of
-// Ivy OS's defaults. Saves field-by-field - no big "Save" button.
+// Ivy's defaults. Saves field-by-field - no big "Save" button.
 function BrandingCard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);

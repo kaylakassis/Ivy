@@ -63,7 +63,7 @@ export default function MobileDrawer({ direction, onClose }) {
             <div style={{
               fontFamily: 'var(--font-display)', fontWeight: 500, fontSize: 18,
               letterSpacing: '-0.01em', color: 'var(--sidebar-fg)',
-            }}>Ivy OS</div>
+            }}>Ivy</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
               {direction === 'bold' ? 'OS v2' : 'All-in-one for solopreneurs'}
             </div>

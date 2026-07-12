@@ -34,7 +34,7 @@ export default async function handler(req, res) {
     await recordAudit(req, { actor, action: 'admin.email_test', meta: { to } });
 
     const html = emailShell({
-      heading: 'Test email from Ivy OS',
+      heading: 'Test email from Ivy',
       body: `<p>If you're reading this in an inbox (not spam), your sending
         domain is configured correctly.</p>
         <p>Open the email's source / "show original" and confirm the
@@ -48,7 +48,7 @@ export default async function handler(req, res) {
 
     const result = await sendEmail({
       to,
-      subject: 'Ivy OS deliverability test',
+      subject: 'Ivy deliverability test',
       html,
     });
     return ok(res, { ok: true, id: result?.id || null });

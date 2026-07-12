@@ -1,9 +1,9 @@
 // Calendar Sync drawer - outbound iCal feed setup + Google Calendar
 // OAuth connect (richer two-way push integration).
 //
-// Both options keep Ivy OS as the source of truth: edits / cancels /
-// reschedules happen in the Ivy OS app, then propagate out. The Google
-// option additionally creates a dedicated "Ivy OS Bookings" calendar
+// Both options keep Ivy as the source of truth: edits / cancels /
+// reschedules happen in the Ivy app, then propagate out. The Google
+// option additionally creates a dedicated "Ivy Bookings" calendar
 // in the owner's Google account so events live in their own colour-
 // coded layer rather than mixing with personal events.
 import React, { useEffect, useState } from 'react';
@@ -72,7 +72,7 @@ export default function SyncDrawer({ onClose }) {
 
   return (
     <Drawer title="Calendar sync"
-      subtitle="Mirror your Ivy OS bookings into your personal calendar."
+      subtitle="Mirror your Ivy bookings into your personal calendar."
       onClose={onClose}>
 
       <GoogleSection/>
@@ -86,7 +86,7 @@ export default function SyncDrawer({ onClose }) {
       }}>
         Works with any calendar app that supports subscriptions. One-way
         only - edits, reschedules, and cancellations all happen here in
-        Ivy OS, then sync out within a few minutes.
+        Ivy, then sync out within a few minutes.
       </div>
 
       {status === null ? (
@@ -208,9 +208,9 @@ function GoogleSection() {
           <Icons.Globe size={13} sw={1.7}/> Google Calendar
         </div>
         <div style={{ fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5 }}>
-          Two-way push: bookings appear in a dedicated "Ivy OS Bookings"
+          Two-way push: bookings appear in a dedicated "Ivy Bookings"
           calendar in your Google account, updated within seconds when
-          you edit them in Ivy OS.
+          you edit them in Ivy.
         </div>
       </div>
 
@@ -314,7 +314,7 @@ function InboundToggle() {
           style={{ marginTop: 3 }}/>
         <div style={{ flex: 1, minWidth: 0 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>
-            Block Ivy OS slots from external events
+            Block Ivy slots from external events
           </div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.5 }}>
             We'll pull busy windows from your primary Google calendar every
@@ -386,7 +386,7 @@ function NotConnected({ busy, onGenerate, err }) {
     <>
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
         Generate a private feed URL. You'll paste it into your calendar
-        app once; from then on your Ivy OS bookings show up automatically.
+        app once; from then on your Ivy bookings show up automatically.
       </p>
 
       {err && <ErrorRow message={err}/>}

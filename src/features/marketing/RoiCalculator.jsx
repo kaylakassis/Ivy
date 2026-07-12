@@ -1,6 +1,6 @@
 // Interactive ROI calculator for the pricing page. Two sliders
 // (clients/month + admin hours/week) drive four always-positive
-// outputs: fixed tool savings (stack price minus Ivy OS), admin
+// outputs: fixed tool savings (stack price minus Ivy), admin
 // hours reclaimed, no-shows prevented, and the total monthly upside.
 //
 // Pure client-side math, no API. The dollar figures for each tool are
@@ -17,7 +17,7 @@ import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS } from '../../lib/pricin
 // Tunable assumptions, all deliberately conservative + cited in the
 // footnote so the calculator never feels like fantasy math.
 const BILLABLE_RATE = 75;     // $/hr - average solo service rate
-const ADMIN_AUTOMATED = 0.6;  // share of admin time Ivy OS automates
+const ADMIN_AUTOMATED = 0.6;  // share of admin time Ivy automates
 const NO_SHOW_RATE = 0.08;    // typical no-show rate without reminders
 
 export default function RoiCalculator() {
@@ -25,10 +25,10 @@ export default function RoiCalculator() {
   const [hours,   setHours]   = useState(8);
 
   const calc = useMemo(() => {
-    // 1. Tool savings - a FIXED, always-positive number: Ivy OS
+    // 1. Tool savings - a FIXED, always-positive number: Ivy
     //    replaces the whole stack (STACK_TOTAL, ~$153) for one price
     //    ($8.99). The old calculator let you drag your current spend
-    //    BELOW Ivy OS's price, which showed "$0 savings vs the stack"
+    //    BELOW Ivy's price, which showed "$0 savings vs the stack"
     //    - a contradiction. This is the honest, appealing framing.
     const toolSavings = Math.max(0, STACK_TOTAL - IVY_PRICE);
 
@@ -65,7 +65,7 @@ export default function RoiCalculator() {
           ROI calculator
         </div>
         <div style={{ fontSize: 20, fontWeight: 600, marginTop: 6 }}>
-          See what Ivy OS puts back in your pocket
+          See what Ivy puts back in your pocket
         </div>
         <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 4 }}>
           Move the two sliders. Numbers update live. No signup needed.
@@ -89,8 +89,8 @@ export default function RoiCalculator() {
       </div>
 
       <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Ivy OS is <strong>${IVY_PRICE}/week</strong>, and you start with a {TRIAL_DAYS}-day free trial ($0 today). The
-        math is deliberately conservative: a $75/hr billable rate, Ivy OS automating
+        Ivy is <strong>${IVY_PRICE}/week</strong>, and you start with a {TRIAL_DAYS}-day free trial ($0 today). The
+        math is deliberately conservative: a $75/hr billable rate, Ivy automating
         60% of your admin time, and an 8% no-show rate that reminders + card-on-file
         recover. Your real numbers are usually higher.
       </div>

@@ -698,7 +698,7 @@ function WelcomeStep({ user, businessType, setBusinessType }) {
         Welcome, {name}.
       </h1>
       <p style={{ color: 'var(--muted)', fontSize: 14.5, lineHeight: 1.6, maxWidth: 520, margin: '0 auto 22px' }}>
-        Let's set up Ivy OS for your business. First - what do you sell?
+        Let's set up Ivy for your business. First - what do you sell?
         We'll tailor the next steps based on your answer.
       </p>
 
@@ -1151,7 +1151,7 @@ function PaymentsStep({ stripeStatus }) {
             </div>
             {pending && (
               <div style={{ fontSize: 12.5, color: 'var(--warn)' }}>
-                Stripe is still verifying. You can keep setting up Ivy OS; charges work as soon as verification finishes.
+                Stripe is still verifying. You can keep setting up Ivy; charges work as soon as verification finishes.
               </div>
             )}
           </>
@@ -1349,7 +1349,7 @@ function WebsiteStep({ websiteStatus, websiteTemplate, setWebsiteTemplate }) {
       </div>
 
       <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
-        Skip if you already have a site — you can embed an Ivy OS booking widget onto it instead.
+        Skip if you already have a site — you can embed an Ivy booking widget onto it instead.
         Want to fine-tune sections, pages, colors right now? <a href="/website" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Open the full builder</a> (you can come back to finish onboarding any time).
       </div>
     </>
@@ -1560,7 +1560,7 @@ function AboutStep({ about, setAbout }) {
       />
 
       <ChoiceField
-        label="What are your goals with Ivy OS? *"
+        label="What are your goals with Ivy? *"
         hint="Pick all that apply."
         options={[
           { id: 'grow_revenue', label: 'Grow revenue' },
@@ -1716,13 +1716,13 @@ function Shell({ tweaks, children }) {
 // at the env var or Connect activation flow.
 const STRIPE_BOUNCE_MSGS = {
   connected:  { tone: 'ok',   title: 'Stripe is connected.',         body: 'You\'re ready to take cards. You can keep going with onboarding.' },
-  pending:    { tone: 'warn', title: 'Stripe is verifying your account', body: 'You can continue setting up Ivy OS. Charges work as soon as Stripe finishes verification.' },
+  pending:    { tone: 'warn', title: 'Stripe is verifying your account', body: 'You can continue setting up Ivy. Charges work as soon as Stripe finishes verification.' },
   incomplete: { tone: 'warn', title: 'Stripe form not finished',     body: 'You left the Stripe form before submitting. Click Connect Stripe again to resume - your account is saved.' },
   no_key:     { tone: 'err',  title: 'Stripe isn\'t configured yet', body: 'Your STRIPE_SECRET_KEY env var is missing. Skip this step for now - you can connect Stripe later from Finance.' },
   bad_key:    { tone: 'err',  title: 'Stripe rejected the API key',  body: 'The STRIPE_SECRET_KEY in Vercel isn\'t a valid Stripe secret key. Skip for now - you can connect later.' },
   connect_not_enabled: { tone: 'err', title: 'Stripe Connect isn\'t enabled', body: 'Visit dashboard.stripe.com/connect/accounts/overview and click "Get started", then come back. Skip for now if you want.' },
   wrong_mode: { tone: 'err',  title: 'Stripe mode mismatch',         body: 'A Stripe account from a different mode is saved. Open Finance after onboarding to disconnect + reconnect.' },
-  unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'Ivy OS currently only supports US Stripe accounts. Email hello@getivyos.com to enable your region.' },
+  unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'Ivy currently only supports US Stripe accounts. Email hello@getivyos.com to enable your region.' },
   error:      { tone: 'err',  title: 'Couldn\'t finish the Stripe step', body: 'Something went wrong. You can skip this and try again from Finance once you\'re in.' },
 };
 function StripeBounceBanner({ search, nav }) {

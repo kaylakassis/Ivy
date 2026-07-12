@@ -175,7 +175,7 @@ export default function PaymentProviderCard() {
         }}>
           <strong style={{ color: 'var(--fg-2)' }}>Provider parity:</strong> all three providers accept
           payments + refunds (including refunds you issue directly from
-          the Square/PayPal dashboard - Ivy OS picks them up via webhook).
+          the Square/PayPal dashboard - Ivy picks them up via webhook).
           Saved-card auto-charges (no-show / late-cancel fees) and
           recurring invoice subscriptions still only run through Stripe.
         </div>

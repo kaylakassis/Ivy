@@ -129,7 +129,7 @@ export default async function handler(req, res) {
       || process.env.IVY_STRIPE_WEBHOOK_SECRET || '';
     if (!stripeKey) {
       checks.push(check('stripe_key', 'STRIPE_SECRET_KEY', 'fail',
-        'Required: Ivy OS billing + Connect won\'t work without it.'));
+        'Required: Ivy billing + Connect won\'t work without it.'));
     } else {
       const mode = stripeKey.startsWith('sk_live_') ? 'LIVE' : 'TEST';
       checks.push(check('stripe_key', 'STRIPE_SECRET_KEY', mode === 'TEST' ? 'warn' : 'ok',

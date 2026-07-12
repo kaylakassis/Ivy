@@ -1,4 +1,4 @@
-// Timezone helpers (server). Ivy OS stores booking times as floating wall-clock
+// Timezone helpers (server). Ivy stores booking times as floating wall-clock
 // (a DATE + minutes-from-midnight) with the intended zone living in
 // calendar_settings.timezone. These convert between that wall-clock model and
 // absolute instants so "is this slot in the past" / "what is today" can be

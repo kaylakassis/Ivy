@@ -54,16 +54,16 @@ export function renderVerifyEmail({ firstName: fnRaw, link }) {
   const fn = escapeHtml(firstName(fnRaw));
   const url = link || `${appUrl()}/verify-email?token=PREVIEW_TOKEN_xxxxxxxx`;
   return {
-    subject: 'Confirm your email for Ivy OS',
+    subject: 'Confirm your email for Ivy',
     html: emailShell({
       heading: 'Confirm your email',
       preheader: 'Tap the button to verify your account.',
       body: `<p>Hi ${fn},</p>
-        <p>Welcome to Ivy OS! Tap the button below to verify your email and finish setting up your account.</p>
-        <p style="color:#8A8D85;font-size:12.5px;">This link expires in 24 hours. If you didn't sign up for Ivy OS, you can ignore this email.</p>`,
+        <p>Welcome to Ivy! Tap the button below to verify your email and finish setting up your account.</p>
+        <p style="color:#8A8D85;font-size:12.5px;">This link expires in 24 hours. If you didn't sign up for Ivy, you can ignore this email.</p>`,
       ctaText: 'Verify my email',
       ctaUrl: url,
-      footer: `Trouble with the button? Paste this link into your browser. — The Ivy OS Team`,
+      footer: `Trouble with the button? Paste this link into your browser. — The Ivy Team`,
     }),
   };
 }
@@ -72,16 +72,16 @@ export function renderPasswordReset({ firstName: fnRaw, link }) {
   const fn = escapeHtml(firstName(fnRaw));
   const url = link || `${appUrl()}/reset-password?token=PREVIEW_TOKEN_xxxxxxxx`;
   return {
-    subject: 'Reset your Ivy OS password',
+    subject: 'Reset your Ivy password',
     html: emailShell({
       heading: 'Reset your password',
       preheader: 'Tap the button to choose a new password.',
       body: `<p>Hi ${fn},</p>
-        <p>Someone (hopefully you) requested a password reset on your Ivy OS account. Tap the button to choose a new password.</p>
+        <p>Someone (hopefully you) requested a password reset on your Ivy account. Tap the button to choose a new password.</p>
         <p style="color:#8A8D85;font-size:12.5px;">This link expires in 1 hour. If you didn't request a reset, you can safely ignore this email — your password stays the same.</p>`,
       ctaText: 'Reset my password',
       ctaUrl: url,
-      footer: `For your security, links can only be used once. — The Ivy OS Team`,
+      footer: `For your security, links can only be used once. — The Ivy Team`,
     }),
   };
 }
@@ -92,12 +92,12 @@ export function renderAccountDeletionRequest({ firstName: fnRaw, finalDeleteDate
   const url = recoverUrl || `${appUrl()}/account-recover?token=PREVIEW_TOKEN_xxxxxxxx`;
   const date = fmtDate(finalDeleteDate || new Date(Date.now() + 30 * 86400000));
   return {
-    subject: 'Your Ivy OS account deletion request',
+    subject: 'Your Ivy account deletion request',
     html: emailShell({
       heading: 'Your account deletion request',
       preheader: `Here's what happens — and how to cancel.`,
       body: `<p>Hi ${fn},</p>
-        <p>We've received your request to delete your Ivy OS account. Here's what happens next:</p>
+        <p>We've received your request to delete your Ivy account. Here's what happens next:</p>
         <ul style="padding-left:20px;margin:14px 0;">
           <li>Your account is scheduled for permanent deletion on <strong>${escapeHtml(date)}</strong></li>
           <li>Until then, it's deactivated but <strong>recoverable</strong></li>
@@ -107,7 +107,7 @@ export function renderAccountDeletionRequest({ firstName: fnRaw, finalDeleteDate
         <p>(Businesses you were a client of keep their own records of your transactions with them, as they're required to.)</p>`,
       ctaText: 'Keep my account →',
       ctaUrl: url,
-      footer: `Thanks for trying Ivy OS. Questions? <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a>. — The Ivy OS Team`,
+      footer: `Thanks for trying Ivy. Questions? <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a>. — The Ivy Team`,
     }),
   };
 }
@@ -115,14 +115,14 @@ export function renderAccountDeletionRequest({ firstName: fnRaw, finalDeleteDate
 export function renderAccountRestored({ firstName: fnRaw }) {
   const fn = escapeHtml(firstName(fnRaw));
   return {
-    subject: 'Your Ivy OS account is restored',
+    subject: 'Your Ivy account is restored',
     html: emailShell({
       heading: 'Welcome back',
       preheader: `Your account and data are right where you left them.`,
       body: `<p>Hi ${fn},</p>
-        <p>Your Ivy OS account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them — nothing was lost during the recovery window.</p>
+        <p>Your Ivy account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them — nothing was lost during the recovery window.</p>
         <p>If you didn't restore your account, change your password right away.</p>`,
-      footer: `Glad you're back. — The Ivy OS Team`,
+      footer: `Glad you're back. — The Ivy Team`,
     }),
   };
 }
@@ -132,20 +132,20 @@ export function renderDataExportReady({ firstName: fnRaw, filename, sizeMb, atta
   const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
   const body = !attached
     ? `<p>Hi ${fn},</p>
-       <p>Your data export for your Ivy OS account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb || '24.5'} MB</strong>), so we couldn't attach it here.</p>
+       <p>Your data export for your Ivy account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb || '24.5'} MB</strong>), so we couldn't attach it here.</p>
        <p>You can download the complete file any time from <strong>Account → Your data → Download my data</strong>. It includes your clients, bookings, financials, and account records.</p>
        <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`
     : `<p>Hi ${fn},</p>
-       <p>Your data export for your Ivy OS account is ready. It's attached to this email as <strong>${escapeHtml(filename || 'ivy-export-2026-06-22.json')}</strong> (${sizeMb || '3.2'} MB of JSON) and includes your clients, bookings, financials, and account records.</p>
+       <p>Your data export for your Ivy account is ready. It's attached to this email as <strong>${escapeHtml(filename || 'ivy-export-2026-06-22.json')}</strong> (${sizeMb || '3.2'} MB of JSON) and includes your clients, bookings, financials, and account records.</p>
        <p>For your security, keep this file somewhere safe — it's a complete copy of your data.</p>
        <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`;
   return {
-    subject: 'Your Ivy OS data export is ready',
+    subject: 'Your Ivy data export is ready',
     html: emailShell({
       heading: 'Your data export is ready',
       preheader: attached === false ? 'Download instructions inside.' : 'Download attached.',
       body,
-      footer: `Requested from your account on ${new Date().toUTCString()}. — The Ivy OS Team`,
+      footer: `Requested from your account on ${new Date().toUTCString()}. — The Ivy Team`,
     }),
   };
 }
@@ -158,28 +158,28 @@ function renderAdminInvite({ kind, firstName: fnRaw, name }) {
   const fn = escapeHtml(firstName(fnRaw));
   const greet = name ? `Hi ${fn},` : 'Hi,';
   const subjects = {
-    sponsored:        "You've got a sponsored Ivy OS account",
-    beta:             "You're invited to the Ivy OS beta",
-    affiliate:        "Welcome to the Ivy OS affiliate program",
-    'business-trial': "Your Ivy OS account is ready - 14-day trial activated",
-    'business-active':"Your Ivy OS account is ready",
-    regular:          'Welcome to Ivy OS',
+    sponsored:        "You've got a sponsored Ivy account",
+    beta:             "You're invited to the Ivy beta",
+    affiliate:        "Welcome to the Ivy affiliate program",
+    'business-trial': "Your Ivy account is ready - 14-day trial activated",
+    'business-active':"Your Ivy account is ready",
+    regular:          'Welcome to Ivy',
   };
   const bodies = {
     sponsored: `<p>${greet}</p>
-      <p>You've been given full access to Ivy OS - no subscription needed. Treat it like the paid version: the calendar, clients, invoicing, AI coach, all of it. Set your password below and you're in.</p>`,
+      <p>You've been given full access to Ivy - no subscription needed. Treat it like the paid version: the calendar, clients, invoicing, AI coach, all of it. Set your password below and you're in.</p>`,
     beta: `<p>${greet}</p>
-      <p>You've been invited to the <strong>Ivy OS beta</strong> — early access to the full app with no subscription and no card needed. You get the same toolset paying customers do (clients, calendar, invoicing, documents, messaging, Ivy your AI coach, the whole thing), free for the duration of the beta.</p>
-      <p>In return, we'd love your honest feedback as you use it — what works, what's broken, what's missing. Just reply to any Ivy OS email and it reaches a real person.</p>
+      <p>You've been invited to the <strong>Ivy beta</strong> — early access to the full app with no subscription and no card needed. You get the same toolset paying customers do (clients, calendar, invoicing, documents, messaging, Ivy your AI coach, the whole thing), free for the duration of the beta.</p>
+      <p>In return, we'd love your honest feedback as you use it — what works, what's broken, what's missing. Just reply to any Ivy email and it reaches a real person.</p>
       <p>Set your password below to get started.</p>`,
     affiliate: `<p>${greet}</p>
-      <p>Welcome to the Ivy OS affiliate program. You've got a referral code that earns you credit on every business that signs up through it. Set your password and the code will be waiting for you in your account.</p>`,
+      <p>Welcome to the Ivy affiliate program. You've got a referral code that earns you credit on every business that signs up through it. Set your password and the code will be waiting for you in your account.</p>`,
     'business-trial': `<p>${greet}</p>
-      <p>Your Ivy OS account is set up. You're on a 14-day full-access trial - long enough to actually run a couple weeks of bookings and see if the numbers move. Set your password to get in.</p>`,
+      <p>Your Ivy account is set up. You're on a 14-day full-access trial - long enough to actually run a couple weeks of bookings and see if the numbers move. Set your password to get in.</p>`,
     'business-active': `<p>${greet}</p>
-      <p>Your Ivy OS account is set up and active. Pick a password below and you're ready to use the app.</p>`,
+      <p>Your Ivy account is set up and active. Pick a password below and you're ready to use the app.</p>`,
     regular: `<p>${greet}</p>
-      <p>Welcome to Ivy OS. Set your password to start using the app.</p>`,
+      <p>Welcome to Ivy. Set your password to start using the app.</p>`,
   };
   return {
     subject: subjects[kind] || subjects.regular,
@@ -424,13 +424,13 @@ export function renderReviewRequest({ clientName, businessName, serviceName, bra
 
 export function renderAdminDeliverabilityTest() {
   return {
-    subject: 'Ivy OS deliverability test',
+    subject: 'Ivy deliverability test',
     html: emailShell({
       heading: 'Deliverability test',
-      body: `<p>This is a deliverability test from Ivy OS at <strong>${new Date().toUTCString()}</strong>.</p>
+      body: `<p>This is a deliverability test from Ivy at <strong>${new Date().toUTCString()}</strong>.</p>
         <p>If you're reading this in your inbox (not Spam), your Resend domain is configured correctly: SPF, DKIM, and DMARC are passing and the From address is verified.</p>
         <p>If this landed in Spam, check Resend → Domains and make sure every DNS record is green.</p>`,
-      footer: `Sent from the admin Settings card. — Ivy OS`,
+      footer: `Sent from the admin Settings card. — Ivy`,
     }),
   };
 }

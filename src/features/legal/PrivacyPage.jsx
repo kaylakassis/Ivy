@@ -15,7 +15,7 @@ export default function PrivacyPage() {
   return (
     <LegalPage title="Privacy Policy" lastUpdated="May 25, 2026">
       <P><strong>Effective version: {PRIVACY_VERSION}.</strong>
-        This Privacy Policy explains what information Ivy OS ("we", "us", "the
+        This Privacy Policy explains what information Ivy ("we", "us", "the
         Service") collects from you, how we use it, and what choices you have.
         If anything here is unclear, please email us at{' '}
         <a href="mailto:privacy@getivyos.com" style={{ color: 'var(--accent)' }}>privacy@getivyos.com</a>.
@@ -39,7 +39,7 @@ export default function PrivacyPage() {
         platform, and similar metrics. This includes per-account usage
         data (which features you touch, how often, and broad outcomes
         like "client booked" / "invoice paid") so we can improve
-        Ivy OS, prioritize features, and inform our marketing and
+        Ivy, prioritize features, and inform our marketing and
         growth efforts.</P>
       <P><strong>What we will never do.</strong> We do not sell, rent,
         or trade your personal information or your business data to
@@ -75,7 +75,7 @@ export default function PrivacyPage() {
         <li><strong>Neon</strong> - hosts the Postgres database where your workspace data lives.</li>
         <li><strong>Resend</strong> - sends transactional email on our behalf.</li>
         <li><strong>Anthropic</strong> - processes your messages to Ivy and returns AI replies.</li>
-        <li><strong>Stripe</strong> - processes any payments you or your clients make through Ivy OS (when enabled).</li>
+        <li><strong>Stripe</strong> - processes any payments you or your clients make through Ivy (when enabled).</li>
       </UL>
       <P>Each of these is a contracted sub-processor under their own privacy
         terms. We do not share data with anyone else, and we do not sell data.</P>
@@ -122,7 +122,7 @@ export default function PrivacyPage() {
         viewing are SHA-256 hashed before being stored.</P>
 
       <H2>Children</H2>
-      <P>Ivy OS is not directed to children under 16. If you believe we have
+      <P>Ivy is not directed to children under 16. If you believe we have
         collected information from a child, please email us and we will delete
         it.</P>
 

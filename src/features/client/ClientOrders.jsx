@@ -35,13 +35,13 @@ export default function ClientOrders() {
     <div className="container" style={{ maxWidth: 760, padding: '28px 18px 64px' }}>
       <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 28, margin: '0 0 4px' }}>Orders</h1>
       <p style={{ color: 'var(--muted)', fontSize: 13.5, marginTop: 0, marginBottom: 18, lineHeight: 1.55 }}>
-        Things you've bought from businesses on Ivy OS.
+        Things you've bought from businesses on Ivy.
       </p>
 
       {orders.length === 0 ? (
         <div className="card" style={{ padding: 36 }}>
           <EmptyNote icon="Gift" title="No orders yet"
-            hint="When you buy something from a business on Ivy OS, it'll show up here."/>
+            hint="When you buy something from a business on Ivy, it'll show up here."/>
         </div>
       ) : (
         <div className="card" style={{ overflow: 'hidden' }}>

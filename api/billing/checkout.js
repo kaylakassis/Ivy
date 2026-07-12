@@ -1,5 +1,5 @@
 // POST /api/billing/checkout
-// Creates a Stripe Checkout Session for the Ivy OS subscription and returns
+// Creates a Stripe Checkout Session for the Ivy subscription and returns
 // its URL. Frontend redirects there; on success Stripe redirects back to
 // /?subscribed=1 and the webhook + sync endpoint together flip the
 // workspace's subscription_status to active.

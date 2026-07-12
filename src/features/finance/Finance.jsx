@@ -591,7 +591,7 @@ const STRIPE_ERRORS = {
   },
   unsupported_country: {
     title: 'Stripe rejected the account country',
-    body: 'Ivy OS currently only supports US accounts. If you\'re outside the US, email hello@getivyos.com and we\'ll enable your region.',
+    body: 'Ivy currently only supports US accounts. If you\'re outside the US, email hello@getivyos.com and we\'ll enable your region.',
   },
   unknown: {
     title: 'Couldn\'t start the Stripe connection',

@@ -109,7 +109,7 @@ async function handler(req, res) {
           const html = emailShell({
             heading: "You're one step from taking bookings",
             body: `<p>Hi ${fn},</p>
-              <p>Your Ivy OS account is set up, but there's one thing left before your
+              <p>Your Ivy account is set up, but there's one thing left before your
               booking page can take a booking: <strong>${escapeHtml(miss.label)}</strong>.</p>
               <p>It takes about a minute, and Ivy can help you do it.</p>`,
             ctaText: 'Finish setup',

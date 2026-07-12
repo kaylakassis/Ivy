@@ -148,7 +148,7 @@ export default function PublicInvoice() {
         </div>
         <div style={{ textAlign: 'right' }}>
           <div className="metric-label" style={{ fontSize: 10 }}>From</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{inv.business?.name || 'An Ivy OS business'}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{inv.business?.name || 'An Ivy business'}</div>
         </div>
         {/* Print / Save-as-PDF: triggers the browser's native print
             dialog. On every modern browser "Save as PDF" is a

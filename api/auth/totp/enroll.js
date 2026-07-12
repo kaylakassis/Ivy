@@ -2,7 +2,7 @@
 //
 // First half of two-factor setup. Generates + saves a TOTP secret
 // (encrypted), generates 10 backup recovery codes (stored hashed),
-// and returns everything the owner needs to add Ivy OS to their
+// and returns everything the owner needs to add Ivy to their
 // authenticator app: the otpauth:// URI (scan as QR via any client-
 // side QR lib OR paste into 1Password), the base32 secret (for
 // manual entry), and the plaintext backup codes (shown ONCE - the
@@ -71,7 +71,7 @@ export default async function handler(req, res) {
 
     return ok(res, {
       // Display label for the authenticator app - shows up under
-      // 'Ivy OS:' with the user's email.
+      // 'Ivy:' with the user's email.
       secret: secretBase32,
       otpauth: otpauthUrl({ secretBase32, label: user.email }),
       backupCodes,

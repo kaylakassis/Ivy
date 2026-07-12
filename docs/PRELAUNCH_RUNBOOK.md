@@ -1,4 +1,4 @@
-# Ivy OS — Pre-launch operator runbook
+# Ivy — Pre-launch operator runbook
 
 Step-by-step for the dashboard/portal tasks that *only you can do* — the
 code-side scaling cliffs are already closed (commit `044bdfa`). After
@@ -48,7 +48,7 @@ never auto-mark-paid.
 2. Click **"+ Add endpoint"**.
 3. Fill in:
    - **Endpoint URL:** `https://getivyos.com/api/webhooks/stripe`
-   - **Description:** `Ivy OS Connect — client payments`
+   - **Description:** `Ivy Connect — client payments`
    - **Events to send:** click "Select events" and check:
      - `charge.succeeded`
      - `charge.refunded`
@@ -71,7 +71,7 @@ never auto-mark-paid.
 
 ## 3. Stripe **platform billing** webhook — `IVY_BILLING_WEBHOOK_SECRET` (5 min)
 
-**Why:** When *you* charge a business owner for their Ivy OS subscription,
+**Why:** When *you* charge a business owner for their Ivy subscription,
 Stripe pings `/api/webhooks/billing`. This is your platform account, NOT
 Connect. The separate endpoint + secret means subscription events don't
 leak across Connect events.
@@ -81,7 +81,7 @@ leak across Connect events.
 1. **Stripe Dashboard** → **Developers** → **Webhooks** → **"+ Add endpoint"**.
 2. Fill in:
    - **Endpoint URL:** `https://getivyos.com/api/webhooks/billing`
-   - **Description:** `Ivy OS platform billing`
+   - **Description:** `Ivy platform billing`
    - **Events to send:**
      - `checkout.session.completed`
      - `customer.subscription.created`
@@ -111,11 +111,11 @@ They cross-check against your privacy policy text.
 
 **Steps:**
 
-1. Open **App Store Connect** → **My Apps** → your Ivy OS app.
+1. Open **App Store Connect** → **My Apps** → your Ivy app.
 2. Left sidebar → **App Privacy**.
 3. **Privacy Policy URL:** `https://getivyos.com/privacy`.
 4. Click **Get Started** under "Data Types" — declare each category we
-   actually collect (Ivy OS does collect these):
+   actually collect (Ivy does collect these):
 
    | Category | Sub-types | Used for | Linked to user? | Tracking? |
    |---|---|---|---|---|
@@ -153,13 +153,13 @@ just needs the products and the intro offer set up.
 1. **App Store Connect** → your app → **Monetization** → **Subscriptions**.
 2. Click **"+"** next to "Subscription Groups" → name it `ivyos` → **Create**.
 3. Inside the group, click **"+"** to add the first product:
-   - **Reference Name:** `Ivy OS — Weekly`
+   - **Reference Name:** `Ivy — Weekly`
    - **Product ID:** **exactly** `ivyos_weekly` (matches the code).
 4. Click **Create** → fill in:
    - **Subscription Duration:** 1 Week
    - **Subscription Prices:** $8.99 USD (and any other currencies)
    - **Localizations:** add at least English:
-     - **Display Name:** `Ivy OS Pro`
+     - **Display Name:** `Ivy Pro`
      - **Description:** `The all-in-one business OS for solo entrepreneurs. Clients, calendar, invoicing, AI coach, all in one workspace.`
 5. **Introductory Offers** (this is the 14-day free trial):
    - Click **"+"** under "Introductory Offers"

@@ -99,7 +99,7 @@ export default async function handler(req, res) {
         return res.status(400).json({ error: 'workspace mismatch' });
       }
       // No metadata.purpose gate: applySubscriptionState resolves both
-      // Ivy OS-originated and Stripe-Dashboard-originated subs by
+      // Ivy-originated and Stripe-Dashboard-originated subs by
       // matching customer + price. Subs that don't map are returned
       // as 'race' / 'mismatch' and quietly dropped. stripeContext lets
       // applySubscriptionState fetch unknown customers and auto-
@@ -403,7 +403,7 @@ export default async function handler(req, res) {
                 <p style="font-size:12px;color:#85827B;margin-top:18px;">Apply it on your booking page during checkout. Save this email - the code is shown only here.</p>`,
               ctaText: 'Visit booking page',
               ctaUrl: `${process.env.APP_URL || ''}`,
-              footer: `Sent by ${escapeHtml(branding.businessName || 'an Ivy OS business')}.`,
+              footer: `Sent by ${escapeHtml(branding.businessName || 'an Ivy business')}.`,
               branding,
             }),
           });

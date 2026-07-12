@@ -1011,7 +1011,7 @@ function ServiceLogEntry({ entry }) {
 // fresh leads who have no bookings to roll up.
 // Portal-claim status + resend-invite button. Visible only on the
 // owner-side ClientDrawer when the client has an email but hasn't
-// finished claiming their Ivy OS portal account. One-click resend
+// finished claiming their Ivy portal account. One-click resend
 // hits /api/clients/:id/resend-invite which bypasses the
 // idempotency guard on the normal invite path.
 function PortalInviteRow({ client }) {

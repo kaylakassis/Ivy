@@ -22,7 +22,7 @@ import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS, IVY_PRICE_ANNUAL, ANNUA
 // deliberately don't sell team / multi-location tiers yet because they
 // aren't supported - one honest plan beats three aspirational ones.
 const PLAN = {
-  name: 'Ivy OS',
+  name: 'Ivy',
   sub: 'Everything to run your business, in one place.',
   priceBeta: `${TRIAL_DAYS} days free`,
   priceGA: `$${IVY_PRICE} / week`,
@@ -50,12 +50,12 @@ const PLAN = {
 
 const FAQ = [
   {
-    q: 'How much does Ivy OS cost?',
+    q: 'How much does Ivy cost?',
     a: `One simple subscription after your ${TRIAL_DAYS}-day free trial: $${IVY_PRICE}/week, or $${IVY_PRICE_ANNUAL}/yr billed annually (save about ${ANNUAL_SAVINGS_PCT}%). No per-seat math, no transaction fees. Early users get a meaningful discount locked in for life.`,
   },
   {
     q: 'Do you take a cut of my payments?',
-    a: "No. Ever. Stripe is your processor (you connect your own account); we never touch your money. You pay Stripe's standard ~2.9%+30¢ - same as on Stripe directly. Ivy OS adds zero markup.",
+    a: "No. Ever. Stripe is your processor (you connect your own account); we never touch your money. You pay Stripe's standard ~2.9%+30¢ - same as on Stripe directly. Ivy adds zero markup.",
   },
   {
     q: 'Per-client or per-seat fees?',
@@ -81,7 +81,7 @@ const FAQ = [
 
 export default function PricingPage() {
   useEffect(() => {
-    document.title = 'Pricing - Ivy OS';
+    document.title = 'Pricing - Ivy';
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content', `One subscription. Every tool you'd otherwise piece together. ${TRIAL_DAYS}-day free trial, $0 today. Then $${IVY_PRICE} every week.`);
   }, []);
@@ -191,7 +191,7 @@ export default function PricingPage() {
             Save $100+/mo on average — replace ${STACK_TOTAL}/mo of stitched-together SaaS
           </h2>
           <p style={{ margin: '0 0 24px', color: 'var(--fg-2)', fontSize: 15 }}>
-            The tools most solo businesses end up running in parallel. Ivy OS
+            The tools most solo businesses end up running in parallel. Ivy
             does each of these - and then makes them talk to each other so the
             booking → invoice → message → follow-up is one fluid motion.
           </p>

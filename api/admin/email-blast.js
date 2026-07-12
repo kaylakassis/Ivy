@@ -94,7 +94,7 @@ export default async function handler(req, res) {
     const html = emailShell({
       heading: heading || subject,
       body: htmlIn,
-      footer: `Sent from Ivy OS. Reply to this email and we'll see it.`,
+      footer: `Sent from Ivy. Reply to this email and we'll see it.`,
     });
 
     // Batched parallel sends. Serial at 200ms/email × 2000 = 400s,

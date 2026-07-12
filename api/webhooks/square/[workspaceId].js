@@ -185,11 +185,11 @@ async function applyPaymentToInvoice({ workspaceId, parsed }) {
 }
 
 // Apply a Square refund event to the matching invoice. Triggers:
-//   - Owner clicks Refund in Ivy OS → /api/invoices/refund calls Square →
+//   - Owner clicks Refund in Ivy → /api/invoices/refund calls Square →
 //     Square responds PENDING → eventual refund.updated webhook with
 //     COMPLETED arrives here. We bump refunded_amount + activity entry.
 //   - Owner refunds directly in Square dashboard → same webhook → same
-//     code path. Without this, the invoice stays 'paid' in Ivy OS while
+//     code path. Without this, the invoice stays 'paid' in Ivy while
 //     the customer's money is back. Status flips to 'refunded' when the
 //     cumulative refund amount reaches the invoice total.
 //

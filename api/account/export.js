@@ -78,11 +78,11 @@ async function emailCopy(req, res) {
     const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
     const body = tooBig
       ? `<p>Hi ${fn},</p>
-         <p>Your data export for your Ivy OS account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb} MB</strong>), so we couldn't attach it here.</p>
+         <p>Your data export for your Ivy account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb} MB</strong>), so we couldn't attach it here.</p>
          <p>You can download the complete file any time from <strong>Account → Your data → Download my data</strong>. It includes your clients, bookings, financials, and account records.</p>
          <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`
       : `<p>Hi ${fn},</p>
-         <p>Your data export for your Ivy OS account is ready. It's attached to this email as <strong>${escapeHtml(filename)}</strong> (${sizeMb} MB of JSON) and includes your clients, bookings, financials, and account records.</p>
+         <p>Your data export for your Ivy account is ready. It's attached to this email as <strong>${escapeHtml(filename)}</strong> (${sizeMb} MB of JSON) and includes your clients, bookings, financials, and account records.</p>
          <p>For your security, keep this file somewhere safe — it's a complete copy of your data.</p>
          <p>Didn't request this? Email <a href="mailto:${escapeHtml(supportEmail)}" style="color:#CFFF50;text-decoration:underline;">${escapeHtml(supportEmail)}</a> right away.</p>`;
 
@@ -90,12 +90,12 @@ async function emailCopy(req, res) {
       heading: 'Your data export is ready',
       preheader: tooBig ? 'Download instructions inside.' : 'Download attached.',
       body,
-      footer: `Requested from your account on ${new Date().toUTCString()}. — The Ivy OS Team`,
+      footer: `Requested from your account on ${new Date().toUTCString()}. — The Ivy Team`,
     });
 
     await sendEmail({
       to: user.email,
-      subject: tooBig ? 'Your Ivy OS data export is ready' : 'Your Ivy OS data export is ready',
+      subject: tooBig ? 'Your Ivy data export is ready' : 'Your Ivy data export is ready',
       html,
       timeoutMs: 20000,
       attachments: tooBig ? undefined : [{

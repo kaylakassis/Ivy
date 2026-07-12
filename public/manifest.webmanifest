@@ -1,7 +1,7 @@
 {
-  "name": "Ivy OS",
-  "short_name": "Ivy OS",
-  "description": "Business OS - bookings, clients, invoices, and AI coaching in one place.",
+  "name": "Ivy",
+  "short_name": "Ivy",
+  "description": "The all-in-one business platform for solopreneurs - bookings, clients, invoices, and an AI that does the work.",
   "start_url": "/dashboard",
   "scope": "/",
   "display": "standalone",

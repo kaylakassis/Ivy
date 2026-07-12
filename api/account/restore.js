@@ -159,14 +159,14 @@ async function sendRestoreConfirmation({ email, name }) {
   try {
     await sendEmail({
       to: email,
-      subject: 'Your Ivy OS account is restored',
+      subject: 'Your Ivy account is restored',
       html: emailShell({
         heading: 'Welcome back',
         preheader: `Your account and data are right where you left them.`,
         body: `<p>Hi ${escapeHtml(fn)},</p>
-          <p>Your Ivy OS account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them — nothing was lost during the recovery window.</p>
+          <p>Your Ivy account is restored. Your clients, bookings, invoices, documents, and history are exactly where you left them — nothing was lost during the recovery window.</p>
           <p>If you didn't restore your account, change your password right away.</p>`,
-        footer: `Glad you're back. — The Ivy OS Team`,
+        footer: `Glad you're back. — The Ivy Team`,
       }),
     });
   } catch (err) {

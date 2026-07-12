@@ -1,5 +1,5 @@
 // POST /api/webhooks/billing  (public, signature-verified)
-// Ivy OS-side Stripe webhook - handles the subscription lifecycle for
+// Ivy-side Stripe webhook - handles the subscription lifecycle for
 // workspaces. Verified against IVY_BILLING_WEBHOOK_SECRET (dedicated
 // secret for this endpoint URL - Stripe issues a separate signing
 // secret per endpoint, so it cannot share STRIPE_WEBHOOK_SECRET with
@@ -42,7 +42,7 @@ export default async function handler(req, res) {
     const secretKey     = platformStripeSecret();
     const webhookSecret = billingWebhookSecret();
     if (!secretKey || !webhookSecret) {
-      return res.status(500).json({ error: 'Ivy OS Stripe billing is not configured' });
+      return res.status(500).json({ error: 'Ivy Stripe billing is not configured' });
     }
 
     const rawBody = await readRawBody(req);

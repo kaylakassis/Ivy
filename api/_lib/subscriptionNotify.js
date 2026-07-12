@@ -21,7 +21,7 @@ import { reportError } from './monitoring.js';
 import { workspaceTimeZone } from './calendar.js';
 import { notifyOwnerSafe } from './push.js';
 
-const PLAN_NAME = 'Ivy OS Pro';
+const PLAN_NAME = 'Ivy Pro';
 
 function fmtMoneyCents(cents, currency = 'USD') {
   if (cents == null) return '';
@@ -80,7 +80,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
     preheader = `Keep your clients, data, and Ivy before your trial ends.`;
     heading = 'You\'ve got 7 days left';
     body = `<p>Hi ${fn},</p>
-      <p>You're one week out from the end of your Ivy OS trial — and you've already set up the kind of system most owners overpay for and scatter across multiple disconnected tools.</p>
+      <p>You're one week out from the end of your Ivy trial — and you've already set up the kind of system most owners overpay for and scatter across multiple disconnected tools.</p>
       <p>Right now, inside <strong>${biz}</strong>, you have:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         <li>Your client list, pipeline, and history in one place</li>
@@ -93,16 +93,16 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
   } else if (stage === '2d') {
     // The heads-up promised on the paywall: ~2 days out, so the owner has time
     // to decide with no surprise charges.
-    subject = 'Your Ivy OS trial ends in 2 days';
+    subject = 'Your Ivy trial ends in 2 days';
     preheader = `A quick heads-up so there are no surprises, ${fnPlain}.`;
     heading = 'Your trial ends in 2 days';
     body = `<p>Hi ${fn},</p>
-      <p>Just so it's not a surprise: your Ivy OS trial ends in <strong>2 days, on ${endDate}</strong>.</p>
+      <p>Just so it's not a surprise: your Ivy trial ends in <strong>2 days, on ${endDate}</strong>.</p>
       <p>If you're getting value from <strong>${biz}</strong>, pick a plan and everything keeps running without a break. If it's not for you, no charge — cancel in one tap from your account, anytime.</p>
       <p>Either way, you're in control. We just didn't want the date to sneak up on you.</p>`;
     ctaText = 'Choose my plan →';
   } else if (stage === '1d') {
-    subject = 'Your Ivy OS trial ends tomorrow';
+    subject = 'Your Ivy trial ends tomorrow';
     preheader = `One step to keep ${businessName || 'your business'} running.`;
     heading = 'Your trial ends tomorrow';
     body = `<p>Hi ${fn},</p>
@@ -111,11 +111,11 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
       <p>You've already done the hard part of setting it up. Don't let it go quiet.</p>`;
     ctaText = 'Keep everything — subscribe →';
   } else if (stage === 'expired') {
-    subject = 'Your Ivy OS trial has ended';
+    subject = 'Your Ivy trial has ended';
     preheader = `Your account and data are safe — reactivate whenever you're ready.`;
     heading = 'Your trial has ended';
     body = `<p>Hi ${fn},</p>
-      <p>Your Ivy OS trial has ended, and <strong>${biz}</strong> has moved to a free Client account. Nothing was deleted — your clients, bookings, documents, and history are all still here.</p>
+      <p>Your Ivy trial has ended, and <strong>${biz}</strong> has moved to a free Client account. Nothing was deleted — your clients, bookings, documents, and history are all still here.</p>
       <p>To switch your business tools back on, you'll want to reactivate:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         <li>Unlimited client management</li>
@@ -133,7 +133,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
   const html = emailShell({
     heading, body, preheader,
     ctaText, ctaUrl: billingUrl(),
-    footer: `No long-term contract. Cancel anytime. — The Ivy OS Team`,
+    footer: `No long-term contract. Cancel anytime. — The Ivy Team`,
   });
   return { subject, html, preheader };
 }
@@ -259,7 +259,7 @@ export function renderSubscriptionStarted({ periodEnd, amountCents, currency, fi
     heading: `You're in — welcome to ${PLAN_NAME}`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>You're officially on <strong>${PLAN_NAME}</strong>. Thanks for trusting Ivy OS to run <strong>${biz}</strong>${amount ? ` — here's your receipt for <strong>${amount}</strong>` : ''}, and you're all set.</p>
+      <p>You're officially on <strong>${PLAN_NAME}</strong>. Thanks for trusting Ivy to run <strong>${biz}</strong>${amount ? ` — here's your receipt for <strong>${amount}</strong>` : ''}, and you're all set.</p>
       ${renewLine}
       <p>If you want a fast win this week, start here:</p>
       <ol style="padding-left:20px;margin:14px 0;">
@@ -270,7 +270,7 @@ export function renderSubscriptionStarted({ periodEnd, amountCents, currency, fi
       <p>Need anything? Reply to this email — a real person reads it.</p>`,
     ctaText: 'Open my dashboard →',
     ctaUrl: dashboardUrl(),
-    footer: `— The Ivy OS Team`,
+    footer: `— The Ivy Team`,
   });
   return { subject: `You're in — welcome to ${PLAN_NAME}`, html, preheader };
 }
@@ -315,7 +315,7 @@ export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, bus
         <p>Now go make running <strong>${biz}</strong> feel easy. Ask Ivy anything to get started.</p>`,
       ctaText: 'Open my dashboard →',
       ctaUrl: dashboardUrl(),
-      footer: `— The Ivy OS Team`,
+      footer: `— The Ivy Team`,
     });
     return { subject: `Welcome to ${PLAN_NAME} — your first week's on us`, html, preheader };
   }
@@ -330,7 +330,7 @@ export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, bus
       <p>Keep sharing your link and keep earning — you both get a free week every time.</p>`,
     ctaText: 'See my referrals →',
     ctaUrl: `${appUrl()}/referrals`,
-    footer: `— The Ivy OS Team`,
+    footer: `— The Ivy Team`,
   });
   return { subject: `You earned ${wk} — thanks for the referral`, html, preheader };
 }
@@ -384,9 +384,9 @@ export function renderUpcomingRenewal({ periodEnd, amountCents, currency, firstN
       <p>Need to update your card or change plans? You can do it anytime.</p>`,
     ctaText: 'Manage subscription',
     ctaUrl: billingUrl(),
-    footer: `— The Ivy OS Team`,
+    footer: `— The Ivy Team`,
   });
-  return { subject: `Your Ivy OS plan renews on ${renewDate}`, html, preheader };
+  return { subject: `Your Ivy plan renews on ${renewDate}`, html, preheader };
 }
 
 export async function notifyUpcomingRenewal({ workspaceId, periodEnd, amountCents, currency }) {
@@ -419,7 +419,7 @@ export function renderWinbackOffer({
   const months = durationMonths || 3;
   const preheader = `Your account's still here. So is the offer.`;
   const html = emailShell({
-    heading: `Come back to Ivy OS — ${percentOff}% off your next ${months} months`,
+    heading: `Come back to Ivy — ${percentOff}% off your next ${months} months`,
     preheader,
     body: `<p>Hi ${fn},</p>
       <p>We saved your spot. Everything you built in <strong>${biz}</strong> — clients, history, settings, Ivy's knowledge of your business — is exactly where you left it.</p>
@@ -428,10 +428,10 @@ export function renderWinbackOffer({
       <p>Apply the code at checkout. Offer expires <strong>${fmtDate(expiresAt)}</strong>, and you can cancel anytime.</p>`,
     ctaText: 'Claim my offer →',
     ctaUrl: `${appUrl()}/account?tab=billing&winback=1`,
-    footer: `This is a one-time offer — once it expires it doesn't come back. — The Ivy OS Team`,
+    footer: `This is a one-time offer — once it expires it doesn't come back. — The Ivy Team`,
   });
   return {
-    subject: `Come back to Ivy OS — ${percentOff}% off your next ${months} months`,
+    subject: `Come back to Ivy — ${percentOff}% off your next ${months} months`,
     html, preheader,
   };
 }
@@ -472,14 +472,14 @@ export function renderPaymentFailed({ amountCents, currency, nextAttemptAt, firs
     heading: `Action needed: your payment didn't go through`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>We tried to process your <strong>${amount}</strong> payment for Ivy OS and it didn't go through — usually an expired card or a temporary bank hold.</p>
+      <p>We tried to process your <strong>${amount}</strong> payment for Ivy and it didn't go through — usually an expired card or a temporary bank hold.</p>
       ${retryLine}
       <p>If the retry fails too, your business features in <strong>${biz}</strong> will pause until the balance is settled — so it's worth two minutes now. If you've already updated your card, you can ignore this.</p>`,
     ctaText: 'Update payment method',
     ctaUrl: billingUrl(),
-    footer: `Critical billing notice — sent regardless of your preferences so you don't miss it. — The Ivy OS Team`,
+    footer: `Critical billing notice — sent regardless of your preferences so you don't miss it. — The Ivy Team`,
   });
-  return { subject: `Action needed: your Ivy OS payment didn't go through`, html, preheader };
+  return { subject: `Action needed: your Ivy payment didn't go through`, html, preheader };
 }
 
 export async function notifyPaymentFailed({ workspaceId, amountCents, currency, nextAttemptAt }) {
@@ -518,7 +518,7 @@ export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, business
     heading: `Your subscription is cancelled — what happens next`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>Your Ivy OS subscription is cancelled. We're sorry to see you go — but a few things to make this painless:</p>
+      <p>Your Ivy subscription is cancelled. We're sorry to see you go — but a few things to make this painless:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         ${accessUntil}
         <li>After that, <strong>${biz}</strong> moves to a free account; <strong>nothing is deleted</strong></li>
@@ -527,9 +527,9 @@ export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, business
       <p>If something wasn't working — Ivy, a missing feature, pricing — just reply and tell me. I read every one, and it genuinely shapes what we build next.</p>`,
     ctaText: 'Changed your mind? Reactivate →',
     ctaUrl: billingUrl(),
-    footer: `— The Ivy OS Team`,
+    footer: `— The Ivy Team`,
   });
-  return { subject: `Your Ivy OS subscription is cancelled — what happens next`, html, preheader };
+  return { subject: `Your Ivy subscription is cancelled — what happens next`, html, preheader };
 }
 
 export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {

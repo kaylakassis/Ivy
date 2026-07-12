@@ -108,7 +108,7 @@ async function handler(req, res) {
           workspaceId: c.workspace_id,
           type: 'billing',
           payload: {
-            title: `${offer.percentOff}% off - your Ivy OS comeback offer`,
+            title: `${offer.percentOff}% off - your Ivy comeback offer`,
             body: `Code ${offer.promoCode} · expires ${new Date(offer.expiresAt).toISOString().slice(0, 10)}`,
             url:  '/account?tab=billing&winback=1',
           },

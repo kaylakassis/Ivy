@@ -81,7 +81,7 @@ export default function EarlyAccessGate({ children, mode }) {
           Early access
         </h1>
         <p style={{ margin: 0, color: 'var(--muted)', fontSize: 14, lineHeight: 1.5 }}>
-          Ivy OS is in private beta. Enter the access password to continue.
+          Ivy is in private beta. Enter the access password to continue.
         </p>
 
         <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 12 }}>

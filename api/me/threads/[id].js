@@ -174,13 +174,13 @@ export default async function handler(req, res) {
             subject: `New message from ${thread.client_name || thread.client_email || 'a client'}`,
             // Reply-To = the client's email so the owner can reply
             // straight from their mail client; the round-trip lands
-            // back in their Ivy OS thread via the normal inbound flow.
+            // back in their Ivy thread via the normal inbound flow.
             replyTo: thread.client_email || branding.replyTo,
             html: emailShell({
               heading: 'New message in your inbox',
               body: `<p>${escapeHtml(thread.client_name || thread.client_email || 'A client')} just sent you a message:</p>
                 <blockquote style="margin:16px 0;padding:12px 16px;border-left:3px solid #C7BFA8;background:#F6F5F1;border-radius:6px;font-size:14px;line-height:1.55;color:#3F3D38;white-space:pre-wrap;">${escapeHtml(text)}</blockquote>
-                <p>Reply from your Ivy OS Messages inbox or hit Reply on this email.</p>`,
+                <p>Reply from your Ivy Messages inbox or hit Reply on this email.</p>`,
               ctaText: 'Open conversation',
               ctaUrl: `${appUrl()}/messages?threadId=${id}`,
               footer: `Replying to this email reaches ${escapeHtml(thread.client_name || 'them')} directly.`,

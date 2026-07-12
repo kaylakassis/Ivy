@@ -49,7 +49,7 @@ export default async function handler(req, res) {
     // enforce the SAME rule server-side: a non-null trial_ends_at means
     // this workspace already had its trial, so refuse to re-grant a fresh
     // one. Without this, a lapsed/cancelled owner could POST start-trial
-    // repeatedly and keep using Ivy OS without ever paying.
+    // repeatedly and keep using Ivy without ever paying.
     if (r.trial_ends_at) {
       return ok(res, {
         ok: true,

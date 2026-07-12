@@ -35,8 +35,8 @@ export const COMPETITORS = {
   honeybook: {
     name: 'HoneyBook',
     angle: 'Built for creative freelancers; expensive, no native AI.',
-    headline: 'Leaving HoneyBook? Here\'s why solo owners switch to Ivy OS.',
-    sub: 'HoneyBook is great at proposals + contracts, but the all-in cost runs $39-$79/mo and there\'s no native AI. Ivy OS matches the workflow at $8.99/week with Ivy built in.',
+    headline: 'Leaving HoneyBook? Here\'s why solo owners switch to Ivy.',
+    sub: 'HoneyBook is great at proposals + contracts, but the all-in cost runs $39-$79/mo and there\'s no native AI. Ivy matches the workflow at $8.99/week with Ivy built in.',
     theirPrice: '$39 - $79 / mo',
     pains: [
       'Pricing climbs once you cross 6 active projects.',
@@ -53,8 +53,8 @@ export const COMPETITORS = {
   dubsado: {
     name: 'Dubsado',
     angle: 'Powerful but steep learning curve; charges per workflow.',
-    headline: 'Switching from Dubsado? Ivy OS keeps the power, drops the friction.',
-    sub: 'Dubsado is feature-rich but the setup curve is famous, and pricing-per-workflow surprises people. Ivy OS ships with the same automation power, native AI, and predictable flat pricing.',
+    headline: 'Switching from Dubsado? Ivy keeps the power, drops the friction.',
+    sub: 'Dubsado is feature-rich but the setup curve is famous, and pricing-per-workflow surprises people. Ivy ships with the same automation power, native AI, and predictable flat pricing.',
     theirPrice: '$20 - $40 / mo',
     pains: [
       'The setup is famously steep - you need a "Dubsado specialist" on Upwork to feel productive.',
@@ -71,8 +71,8 @@ export const COMPETITORS = {
   vagaro: {
     name: 'Vagaro',
     angle: 'Beauty + wellness focused; bloated, expensive add-ons.',
-    headline: 'Why beauty + wellness pros switch from Vagaro to Ivy OS.',
-    sub: 'Vagaro dominates legacy salon software but charges extra for everything (text marketing, forms, online listing, multi-location). Ivy OS ships everything in $8.99/week with no add-on tax.',
+    headline: 'Why beauty + wellness pros switch from Vagaro to Ivy.',
+    sub: 'Vagaro dominates legacy salon software but charges extra for everything (text marketing, forms, online listing, multi-location). Ivy ships everything in $8.99/week with no add-on tax.',
     theirPrice: '$25 - $85 / mo (add-ons extra)',
     pains: [
       "Text marketing? Forms? Online listing? Multi-staff? Each is a separate add-on.",
@@ -90,7 +90,7 @@ export const COMPETITORS = {
     name: 'Mindbody',
     angle: 'Enterprise fitness/wellness; built for chains, painful for solos.',
     headline: 'Leaving Mindbody? You\'re not the only solo who outgrew its enterprise UX.',
-    sub: 'Mindbody is built for chains. Solo owners pay enterprise prices for software designed for someone else. Ivy OS matches the workflow at a fraction of the cost.',
+    sub: 'Mindbody is built for chains. Solo owners pay enterprise prices for software designed for someone else. Ivy matches the workflow at a fraction of the cost.',
     theirPrice: '$139 - $349 / mo',
     pains: [
       'Enterprise pricing for what most solos actually need.',
@@ -107,8 +107,8 @@ export const COMPETITORS = {
   acuity: {
     name: 'Acuity',
     angle: 'Great booking; nothing else built in.',
-    headline: 'Acuity is just booking. Ivy OS is the whole business.',
-    sub: "Acuity has a clean booking page but stops there - you still need a CRM, an invoicer, a contract tool, and AI. Ivy OS matches Acuity's top tier at $8.99/week and gives you the whole stack instead of just scheduling.",
+    headline: 'Acuity is just booking. Ivy is the whole business.',
+    sub: "Acuity has a clean booking page but stops there - you still need a CRM, an invoicer, a contract tool, and AI. Ivy matches Acuity's top tier at $8.99/week and gives you the whole stack instead of just scheduling.",
     theirPrice: '$16 - $49 / mo',
     pains: [
       "Acuity is just booking - you still pay separately for invoicing, contracts, CRM.",
@@ -125,8 +125,8 @@ export const COMPETITORS = {
   calendly: {
     name: 'Calendly',
     angle: 'Scheduling-only; everyone using it for solo business needs more.',
-    headline: 'Calendly is scheduling. Ivy OS schedules - and bills, signs, messages, and runs your AI.',
-    sub: "Calendly does scheduling well. But if you're using it to run a business, you're stitching it to 4 other tools. Ivy OS replaces the whole stack at $8.99/week.",
+    headline: 'Calendly is scheduling. Ivy schedules - and bills, signs, messages, and runs your AI.',
+    sub: "Calendly does scheduling well. But if you're using it to run a business, you're stitching it to 4 other tools. Ivy replaces the whole stack at $8.99/week.",
     theirPrice: '$10 - $16 / mo',
     pains: [
       "You're already paying for Stripe, QuickBooks, Mailchimp, and a CRM next to it.",
@@ -143,8 +143,8 @@ export const COMPETITORS = {
   practice: {
     name: 'Practice',
     angle: 'Coach-focused; missing financial tools.',
-    headline: 'Why coaches who outgrew Practice switch to Ivy OS.',
-    sub: 'Practice is decent for coaches but lacks real invoicing/accounting, has a young feature set, and pricing-per-seat scales fast. Ivy OS matches the workflow plus shipping financials + AI included.',
+    headline: 'Why coaches who outgrew Practice switch to Ivy.',
+    sub: 'Practice is decent for coaches but lacks real invoicing/accounting, has a young feature set, and pricing-per-seat scales fast. Ivy matches the workflow plus shipping financials + AI included.',
     theirPrice: '$25 - $49 / mo',
     pains: [
       "Invoicing + recurring billing are weak. We're closer to QuickBooks in that respect.",
@@ -161,7 +161,7 @@ export const COMPETITORS = {
   paperbell: {
     name: 'Paperbell',
     angle: 'Coach-focused, simple - missing the deeper stack.',
-    headline: 'Outgrowing Paperbell? Ivy OS picks up where it stops.',
+    headline: 'Outgrowing Paperbell? Ivy picks up where it stops.',
     sub: 'Paperbell is a clean coaching tool. Once you need real invoicing, an AI, a website, or memberships, you\'re looking elsewhere. That\'s us.',
     theirPrice: '$57 - $97 / mo',
     pains: [

@@ -129,7 +129,7 @@ function RouteCrash({ resetError, error }) {
     try { localStorage.clear(); } catch {}
     window.location.href = '/';
   };
-  const mail = `mailto:hello@getivyos.com?subject=${encodeURIComponent('Error on Ivy OS')}&body=${encodeURIComponent(`I hit an error: ${msg}\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\n\n`)}`;
+  const mail = `mailto:hello@getivyos.com?subject=${encodeURIComponent('Error on Ivy')}&body=${encodeURIComponent(`I hit an error: ${msg}\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\n\n`)}`;
   return (
     <div style={{
       minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',

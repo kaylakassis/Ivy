@@ -530,7 +530,7 @@ export default async function handler(req, res) {
       },
       // Marketing-friendly platform aggregates. All values are means
       // or ratios across active workspaces - no per-workspace data
-      // leaves this endpoint. Safe to drop into landing copy ("Ivy OS
+      // leaves this endpoint. Safe to drop into landing copy ("Ivy
       // users see an average no-show rate of X%"). Window: 90d rolling.
       // Served from the analytics-cache table (refreshed every 15 min)
       // when the cron has populated it; otherwise computed live as a

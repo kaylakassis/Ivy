@@ -9,9 +9,9 @@ import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 export default function SecurityPage() {
   useEffect(() => {
-    document.title = 'Security & data - Ivy OS';
+    document.title = 'Security & data - Ivy';
     const desc = document.querySelector('meta[name="description"]');
-    if (desc) desc.setAttribute('content', 'How Ivy OS protects your data: Stripe-handled payments, encryption at rest + in transit, exportable data, US-based SOC2 vendors.');
+    if (desc) desc.setAttribute('content', 'How Ivy protects your data: Stripe-handled payments, encryption at rest + in transit, exportable data, US-based SOC2 vendors.');
   }, []);
   return (
     <MarketingShell>
@@ -47,13 +47,13 @@ export default function SecurityPage() {
         </Section>
 
         <Section title="Your data, exportable any time">
-          <p>From your account page, download a complete export of everything you've put into Ivy OS: client list, booking history, invoices, documents, messages. Standard CSV + JSON formats - usable in any other tool.</p>
+          <p>From your account page, download a complete export of everything you've put into Ivy: client list, booking history, invoices, documents, messages. Standard CSV + JSON formats - usable in any other tool.</p>
           <p>If you cancel, your data stays available for 60 days for export. After that it's deleted from active and backup systems within a further 30 days.</p>
         </Section>
 
         <Section title="Who sees your data">
           <p>The short list: you, your invited staff, your clients (in the limited views they're shown), and Anthropic (when Ivy generates a response - see below).</p>
-          <p>Ivy OS staff access is logged and only happens when you explicitly request support help on a specific record. No automated mining of customer data, ever.</p>
+          <p>Ivy staff access is logged and only happens when you explicitly request support help on a specific record. No automated mining of customer data, ever.</p>
         </Section>
 
         <Section title="AI (Ivy) data handling">

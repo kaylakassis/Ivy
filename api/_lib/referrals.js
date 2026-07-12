@@ -34,7 +34,7 @@ export function normalizeCode(raw) {
 // Reserved-ish words that would collide with admin affiliate codes or
 // look like system values. Cheap denylist; uniqueness index does the
 // real enforcement.
-const BLOCKED = new Set(['Ivy OS', 'ADMIN', 'SUPPORT', 'NULL', 'NONE', 'TEST']);
+const BLOCKED = new Set(['Ivy', 'ADMIN', 'SUPPORT', 'NULL', 'NONE', 'TEST']);
 
 // Read the owner's current referral code (or null).
 export async function getCode(userId) {
@@ -175,7 +175,7 @@ export async function grantPendingReferralCredits(referrerUserId) {
         secretKey,
         customerId: ws.stripe_customer_id,
         amountCents: REWARD_CENTS,
-        description: 'Ivy OS referral reward - one free week',
+        description: 'Ivy referral reward - one free week',
       });
       granted++;
       // Best-effort: tell the referrer they earned a free week. Never blocks
@@ -238,7 +238,7 @@ export async function grantReferredUserReward(referredUserId) {
       secretKey,
       customerId: row.stripe_customer_id,
       amountCents: REWARD_CENTS,
-      description: 'Ivy OS referral welcome gift - one free week',
+      description: 'Ivy referral welcome gift - one free week',
     });
   } catch (err) {
     // Roll the claim back so a later run retries; if the rollback also

@@ -285,7 +285,7 @@ async function generateUniqueCode() {
   }
   // Improbable: 8 collisions on 8 random 8-char codes from 36^8 space.
   // Fall back with a timestamp suffix.
-  return `Ivy OS-${Date.now().toString(36).toUpperCase()}`;
+  return `Ivy-${Date.now().toString(36).toUpperCase()}`;
 }
 
 function randomCode() {
@@ -297,12 +297,12 @@ function randomCode() {
 
 function subjectFor(type) {
   switch (type) {
-    case 'sponsored':       return "You've got a sponsored Ivy OS account";
-    case 'beta':            return "You're invited to the Ivy OS beta";
-    case 'affiliate':       return "Welcome to the Ivy OS affiliate program";
-    case 'business-trial':  return "Your Ivy OS account is ready - 14-day trial activated";
-    case 'business-active': return "Your Ivy OS account is ready";
-    default:                return 'Welcome to Ivy OS';
+    case 'sponsored':       return "You've got a sponsored Ivy account";
+    case 'beta':            return "You're invited to the Ivy beta";
+    case 'affiliate':       return "Welcome to the Ivy affiliate program";
+    case 'business-trial':  return "Your Ivy account is ready - 14-day trial activated";
+    case 'business-active': return "Your Ivy account is ready";
+    default:                return 'Welcome to Ivy';
   }
 }
 function headingFor(type, name) {
@@ -312,34 +312,34 @@ function headingFor(type, name) {
 function bodyFor(type, name) {
   switch (type) {
     case 'sponsored':
-      return `<p>You've been given full access to Ivy OS - no subscription
+      return `<p>You've been given full access to Ivy - no subscription
         needed. Treat it like the paid version: the calendar, clients,
         invoicing, AI coach, all of it. Set your password below and
         you're in.</p>`;
     case 'beta':
-      return `<p>You've been invited to the <strong>Ivy OS beta</strong> — early
+      return `<p>You've been invited to the <strong>Ivy beta</strong> — early
         access to the full app with no subscription and no card needed. You
         get the same toolset paying customers do (clients, calendar, invoicing,
         documents, messaging, Ivy your AI coach, the whole thing), free for
         the duration of the beta.</p>
         <p>In return, we'd love your honest feedback as you use it — what
-        works, what's broken, what's missing. Just reply to any Ivy OS email
+        works, what's broken, what's missing. Just reply to any Ivy email
         and it reaches a real person.</p>
         <p>Set your password below to get started.</p>`;
     case 'affiliate':
-      return `<p>Welcome to the Ivy OS affiliate program. You've got a
+      return `<p>Welcome to the Ivy affiliate program. You've got a
         referral code that earns you credit on every business that signs
         up through it. Set your password and the code will be waiting for
         you in your account.</p>`;
     case 'business-trial':
-      return `<p>Your Ivy OS account is set up. You're on a 14-day full-
+      return `<p>Your Ivy account is set up. You're on a 14-day full-
         access trial - long enough to actually run a couple weeks of
         bookings and see if the numbers move. Set your password to get in.</p>`;
     case 'business-active':
-      return `<p>Your Ivy OS account is set up and active. Pick a
+      return `<p>Your Ivy account is set up and active. Pick a
         password below and you're ready to use the app.</p>`;
     default:
-      return `<p>Welcome to Ivy OS. Set your password to start using the
+      return `<p>Welcome to Ivy. Set your password to start using the
         app.</p>`;
   }
 }

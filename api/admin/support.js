@@ -122,7 +122,7 @@ async function reply(req, res) {
     userId: tr.rows[0].user_id,
     type: 'support',
     payload: {
-      title: 'Ivy OS Support replied',
+      title: 'Ivy Support replied',
       body: preview,
       url: '/account?support=1',
       tag: `support-${threadId}`,

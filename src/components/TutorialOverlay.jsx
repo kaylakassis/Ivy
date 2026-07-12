@@ -256,7 +256,7 @@ function SkipWarning({ tabTitle, onDismiss, onConfirmSkip }) {
           Skip the {tabTitle} walkthrough?
         </h3>
         <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Ivy OS works best when you understand what each tab can do for
+          Ivy works best when you understand what each tab can do for
           your business. Skipping risks missing features that could save
           you hours every week or unlock revenue you didn't know was on
           the table. You can always replay this from the (i) icon next

@@ -250,8 +250,8 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
         <br/><span style="font-size:12px;color:#85827B;">Save this - open it at the start of your session.</span>
       </p>` : ''}
       <p>Need to reschedule or message ${escapeHtml(businessName)}? ${hasPortal
-        ? 'You can view this booking and chat with them through your Ivy OS portal.'
-        : 'Create a free Ivy OS portal account to see this booking, future visits, invoices, and messages from them in one place.'}</p>`,
+        ? 'You can view this booking and chat with them through your Ivy portal.'
+        : 'Create a free Ivy portal account to see this booking, future visits, invoices, and messages from them in one place.'}</p>`,
     ctaText: portalCtaText,
     ctaUrl: portalUrl,
     footer: `If you didn't make this booking, please reach out to ${escapeHtml(businessName)} directly.`,
@@ -273,8 +273,8 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
         timezone,
         locationAddress: videoRoomUrl || locationAddress || null,
         description: videoRoomUrl
-          ? `Booked with ${businessName} via Ivy OS. Join: ${videoRoomUrl}`
-          : `Booked with ${businessName} via Ivy OS.`,
+          ? `Booked with ${businessName} via Ivy. Join: ${videoRoomUrl}`
+          : `Booked with ${businessName} via Ivy.`,
       });
       attachments = [{
         filename: 'booking.ics',
@@ -297,7 +297,7 @@ async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail
     heading: 'New booking',
     branding,
     body: `<p>${greeting}</p>
-      <p><strong>${escapeHtml(clientName || 'A client')}</strong> just booked through your Ivy OS link.</p>
+      <p><strong>${escapeHtml(clientName || 'A client')}</strong> just booked through your Ivy link.</p>
       <table role="presentation" cellpadding="0" cellspacing="0"
         style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Service</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(serviceName)}</td></tr>
@@ -310,7 +310,7 @@ async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail
       under Messages.</p>`,
     ctaText: 'Open the calendar',
     ctaUrl: `${appUrl()}/calendar`,
-    footer: `You're getting this because someone booked through your public Ivy OS link. Manage notification preferences from Account.`,
+    footer: `You're getting this because someone booked through your public Ivy link. Manage notification preferences from Account.`,
   });
   await sendEmailToUser({
     userId: ownerId, type: 'bookings',

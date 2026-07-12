@@ -1,4 +1,4 @@
--- Ivy OS - Postgres schema
+-- Ivy - Postgres schema
 -- Apply once via POST /api/admin/migrate with header x-admin-secret: $ADMIN_SECRET
 -- Requires Postgres 13+ for built-in gen_random_uuid() (Neon runs 16).
 

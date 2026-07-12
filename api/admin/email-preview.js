@@ -11,7 +11,7 @@
 //
 // The preview email's subject is prefixed `[PREVIEW] ` so it can't be
 // confused with a real send, and the From / List-Unsubscribe headers
-// stay as Ivy OS so the preview also tests the From address.
+// stay as Ivy so the preview also tests the From address.
 import { requireSuperAdmin } from '../_lib/admin.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { readBody } from '../_lib/body.js';

@@ -8,7 +8,7 @@
 // Sample response:
 //   {
 //     "ok": true,
-//     "from": "Ivy OS <noreply@getivyos.com>",
+//     "from": "Ivy <noreply@getivyos.com>",
 //     "replyTo": "support@getivyos.com",
 //     "domains": [
 //       {
@@ -73,7 +73,7 @@ export default async function handler(req, res) {
     }));
     return ok(res, {
       ok: true,
-      from: process.env.EMAIL_FROM || 'Ivy OS <onboarding@resend.dev>',
+      from: process.env.EMAIL_FROM || 'Ivy <onboarding@resend.dev>',
       replyTo: process.env.EMAIL_REPLY_TO || null,
       domains,
     });

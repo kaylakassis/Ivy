@@ -2,9 +2,9 @@
 // and email signature in /account → Branding; we apply them to every
 // client-facing email so the invoice/document/booking notification
 // the client receives feels like it came from the OWNER'S brand,
-// not from a generic Ivy OS template.
+// not from a generic Ivy template.
 //
-// Falls back to "Ivy OS" defaults whenever a workspace hasn't
+// Falls back to "Ivy" defaults whenever a workspace hasn't
 // customized - meaning existing accounts get the same email shell
 // they had pre-branding until they deliberately set values.
 import { sql } from './db.js';

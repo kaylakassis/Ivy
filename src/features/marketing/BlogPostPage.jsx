@@ -12,7 +12,7 @@ export default function BlogPostPage() {
 
   useEffect(() => {
     if (!post) return;
-    document.title = `${post.title} - Ivy OS blog`;
+    document.title = `${post.title} - Ivy blog`;
     const desc = document.querySelector('meta[name="description"]');
     if (desc) desc.setAttribute('content', post.excerpt);
   }, [post]);
@@ -75,10 +75,10 @@ export default function BlogPostPage() {
           border: '1px solid color-mix(in srgb, var(--accent) 30%, transparent)',
         }}>
           <div style={{ fontFamily: 'var(--font-display)', fontSize: 20, fontWeight: 500, color: 'var(--accent)' }}>
-            Want Ivy OS to handle this for you?
+            Want Ivy to handle this for you?
           </div>
           <p style={{ margin: '8px 0 14px', fontSize: 14, lineHeight: 1.55, color: 'var(--fg-2)' }}>
-            Pricing, intake, no-shows, invoicing - every problem in this post is one tab in Ivy OS. {TRIAL_DAYS} days free, $0 today.
+            Pricing, intake, no-shows, invoicing - every problem in this post is one tab in Ivy. {TRIAL_DAYS} days free, $0 today.
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ padding: '10px 16px', fontSize: 13, fontWeight: 600 }}>

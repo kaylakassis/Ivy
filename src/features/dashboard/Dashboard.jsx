@@ -327,7 +327,7 @@ function HeroBand() {
         <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, letterSpacing: '0.04em' }}>{dateStr}</div>
         <h2 className="page-title" style={{ margin: 0, fontSize: 36 }}>{greet}.</h2>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 560 }}>
-          Welcome to Ivy OS. Add a client or open Ivy - she'll walk you through setup.
+          Welcome to Ivy. Add a client or open Ivy - she'll walk you through setup.
         </p>
       </div>
       <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>

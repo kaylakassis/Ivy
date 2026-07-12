@@ -11,7 +11,7 @@
 // - Flexibility we don't need: the recipient-side sanitizer rejects
 //   anything outside the eight tags above, so a rich editor would
 //   just produce content that gets stripped at render time.
-// - Footprint: ~120 lines of React + the toolbar fits the Ivy OS
+// - Footprint: ~120 lines of React + the toolbar fits the Ivy
 //   "small surface area" goal without a third-party migration story.
 //
 // Caveats: contenteditable + execCommand is officially deprecated but

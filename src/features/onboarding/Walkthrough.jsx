@@ -28,7 +28,7 @@ import { api } from '../../lib/api.js';
 const STEPS = [
   {
     id: 'welcome',
-    title: 'Welcome to Ivy OS',
+    title: 'Welcome to Ivy',
     body: "This is your all-in-one business platform - every booking, client, invoice, and document in one place, with Ivy handling the busywork. The tour takes about a minute. You can replay it any time from your Account page.",
   },
   {
@@ -112,7 +112,7 @@ const STEPS = [
     placement: 'right',
   },
   // Aha-moment step (the video's #5 theme). Centered card right before
-  // Ivy hello that frames the FIRST BOOKING as the moment Ivy OS proves
+  // Ivy hello that frames the FIRST BOOKING as the moment Ivy proves
   // itself. Two CTAs: jump straight to the booking-link share drawer, or
   // skip and meet Ivy. Goal: get the owner to do the thing that creates
   // real value in their first session in the app.
@@ -494,7 +494,7 @@ function StepCard({ step, stepIdx, isLast, onSkip, onBack, onNext, embedded }) {
 function IvyHello({ onDismiss, onBack }) {
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages]   = useState([
-    { role: 'ivy', text: "Welcome to Ivy OS! I'm Ivy, your AI business coach. I'll be here in the app to help you understand your numbers, spot patterns, and figure out what to focus on next. Is there anything you'd like to ask before you dive in?" },
+    { role: 'ivy', text: "Welcome to Ivy! I'm Ivy, your AI business coach. I'll be here in the app to help you understand your numbers, spot patterns, and figure out what to focus on next. Is there anything you'd like to ask before you dive in?" },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy]   = useState(false);
@@ -661,7 +661,7 @@ function AhaStep({ onBack, onSkip, onTake }) {
           fontSize: 22, letterSpacing: '-0.015em', lineHeight: 1.2,
         }}>Your first booking is the moment.</h2>
         <p style={{ margin: 0, color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55 }}>
-          When the first real booking lands, you'll see it flow through Ivy OS -
+          When the first real booking lands, you'll see it flow through Ivy -
           calendar confirmed, client created, confirmation email + reminder
           queued, invoice ready. <strong>Grab your booking link, send it to one
           person, and watch.</strong>

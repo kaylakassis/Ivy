@@ -142,7 +142,7 @@ export async function syncOnBookingUpdated({ workspaceId, bookingId }) {
 }
 
 // Express an absolute instant as wall-clock { date, minutes } in the
-// workspace's IANA timezone. Ivy OS bookings/slots use floating LOCAL
+// workspace's IANA timezone. Ivy bookings/slots use floating LOCAL
 // time, so a Google event at 2pm Pacific must block the 2pm slot - not
 // 9pm (its UTC hour). When no workspace timezone is configured we fall
 // back to the event's own wall-clock (the time as written before the
@@ -173,7 +173,7 @@ function eventLocalParts(rfc3339, timeZone) {
 
 // Pull busy times from the owner's primary Google calendar over the
 // next `daysAhead` days and mirror them into external_busy_blocks. The
-// dedicated Ivy OS Bookings calendar (where we PUSH) is excluded so
+// dedicated Ivy Bookings calendar (where we PUSH) is excluded so
 // pushed bookings don't double-count.
 //
 // Diff strategy: list events, upsert each by source_event_id, then
@@ -236,7 +236,7 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     if (!start || !end) { skipped++; continue; }   // all-day, skip
 
     // Convert to the workspace's local wall-clock so busy blocks line up
-    // with Ivy OS's local-time slot model (see eventLocalParts above).
+    // with Ivy's local-time slot model (see eventLocalParts above).
     const sp = eventLocalParts(start, r.timezone);
     const ep = eventLocalParts(end, r.timezone);
     const dateA = sp.date;
