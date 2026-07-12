@@ -1,5 +1,5 @@
 // Auth context - holds the logged-in user and exposes sign-in / sign-up / sign-out.
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from './api.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
@@ -25,8 +25,29 @@ export function AuthProvider({ children }) {
     return () => { live = false; };
   }, []);
 
+  // Holds the native-only mfa token between /auth/login and the challenge.
+  // (Web carries it in an httpOnly cookie the server sets on login.)
+  const mfaTokenRef = useRef(null);
+
   const signIn = useCallback(async (email, password) => {
     const r = await api.post('/auth/login', { email, password });
+    if (r.mfaRequired) {
+      // Password OK but this account has 2FA on — hold here; the caller shows a
+      // code screen and calls mfaChallenge().
+      mfaTokenRef.current = r.mfaToken || null;
+      return { mfaRequired: true };
+    }
+    setUser(r.user);
+    return r.user;
+  }, []);
+
+  // Second factor: exchange a 6-digit TOTP or a backup code for a real session.
+  const mfaChallenge = useCallback(async (code) => {
+    const r = await api.post('/auth/totp/challenge', {
+      code,
+      ...(mfaTokenRef.current ? { mfaToken: mfaTokenRef.current } : {}),
+    });
+    mfaTokenRef.current = null;
     setUser(r.user);
     return r.user;
   }, []);
@@ -86,7 +107,7 @@ export function AuthProvider({ children }) {
 
   return (
     <Ctx.Provider value={{
-      user, loading, signIn, signUp, signOut, refresh, impersonating,
+      user, loading, signIn, mfaChallenge, signUp, signOut, refresh, impersonating,
       terms,
       mustAcceptTerms: !!(user && terms?.needsAcceptance),
       acceptCurrentTerms,

@@ -6,7 +6,7 @@ import { useAuth } from '../../lib/auth.jsx';
 import AuthShell from './AuthShell.jsx';
 
 export default function AuthPage({ mode = 'signin' }) {
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, mfaChallenge } = useAuth();
   const nav       = useNavigate();
   const location  = useLocation();
   // ?ref=CODE survives all the way to the signup POST so affiliate
@@ -24,6 +24,8 @@ export default function AuthPage({ mode = 'signin' }) {
   const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy]   = useState(false);
+  const [mfaStep, setMfaStep] = useState(false);
+  const [mfaCode, setMfaCode] = useState('');
   const [err,  setErr]    = useState(null);
   // When signup succeeds but the welcome / verification email failed to
   // send, we hold the user on this screen with an explicit notice +
@@ -64,7 +66,9 @@ export default function AuthPage({ mode = 'signin' }) {
         }
         nav(role === 'client' ? '/me' : '/', { replace: true });
       } else {
-        await signIn(email, password);
+        const res = await signIn(email, password);
+        // 2FA on this account → show the code step instead of landing.
+        if (res?.mfaRequired) { setMfaStep(true); return; }
         // For sign-in we let RoleRouter (in AppShell entry) figure out where
         // to land - pushing to '/' triggers it.
         nav('/', { replace: true });
@@ -75,6 +79,55 @@ export default function AuthPage({ mode = 'signin' }) {
       setBusy(false);
     }
   };
+
+  const mfaSubmit = async (e) => {
+    e.preventDefault();
+    setErr(null);
+    const c = mfaCode.replace(/\s+/g, '');
+    if (!c) { setErr('Enter your 6-digit code, or a backup code.'); return; }
+    setBusy(true);
+    try {
+      await mfaChallenge(c);
+      nav('/', { replace: true });
+    } catch (ex) {
+      setErr(ex.message || "That code didn't match.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  // Second-factor step: shown after a correct password for a 2FA account.
+  if (mfaStep) {
+    return (
+      <AuthShell>
+        <form onSubmit={mfaSubmit} className="card" style={{
+          width: '100%', maxWidth: 420, padding: 32,
+          display: 'flex', flexDirection: 'column', gap: 18,
+        }}>
+          <div>
+            <h1 className="page-title" style={{ margin: 0, fontSize: 24 }}>Two-factor verification</h1>
+            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}>
+              Enter the 6-digit code from your authenticator app. Lost your device? Enter a backup code instead.
+            </p>
+          </div>
+          <Field label="Authentication code">
+            <input value={mfaCode} onChange={(e) => setMfaCode(e.target.value)}
+              autoFocus inputMode="text" autoComplete="one-time-code"
+              placeholder="123 456" style={inputS} />
+          </Field>
+          {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
+          <button type="submit" className="btn btn-primary" disabled={busy}
+            style={{ justifyContent: 'center' }}>
+            {busy ? 'Verifying…' : 'Verify & sign in'}
+          </button>
+          <button type="button" onClick={() => { setMfaStep(false); setMfaCode(''); setErr(null); }}
+            className="btn btn-ghost" style={{ justifyContent: 'center' }}>
+            Back
+          </button>
+        </form>
+      </AuthShell>
+    );
+  }
 
   return (
     <AuthShell>

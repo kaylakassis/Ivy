@@ -63,6 +63,40 @@ export function clearSessionCookie(res) {
   );
 }
 
+// ── Short-lived MFA challenge token ──────────────────────────────────
+// After a correct password, if the user has TOTP enrolled we do NOT issue a
+// full session — we issue this 5-minute "mfa pending" token instead. The user
+// must clear /api/auth/totp/challenge (a TOTP or backup code) to trade it for
+// a real session. The distinct `mfa: 'pending'` claim is rejected by
+// readSession() so it can never authenticate a request on its own.
+const MFA_COOKIE = 'ivy_mfa';
+const MFA_MAX_AGE = 5 * 60; // 5 minutes to enter a code
+
+export function signMfaToken(userId) {
+  return jwt.sign({ sub: userId, mfa: 'pending' }, secret(), { expiresIn: `${MFA_MAX_AGE}s`, algorithm: 'HS256' });
+}
+
+export function verifyMfaToken(token) {
+  if (!token) return null;
+  try {
+    const p = jwt.verify(token, secret(), { algorithms: ['HS256'] });
+    return (p && p.mfa === 'pending' && p.sub) ? p.sub : null;
+  } catch { return null; }
+}
+
+export function setMfaCookie(res, token) {
+  res.setHeader('Set-Cookie', cookie.serialize(MFA_COOKIE, token, { ...COOKIE_BASE, maxAge: MFA_MAX_AGE }));
+}
+
+export function clearMfaCookie(res) {
+  res.setHeader('Set-Cookie', cookie.serialize(MFA_COOKIE, '', { ...COOKIE_BASE, maxAge: 0 }));
+}
+
+export function readMfaCookie(req) {
+  const parsed = cookie.parse(req.headers.cookie || '');
+  return parsed[MFA_COOKIE] || null;
+}
+
 // Stash the current session under a backup cookie + set a new one for
 // the impersonated user. Both written in a single Set-Cookie array.
 export function setImpersonationCookies(res, { backupToken, targetToken }) {
@@ -111,7 +145,12 @@ export function readSession(req) {
   const token = readToken(req);
   if (!token) return null;
   try {
-    return jwt.verify(token, secret(), { algorithms: ['HS256'] });
+    const payload = jwt.verify(token, secret(), { algorithms: ['HS256'] });
+    // An MFA-pending token (issued after password, before the 2FA challenge)
+    // is NOT a session and must never authenticate a request — otherwise it
+    // could be replayed as a Bearer token to bypass the 2FA gate.
+    if (payload && payload.mfa === 'pending') return null;
+    return payload;
   } catch {
     return null;
   }

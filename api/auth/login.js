@@ -1,7 +1,7 @@
 // POST /api/auth/login  { email, password }
 import bcrypt from 'bcryptjs';
 import { sql, warmupDb, isConnectionError } from '../_lib/db.js';
-import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient } from '../_lib/auth.js';
+import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient, signMfaToken, setMfaCookie } from '../_lib/auth.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -59,7 +59,7 @@ export default async function handler(req, res) {
     if (blocked) return;
 
     const { rows } = await sql`
-      SELECT id, email, name, password_hash, created_at, email_verified_at, user_type
+      SELECT id, email, name, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at
       FROM users WHERE email = ${emailKey}
     `;
     // Always run a bcrypt compare so the timing of the no-user branch
@@ -76,6 +76,20 @@ export default async function handler(req, res) {
     if (!okPw) {
       recordAudit(req, { actor: user, action: 'auth.login_fail', meta: { email: emailKey, reason: 'bad_password' } });
       return unauthorized(res, 'Invalid email or password');
+    }
+
+    // 2FA gate: if this user has TOTP enrolled, DON'T issue a session yet.
+    // Hand back a short-lived MFA-pending token; they must clear
+    // /api/auth/totp/challenge with a 6-digit or backup code before they get a
+    // real session. (readSession refuses the mfa-pending token as a session,
+    // so it can't be replayed to bypass this.)
+    if (user.totp_enrolled_at) {
+      const mfaToken = signMfaToken(user.id);
+      setMfaCookie(res, mfaToken);
+      recordAudit(req, { actor: user, action: 'auth.mfa_required', meta: {} });
+      const out = { mfaRequired: true };
+      if (isNativeClient(req)) out.mfaToken = mfaToken; // native can't use the cookie
+      return ok(res, out);
     }
 
     const token = signSession(user.id);
