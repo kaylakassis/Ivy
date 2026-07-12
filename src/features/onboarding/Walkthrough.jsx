@@ -29,7 +29,7 @@ const STEPS = [
   {
     id: 'welcome',
     title: 'Welcome to Ivy OS',
-    body: "This is your business OS - every booking, client, invoice, and document in one place. The tour takes about a minute. You can replay it any time from your Account page.",
+    body: "This is your all-in-one business platform - every booking, client, invoice, and document in one place, with Ivy handling the busywork. The tour takes about a minute. You can replay it any time from your Account page.",
   },
   {
     id: 'dashboard',

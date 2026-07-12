@@ -403,7 +403,7 @@ function Hero() {
         margin: 0, fontSize: 'clamp(34px, 6vw, 56px)',
         lineHeight: 1.05, maxWidth: 760, marginInline: 'auto',
       }}>
-        The business OS with an AI<br/>that <em style={{ fontStyle: 'italic' }}>does</em> the work.
+        The all-in-one business platform<br/>with an AI that <em style={{ fontStyle: 'italic' }}>does</em> the work.
       </h1>
 
       <p style={{
@@ -654,7 +654,7 @@ function IvyHero() {
             letterSpacing: '-0.025em', lineHeight: 1.1,
             color: 'var(--accent-ink)',
           }}>
-            Meet Ivy.<br/>The first business OS with an AI that <em>does</em> the work.
+            Meet Ivy.<br/>The all-in-one platform with an AI that <em>does</em> the work.
           </h2>
           <p style={{
             margin: '16px 0 0', fontSize: 16, lineHeight: 1.55,

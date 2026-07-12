@@ -65,7 +65,7 @@ export default function MobileDrawer({ direction, onClose }) {
               letterSpacing: '-0.01em', color: 'var(--sidebar-fg)',
             }}>Ivy OS</div>
             <div style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-              {direction === 'bold' ? 'OS v2' : 'Business OS'}
+              {direction === 'bold' ? 'OS v2' : 'All-in-one for solopreneurs'}
             </div>
           </div>
           <button onClick={onClose}

@@ -117,7 +117,7 @@ export default function Sidebar({ direction, variant = 'full' }) {
             color: 'var(--sidebar-fg)',
           }}>Ivy OS</span>
           <span style={{ fontSize: 10, color: 'var(--muted)', marginTop: 3, letterSpacing: '0.1em', textTransform: 'uppercase' }}>
-            {direction === 'bold' ? 'OS v2' : 'Business OS'}
+            {direction === 'bold' ? 'OS v2' : 'All-in-one for solopreneurs'}
           </span>
         </div>
       </div>
