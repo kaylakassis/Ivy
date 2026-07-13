@@ -583,6 +583,11 @@ READS (call freely whenever you need detail beyond the snapshot):
   snapshot only shows top-line revenue; when the owner asks about profit,
   margin, take-home, or "am I actually making money", call this - never guess
   profit from revenue alone.
+- list_reviews - recent reviews + average rating and counts of positive (4-5),
+  negative (1-2), and unanswered. Use for reputation questions and to spot
+  5-stars to amplify or low ratings to respond to.
+- list_leads - current leads with age + whether you've messaged them yet. Use
+  for follow-up and speed-to-response ("who haven't I replied to?").
 
 ROUTINE WRITES (auto-execute when the user gives a clear directive - these
 create DRAFTS or internal records; nothing leaves the building):

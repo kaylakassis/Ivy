@@ -62,6 +62,22 @@ export const IVY_TOOLS = [
     input_schema: { type: 'object', properties: {} },
   },
   {
+    name: 'list_reviews',
+    description: "Lists recent client reviews with ratings, plus totals (average rating, count of 4-5 star vs 1-2 star, and how many have no owner reply yet). Use when the user asks about reviews, reputation, ratings, feedback, or which reviews to respond to or amplify.",
+    input_schema: {
+      type: 'object',
+      properties: { limit: { type: 'integer', description: 'Max recent rows. Default 20, max 50.' } },
+    },
+  },
+  {
+    name: 'list_leads',
+    description: "Lists current leads (prospects who aren't active clients yet) with how many days old each is and whether the owner has messaged them. Use for 'do I have leads to follow up on', speed-to-response, or who hasn't been contacted.",
+    input_schema: {
+      type: 'object',
+      properties: { limit: { type: 'integer', description: 'Max rows. Default 20, max 50.' } },
+    },
+  },
+  {
     name: 'list_upcoming_bookings',
     description: "Lists upcoming non-cancelled bookings. Use when the user asks what's on the calendar.",
     input_schema: {
@@ -761,6 +777,8 @@ export const HANDLERS = {
   get_dashboard_summary,
   list_expenses,
   get_pl_summary,
+  list_reviews,
+  list_leads,
   // Writes - existing
   send_message_to_client,
   mark_invoice_paid,
@@ -1490,6 +1508,46 @@ async function get_pl_summary({ workspaceId }) {
     this_month: { revenue: tR, expenses: tE, profit: tR - tE },
     last_month: { revenue: lR, expenses: lE, profit: lR - lE },
   };
+}
+
+async function list_reviews({ workspaceId, args }) {
+  const limit = clampInt(args?.limit, 20, 1, 50);
+  const [recent, agg] = await Promise.all([
+    sql`SELECT id, reviewer_name, rating, text, (owner_response IS NOT NULL) AS responded, created_at
+          FROM reviews WHERE workspace_id = ${workspaceId} AND status = 'visible'
+          ORDER BY created_at DESC LIMIT ${limit}`,
+    sql`SELECT COUNT(*)::int AS total,
+               ROUND(AVG(rating)::numeric, 2) AS avg_rating,
+               COUNT(*) FILTER (WHERE rating >= 4)::int AS positive,
+               COUNT(*) FILTER (WHERE rating <= 2)::int AS negative,
+               COUNT(*) FILTER (WHERE owner_response IS NULL)::int AS unresponded
+          FROM reviews WHERE workspace_id = ${workspaceId} AND status = 'visible'`,
+  ]);
+  const a = agg.rows[0] || {};
+  return {
+    reviews: recent.rows.map((r) => ({ ...r, responded: !!r.responded })),
+    total: Number(a.total || 0),
+    average_rating: a.avg_rating != null ? Number(a.avg_rating) : null,
+    positive_count: Number(a.positive || 0),
+    negative_count: Number(a.negative || 0),
+    unresponded_count: Number(a.unresponded || 0),
+  };
+}
+
+async function list_leads({ workspaceId, args }) {
+  const limit = clampInt(args?.limit, 20, 1, 50);
+  const { rows } = await sql`
+    SELECT c.id, c.name, c.email, c.phone, c.created_at,
+           EXTRACT(DAY FROM (NOW() - c.created_at))::int AS days_old,
+           EXISTS (
+             SELECT 1 FROM message_threads mt JOIN messages m ON m.thread_id = mt.id
+             WHERE mt.workspace_id = c.workspace_id AND mt.client_id = c.id AND m.sender = 'biz'
+           ) AS contacted
+      FROM clients c
+     WHERE c.workspace_id = ${workspaceId} AND c.stage = 'lead'
+     ORDER BY c.created_at DESC LIMIT ${limit}`;
+  const leads = rows.map((r) => ({ ...r, contacted: !!r.contacted, days_old: Number(r.days_old) }));
+  return { leads, total: leads.length, uncontacted_count: leads.filter((l) => !l.contacted).length };
 }
 
 // ── Creates ─────────────────────────────────────────────────────────
