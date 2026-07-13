@@ -75,9 +75,11 @@ export default async function handler(req, res) {
       const thread = await getOrCreateDmThread({
         workspaceId, clientAId: myClientId, clientBId: recipientClientId,
       });
-      // Hydrate the response with the other side's name.
+      // Hydrate the response with the other side's name. Scope the lookup to
+      // the shared workspace (defense-in-depth) so this can only ever return a
+      // person in the workspace the group-membership gate just authorized.
       const other = (await sql`
-        SELECT name, email FROM clients WHERE id = ${recipientClientId} LIMIT 1
+        SELECT name, email FROM clients WHERE id = ${recipientClientId} AND workspace_id = ${workspaceId} LIMIT 1
       `).rows[0];
       return created(res, {
         dm: serializeDmThread({
