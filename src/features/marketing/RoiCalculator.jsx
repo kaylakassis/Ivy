@@ -12,13 +12,12 @@ import React, { useMemo, useState } from 'react';
 // page + this calculator can't drift. Re-exported below to preserve the
 // existing `import { TOOL_STACK, STACK_TOTAL, IVY_PRICE } from
 // './RoiCalculator.jsx'` call sites.
-import { TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS } from '../../lib/pricing.js';
-
-// Tunable assumptions, all deliberately conservative + cited in the
-// footnote so the calculator never feels like fantasy math.
-const BILLABLE_RATE = 75;     // $/hr - average solo service rate
-const ADMIN_AUTOMATED = 0.6;  // share of admin time Ivy automates
-const NO_SHOW_RATE = 0.08;    // typical no-show rate without reminders
+// Tunable assumptions live in pricing.js (the single source of truth) so
+// this calculator and the onboarding impact projection never drift.
+import {
+  TOOL_STACK, STACK_TOTAL, IVY_PRICE, TRIAL_DAYS,
+  BILLABLE_RATE, ADMIN_AUTOMATED, NO_SHOW_RATE, WEEKS_PER_MONTH,
+} from '../../lib/pricing.js';
 
 export default function RoiCalculator() {
   const [clients, setClients] = useState(40);
@@ -33,7 +32,7 @@ export default function RoiCalculator() {
     const toolSavings = Math.max(0, STACK_TOTAL - IVY_PRICE);
 
     // 2. Admin hours reclaimed - the HOURS slider drives this.
-    const reclaimedHours = Math.round(hours * 4.33 * ADMIN_AUTOMATED);
+    const reclaimedHours = Math.round(hours * WEEKS_PER_MONTH * ADMIN_AUTOMATED);
     const hoursRevenue = reclaimedHours * BILLABLE_RATE;
 
     // 3. No-shows prevented - the CLIENTS slider drives this. Card-on-

@@ -35,6 +35,15 @@ export const IVY_PRICE = 8.99;
 // in the trial length only happens in one place.
 export const TRIAL_DAYS = 14;
 
+// Shared ROI assumptions - deliberately conservative and cited wherever
+// they surface. Both the marketing ROI calculator (RoiCalculator.jsx) and
+// the onboarding "here's what Ivy sees for you" proof step (impact.js)
+// import these, so the two projections can never drift.
+export const BILLABLE_RATE = 75;      // $/hr - average solo service rate
+export const ADMIN_AUTOMATED = 0.6;   // share of admin time Ivy automates
+export const NO_SHOW_RATE = 0.08;     // typical no-show rate without reminders
+export const WEEKS_PER_MONTH = 4.33;  // avg weeks/month for monthly rollups
+
 // Billing cadence for the "Active" plan. We bill every WEEK (7 days) — so
 // 365/7 ≈ 52.14 cycles per year. All savings/equivalence math below is derived
 // from this so a future cadence change only requires updating CYCLES_PER_YEAR.

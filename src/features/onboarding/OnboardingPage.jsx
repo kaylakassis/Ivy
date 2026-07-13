@@ -9,13 +9,14 @@
 // Step ids (kept in sync with VALID_STEPS in api/onboarding/state.js):
 //   welcome      → intro slide, "let's get you set up"
 //   business     → name, handle (slug), tagline, category
+//   about        → goals + pain points (with instant validation payoff)
 //   services     → at least one service to be bookable
 //   availability → weekday windows
 //   payments     → Stripe Connect (optional, can skip)
 //   branding     → logo + accent color (optional)
 //   first_client → manual add OR import (optional)
 //   website      → pick template + publish (optional)
-//   tour         → quick walk through the main tabs
+//   impact       → "here's what Ivy sees for you" personalized proof
 //   done         → celebrate + route to dashboard
 //
 // "Skip" on any optional step records the step into skippedSteps so
@@ -32,7 +33,8 @@ import { useUserContext } from '../../lib/userContext.jsx';
 import { publicOrigin } from '../../lib/publicUrl.js';
 import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
 import IvyGuidedSetup from './IvyGuidedSetup.jsx';
-import { TRIAL_DAYS, IVY_PRICE } from '../../lib/pricing.js';
+import { TRIAL_DAYS, IVY_PRICE, STACK_TOTAL } from '../../lib/pricing.js';
+import { computeImpact } from './impact.js';
 
 // Step set per business type. 'both' keeps every step so existing
 // workspaces aren't affected; 'service' removes the first_product
@@ -64,6 +66,7 @@ function stepsFor(businessType) {
     { id: 'branding',     label: 'Branding',        optional: true  },
     { id: 'first_client', label: 'First client',    optional: true  },
     { id: 'website',      label: 'Website',         optional: true  },
+    { id: 'impact',       label: 'Your upside',     optional: false },
     { id: 'done',         label: 'Done',            optional: false },
   );
   return base;
@@ -625,6 +628,7 @@ export default function OnboardingPage() {
         {currentStep === 'first_client' && <FirstClientStep clientDraft={clientDraft} setClientDraft={setClientDraft}
           clientsCount={clientsCount}/>}
         {currentStep === 'website'      && <WebsiteStep websiteStatus={websiteStatus} websiteTemplate={websiteTemplate} setWebsiteTemplate={setWebsiteTemplate}/>}
+        {currentStep === 'impact'       && <ImpactStep about={about} businessType={businessType}/>}
         {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}
           trialEndsAt={ctx?.subscription?.trialEndsAt || null}/>}
 
@@ -669,6 +673,7 @@ export default function OnboardingPage() {
               if (currentStep === 'branding')     return saveBranding();
               if (currentStep === 'first_client') return saveFirstClient();
               if (currentStep === 'website')      return saveWebsite();
+              if (currentStep === 'impact')       return goNext();
               if (currentStep === 'tour')         return goNext();
               if (currentStep === 'done')         return finish();
             }}/>
@@ -1501,6 +1506,7 @@ function PrimaryCTA({ currentStep, onContinue, busy }) {
   const label = currentStep === 'welcome' ? "Let's go"
               : currentStep === 'done'    ? 'Finish'
               : currentStep === 'tour'    ? 'Almost there'
+              : currentStep === 'impact'  ? 'Continue'
               : 'Save & continue';
   return (
     <button onClick={onContinue} className="btn btn-primary" disabled={busy}>
@@ -1575,13 +1581,13 @@ function AboutStep({ about, setAbout }) {
       />
 
       <ChoiceField
-        label="What are your biggest challenges right now? *"
-        hint="Pick all that apply."
+        label="What's draining you most right now? *"
+        hint="Be honest - pick all that apply. This is exactly what Ivy takes off your plate."
         options={[
           { id: 'leads',        label: 'Not enough leads' },
           { id: 'no_shows',     label: 'No-shows & cancellations' },
-          { id: 'getting_paid', label: 'Getting paid on time' },
-          { id: 'organized',    label: 'Staying organized' },
+          { id: 'getting_paid', label: 'Chasing payments' },
+          { id: 'organized',    label: 'Staying on top of it all' },
           { id: 'marketing',    label: 'Marketing myself' },
         ]}
         values={about.challengeIds} other={about.challengeOther}
@@ -1589,6 +1595,8 @@ function AboutStep({ about, setAbout }) {
         onOtherToggle={() => toggle('challengeIds')(OTHER)}
         onOtherText={(v) => set({ challengeOther: v })}
       />
+
+      <ValidationCard challengeIds={about.challengeIds} />
 
       <Field
         label="Who's your ideal client?"
@@ -1667,6 +1675,119 @@ function ChoiceField({ label, hint, options, values, other, onToggle, onOtherTog
           placeholder="Tell us…"/>
       )}
     </Field>
+  );
+}
+
+// Instant validation payoff for the pain-point question. The moment the
+// owner names what's draining them, Ivy reflects it back ("you're not
+// alone") and shows how she takes it off their plate - turning the stated
+// struggle into "this is exactly why I'm here." Copy is grounded and
+// conservative; no fabricated statistics presented as research.
+const CHALLENGE_VALIDATION = {
+  getting_paid: {
+    stat: "You're not alone - solo owners often wait 20+ days to get paid.",
+    fix: 'Ivy sends invoices, chases the unpaid ones, and reminds clients automatically - so you stop being your own collections department.',
+  },
+  organized: {
+    stat: 'Scattered admin quietly eats hours every single week.',
+    fix: 'Ivy keeps clients, bookings, payments, and messages in one place, so nothing slips through the cracks.',
+  },
+  no_shows: {
+    stat: 'No-shows cost roughly 1 in every 12 sessions.',
+    fix: 'Ivy sends automatic reminders and keeps a card on file, so empty slots stop costing you money.',
+  },
+  leads: {
+    stat: 'Most solo businesses grow on referrals and follow-ups, not ads.',
+    fix: "Ivy spots clients who've gone quiet and drafts the check-in that wins them back.",
+  },
+  marketing: {
+    stat: "Marketing yourself is the first thing to slip when you're slammed.",
+    fix: 'Ivy drafts posts, review requests, and client check-ins for you - in your voice.',
+  },
+};
+
+function ValidationCard({ challengeIds }) {
+  const picked = (challengeIds || []).filter((id) => id !== OTHER && CHALLENGE_VALIDATION[id]);
+  if (!picked.length) return null;
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 12,
+      padding: '14px 16px', borderRadius: 12,
+      background: 'var(--accent-soft)', border: '1px solid var(--border)',
+    }}>
+      {picked.map((id) => {
+        const v = CHALLENGE_VALIDATION[id];
+        return (
+          <div key={id} style={{ display: 'flex', gap: 10 }}>
+            <span style={{ flex: '0 0 auto', color: 'var(--accent)', marginTop: 1 }}>
+              <Icons.Spark size={15} sw={2}/>
+            </span>
+            <div>
+              <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--fg)', lineHeight: 1.45 }}>{v.stat}</div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, marginTop: 2 }}>{v.fix}</div>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+// Small stat card, mirroring the marketing ROI calculator's Stat but kept
+// local so onboarding follows its own local-primitive convention.
+function StatCard({ label, value, sub, emphasis }) {
+  return (
+    <div>
+      <div style={{
+        fontSize: 11.5, fontWeight: 600, color: 'var(--muted)',
+        letterSpacing: '0.06em', textTransform: 'uppercase',
+      }}>{label}</div>
+      <div style={{
+        fontFamily: 'var(--font-display)', fontSize: emphasis ? 27 : 21, fontWeight: 600,
+        color: emphasis ? 'var(--accent)' : 'var(--fg)',
+        lineHeight: 1.1, marginTop: 6, letterSpacing: '-0.02em',
+      }}>{value}</div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>{sub}</div>
+    </div>
+  );
+}
+
+// "Here's what Ivy sees for you" - the proof beat. A brand-new workspace
+// has no real data yet, so this is an HONEST projection seeded from the
+// owner's own answers, using the same conservative assumptions as the
+// marketing ROI calculator (see impact.js). Always framed "typical for a
+// business like yours," never as a reading of their real account.
+function ImpactStep({ about, businessType }) {
+  const impact = useMemo(
+    () => computeImpact({ challengeIds: about.challengeIds, stageIds: about.stageIds, businessType }),
+    [about.challengeIds, about.stageIds, businessType],
+  );
+  const stats = [
+    { key: 'hours',     label: 'Admin hours back',  value: `${impact.reclaimedHours} hrs/mo`, sub: 'billing + reminders, automated' },
+    { key: 'recovered', label: 'Revenue recovered', value: `~$${impact.recovered.toLocaleString()}/mo`,
+      sub: impact.takesAppointments ? 'reclaimed time + fewer no-shows' : 'reclaimed admin time' },
+    { key: 'total',     label: 'Tools replaced',    value: `$${STACK_TOTAL}/mo → $${IVY_PRICE}/wk`, sub: 'one app instead of a stack' },
+  ];
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <StepHeader
+        title="Here's what Ivy sees for you"
+        subtitle="A conservative estimate for a business like yours - before you've entered a thing. Your real numbers usually land higher."
+      />
+      <div style={{
+        display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 14,
+        padding: 18, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 12,
+      }}>
+        {stats.map((s) => (
+          <StatCard key={s.key} label={s.label} value={s.value} sub={s.sub} emphasis={impact.emphasis === s.key}/>
+        ))}
+      </div>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+        Based on a $75/hr rate, Ivy automating ~60% of admin time, and reminders +
+        card-on-file recovering typical no-shows. It's an estimate to show the upside -
+        not a reading of your account.
+      </div>
+    </div>
   );
 }
 
