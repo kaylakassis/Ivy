@@ -20,6 +20,7 @@ import { validateAvailability, availabilityFromPreset, validateBookingRules, val
 import { sendEmail, emailShell } from './email.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
+import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
 import crypto from 'node:crypto';
 
 // ── Tool schema (passed to Anthropic on every call) ──────────────────
@@ -76,6 +77,29 @@ export const IVY_TOOLS = [
       type: 'object',
       properties: { limit: { type: 'integer', description: 'Max rows. Default 20, max 50.' } },
     },
+  },
+  {
+    name: 'remember',
+    description: "Save a durable note about the business or the owner's preferences so you don't forget it in future sessions - e.g. 'raising rates to $150 in March', 'busy season is December', 'prefers Venmo', 'no clients on Mondays'. Call this whenever the owner tells you something worth remembering long-term. Do NOT use it for one-off task details.",
+    input_schema: {
+      type: 'object',
+      properties: { fact: { type: 'string', description: 'The single durable fact to remember, in a short sentence.' } },
+      required: ['fact'],
+    },
+  },
+  {
+    name: 'forget',
+    description: "Remove durable notes matching a phrase - use when the owner asks you to forget something or a saved fact is no longer true.",
+    input_schema: {
+      type: 'object',
+      properties: { about: { type: 'string', description: 'A phrase identifying what to forget (matched against saved notes).' } },
+      required: ['about'],
+    },
+  },
+  {
+    name: 'list_memories',
+    description: "List the durable notes you've saved about this business. Use when the owner asks what you remember about them.",
+    input_schema: { type: 'object', properties: {} },
   },
   {
     name: 'list_upcoming_bookings',
@@ -779,6 +803,9 @@ export const HANDLERS = {
   get_pl_summary,
   list_reviews,
   list_leads,
+  remember,
+  forget,
+  list_memories,
   // Writes - existing
   send_message_to_client,
   mark_invoice_paid,
@@ -1548,6 +1575,22 @@ async function list_leads({ workspaceId, args }) {
      ORDER BY c.created_at DESC LIMIT ${limit}`;
   const leads = rows.map((r) => ({ ...r, contacted: !!r.contacted, days_old: Number(r.days_old) }));
   return { leads, total: leads.length, uncontacted_count: leads.filter((l) => !l.contacted).length };
+}
+
+async function remember({ workspaceId, args }) {
+  const saved = await addMemory(workspaceId, args?.fact);
+  if (!saved) return { error: 'Nothing to remember - give me a fact to save.' };
+  return { remembered: saved.content };
+}
+
+async function forget({ workspaceId, args }) {
+  const forgot = await forgetMemoryMatching(workspaceId, args?.about);
+  return { forgot };
+}
+
+async function list_memories({ workspaceId }) {
+  const rows = await listMemories(workspaceId);
+  return { memories: rows.map((r) => r.content) };
 }
 
 // ── Creates ─────────────────────────────────────────────────────────

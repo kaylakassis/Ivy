@@ -2021,6 +2021,20 @@ CREATE TABLE IF NOT EXISTS ivy_suggestions (
 CREATE UNIQUE INDEX IF NOT EXISTS idx_ivy_suggestions_dedupe ON ivy_suggestions(workspace_id, dedupe_key);
 CREATE INDEX IF NOT EXISTS idx_ivy_suggestions_pending ON ivy_suggestions(workspace_id, status, created_at DESC);
 
+-- Ivy durable memory. Freeform notes the owner asks Ivy to remember (rates,
+-- busy season, preferences, decisions) so she carries context across sessions
+-- instead of forgetting past the last ~10 turns. Owner-authored (same trust
+-- level as their chat messages) and injected into every Ivy turn's context.
+-- Capped per workspace in code (oldest pruned) to bound the injected prompt.
+CREATE TABLE IF NOT EXISTS ivy_memory (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  content      TEXT NOT NULL,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_memory_ws ON ivy_memory(workspace_id, created_at DESC);
+
 -- Per-workspace Anthropic usage tracking. One row per (workspace, day, model)
 -- so we can cap daily spend, surface usage in the UI, and later tier on plan.
 CREATE TABLE IF NOT EXISTS ivy_usage (
