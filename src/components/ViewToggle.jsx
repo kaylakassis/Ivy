@@ -49,9 +49,8 @@ const HIDE_PREFIXES = [
 ];
 
 export default function ViewToggle() {
-  const navigate = useNavigate();
   const location = useLocation();
-  const { isMobile } = useViewport();
+  const { isMobile, isDesktop } = useViewport();
 
   // Hide on routes that have no concept of "Business vs Client view".
   if (location.pathname === '/') return null;
@@ -63,47 +62,51 @@ export default function ViewToggle() {
   if (isMobile) return null;
 
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
-  const view = onClient ? 'client' : 'business';
+  // On DESKTOP owner routes the switch now lives inline in the sidebar (under
+  // the brand), so suppress the floating pill there. Keep it for the client
+  // portal (/me — no owner sidebar), for tablet (compact sidebar has no room),
+  // and everywhere the paywall covers the sidebar (the Paywall carries its own
+  // client/logout escapes).
+  if (isDesktop && !onClient) return null;
   // On chat-style routes the default bottom-center position lands the
   // pill directly on top of the composer. Add a class so global.css can
   // lift it above the composer without affecting any other route.
   const raised = RAISE_PREFIXES.some((p) => location.pathname === p || location.pathname.startsWith(p + '/') || location.pathname === p);
 
-  const go = (target) => {
-    if (target === view) return;
-    navigate(target === 'client' ? '/me' : '/');
-  };
-
   return (
-    <div role="group" aria-label="View switcher" style={{
+    // Outer wrapper carries the fixed position (and the .view-toggle class so
+    // global.css can lift `bottom` above the mobile/composer bars). `bottom`
+    // lives in CSS, not inline, so those overrides win.
+    <div className={'view-toggle' + (raised ? ' view-toggle-raised' : '')} style={{
       position: 'fixed',
-      // `bottom` lives in CSS (.view-toggle) so the
-      // `body.has-mobile-nav .view-toggle` media-query override can lift
-      // the pill above the bottom nav. Setting it inline here would
-      // override the CSS and the pill would sit ON TOP of the nav.
       left: '50%', transform: 'translateX(-50%)',
       // Sits above the Paywall (z-index 200) so a paywalled owner can
       // always escape back to the free client portal.
       zIndex: 250,
-      display: 'flex', gap: 4, padding: 4,
+    }}>
+      <ViewSwitch floating />
+    </div>
+  );
+}
+
+// The Business ↔ Client switch itself, position-free. Reused by the floating
+// pill above and rendered inline in the sidebar (under the brand). `floating`
+// adds the drop shadow the corner pill wants.
+export function ViewSwitch({ floating }) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
+  const view = onClient ? 'client' : 'business';
+  const go = (target) => { if (target !== view) navigate(target === 'client' ? '/me' : '/'); };
+  return (
+    <div role="group" aria-label="View switcher" style={{
+      display: 'inline-flex', gap: 4, padding: 4,
       background: 'var(--surface)', border: '1px solid var(--border-strong)',
-      borderRadius: 999, boxShadow: 'var(--shadow)',
-    }}
-    className={'view-toggle' + (raised ? ' view-toggle-raised' : '')}
-    >
-      <ToggleButton
-        active={view === 'business'}
-        onClick={() => go('business')}
-        icon="Trending"
-        label="Business"
-      />
-      <ToggleButton
-        active={view === 'client'}
-        onClick={() => go('client')}
-        icon="Users"
-        label="Client"
-        sub="free"
-      />
+      borderRadius: 999,
+      boxShadow: floating ? 'var(--shadow)' : 'none',
+    }}>
+      <ToggleButton active={view === 'business'} onClick={() => go('business')} icon="Trending" label="Business" />
+      <ToggleButton active={view === 'client'} onClick={() => go('client')} icon="Users" label="Client" sub="free" />
     </div>
   );
 }

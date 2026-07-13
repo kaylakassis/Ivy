@@ -4,6 +4,7 @@ import { Icons } from '../Icons.jsx';
 import { visibleNavFor } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
+import { ViewSwitch } from '../ViewToggle.jsx';
 import ReportBugModal from '../ReportBugModal.jsx';
 
 function initialsOf(user) {
@@ -121,6 +122,10 @@ export default function Sidebar({ variant = 'full' }) {
           </span>
         </div>
       </div>
+
+      {/* Business ↔ Client view switch — moved here from the floating pill so
+          it lives under the brand instead of hovering over the composer. */}
+      <ViewSwitch />
 
       <button onClick={() => nav('/calendar')} style={{
         display: 'flex', alignItems: 'center', gap: 10,
