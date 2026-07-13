@@ -47,6 +47,21 @@ export const IVY_TOOLS = [
     },
   },
   {
+    name: 'list_expenses',
+    description: "Lists recent expenses plus this month's total and a by-category breakdown. Use when the user asks about costs, spending, expenses, deductions, or where their money is going.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        limit: { type: 'integer', description: 'Max recent rows. Default 20, max 50.' },
+      },
+    },
+  },
+  {
+    name: 'get_pl_summary',
+    description: "Profit summary: revenue minus expenses (net profit) for this month and last month. Use whenever the user asks about profit, take-home, margin, net, or whether they're actually making money - revenue alone doesn't answer that.",
+    input_schema: { type: 'object', properties: {} },
+  },
+  {
     name: 'list_upcoming_bookings',
     description: "Lists upcoming non-cancelled bookings. Use when the user asks what's on the calendar.",
     input_schema: {
@@ -744,6 +759,8 @@ export const HANDLERS = {
   search_invoices,
   search_bookings,
   get_dashboard_summary,
+  list_expenses,
+  get_pl_summary,
   // Writes - existing
   send_message_to_client,
   mark_invoice_paid,
@@ -1424,6 +1441,54 @@ async function get_dashboard_summary({ workspaceId }) {
     open_invoices:      invoices.rows[0]?.open_count || 0,
     open_invoices_value: Number(invoices.rows[0]?.open_value || 0),
     average_lifetime_value: Number(ltv.rows[0]?.avg_ltv || 0),
+  };
+}
+
+async function list_expenses({ workspaceId, args }) {
+  const tz = await workspaceTimeZone(workspaceId);
+  const limit = clampInt(args?.limit, 20, 1, 50);
+  const [recent, month, byCat] = await Promise.all([
+    sql`SELECT id, amount, date, category, vendor, notes, is_deductible
+          FROM expenses WHERE workspace_id = ${workspaceId}
+          ORDER BY date DESC, created_at DESC LIMIT ${limit}`,
+    sql`SELECT COALESCE(SUM(amount), 0)::numeric AS total
+          FROM expenses WHERE workspace_id = ${workspaceId}
+            AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date`,
+    sql`SELECT category, COALESCE(SUM(amount), 0)::numeric AS total
+          FROM expenses WHERE workspace_id = ${workspaceId}
+            AND date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date
+          GROUP BY category ORDER BY total DESC LIMIT 8`,
+  ]);
+  return {
+    expenses: recent.rows.map((r) => ({ ...r, amount: Number(r.amount) })),
+    this_month_total: Number(month.rows[0].total),
+    this_month_by_category: byCat.rows.map((r) => ({ category: r.category, total: Number(r.total) })),
+  };
+}
+
+async function get_pl_summary({ workspaceId }) {
+  const tz = await workspaceTimeZone(workspaceId);
+  // Revenue = paid invoices (materialized total, same source as the snapshot
+  // Ivy already quotes). Expenses = expenses.amount. Profit = revenue - expenses.
+  const [rev, exp] = await Promise.all([
+    sql`SELECT
+          COALESCE(SUM(total) FILTER (WHERE paid_at >= date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS this_month,
+          COALESCE(SUM(total) FILTER (WHERE paid_at >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month') AT TIME ZONE ${tz}
+                                        AND paid_at <  date_trunc('month', NOW() AT TIME ZONE ${tz}) AT TIME ZONE ${tz}), 0)::numeric AS last_month
+        FROM invoices
+        WHERE workspace_id = ${workspaceId} AND status = 'paid' AND paid_at IS NOT NULL`,
+    sql`SELECT
+          COALESCE(SUM(amount) FILTER (WHERE date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date), 0)::numeric AS this_month,
+          COALESCE(SUM(amount) FILTER (WHERE date >= (date_trunc('month', NOW() AT TIME ZONE ${tz}) - INTERVAL '1 month')::date
+                                        AND date <  (date_trunc('month', NOW() AT TIME ZONE ${tz}))::date), 0)::numeric AS last_month
+        FROM expenses WHERE workspace_id = ${workspaceId}`,
+  ]);
+  const r = rev.rows[0], e = exp.rows[0];
+  const tR = Number(r.this_month), tE = Number(e.this_month);
+  const lR = Number(r.last_month),  lE = Number(e.last_month);
+  return {
+    this_month: { revenue: tR, expenses: tE, profit: tR - tE },
+    last_month: { revenue: lR, expenses: lE, profit: lR - lE },
   };
 }
 
