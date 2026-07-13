@@ -60,7 +60,10 @@ export default function Sidebar({ variant = 'full' }) {
           <Icons.Logo size={22} color="currentColor"/>
         </div>
 
-        <nav style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+        <nav style={{
+          display: 'flex', flexDirection: 'column', gap: 4,
+          flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+        }}>
           {visibleNav.map((item) => {
             const Icon = Icons[item.icon] || Icons.Home;
             return (
@@ -78,11 +81,10 @@ export default function Sidebar({ variant = 'full' }) {
           })}
         </nav>
 
-        <div style={{ flex: 1 }}/>
-
         <button onClick={doSignOut} title="Sign out"
           style={{
             width: 36, height: 36, margin: '0 auto', borderRadius: 99,
+            flexShrink: 0,
             background: 'var(--accent)', color: 'var(--accent-ink)',
             fontSize: 12, fontWeight: 600,
             display: 'flex', alignItems: 'center', justifyContent: 'center',
@@ -159,7 +161,13 @@ export default function Sidebar({ variant = 'full' }) {
         <Icons.ArrowDown size={14} stroke="var(--muted)" sw={1.8} />
       </button>
 
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+      {/* The nav list is the scroll region so the account block below stays
+          pinned + visible even when there are more items than fit the
+          viewport. minHeight:0 lets a flex child actually shrink and scroll. */}
+      <nav style={{
+        display: 'flex', flexDirection: 'column', gap: 2,
+        flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+      }}>
         {visibleNav.map((item, i) => {
           const IconComp = Icons[item.icon] || Icons.Home;
           // Section label the first time a new section appears (NAV is ordered
@@ -198,9 +206,7 @@ export default function Sidebar({ variant = 'full' }) {
         })}
       </nav>
 
-      <div style={{ flex: 1 }} />
-
-      <div style={{ position: 'relative' }}>
+      <div style={{ position: 'relative', flexShrink: 0 }}>
         {menuOpen && (
           <div style={{
             position: 'absolute', bottom: 'calc(100% + 6px)', left: 0, right: 0,
