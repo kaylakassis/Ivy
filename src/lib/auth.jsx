@@ -68,6 +68,12 @@ export function AuthProvider({ children }) {
       acceptedTermsVersion: CURRENT_TERMS_VERSION,
       acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,
     });
+    // A brand-new account must ALWAYS be eligible for onboarding. The
+    // onboarding-skip flag is per-browser, not per-account, so a stale one
+    // left by a PREVIOUS account on this device (owner deleted + re-signed
+    // up, or a shared device) would make RoleRouter wrongly bypass the
+    // wizard. Clear it at account creation so a fresh owner always onboards.
+    try { localStorage.removeItem('ivy_skip_onboarding_until'); } catch { /* private mode */ }
     setUser(r.user);
     return r;
   }, []);
@@ -76,7 +82,12 @@ export function AuthProvider({ children }) {
     // Always clear local auth state even if the network call fails, so the
     // user is never stuck "logged in" with no feedback when offline / on a 5xx.
     try { await api.post('/auth/logout'); }
-    finally { setUser(null); setImpersonating(null); setTerms(null); }
+    finally {
+      setUser(null); setImpersonating(null); setTerms(null);
+      // Don't let a per-browser onboarding-skip flag leak into whoever signs
+      // in next on this device (e.g. after an account deletion).
+      try { localStorage.removeItem('ivy_skip_onboarding_until'); } catch { /* private mode */ }
+    }
   }, []);
 
   // Refresh the user (e.g. after email verification) so UI flips immediately.
