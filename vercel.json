@@ -15,6 +15,7 @@
     { "path": "/api/cron/invoice-due-soon",     "schedule": "0 13 * * *" },
     { "path": "/api/cron/review-requests",      "schedule": "0 17 * * *" },
     { "path": "/api/cron/db-prune",              "schedule": "0 4 * * *" },
+    { "path": "/api/cron/ivy-agent",             "schedule": "0 9 * * *" },
     { "path": "/api/cron/blob-prune",            "schedule": "30 4 * * 0" },
     { "path": "/api/cron/discover-refresh",      "schedule": "*/15 * * * *" },
     { "path": "/api/cron/subscription-dunning",  "schedule": "0 10 * * *" },

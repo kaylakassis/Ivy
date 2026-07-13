@@ -1998,6 +1998,29 @@ CREATE TABLE IF NOT EXISTS ivy_messages (
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_messages_session ON ivy_messages(session_id, created_at);
 
+-- Ivy proactive suggestions ("Ivy noticed X → approve?"). A cron
+-- (api/cron/ivy-agent.js) detects overnight signals per workspace (overdue
+-- invoices, a quiet calendar, a new review, waiting leads) and inserts one
+-- PENDING row per signal. The owner sees them in-app and either acts (opens Ivy
+-- with the pre-filled prompt, which still runs through Ivy's normal confirm
+-- gate) or dismisses. The unique dedupe_key encodes a per-day bucket so the cron
+-- is idempotent and a signal never suggests more than once a day.
+CREATE TABLE IF NOT EXISTS ivy_suggestions (
+  id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  kind         TEXT NOT NULL,
+  dedupe_key   TEXT NOT NULL,
+  icon         TEXT,
+  title        TEXT NOT NULL,
+  detail       TEXT,
+  prompt       TEXT NOT NULL,
+  status       TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending','done','dismissed')),
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  acted_at     TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_ivy_suggestions_dedupe ON ivy_suggestions(workspace_id, dedupe_key);
+CREATE INDEX IF NOT EXISTS idx_ivy_suggestions_pending ON ivy_suggestions(workspace_id, status, created_at DESC);
+
 -- Per-workspace Anthropic usage tracking. One row per (workspace, day, model)
 -- so we can cap daily spend, surface usage in the UI, and later tier on plan.
 CREATE TABLE IF NOT EXISTS ivy_usage (
