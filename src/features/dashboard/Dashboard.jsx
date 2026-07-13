@@ -10,6 +10,7 @@ import SuccessToast from '../../components/SuccessToast.jsx';
 import InviteFriendCard from './InviteFriendCard.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
 import WorkflowSuggestionCard from './WorkflowSuggestionCard.jsx';
+import IvyNoticedCard from './IvyNoticedCard.jsx';
 import NotifyPrompt from '../../components/NotifyPrompt.jsx';
 
 // Dashboard tiles per business type. 'both' is the default and shows
@@ -483,6 +484,7 @@ export default function Dashboard() {
             )}
           </div>
         )}
+        <IvyNoticedCard />
         <TodayWithIvyCard items={data?.briefing?.items}/>
         {data?.workflowSuggestion && (
           <WorkflowSuggestionCard suggestion={data.workflowSuggestion} onChanged={loadDashboard}/>
