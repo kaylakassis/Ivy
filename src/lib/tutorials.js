@@ -42,7 +42,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Ivy is always one tap away',
-        body: 'Tap the "Ivy" bubble in the bottom-right of any page to ask your AI coach anything - from "how should I price my new service?" to "draft a check-in to my 3 quietest clients."',
+        body: 'Tap the "Ivy" bubble in the bottom-right of any page to ask your AI assistant anything - from "how should I price my new service?" to "draft a check-in to my 3 quietest clients."',
       },
     ],
   },

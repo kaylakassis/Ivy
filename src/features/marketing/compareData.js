@@ -25,7 +25,7 @@ export const FEATURE_ROWS = [
   { key: 'workflows',     label: 'Automated workflows' },
   { key: 'reviews',       label: 'Review capture + display' },
   { key: 'rewards',       label: 'Loyalty + referral rewards' },
-  { key: 'ai',            label: 'Native AI coach (takes actions)' },
+  { key: 'ai',            label: 'Native AI assistant (takes actions)' },
   { key: 'export',        label: 'Full data export, any time' },
   { key: 'noTxnFee',      label: 'No transaction fees (Stripe direct)' },
 ];

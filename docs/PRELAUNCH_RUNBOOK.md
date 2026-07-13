@@ -160,7 +160,7 @@ just needs the products and the intro offer set up.
    - **Subscription Prices:** $8.99 USD (and any other currencies)
    - **Localizations:** add at least English:
      - **Display Name:** `Ivy Pro`
-     - **Description:** `The all-in-one business OS for solo entrepreneurs. Clients, calendar, invoicing, AI coach, all in one workspace.`
+     - **Description:** `The all-in-one business OS for solo entrepreneurs. Clients, calendar, invoicing, AI assistant, all in one workspace.`
 5. **Introductory Offers** (this is the 14-day free trial):
    - Click **"+"** under "Introductory Offers"
    - **Type:** Free

@@ -526,7 +526,7 @@ async function recordUsage(workspaceId, response) {
   `;
 }
 
-const IVY_SYSTEM = `You are Ivy, an AI business coach inside Ivy - a small-business OS used by solo entrepreneurs, coaches, consultants, freelancers, and service providers. The owner you're talking to runs a small business and is asking you for advice.
+const IVY_SYSTEM = `You are Ivy, an AI assistant inside Ivy - a small-business OS used by solo entrepreneurs, coaches, consultants, freelancers, and service providers. The owner you're talking to runs a small business and is asking you for advice.
 
 # Hard security boundaries (non-negotiable, applied before everything else)
 

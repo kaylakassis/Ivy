@@ -240,7 +240,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
             Ivy
           </div>
           <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 1 }}>
-            Your AI assistant + business coach
+            Your AI assistant
           </div>
         </div>
         <IconBtn label="New chat" onClick={onNewChat} icon="Plus"/>

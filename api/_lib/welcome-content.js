@@ -142,7 +142,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                       03 Let AI run the busywork
                     </p>
                     <p style="margin:0;padding:0;font-size:15px;padding-top:0.5em;padding-bottom:0.5em;color:#F3F3EE;margin-top:0;margin-bottom:40px">
-                      Ivy, your AI-assistant and coach, can draft messages, send invoices, follow up with leads, and surface what needs your attention - so you stay focused on the work only you can do.
+                      Ivy, your AI assistant, can draft messages, send invoices, follow up with leads, and surface what needs your attention - so you stay focused on the work only you can do.
                     </p>
                     <hr style="width:100%;border:none;border-color:transparent;border-top:1px solid #e8e8e4;padding-bottom:1em;border-style:solid;border-width:2px;margin-top:0;margin-bottom:40px" />
                     <h2 style="margin:0;padding:0;font-size:35px;line-height:1.44em;font-weight:600;letter-spacing:-0.5px;margin-top:0;margin-bottom:16px">

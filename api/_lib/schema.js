@@ -1974,7 +1974,7 @@ CREATE INDEX IF NOT EXISTS idx_bug_reports_status_recent
 CREATE INDEX IF NOT EXISTS idx_bug_reports_user_recent
   ON bug_reports(user_id, created_at DESC) WHERE user_id IS NOT NULL;
 
--- Ivy: AI coach chat history. Each workspace owns its sessions; messages
+-- Ivy: AI assistant chat history. Each workspace owns its sessions; messages
 -- live in a child table so we can stream and paginate later. Replies are
 -- generated server-side (mock now, real Anthropic API later) so the secret
 -- never reaches the browser.

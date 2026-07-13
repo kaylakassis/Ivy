@@ -101,7 +101,7 @@ export default function TermsAcceptModal() {
             I have read and agree to the{' '}
             <Link to="/terms" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Terms of Service</Link>{' '}and{' '}
             <Link to="/privacy" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Privacy Policy</Link>,
-            and I understand that Ivy - including the Ivy AI coach
+            and I understand that Ivy - including the Ivy AI assistant
             and every integrated third-party service - provides
             informational tools only, not financial, legal, tax, or
             other professional advice. I am responsible for my own

@@ -24,8 +24,8 @@ const BLOCKS = [
     kicker: 'The shape',
     heading: "What Ivy actually is.",
     paragraphs: [
-      "One workspace where every part of the business lives. Bookings know about clients. Clients know about invoices. Invoices know about payments. Payments know about the AI coach. The coach knows about everything and can quietly nudge - \"Sarah hasn't booked in three weeks; want me to send a check-in?\"",
-      "Every workspace is fully isolated. Your numbers, your messages, your clients are yours. The AI coach can only see your data - never anyone else's. You can export everything as JSON any time and walk away if it isn't working.",
+      "One workspace where every part of the business lives. Bookings know about clients. Clients know about invoices. Invoices know about payments. Payments know about Ivy. Ivy knows about everything and can quietly nudge - \"Sarah hasn't booked in three weeks; want me to send a check-in?\"",
+      "Every workspace is fully isolated. Your numbers, your messages, your clients are yours. The AI assistant can only see your data - never anyone else's. You can export everything as JSON any time and walk away if it isn't working.",
     ],
   },
   {
@@ -38,9 +38,9 @@ const BLOCKS = [
   },
   {
     kicker: 'The bet',
-    heading: 'AI is a coach, not a chatbot.',
+    heading: 'AI that does the work, not a chatbot.',
     paragraphs: [
-      "Ivy is built into Ivy because the coach matters more than the AI. She sees your real numbers - revenue this month, active clients, who's gone quiet, what's overdue - and answers in plain English with specific actions. Not \"consider engaging your top customers\" but \"send Sarah a check-in; she's 22 days quiet.\"",
+      "Ivy is built in because what she does matters more than the fact that she's AI. She sees your real numbers - revenue this month, active clients, who's gone quiet, what's overdue - and answers in plain English with specific actions. Not \"consider engaging your top customers\" but \"send Sarah a check-in; she's 22 days quiet.\"",
       "She has tools. Tell her to draft a thank-you to a client who just paid and send it through the portal - she'll do all of it. The chat box is a deliberately small surface area for what's actually a working assistant.",
     ],
   },
@@ -87,7 +87,7 @@ export default function AboutPage() {
         }}>
           Most "all-in-one" tools are five mediocre ones bolted together with a
           shared logo. Ivy is the opposite bet: one workspace where booking,
-          invoicing, messaging, documents, and AI coaching share the same
+          invoicing, messaging, documents, and AI assistance share the same
           memory.
         </p>
       </section>

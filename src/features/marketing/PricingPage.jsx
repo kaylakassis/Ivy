@@ -42,7 +42,7 @@ const PLAN = {
     'Workflows + automated reminders',
     'Goals + finance dashboard',
     'Reviews + rewards',
-    'Ivy AI coach (chat + actions, personalized to you)',
+    'Ivy AI assistant (chat + actions, personalized to you)',
     'Stripe payments (no transaction fee)',
     'Email support',
   ],

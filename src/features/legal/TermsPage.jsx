@@ -35,7 +35,7 @@ export default function TermsPage() {
         if you suspect unauthorized access.</P>
 
       <H2>2. The Service is informational, not professional advice</H2>
-      <P><strong>Ivy - including the Ivy AI coach, every dashboard
+      <P><strong>Ivy - including the Ivy AI assistant, every dashboard
         metric, every suggested action, every email, every report
         export, and every integration - provides informational tools
         only. Nothing in the Service constitutes financial, legal, tax,

@@ -494,7 +494,7 @@ function StepCard({ step, stepIdx, isLast, onSkip, onBack, onNext, embedded }) {
 function IvyHello({ onDismiss, onBack }) {
   const [sessionId, setSessionId] = useState(null);
   const [messages, setMessages]   = useState([
-    { role: 'ivy', text: "Welcome to Ivy! I'm Ivy, your AI business coach. I'll be here in the app to help you understand your numbers, spot patterns, and figure out what to focus on next. Is there anything you'd like to ask before you dive in?" },
+    { role: 'ivy', text: "Welcome to Ivy! I'm Ivy, your AI assistant. I'll be here in the app to help you understand your numbers, spot patterns, and figure out what to focus on next. Is there anything you'd like to ask before you dive in?" },
   ]);
   const [input, setInput] = useState('');
   const [busy, setBusy]   = useState(false);
@@ -552,7 +552,7 @@ function IvyHello({ onDismiss, onBack }) {
               Hi, I'm Ivy
             </div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-              Your AI business coach
+              Your AI assistant
             </div>
           </div>
         </div>

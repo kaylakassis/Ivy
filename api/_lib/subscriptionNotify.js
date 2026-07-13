@@ -85,7 +85,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
       <ul style="padding-left:20px;margin:14px 0;">
         <li>Your client list, pipeline, and history in one place</li>
         <li>Bookings and reminders running automatically</li>
-        <li>Ivy, your AI coach, learning your business</li>
+        <li>Ivy, your AI assistant, learning your business</li>
         <li>Financials and reporting tracking every dollar</li>
       </ul>
       <p>When your trial ends on <strong>${endDate}</strong>, you keep your account — but the business features above pause until you choose a plan. Lock everything in now and don't lose a beat.</p>`;
@@ -120,7 +120,7 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
       <ul style="padding-left:20px;margin:14px 0;">
         <li>Unlimited client management</li>
         <li>Scheduling, reminders, and your booking page</li>
-        <li>Ivy, your AI business coach</li>
+        <li>Ivy, your AI assistant</li>
         <li>Financial tracking, invoicing, and reports</li>
         <li>Website builder and campaign tools</li>
       </ul>

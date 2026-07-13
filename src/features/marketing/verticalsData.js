@@ -39,7 +39,7 @@ export const VERTICALS = {
     angle: 'personal trainers & fitness coaches',
     homeLine: 'Group classes with capacity, recurring sessions, payment-on-booking.',
     headline: 'Group classes, recurring sessions, and packages - without enterprise-grade overhead.',
-    sub: 'Schedule 1-on-1s and group classes. Sell session packs. Collect on booking. Let your AI coach (Ivy) help you spot at-risk clients before they ghost.',
+    sub: 'Schedule 1-on-1s and group classes. Sell session packs. Collect on booking. Let your AI assistant (Ivy) help you spot at-risk clients before they ghost.',
     bullets: [
       { title: 'Group classes with capacity', body: 'Set a service to "capacity 12". Clients book individual seats; the slot fills up like a real class roster.' },
       { title: 'Recurring sessions', body: 'Tuesday + Thursday 6 AM, every week, until canceled. Ivy creates the booking series and reminders fire for each.' },

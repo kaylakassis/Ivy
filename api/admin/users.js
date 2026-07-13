@@ -314,13 +314,13 @@ function bodyFor(type, name) {
     case 'sponsored':
       return `<p>You've been given full access to Ivy - no subscription
         needed. Treat it like the paid version: the calendar, clients,
-        invoicing, AI coach, all of it. Set your password below and
+        invoicing, AI assistant, all of it. Set your password below and
         you're in.</p>`;
     case 'beta':
       return `<p>You've been invited to the <strong>Ivy beta</strong> — early
         access to the full app with no subscription and no card needed. You
         get the same toolset paying customers do (clients, calendar, invoicing,
-        documents, messaging, Ivy your AI coach, the whole thing), free for
+        documents, messaging, Ivy your AI assistant, the whole thing), free for
         the duration of the beta.</p>
         <p>In return, we'd love your honest feedback as you use it — what
         works, what's broken, what's missing. Just reply to any Ivy email

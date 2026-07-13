@@ -91,7 +91,7 @@ function capitalize(s) {
 
 const TESTIMONIALS = [
   {
-    quote: 'I cut three subscriptions the same week. Bookings, invoices, and the AI coach all in one place - and the coach actually quotes my real numbers.',
+    quote: 'I cut three subscriptions the same week. Bookings, invoices, and the AI assistant all in one place - and it actually quotes my real numbers.',
     role: 'Massage therapist',
     location: 'Portland, OR',
   },
@@ -299,7 +299,7 @@ function ClientAudienceView() {
           </h2>
           <p style={{ margin: '0 0 18px', fontSize: 14.5, color: 'var(--fg-2)', lineHeight: 1.6 }}>
             Ivy is also the all-in-one workspace for solo owners - booking,
-            invoicing, messaging, documents, and an AI coach in one place.
+            invoicing, messaging, documents, and an AI assistant in one place.
           </p>
           <Link to="/" className="btn btn-outline" style={{ padding: '12px 20px', fontSize: 14 }}>
             See Ivy for owners <Icons.Arrow size={13} sw={2}/>

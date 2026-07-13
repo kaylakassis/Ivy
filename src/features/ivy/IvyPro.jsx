@@ -1,4 +1,4 @@
-// Ivy - full-page AI business coach.
+// Ivy - full-page AI assistant.
 // Three-column layout: left (history + new chat), center (chat / welcome),
 // right (workspace context + upload placeholder).
 import React, { useEffect, useRef, useState } from 'react';
@@ -95,7 +95,7 @@ export default function IvyPro() {
             <SparkBadge direction={direction} size={32}/>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div className="page-title" style={{ fontSize: 17, margin: 0 }}>Ivy</div>
-              <div style={{ fontSize: 11, color: 'var(--muted)' }}>AI business coach</div>
+              <div style={{ fontSize: 11, color: 'var(--muted)' }}>AI assistant</div>
             </div>
           </div>
           {mode && <ModeChip mode={mode} modeError={modeError} model={model}/>}
@@ -421,7 +421,7 @@ function WelcomePanel({ onPrompt, direction, briefing }) {
         <div style={{ fontSize: 14, color: 'var(--muted)', marginTop: 8, lineHeight: 1.5 }}>
           {showBriefing
             ? "Here's where things stand today. Tap an item and I'll take it from there."
-            : 'Your AI business coach. Ask anything or start with a prompt below.'}
+            : 'Your AI assistant. Ask anything or start with a prompt below.'}
         </div>
       </div>
 
