@@ -136,7 +136,13 @@ function useIvyState() {
       setModeError(r.modeError || null);
       if (r.usage) setUsage(r.usage);
     } catch (e) {
-      setError(e);
+      // A 5xx / gateway timeout (e.g. Vercel killing a slow function → a raw
+      // "504 FUNCTION_INVOCATION_TIMEOUT") or a network abort should read as a
+      // calm "try again", not a scary deployment error dumped into the chat.
+      const serverOrTimeout = e?.status === 0 || (e?.status >= 500 && e?.status < 600);
+      setError(serverOrTimeout
+        ? new Error('Ivy took too long to answer that one — please try again.')
+        : e);
       // Drop the optimistic bubble so the user can retry
       setMessages((xs) => xs.filter((m) => m.id !== optimistic.id));
     } finally {
