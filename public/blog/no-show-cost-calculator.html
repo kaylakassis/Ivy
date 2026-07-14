@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>No-Show Cost Calculator: What Empty Slots Cost You Per Year | Ivy Blog</title>
+<meta name="description" content="Interactive calculator: enter your average service price and weekly appointments to see what no-shows cost annually - and what deposits + reminders would recover.">
+<link rel="canonical" href="https://joinivy.ai/blog/no-show-cost-calculator">
+<meta property="og:type" content="article">
+<meta property="og:site_name" content="Ivy">
+<meta property="og:title" content="No-Show Cost Calculator: What Empty Slots Cost You Per Year | Ivy Blog">
+<meta property="og:description" content="Interactive calculator: enter your average service price and weekly appointments to see what no-shows cost annually - and what deposits + reminders would recover.">
+<meta property="og:url" content="https://joinivy.ai/blog/no-show-cost-calculator">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="No-Show Cost Calculator: What Empty Slots Cost You Per Year | Ivy Blog">
+<meta name="twitter:description" content="Interactive calculator: enter your average service price and weekly appointments to see what no-shows cost annually - and what deposits + reminders would recover.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/blog.css">
+<script type="application/ld+json">{"@context": "https://schema.org", "@type": "BlogPosting", "headline": "No-Show Cost Calculator: What Empty Slots Cost You Per Year", "description": "Interactive calculator: enter your average service price and weekly appointments to see what no-shows cost annually - and what deposits + reminders would recover.", "datePublished": "2026-03-16", "url": "https://joinivy.ai/blog/no-show-cost-calculator", "author": {"@type": "Organization", "name": "Ivy", "url": "https://joinivy.ai"}, "publisher": {"@type": "Organization", "name": "Ivy", "url": "https://joinivy.ai"}}</script>
+</head>
+<body>
+<nav>
+  <div class="container nav-inner">
+    <a href="/" class="logo"><span class="logo-mark">&#10003;</span>Ivy</a>
+    <div class="nav-links">
+      <a href="/">Home</a>
+      <a href="/tour">Tour</a>
+      <a href="/features">Features</a>
+      <a href="/pricing">Pricing</a>
+      <a href="/compare">Compare</a>
+      <a href="/blog" class="active">Blog</a>
+      <a href="/about">About</a>
+    </div>
+    <div class="nav-cta">
+      <a href="/signin" class="login">Sign in</a>
+      <a href="/signup" class="btn btn-primary btn-sm">Get started</a>
+      <button class="menu-btn" id="menuBtn" aria-label="Menu">&#9776;</button>
+    </div>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobileMenu">
+  <a href="/">Home</a>
+  <a href="/tour">Tour</a>
+  <a href="/features">Features</a>
+  <a href="/pricing">Pricing</a>
+  <a href="/compare">Compare</a>
+  <a href="/blog">Blog</a>
+  <a href="/about">About</a>
+  <a href="/signin">Sign in</a>
+</div>
+<div class="container">
+  <header class="post-head">
+    <div class="pcat">Templates &amp; Tools</div>
+    <h1>No-Show Cost Calculator: What Empty Slots Cost You Per Year</h1>
+    <p class="pdesc">Interactive calculator: enter your average service price and weekly appointments to see what no-shows cost annually - and what deposits + reminders would recover.</p>
+    <div class="pmeta">2026-03-16 &middot; 3 min read &middot; Ivy Blog</div>
+  </header>
+  <article class="post-body">
+<p>Move the sliders. The math uses industry no-show benchmarks and updates live.</p>
+<div class="calcbox">
+  <label>Average service price <output id="nsPrice">$80</output></label>
+  <input type="range" id="nsP" min="20" max="500" step="5" value="80" oninput="nsCalc()">
+  <label>Appointments per week <output id="nsAppts">25</output></label>
+  <input type="range" id="nsA" min="3" max="80" value="25" oninput="nsCalc()">
+  <label>Your current no-show rate <output id="nsRateOut">15%</output></label>
+  <input type="range" id="nsR" min="2" max="35" value="15" oninput="nsCalc()">
+  <div class="calcrow"><span>Lost per month</span><b id="nsMonth">$1,300</b></div>
+  <div class="calcrow"><span>Lost per year</span><b id="nsYear">$15,600</b></div>
+  <div class="calcrow hl"><span>Recoverable with deposits + reminders (at a 4% no-show rate)</span><b id="nsSave">$11,440/yr</b></div>
+</div>
+<p class="tbl-note" style="font-size:12.5px;color:var(--dim)">Assumptions: your inputs, a 4.33-week month, and the documented drop to a 3-5% no-show rate (we use 4%) for businesses using deposits at booking. Typical rates without them: salons ~15%, medical ~18%, fitness ~20%.</p>
+<h2>Why the recovery number is realistic</h2>
+<div class="fact">Businesses requiring deposits at booking report <b>3-5% no-show rates versus 15-25%</b> without. SMS reminders independently cut no-shows by up to <b>38%</b>, with a <b>98% open rate</b>.</div>
+<p>The playbook for capturing it is short: deposits or card-on-file at booking, a visible policy, and a reminder cadence that runs itself - the full breakdown is in our <a href="/blog/how-to-reduce-no-shows">no-show guide</a>.</p>
+<div class="cta-box"><h3>Recover most of that number</h3><p>Deposits, card on file, and automatic email + SMS reminders are built into every Ivy booking page.</p><a href="/signup" class="btn btn-primary">Start your 14-day free trial</a><p style="font-size:12px;color:var(--dim);margin:10px 0 0">$0 today &middot; Cancel anytime</p></div>
+<script>
+function nsCalc(){
+  var p=+document.getElementById('nsP').value, a=+document.getElementById('nsA').value, r=+document.getElementById('nsR').value;
+  document.getElementById('nsPrice').textContent='$'+p;
+  document.getElementById('nsAppts').textContent=a;
+  document.getElementById('nsRateOut').textContent=r+'%';
+  var month=p*a*4.33*(r/100), year=month*12;
+  var post=p*a*4.33*0.04*12, save=Math.max(0, year-post);
+  function fmt(n){return '$'+Math.round(n).toLocaleString('en-US');}
+  document.getElementById('nsMonth').textContent=fmt(month);
+  document.getElementById('nsYear').textContent=fmt(year);
+  document.getElementById('nsSave').textContent=fmt(save)+'/yr';
+}
+nsCalc();
+</script>
+</article>
+</div>
+<div class="container"><div class="sources"><h3>Sources</h3><ul><li><a href="https://www.etisia.com/no-show-statistics" rel="noopener" target="_blank">Etisia - No-Show Statistics by Industry</a></li><li><a href="https://www.omnisend.com/blog/sms-marketing-statistics/" rel="noopener" target="_blank">Omnisend - SMS Marketing Statistics</a></li></ul></div></div>
+<div class="container"><div class="back"><a href="/blog">&larr; All articles</a></div></div>
+<footer>
+  <div class="container foot-inner">
+    <div class="foot-brand">
+      <a href="/" class="logo"><span class="logo-mark">&#10003;</span>Ivy</a>
+      <p>The all-in-one business platform for solopreneurs, with an AI assistant that does your busywork.</p>
+    </div>
+    <div class="foot-cols">
+      <div class="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/compare">Compare</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
+      <div class="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a></div>
+      <div class="foot-col"><h5>Account</h5><a href="/signin">Sign in</a><a href="/signup">Get started</a><a href="/me">Client portal</a></div>
+    </div>
+  </div>
+  <div class="container foot-bottom">
+    <span>&copy; 2026 Ivy.</span>
+    <span>joinivy.ai</span>
+  </div>
+</footer>
+
+<div class="sticky-cta" id="stickyCta">
+  <a href="/signup" class="btn btn-primary">Start your 14-day free trial</a>
+  <div class="note">$0 today &middot; Cancel anytime</div>
+</div>
+
+<script>
+document.getElementById('menuBtn').onclick = () => document.getElementById('mobileMenu').classList.toggle('open');
+addEventListener('scroll', () => {
+  document.getElementById('stickyCta').classList.toggle('show', scrollY > 600);
+}, {passive:true});
+</script>
+</body>
+</html>

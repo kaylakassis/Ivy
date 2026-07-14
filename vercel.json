@@ -1,4 +1,5 @@
 {
+  "cleanUrls": true,
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "node scripts/migrate.mjs && vite build",
   "outputDirectory": "dist",

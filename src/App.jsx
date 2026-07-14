@@ -71,12 +71,13 @@ const ReviewPage    = lazy(() => import('./features/reviews/ReviewPage.jsx'));
 const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
 const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
 const DoNotSellPage = lazy(() => import('./features/legal/DoNotSellPage.jsx'));
-const AboutPage     = lazy(() => import('./features/marketing/AboutPage.jsx'));
+const SiteAbout     = lazy(() => import('./features/marketing/site/SiteAbout.jsx'));
 const VerticalPage  = lazy(() => import('./features/marketing/VerticalPage.jsx'));
-const PricingPage     = lazy(() => import('./features/marketing/PricingPage.jsx'));
+const SitePricing     = lazy(() => import('./features/marketing/site/SitePricing.jsx'));
+const SiteTour        = lazy(() => import('./features/marketing/site/SiteTour.jsx'));
+const SiteFeatures    = lazy(() => import('./features/marketing/site/SiteFeatures.jsx'));
+const SiteCompare     = lazy(() => import('./features/marketing/site/SiteCompare.jsx'));
 const ComparePage     = lazy(() => import('./features/marketing/ComparePage.jsx'));
-const BlogIndex       = lazy(() => import('./features/marketing/BlogIndex.jsx'));
-const BlogPostPage    = lazy(() => import('./features/marketing/BlogPostPage.jsx'));
 const SecurityPage    = lazy(() => import('./features/marketing/SecurityPage.jsx'));
 const MobilePage      = lazy(() => import('./features/marketing/MobilePage.jsx'));
 const IntegrationsPage = lazy(() => import('./features/marketing/IntegrationsPage.jsx'));
@@ -236,12 +237,13 @@ export default function App() {
         <Route path="/do-not-sell" element={<DoNotSellPage />} />
 
         {/* Marketing - extra public surfaces beyond the home page. */}
-        <Route path="/about"       element={<AboutPage />} />
+        <Route path="/about"       element={<SiteAbout />} />
+        <Route path="/tour"        element={<SiteTour />} />
+        <Route path="/features"    element={<SiteFeatures />} />
+        <Route path="/compare"     element={<SiteCompare />} />
         <Route path="/for/:slug"   element={<VerticalPage />} />
-        <Route path="/pricing"     element={<PricingPage />} />
+        <Route path="/pricing"     element={<SitePricing />} />
         <Route path="/vs/:slug"    element={<ComparePage />} />
-        <Route path="/blog"        element={<BlogIndex />} />
-        <Route path="/blog/:slug"  element={<BlogPostPage />} />
         <Route path="/security"    element={<SecurityPage />} />
         <Route path="/mobile"      element={<MobilePage />} />
         <Route path="/integrations" element={<IntegrationsPage />} />

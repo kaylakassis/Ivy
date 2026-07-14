@@ -10,7 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
-import MarketingHome from './MarketingHome.jsx';
+import MarketingHome from './site/SiteHome.jsx';
 
 export default function RootRouter() {
   const { user, loading: authLoading } = useAuth();
