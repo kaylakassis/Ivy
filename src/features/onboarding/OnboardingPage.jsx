@@ -109,6 +109,12 @@ export default function OnboardingPage() {
   const { ctx } = useUserContext();
   const nav = useNavigate();
   const location = useLocation();
+  // "Replay setup" entry point (Account → Replay setup) lands here with
+  // ?replay=1. Start the wizard fresh at 'welcome' instead of resuming the
+  // owner's last saved step - and we never touch onboarded_at, so an
+  // already-onboarded owner can walk through again and closing it midway
+  // never re-traps them behind the onboarding gate.
+  const isReplay = new URLSearchParams(location.search).get('replay') === '1';
 
   // Navigational state - synced to /api/onboarding/state. completedSteps
   // grows as the owner advances; skippedSteps tracks explicit "do this
@@ -175,9 +181,13 @@ export default function OnboardingPage() {
       if (!live) return;
       const st = stateRes?.state;
       if (st) {
-        setCurrentStep(st.currentStep || 'welcome');
+        // On a replay, always start at 'welcome' regardless of the saved
+        // step (a completed owner's saved step is 'done').
+        setCurrentStep(isReplay ? 'welcome' : (st.currentStep || 'welcome'));
         setCompletedSteps(st.completedSteps || []);
         setSkippedSteps(st.skippedSteps || []);
+      } else if (isReplay) {
+        setCurrentStep('welcome');
       }
       if (stateRes?.businessType) setBusinessType(stateRes.businessType);
       const s = calRes?.cal?.settings || {};

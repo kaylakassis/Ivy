@@ -103,6 +103,8 @@ export default function AccountPage() {
 
       <WalkthroughCard/>
 
+      <SetupReplayCard/>
+
       {/* Export */}
       <div className="card" style={{ padding: 22 }}>
         <div className="metric-label" style={{ marginBottom: 8 }}>Your data</div>
@@ -1333,6 +1335,33 @@ function WalkthroughCard() {
       <button onClick={replay} disabled={busy}
         className="btn btn-outline">
         <Icons.Trending size={13} sw={1.7}/> {busy ? 'Loading…' : (seen ? 'Replay walkthrough' : 'Start walkthrough')}
+      </button>
+    </div>
+  );
+}
+
+// Replay the setup wizard. Sends the owner to /onboarding?replay=1, which
+// starts the wizard fresh at the welcome step with their existing settings
+// pre-filled. It does NOT reset onboarded_at, so walking through again (or
+// closing it midway) never re-traps them behind the onboarding gate.
+function SetupReplayCard() {
+  const { ctx } = useUserContext();
+  const nav = useNavigate();
+  if (!ctx?.isOwner) return null;
+
+  return (
+    <div className="card" style={{ padding: 22 }}>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Setup</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>
+        Replay setup
+      </h3>
+      <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+        Step back through the setup wizard - business details, services,
+        availability, branding and more. Your current settings are pre-filled
+        and nothing is reset.
+      </p>
+      <button onClick={() => nav('/onboarding?replay=1')} className="btn btn-outline">
+        <Icons.Spark size={13} sw={1.7}/> Replay setup
       </button>
     </div>
   );
