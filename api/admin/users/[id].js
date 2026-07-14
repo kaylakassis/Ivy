@@ -40,6 +40,8 @@ import { sendEmail, emailShell } from '../../_lib/email.js';
 import { createToken, invalidateUserTokens, KIND_RESET, KIND_VERIFY, appUrl } from '../../_lib/tokens.js';
 import { recordAudit } from '../../_lib/audit.js';
 import { renderWelcome } from '../../_lib/welcome-content.js';
+import { cancelSubscription, platformStripeSecret } from '../../_lib/stripe.js';
+import { invalidateOwnerWorkspace } from '../../_lib/clientPortal.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../../_lib/json.js';
 
 // Same reason as /api/auth/signup - this PATCH can fire emails
@@ -227,7 +229,44 @@ async function deleteUser(u, req, res) {
   if (actor?.id === u.id) {
     return badRequest(res, "You can't delete the account you're signed in as.");
   }
-  await sql`DELETE FROM users WHERE id = ${u.id}`;
+
+  // Cancel any live platform subscription first so Stripe doesn't keep
+  // billing a deleted account. Best-effort - deletion proceeds regardless.
+  try {
+    const secretKey = platformStripeSecret();
+    if (secretKey) {
+      const subs = await sql`
+        SELECT stripe_subscription_id FROM workspaces
+        WHERE owner_id = ${u.id} AND stripe_subscription_id IS NOT NULL
+      `;
+      for (const w of subs.rows) {
+        // eslint-disable-next-line no-await-in-loop
+        await cancelSubscription({ secretKey, subscriptionId: w.stripe_subscription_id, atPeriodEnd: false })
+          .catch((e) => console.error('[admin/users/:id] sub cancel failed:', e.message));
+      }
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.error('[admin/users/:id] subscription cleanup failed:', e.message);
+  }
+
+  // Soft-delete + email-mangle, the SAME semantics as self-serve
+  // /api/account/delete. The old hard `DELETE FROM users` could be blocked
+  // by a live-DB foreign key that predates schema.js's ON DELETE rules
+  // (CREATE TABLE IF NOT EXISTS never retrofits constraints), leaving the
+  // row - and the email - stuck as "already in use" while the admin UI
+  // looked like the delete worked. A plain UPDATE can't be FK-blocked:
+  // it frees the email immediately, kills the session (requireUser rejects
+  // deleted_at rows), and db-prune hard-deletes after the 30-day window.
+  const mangledEmail = u.email
+    ? u.email.replace(/^([^@]+)@(.+)$/, `$1+deleted-${u.id}@$2`)
+    : `deleted-${u.id}@invalid.local`;
+  await sql`
+    UPDATE users SET deleted_at = NOW(), email = ${mangledEmail}, updated_at = NOW()
+    WHERE id = ${u.id}
+  `;
+  invalidateUserCache(u.id);
+  invalidateOwnerWorkspace(u.id);
   await recordAudit(req, {
     actor, targetUserId: u.id, action: 'user.delete',
     meta: { email: u.email },

@@ -120,8 +120,21 @@ export default async function handler(req, res) {
     if (blocked) return;
 
     const emailKey = email.toLowerCase();
-    const existing = await sql`SELECT id FROM users WHERE email = ${emailKey}`;
-    if (existing.rows.length > 0) return badRequest(res, 'Email already in use');
+    const existing = await sql`SELECT id, deleted_at FROM users WHERE email = ${emailKey}`;
+    if (existing.rows.length > 0) {
+      const row = existing.rows[0];
+      // Self-heal: a soft-deleted row squatting on an unmangled email
+      // (deletion paths mangle the address to free it, but a legacy or
+      // partially-failed delete can leave it behind). The account is dead
+      // either way - free the address now so the signup can proceed,
+      // instead of telling the user their email is taken by a ghost.
+      if (row.deleted_at) {
+        const mangled = emailKey.replace(/^([^@]+)@(.+)$/, `$1+deleted-${row.id}@$2`);
+        await sql`UPDATE users SET email = ${mangled}, updated_at = NOW() WHERE id = ${row.id} AND deleted_at IS NOT NULL`;
+      } else {
+        return badRequest(res, 'Email already in use');
+      }
+    }
 
     const password_hash = await hashPassword(password);
     const insertUser = await sql`
