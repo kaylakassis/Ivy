@@ -162,8 +162,11 @@ const ANIMATION_OFFSCREEN = {
   zoom:        { opacity: 0, transform: 'scale(0.97)' },
 };
 
+// clamp() on padding: the old fixed 64px sides left ~230px of content on a
+// 360px phone. These sections render the owner's PUBLIC site - their
+// clients' phones are the primary viewer.
 const container = {
-  padding: '80px 64px',
+  padding: 'clamp(48px, 9vw, 80px) clamp(20px, 6vw, 64px)',
   maxWidth: 1200,
   margin: '0 auto',
 };
@@ -202,8 +205,10 @@ function Hero({ data, variant, editable, onUpdate }) {
       <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
         <div style={{
           maxWidth: 1200, margin: '0 auto',
-          padding: '80px 64px',
-          display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)',
+          padding: 'clamp(48px, 9vw, 80px) clamp(20px, 6vw, 64px)',
+          // auto-fit so the text/image halves stack on phones - the
+          // .hero-split class this relied on never existed in any CSS.
+          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))',
           gap: 48, alignItems: 'center',
         }} className="hero-split">
           <div>
@@ -230,7 +235,7 @@ function Hero({ data, variant, editable, onUpdate }) {
         background: data.imgUrl
           ? `linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.45)), center/cover no-repeat url("${data.imgUrl}")`
           : 'var(--site-fg)',
-        padding: '160px 64px', textAlign: 'center', minHeight: 480,
+        padding: 'clamp(72px, 14vw, 160px) clamp(20px, 6vw, 64px)', textAlign: 'center', minHeight: 480,
       }}>
         <div style={{ maxWidth: 760, margin: '0 auto' }}>
           <h1 style={{
@@ -254,7 +259,7 @@ function Hero({ data, variant, editable, onUpdate }) {
   return (
     <section style={{
       background: 'var(--site-bg)', color: 'var(--site-fg)',
-      padding: '120px 64px', textAlign: align,
+      padding: 'clamp(64px, 11vw, 120px) clamp(20px, 6vw, 64px)', textAlign: align,
     }}>
       <div style={{ maxWidth: 760, margin: align === 'center' ? '0 auto' : 0 }}>
         {headline}
@@ -321,7 +326,7 @@ function Services({ data, variant }) {
           <Heading text={data.headline} sub={data.sub}/>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, items.length))}, 1fr)`,
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
             gap: 24, marginTop: 40,
           }}>
             {items.map((s) => (
@@ -358,7 +363,7 @@ function Services({ data, variant }) {
         <Heading text={data.headline} sub={data.sub} />
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, items.length || 1))}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
           gap: 20, marginTop: 40,
         }}>
           {items.map((s) => (
@@ -393,7 +398,7 @@ function About({ data, editable, onUpdate }) {
   const commit = (key) => (val) => onUpdate && onUpdate({ data: { [key]: val } });
   return (
     <section style={{ background: 'var(--site-surface)', color: 'var(--site-fg)' }}>
-      <div style={{ ...container, display: 'grid', gridTemplateColumns: data.imgUrl ? '1fr 1fr' : '1fr', gap: 48, alignItems: 'center' }}>
+      <div style={{ ...container, display: 'grid', gridTemplateColumns: data.imgUrl ? 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))' : '1fr', gap: 48, alignItems: 'center' }}>
         <div>
           <Heading text={data.headline} align="left" editable={editable} onCommit={commit('headline')}/>
           <EditableText as="p" value={data.body} editable={editable} onCommit={commit('body')}
@@ -467,7 +472,7 @@ function Testimonials({ data }) {
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
       <div style={container}>
         <Heading text={data.headline} />
-        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${Math.min(2, Math.max(1, data.items?.length || 1))}, 1fr)`, gap: 20, marginTop: 40 }}>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(320px, 100%), 1fr))', gap: 20, marginTop: 40 }}>
           {(data.items || []).map((t) => (
             <div key={t.id} style={{
               padding: 28,
@@ -701,7 +706,7 @@ function Stats({ data, editable, onUpdate }) {
         {(data.headline || editable) && <Heading text={data.headline || ''} sub={data.sub} editable={editable} onCommit={commit('headline')} onCommitSub={commit('sub')}/>}
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(4, Math.max(1, items.length || 1))}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(180px, 100%), 1fr))',
           gap: 24, marginTop: data.headline ? 40 : 0,
           textAlign: 'center',
         }}>
@@ -731,7 +736,7 @@ function CtaBanner({ data, editable, onUpdate }) {
       background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
     }}>
       <div style={{
-        maxWidth: 900, margin: '0 auto', padding: '80px 64px', textAlign: 'center',
+        maxWidth: 900, margin: '0 auto', padding: 'clamp(48px, 9vw, 80px) clamp(20px, 6vw, 64px)', textAlign: 'center',
       }}>
         <EditableText as="h2" value={data.headline} editable={editable} onCommit={commit('headline')}
           style={{
@@ -772,7 +777,7 @@ function Team({ data }) {
         <Heading text={data.headline}/>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, members.length || 1))}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
           gap: 32, marginTop: 40,
         }}>
           {members.map((m) => (
@@ -807,7 +812,7 @@ function Pricing({ data }) {
         <Heading text={data.headline} sub={data.sub}/>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, tiers.length || 1))}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
           gap: 20, marginTop: 40, alignItems: 'stretch',
         }}>
           {tiers.map((t) => (
@@ -1066,7 +1071,7 @@ function Blog({ data }) {
         <Heading text={data.headline} sub={data.sub}/>
         <div style={{
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, posts.length || 1))}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
           gap: 24, marginTop: 40,
         }}>
           {posts.map((p) => (
@@ -1311,7 +1316,7 @@ function Process({ data }) {
         <div style={{
           marginTop: data.headline ? 40 : 0,
           display: 'grid',
-          gridTemplateColumns: `repeat(${Math.min(3, Math.max(1, steps.length || 1))}, 1fr)`,
+          gridTemplateColumns: 'repeat(auto-fit, minmax(min(260px, 100%), 1fr))',
           gap: 28,
         }}>
           {steps.map((s) => (
@@ -1348,7 +1353,7 @@ function BeforeAfter({ data }) {
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
       <div style={container}>
         {(data.headline || data.sub) && <Heading text={data.headline} sub={data.sub}/>}
-        <div style={{ marginTop: data.headline ? 32 : 0, display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 18 }}>
+        <div style={{ marginTop: data.headline ? 32 : 0, display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(280px, 100%), 1fr))', gap: 18 }}>
           {card(data.beforeUrl, data.beforeLabel || 'Before')}
           {card(data.afterUrl,  data.afterLabel  || 'After')}
         </div>

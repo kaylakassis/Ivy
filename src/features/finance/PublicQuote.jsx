@@ -6,6 +6,7 @@ import { useParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
+import { useViewport } from '../../lib/viewport.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -14,6 +15,10 @@ function fmtMoney(n) {
 export default function PublicQuote() {
   const { token } = useParams();
   const [tweaks] = useTweaks();
+  // On phones the fixed Qty/Rate/Amount columns (260px) crushed the Item
+  // column to ~90px. Drop the Rate column on mobile - the Amount column
+  // already carries the number that matters for accepting.
+  const { isMobile } = useViewport();
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -163,11 +168,13 @@ export default function PublicQuote() {
               <th style={{ textAlign: 'left', padding: '8px 0', fontSize: 11, fontWeight: 600,
                 letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>Item</th>
               <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600,
-                letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', width: 70 }}>Qty</th>
+                letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', width: isMobile ? 44 : 70 }}>Qty</th>
+              {!isMobile && (
+                <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600,
+                  letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', width: 90 }}>Rate</th>
+              )}
               <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600,
-                letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', width: 90 }}>Rate</th>
-              <th style={{ textAlign: 'right', padding: '8px 0', fontSize: 11, fontWeight: 600,
-                letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', width: 100 }}>Amount</th>
+                letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--muted)', width: isMobile ? 84 : 100 }}>Amount</th>
             </tr>
           </thead>
           <tbody>
@@ -197,7 +204,9 @@ export default function PublicQuote() {
                     </label>
                   </td>
                   <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--fg-2)' }}>{it.quantity}</td>
-                  <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--fg-2)' }}>{fmtMoney(it.rate)}</td>
+                  {!isMobile && (
+                    <td style={{ padding: '10px 0', textAlign: 'right', color: 'var(--fg-2)' }}>{fmtMoney(it.rate)}</td>
+                  )}
                   <td style={{ padding: '10px 0', textAlign: 'right', fontWeight: 600 }}>{fmtMoney(amount)}</td>
                 </tr>
               );

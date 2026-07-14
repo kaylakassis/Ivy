@@ -19,7 +19,6 @@ export default function AuthPage({ mode = 'signin' }) {
   const refCode   = params.get('ref');
   const [email,    setEmail]    = useState(params.get('email') || '');
   const [password, setPassword] = useState('');
-  const [confirm,  setConfirm]  = useState('');
   const [name,     setName]     = useState('');
   const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -34,10 +33,9 @@ export default function AuthPage({ mode = 'signin' }) {
   const [emailWarn, setEmailWarn] = useState(null);
 
   const isSignUp = mode === 'signup';
-  const mismatch = isSignUp && confirm.length > 0 && confirm !== password;
   const canSubmit = !busy
     && (!isSignUp
-      || (name.trim().length > 0 && password.length >= 8 && confirm === password && acceptedTerms));
+      || (name.trim().length > 0 && password.length >= 8 && acceptedTerms));
 
   const submit = async (e) => {
     e.preventDefault();
@@ -45,7 +43,6 @@ export default function AuthPage({ mode = 'signin' }) {
     if (isSignUp) {
       if (!name.trim()) { setErr('Please share your name'); return; }
       if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
-      if (password !== confirm) { setErr("Passwords don't match"); return; }
       if (!acceptedTerms) {
         setErr('You must accept the Terms and Privacy Policy to continue.');
         return;
@@ -151,26 +148,25 @@ export default function AuthPage({ mode = 'signin' }) {
 
         <div>
           <h1 className="page-title" style={{ margin: 0, fontSize: 26 }}>
-            {isSignUp ? 'Create your account' : 'Welcome back'}
+            {isSignUp
+              ? (role === 'client' ? 'Create your client account' : 'Create your account')
+              : 'Welcome back'}
           </h1>
           <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}>
             {isSignUp
-              ? 'Spin up a workspace in a few seconds.'
+              ? (role === 'client'
+                ? 'See your bookings, invoices, and messages in one place - free.'
+                : 'Your workspace is ready in under a minute. $0 today.')
               : 'Sign in to pick up where you left off.'}
           </p>
         </div>
 
         {isSignUp && (
-          <>
-            <Field label="I'm signing up as a…">
-              <RoleToggle value={role} onChange={setRole}/>
-            </Field>
-            <Field label="Your name">
-              <input value={name} onChange={(e) => setName(e.target.value)}
-                required minLength={1}
-                autoComplete="name" style={inputS} />
-            </Field>
-          </>
+          <Field label="Your name">
+            <input value={name} onChange={(e) => setName(e.target.value)}
+              required minLength={1}
+              autoComplete="name" style={inputS} />
+          </Field>
         )}
         <Field label="Email">
           <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" style={inputS} />
@@ -180,24 +176,6 @@ export default function AuthPage({ mode = 'signin' }) {
             required minLength={isSignUp ? 8 : undefined}
             autoComplete={isSignUp ? 'new-password' : 'current-password'}/>
         </Field>
-        {isSignUp && (
-          <Field label="Confirm password">
-            <PasswordInput value={confirm} onChange={setConfirm}
-              required minLength={8}
-              autoComplete="new-password"
-              invalid={mismatch}/>
-            {mismatch && (
-              <span style={{ fontSize: 11.5, color: 'var(--danger)', marginTop: 4 }}>
-                Passwords don&apos;t match
-              </span>
-            )}
-            {!mismatch && confirm.length > 0 && confirm === password && (
-              <span style={{ fontSize: 11.5, color: 'var(--ok)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                <Icons.Check size={11} sw={2.4}/> Passwords match
-              </span>
-            )}
-          </Field>
-        )}
         {!isSignUp && (
           <div style={{ marginTop: -8, textAlign: 'right' }}>
             <Link to="/forgot-password" style={{ fontSize: 13, color: 'var(--accent)', fontWeight: 500 }}>
@@ -208,9 +186,11 @@ export default function AuthPage({ mode = 'signin' }) {
 
         {/* Required-acceptance checkbox on signup. Server enforces the
             same requirement and refuses the POST without it; this is
-            the soft guard. Wording explicitly calls out AI / financial /
-            legal / business-outcome disclaimers so it can't be argued
-            the user "didn't see" them. */}
+            the soft guard. The checked statement still includes the
+            explicit "informational tools, not professional advice"
+            acknowledgment (so assent to it stays affirmative); the
+            longer responsibility wording lives in the fine print below
+            the button, still on-screen at the moment of signup. */}
         {isSignUp && (
           <label style={{
             display: 'flex', alignItems: 'flex-start', gap: 10,
@@ -220,18 +200,13 @@ export default function AuthPage({ mode = 'signin' }) {
           }}>
             <input type="checkbox" checked={acceptedTerms}
               onChange={(e) => setAcceptedTerms(e.target.checked)}
-              style={{ marginTop: 3, flexShrink: 0 }}/>
+              style={{ marginTop: 3, flexShrink: 0, width: 18, height: 18 }}/>
             <span>
-              I have read and agree to the{' '}
+              I agree to the{' '}
               <Link to="/terms"   target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Terms of Service</Link>{' '}and{' '}
               <Link to="/privacy" target="_blank" rel="noopener" style={{ color: 'var(--accent)', fontWeight: 600 }}>Privacy Policy</Link>,
-              and I understand that Ivy - including the Ivy AI assistant
-              and every integrated third-party service - provides
-              informational tools only, not financial, legal, tax, or
-              other professional advice. I am responsible for my own
-              business decisions and outcomes, and I will consult a
-              qualified financial advisor and/or attorney for guidance
-              on material decisions.
+              and I understand Ivy provides informational tools - not
+              financial, legal, or tax advice.
             </span>
           </label>
         )}
@@ -272,6 +247,16 @@ export default function AuthPage({ mode = 'signin' }) {
         </button>
         )}
 
+        {isSignUp && role === 'owner' && (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+            fontSize: 12, color: 'var(--muted)',
+          }}>
+            <Icons.Check size={12} sw={2.4} stroke="var(--ok)"/>
+            $0 today · 14-day free trial · Cancel anytime
+          </div>
+        )}
+
         <div style={{ fontSize: 13, color: 'var(--muted)', textAlign: 'center' }}>
           {isSignUp ? (
             <>Already have an account? <Link to="/signin" style={{ color: 'var(--accent)' }}>Sign in</Link></>
@@ -282,9 +267,21 @@ export default function AuthPage({ mode = 'signin' }) {
 
         {isSignUp && (
           <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', lineHeight: 1.5 }}>
-            By creating an account you agree to our{' '}
-            <Link to="/terms" style={{ color: 'var(--fg-2)' }}>Terms</Link>{' '}and{' '}
-            <Link to="/privacy" style={{ color: 'var(--fg-2)' }}>Privacy Policy</Link>.
+            {role === 'owner' ? (
+              <>
+                You&apos;re responsible for your own business decisions - consult a
+                qualified professional for material ones.{' '}
+                <button type="button" onClick={() => setRole('client')}
+                  style={{ color: 'var(--fg-2)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>
+                  Booking with a business that uses Ivy?
+                </button>
+              </>
+            ) : (
+              <button type="button" onClick={() => setRole('owner')}
+                style={{ color: 'var(--fg-2)', textDecoration: 'underline', cursor: 'pointer', padding: 0, font: 'inherit' }}>
+                Running a business? Create a workspace instead
+              </button>
+            )}
           </div>
         )}
       </form>
@@ -294,12 +291,15 @@ export default function AuthPage({ mode = 'signin' }) {
 
 const inputS = {
   width: '100%',
-  padding: '10px 12px',
+  padding: '12px 12px',
   borderRadius: 10,
   border: '1px solid var(--border-strong)',
   background: 'var(--surface)',
   outline: 'none',
-  fontSize: 14,
+  // 16px minimum: any inline font-size below 16 defeats the global
+  // mobile anti-zoom rule (global.css) and makes iOS Safari zoom the
+  // viewport on focus - the worst possible jank mid-signup.
+  fontSize: 16,
   color: 'var(--fg)',
 };
 
@@ -312,34 +312,10 @@ function Field({ label, children }) {
   );
 }
 
-function RoleToggle({ value, onChange }) {
-  const options = [
-    { id: 'owner',  label: 'Business owner',  hint: 'I run a business and want to manage it.' },
-    { id: 'client', label: 'Client / customer', hint: 'I book with a business that uses Ivy.' },
-  ];
-  return (
-    <div className="form-2col" style={{ gap: 8 }}>
-      {options.map((o) => {
-        const on = value === o.id;
-        return (
-          <button key={o.id} type="button" onClick={() => onChange(o.id)} style={{
-            padding: '12px 12px', borderRadius: 10, textAlign: 'left',
-            background: on ? 'var(--accent-soft)' : 'var(--surface)',
-            border: '1.5px solid ' + (on ? 'var(--accent)' : 'var(--border)'),
-            cursor: 'pointer',
-          }}>
-            <div style={{ fontSize: 13, fontWeight: 600, color: on ? 'var(--accent)' : 'var(--fg)' }}>
-              {o.label}
-            </div>
-            <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 3, lineHeight: 1.4 }}>
-              {o.hint}
-            </div>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
+// (The old two-card RoleToggle was removed: the business-vs-client
+// decision now lives as a small text link under the form, so the owner
+// path - the overwhelming majority of signups - is the single clear
+// action. ?mode=client deep links still preselect the client role.)
 
 // Password input with a show/hide eye toggle.
 // `invalid` adds a red border so it can be used for the "doesn't match" state.

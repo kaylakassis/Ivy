@@ -189,9 +189,11 @@ export default function MarketingHome() {
   return (
     <div className={`app-root dir-${tweaks.direction}`} style={{ minHeight: '100vh', background: 'var(--page)' }}>
       <Nav/>
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '18px 24px 0' }}>
-        <AudienceToggle/>
-      </div>
+      {/* The Business↔Client audience toggle used to sit here, above the
+          hero - it pushed the primary CTA below the fold on phones and
+          split attention with a decision most visitors don't need. Client
+          entry lives on as a text link under the hero CTA + the footer
+          toggle; ?for=client still renders the client view directly. */}
       {audience === 'client' ? (
         <ClientAudienceView/>
       ) : (
@@ -201,6 +203,9 @@ export default function MarketingHome() {
           <IvyHero/>
           <TrustStrip/>
           <Features/>
+          <InlineCTA
+            title="Sound like your kind of workday?"
+            sub="Everything above is one subscription - not six."/>
           <BuiltFor/>
           <UserCounter/>
           {/* Testimonials section removed until we have real attributed
@@ -209,6 +214,9 @@ export default function MarketingHome() {
               and the Testimonials component are intentionally kept in
               this file so a single import + re-mount restores them. */}
           <Comparison/>
+          <InlineCTA
+            title={`One subscription replaces all of this.`}
+            sub={`$${STACK_TOTAL}/mo of tools for $${IVY_PRICE}/week - and Ivy does the busywork.`}/>
           <MobileBand/>
           <FAQSection/>
           <FounderNote/>
@@ -343,9 +351,13 @@ function Nav() {
           style={{ padding: '8px 14px', fontSize: 13, color: 'var(--fg-2)' }}>
           Sign in
         </Link>
-        <Link to="/signup" className="btn btn-primary marketing-nav-secondary"
-          style={{ padding: '8px 14px', fontSize: 13 }}>
-          Get started
+        {/* NOT marketing-nav-secondary: the primary CTA must stay visible
+            in the sticky header on phones too - without it, mobile
+            visitors had zero persistent way to convert after the hero
+            scrolled away (the drawer needed 2 taps). */}
+        <Link to="/signup" className="btn btn-primary"
+          style={{ padding: '8px 14px', fontSize: 13, whiteSpace: 'nowrap' }}>
+          Start free
         </Link>
         <MarketingMobileMenu extra={[
           { label: 'Features', href: '#features' },
@@ -386,7 +398,9 @@ function Hero() {
   return (
     <section style={{
       maxWidth: 1100, margin: '0 auto',
-      padding: '72px 24px 40px',
+      // clamp: the old fixed 72px top pad pushed the CTA below the fold
+      // on a 375x667 phone; ~36px keeps the button visible first-paint.
+      padding: 'clamp(36px, 8vh, 72px) 24px 40px',
       textAlign: 'center',
     }}>
       <div style={{
@@ -403,33 +417,56 @@ function Hero() {
         margin: 0, fontSize: 'clamp(34px, 6vw, 56px)',
         lineHeight: 1.05, maxWidth: 760, marginInline: 'auto',
       }}>
-        The all-in-one business platform<br/>with an AI that <em style={{ fontStyle: 'italic' }}>does</em> the work.
+        Stop juggling six apps.<br/>Ivy runs your business - and <em style={{ fontStyle: 'italic' }}>does</em> the busywork.
       </h1>
 
       <p style={{
         margin: '20px auto 0', maxWidth: 620,
         fontSize: 17, lineHeight: 1.55, color: 'var(--fg-2)',
       }}>
-        Meet Ivy. She knows your clients, your numbers, and your calendar - and she
-        actually <em>does the busywork</em>: drafts invoices, books sessions, messages
-        quiet clients, sends contracts. All inside one workspace that replaces
-        ${STACK_TOTAL}/mo of stitched-together tools - <strong>save $100+/mo on average</strong>.
+        Clients, bookings, invoices, messages, website - one workspace with an AI
+        assistant that actually does the work. Replaces ${STACK_TOTAL}/mo of tools -
+        <strong> save $100+/mo on average</strong>.
       </p>
 
       <div style={{
         display: 'flex', gap: 12, justifyContent: 'center',
-        marginTop: 32, flexWrap: 'wrap',
+        marginTop: 28, flexWrap: 'wrap',
       }}>
         <Link to="/signup" className="btn btn-primary"
           style={{ padding: '14px 24px', fontSize: 15, gap: 10 }}>
           Start your {TRIAL_DAYS}-day free trial <Icons.Arrow size={14} sw={2}/>
         </Link>
-        <Link to="/signup?mode=client" className="btn btn-outline"
-          style={{ padding: '14px 24px', fontSize: 15 }}>
-          I'm a client
-        </Link>
       </div>
       <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 14 }}>
+        $0 today · Cancel anytime
+      </div>
+      <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 10 }}>
+        Booking with a business that uses Ivy?{' '}
+        <Link to="/?for=client" style={{ color: 'var(--fg-2)', textDecoration: 'underline' }}>
+          Client portal →
+        </Link>
+      </div>
+    </section>
+  );
+}
+
+// Small centered inline CTA used to break up the long feature stretch -
+// before this, there was no way to convert between the IvyHero and the
+// pricing teaser (~10 phone-screens of scrolling).
+function InlineCTA({ title, sub }) {
+  return (
+    <section style={{ maxWidth: 720, margin: '0 auto', padding: '8px 24px 40px', textAlign: 'center' }}>
+      <h3 className="page-title" style={{ margin: 0, fontSize: 22 }}>{title}</h3>
+      {sub && (
+        <p style={{ margin: '8px auto 16px', maxWidth: 460, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+          {sub}
+        </p>
+      )}
+      <Link to="/signup" className="btn btn-primary" style={{ padding: '12px 22px', fontSize: 14, gap: 8 }}>
+        Start your free trial <Icons.Arrow size={13} sw={2}/>
+      </Link>
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 10 }}>
         $0 today · Cancel anytime
       </div>
     </section>
@@ -677,6 +714,9 @@ function IvyHero() {
                        border: '1px solid rgba(255,255,255,0.25)', borderRadius: 10 }}>
               See it in action →
             </Link>
+          </div>
+          <div style={{ marginTop: 10, fontSize: 12, color: 'var(--accent-ink)', opacity: 0.7 }}>
+            $0 today · Cancel anytime
           </div>
         </div>
         <div style={{
@@ -1299,10 +1339,13 @@ function Pricing() {
             discount locked in for life. The client portal stays free forever for clients.
           </p>
         </div>
-        <Link to="/signup" className="btn btn-primary"
-          style={{ padding: '12px 22px', fontSize: 14, flexShrink: 0 }}>
-          Claim your workspace <Icons.Arrow size={13} sw={2}/>
-        </Link>
+        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+          <Link to="/signup" className="btn btn-primary"
+            style={{ padding: '12px 22px', fontSize: 14 }}>
+            Claim your workspace <Icons.Arrow size={13} sw={2}/>
+          </Link>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>$0 today · Cancel anytime</div>
+        </div>
       </div>
     </section>
   );
@@ -1332,6 +1375,9 @@ function CTA() {
         style={{ padding: '14px 26px', fontSize: 15 }}>
         Start your {TRIAL_DAYS}-day free trial
       </Link>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 12 }}>
+        $0 today · Cancel anytime · Your data stays yours
+      </div>
     </section>
   );
 }

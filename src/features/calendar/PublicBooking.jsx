@@ -902,19 +902,24 @@ export default function PublicBooking({ embedded = false }) {
                       Fully booked<br/><span style={{ fontWeight: 500 }}>Join waitlist →</span>
                     </button>
                   ) : shownSlots.map((s, si) => (
+                    /* min-height 40 + real padding: these are THE primary
+                       action on the page and were ~26px tall - fiddly for
+                       a client booking from their phone. */
                     <button key={si} onClick={() => {
                       setSlot({ dateISO: fmtDateISO(d), start: s.start, end: s.end });
                       setStep('details');
                     }} style={{
-                      padding: '6px 4px', borderRadius: 6, fontSize: 11, fontWeight: 550,
+                      padding: '9px 4px', minHeight: 40,
+                      borderRadius: 6, fontSize: 12.5, fontWeight: 550,
                       background: 'var(--surface-2)', border: '1px solid var(--border)',
                       color: 'var(--fg)', cursor: 'pointer',
-                      display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1,
+                      display: 'flex', flexDirection: 'column', alignItems: 'center',
+                      justifyContent: 'center', gap: 1,
                     }}>
                       <span>{minToHM(s.start)}</span>
                       {s.seatsLeft != null && (
                         <span style={{
-                          fontSize: 9, fontWeight: 600,
+                          fontSize: 9.5, fontWeight: 600,
                           color: s.seatsLeft <= 2 ? 'var(--warn)' : 'var(--accent)',
                         }}>
                           {s.seatsLeft} left
@@ -924,9 +929,9 @@ export default function PublicBooking({ embedded = false }) {
                   ))}
                   {slots.length > 8 && (
                     <button type="button" onClick={toggleDay} style={{
-                      fontSize: 10, fontWeight: 600, color: 'var(--accent)',
+                      fontSize: 11, fontWeight: 600, color: 'var(--accent)',
                       background: 'transparent', border: 'none', cursor: 'pointer',
-                      padding: '2px 0', textAlign: 'center',
+                      padding: '10px 0', minHeight: 36, textAlign: 'center',
                     }}>
                       {dayExpanded ? 'Show less' : `+${slots.length - 8} more`}
                     </button>

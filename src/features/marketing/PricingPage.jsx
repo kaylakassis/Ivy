@@ -196,7 +196,7 @@ export default function PricingPage() {
             booking → invoice → message → follow-up is one fluid motion.
           </p>
           <div style={{
-            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+            display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(240px, 100%), 1fr))',
             gap: 10,
             border: '1px solid var(--border)', borderRadius: 12,
             background: 'var(--surface)', padding: 18,
@@ -232,7 +232,7 @@ export default function PricingPage() {
         }}>
           <div style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+            gridTemplateColumns: 'repeat(auto-fit, minmax(min(160px, 100%), 1fr))',
             gap: 18, textAlign: 'center',
           }}>
             {[

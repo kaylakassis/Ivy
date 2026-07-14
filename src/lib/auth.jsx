@@ -5,6 +5,18 @@ import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
 const Ctx = createContext(null);
 
+// Local hint that a session probably exists on this browser. RootRouter
+// reads it to decide whether a cold "/" load should optimistically paint
+// the marketing home (no hint → almost certainly signed out) instead of a
+// blank "Loading…" while /auth/me round-trips. UX only - the server
+// session cookie remains the sole source of truth for auth.
+function stampSessionHint(signedIn) {
+  try {
+    if (signedIn) localStorage.setItem('ivy_signed_in', '1');
+    else localStorage.removeItem('ivy_signed_in');
+  } catch { /* private mode */ }
+}
+
 export function AuthProvider({ children }) {
   const [user, setUser]                 = useState(null);
   const [impersonating, setImpersonating] = useState(null);
@@ -19,8 +31,9 @@ export function AuthProvider({ children }) {
         setUser(r.user);
         setImpersonating(r.impersonating || null);
         setTerms(r.terms || null);
+        stampSessionHint(!!r.user);
       })
-      .catch(() => live && setUser(null))
+      .catch(() => { if (live) { setUser(null); stampSessionHint(false); } })
       .finally(() => live && setLoading(false));
     return () => { live = false; };
   }, []);
@@ -38,6 +51,7 @@ export function AuthProvider({ children }) {
       return { mfaRequired: true };
     }
     setUser(r.user);
+    stampSessionHint(true);
     return r.user;
   }, []);
 
@@ -49,6 +63,7 @@ export function AuthProvider({ children }) {
     });
     mfaTokenRef.current = null;
     setUser(r.user);
+    stampSessionHint(true);
     return r.user;
   }, []);
 
@@ -75,6 +90,7 @@ export function AuthProvider({ children }) {
     // wizard. Clear it at account creation so a fresh owner always onboards.
     try { localStorage.removeItem('ivy_skip_onboarding_until'); } catch { /* private mode */ }
     setUser(r.user);
+    stampSessionHint(true);
     return r;
   }, []);
 
@@ -84,6 +100,7 @@ export function AuthProvider({ children }) {
     try { await api.post('/auth/logout'); }
     finally {
       setUser(null); setImpersonating(null); setTerms(null);
+      stampSessionHint(false);
       // Don't let a per-browser onboarding-skip flag leak into whoever signs
       // in next on this device (e.g. after an account deletion).
       try { localStorage.removeItem('ivy_skip_onboarding_until'); } catch { /* private mode */ }
@@ -97,6 +114,14 @@ export function AuthProvider({ children }) {
       setUser(r.user);
       setImpersonating(r.impersonating || null);
       setTerms(r.terms || null);
+      // Local session hint: lets RootRouter render the marketing home
+      // instantly for cold signed-out visitors (no hint) instead of a
+      // blank "Loading…" while /auth/me round-trips. Purely a UX hint -
+      // never trusted for auth decisions.
+      try {
+        if (r.user) localStorage.setItem('ivy_signed_in', '1');
+        else localStorage.removeItem('ivy_signed_in');
+      } catch { /* private mode */ }
       return r.user;
     } catch {
       setUser(null);

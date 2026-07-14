@@ -203,8 +203,8 @@ function PublicNav({ handle, linkBase = `/site/${handle}`, nav, currentSlug, bus
   return (
     <nav style={{
       position: 'sticky', top: 0, zIndex: 50,
-      display: 'flex', alignItems: 'center', gap: 24,
-      padding: '14px 64px',
+      display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap',
+      padding: '14px clamp(16px, 5vw, 64px)',
       background: scrolled ? 'color-mix(in srgb, var(--site-bg) 92%, transparent)' : 'transparent',
       backdropFilter: scrolled ? 'blur(8px)' : 'none',
       WebkitBackdropFilter: scrolled ? 'blur(8px)' : 'none',
@@ -216,7 +216,9 @@ function PublicNav({ handle, linkBase = `/site/${handle}`, nav, currentSlug, bus
         color: 'var(--site-fg)', textDecoration: 'none', letterSpacing: '-0.015em',
       }}>{businessName || handle}</Link>
       <div style={{ flex: 1 }}/>
-      <div style={{ display: 'flex', gap: 22 }}>
+      {/* Horizontal scroll on phones: page links used to overflow/cramp
+          with no mobile handling at all. Links get real tap padding. */}
+      <div className="scroll-x" style={{ display: 'flex', gap: 8, maxWidth: '100%' }}>
         {nav.map((p) => {
           const active = (p.slug || '') === (currentSlug || '');
           return (
@@ -225,6 +227,7 @@ function PublicNav({ handle, linkBase = `/site/${handle}`, nav, currentSlug, bus
               style={{
                 fontSize: 14, color: active ? 'var(--site-accent)' : 'var(--site-fg-2)',
                 textDecoration: 'none', fontWeight: active ? 600 : 500,
+                padding: '8px 7px', whiteSpace: 'nowrap',
               }}>{p.title || (p.slug ? p.slug : 'Home')}</Link>
           );
         })}

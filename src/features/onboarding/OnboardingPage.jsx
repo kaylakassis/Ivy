@@ -601,7 +601,10 @@ export default function OnboardingPage() {
         }}/>
 
       <div className="card" style={{
-        padding: '32px 36px', marginTop: 18,
+        // clamp: 36px of side padding on desktop, but only ~14px on a
+        // 375px phone - fixed 36px ate a third of the usable width and
+        // was the root cause of the availability/service rows clipping.
+        padding: 'clamp(18px, 5vw, 32px) clamp(14px, 5vw, 36px)', marginTop: 18,
         display: 'flex', flexDirection: 'column', gap: 18,
       }}>
         {currentStep === 'welcome'      && (
@@ -719,7 +722,9 @@ function WelcomeStep({ user, businessType, setBusinessType }) {
 
       <div style={{
         display: 'grid', gap: 10, maxWidth: 520, margin: '0 auto',
-        gridTemplateColumns: 'repeat(3, 1fr)',
+        // auto-fit so the three what-do-you-sell cards stack on a phone
+        // instead of crushing to ~80px columns with 4-line sub-labels.
+        gridTemplateColumns: 'repeat(auto-fit, minmax(min(150px, 100%), 1fr))',
       }}>
         {options.map((o) => {
           const active = businessType === o.id;
@@ -909,28 +914,32 @@ function ServicesStep({ services, setServices, draft, setDraft, category }) {
         <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
           Add a service
         </div>
-        {/* Column labels — without these the "60" duration input reads
-            as an unexplained number once the placeholder is hidden by
-            its default value. */}
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8,
-                      fontSize: 10.5, fontWeight: 600, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-          <div>Service name</div>
-          <div>Duration (min)</div>
-          <div>Price ($)</div>
-          <div></div>
-        </div>
-        <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr 1fr auto', gap: 8 }}>
-          <input className="input" value={draft.name}
-            onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-            placeholder="e.g. 60-min consultation" style={inputStyle}/>
-          <input className="input" type="number" min={15} step={15} value={draft.durationMinutes}
-            onChange={(e) => setDraft({ ...draft, durationMinutes: Number(e.target.value) })}
-            placeholder="60" aria-label="Duration in minutes" style={inputStyle}/>
-          <input className="input" type="number" min={0} step="0.01" value={draft.price}
-            onChange={(e) => setDraft({ ...draft, price: e.target.value })}
-            placeholder="0.00" aria-label="Price in dollars" style={inputStyle}/>
+        {/* Flex-wrap layout with a label attached to each field: on a
+            phone the name input takes its own row and duration/price/Add
+            wrap beneath, so nothing crushes (the old fixed 4-col grid
+            squeezed the number inputs to ~45px on 375px screens). Labels
+            stay glued to their inputs whichever way the row wraps. */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'flex-end' }}>
+          <label style={{ flex: '1 1 200px', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={fieldLabelStyle}>Service name</span>
+            <input className="input" value={draft.name}
+              onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+              placeholder="e.g. 60-min consultation" style={inputStyle}/>
+          </label>
+          <label style={{ flex: '1 1 100px', maxWidth: 150, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={fieldLabelStyle}>Duration (min)</span>
+            <input className="input" type="number" min={15} step={15} value={draft.durationMinutes}
+              onChange={(e) => setDraft({ ...draft, durationMinutes: Number(e.target.value) })}
+              placeholder="60" aria-label="Duration in minutes" style={inputStyle}/>
+          </label>
+          <label style={{ flex: '1 1 100px', maxWidth: 150, display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <span style={fieldLabelStyle}>Price ($)</span>
+            <input className="input" type="number" min={0} step="0.01" value={draft.price}
+              onChange={(e) => setDraft({ ...draft, price: e.target.value })}
+              placeholder="0.00" aria-label="Price in dollars" style={inputStyle}/>
+          </label>
           <button onClick={addService} className="btn btn-primary" disabled={!draft.name.trim()}
-            style={{ padding: '0 14px', fontSize: 13 }}>
+            style={{ padding: '0 16px', fontSize: 13, minHeight: 42, flex: '0 0 auto' }}>
             Add
           </button>
         </div>
@@ -1047,7 +1056,7 @@ function AvailabilityStep({ availability, setAvailability }) {
           const last = idx === WEEKDAYS.length - 1;
           return (
             <div key={d.idx} style={{
-              display: 'flex', alignItems: 'center',
+              display: 'flex', alignItems: 'center', flexWrap: 'wrap',
               gap: 12, padding: '12px 14px', minHeight: 56,
               background: on ? 'var(--surface)' : 'var(--surface-2)',
               borderBottom: last ? 'none' : '1px solid var(--border)',
@@ -1057,14 +1066,21 @@ function AvailabilityStep({ availability, setAvailability }) {
                 display: 'inline-flex', alignItems: 'center', gap: 10,
                 fontSize: 14, fontWeight: on ? 600 : 500,
                 color: on ? 'var(--fg)' : 'var(--fg-2)',
-                minWidth: 130, cursor: 'pointer',
+                minWidth: 110, cursor: 'pointer', flex: '0 0 auto',
               }}>
                 <input type="checkbox" checked={on} onChange={() => toggleDay(d.idx)}
-                  style={{ accentColor: 'var(--accent)', width: 16, height: 16, cursor: 'pointer' }}/>
+                  style={{ accentColor: 'var(--accent)', width: 18, height: 18, cursor: 'pointer' }}/>
                 {d.long}
               </label>
               {on ? (
-                <>
+                /* Own flex-wrap group: on a phone the whole time row wraps
+                   BELOW the day label instead of clipping off the right
+                   edge (the old single-row flex needed ~350px it never had
+                   on a 375px screen). */
+                <div style={{
+                  display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap',
+                  flex: '1 1 240px', minWidth: 0, justifyContent: 'flex-start',
+                }}>
                   <TimeSelect value={win.start} onChange={(v) => updateWindow(d.idx, 'start', v)}/>
                   <span style={{ color: 'var(--muted)', fontSize: 13 }}>to</span>
                   <TimeSelect value={win.end} onChange={(v) => updateWindow(d.idx, 'end', v)} min={win.start}/>
@@ -1072,14 +1088,14 @@ function AvailabilityStep({ availability, setAvailability }) {
                     <button onClick={() => copyToAllEnabled(d.idx)}
                       title={`Copy ${d.long}'s hours to every selected day`}
                       style={{
-                        marginLeft: 'auto', padding: '4px 10px', borderRadius: 6,
+                        marginLeft: 'auto', padding: '8px 10px', borderRadius: 6,
                         background: 'transparent', color: 'var(--muted)',
                         border: '1px solid var(--border)', fontSize: 11.5, cursor: 'pointer',
                       }}>
                       Copy to all
                     </button>
                   )}
-                </>
+                </div>
               ) : (
                 <span style={{ fontSize: 13, color: 'var(--muted-2)', fontStyle: 'italic' }}>Closed</span>
               )}
@@ -1536,19 +1552,26 @@ function ProgressRow({ steps, currentStep, completed, skipped, onJump }) {
         const isSkip    = skipped.includes(s.id);
         const visited   = isDone || isSkip || i <= stepIdx;
         return (
+          /* The visible bar is 6px, but the button wraps it with vertical
+             padding so the real touch target is ~26px tall - the bare 6px
+             bar was nearly impossible to tap on a phone. */
           <button key={s.id} onClick={() => onJump(s.id)} disabled={!visited}
-            title={s.label}
+            title={s.label} aria-label={s.label}
             style={{
-              flex: 1, height: 6, borderRadius: 3,
+              flex: 1, padding: '10px 0', border: 0,
+              background: 'transparent',
+              cursor: visited ? 'pointer' : 'default',
+            }}>
+            <span style={{
+              display: 'block', height: 6, borderRadius: 3,
               background: isCurrent ? 'var(--accent)'
                        : isDone    ? 'color-mix(in srgb, var(--ok) 60%, transparent)'
                        : isSkip    ? 'color-mix(in srgb, var(--warn) 40%, transparent)'
                        : visited   ? 'var(--border-strong)'
                        :             'var(--border)',
-              cursor: visited ? 'pointer' : 'default',
-              border: 0,
               transition: 'background 0.2s',
             }}/>
+          </button>
         );
       })}
     </div>
@@ -1827,12 +1850,20 @@ function Field({ label, hint, required, children }) {
   );
 }
 
-const inputStyle = { padding: '10px 12px', fontSize: 14, width: '100%' };
+// 16px so mobile Safari never zooms on focus (global.css enforces 16px
+// under 720px with !important; matching it here keeps desktop consistent).
+const inputStyle = { padding: '10px 12px', fontSize: 16, width: '100%' };
+
+// Tiny uppercase label used above the add-a-service fields.
+const fieldLabelStyle = {
+  fontSize: 10.5, fontWeight: 600, color: 'var(--muted)',
+  textTransform: 'uppercase', letterSpacing: '0.05em',
+};
 
 function Shell({ tweaks, children }) {
   return (
     <div className={`app-root dir-${tweaks.direction}`} style={{
-      minHeight: '100vh', padding: '40px 24px',
+      minHeight: '100vh', padding: 'clamp(16px, 5vh, 40px) clamp(12px, 4vw, 24px)',
       background: 'var(--page)',
       display: 'flex', flexDirection: 'column', alignItems: 'center',
     }}>

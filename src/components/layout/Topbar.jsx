@@ -64,6 +64,7 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
           aria-label="Open menu"
           style={{
             padding: 8, borderRadius: 8, color: 'var(--fg-2)',
+            minWidth: 44, minHeight: 44,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
           <Icons.Menu size={20} sw={1.8}/>
@@ -150,6 +151,7 @@ export default function Topbar({ title, subtitle, isMobile, isTablet, onMenuClic
           onClick={openPalette}
           style={{
             padding: 8, borderRadius: 8, color: 'var(--fg-2)',
+            minWidth: 44, minHeight: 44,
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
           }}>
           <Icons.Search size={18} sw={1.7}/>

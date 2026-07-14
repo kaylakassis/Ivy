@@ -4,6 +4,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { useViewport } from '../../lib/viewport.js';
 
 // Mirror api/_lib/expenses.js. Kept in sync by hand - small + stable.
 const CATEGORIES = [
@@ -37,6 +38,7 @@ function fmtDate(iso) {
 }
 
 export default function Expenses() {
+  const { isMobile } = useViewport();
   const [items, setItems]     = useState([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(null);
@@ -103,6 +105,43 @@ export default function Expenses() {
           <div style={{ padding: 40 }}>
             <EmptyNote icon="Doc" title="No expenses yet"
               hint="Track your business spend by Schedule C category. Year-end export bundles them for tax filing."/>
+          </div>
+        ) : isMobile ? (
+          /* Stacked cards on phones (same pattern as the Invoices list) -
+             the fixed 6-column grid needed 362px of fixed columns alone,
+             so the Amount + delete button were clipped off-screen. */
+          <div>
+            {items.map((e, i) => (
+              <div key={e.id} onClick={() => setEditing(e)} style={{
+                display: 'flex', flexDirection: 'column', gap: 4,
+                padding: '12px 16px', minHeight: 44, cursor: 'pointer',
+                borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                opacity: e.isDeductible ? 1 : 0.6,
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, minWidth: 0,
+                    overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {CAT_LABEL[e.category] || e.category}
+                  </div>
+                  <div className="mono-num" style={{ fontWeight: 600, fontSize: 14 }}>{fmtMoney(e.amount)}</div>
+                  <button onClick={(ev) => { ev.stopPropagation(); remove(e.id); }}
+                    className="btn btn-ghost"
+                    style={{ padding: '8px 10px', minHeight: 36, color: 'var(--muted)' }}
+                    title="Delete">
+                    <Icons.X size={13}/>
+                  </button>
+                </div>
+                <div style={{ display: 'flex', gap: 8, fontSize: 12, color: 'var(--muted)', minWidth: 0 }}>
+                  <span>{fmtDate(e.date)}</span>
+                  {(e.vendor || e.notes) && (
+                    <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      · {e.vendor || ''}{e.vendor && e.notes ? ' · ' : ''}{e.notes || ''}
+                    </span>
+                  )}
+                  {e.paymentMethod && <span style={{ marginLeft: 'auto', flexShrink: 0 }}>{e.paymentMethod}</span>}
+                </div>
+              </div>
+            ))}
           </div>
         ) : (
           <div>

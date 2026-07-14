@@ -334,7 +334,7 @@ export default function Editor({
               <div style={{
                 position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 60,
                 background: 'var(--surface)', border: '1px solid var(--border)',
-                borderRadius: 10, padding: 12, width: 250, boxShadow: 'var(--shadow-md)',
+                borderRadius: 10, padding: 12, width: 'min(250px, calc(100vw - 24px))', boxShadow: 'var(--shadow-md)',
               }}>
                 <div style={{ fontSize: 12, color: 'var(--fg-2)', marginBottom: 8 }}>
                   Publish the current draft at:
@@ -749,7 +749,7 @@ function SiteStyleButton({ site, set }) {
             style={{ position: 'fixed', inset: 0, zIndex: 60 }}/>
           <div style={{
             position: 'absolute', top: 'calc(100% + 6px)', right: 0, zIndex: 70,
-            width: 380, maxHeight: '70vh', overflowY: 'auto', padding: 16,
+            width: 'min(380px, calc(100vw - 24px))', maxHeight: '70vh', overflowY: 'auto', padding: 16,
             background: 'var(--surface)', border: '1px solid var(--border-strong)',
             borderRadius: 10, boxShadow: 'var(--shadow, 0 10px 30px rgba(0,0,0,0.16))',
             display: 'flex', flexDirection: 'column', gap: 14,

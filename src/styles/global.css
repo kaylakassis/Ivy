@@ -245,10 +245,25 @@ body.app-walled .view-toggle { display: none; }
 
 /* MOBILE: < 720px ------------------------------------------- */
 @media (max-width: 720px) {
-  /* iOS auto-zooms when the focused input is < 16px. Force 16px while
-     keeping the visual size via transform. Simpler: just set 16px. */
+  /* iOS auto-zooms (and never zooms back out) when the focused input is
+     < 16px. !important is REQUIRED here, not optional: the .input class
+     sets 14px at higher specificity, and dozens of fields across the app
+     set an inline fontSize of 13-15 - both beat a bare media-query
+     selector, which is how the zoom bug shipped everywhere despite this
+     rule existing. An !important stylesheet declaration outranks inline
+     styles, so this one rule fixes every text field in the app at once. */
   input, textarea, select {
-    font-size: 16px;
+    font-size: 16px !important;
+  }
+
+  /* Range sliders (ROI calculator, settings) get a finger-sized thumb +
+     thicker track; the native ~16px thumb is fiddly on touch. */
+  input[type="range"] { min-height: 32px; }
+  input[type="range"]::-webkit-slider-thumb {
+    width: 26px; height: 26px;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 26px; height: 26px;
   }
 
   /* WCAG 2.5.5 recommends 44x44 minimum touch targets on mobile.

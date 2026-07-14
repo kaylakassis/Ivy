@@ -47,8 +47,20 @@ export default function RootRouter() {
     return <MarketingHome/>;
   }
 
-  // Initial /api/me still pending → keep the marketing chrome until we know,
-  // because flashing a sign-in screen first would feel like a redirect bug.
+  // While the initial /auth/me is still in flight: cold visitors (no local
+  // session hint) get the marketing home painted IMMEDIATELY - a paid-
+  // traffic phone visitor used to stare at a blank "Loading…" for a full
+  // network round-trip before the hero appeared. If they turn out to be
+  // signed in after all, the redirect below kicks in a moment later.
+  let hasSessionHint = false;
+  try { hasSessionHint = localStorage.getItem('ivy_signed_in') === '1'; } catch { /* private mode */ }
+  if (authLoading && !user && !hasSessionHint) {
+    return <MarketingHome/>;
+  }
+
+  // Likely-signed-in (hint present) → keep the neutral loading frame until
+  // we know where to land, because flashing marketing at an active user
+  // would feel like a sign-out bug.
   if (authLoading || (user && !decision)) {
     return (
       <div style={{

@@ -285,10 +285,16 @@ function ClientTopbar({ isMobile, onMenuClick, data }) {
 }
 
 // ----- mobile bottom nav + drawer -----
+// Cap the bottom bar at the 5 highest-traffic tabs (matching the business
+// app's MobileBottomNav). All 8 items crammed into 375px left ~47px per
+// slot with truncated labels; the rest (Documents, Billing, Discover) stay
+// one tap away in the hamburger drawer, which already lists everything.
+const MOBILE_NAV_PRIMARY = new Set(['/me', '/me/messages', '/me/bookings', '/me/orders', '/me/invoices']);
+
 function ClientMobileNav() {
   return (
     <nav className="mobile-nav" aria-label="Primary">
-      {NAV.map((item) => {
+      {NAV.filter((item) => MOBILE_NAV_PRIMARY.has(item.to)).map((item) => {
         const Icon = Icons[item.icon];
         return (
           <NavLink key={item.to} to={item.to} end={item.end}

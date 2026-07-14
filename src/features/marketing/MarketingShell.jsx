@@ -204,8 +204,11 @@ export function SimpleNav() {
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>About</Link>
         <Link to="/signin" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 14px', fontSize: 13, color: 'var(--fg-2)' }}>Sign in</Link>
-        <Link to="/signup" className="btn btn-primary marketing-nav-secondary"
-          style={{ padding: '8px 14px', fontSize: 13 }}>Get started</Link>
+        {/* Primary CTA stays visible on mobile (no marketing-nav-secondary):
+            the sticky header is the only persistent conversion point once
+            the page scrolls. */}
+        <Link to="/signup" className="btn btn-primary"
+          style={{ padding: '8px 14px', fontSize: 13, whiteSpace: 'nowrap' }}>Start free</Link>
         <MarketingMobileMenu/>
       </div>
     </header>
@@ -218,6 +221,17 @@ export function SimpleFooter() {
       borderTop: '1px solid var(--border)',
       padding: '24px 24px 40px', marginTop: 24,
     }}>
+      {/* A visitor who reads a sub-page to the end had no signup button
+          down here - only links. Give scroll-enders a next step. */}
+      <div style={{
+        maxWidth: 1100, margin: '0 auto 20px',
+        display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8,
+      }}>
+        <Link to="/signup" className="btn btn-primary" style={{ padding: '12px 22px', fontSize: 14 }}>
+          Start your free trial
+        </Link>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>$0 today · Cancel anytime</div>
+      </div>
       <div style={{
         maxWidth: 1100, margin: '0 auto 16px',
         display: 'flex', justifyContent: 'center',
