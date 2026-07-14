@@ -2,6 +2,7 @@
 // across all the businesses they're a client of, with per-thread
 // view/send/leave.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
@@ -34,6 +35,22 @@ export default function ClientGroups() {
   useEffect(() => {
     if (!isMobile && !selectedId && groups.length > 0) setSelectedId(groups[0].id);
   }, [groups, selectedId, isMobile]);
+
+  // Deep-link consumer: /me/messages?group=<id> (the accept-invite flow's
+  // landing URL) auto-opens that group. Param is stripped after consuming
+  // so refresh doesn't re-trigger over a later manual pick.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const consumedGroupRef = useRef(false);
+  useEffect(() => {
+    if (consumedGroupRef.current || loading) return;
+    const gid = searchParams.get('group');
+    if (!gid) return;
+    consumedGroupRef.current = true;
+    if (groups.some((g) => g.id === gid)) setSelectedId(gid);
+    const next = new URLSearchParams(searchParams);
+    next.delete('group');
+    setSearchParams(next, { replace: true });
+  }, [loading, groups, searchParams, setSearchParams]);
 
   const selected = useMemo(() => groups.find((g) => g.id === selectedId) || null, [groups, selectedId]);
   const showList = !isMobile || !selectedId;
@@ -124,12 +141,15 @@ function GroupView({ groupId, onBack, onLeave }) {
   const [showMembers, setShowMembers] = useState(false);
   const scrollRef = useRef(null);
   const { isMobile } = useViewport();
+  const navigate = useNavigate();
 
   const startDm = async (otherClientId) => {
     try {
       const r = await api.post('/me/dms', { recipientClientId: otherClientId });
-      // Take user to the new DM via the messages page's DM tab.
-      window.location.assign(`/me/messages?dm=${r.dm.id}`);
+      // Client-side navigation (no full reload): ClientMessagesPage
+      // watches ?dm= and flips to the People tab, where ClientDms
+      // consumes the param and opens the new conversation.
+      navigate(`/me/messages?dm=${r.dm.id}`);
     } catch (err) {
       window.alert(err.message || 'Could not start DM.');
     }

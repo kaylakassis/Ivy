@@ -2,6 +2,7 @@
 // clients in groups you share. Each conversation has block / mute / leave /
 // report actions.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
@@ -33,6 +34,22 @@ export default function ClientDms() {
   useEffect(() => {
     if (!isMobile && !selectedId && dms.length > 0) setSelectedId(dms[0].id);
   }, [dms, selectedId, isMobile]);
+
+  // Deep-link consumer: /me/messages?dm=<id> (set by GroupView's "Message"
+  // action right after creating the DM) auto-opens that conversation.
+  // Param is stripped after consuming so refresh doesn't re-trigger.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const consumedDmRef = useRef(false);
+  useEffect(() => {
+    if (consumedDmRef.current || loading) return;
+    const did = searchParams.get('dm');
+    if (!did) return;
+    consumedDmRef.current = true;
+    if (dms.some((d) => d.id === did)) setSelectedId(did);
+    const next = new URLSearchParams(searchParams);
+    next.delete('dm');
+    setSearchParams(next, { replace: true });
+  }, [loading, dms, searchParams, setSearchParams]);
 
   const selected = dms.find((d) => d.id === selectedId) || null;
   const showList = !isMobile || !selectedId;

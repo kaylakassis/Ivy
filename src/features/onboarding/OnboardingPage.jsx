@@ -376,7 +376,10 @@ export default function OnboardingPage() {
     } catch { /* localStorage may be disabled in private mode */ }
     setExitedAt(Date.now());
     setBusy(false);
-    nav('/dashboard?onboarding=resume', { replace: true });
+    // Plain /dashboard - a ?onboarding=resume param used to ride along
+    // here but nothing ever consumed it (the dashboard's "Finish setup"
+    // checklist re-surfaces skipped steps on its own).
+    nav('/dashboard', { replace: true });
   };
 
   // "Finish" - marks workspaces.onboarded_at + bounces. Final step CTA.

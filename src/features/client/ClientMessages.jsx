@@ -21,7 +21,21 @@ import {
 } from '../../components/AudioMessage.jsx';
 
 export default function ClientMessagesPage() {
-  const [tab, setTab] = useState('direct'); // 'direct' | 'groups' | 'dms'
+  // Deep links pick the right tab: accepting a group invite lands on
+  // /me/messages?group=<id> and "Message person" lands on ?dm=<id>.
+  // Before this, both landed on the default "From businesses" tab and
+  // the just-joined group / just-created DM was silently invisible -
+  // the terminal step of each flow was a dead end.
+  const [searchParams] = useSearchParams();
+  const [tab, setTab] = useState(() => (
+    searchParams.get('group') ? 'groups' : searchParams.get('dm') ? 'dms' : 'direct'
+  )); // 'direct' | 'groups' | 'dms'
+  // Follow deep links that arrive while already mounted (e.g. GroupView's
+  // "Message" button navigates to ?dm=... from the Groups tab).
+  useEffect(() => {
+    if (searchParams.get('group')) setTab('groups');
+    else if (searchParams.get('dm')) setTab('dms');
+  }, [searchParams]);
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{ display: 'flex', gap: 4, padding: '8px 16px',
