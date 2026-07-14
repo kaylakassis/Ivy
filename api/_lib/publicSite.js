@@ -6,7 +6,7 @@
 // page fallback, nav build - stay in sync.
 //
 // Two ways to identify the site:
-//   • handle  - the platform URL getivyos.com/site/:handle
+//   • handle  - the platform URL joinivy.ai/site/:handle
 //   • host    - the owner's VERIFIED custom domain (e.g. rivers.com).
 //               Used when a request arrives at the custom domain itself.
 

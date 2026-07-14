@@ -1,7 +1,7 @@
 // GET /api/auth/dev-login?token=<DEV_LOGIN_SECRET>&state=<preset>
 //
 // Passwordless QA login. Logs you into ONE dedicated QA-only account
-// (qa@getivyos.com by default) - never a real user - and optionally forces
+// (qa@joinivy.ai by default) - never a real user - and optionally forces
 // that account's workspace into a known state so you can visually test the
 // paywall, trial, active, and onboarding screens. Issues a normal session
 // cookie and 302-redirects into the app, so it works as a one-click
@@ -34,7 +34,7 @@ import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../_lib/legal.js
 import { TRIAL_DAYS } from '../_lib/billing.js';
 import { serverError } from '../_lib/json.js';
 
-const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@getivyos.com').toLowerCase();
+const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@joinivy.ai').toLowerCase();
 const MIN_SECRET_LEN = 16;
 const VALID_STATES = new Set(['onboarding', 'paywall', 'trial', 'active']);
 

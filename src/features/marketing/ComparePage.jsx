@@ -159,7 +159,7 @@ export default function ComparePage() {
             and our team will import everything into your new Ivy workspace within a business day. No charge,
             no catch.
           </p>
-          <a href={`mailto:hello@getivyos.com?subject=${encodeURIComponent(`Switching from ${c.name}`)}`}
+          <a href={`mailto:hello@joinivy.ai?subject=${encodeURIComponent(`Switching from ${c.name}`)}`}
             className="btn btn-primary"
             style={{ padding: '10px 18px', fontSize: 13, fontWeight: 600 }}>
             Get migration help →

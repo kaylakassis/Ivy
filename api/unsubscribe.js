@@ -38,7 +38,7 @@ const PAGE_OK = (label) => `<!doctype html>
 <body><div class="card">
   <h1>You're unsubscribed</h1>
   <p>You won't receive any more ${label} from us.</p>
-  <p>Changed your mind? <a href="${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications">Manage preferences</a>.</p>
+  <p>Changed your mind? <a href="${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications">Manage preferences</a>.</p>
   <small>— Ivy</small>
 </div></body></html>`;
 

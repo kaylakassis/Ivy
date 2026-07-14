@@ -47,7 +47,7 @@ never auto-mark-paid.
 1. Open **Stripe Dashboard** → **Developers** → **Webhooks**.
 2. Click **"+ Add endpoint"**.
 3. Fill in:
-   - **Endpoint URL:** `https://getivyos.com/api/webhooks/stripe`
+   - **Endpoint URL:** `https://joinivy.ai/api/webhooks/stripe`
    - **Description:** `Ivy Connect — client payments`
    - **Events to send:** click "Select events" and check:
      - `charge.succeeded`
@@ -80,7 +80,7 @@ leak across Connect events.
 
 1. **Stripe Dashboard** → **Developers** → **Webhooks** → **"+ Add endpoint"**.
 2. Fill in:
-   - **Endpoint URL:** `https://getivyos.com/api/webhooks/billing`
+   - **Endpoint URL:** `https://joinivy.ai/api/webhooks/billing`
    - **Description:** `Ivy platform billing`
    - **Events to send:**
      - `checkout.session.completed`
@@ -113,7 +113,7 @@ They cross-check against your privacy policy text.
 
 1. Open **App Store Connect** → **My Apps** → your Ivy app.
 2. Left sidebar → **App Privacy**.
-3. **Privacy Policy URL:** `https://getivyos.com/privacy`.
+3. **Privacy Policy URL:** `https://joinivy.ai/privacy`.
 4. Click **Get Started** under "Data Types" — declare each category we
    actually collect (Ivy does collect these):
 
@@ -206,7 +206,7 @@ dev-login endpoint we already built is *perfect* for this.
    Information** → scroll to **"Sign-In Information"**.
 2. Toggle **"Sign-in required"** ON.
 3. Enter:
-   - **User Name:** `qa@getivyos.com`
+   - **User Name:** `qa@joinivy.ai`
    - **Password:** N/A — instead, fill the **Additional Information** /
      **Notes for the Reviewer** field below with:
 
@@ -214,7 +214,7 @@ dev-login endpoint we already built is *perfect* for this.
      > Open this URL on any device — it signs you straight in as a Beta
      > tester with full app access, no card required:
      >
-     > `https://getivyos.com/api/auth/dev-login?token=<YOUR_DEV_LOGIN_SECRET>`
+     > `https://joinivy.ai/api/auth/dev-login?token=<YOUR_DEV_LOGIN_SECRET>`
      >
      > Replace `<YOUR_DEV_LOGIN_SECRET>` with the actual secret from
      > `DEV_LOGIN_SECRET` in your Vercel env vars.
@@ -223,7 +223,7 @@ dev-login endpoint we already built is *perfect* for this.
      > onboarding, append `&state=onboarding`.
 
    *(If you'd rather use a password-protected account, just create
-   `qa@getivyos.com` from Admin → Users with a fixed password and put the
+   `qa@joinivy.ai` from Admin → Users with a fixed password and put the
    password here.)*
 
 4. **Save**.
@@ -240,7 +240,7 @@ ramp volume over ~7 days.
 
 **Steps (one-time setup):**
 
-1. **Resend Dashboard** → **Domains** → confirm `getivyos.com` shows all
+1. **Resend Dashboard** → **Domains** → confirm `joinivy.ai` shows all
    four records green: **SPF**, **DKIM**, **DMARC**, **MX**.
 2. If anything is "Pending," copy the DNS record values into **GoDaddy
    (or your registrar)** → DNS → Add Record. Wait ~10 min, click

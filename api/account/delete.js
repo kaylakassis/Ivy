@@ -130,7 +130,7 @@ export default async function handler(req, res) {
     if (r.rowCount > 0 && userEmail) {
       try {
         const fn = (userName || '').split(/\s+/)[0] || 'there';
-        const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
+        const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@joinivy.ai';
         // 30-day recovery window matches db-prune.js's hard-delete cutoff.
         const ttlMinutes = 30 * 24 * 60;
         const finalDelete = new Date(Date.now() + ttlMinutes * 60 * 1000)

@@ -70,7 +70,7 @@ export default function SecurityPage() {
         </Section>
 
         <Section title="Reporting a security issue">
-          <p>If you find a vulnerability, please email <a href="mailto:security@getivyos.com" style={{ color: 'var(--accent)' }}>security@getivyos.com</a> with details. We respond within one business day and won't pursue legal action against good-faith research.</p>
+          <p>If you find a vulnerability, please email <a href="mailto:security@joinivy.ai" style={{ color: 'var(--accent)' }}>security@joinivy.ai</a> with details. We respond within one business day and won't pursue legal action against good-faith research.</p>
         </Section>
 
         <div style={{
@@ -80,7 +80,7 @@ export default function SecurityPage() {
           <div style={{ fontSize: 14, fontWeight: 600 }}>Questions?</div>
           <p style={{ margin: '6px 0 12px', fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
             For specific contractual or compliance questions (DPA, vendor
-            review forms, etc.), email <a href="mailto:hello@getivyos.com" style={{ color: 'var(--accent)' }}>hello@getivyos.com</a>.
+            review forms, etc.), email <a href="mailto:hello@joinivy.ai" style={{ color: 'var(--accent)' }}>hello@joinivy.ai</a>.
             We respond personally - small team, founder included.
           </p>
           <Link to="/signup" className="btn btn-primary"

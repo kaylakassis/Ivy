@@ -15,7 +15,7 @@ import { isWorkspaceActive } from '../api/_lib/clientPortal.js';
 import devLogin from '../api/auth/dev-login.js';
 
 const SECRET = 'qa-dev-login-secret-at-least-16-chars';
-const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@getivyos.com').toLowerCase();
+const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@joinivy.ai').toLowerCase();
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };

@@ -14,7 +14,7 @@
 // Native iOS (Capacitor) twist:
 //   • The WebView origin is `https://localhost`, so a relative `/api/…`
 //     URL resolves to the wrong place. We prepend VITE_API_BASE_URL
-//     (e.g. https://getivyos.com) on native.
+//     (e.g. https://joinivy.ai) on native.
 //   • Cross-origin XHR drops the SameSite=Lax session cookie. We attach
 //     `Authorization: Bearer <jwt>` (token stored in iOS Keychain via
 //     src/lib/nativeAuth.js) and `X-Client-Platform: ios` so the server

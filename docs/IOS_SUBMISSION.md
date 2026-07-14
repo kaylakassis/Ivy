@@ -15,7 +15,7 @@ Mac - Xcode is required.
 - **RevenueCat account** (free up to $2.5K MRR). Create a project named
   "Ivy" with one iOS app entry.
 - The repo's `VITE_API_BASE_URL` env var set in Vercel for production
-  (e.g. `https://getivyos.com`). The native build uses this as the
+  (e.g. `https://joinivy.ai`). The native build uses this as the
   cross-origin API base - without it, every API call from the device
   resolves to `https://localhost/api/…` and 404s.
 - The repo's `VITE_REVENUECAT_PUBLIC_KEY_IOS` env var set (it ships in
@@ -76,7 +76,7 @@ Mac - Xcode is required.
    the App-Specific Shared Secret + the in-app purchase key (`.p8`).
    Without these RC can't validate Apple receipts.
 6. **Webhook:**
-   - URL: `https://getivyos.com/api/billing/revenuecat-webhook`
+   - URL: `https://joinivy.ai/api/billing/revenuecat-webhook`
    - Authorization header: paste the same string as
      `REVENUECAT_WEBHOOK_SECRET` above (RC sends it verbatim, we
      constant-time compare).

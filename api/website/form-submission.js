@@ -178,7 +178,7 @@ async function deliverByEmail({ to, site, formId, payload }) {
   const html = emailShell({
     heading: 'New form submission',
     body: `Someone submitted your <strong>${escapeHtml(formId)}</strong> form on
-      <a href="https://getivyos.com/site/${escapeHtml(site.handle)}">${escapeHtml(site.business_name || site.handle)}</a>.
+      <a href="https://joinivy.ai/site/${escapeHtml(site.handle)}">${escapeHtml(site.business_name || site.handle)}</a>.
       <table style="margin-top:18px;border-collapse:collapse;width:100%">${rows}</table>`,
     footer: 'You can change where these go in Editor → Forms.',
   });

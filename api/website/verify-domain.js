@@ -20,9 +20,9 @@ import { addProjectDomain, getDomainConfig } from '../_lib/vercelDomains.js';
 import dns from 'node:dns/promises';
 
 // The platform-level CNAME owners point their domain at. Owners type
-// "rivers.com" → CNAME rivers.com → cname.getivyos.com. Set via env so
+// "rivers.com" → CNAME rivers.com → cname.joinivy.ai. Set via env so
 // staging + prod can differ.
-const TARGET_CNAME = process.env.WEBSITE_CNAME_TARGET || 'cname.getivyos.com';
+const TARGET_CNAME = process.env.WEBSITE_CNAME_TARGET || 'cname.joinivy.ai';
 
 // Trim trailing dots and lowercase everything so the comparison is
 // deterministic regardless of how the resolver returns the record.

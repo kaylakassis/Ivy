@@ -88,7 +88,7 @@ export function renderPasswordReset({ firstName: fnRaw, link }) {
 
 export function renderAccountDeletionRequest({ firstName: fnRaw, finalDeleteDate, recoverUrl }) {
   const fn = escapeHtml(firstName(fnRaw));
-  const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
+  const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@joinivy.ai';
   const url = recoverUrl || `${appUrl()}/account-recover?token=PREVIEW_TOKEN_xxxxxxxx`;
   const date = fmtDate(finalDeleteDate || new Date(Date.now() + 30 * 86400000));
   return {
@@ -129,7 +129,7 @@ export function renderAccountRestored({ firstName: fnRaw }) {
 
 export function renderDataExportReady({ firstName: fnRaw, filename, sizeMb, attached }) {
   const fn = escapeHtml(firstName(fnRaw));
-  const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
+  const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@joinivy.ai';
   const body = !attached
     ? `<p>Hi ${fn},</p>
        <p>Your data export for your Ivy account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb || '24.5'} MB</strong>), so we couldn't attach it here.</p>

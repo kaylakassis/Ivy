@@ -4,7 +4,7 @@
 //
 // Routed by vercel.json so the URL is /marketing-sitemap.xml (no /api/).
 
-const HOST = process.env.PUBLIC_HOST || 'getivyos.com';
+const HOST = process.env.PUBLIC_HOST || 'joinivy.ai';
 
 const STATIC_PATHS = [
   '/',

@@ -115,7 +115,7 @@ export function buildBookingInvite({
   const summary = serviceName
     ? `${serviceName}${bizName ? ` with ${bizName}` : ''}`
     : (bizName ? `Appointment with ${bizName}` : 'Appointment');
-  const uid = `${bookingId || 'booking'}@getivyos.com`;
+  const uid = `${bookingId || 'booking'}@joinivy.ai`;
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
@@ -159,7 +159,7 @@ export function buildICalFeed({ bizName, bookings, services, timezone }) {
     const summary = `${svc?.name || 'Appointment'} - ${firstName(b.client_name)}`;
     const dtstart = fmtDT(b.date, b.start_min, timezone);
     const dtend   = fmtDT(b.date, b.end_min, timezone);
-    const uid     = `${b.id}@getivyos.com`;
+    const uid     = `${b.id}@joinivy.ai`;
     const rrule   = rruleFor(b.recurrence_rule, b.recurrence_until);
     const ex      = exDates(b.cancelled_occurrences);
 

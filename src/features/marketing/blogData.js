@@ -109,7 +109,7 @@ export const POSTS = [
       { type: 'p', text: "6. Import open invoices last. These are the ones that affect money flow - get them right." },
       { type: 'p', text: "7. Keep the old tool for 60 days, read-only, just in case. Then cancel." },
       { type: 'h', text: 'Ivy handles all of this for free' },
-      { type: 'p', text: "We'll take your CSV exports or read-only access to your current tool and import everything inside one business day. No charge. Email hello@getivyos.com or sign up and our team reaches out." },
+      { type: 'p', text: "We'll take your CSV exports or read-only access to your current tool and import everything inside one business day. No charge. Email hello@joinivy.ai or sign up and our team reaches out." },
     ],
   },
 ];

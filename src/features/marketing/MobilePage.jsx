@@ -79,7 +79,7 @@ export default function MobilePage() {
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18,
           }}>
-            <Step n={1} title="Open getivyos.com on your phone" body="Any modern browser - Safari, Chrome, Firefox, Edge." />
+            <Step n={1} title="Open joinivy.ai on your phone" body="Any modern browser - Safari, Chrome, Firefox, Edge." />
             <Step n={2} title="Tap Share, then Add to Home Screen" body="iOS: the Share icon at the bottom. Android: the three-dot menu at the top." />
             <Step n={3} title="Done" body='Ivy shows up as an app icon. Opens full-screen, no browser chrome - looks and feels like a native app.' />
           </div>

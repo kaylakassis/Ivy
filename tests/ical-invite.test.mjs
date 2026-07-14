@@ -31,7 +31,7 @@ console.log('\n[2] event fields');
 assert(ics.includes('DTSTART:20260814T093000'), 'DTSTART floating local 09:30');
 assert(ics.includes('DTEND:20260814T103000'), 'DTEND floating local 10:30');
 assert(/SUMMARY:Deep Tissue Massage with Bright/.test(ics), 'SUMMARY names service + business');
-assert(ics.includes('UID:abc123@getivyos.com'), 'UID from booking id');
+assert(ics.includes('UID:abc123@joinivy.ai'), 'UID from booking id');
 assert(/LOCATION:123 Main St/.test(ics), 'LOCATION carried');
 assert(ics.includes('STATUS:CONFIRMED'), 'STATUS confirmed');
 

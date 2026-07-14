@@ -89,7 +89,7 @@ export default function AccountRecoverPage() {
               {err || 'This recovery link is invalid, already used, or expired.'}
             </p>
             <p style={{ margin: 0, fontSize: 13, color: 'var(--muted)', lineHeight: 1.55 }}>
-              Recovery links work for 30 days after deletion. If yours has expired, the account is no longer recoverable. If you think this is wrong, reach us at <a href="mailto:hello@getivyos.com" style={{ color: 'var(--accent)' }}>hello@getivyos.com</a>.
+              Recovery links work for 30 days after deletion. If yours has expired, the account is no longer recoverable. If you think this is wrong, reach us at <a href="mailto:hello@joinivy.ai" style={{ color: 'var(--accent)' }}>hello@joinivy.ai</a>.
             </p>
             <Link to="/" className="btn btn-outline">Back to home</Link>
           </>

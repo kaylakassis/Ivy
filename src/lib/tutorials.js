@@ -273,7 +273,7 @@ export const TUTORIALS = {
       },
       {
         title: 'Pick your handle',
-        body: 'Set a handle once (e.g. "kayla") → your site lives at getivyos.com/site/kayla forever. We reserve it.',
+        body: 'Set a handle once (e.g. "kayla") → your site lives at joinivy.ai/site/kayla forever. We reserve it.',
       },
       {
         title: 'Visibility gives you a draft mode',

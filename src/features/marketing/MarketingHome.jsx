@@ -167,7 +167,7 @@ export default function MarketingHome() {
     };
     document.title = 'Ivy - the all-in-one business platform for solo entrepreneurs';
     const desc = "Online booking, payments, a real website, client messaging, documents & e-sign, automations, reviews, and an AI that acts on your numbers - all in one workspace. Built for massage therapists, stylists, trainers, coaches, and anyone running a small business solo.";
-    const url  = typeof window !== 'undefined' ? window.location.origin : 'https://getivyos.com';
+    const url  = typeof window !== 'undefined' ? window.location.origin : 'https://joinivy.ai';
     upsert('name', 'description',          desc);
     upsert('property', 'og:title',         'Ivy - the all-in-one business platform');
     upsert('property', 'og:description',   desc);
@@ -468,7 +468,7 @@ function ProductPreview() {
             background: 'var(--surface)', border: '1px solid var(--border)',
             fontSize: 11, color: 'var(--muted)',
           }}>
-            getivyos.com/dashboard
+            joinivy.ai/dashboard
           </div>
         </div>
 

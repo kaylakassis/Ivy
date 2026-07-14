@@ -25,7 +25,7 @@ function configure() {
     _configured = false;
     return false;
   }
-  webpush.setVapidDetails(subj || 'mailto:support@getivyos.com', pub, priv);
+  webpush.setVapidDetails(subj || 'mailto:support@joinivy.ai', pub, priv);
   _configured = true;
   return true;
 }

@@ -2,7 +2,7 @@
 // Sends a test email through the same code path the rest of the app uses,
 // so you can confirm From / Reply-To / DNS auth all work end-to-end.
 //
-//   curl -X POST https://getivyos.com/api/admin/email-test \
+//   curl -X POST https://joinivy.ai/api/admin/email-test \
 //     -H "x-admin-secret: $ADMIN_SECRET" \
 //     -H "Content-Type: application/json" \
 //     -d '{"to":"you@example.com"}'

@@ -58,7 +58,7 @@ async function loadUser(userId) {
 // operator sees is byte-for-byte what real users get.
 export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, enabled, supportEmail }) {
   const fn = escapeHtml(fnRaw || 'there');
-  const supportAddr = supportEmail || process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
+  const supportAddr = supportEmail || process.env.EMAIL_REPLY_TO || 'hello@joinivy.ai';
 
   let subject, preheader, heading, intro, decided;
   if (kind === 'new_signin') {

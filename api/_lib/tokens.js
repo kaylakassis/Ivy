@@ -86,7 +86,7 @@ export async function invalidateUserTokens({ userId, kind }) {
 //      at the real, publicly-reachable domain.
 //   3. Preview deploys: the deployment's own VERCEL_URL.
 //   4. Local dev: localhost.
-const CANONICAL_APP_URL = 'https://getivyos.com';
+const CANONICAL_APP_URL = 'https://joinivy.ai';
 
 export function appUrl() {
   if (process.env.APP_URL) return process.env.APP_URL.replace(/\/$/, '');

@@ -3,16 +3,16 @@
 //
 // Why not just use `window.location.origin`?
 //   The app runs on three URLs in practice:
-//     - https://getivyos.com            (production, marketed)
+//     - https://joinivy.ai            (production, marketed)
 //     - https://ivy-pink.vercel.app  (default Vercel deploy URL - same project)
 //     - http://localhost:5173           (local dev)
 //   Operators using the second one would otherwise see and copy
 //   "ivy-pink.vercel.app/book/handle" from the wizard / share
 //   drawer, then paste a stale URL into Instagram. We want every
-//   share-able URL to read getivyos.com regardless of which host
+//   share-able URL to read joinivy.ai regardless of which host
 //   they're currently loaded on, except in dev where localhost is
 //   what actually works.
-const CANONICAL = 'https://getivyos.com';
+const CANONICAL = 'https://joinivy.ai';
 
 export function publicOrigin() {
   if (typeof window === 'undefined') return CANONICAL;
@@ -29,8 +29,8 @@ export function isPlatformHost(host) {
   const h = String(host || '').toLowerCase().replace(/:\d+$/, '');
   if (!h) return true; // SSR / unknown -> treat as platform (safe default)
   return (
-    h === 'getivyos.com' ||
-    h === 'www.getivyos.com' ||
+    h === 'joinivy.ai' ||
+    h === 'www.joinivy.ai' ||
     h === 'localhost' ||
     h.startsWith('127.') ||
     h.endsWith('.vercel.app')
@@ -39,7 +39,7 @@ export function isPlatformHost(host) {
 
 // The URL a business owner should share for their site:
 //   • their VERIFIED custom domain when connected (https://theirdomain.com)
-//   • otherwise the platform URL (https://getivyos.com/site/<handle>)
+//   • otherwise the platform URL (https://joinivy.ai/site/<handle>)
 // `site` is the website-builder state object (has customDomain,
 // domainStatus, handle).
 export function siteShareUrl(site) {

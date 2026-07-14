@@ -75,7 +75,7 @@ async function emailCopy(req, res) {
     const sizeMb = (bytes / (1024 * 1024)).toFixed(1);
 
     const fn = escapeHtml((user.name || '').split(/\s+/)[0] || 'there');
-    const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@getivyos.com';
+    const supportEmail = process.env.EMAIL_REPLY_TO || 'hello@joinivy.ai';
     const body = tooBig
       ? `<p>Hi ${fn},</p>
          <p>Your data export for your Ivy account is ready — but it turned out to be a bit large to email safely (about <strong>${sizeMb} MB</strong>), so we couldn't attach it here.</p>

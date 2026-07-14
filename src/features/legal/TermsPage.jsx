@@ -31,7 +31,7 @@ export default function TermsPage() {
         contract. You're responsible for keeping your credentials safe
         and for everything that happens under your account. Notify us
         immediately at{' '}
-        <a href="mailto:support@getivyos.com" style={{ color: 'var(--accent)' }}>support@getivyos.com</a>{' '}
+        <a href="mailto:support@joinivy.ai" style={{ color: 'var(--accent)' }}>support@joinivy.ai</a>{' '}
         if you suspect unauthorized access.</P>
 
       <H2>2. The Service is informational, not professional advice</H2>
@@ -275,7 +275,7 @@ export default function TermsPage() {
 
       <H2>18. Contact</H2>
       <P>Questions about these Terms:{' '}
-        <a href="mailto:support@getivyos.com" style={{ color: 'var(--accent)' }}>support@getivyos.com</a>.
+        <a href="mailto:support@joinivy.ai" style={{ color: 'var(--accent)' }}>support@joinivy.ai</a>.
       </P>
     </LegalPage>
   );

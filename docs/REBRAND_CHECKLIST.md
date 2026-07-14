@@ -4,21 +4,21 @@ The codebase rebrand is done. Everything below has to happen **outside the repo*
 
 ## 1. Domain & DNS (do this first - everything else depends on it)
 
-- [ ] **Register `getivyos.com`** (any registrar - Namecheap, Cloudflare, etc.).
-- [ ] **Point `getivyos.com` at Vercel** - in Vercel → Project → Settings → Domains, add `getivyos.com` and `www.getivyos.com`, and copy the A/CNAME records Vercel shows into your registrar's DNS.
-- [ ] **Add the apex CNAME target `cname.getivyos.com`** as a CNAME → `cname.vercel-dns.com` (or whatever Vercel tells you). This is the address customers' custom domains will point at via `WEBSITE_CNAME_TARGET`; without it the in-product "Connect a custom domain" flow can't verify.
-- [ ] **Remove the old `getthryve.ai` domain from the Vercel project** so it stops serving stale content (or set up a redirect from `getthryve.ai` → `getivyos.com` if you want existing inbound links to survive - your call).
+- [ ] **Register `joinivy.ai`** (any registrar - Namecheap, Cloudflare, etc.).
+- [ ] **Point `joinivy.ai` at Vercel** - in Vercel → Project → Settings → Domains, add `joinivy.ai` and `www.joinivy.ai`, and copy the A/CNAME records Vercel shows into your registrar's DNS.
+- [ ] **Add the apex CNAME target `cname.joinivy.ai`** as a CNAME → `cname.vercel-dns.com` (or whatever Vercel tells you). This is the address customers' custom domains will point at via `WEBSITE_CNAME_TARGET`; without it the in-product "Connect a custom domain" flow can't verify.
+- [ ] **Remove the old `getthryve.ai` domain from the Vercel project** so it stops serving stale content (or set up a redirect from `getthryve.ai` → `joinivy.ai` if you want existing inbound links to survive - your call).
 
 ## 2. Email (mailboxes + sender verification)
 
-- [ ] **Create these mailboxes** at `getivyos.com` (in Google Workspace, Fastmail, whatever you use - aliases to one inbox are fine):
-  - `hello@getivyos.com` - sender + main reply-to (used in `EMAIL_FROM` and many templates)
-  - `support@getivyos.com` - Terms / customer support
-  - `privacy@getivyos.com` - Privacy Policy / Do-Not-Sell
-  - `security@getivyos.com` - Security page vulnerability reports
-  - `noreply@getivyos.com` - (optional; only one template references it)
-- [ ] **Verify `getivyos.com` in Resend** (Resend dashboard → Domains → Add domain). Add the DKIM + SPF + return-path records they give you to your registrar's DNS.
-- [ ] **Add a DMARC record** for `getivyos.com` (a permissive `v=DMARC1; p=none; rua=mailto:hello@getivyos.com` is fine to start). Without DMARC, Gmail and Yahoo started rejecting transactional mail in 2024.
+- [ ] **Create these mailboxes** at `joinivy.ai` (in Google Workspace, Fastmail, whatever you use - aliases to one inbox are fine):
+  - `hello@joinivy.ai` - sender + main reply-to (used in `EMAIL_FROM` and many templates)
+  - `support@joinivy.ai` - Terms / customer support
+  - `privacy@joinivy.ai` - Privacy Policy / Do-Not-Sell
+  - `security@joinivy.ai` - Security page vulnerability reports
+  - `noreply@joinivy.ai` - (optional; only one template references it)
+- [ ] **Verify `joinivy.ai` in Resend** (Resend dashboard → Domains → Add domain). Add the DKIM + SPF + return-path records they give you to your registrar's DNS.
+- [ ] **Add a DMARC record** for `joinivy.ai` (a permissive `v=DMARC1; p=none; rua=mailto:hello@joinivy.ai` is fine to start). Without DMARC, Gmail and Yahoo started rejecting transactional mail in 2024.
 
 ## 3. Vercel env vars (rename THRYVE_* → IVY_*)
 
@@ -39,14 +39,14 @@ In Vercel → Project → Settings → Environment Variables, for **each environ
 | `THRYVE_POSTAL_ADDRESS` | `IVY_POSTAL_ADDRESS` |
 
 - [ ] **Also update the values that contain the old domain or brand text**:
-  - `APP_URL` → `https://getivyos.com`
-  - `VITE_APP_URL` → `https://getivyos.com`
-  - `VITE_API_BASE_URL` (used by the iOS build) → `https://getivyos.com`
-  - `EMAIL_FROM` → `Ivy <hello@getivyos.com>`
-  - `EMAIL_REPLY_TO` → `hello@getivyos.com`
-  - `VAPID_SUBJECT` → `mailto:hello@getivyos.com`
-  - `WEBSITE_CNAME_TARGET` → `cname.getivyos.com` (if you've set it explicitly; otherwise the code default already points here)
-  - `SQUARE_REDIRECT_URI` → `https://getivyos.com/api/finance/square-oauth-callback`
+  - `APP_URL` → `https://joinivy.ai`
+  - `VITE_APP_URL` → `https://joinivy.ai`
+  - `VITE_API_BASE_URL` (used by the iOS build) → `https://joinivy.ai`
+  - `EMAIL_FROM` → `Ivy <hello@joinivy.ai>`
+  - `EMAIL_REPLY_TO` → `hello@joinivy.ai`
+  - `VAPID_SUBJECT` → `mailto:hello@joinivy.ai`
+  - `WEBSITE_CNAME_TARGET` → `cname.joinivy.ai` (if you've set it explicitly; otherwise the code default already points here)
+  - `SQUARE_REDIRECT_URI` → `https://joinivy.ai/api/finance/square-oauth-callback`
 - [ ] **Generate `REVENUECAT_WEBHOOK_SECRET`** if you haven't yet (any long random string; used as the bearer token RC sends to our webhook). Set it in Vercel.
 - [ ] **Generate `VITE_REVENUECAT_PUBLIC_KEY_IOS`** - actually, you'll get this from RevenueCat in step 8. Just remember to come back and set it.
 
@@ -54,9 +54,9 @@ In Vercel → Project → Settings → Environment Variables, for **each environ
 
 ### Optional: passwordless QA test login
 
-Set **`DEV_LOGIN_SECRET`** (a long random string, **16+ chars** - e.g. `openssl rand -hex 24`) to enable a one-click, passwordless login into a dedicated **QA-only** account (`qa@getivyos.com`) for visually testing app states. Off by default; with no secret set the endpoint 404s and is invisible.
+Set **`DEV_LOGIN_SECRET`** (a long random string, **16+ chars** - e.g. `openssl rand -hex 24`) to enable a one-click, passwordless login into a dedicated **QA-only** account (`qa@joinivy.ai`) for visually testing app states. Off by default; with no secret set the endpoint 404s and is invisible.
 
-- Bookmark: `https://getivyos.com/api/auth/dev-login?token=YOUR_SECRET`
+- Bookmark: `https://joinivy.ai/api/auth/dev-login?token=YOUR_SECRET`
 - Force a state with `&state=`:
   - `…&state=onboarding` - re-walk onboarding + walkthrough from the top (default for a fresh QA account)
   - `…&state=paywall` - jump straight to the hard paywall + priming screens
@@ -71,30 +71,30 @@ In Stripe Dashboard, account-wide:
 
 - [ ] **Account name** → "Ivy" (Stripe → Settings → Public details). Shows on receipts and the customer portal.
 - [ ] **Public business name / statement descriptor** → "IVY OS" (≤22 chars, appears on credit-card statements).
-- [ ] **Webhook endpoint URL** (Stripe → Developers → Webhooks → your "billing" endpoint) → `https://getivyos.com/api/webhooks/billing`. If you change the URL Stripe issues a new signing secret - update `IVY_BILLING_WEBHOOK_SECRET` in Vercel to match.
-- [ ] **Stripe Connect** (Stripe → Settings → Connect → Branding) - update the "Connect platform" name, logo, and **redirect URL** to `https://getivyos.com/api/finance/stripe-connect-callback`.
+- [ ] **Webhook endpoint URL** (Stripe → Developers → Webhooks → your "billing" endpoint) → `https://joinivy.ai/api/webhooks/billing`. If you change the URL Stripe issues a new signing secret - update `IVY_BILLING_WEBHOOK_SECRET` in Vercel to match.
+- [ ] **Stripe Connect** (Stripe → Settings → Connect → Branding) - update the "Connect platform" name, logo, and **redirect URL** to `https://joinivy.ai/api/finance/stripe-connect-callback`.
 
 ## 5. Square (per-merchant Connect)
 
 Square Developer Dashboard → your app:
 
 - [ ] **App name** → "Ivy".
-- [ ] **OAuth Redirect URL** → `https://getivyos.com/api/finance/square-oauth-callback`. Match `SQUARE_REDIRECT_URI` in Vercel.
-- [ ] **Webhook subscription URL** → `https://getivyos.com/api/webhooks/square/<workspaceId>` (the pattern handler routes by workspace).
+- [ ] **OAuth Redirect URL** → `https://joinivy.ai/api/finance/square-oauth-callback`. Match `SQUARE_REDIRECT_URI` in Vercel.
+- [ ] **Webhook subscription URL** → `https://joinivy.ai/api/webhooks/square/<workspaceId>` (the pattern handler routes by workspace).
 
 ## 6. PayPal (per-merchant Partner onboarding)
 
 PayPal Developer Dashboard → your app:
 
 - [ ] **App / partner display name** → "Ivy".
-- [ ] **Return URL after onboarding** → `https://getivyos.com/api/finance/paypal-onboard-return`.
-- [ ] **Webhook URL** → `https://getivyos.com/api/webhooks/paypal` (or the per-workspace path your handler uses).
+- [ ] **Return URL after onboarding** → `https://joinivy.ai/api/finance/paypal-onboard-return`.
+- [ ] **Webhook URL** → `https://joinivy.ai/api/webhooks/paypal` (or the per-workspace path your handler uses).
 
 ## 7. Twilio (your own sending number)
 
 Twilio Console:
 
-- [ ] **Voice / messaging webhook URLs** (if any) on your phone number → `https://getivyos.com/api/webhooks/twilio/...`.
+- [ ] **Voice / messaging webhook URLs** (if any) on your phone number → `https://joinivy.ai/api/webhooks/twilio/...`.
 - [ ] **A2P 10DLC brand registration** (if you've done one) - update the brand name to "Ivy". Required for US SMS deliverability.
 
 ## 8. RevenueCat (iOS in-app subscriptions)
@@ -110,7 +110,7 @@ RevenueCat dashboard:
 - [ ] **Create the default offering** with a "Weekly" package linked to `ivyos_weekly` and an "Annual" package linked to `ivyos_yearly`. Order Annual first.
 - [ ] **Copy the iOS public SDK key** into `VITE_REVENUECAT_PUBLIC_KEY_IOS` in Vercel.
 - [ ] **Add a webhook**:
-  - URL: `https://getivyos.com/api/billing/revenuecat-webhook`
+  - URL: `https://joinivy.ai/api/billing/revenuecat-webhook`
   - Authorization header: paste the same value you used for `REVENUECAT_WEBHOOK_SECRET`.
 - [ ] **App Store Connect integration**: generate the in-app purchase key (`.p8`) and App-Specific Shared Secret per RC's setup wizard.
 
@@ -126,9 +126,9 @@ RevenueCat dashboard:
 
 Google Cloud Console → APIs & Services → Credentials → your OAuth client:
 
-- [ ] **Authorized JavaScript origins** → `https://getivyos.com`.
-- [ ] **Authorized redirect URIs** → `https://getivyos.com/api/calendar/google/callback`.
-- [ ] **OAuth consent screen** → app name "Ivy", support email `support@getivyos.com`, app logo, app domain, privacy + terms URLs (`https://getivyos.com/privacy`, `https://getivyos.com/terms`).
+- [ ] **Authorized JavaScript origins** → `https://joinivy.ai`.
+- [ ] **Authorized redirect URIs** → `https://joinivy.ai/api/calendar/google/callback`.
+- [ ] **OAuth consent screen** → app name "Ivy", support email `support@joinivy.ai`, app logo, app domain, privacy + terms URLs (`https://joinivy.ai/privacy`, `https://joinivy.ai/terms`).
 
 ## 11. Sentry
 
@@ -150,7 +150,7 @@ Google Cloud Console → APIs & Services → Credentials → your OAuth client:
 
 ## 15. Social handles (cosmetic but match the brand)
 
-- [ ] Twitter / X, Instagram, LinkedIn company page, etc. → update handle and bio to Ivy / getivyos.com.
+- [ ] Twitter / X, Instagram, LinkedIn company page, etc. → update handle and bio to Ivy / joinivy.ai.
 
 ## 16. Deploy
 
@@ -158,17 +158,17 @@ Once 1–8 are done:
 
 - [ ] **Trigger a Vercel production deploy** (push to main, or redeploy). The build picks up the renamed env vars.
 - [ ] **Verify after deploy**:
-  - `https://getivyos.com` loads and shows the Ivy brand.
+  - `https://joinivy.ai` loads and shows the Ivy brand.
   - Log in works (note: **every existing user is logged out**, because the session cookie was renamed `thryve_session` → `ivy_session`. They just sign in again.)
-  - A test signup arrives by email from `hello@getivyos.com`.
+  - A test signup arrives by email from `hello@joinivy.ai`.
   - Stripe Connect onboarding flow returns to the new redirect URL.
   - RevenueCat dashboard shows the webhook URL as reachable (test event).
 
 ## 17. Optional: keep the old domain
 
-If you want to keep `getthryve.ai` as a permanent 301 → `getivyos.com`:
+If you want to keep `getthryve.ai` as a permanent 301 → `joinivy.ai`:
 
-- [ ] In Vercel → Domains, add `getthryve.ai` and set "Redirect to: `getivyos.com`" (308 permanent).
+- [ ] In Vercel → Domains, add `getthryve.ai` and set "Redirect to: `joinivy.ai`" (308 permanent).
 - [ ] Keep its DNS pointed at Vercel.
 
 Otherwise, just let it expire at renewal.

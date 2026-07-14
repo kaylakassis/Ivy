@@ -37,7 +37,7 @@ Preview + Development.
 | `CRON_SECRET` | `openssl rand -hex 32` output | **Vercel cron jobs reject without this** |
 | `SECRETS_KEY` | `openssl rand -hex 32` output | At-rest encryption of provider tokens |
 | `DATABASE_URL` | From Vercel → Storage → Neon | Auto-injected when Neon is linked |
-| `APP_URL` | `https://getivyos.com` (or your domain) | Used in email links - **must be HTTPS** |
+| `APP_URL` | `https://joinivy.ai` (or your domain) | Used in email links - **must be HTTPS** |
 | `VITE_APP_URL` | Same as `APP_URL` | Frontend mirror |
 | `STRIPE_SECRET_KEY` | `sk_live_…` | TEST mode shows as a WARN |
 | `STRIPE_WEBHOOK_SECRET` | From Stripe → Developers → Webhooks (see §4) | Connect platform webhook signing |
@@ -45,8 +45,8 @@ Preview + Development.
 | `STRIPE_CONNECT_CLIENT_ID` | Stripe → Settings → Connect → "Connect platform" | OAuth |
 | `IVY_STRIPE_PRICE_ID` | The Price for Ivy OS's $49/mo subscription (see §4a) | |
 | `RESEND_API_KEY` | From Resend dashboard | Outbound email |
-| `EMAIL_FROM` | `Ivy OS <hello@getivyos.com>` | **Domain must be verified in Resend** |
-| `EMAIL_REPLY_TO` | `hello@getivyos.com` | |
+| `EMAIL_FROM` | `Ivy OS <hello@joinivy.ai>` | **Domain must be verified in Resend** |
+| `EMAIL_REPLY_TO` | `hello@joinivy.ai` | |
 | `SUPER_ADMIN_EMAIL` | Your account email | Auto-promotes you to super-admin on sign-in |
 
 **Recommended** (the probe shows `WARN`, app works without):

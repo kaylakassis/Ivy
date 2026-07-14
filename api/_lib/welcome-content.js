@@ -71,7 +71,7 @@ export function renderWelcome({ name, appUrl, variant }) {
 //
 // Variables resolved server-side:
 //   {{{first_name}}}    → escapeHtml(name) with empty-string fallback
-//   https://getivyos.com → ${appUrl}/<route> so dev/preview deploys
+//   https://joinivy.ai → ${appUrl}/<route> so dev/preview deploys
 //                          point at themselves
 function renderOwnerWelcome({ name, appUrl }) {
   const greetSuffix = name ? `, ${escapeHtml(name)}` : '';

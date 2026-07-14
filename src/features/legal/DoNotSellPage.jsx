@@ -42,7 +42,7 @@ export default function DoNotSellPage() {
         To do so, or to file any other CCPA/CPRA request (access, deletion,
         correction, portability, limit use of sensitive personal
         information), email us at{' '}
-        <a href="mailto:privacy@getivyos.com" style={{ color: 'var(--accent)' }}>privacy@getivyos.com</a>{' '}
+        <a href="mailto:privacy@joinivy.ai" style={{ color: 'var(--accent)' }}>privacy@joinivy.ai</a>{' '}
         from the email address tied to your Ivy account. We will respond
         within 45 days as the law requires.
       </P>

@@ -112,7 +112,7 @@ function DomainTab({ site, set }) {
           </div>
           <pre style={{ margin: 0, padding: '8px 10px', background: 'var(--surface)', borderRadius: 6, fontFamily: 'ui-monospace, monospace', fontSize: 12, overflowX: 'auto' }}>{`Type:  CNAME
 Host:  @  (or www)
-Value: cname.getivyos.com`}</pre>
+Value: cname.joinivy.ai`}</pre>
           <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 12 }}>
             <button className="btn btn-primary" onClick={verify} disabled={busy} style={{ padding: '6px 12px', fontSize: 12.5 }}>
               {busy ? 'Checking…' : 'Verify now'}

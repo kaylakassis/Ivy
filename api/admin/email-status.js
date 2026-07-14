@@ -2,18 +2,18 @@
 // Returns Resend's verification status for every domain in your account.
 // Use after adding DNS records to confirm SPF / DKIM / DMARC are healthy.
 //
-//   curl https://getivyos.com/api/admin/email-status \
+//   curl https://joinivy.ai/api/admin/email-status \
 //     -H "x-admin-secret: $ADMIN_SECRET"
 //
 // Sample response:
 //   {
 //     "ok": true,
-//     "from": "Ivy <noreply@getivyos.com>",
-//     "replyTo": "support@getivyos.com",
+//     "from": "Ivy <noreply@joinivy.ai>",
+//     "replyTo": "support@joinivy.ai",
 //     "domains": [
 //       {
 //         "id": "...",
-//         "name": "getivyos.com",
+//         "name": "joinivy.ai",
 //         "status": "verified",
 //         "region": "us-east-1",
 //         "createdAt": "2026-...",

@@ -318,7 +318,7 @@ export default function OnboardingPage() {
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('[onboarding] flushAndAdvance: save failed (advanced anyway):', e);
-      setErr("Heads up: your progress couldn't be saved server-side, but you can keep going. If this persists please email hello@getivyos.com.");
+      setErr("Heads up: your progress couldn't be saved server-side, but you can keep going. If this persists please email hello@joinivy.ai.");
     } finally {
       setBusy(false);
     }
@@ -1853,7 +1853,7 @@ const STRIPE_BOUNCE_MSGS = {
   bad_key:    { tone: 'err',  title: 'Stripe rejected the API key',  body: 'The STRIPE_SECRET_KEY in Vercel isn\'t a valid Stripe secret key. Skip for now - you can connect later.' },
   connect_not_enabled: { tone: 'err', title: 'Stripe Connect isn\'t enabled', body: 'Visit dashboard.stripe.com/connect/accounts/overview and click "Get started", then come back. Skip for now if you want.' },
   wrong_mode: { tone: 'err',  title: 'Stripe mode mismatch',         body: 'A Stripe account from a different mode is saved. Open Finance after onboarding to disconnect + reconnect.' },
-  unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'Ivy currently only supports US Stripe accounts. Email hello@getivyos.com to enable your region.' },
+  unsupported_country: { tone: 'err', title: 'Country not supported yet', body: 'Ivy currently only supports US Stripe accounts. Email hello@joinivy.ai to enable your region.' },
   error:      { tone: 'err',  title: 'Couldn\'t finish the Stripe step', body: 'Something went wrong. You can skip this and try again from Finance once you\'re in.' },
 };
 function StripeBounceBanner({ search, nav }) {

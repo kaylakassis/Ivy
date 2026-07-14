@@ -9,13 +9,13 @@
  * Usage:
  *
  *   <!-- Booking widget -->
- *   <script async src="https://getivyos.com/embed.js"
+ *   <script async src="https://joinivy.ai/embed.js"
  *     data-Ivy OS="book"
  *     data-slug="your-handle"
  *     data-accent="#C7BFA8"></script>
  *
  *   <!-- Lead-capture / contact form -->
- *   <script async src="https://getivyos.com/embed.js"
+ *   <script async src="https://joinivy.ai/embed.js"
  *     data-Ivy OS="contact"
  *     data-slug="your-handle"></script>
  *

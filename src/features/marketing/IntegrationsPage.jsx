@@ -77,7 +77,7 @@ export default function IntegrationsPage() {
 
         <section style={{ textAlign: 'center' }}>
           <p style={{ fontSize: 14.5, color: 'var(--fg-2)' }}>
-            Need a specific integration? Email <a href="mailto:hello@getivyos.com" style={{ color: 'var(--accent)' }}>hello@getivyos.com</a> - we prioritize integrations that owners actually ask for.
+            Need a specific integration? Email <a href="mailto:hello@joinivy.ai" style={{ color: 'var(--accent)' }}>hello@joinivy.ai</a> - we prioritize integrations that owners actually ask for.
           </p>
           <Link to="/signup" className="btn btn-primary"
             style={{ marginTop: 16, padding: '12px 22px', fontSize: 14, fontWeight: 600 }}>

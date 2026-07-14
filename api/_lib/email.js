@@ -128,8 +128,8 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   // bare sendEmail() callers (system-critical, no recipient lookup
   // possible) so the header is never missing.
   const httpsUnsub = unsubscribeUrl
-    || `${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications`;
-  const mailtoUnsub = `mailto:${replyToAddress() || 'hello@getivyos.com'}?subject=unsubscribe`;
+    || `${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications`;
+  const mailtoUnsub = `mailto:${replyToAddress() || 'hello@joinivy.ai'}?subject=unsubscribe`;
   const defaultHeaders = {
     'List-Unsubscribe': `<${httpsUnsub}>, <${mailtoUnsub}>`,
     'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
@@ -192,7 +192,7 @@ const UNSUB_MARKER = 'data-ivy-unsub="1"';
 function injectUnsubFooter(html, unsubscribeUrl) {
   if (!html || typeof html !== 'string') return html;
   if (html.includes(UNSUB_MARKER)) return html;
-  const prefsUrl = `${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications`;
+  const prefsUrl = `${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications`;
   const block = `<div ${UNSUB_MARKER} style="margin:18px auto 0;max-width:600px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,Arial,sans-serif;font-size:11px;color:#8A8D85;line-height:1.5;">
     <a href="${unsubscribeUrl}" style="color:#8A8D85;text-decoration:underline;">Unsubscribe</a>
     &nbsp;·&nbsp;
@@ -296,7 +296,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
 
   const footerByline = businessName
     ? `Sent by <strong style="color:${C.fg2};">${escapeText(businessName)}</strong> via Ivy`
-    : `Made with care · <a href="https://getivyos.com" style="color:${C.muted};text-decoration:none;">getivyos.com</a>`;
+    : `Made with care · <a href="https://joinivy.ai" style="color:${C.muted};text-decoration:none;">joinivy.ai</a>`;
 
   // CAN-SPAM postal address. Only shown on unbranded sends (i.e.
   // Ivy itself as the sender - admin blasts, magic links, account
@@ -379,7 +379,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
                 ? `<div style="margin-top:8px;font-size:11px;color:${C.muted2};letter-spacing:0.02em;">
                      <a href="${unsubscribeUrl}" style="color:${C.muted};text-decoration:underline;">Unsubscribe</a>
                      &nbsp;·&nbsp;
-                     <a href="${process.env.APP_URL || 'https://getivyos.com'}/account?tab=notifications" style="color:${C.muted};text-decoration:underline;">Manage preferences</a>
+                     <a href="${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications" style="color:${C.muted};text-decoration:underline;">Manage preferences</a>
                    </div>`
                 : ''}
             </td>
