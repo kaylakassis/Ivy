@@ -1,98 +1,252 @@
 {
-  "cleanUrls": true,
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "buildCommand": "node scripts/migrate.mjs && vite build",
   "outputDirectory": "dist",
   "framework": "vite",
-  "regions": ["iad1", "fra1", "syd1"],
+  "regions": [
+    "iad1",
+    "fra1",
+    "syd1"
+  ],
   "crons": [
-    { "path": "/api/cron/booking-reminders",    "schedule": "*/10 * * * *" },
-    { "path": "/api/cron/google-busy-sync",     "schedule": "15 * * * *" },
-    { "path": "/api/cron/workflows",            "schedule": "30 * * * *" },
-    { "path": "/api/cron/scheduled-publish",    "schedule": "5,15,25,35,45,55 * * * *" },
-    { "path": "/api/cron/doc-reminders",        "schedule": "0 16 * * *" },
-    { "path": "/api/cron/recurring-invoices",   "schedule": "0 8 * * *" },
-    { "path": "/api/cron/invoice-overdue",      "schedule": "30 9 * * *" },
-    { "path": "/api/cron/invoice-due-soon",     "schedule": "0 13 * * *" },
-    { "path": "/api/cron/review-requests",      "schedule": "0 17 * * *" },
-    { "path": "/api/cron/db-prune",              "schedule": "0 4 * * *" },
-    { "path": "/api/cron/ivy-agent",             "schedule": "0 9 * * *" },
-    { "path": "/api/cron/blob-prune",            "schedule": "30 4 * * 0" },
-    { "path": "/api/cron/discover-refresh",      "schedule": "*/15 * * * *" },
-    { "path": "/api/cron/subscription-dunning",  "schedule": "0 10 * * *" },
-    { "path": "/api/cron/winback",               "schedule": "0 11 * * *" },
-    { "path": "/api/cron/trial-reminders",       "schedule": "0 12 * * *" },
-    { "path": "/api/cron/stripe-reconcile",      "schedule": "0 6 * * *" },
-    { "path": "/api/cron/group-digest",          "schedule": "30 8 * * *" },
-    { "path": "/api/cron/owner-weekly-recap",    "schedule": "0 8 * * 1" },
-    { "path": "/api/cron/owner-reengage",        "schedule": "0 15 * * *" },
-    { "path": "/api/cron/setup-nudge",           "schedule": "0 16 * * *" },
-    { "path": "/api/cron/ivy-nudges",            "schedule": "0 9,13,17 * * *" },
-    { "path": "/api/cron/daily-return",          "schedule": "0 * * * *" },
-    { "path": "/api/cron/refresh-admin-analytics", "schedule": "*/15 * * * *" }
+    {
+      "path": "/api/cron/booking-reminders",
+      "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/google-busy-sync",
+      "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/workflows",
+      "schedule": "30 * * * *"
+    },
+    {
+      "path": "/api/cron/scheduled-publish",
+      "schedule": "5,15,25,35,45,55 * * * *"
+    },
+    {
+      "path": "/api/cron/doc-reminders",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/recurring-invoices",
+      "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/invoice-overdue",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/invoice-due-soon",
+      "schedule": "0 13 * * *"
+    },
+    {
+      "path": "/api/cron/review-requests",
+      "schedule": "0 17 * * *"
+    },
+    {
+      "path": "/api/cron/db-prune",
+      "schedule": "0 4 * * *"
+    },
+    {
+      "path": "/api/cron/ivy-agent",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/blob-prune",
+      "schedule": "30 4 * * 0"
+    },
+    {
+      "path": "/api/cron/discover-refresh",
+      "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/subscription-dunning",
+      "schedule": "0 10 * * *"
+    },
+    {
+      "path": "/api/cron/winback",
+      "schedule": "0 11 * * *"
+    },
+    {
+      "path": "/api/cron/trial-reminders",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/cron/stripe-reconcile",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/group-digest",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/owner-weekly-recap",
+      "schedule": "0 8 * * 1"
+    },
+    {
+      "path": "/api/cron/owner-reengage",
+      "schedule": "0 15 * * *"
+    },
+    {
+      "path": "/api/cron/setup-nudge",
+      "schedule": "0 16 * * *"
+    },
+    {
+      "path": "/api/cron/ivy-nudges",
+      "schedule": "0 9,13,17 * * *"
+    },
+    {
+      "path": "/api/cron/daily-return",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/refresh-admin-analytics",
+      "schedule": "*/15 * * * *"
+    }
   ],
   "functions": {
     "api/site/**/*.js": {
       "includeFiles": "dist/**"
     },
-    "api/ivy/**/*.js":            { "maxDuration": 60 },
-    "api/cron/**/*.js":           { "maxDuration": 300 },
-    "api/admin/email-blast.js":   { "maxDuration": 60 },
-    "api/sign/[token].js":        { "maxDuration": 45 },
-    "api/documents/send.js":      { "maxDuration": 30 },
-    "api/campaigns/[id]/send.js": { "maxDuration": 60 },
-    "api/auth/signup.js":         { "maxDuration": 30 }
+    "api/ivy/**/*.js": {
+      "maxDuration": 60
+    },
+    "api/cron/**/*.js": {
+      "maxDuration": 300
+    },
+    "api/admin/email-blast.js": {
+      "maxDuration": 60
+    },
+    "api/sign/[token].js": {
+      "maxDuration": 45
+    },
+    "api/documents/send.js": {
+      "maxDuration": 30
+    },
+    "api/campaigns/[id]/send.js": {
+      "maxDuration": 60
+    },
+    "api/auth/signup.js": {
+      "maxDuration": 30
+    }
   },
   "rewrites": [
-    { "source": "/marketing-sitemap.xml",    "destination": "/api/marketing-sitemap.xml" },
-    { "source": "/site/:handle/sitemap.xml", "destination": "/api/site/:handle/sitemap.xml" },
-    { "source": "/site/:handle/robots.txt",  "destination": "/api/site/:handle/robots.txt" },
-    { "source": "/site/:handle",             "destination": "/api/site/:handle" },
-    { "source": "/site/:handle/:slug",       "destination": "/api/site/:handle/:slug" },
-    { "source": "/((?!api/).*)",             "destination": "/index.html" }
+    {
+      "source": "/marketing-sitemap.xml",
+      "destination": "/api/marketing-sitemap.xml"
+    },
+    {
+      "source": "/site/:handle/sitemap.xml",
+      "destination": "/api/site/:handle/sitemap.xml"
+    },
+    {
+      "source": "/site/:handle/robots.txt",
+      "destination": "/api/site/:handle/robots.txt"
+    },
+    {
+      "source": "/site/:handle",
+      "destination": "/api/site/:handle"
+    },
+    {
+      "source": "/site/:handle/:slug",
+      "destination": "/api/site/:handle/:slug"
+    },
+    {
+      "source": "/blog",
+      "destination": "/blog.html"
+    },
+    {
+      "source": "/blog/:slug",
+      "destination": "/blog/:slug.html"
+    },
+    {
+      "source": "/((?!api/).*)",
+      "destination": "/index.html"
+    }
   ],
   "headers": [
     {
       "source": "/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "DENY" },
-        { "key": "X-Content-Type-Options", "value": "nosniff" },
-        { "key": "Referrer-Policy", "value": "strict-origin-when-cross-origin" },
-        { "key": "Strict-Transport-Security", "value": "max-age=63072000; includeSubDomains; preload" },
-        { "key": "Permissions-Policy", "value": "geolocation=(self), payment=(self), usb=(), magnetometer=(), accelerometer=(), gyroscope=()" },
-        { "key": "Cross-Origin-Opener-Policy", "value": "same-origin" },
-        { "key": "Content-Security-Policy", "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://js.squareup.com https://sandbox.web.squarecdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://api.stripe.com https://m.stripe.com https://r.stripe.com https://api.paypal.com https://www.paypal.com https://connect.squareup.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com https://nominatim.openstreetmap.org; frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://player.vimeo.com https://www.youtube.com https://www.youtube-nocookie.com https://www.instagram.com https://www.openstreetmap.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests" }
+        {
+          "key": "X-Frame-Options",
+          "value": "DENY"
+        },
+        {
+          "key": "X-Content-Type-Options",
+          "value": "nosniff"
+        },
+        {
+          "key": "Referrer-Policy",
+          "value": "strict-origin-when-cross-origin"
+        },
+        {
+          "key": "Strict-Transport-Security",
+          "value": "max-age=63072000; includeSubDomains; preload"
+        },
+        {
+          "key": "Permissions-Policy",
+          "value": "geolocation=(self), payment=(self), usb=(), magnetometer=(), accelerometer=(), gyroscope=()"
+        },
+        {
+          "key": "Cross-Origin-Opener-Policy",
+          "value": "same-origin"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://js.stripe.com https://www.paypal.com https://www.paypalobjects.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://js.squareup.com https://sandbox.web.squarecdn.com; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com data:; img-src 'self' data: blob: https:; media-src 'self' blob: https:; connect-src 'self' https://api.stripe.com https://m.stripe.com https://r.stripe.com https://api.paypal.com https://www.paypal.com https://connect.squareup.com https://pci-connect.squareup.com https://pci-connect.squareupsandbox.com https://nominatim.openstreetmap.org; frame-src 'self' https://js.stripe.com https://hooks.stripe.com https://checkout.stripe.com https://www.paypal.com https://www.sandbox.paypal.com https://web.squarecdn.com https://sandbox.web.squarecdn.com https://player.vimeo.com https://www.youtube.com https://www.youtube-nocookie.com https://www.instagram.com https://www.openstreetmap.org; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; upgrade-insecure-requests"
+        }
       ]
     },
     {
       "source": "/api/((?!site/|marketing-sitemap\\.xml|calendar/public/|businesses/).*)",
       "headers": [
-        { "key": "Cache-Control", "value": "no-store" }
+        {
+          "key": "Cache-Control",
+          "value": "no-store"
+        }
       ]
     },
     {
       "source": "/api/calendar/public/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, s-maxage=30, stale-while-revalidate=120" }
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=30, stale-while-revalidate=120"
+        }
       ]
     },
     {
       "source": "/api/businesses/(.*)",
       "headers": [
-        { "key": "Cache-Control", "value": "public, s-maxage=60, stale-while-revalidate=300" }
+        {
+          "key": "Cache-Control",
+          "value": "public, s-maxage=60, stale-while-revalidate=300"
+        }
       ]
     },
     {
       "source": "/embed/(.*)",
       "headers": [
-        { "key": "X-Frame-Options", "value": "ALLOWALL" },
-        { "key": "Content-Security-Policy", "value": "frame-ancestors *" }
+        {
+          "key": "X-Frame-Options",
+          "value": "ALLOWALL"
+        },
+        {
+          "key": "Content-Security-Policy",
+          "value": "frame-ancestors *"
+        }
       ]
     },
     {
       "source": "/embed.js",
       "headers": [
-        { "key": "Cache-Control", "value": "public, max-age=300" }
+        {
+          "key": "Cache-Control",
+          "value": "public, max-age=300"
+        }
       ]
     }
   ]
