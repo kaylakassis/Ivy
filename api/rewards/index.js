@@ -11,7 +11,7 @@ import {
   ensureRewardSettings, serializeRule, serializeRedemption, rewardKpis,
   pendingRewards,
 } from '../_lib/rewards.js';
-import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -48,13 +48,16 @@ export default async function handler(req, res) {
 
     if (req.method === 'PATCH') {
       const body = await readBody(req);
-      let launchedAt;
-      if (body.launched === true)  launchedAt = new Date().toISOString();
-      if (body.launched === false) launchedAt = null;
-      else if (!('launched' in body)) {
+      if (!('launched' in body)) {
         const r = await ensureRewardSettings(workspaceId);
         return ok(res, { settings: { launchedAt: r.launched_at, launched: !!r.launched_at } });
       }
+      // Strict boolean only - a truthy non-boolean used to fall through
+      // with launchedAt undefined and silently pause the program.
+      if (typeof body.launched !== 'boolean') {
+        return badRequest(res, 'launched must be true or false');
+      }
+      const launchedAt = body.launched ? new Date().toISOString() : null;
       // ensure exists then update
       await ensureRewardSettings(workspaceId);
       const upd = await sql`

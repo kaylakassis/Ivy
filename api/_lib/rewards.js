@@ -55,9 +55,13 @@ export async function rewardKpis(workspaceId) {
   // Rewards redeemed = total redemptions.
   // Revenue from repeats = sum of paid invoices for clients who paid more than once.
   // Referrals converted = redemptions of rules with type='referral'.
+  // Dismissed rows are bookkeeping (they stop a milestone from re-firing),
+  // not rewards anyone received - excluding them keeps "Active members" and
+  // "Rewards redeemed" honest.
   const { rows } = await sql`
     WITH redemptions AS (
-      SELECT * FROM reward_redemptions WHERE workspace_id = ${workspaceId}
+      SELECT * FROM reward_redemptions
+      WHERE workspace_id = ${workspaceId} AND COALESCE(status, 'used') <> 'dismissed'
     ),
     repeats AS (
       SELECT i.client_id

@@ -190,6 +190,11 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
           {/* Tags */}
           <Tags client={client} onSave={safeUpdate}/>
 
+          {/* Referred by - the record that powers referral reward rules
+              (Rewards → type 'referral'). Until who-sent-whom is stored,
+              those rules can never detect an earned reward. */}
+          <ReferredByRow client={client} onSave={safeUpdate}/>
+
           {/* Packages */}
           <ClientPackages client={client}/>
 
@@ -371,6 +376,49 @@ function InlineText({ value, onSave, placeholder, style, editStyle, required, ty
     }}>
       {value || <span style={{ color: 'var(--muted-2)', fontStyle: 'italic' }}>{placeholder}</span>}
     </button>
+  );
+}
+
+// "Referred by" picker. Lazily loads the client list on first open so the
+// drawer stays light; saving writes clients.referred_by_client_id, which is
+// exactly what referral-type reward rules count when auto-detecting earned
+// rewards.
+function ReferredByRow({ client, onSave }) {
+  const [others, setOthers] = useState(null); // null = not loaded yet
+  useEffect(() => {
+    let live = true;
+    api.get('/clients')
+      .then((r) => live && setOthers((r.clients || []).filter((c) => c.id !== client.id)))
+      .catch(() => live && setOthers([]));
+    return () => { live = false; };
+  }, [client.id]);
+
+  const referrer = (others || []).find((c) => c.id === client.referredByClientId);
+  return (
+    <div>
+      <Section label="Referred by"/>
+      <select
+        value={client.referredByClientId || ''}
+        onChange={(e) => onSave({ referredByClientId: e.target.value || null })}
+        disabled={others === null}
+        style={{
+          width: '100%', padding: '7px 10px', borderRadius: 8, fontSize: 12.5,
+          background: 'var(--surface)', border: '1px solid var(--border-strong)',
+          color: client.referredByClientId ? 'var(--fg)' : 'var(--muted)', outline: 'none',
+        }}>
+        <option value="">No one / not a referral</option>
+        {(others || []).map((c) => (
+          <option key={c.id} value={c.id}>{c.name}{c.email ? ` · ${c.email}` : ''}</option>
+        ))}
+        {/* Keep an unknown/legacy referrer visible instead of silently blanking */}
+        {client.referredByClientId && others !== null && !referrer && (
+          <option value={client.referredByClientId}>(former client)</option>
+        )}
+      </select>
+      <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 5 }}>
+        Feeds referral rewards: if you have a referral rule in Rewards, the referrer earns it automatically.
+      </div>
+    </div>
   );
 }
 

@@ -196,19 +196,19 @@ export const TUTORIALS = {
 
   rewards: {
     title: 'Rewards',
-    intro: 'Loyalty + referrals on autopilot. Reward repeat clients, incentivize them to bring friends, automate the whole thing.',
+    intro: 'Loyalty and referrals without the spreadsheet. You set the rules; Ivy watches your real bookings, invoices, and referrals and flags who earned what.',
     steps: [
       {
-        title: 'Pick the rules that fit your business',
-        body: '"$5 off for every $100 spent." "Free service after 10 visits." "Referrer + new client both get $20 off." Toggle the rules that match how you already work; Ivy applies them automatically.',
+        title: 'Set rules that fit your business',
+        body: '"Free service after 10 visits." "$25 credit after $300 spent." "Refer a friend, get 20% off." Create visit, spend, referral, or custom rules with your own threshold and reward text.',
       },
       {
-        title: 'Referrals track themselves',
-        body: 'Each client gets a unique referral link. When a friend books through that link, both sides get the reward you set. You see the chain - who referred who - in their profile.',
+        title: 'Ivy spots who earned it',
+        body: 'Progress comes from real data: completed bookings, paid invoices, and who referred whom (set "Referred by" on a client\'s profile). The moment someone crosses a threshold they appear under "ready to issue" - confirming takes one tap.',
       },
       {
-        title: 'Surfaces matter',
-        body: "Rewards balances appear in your client's portal, on their invoices, and in their booking confirmations. They notice. That's the point.",
+        title: 'Clients hear about it right away',
+        body: 'Confirming sends the client a portal message (plus push and email) with what they earned and when it expires. The Redemptions tab tracks issued, used, and expired rewards, and you can log in-person redemptions by hand.',
       },
     ],
   },
