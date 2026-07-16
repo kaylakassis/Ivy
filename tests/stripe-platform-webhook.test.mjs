@@ -161,6 +161,47 @@ async function run() {
     const dashRow = (await sql`SELECT * FROM client_memberships WHERE stripe_subscription_id = ${`sub_${tag}_D`}`).rows[0];
     assert(dashRow && dashRow.client_id === cidD && dashRow.membership_id === midD, 'dashboard sub resolved via customer+price');
 
+    console.log('\n[3.5] charge.refunded (Stripe-Dashboard refund) syncs back to the invoice');
+    // Reuse the invoice paid in [1]: partial refund first, then full.
+    const partialEvent = {
+      id: `evt_ref1_${Date.now()}`, type: 'charge.refunded', account: acctId,
+      data: { object: {
+        id: 'ch_ref_1', payment_intent: `pi_${tag}_A`,
+        amount: 10000, amount_refunded: 2500,
+      } },
+    };
+    let rr = mkRes();
+    await handler(signedReq(partialEvent), rr);
+    assert(rr.body?.applied === 'invoice-refund-synced', `partial refund applied (got ${JSON.stringify(rr.body)})`);
+    let refRow = (await sql`SELECT status, refunded_amount FROM invoices WHERE id = ${inv}`).rows[0];
+    assert(refRow.status === 'paid', 'partial refund keeps status paid');
+    assert(Number(refRow.refunded_amount) === 25, `refunded_amount = $25 (got ${refRow.refunded_amount})`);
+
+    const fullEvent = {
+      id: `evt_ref2_${Date.now()}`, type: 'charge.refunded', account: acctId,
+      data: { object: {
+        id: 'ch_ref_1', payment_intent: `pi_${tag}_A`,
+        amount: 10000, amount_refunded: 10000,
+      } },
+    };
+    rr = mkRes();
+    await handler(signedReq(fullEvent), rr);
+    refRow = (await sql`SELECT status, refunded_amount FROM invoices WHERE id = ${inv}`).rows[0];
+    assert(refRow.status === 'refunded', 'full refund flips status to refunded');
+    assert(Number(refRow.refunded_amount) === 100, `refunded_amount = $100 (got ${refRow.refunded_amount})`);
+
+    // Echo of an already-recorded refund (same cumulative amount) no-ops.
+    const echoEvent = {
+      id: `evt_ref3_${Date.now()}`, type: 'charge.refunded', account: acctId,
+      data: { object: {
+        id: 'ch_ref_1', payment_intent: `pi_${tag}_A`,
+        amount: 10000, amount_refunded: 10000,
+      } },
+    };
+    rr = mkRes();
+    await handler(signedReq(echoEvent), rr);
+    assert(rr.body?.ignored === 'refund already recorded', `echo refund no-ops (got ${JSON.stringify(rr.body)})`);
+
     console.log('\n[4] tampered signature is rejected (defense in depth)');
     const tampered = {
       method: 'POST',

@@ -448,6 +448,63 @@ export default async function handler(req, res) {
       return ok(res, { received: true, applied: 'invoice-paid', result });
     }
 
+    // charge.refunded - a refund issued OUTSIDE Ivy (straight from the
+    // Stripe Dashboard, or by Stripe on a dispute). Without this, the
+    // invoice stays 'paid' and the owner's revenue numbers overstate.
+    // Mirrors api/_lib/refunds.js semantics: refunded_amount is the
+    // CUMULATIVE dollars refunded (charge.amount_refunded is cumulative
+    // cents, so an absolute set is naturally idempotent - the echo of an
+    // Ivy-initiated refund lands on identical values and no-ops).
+    if (event.type === 'charge.refunded') {
+      const charge = event.data?.object || {};
+      const pi = typeof charge.payment_intent === 'string'
+        ? charge.payment_intent : charge.payment_intent?.id;
+      if (!pi) return ok(res, { received: true, ignored: 'no payment_intent on charge' });
+
+      const inv = await sql`
+        SELECT id, number, activity, refunded_amount FROM invoices
+         WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi}
+         LIMIT 1
+      `;
+      if (inv.rows.length === 0) {
+        // Booking deposits / orders track refunds separately; unmatched
+        // charges are acknowledged so Stripe stops retrying.
+        return ok(res, { received: true, ignored: 'no invoice for payment_intent' });
+      }
+      const i = inv.rows[0];
+      const refundedTotal = Math.round(Number(charge.amount_refunded || 0)) / 100;
+      const already = Number(i.refunded_amount || 0);
+      if (refundedTotal <= already) {
+        return ok(res, { received: true, ignored: 'refund already recorded' });
+      }
+      const fully = Number(charge.amount_refunded) >= Number(charge.amount);
+      const entry = {
+        ts: new Date().toISOString(),
+        kind: 'refund',
+        text: `Refunded $${(refundedTotal - already).toFixed(2)} to card (via Stripe)`,
+      };
+      await sql`
+        UPDATE invoices SET
+          status          = ${fully ? 'refunded' : 'paid'},
+          refunded_amount = ${refundedTotal},
+          refunded_at     = NOW(),
+          activity        = ${JSON.stringify([...(i.activity || []), entry])}::jsonb,
+          updated_at      = NOW()
+        WHERE id = ${i.id} AND workspace_id = ${workspaceId}
+          AND COALESCE(refunded_amount, 0) = ${already}
+      `;
+      notifyOwnerSafe({
+        workspaceId, type: 'payments',
+        payload: {
+          title: fully ? 'Invoice refunded' : 'Partial refund recorded',
+          body: `${i.number} · $${refundedTotal.toFixed(2)} refunded via Stripe`,
+          url: `/finance?invoice=${i.id}`,
+          tag: `refund-${i.id}`,
+        },
+      });
+      return ok(res, { received: true, applied: 'invoice-refund-synced' });
+    }
+
     // All other event types - quietly accept so Stripe stops retrying.
     return ok(res, { received: true, ignored: event.type });
   } catch (err) {
