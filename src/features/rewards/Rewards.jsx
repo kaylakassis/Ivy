@@ -12,6 +12,15 @@ const RULE_TYPE_LABELS = {
   custom:   'Custom',
 };
 
+// The "why rewards work" stat tiles. Shown on the pre-launch landing AND
+// kept permanently in the manager (above the rules) - the motivation
+// shouldn't disappear the moment the program goes live.
+const WHY_STATS = [
+  { value: '67%',    body: 'Repeat customers spend 67% more than new customers.', src: 'Bain & Company',  tone: 'ok',     icon: <Icons.Trending size={18} sw={1.8}/> },
+  { value: '60–70%', body: 'Probability of selling to an existing customer vs. 5–20% for new ones.', src: 'Invesp', tone: 'accent', icon: <Icons.Users    size={18} sw={1.8}/> },
+  { value: '2.5×',   body: 'Businesses with loyalty programs grow revenue 2.5× faster.', src: 'Annex Cloud', tone: 'warn',   icon: <Icons.Heart    size={18} sw={1.8}/> },
+];
+
 export default function Rewards() {
   const r = useRewards();
   if (r.loading) return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading rewards…</div>;
@@ -41,11 +50,6 @@ function RewardsLanding({ onLaunch }) {
     try { await onLaunch(); }
     catch (ex) { setErr(ex.message || 'Could not start the program. Try again.'); setBusy(false); }
   };
-  const stats = [
-    { value: '67%',    body: 'Repeat customers spend 67% more than new customers.', src: 'Bain & Company',  tone: 'ok',     icon: <Icons.Trending size={18} sw={1.8}/> },
-    { value: '60–70%', body: 'Probability of selling to an existing customer vs. 5–20% for new ones.', src: 'Invesp', tone: 'accent', icon: <Icons.Users    size={18} sw={1.8}/> },
-    { value: '2.5×',   body: 'Businesses with loyalty programs grow revenue 2.5× faster.', src: 'Annex Cloud', tone: 'warn',   icon: <Icons.Heart    size={18} sw={1.8}/> },
-  ];
   const offerings = [
     { title: 'Visit-based rewards', body: 'Book 5, get 1 free.' },
     { title: 'Spend-based rewards', body: 'Spend $300, get $25 credit.' },
@@ -75,7 +79,7 @@ function RewardsLanding({ onLaunch }) {
           Loyalty isn't about giveaways - it's about making your best clients feel seen. The data agrees:
         </p>
         <div className="grid-auto-sm">
-          {stats.map((s, i) => <StatTile key={i} {...s}/>)}
+          {WHY_STATS.map((s, i) => <StatTile key={i} {...s}/>)}
         </div>
       </div>
 
@@ -197,6 +201,21 @@ function RewardsManager({ r }) {
           ))}
         </div>
       )}
+
+      {/* Why rewards work - permanent. These lived only on the pre-launch
+          landing and vanished the moment the program went live; the owner
+          wants the motivation visible above the program itself. */}
+      <div className="card" style={{ padding: 20 }}>
+        <div style={{
+          fontSize: 11, fontWeight: 600, letterSpacing: '0.07em',
+          textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 12,
+        }}>
+          Why reward programs work
+        </div>
+        <div className="grid-auto-sm">
+          {WHY_STATS.map((s, i) => <StatTile key={i} {...s}/>)}
+        </div>
+      </div>
 
       {/* Tabs */}
       <div className="tab-row">
