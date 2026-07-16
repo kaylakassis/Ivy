@@ -250,6 +250,25 @@ async function deleteUser(u, req, res) {
     console.error('[admin/users/:id] subscription cleanup failed:', e.message);
   }
 
+  // TRUE deletion first: try the hard DELETE (cascades wipe the workspace
+  // and every scoped row immediately, and the user disappears from the
+  // admin list entirely). If a legacy live-DB foreign key blocks it, fall
+  // back to soft-delete + email-mangle below - which still frees the email
+  // for re-signup instantly and is hard-deleted by db-prune in 30 days.
+  try {
+    await sql`DELETE FROM users WHERE id = ${u.id}`;
+    invalidateUserCache(u.id);
+    invalidateOwnerWorkspace(u.id);
+    await recordAudit(req, {
+      actor, targetUserId: u.id, action: 'user.delete',
+      meta: { email: u.email, mode: 'hard' },
+    });
+    return noContent(res);
+  } catch (hardErr) {
+    // eslint-disable-next-line no-console
+    console.warn('[admin/users/:id] hard delete blocked, soft-deleting:', hardErr.message);
+  }
+
   // Soft-delete + email-mangle, the SAME semantics as self-serve
   // /api/account/delete. The old hard `DELETE FROM users` could be blocked
   // by a live-DB foreign key that predates schema.js's ON DELETE rules

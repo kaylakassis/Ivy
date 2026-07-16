@@ -53,7 +53,7 @@ async function listUsers(req, res) {
 
   // SQL with optional WHERE clauses. We hand-build the params array so
   // we can keep the indexed search efficient even on large tables.
-  const where = [];
+  const where = ['u.deleted_at IS NULL'];
   const params = [];
 
   if (q) {
