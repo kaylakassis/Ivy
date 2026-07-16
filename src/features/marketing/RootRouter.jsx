@@ -73,7 +73,7 @@ export default function RootRouter() {
   }
 
   // Logged-in: bounce to the right surface.
-  if (decision === 'onboarding') return <Navigate to="/onboarding" replace/>;
-  if (decision === 'client')     return <Navigate to="/me" replace/>;
-  return <Navigate to="/dashboard" replace/>;
+  if (decision === 'onboarding') return <Navigate to={{ pathname: '/onboarding', search: window.location.search }} replace/>;
+  if (decision === 'client')     return <Navigate to={{ pathname: '/me', search: window.location.search }} replace/>;
+  return <Navigate to={{ pathname: '/dashboard', search: window.location.search }} replace/>;
 }

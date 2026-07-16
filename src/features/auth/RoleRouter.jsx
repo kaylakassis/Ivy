@@ -51,7 +51,7 @@ export default function RoleRouter({ children }) {
   if (!decision) {
     return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
   }
-  if (decision === 'onboarding') return <Navigate to="/onboarding" replace/>;
-  if (decision === 'client')     return <Navigate to="/me" replace/>;
+  if (decision === 'onboarding') return <Navigate to={{ pathname: '/onboarding', search: window.location.search }} replace/>;
+  if (decision === 'client')     return <Navigate to={{ pathname: '/me', search: window.location.search }} replace/>;
   return children;
 }
