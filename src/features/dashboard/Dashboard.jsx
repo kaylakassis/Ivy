@@ -3,6 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
+import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { fireConfetti } from '../../lib/celebrate.js';
@@ -103,9 +104,15 @@ function dismissForAWeek() {
 }
 
 function SetupChecklist() {
+  const { user } = useAuth();
   const [data, setData] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [hidden, setHidden] = useState(() => isDismissed());
+
+  // Keyed on email_verified_at so the moment the auth provider detects
+  // verification (focus / cross-tab beacon / poll), the checklist
+  // re-fetches and the "verify your email" step drops off immediately.
+  const emailVerifiedAt = user?.email_verified_at || null;
 
   useEffect(() => {
     let cancelled = false;
@@ -129,7 +136,7 @@ function SetupChecklist() {
       window.removeEventListener('focus', onFocus);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, []);
+  }, [emailVerifiedAt]);
 
   if (!data || !data.items || data.items.length === 0) return null;
   if (data.fullyComplete) return null;
@@ -260,6 +267,11 @@ function SetupChecklist() {
 }
 
 function ChecklistGroup({ label, items }) {
+  // Completed steps disappear from the to-do list instead of lingering
+  // as checked-off rows - the badge/progress bar already tell the
+  // "3/5 done" story, so the list only shows what's actually left.
+  const remaining = items.filter((i) => !i.done);
+  if (remaining.length === 0) return null;
   return (
     <div>
       <div style={{
@@ -267,7 +279,7 @@ function ChecklistGroup({ label, items }) {
         textTransform: 'uppercase', color: 'var(--muted)', marginBottom: 6,
       }}>{label}</div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-        {items.map((item) => <ChecklistRow key={item.id} item={item}/>)}
+        {remaining.map((item) => <ChecklistRow key={item.id} item={item}/>)}
       </div>
     </div>
   );

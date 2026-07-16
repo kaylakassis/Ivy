@@ -131,6 +131,31 @@ export function AuthProvider({ children }) {
     }
   }, []);
 
+  // Auto-detect email verification that happens OUTSIDE this tab - the
+  // verify link usually opens in a new tab (or gets clicked on the
+  // user's phone), so this tab's user snapshot goes stale and the
+  // "Confirm your email" banner never leaves. While the signed-in user
+  // is unverified: re-check on focus/visibility, listen for the
+  // cross-tab localStorage beacon the verify page writes, and poll
+  // gently as a cross-device fallback. Tears down as soon as the user
+  // is verified (or signed out).
+  useEffect(() => {
+    if (!user || user.email_verified_at) return undefined;
+    const check = () => { refresh(); };
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    const onStorage = (e) => { if (e.key === 'ivy_email_verified_beacon') check(); };
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('storage', onStorage);
+    const iv = setInterval(check, 45000);
+    return () => {
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('storage', onStorage);
+      clearInterval(iv);
+    };
+  }, [user?.id, user?.email_verified_at, refresh]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // Records the user's acceptance of the current Terms version.
   // Server gates by version, then writes both an immutable
   // legal_acceptances row and the denormalized users.terms_version

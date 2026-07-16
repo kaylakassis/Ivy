@@ -34,6 +34,10 @@ export default function VerifyEmailPage() {
     api.post('/auth/verify-email', { token })
       .then(async (r) => {
         if (!live) return;
+        // Beacon other open tabs (the dashboard that showed the banner)
+        // so their auth providers re-fetch instantly instead of waiting
+        // for the next focus/poll cycle.
+        try { localStorage.setItem('ivy_email_verified_beacon', String(Date.now())); } catch { /* private mode */ }
         await refresh();
         setStatus(r?.alreadyVerified ? 'already' : 'ok');
         setTimeout(() => live && nav('/', { replace: true }), 1800);
