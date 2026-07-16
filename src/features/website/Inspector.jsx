@@ -220,6 +220,113 @@ export function ImageInput({ value, onChange, placeholder = 'https://… or uplo
   );
 }
 
+// Multi-photo manager for gallery-style sections: thumbnail grid with
+// reorder + remove, multi-file upload to Vercel Blob (same endpoint as
+// ImageInput), and a paste-a-URL fallback for photos hosted elsewhere.
+export function GalleryPhotos({ photos = [], onChange }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr]   = useState(null);
+  const [urlDraft, setUrlDraft] = useState('');
+  const inputId = `gal-up-${Math.random().toString(36).slice(2, 8)}`;
+
+  const move = (i, d) => {
+    const j = i + d;
+    if (j < 0 || j >= photos.length) return;
+    const next = photos.slice();
+    [next[i], next[j]] = [next[j], next[i]];
+    onChange(next);
+  };
+  const remove = (i) => onChange(photos.filter((_, x) => x !== i));
+  const addUrl = () => {
+    const u = urlDraft.trim();
+    if (!u) return;
+    onChange([...photos, u]);
+    setUrlDraft('');
+  };
+  const onPick = async (e) => {
+    const files = [...(e.target.files || [])];
+    if (!files.length) return;
+    setBusy(true); setErr(null);
+    try {
+      const urls = [];
+      for (const file of files) {
+        const result = await upload(file.name, file, {
+          access: 'public',
+          handleUploadUrl: '/api/clients/upload-token',
+          contentType: file.type,
+        });
+        urls.push(result.url);
+      }
+      onChange([...photos, ...urls]);
+    } catch (e2) {
+      setErr(e2.message || 'Upload failed');
+    } finally {
+      setBusy(false);
+      e.target.value = '';
+    }
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {photos.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+          {photos.map((url, i) => (
+            <div key={`${url}-${i}`} style={{
+              position: 'relative', aspectRatio: '4 / 3', borderRadius: 8,
+              background: `center/cover no-repeat url("${url}"), var(--surface-2)`,
+              border: '1px solid var(--border)', overflow: 'hidden',
+            }}>
+              <div style={{
+                position: 'absolute', inset: 'auto 0 0 0', display: 'flex',
+                justifyContent: 'space-between', padding: 4,
+                background: 'linear-gradient(transparent, rgba(0,0,0,0.55))',
+              }}>
+                <div style={{ display: 'flex', gap: 2 }}>
+                  <button type="button" onClick={() => move(i, -1)} disabled={i === 0}
+                    title="Move earlier" style={{ ...galBtn, opacity: i === 0 ? 0.35 : 1 }}>←</button>
+                  <button type="button" onClick={() => move(i, 1)} disabled={i === photos.length - 1}
+                    title="Move later" style={{ ...galBtn, opacity: i === photos.length - 1 ? 0.35 : 1 }}>→</button>
+                </div>
+                <button type="button" onClick={() => remove(i)} title="Remove photo"
+                  style={{ ...galBtn, color: '#ff8a80' }}>✕</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <label htmlFor={inputId} style={{
+        display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6,
+        padding: '10px 12px', fontSize: 12.5, fontWeight: 550,
+        border: '1px dashed var(--border-strong)', borderRadius: 8,
+        background: 'var(--surface-2)', color: 'var(--fg-2)',
+        cursor: busy ? 'wait' : 'pointer', opacity: busy ? 0.6 : 1,
+      }}>
+        {busy ? 'Uploading…' : `+ Upload photo${photos.length ? 's' : 's (or several at once)'}`}
+      </label>
+      <input id={inputId} type="file" accept="image/*" multiple
+        onChange={onPick} disabled={busy} style={{ display: 'none' }}/>
+      <div style={{ display: 'flex', gap: 6 }}>
+        <input type="url" value={urlDraft} onChange={(e) => setUrlDraft(e.target.value)}
+          onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addUrl(); } }}
+          placeholder="…or paste an image URL" style={{ ...inputS, flex: 1 }}/>
+        <button type="button" onClick={addUrl} disabled={!urlDraft.trim()} style={{
+          padding: '8px 12px', fontSize: 12, borderRadius: 'var(--radius-sm, 10px)',
+          border: '1px solid var(--border-strong)', background: 'var(--surface-2)',
+          color: 'var(--fg)', cursor: 'pointer', opacity: urlDraft.trim() ? 1 : 0.5,
+        }}>Add</button>
+      </div>
+      {err && <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>}
+    </div>
+  );
+}
+
+const galBtn = {
+  background: 'rgba(17,18,16,0.7)', border: 'none', color: '#fff',
+  width: 22, height: 20, borderRadius: 5, cursor: 'pointer',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  fontSize: 11, lineHeight: 1, padding: 0,
+};
+
 // Per-section style overrides - background color/gradient, padding
 // density, text alignment. Kept inline so they're always available
 // regardless of section type.
@@ -596,17 +703,9 @@ const EDITORS = {
   gallery: ({ data, update }) => (
     <>
       <Row label="Headline"><TextInput value={data.headline} onChange={(e) => update({ headline: e.target.value })} /></Row>
-      <Row label="Photo URLs">
-        <TextArea
-          rows={6}
-          placeholder="One URL per line"
-          value={(data.photos || []).join('\n')}
-          onChange={(e) => update({ photos: e.target.value.split('\n').map((s) => s.trim()).filter(Boolean) })}
-        />
+      <Row label="Photos">
+        <GalleryPhotos photos={data.photos || []} onChange={(photos) => update({ photos })} />
       </Row>
-      <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-        File uploads coming once the backend is connected.
-      </div>
     </>
   ),
 

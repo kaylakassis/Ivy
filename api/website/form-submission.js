@@ -80,7 +80,8 @@ export default async function handler(req, res) {
     if (await enforce(req, res, [{ key: `form:${ip}`, max: 5, windowSeconds: 3600 }])) return;
 
     const found = await sql`
-      SELECT id, business_name, handle, form_destinations, workspace_id
+      SELECT id, business_name, handle, form_destinations, workspace_id,
+             custom_domain, domain_status
       FROM websites
       WHERE handle = ${handle} AND published_at IS NOT NULL
     `;
@@ -170,6 +171,11 @@ export default async function handler(req, res) {
 
 async function deliverByEmail({ to, site, formId, payload }) {
   const subject = `New ${formId} submission - ${site.business_name || site.handle}`;
+  // Link to the site the way the owner brands it: their verified custom
+  // domain when connected, the platform URL otherwise.
+  const siteUrl = site.custom_domain && site.domain_status === 'verified'
+    ? `https://${String(site.custom_domain).replace(/^https?:\/\//, '').replace(/\/+$/, '')}`
+    : `https://joinivy.ai/site/${site.handle}`;
   const rows = Object.entries(payload || {}).map(([k, v]) => `
     <tr>
       <td style="padding:8px 12px;color:#5C5A55;font-size:12px;text-transform:uppercase;letter-spacing:0.05em">${escapeHtml(k)}</td>
@@ -178,7 +184,7 @@ async function deliverByEmail({ to, site, formId, payload }) {
   const html = emailShell({
     heading: 'New form submission',
     body: `Someone submitted your <strong>${escapeHtml(formId)}</strong> form on
-      <a href="https://joinivy.ai/site/${escapeHtml(site.handle)}">${escapeHtml(site.business_name || site.handle)}</a>.
+      <a href="${escapeHtml(siteUrl)}">${escapeHtml(site.business_name || site.handle)}</a>.
       <table style="margin-top:18px;border-collapse:collapse;width:100%">${rows}</table>`,
     footer: 'You can change where these go in Editor → Forms.',
   });

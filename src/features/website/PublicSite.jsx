@@ -45,11 +45,45 @@ export default function PublicSite({ byHost = false }) {
   }, [byHost, params.handle, pageSlug]);
 
   useEffect(() => {
-    if (site) {
-      const pageTitle = site.page?.title;
-      document.title = pageTitle && pageTitle !== 'Home'
+    if (!site) return;
+    const pageTitle = site.page?.title;
+    const title = site.page?.metaTitle
+      || site.seoTitle
+      || (pageTitle && pageTitle !== 'Home'
         ? `${pageTitle} · ${site.businessName || handle}`
-        : (site.businessName || `${handle} · Ivy`);
+        : (site.businessName || `${handle} · Ivy`));
+    document.title = title;
+    // Meta/OG parity with the SSR path (siteHtml.js). Production traffic is
+    // server-rendered with full head tags; this covers the CSR fallback so
+    // a shared link still unfurls with the right description/image.
+    const desc = site.page?.metaDescription || site.seoDescription || '';
+    const ogImage = site.page?.ogImage || site.seoOgImage || '';
+    const setMeta = (attr, name, content) => {
+      let el = document.head.querySelector(`meta[${attr}="${name}"]`);
+      if (!content) { if (el?.dataset.publicSite) el.remove(); return; }
+      if (!el) {
+        el = document.createElement('meta');
+        el.setAttribute(attr, name);
+        el.dataset.publicSite = '1';
+        document.head.appendChild(el);
+      }
+      el.setAttribute('content', content);
+    };
+    setMeta('name', 'description', desc);
+    setMeta('property', 'og:title', title);
+    setMeta('property', 'og:description', desc);
+    setMeta('property', 'og:type', 'website');
+    setMeta('property', 'og:image', ogImage);
+    setMeta('name', 'twitter:card', ogImage ? 'summary_large_image' : 'summary');
+    if (site.faviconUrl) {
+      let link = document.head.querySelector('link[rel="icon"][data-public-site]');
+      if (!link) {
+        link = document.createElement('link');
+        link.rel = 'icon';
+        link.dataset.publicSite = '1';
+        document.head.appendChild(link);
+      }
+      link.href = site.faviconUrl;
     }
   }, [site, handle]);
 

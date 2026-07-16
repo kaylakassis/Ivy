@@ -358,8 +358,14 @@ export default function Editor({
           </span>
         )}
 
-        <button className="btn btn-ghost" title="Reset site" onClick={() => { if (confirm('Reset your website? This clears all content.')) reset(); }}>
-          <Icons.Settings size={14} />
+        {/* Destructive - distinct icon + color so it can't be mistaken
+            for the Advanced-settings cog next to it. */}
+        <button className="btn btn-ghost" title="Start over (clears all draft content)"
+          style={{ color: 'var(--danger)' }}
+          onClick={() => {
+            if (confirm('Start over? This clears ALL pages and sections from your draft.\n\nYour published version history is kept (Advanced → History), but the current draft cannot be recovered.')) reset();
+          }}>
+          <Icons.Trash size={14} />
         </button>
       </div>
 
@@ -445,7 +451,19 @@ export default function Editor({
           currentPageId={currentPageId}
           onSelect={setCurrentPageId}
           onAdd={() => addPage({ title: 'New page', slug: 'page-' + (site.pages.length + 1) })}
-          onRename={renamePage}
+          onRename={(pageId, patch) => {
+            // Renaming auto-derives a new slug. If the page was already
+            // published under the old slug, add a 301 automatically so
+            // inbound links (Instagram bio, business cards) keep working.
+            const p = (site.pages || []).find((x) => x.id === pageId);
+            if (p && patch.slug && patch.slug !== p.slug && p.slug !== '' && site.publishedAt) {
+              const existing = site.redirects || [];
+              if (!existing.some((r) => r.from === p.slug)) {
+                set({ redirects: [...existing, { from: p.slug, to: `/${patch.slug}` }] });
+              }
+            }
+            renamePage(pageId, patch);
+          }}
           onMove={movePage}
           onRemove={removePage}
         />
@@ -488,6 +506,10 @@ export default function Editor({
             onSectionUpdate={setSection}
             device={device}
             previewMode={previewMode}
+            onMove={moveSection}
+            onMoveTo={moveSectionTo}
+            onDuplicate={(id) => duplicateSection && duplicateSection(id)}
+            onDelete={(id) => { removeSection(id); if (selectedId === id) setSelectedId(null); }}
           />
         )}
         {/* Inspector - desktop: always. Tablet: only when a section is

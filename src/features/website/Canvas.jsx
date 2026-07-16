@@ -1,5 +1,8 @@
 // Live preview canvas. Renders the full page using the template's CSS variables,
 // and makes each section click-to-select with a highlighted outline when selected.
+// Selected sections get a floating action toolbar (reorder / duplicate / delete)
+// and a drag grip, so the canvas is a first-class editing surface - not just a
+// preview you have to leave to rearrange.
 import React, { useMemo, useRef, useEffect, useState } from 'react';
 import SectionRenderer from './SectionRenderer.jsx';
 import { TEMPLATES } from './templates.js';
@@ -7,7 +10,10 @@ import { FONT_PAIRS } from './sections.js';
 
 const DEVICE_WIDTHS = { desktop: 1200, tablet: 768, mobile: 390 };
 
-export default function Canvas({ site, sections, selectedId, onSelect, onSectionUpdate, device = 'desktop', previewMode = false }) {
+export default function Canvas({
+  site, sections, selectedId, onSelect, onSectionUpdate, device = 'desktop', previewMode = false,
+  onMove, onMoveTo, onDuplicate, onDelete,
+}) {
   const tpl = TEMPLATES[site.template] || TEMPLATES.clean;
   const width = DEVICE_WIDTHS[device] || DEVICE_WIDTHS.desktop;
   // Editor passes the current-page's sections in; fall back to legacy
@@ -19,6 +25,12 @@ export default function Canvas({ site, sections, selectedId, onSelect, onSection
   const innerRef = useRef(null);
   const [scale, setScale] = useState(1);
   const [innerH, setInnerH] = useState(0);
+
+  // Canvas drag-reorder state. `dropAt` is the FULL-array insertion index
+  // (hidden sections included) so it stays consistent with the outline's
+  // drag math in SectionLibrary.jsx and with moveSectionTo().
+  const [dragId, setDragId] = useState(null);
+  const [dropAt, setDropAt] = useState(null);
 
   useEffect(() => {
     if (!wrapRef.current || !innerRef.current) return;
@@ -49,6 +61,18 @@ export default function Canvas({ site, sections, selectedId, onSelect, onSection
   }, [tpl, site.fontPair]);
   const visibleSections = sourceSections.filter((s) => s.visible);
 
+  const endDrag = () => { setDragId(null); setDropAt(null); };
+  const handleDrop = (e) => {
+    e.preventDefault();
+    if (dragId && dropAt != null && onMoveTo) {
+      // Splicing the dragged item out first shifts later indexes down one.
+      const srcIdx = sourceSections.findIndex((s) => s.id === dragId);
+      const adj = srcIdx >= 0 && srcIdx < dropAt ? dropAt - 1 : dropAt;
+      onMoveTo(dragId, adj);
+    }
+    endDrag();
+  };
+
   return (
     <div
       ref={wrapRef}
@@ -78,6 +102,8 @@ export default function Canvas({ site, sections, selectedId, onSelect, onSection
           }}
         >
           <div
+            onDrop={handleDrop}
+            onDragOver={(e) => { if (dragId) e.preventDefault(); }}
             style={{
               ...tplStyle,
               background: 'var(--site-bg)',
@@ -92,17 +118,42 @@ export default function Canvas({ site, sections, selectedId, onSelect, onSection
             {visibleSections.length === 0 ? (
               <EmptyCanvas />
             ) : (
-              visibleSections.map((section) => (
-                <SectionFrame
-                  key={section.id}
-                  section={section}
-                  selected={section.id === selectedId}
-                  onSelect={previewMode ? null : onSelect}
-                  previewMode={previewMode}
-                  handle={site.handle}
-                  onSectionUpdate={onSectionUpdate}
-                />
-              ))
+              visibleSections.map((section, vi) => {
+                const fullIdx = sourceSections.findIndex((s) => s.id === section.id);
+                return (
+                  <SectionFrame
+                    key={section.id}
+                    section={section}
+                    selected={section.id === selectedId}
+                    onSelect={previewMode ? null : onSelect}
+                    previewMode={previewMode}
+                    handle={site.handle}
+                    onSectionUpdate={onSectionUpdate}
+                    isFirst={vi === 0}
+                    isLast={vi === visibleSections.length - 1}
+                    actions={previewMode ? null : { onMove, onDuplicate, onDelete }}
+                    drag={previewMode ? null : {
+                      dragging: dragId === section.id,
+                      showLineAbove: dragId && dragId !== section.id && dropAt === fullIdx,
+                      showLineBelow: dragId && dragId !== section.id && dropAt === fullIdx + 1,
+                      onGripStart: (e) => {
+                        e.dataTransfer.effectAllowed = 'move';
+                        try { e.dataTransfer.setData('text/plain', section.id); } catch { /* IE-ish */ }
+                        setDragId(section.id);
+                      },
+                      onGripEnd: endDrag,
+                      onFrameOver: (e) => {
+                        if (!dragId || dragId === section.id) return;
+                        e.preventDefault();
+                        const r = e.currentTarget.getBoundingClientRect();
+                        const before = (e.clientY - r.top) < r.height / 2;
+                        const next = before ? fullIdx : fullIdx + 1;
+                        setDropAt((d) => (d === next ? d : next));
+                      },
+                    }}
+                  />
+                );
+              })
             )}
             {/* Owner-supplied CSS - wraps the rendered tree so styles
                 scope naturally to within the site shell. Empty when no
@@ -115,7 +166,10 @@ export default function Canvas({ site, sections, selectedId, onSelect, onSection
   );
 }
 
-function SectionFrame({ section, selected, onSelect, previewMode, handle, onSectionUpdate }) {
+function SectionFrame({
+  section, selected, onSelect, previewMode, handle, onSectionUpdate,
+  isFirst, isLast, actions, drag,
+}) {
   const handleClick = (e) => {
     if (!onSelect) return;
     e.stopPropagation();
@@ -125,16 +179,21 @@ function SectionFrame({ section, selected, onSelect, previewMode, handle, onSect
   // Renderers that support it (Hero, About, CtaBanner, Stats) gate the
   // contentEditable handling on this `editable` flag.
   const editable = selected && !previewMode && !!onSectionUpdate;
+  const showToolbar = selected && !previewMode && actions;
   return (
     <div
       onClick={handleClick}
+      onDragOver={drag?.onFrameOver}
       style={{
         position: 'relative',
         cursor: previewMode ? 'default' : 'pointer',
         outline: selected ? '2px solid var(--accent)' : 'none',
         outlineOffset: -2,
+        opacity: drag?.dragging ? 0.35 : 1,
       }}
     >
+      {drag?.showLineAbove && <DropLine top/>}
+      {drag?.showLineBelow && <DropLine/>}
       {selected && !previewMode && (
         <div style={{
           position: 'absolute', top: 8, left: 8, zIndex: 2,
@@ -145,6 +204,34 @@ function SectionFrame({ section, selected, onSelect, previewMode, handle, onSect
           {section.type}
         </div>
       )}
+      {showToolbar && (
+        <div
+          data-canvas-toolbar
+          onClick={(e) => e.stopPropagation()}
+          style={{
+            position: 'absolute', top: 8, right: 8, zIndex: 3,
+            display: 'flex', alignItems: 'center', gap: 2,
+            background: 'rgba(17,18,16,0.92)', color: '#fff',
+            borderRadius: 8, padding: 3,
+            boxShadow: '0 6px 20px rgba(0,0,0,0.3)',
+          }}>
+          <span
+            draggable
+            onDragStart={drag?.onGripStart}
+            onDragEnd={drag?.onGripEnd}
+            title="Drag to reorder"
+            style={{ ...tbBtn, cursor: 'grab', fontSize: 13, letterSpacing: 1 }}
+          >⠿</span>
+          <button style={{ ...tbBtn, opacity: isFirst ? 0.35 : 1 }} disabled={isFirst}
+            title="Move up" onClick={() => actions.onMove?.(section.id, 'up')}>↑</button>
+          <button style={{ ...tbBtn, opacity: isLast ? 0.35 : 1 }} disabled={isLast}
+            title="Move down" onClick={() => actions.onMove?.(section.id, 'down')}>↓</button>
+          <button style={tbBtn} title="Duplicate section"
+            onClick={() => actions.onDuplicate?.(section.id)}>⧉</button>
+          <button style={{ ...tbBtn, color: '#ff8a80' }} title="Delete section"
+            onClick={() => actions.onDelete?.(section.id)}>✕</button>
+        </div>
+      )}
       <SectionRenderer
         section={section}
         handle={handle}
@@ -152,6 +239,25 @@ function SectionFrame({ section, selected, onSelect, previewMode, handle, onSect
         onUpdate={editable ? (patch) => onSectionUpdate(section.id, patch) : null}
       />
     </div>
+  );
+}
+
+const tbBtn = {
+  background: 'transparent', border: 'none', color: 'inherit',
+  width: 26, height: 24, borderRadius: 6, cursor: 'pointer',
+  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  fontSize: 12, lineHeight: 1, padding: 0,
+};
+
+// Accent insertion marker shown while dragging a section over a frame.
+function DropLine({ top }) {
+  return (
+    <div style={{
+      position: 'absolute', left: 0, right: 0, height: 3, zIndex: 4,
+      top: top ? -2 : 'auto', bottom: top ? 'auto' : -2,
+      background: 'var(--accent)', boxShadow: '0 0 0 1px var(--accent)',
+      pointerEvents: 'none',
+    }}/>
   );
 }
 
