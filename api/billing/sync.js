@@ -68,6 +68,15 @@ export default async function handler(req, res) {
     const periodEnd = subscription.current_period_end
       ? new Date(subscription.current_period_end * 1000)
       : null;
+    // Card-backed trial: mirror Stripe's trial_end into trial_ends_at,
+    // exactly like the billing webhook does. Without this, sync set
+    // status='trialing' while trial_ends_at stayed NULL - and
+    // isWorkspaceActive's trialing branch (trial_ends_at > now) still
+    // failed, so a user who JUST subscribed kept seeing the paywall.
+    const isTrialing = mapped === 'trialing';
+    const trialEnd = subscription.trial_end
+      ? new Date(subscription.trial_end * 1000)
+      : periodEnd;
 
     await sql`
       UPDATE workspaces SET
@@ -75,6 +84,7 @@ export default async function handler(req, res) {
         stripe_customer_id      = ${customerId},
         stripe_subscription_id  = ${subscription.id},
         subscription_period_end = ${periodEnd},
+        trial_ends_at            = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
         -- Funnel: stamp the first conversion. COALESCE keeps the
         -- original timestamp on every subsequent sync so we measure
         -- FIRST-paying-time, not most-recent-renewal.
