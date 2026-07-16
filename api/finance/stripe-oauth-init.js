@@ -136,6 +136,11 @@ export default async function handler(req, res) {
     let code = 'unknown';
     if (raw.includes('signed up for connect') || raw.includes('apply for connect')) {
       code = 'connect_not_enabled';
+    } else if (raw.includes('does not have the required permissions') || raw.includes('permission denied')) {
+      // Restricted platform key (rk_...) without Connect permissions -
+      // the Vercel Stripe integration injects rk_ keys that can charge
+      // but can't create connected accounts / account links.
+      code = 'restricted_key';
     } else if (raw.includes('no such account')) {
       code = 'wrong_mode';
     } else if (raw.includes('invalid api key') || raw.includes('no api key')) {

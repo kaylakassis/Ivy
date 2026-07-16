@@ -581,6 +581,10 @@ const STRIPE_ERRORS = {
     title: 'Stripe rejected the API key',
     body: 'STRIPE_SECRET_KEY in Vercel doesn\'t look like a valid Stripe secret key. It must start with sk_live_ or sk_test_. Get the right value from https://dashboard.stripe.com/apikeys and update the env var, then redeploy.',
   },
+  restricted_key: {
+    title: 'Your Stripe key can\'t start Connect onboarding',
+    body: 'The STRIPE_SECRET_KEY on this deploy is a restricted key (rk_live_...) without Connect permissions - the Vercel Stripe integration installs these. Fix either way: (1) In Vercel > Settings > Environment Variables, replace STRIPE_SECRET_KEY with your full secret key (sk_live_...) from https://dashboard.stripe.com/apikeys and redeploy, or (2) in Stripe > Developers > API keys, edit that restricted key and grant "Connect" write access (Accounts + Account Links), then retry.',
+  },
   connect_not_enabled: {
     title: 'Your Stripe account hasn\'t enabled Connect yet',
     body: 'Visit https://dashboard.stripe.com/connect/accounts/overview (or /test/connect/accounts/overview if you\'re using a test key) and click "Get started" - takes about 2 minutes. Then retry the Connect button.',
