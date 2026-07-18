@@ -66,60 +66,113 @@ export async function withIdempotency(req, userId, fn) {
   // silently returning the prior response).
   const requestHash = hashRequest(req);
 
-  // Look for a cached response first.
+  // Atomically CLAIM the key before running the handler. The previous
+  // check-then-act (SELECT, run, INSERT) let two truly-concurrent
+  // requests with the same key both miss the cache and both execute -
+  // exactly the double-click this layer claims to stop. A row with
+  // response_status IS NULL marks an in-flight attempt; a pending row
+  // older than 90s is a crashed attempt and gets adopted.
+  //
   // TTL_HOURS is a module-level constant (not user input) so inlining
   // it as a literal in the INTERVAL clause is safe - and necessary,
   // because tagged-template ${...} substitution treats it as a bound
   // parameter, which breaks `INTERVAL '$N hours'` syntax.
+  let claimed = false;
   try {
-    const { rows } = await sql.query(
-      `SELECT response_status, response_body, request_hash
-         FROM idempotency_records
-        WHERE scope = $1 AND key = $2
-          AND created_at > NOW() - INTERVAL '${TTL_HOURS} hours'`,
-      [scope, key],
-    );
-    if (rows.length > 0) {
-      const cached = rows[0];
-      if (cached.request_hash && cached.request_hash !== requestHash) {
+    const ins = await sql`
+      INSERT INTO idempotency_records (scope, key, request_hash, response_status, response_body)
+      VALUES (${scope}, ${key}, ${requestHash}, NULL, NULL)
+      ON CONFLICT (scope, key) DO NOTHING
+      RETURNING key
+    `;
+    claimed = ins.rows.length > 0;
+    if (!claimed) {
+      const { rows } = await sql.query(
+        `SELECT response_status, response_body, request_hash,
+                created_at <= NOW() - INTERVAL '${TTL_HOURS} hours' AS expired,
+                (response_status IS NULL AND created_at <= NOW() - INTERVAL '90 seconds') AS stale_pending
+           FROM idempotency_records
+          WHERE scope = $1 AND key = $2`,
+        [scope, key],
+      );
+      const row = rows[0];
+      if (row && !row.expired && !row.stale_pending) {
+        if (row.response_status === null) {
+          // A live attempt holds the claim right now - the concurrent
+          // duplicate. Tell the client to retry in a moment rather
+          // than double-executing.
+          return {
+            status: 409,
+            body: { error: 'This request is already being processed - retry in a moment.' },
+            idempotent: true, replayed: false,
+          };
+        }
+        if (row.request_hash && requestHash && row.request_hash !== requestHash) {
+          return {
+            status: 422,
+            body: { error: 'Idempotency-Key reused with a different request body' },
+            idempotent: true, replayed: false,
+          };
+        }
         return {
-          status: 422,
-          body: { error: 'Idempotency-Key reused with a different request body' },
+          status: row.response_status || 200,
+          body:   row.response_body,
+          idempotent: true,
+          replayed: true,
+        };
+      }
+      // Expired row or crashed-pending attempt: adopt it.
+      const take = await sql.query(
+        `UPDATE idempotency_records
+            SET request_hash = $3, response_status = NULL, response_body = NULL, created_at = NOW()
+          WHERE scope = $1 AND key = $2
+            AND (created_at <= NOW() - INTERVAL '${TTL_HOURS} hours'
+                 OR (response_status IS NULL AND created_at <= NOW() - INTERVAL '90 seconds'))
+          RETURNING key`,
+        [scope, key, requestHash],
+      );
+      claimed = take.rows.length > 0;
+      if (!claimed) {
+        // Lost the adoption race to another concurrent request.
+        return {
+          status: 409,
+          body: { error: 'This request is already being processed - retry in a moment.' },
           idempotent: true, replayed: false,
         };
       }
-      return {
-        status: cached.response_status || 200,
-        body:   cached.response_body,
-        idempotent: true,
-        replayed: true,
-      };
     }
   } catch (err) {
     // Table missing on cold install OR transient DB failure: log
     // and run the handler without caching. Prefer "run twice
     // once" to "fail the request because the cache is down".
     // eslint-disable-next-line no-console
-    console.warn('[idempotency] lookup failed; running uncached:', err.message);
+    console.warn('[idempotency] claim failed; running uncached:', err.message);
     const result = await fn();
     return { ...result, idempotent: false };
   }
 
-  // First time we've seen this key - run the handler.
-  const result = await fn();
+  // We own the claim - run the handler and record the outcome.
+  let result;
+  try {
+    result = await fn();
+  } catch (err) {
+    // Release the claim so the client's retry can execute instead of
+    // 409ing against a permanently-pending row for 90 seconds.
+    try {
+      await sql`DELETE FROM idempotency_records
+                 WHERE scope = ${scope} AND key = ${key} AND response_status IS NULL`;
+    } catch { /* best effort */ }
+    throw err;
+  }
 
   // Best-effort store. If this fails the user still gets their
-  // response; only retries within TTL would re-execute.
+  // response; the stale-pending window lets a later retry re-execute.
   try {
     await sql`
-      INSERT INTO idempotency_records (
-        scope, key, request_hash, response_status, response_body
-      ) VALUES (
-        ${scope}, ${key}, ${requestHash},
-        ${result.status || 200},
-        ${JSON.stringify(result.body || null)}::jsonb
-      )
-      ON CONFLICT (scope, key) DO NOTHING
+      UPDATE idempotency_records SET
+        response_status = ${result.status || 200},
+        response_body   = ${JSON.stringify(result.body || null)}::jsonb
+      WHERE scope = ${scope} AND key = ${key}
     `;
   } catch (err) {
     // eslint-disable-next-line no-console

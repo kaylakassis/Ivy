@@ -113,7 +113,43 @@ export async function fetchFirstLocation({ accessToken }) {
   return j.locations?.[0] || null;
 }
 
-async function loadSquareCreds(settings) {
+// Square access tokens expire ~30 days after issue; without a refresh
+// pass every connected merchant silently broke a month after connecting.
+// Refresh when inside this window of expiry (or past it) and persist the
+// rotated pair.
+const TOKEN_REFRESH_WINDOW_MS = 7 * 24 * 3600 * 1000;
+
+async function refreshSquareToken(creds, workspaceId) {
+  const res = await fetchWithTimeout(`${squareApiBase()}/oauth2/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Square-Version': '2024-10-17' },
+    body: JSON.stringify({
+      client_id: process.env.SQUARE_APPLICATION_ID,
+      client_secret: process.env.SQUARE_APPLICATION_SECRET,
+      grant_type: 'refresh_token',
+      refresh_token: creds.refresh_token,
+    }),
+  }, 15000);
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    return { ok: false, detail: `(${res.status}) ${text.slice(0, 160)}` };
+  }
+  const next = await res.json();
+  const rotated = {
+    access_token:  next.access_token || creds.access_token,
+    refresh_token: next.refresh_token || creds.refresh_token,
+    expires_at:    next.expires_at || creds.expires_at,
+  };
+  if (workspaceId) {
+    await sql`
+      UPDATE finance_settings SET square_credentials_encrypted = ${encrypt(JSON.stringify(rotated))}
+       WHERE workspace_id = ${workspaceId}
+    `;
+  }
+  return { ok: true, creds: rotated };
+}
+
+async function loadSquareCreds(settings, workspaceId = null) {
   if (!settings?.squareCredentialsEncrypted) {
     throw new Error('Square is not connected for this workspace');
   }
@@ -122,6 +158,23 @@ async function loadSquareCreds(settings) {
     creds = JSON.parse(decrypt(settings.squareCredentialsEncrypted));
   } catch {
     throw new Error('Square credentials are misconfigured');
+  }
+  const expMs = creds.expires_at ? Date.parse(creds.expires_at) : null;
+  const nearExpiry = Number.isFinite(expMs) && (expMs - Date.now()) < TOKEN_REFRESH_WINDOW_MS;
+  if (creds.refresh_token && nearExpiry) {
+    let result;
+    try {
+      result = await refreshSquareToken(creds, workspaceId);
+    } catch (e) {
+      result = { ok: false, detail: e.message };
+    }
+    if (result.ok) return result.creds;
+    // Refresh failed. With time still on the clock, proceed on the
+    // current token (next call retries); past expiry, fail with an
+    // actionable message instead of Square's raw 401.
+    if (expMs <= Date.now()) {
+      throw new Error(`Square access token expired and refresh failed ${result.detail || ''} - reconnect Square from Finance → Payment processor.`);
+    }
   }
   return creds;
 }
@@ -157,7 +210,7 @@ export async function createCheckoutSession({
   successUrl, cancelUrl, customerEmail,
 }) {
   const fs = settings || await fetchFinanceSettings(workspaceId);
-  const creds = await loadSquareCreds(fs);
+  const creds = await loadSquareCreds(fs, workspaceId);
   const env = fs.squareEnvironment || squareEnv();
   const locationId = fs.squareLocationId;
   if (!locationId) throw new Error('Square location is not set for this workspace');
@@ -236,7 +289,7 @@ export async function createRefund({
 }) {
   if (!paymentIntent) throw new Error('paymentIntent (Square payment_id) is required');
   const fs = settings || await fetchFinanceSettings(workspaceId);
-  const creds = await loadSquareCreds(fs);
+  const creds = await loadSquareCreds(fs, workspaceId);
   const env = fs.squareEnvironment || squareEnv();
 
   const body = {

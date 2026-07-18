@@ -32,14 +32,15 @@ export function IvyProvider({ children }) {
 export function useIvy() {
   const ctx = useContext(IvyCtx);
   // useIvyState is a hook - must be called unconditionally on every
-  // render. We always call it; we just return the context's value
-  // when there is one. The "unused" hook in the provider path is the
-  // cost of safety here.
-  const fallback = useIvyState();
+  // render. We always call it, but with enabled:false whenever the
+  // provider's store exists, so the shadow store no longer issues a
+  // duplicate GET /api/ivy (the heaviest dashboard query) on every
+  // consumer mount. The disabled hook is inert local state.
+  const fallback = useIvyState({ enabled: !ctx });
   return ctx || fallback;
 }
 
-function useIvyState() {
+function useIvyState({ enabled = true } = {}) {
   const [sessions, setSessions]   = useState([]);
   const [activeId, setActiveId]   = useState(null);
   const [messages, setMessages]   = useState([]);
@@ -55,6 +56,7 @@ function useIvyState() {
   const msgCacheRef = useRef(new Map()); // sessionId -> messages[]
 
   useEffect(() => {
+    if (!enabled) { setLoading(false); return undefined; }
     let live = true;
     // 20s timeout so a slow/hung Ivy context query surfaces as an
     // error + retry instead of an infinite "Loading Ivy…" spinner.
@@ -72,7 +74,7 @@ function useIvyState() {
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
-  }, []);
+  }, [enabled]);
 
   const openSession = useCallback(async (id) => {
     setActiveId(id);
