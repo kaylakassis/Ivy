@@ -140,6 +140,14 @@ async function handler(req, res) {
         if (sendRes?.reason === 'workspace-quota-exceeded') {
           continue;
         }
+        // A FAILED send ({ ok: false } - Resend threw / provider outage) must
+        // also leave the row unstamped: stamping review_requested_at here
+        // burned the booking permanently even though the client never got the
+        // email. Leave it for the next run to retry.
+        if (sendRes?.ok === false) {
+          failed++;
+          continue;
+        }
         await sql`
           UPDATE bookings SET
             review_request_token_hash = ${sendRes?.sent ? hash : null},

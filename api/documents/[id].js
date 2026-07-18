@@ -29,12 +29,30 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      // Only drafts and voided are editable; once sent we lock the content.
-      if (doc.status !== 'draft' && doc.status !== 'voided') {
-        return badRequest(res, "Can't edit a document after it's been sent");
-      }
-
       const body = await readBody(req);
+      // Restore: send/resend gate voided AND declined docs with "restore
+      // to draft first", so that restore has to actually exist. Exactly
+      // { status: 'draft' } flips either state back to an editable,
+      // re-sendable draft.
+      if ((doc.status === 'voided' || doc.status === 'declined')
+          && body.status === 'draft' && Object.keys(body).length === 1) {
+        const r = await sql`
+          UPDATE documents SET status = 'draft', updated_at = NOW()
+           WHERE id = ${id} AND workspace_id = ${workspaceId}
+             AND status IN ('voided', 'declined')
+           RETURNING *
+        `;
+        if (r.rows.length === 0) return badRequest(res, 'Document is no longer voided/declined');
+        const signers = await fetchSigners(id);
+        return ok(res, { document: serializeDoc(r.rows[0], signers) });
+      }
+      // Drafts and voided are editable; sent/signed content is locked,
+      // and declined must be restored to draft (above) before editing.
+      if (doc.status !== 'draft' && doc.status !== 'voided') {
+        return badRequest(res, doc.status === 'declined'
+          ? "Restore the declined document to draft first (PATCH { status: 'draft' })"
+          : "Can't edit a document after it's been sent");
+      }
       const sets = [];
       const values = [];
       const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };

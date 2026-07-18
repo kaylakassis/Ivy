@@ -252,7 +252,9 @@ const menuBtn = {
 // ----- topbar (mobile shows hamburger) -----
 function ClientTopbar({ isMobile, onMenuClick, data }) {
   const { pathname } = useLocation();
-  const current = NAV.find((n) => n.end ? pathname === n.to : pathname.startsWith(n.to)) || NAV[0];
+  const EXTRA_TITLES = { '/me/profile': 'Profile', '/me/notifications': 'Notifications' };
+  const current = NAV.find((n) => n.end ? pathname === n.to : pathname.startsWith(n.to))
+    || (EXTRA_TITLES[pathname] ? { label: EXTRA_TITLES[pathname] } : NAV[0]);
   return (
     <header style={{
       display: 'flex', alignItems: 'center', gap: isMobile ? 10 : 16,

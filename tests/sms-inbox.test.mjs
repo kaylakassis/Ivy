@@ -52,7 +52,9 @@ async function run() {
     const cid = cli.rows[0].id;
 
     console.log('\n[inbound] routing + signature');
-    const params = { From: '+15551234567', To: '+15550000000', Body: 'hi from my phone', MessageSid: 'SM1' };
+    // Unique per run: the webhook now dedupes on MessageSid (webhook_event_dedup),
+    // so a static sid would make every re-run of this test a deduped no-op.
+    const params = { From: '+15551234567', To: '+15550000000', Body: 'hi from my phone', MessageSid: `SM-${Date.now()}` };
     const rawBody = new URLSearchParams(params).toString();
 
     // Bad signature → 403.

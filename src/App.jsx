@@ -16,6 +16,7 @@ import EarlyAccessGate from './features/auth/EarlyAccessGate.jsx';
 import RoleRouter from './features/auth/RoleRouter.jsx';
 import RootRouter from './features/marketing/RootRouter.jsx';
 import ClientShell from './features/client/ClientShell.jsx';
+import { ClientPortalProvider } from './features/client/clientContext.jsx';
 import { ErrorBoundary } from './lib/monitoring.js';
 import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { isPlatformHost } from './lib/publicUrl.js';
@@ -282,7 +283,7 @@ export default function App() {
         {/* Group-chat invite landing - auth required; component itself
             handles the "redirect to /signup with next=..." bounce. */}
         <Route path="/invite/group/:token"
-          element={<RequireAuth><AcceptGroupInvite /></RequireAuth>} />
+          element={<RequireAuth><ClientPortalProvider><AcceptGroupInvite /></ClientPortalProvider></RequireAuth>} />
 
         <Route element={<RequireAuth><ClientShell /></RequireAuth>}>
           <Route path="/me"           element={<ClientHome />} />

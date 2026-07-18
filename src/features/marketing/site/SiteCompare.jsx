@@ -82,7 +82,7 @@ export default function SiteCompare() {
                   <td className="ivy-col"><span className="yes">$8.99/week</span> (or $375/yr)</td>
                   <td>from ~$39/mo</td>
                   <td>from ~$12/mo</td>
-                  <td>$150+/mo on average</td>
+                  <td>$138+/mo on average</td>
                 </tr>
                 <tr>
                   <td>Online booking + reminders</td>
@@ -181,7 +181,7 @@ export default function SiteCompare() {
           <span className="eyebrow">Why owners switch</span>
           <h2>The seams are the real cost.</h2>
           <div className="why-grid">
-            <div className="why"><h3>One bill instead of five</h3><p>Most solos spend $150/month or more across separate tools. Ivy is $8.99/week for all of it - see <a href="/pricing" style={{ color: 'var(--lime)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>pricing</a>.</p></div>
+            <div className="why"><h3>One bill instead of five</h3><p>Most solos spend $138/month or more across separate tools. Ivy is $8.99/week for all of it - see <a href="/pricing" style={{ color: 'var(--lime)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>pricing</a>.</p></div>
             <div className="why"><h3>Tools that talk to each other</h3><p>The booking knows the client, the invoice knows the booking, the follow-up knows the invoice. No copy-paste glue, no "let me check the other app."</p></div>
             <div className="why"><h3>An assistant, not another inbox</h3><p>Ivy is the only option here with an AI that takes real actions on your data - draft, book, remind, follow up - with your approval on anything client-facing.</p></div>
           </div>

@@ -139,9 +139,86 @@ async function drainSource(queryFn, cursorField, onRow) {
 export async function collectReferencedPathnames() {
   const refs = new Set();
   const add = (p) => { if (p && typeof p === 'string') refs.add(p); };
+  // Several columns store the full public blob URL rather than a pathname
+  // (services.photo_url, clients.photo_url, calendar_settings.brand_logo_url,
+  // websites.* content). Register both the encoded and decoded pathname
+  // forms - extra refs are harmless (they only prevent deletions), a
+  // missing ref deletes a paying customer's live image.
+  const addUrl = (u) => {
+    if (!u || typeof u !== 'string' || !/^https?:\/\//.test(u)) return;
+    try {
+      const p = new URL(u).pathname.replace(/^\//, '');
+      add(p);
+      add(decodeURIComponent(p));
+    } catch { /* not a URL - ignore */ }
+  };
+  // Pull every blob-storage URL out of a JSON/text blob (website sections,
+  // published pages, etc.) without caring about its exact shape.
+  const addUrlsFromText = (text) => {
+    if (!text || typeof text !== 'string') return;
+    const m = text.match(/https?:\/\/[^"'\\\s)]+blob\.vercel-storage\.com\/[^"'\\\s)]+/g) || [];
+    for (const u of m) addUrl(u);
+  };
 
   try {
     const drained = [];
+
+    // services + clients - single photo URL columns (Vercel Blob uploads).
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, photo_url FROM services
+          WHERE photo_url IS NOT NULL
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => addUrl(r.photo_url),
+    ));
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, photo_url FROM clients
+          WHERE photo_url IS NOT NULL
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => addUrl(r.photo_url),
+    ));
+
+    // calendar_settings.brand_logo_url - URL twin of the pathname column.
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT workspace_id, brand_logo_url FROM calendar_settings
+          WHERE brand_logo_url IS NOT NULL
+            ${cur ? 'AND workspace_id > $1' : ''}
+          ORDER BY workspace_id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'workspace_id',
+      (r) => addUrl(r.brand_logo_url),
+    ));
+
+    // websites - hero/gallery/section images, OG image, favicon live as raw
+    // URLs inside JSONB (draft AND published copies). Shape-agnostic scan.
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, sections::text AS s, pages::text AS p,
+                published_sections::text AS ps, published_pages::text AS pp,
+                seo_og_image, favicon_url
+           FROM websites
+          ${cur ? 'WHERE id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => {
+        addUrlsFromText(r.s); addUrlsFromText(r.p);
+        addUrlsFromText(r.ps); addUrlsFromText(r.pp);
+        addUrl(r.seo_og_image); addUrl(r.favicon_url);
+      },
+    ));
 
     // documents - scalar pathname columns.
     drained.push(await drainSource(

@@ -95,9 +95,12 @@ async function handler(req, res) {
             // eslint-disable-next-line no-await-in-loop
             const brief = await buildBriefing(r.id);
             const top = brief?.items?.[0];
-            if (!top) continue; // nothing worth saying → skip WITHOUT stamping
             // Guarded stamp-then-send: only one run wins the day. 0 rows = a
-            // concurrent/retried run already claimed it → skip.
+            // concurrent/retried run already claimed it → skip. Stamped for
+            // EMPTY briefings too (no push goes out) - a skipped-but-unstamped
+            // row stays in the candidate set, so each batch re-selected the
+            // same quiet workspaces forever (busy loop) and anyone past the
+            // 250-row batch never got their push this hour.
             // eslint-disable-next-line no-await-in-loop
             const claim = await sql`
               UPDATE workspaces SET briefing_push_last_sent_at = NOW()
@@ -106,6 +109,7 @@ async function handler(req, res) {
                       OR briefing_push_last_sent_at < NOW() - (${String(REPEAT_AFTER_HOURS)} || ' hours')::interval)
               RETURNING id`;
             if (claim.rows.length === 0) continue;
+            if (!top) continue; // nothing worth saying → stamped, no push
             // eslint-disable-next-line no-await-in-loop
             await notifyOwnerSafe({
               workspaceId: r.id, type: 'engagement',

@@ -540,8 +540,9 @@ export const IVY_TOOLS = [
       type: 'object',
       properties: {
         title:    { type: 'string' },
-        type:     { type: 'string', enum: ['revenue', 'bookings', 'clients', 'custom'] },
+        type:     { type: 'string', enum: ['revenue', 'sessions', 'clients', 'custom'], description: "'sessions' tracks completed bookings." },
         target:   { type: 'number' },
+        current:  { type: 'number', description: 'Starting progress. Only used for custom goals.' },
         deadline: { type: 'string', description: 'YYYY-MM-DD.' },
         notes:    { type: 'string' },
       },
@@ -587,7 +588,7 @@ export const IVY_TOOLS = [
         tax_rate:    { type: 'number' },
         discount:    { type: 'number' },
         end_date:    { type: 'string', description: 'YYYY-MM-DD (optional).' },
-        auto_send:   { type: 'boolean', description: 'Email each generated invoice automatically. Defaults to true.' },
+        auto_send:   { type: 'boolean', description: 'Requested auto-send preference. NOTE: Ivy-created schedules always start with auto-send OFF for safety; the owner can enable it from Finance → Recurring.' },
         notes:       { type: 'string' },
       },
       required: ['name', 'items', 'cadence', 'next_run_at'],
@@ -1267,8 +1268,12 @@ async function send_invoice({ workspaceId, args }) {
   const invoiceNumber = inv2.rows[0]?.number;
   if (!invoiceNumber) throw new Error('Invoice disappeared mid-send');
 
-  await sendEmail({
-    to: recipientEmail,
+  // Route through the prefs/quota-aware sender exactly like
+  // /api/invoices/send - raw sendEmail here bypassed the client's
+  // notification opt-outs and the per-workspace daily send cap.
+  const { sendEmailToClient, sendEmailToClientByAddress } = await import('./email.js');
+  const emailPayload = {
+    type: 'invoices',
     subject: `Invoice ${invoiceNumber} from ${bizName}`,
     html: emailShell({
       heading: `Invoice ${invoiceNumber}`,
@@ -1278,7 +1283,16 @@ async function send_invoice({ workspaceId, args }) {
       ctaUrl: link,
       footer: `Thanks for your business.`,
     }),
-  });
+  };
+  const sendResult = resolvedClientId
+    ? await sendEmailToClient({ clientId: resolvedClientId, to: recipientEmail, ...emailPayload })
+    : await sendEmailToClientByAddress({ workspaceId, email: recipientEmail, ...emailPayload });
+  if (sendResult && sendResult.ok === false) {
+    return {
+      ok: true, invoice_id: id, sent_to: recipientEmail, email_delivered: false,
+      note: `Invoice marked sent and the pay link is live, but the email was not delivered (${sendResult.reason || 'client email preferences or send quota'}).`,
+    };
+  }
   return { ok: true, invoice_id: id, sent_to: recipientEmail };
 }
 
@@ -1632,6 +1646,12 @@ async function create_booking({ workspaceId, args }) {
     const st = await sql`SELECT id FROM staff_members WHERE id = ${args.staff_id} AND workspace_id = ${workspaceId} AND active = TRUE`;
     if (st.rows.length === 0) throw new Error('Unknown or inactive staff member');
   }
+  // bookings.client_email is NOT NULL; clients.email is nullable. Without
+  // this guard an email-less client produces a raw not-null-violation
+  // instead of an actionable message.
+  if (!cl.rows[0].email) {
+    throw new Error(`${cl.rows[0].name} has no email on file. Add an email to their client profile first, then book them.`);
+  }
   const { rows } = await sql`
     INSERT INTO bookings (
       workspace_id, service_id, client_id, client_name, client_email,
@@ -1886,9 +1906,21 @@ async function cancel_booking({ workspaceId, args }) {
      RETURNING id, date, start_min, client_name
   `;
   if (rows.length === 0) throw new Error('Booking not found or already cancelled');
-  // Caller controls notify via args.notify; for v1 we skip the email,
-  // matching the existing per-workspace cancel-booking endpoint behavior.
-  return { booking: rows[0], cancelled: true };
+  // notify:true is what the owner approved on the confirmation card
+  // ("cancel and notify the client") - honor it. Best-effort: the
+  // cancellation itself is already committed above.
+  let notified = false;
+  if (args.notify) {
+    try {
+      const { notifyBookingCancellation } = await import('./bookingNotify.js');
+      await notifyBookingCancellation({ workspaceId, bookingId: rows[0].id, source: 'owner' });
+      notified = true;
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn('[ivy cancel_booking] notify failed:', e.message);
+    }
+  }
+  return { booking: rows[0], cancelled: true, client_notified: notified };
 }
 
 async function void_invoice({ workspaceId, args }) {
@@ -1990,7 +2022,11 @@ async function create_expense({ workspaceId, args }) {
 async function create_goal({ workspaceId, args }) {
   const title = (args?.title || '').toString().trim();
   if (!title) throw new Error('title is required');
-  const type = ['revenue', 'bookings', 'clients', 'custom'].includes(args?.type) ? args.type : 'revenue';
+  // DB CHECK allows revenue|clients|sessions|custom ('sessions' = completed
+  // bookings). Accept the model saying 'bookings' and map it, so a "track my
+  // bookings" goal can't die on the goals_type_check constraint.
+  const rawType = args?.type === 'bookings' ? 'sessions' : args?.type;
+  const type = ['revenue', 'sessions', 'clients', 'custom'].includes(rawType) ? rawType : 'revenue';
   const target = Number(args?.target);
   if (!Number.isFinite(target) || target <= 0) throw new Error('target must be a positive number');
   const currentManual = type === 'custom' && Number.isFinite(Number(args.current)) ? Number(args.current) : 0;

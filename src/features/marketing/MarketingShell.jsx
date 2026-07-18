@@ -232,12 +232,9 @@ export function SimpleFooter() {
         </Link>
         <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>$0 today · Cancel anytime</div>
       </div>
-      <div style={{
-        maxWidth: 1100, margin: '0 auto 16px',
-        display: 'flex', justifyContent: 'center',
-      }}>
-        <AudienceToggle size="sm"/>
-      </div>
+      {/* AudienceToggle removed: its "For clients" link pointed at
+          /?for=client, which the live home page never reads - the
+          toggle just reloaded the same page. */}
       <div style={{
         maxWidth: 1100, margin: '0 auto',
         display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap',

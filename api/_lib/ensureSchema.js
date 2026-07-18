@@ -200,8 +200,12 @@ const MAX_PASSES = 4;
 // subsequent statements. Instead we use a single-row claim with a TTL,
 // which is atomic per-statement and therefore correct over independent
 // HTTP connections. The TTL means a crashed migrator can't wedge the
-// lock forever - after it lapses another instance reclaims.
-const LOCK_TTL_SECONDS = 120;
+// lock forever - after it lapses another instance reclaims. Sized WELL
+// above the worst honest run: a cold full migration is ~550 statements
+// times up to MAX_PASSES passes over the per-query HTTP driver, which
+// can comfortably exceed two minutes - a TTL shorter than the run lets
+// a second instance "reclaim" mid-migration and stampede.
+const LOCK_TTL_SECONDS = 600;
 
 async function tryAcquireMigrationLock() {
   // Create the lock table itself idempotently. It must not depend on the

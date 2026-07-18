@@ -365,6 +365,10 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
       setMessages((m) => [...m, r.message]);
       setInput('');
       onUpdated?.();
+    } catch (err) {
+      // A silently-swallowed failure looked like the message sent when it
+      // never did - surface it like the DM pane does.
+      window.alert(`Couldn't send your message: ${err.message || 'try again in a moment'}`);
     } finally { setSending(false); }
   };
 

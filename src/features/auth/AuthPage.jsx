@@ -9,6 +9,17 @@ export default function AuthPage({ mode = 'signin' }) {
   const { signIn, signUp, mfaChallenge } = useAuth();
   const nav       = useNavigate();
   const location  = useLocation();
+  // Post-auth destination. RequireAuth passes state.from; invite links pass
+  // ?next=. Previously both were discarded (always nav('/')), so deep links
+  // and group invites dead-ended on the dashboard. Only same-origin absolute
+  // paths are honored - anything with a scheme or protocol-relative form is
+  // rejected to prevent open redirects.
+  const nextTarget = (() => {
+    const qs = new URLSearchParams(location.search).get('next');
+    const cand = location.state?.from || qs;
+    if (typeof cand === 'string' && /^\/(?!\/)/.test(cand) && !cand.includes(':')) return cand;
+    return null;
+  })();
   // ?ref=CODE survives all the way to the signup POST so affiliate
   // attribution lands. Lowercased keys handled server-side; only
   // honored on the signup path.
@@ -61,14 +72,15 @@ export default function AuthPage({ mode = 'signin' }) {
           setEmailWarn(role === 'client' ? '/me' : '/');
           return;
         }
-        nav(role === 'client' ? '/me' : '/', { replace: true });
+        nav(nextTarget || (role === 'client' ? '/me' : '/'), { replace: true });
       } else {
         const res = await signIn(email, password);
         // 2FA on this account → show the code step instead of landing.
         if (res?.mfaRequired) { setMfaStep(true); return; }
         // For sign-in we let RoleRouter (in AppShell entry) figure out where
-        // to land - pushing to '/' triggers it.
-        nav('/', { replace: true });
+        // to land - pushing to '/' triggers it - unless the user arrived
+        // with an explicit destination (deep link / invite).
+        nav(nextTarget || '/', { replace: true });
       }
     } catch (ex) {
       setErr(ex.message || 'Something went wrong');
@@ -85,7 +97,7 @@ export default function AuthPage({ mode = 'signin' }) {
     setBusy(true);
     try {
       await mfaChallenge(c);
-      nav('/', { replace: true });
+      nav(nextTarget || '/', { replace: true });
     } catch (ex) {
       setErr(ex.message || "That code didn't match.");
     } finally {

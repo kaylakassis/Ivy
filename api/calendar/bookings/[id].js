@@ -64,15 +64,16 @@ export default async function handler(req, res) {
         // past times-on-today unless the owner explicitly opts in. The
         // today+past-time guard catches the realistic mistake of typing
         // 9am when you meant 9pm and it's already noon.
-        const now = new Date();
-        const today = now.toISOString().slice(0, 10);
-        const nowMins = now.getUTCHours() * 60 + now.getUTCMinutes();
+        // Past-check in the WORKSPACE's timezone, not UTC - a US-West
+        // owner after ~5pm local is already "tomorrow" in UTC, and the
+        // old UTC compare rejected valid same-day slots. Same epoch
+        // technique the public booking flow uses (slotEpochMs).
         if (!r.allowPast) {
-          if (newDate < today) {
-            return badRequest(res, "That's in the past - pass allowPast: true to record a historical session.");
-          }
-          if (newDate === today && newEnd <= nowMins) {
-            return badRequest(res, "That time has already passed today - pass allowPast: true to record a historical session.");
+          const { slotEpochMs, workspaceTimeZone } = await import('../../_lib/calendar.js');
+          const tz = await workspaceTimeZone(workspaceId);
+          const slotEndMs = slotEpochMs(newDate, newEnd, tz);
+          if (Number.isFinite(slotEndMs) && slotEndMs <= Date.now()) {
+            return badRequest(res, "That time has already passed - pass allowPast: true to record a historical session.");
           }
         }
 

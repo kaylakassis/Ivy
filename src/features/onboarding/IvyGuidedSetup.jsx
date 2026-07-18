@@ -120,7 +120,10 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
       let finalSlug = desiredSlug;
       try {
         const cal = await api.get('/calendar');
-        if (cal?.slug) finalSlug = cal.slug;
+        // Response shape is { calendar: { settings: { slug } } } - the old
+        // cal?.slug read never matched, so a taken-slug retry could show
+        // a booking link that was never actually saved.
+        if (cal?.calendar?.settings?.slug) finalSlug = cal.calendar.settings.slug;
       } catch { /* fall back to derived slug */ }
       finishLast();
 

@@ -50,11 +50,24 @@ function toDateString(v) {
 // - operates in UTC to dodge DST surprises around month boundaries.
 export function advanceDate(dateStr, cadence) {
   const d = new Date(dateStr + 'T00:00:00Z');
+  // Month math must clamp, not overflow: setUTCMonth(+1) on Jan 31
+  // lands on "Feb 31" → Mar 3, silently skipping February's invoice
+  // and drifting the bill day forever. Clamp to the target month's
+  // last day instead. Note the day compounds through short months
+  // (Jan 31 → Feb 28 → Mar 28) - deliberate: stable, never skips a
+  // month, never drifts past the original day.
+  const addMonthsClamped = (months) => {
+    const day = d.getUTCDate();
+    const target = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + months, 1));
+    const lastDay = new Date(Date.UTC(target.getUTCFullYear(), target.getUTCMonth() + 1, 0)).getUTCDate();
+    target.setUTCDate(Math.min(day, lastDay));
+    d.setTime(target.getTime());
+  };
   switch (cadence) {
     case 'weekly':    d.setUTCDate(d.getUTCDate() + 7); break;
     case 'biweekly':  d.setUTCDate(d.getUTCDate() + 14); break;
-    case 'monthly':   d.setUTCMonth(d.getUTCMonth() + 1); break;
-    case 'quarterly': d.setUTCMonth(d.getUTCMonth() + 3); break;
+    case 'monthly':   addMonthsClamped(1); break;
+    case 'quarterly': addMonthsClamped(3); break;
     case 'yearly':    d.setUTCFullYear(d.getUTCFullYear() + 1); break;
     default: break;
   }

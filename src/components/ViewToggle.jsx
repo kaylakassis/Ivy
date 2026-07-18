@@ -39,6 +39,7 @@ const HIDE_PREFIXES = [
   '/onboarding',
   '/book/', '/sign/', '/invoice/', '/quote/', '/review/', '/site/', '/embed/',
   '/privacy', '/terms',
+  '/tour', '/features', '/compare', '/waitlist', '/account-recover', '/do-not-sell',
   // Marketing pages: the floating pill overlapped page content (e.g. the
   // pricing card) and confused logged-out visitors. The Business/Client
   // switch is surfaced on marketing pages via the AudienceToggle in the

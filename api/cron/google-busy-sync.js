@@ -13,6 +13,10 @@ import { pullBusyTimes } from '../_lib/googleSync.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { withDeadline, terminationReason } from '../_lib/cronShard.js';
+
+const BATCH_SIZE = 50;
+const BUDGET_MS = 250_000; // under the api/cron/** 300s function cap
 
 async function handler(req, res) {
   // Vercel crons fire as GET. Allow POST too for manual triggers.
@@ -31,26 +35,50 @@ async function handler(req, res) {
 
   try {
     await ensureSchemaApplied();
-    const { rows } = await sql`
-      SELECT workspace_id FROM calendar_settings
-      WHERE google_refresh_token_encrypted IS NOT NULL
-        AND google_block_inbound = TRUE
-    `;
 
+    // Keyset-paginated + deadline-bounded loop (mirrors daily-return). The
+    // old unbounded serial loop pulled EVERY connected workspace in one
+    // pass - each pull is a Google round-trip, so past a few thousand
+    // connections the run blows the 300s function budget and the tail of
+    // the candidate set never syncs. Bail near the budget instead; the
+    // hourly cadence means the next run picks the stragglers up.
     const results = [];
-    for (const r of rows) {
-      // eslint-disable-next-line no-await-in-loop
-      const out = await pullBusyTimes({ workspaceId: r.workspace_id });
-      if (!out.ok) {
+    let ran = 0;
+    let emptied = false;
+    let lastId = '00000000-0000-0000-0000-000000000000';
+    await withDeadline(async (deadline) => {
+      while (Date.now() < deadline) {
         // eslint-disable-next-line no-await-in-loop
-        await sql`
-          UPDATE calendar_settings SET google_inbound_last_error = ${out.reason}
-          WHERE workspace_id = ${r.workspace_id}
+        const { rows } = await sql`
+          SELECT workspace_id FROM calendar_settings
+          WHERE google_refresh_token_encrypted IS NOT NULL
+            AND google_block_inbound = TRUE
+            AND workspace_id > ${lastId}::uuid
+          ORDER BY workspace_id ASC
+          LIMIT ${BATCH_SIZE}
         `;
+        if (rows.length === 0) { emptied = true; break; }
+        for (const r of rows) {
+          // eslint-disable-next-line no-await-in-loop
+          const out = await pullBusyTimes({ workspaceId: r.workspace_id });
+          if (!out.ok) {
+            // eslint-disable-next-line no-await-in-loop
+            await sql`
+              UPDATE calendar_settings SET google_inbound_last_error = ${out.reason}
+              WHERE workspace_id = ${r.workspace_id}
+            `;
+          }
+          results.push({ workspaceId: r.workspace_id, ...out });
+          ran++;
+          if (Date.now() >= deadline) break;
+        }
+        lastId = rows[rows.length - 1].workspace_id;
+        if (rows.length < BATCH_SIZE) { emptied = true; break; }
       }
-      results.push({ workspaceId: r.workspace_id, ...out });
-    }
-    return ok(res, { ran: rows.length, results });
+    }, { budgetMs: BUDGET_MS });
+
+    const terminatedBy = terminationReason({ emptied, hitCap: false });
+    return ok(res, { ran, terminatedBy, results });
   } catch (err) {
     return serverError(res, err);
   }

@@ -55,14 +55,15 @@ export default async function handler(req, res) {
         INSERT INTO recurring_invoices (
           workspace_id, name, client_id, client_name, client_email,
           items, tax_rate, discount, notes,
-          cadence, next_run_at, end_date, status, auto_send
+          cadence, next_run_at, end_date, status, auto_send, currency
         ) VALUES (
           ${workspaceId}, ${s.name}, ${s.clientId || null}, ${clientName}, ${clientEmail},
           ${JSON.stringify(s.items || [])}::jsonb,
           ${s.taxRate ?? 0}, ${s.discount ?? 0}, ${s.notes || null},
           ${s.cadence}, ${s.nextRunAt}::date,
           ${s.endDate ? `${s.endDate}` : null}::date,
-          'active', ${s.autoSend !== false}
+          'active', ${s.autoSend !== false},
+          COALESCE((SELECT currency FROM finance_settings WHERE workspace_id = ${workspaceId}), 'USD')
         )
         RETURNING *
       `;

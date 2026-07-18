@@ -28,10 +28,22 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'PATCH') {
-      if (inv.status === 'paid' || inv.status === 'voided') {
-        return badRequest(res, `Can't edit a ${inv.status} invoice`);
-      }
       const body = await readBody(req);
+      // Un-void: every send/resend/pay-link/mark-paid gate says "restore
+      // first", so restore has to actually exist. A voided invoice accepts
+      // exactly { status: 'draft' } and returns to editable draft state.
+      if (inv.status === 'voided' && body.status === 'draft' && Object.keys(body).length === 1) {
+        const r = await sql`
+          UPDATE invoices SET status = 'draft', updated_at = NOW()
+           WHERE id = ${id} AND workspace_id = ${workspaceId} AND status = 'voided'
+           RETURNING *
+        `;
+        if (r.rows.length === 0) return badRequest(res, 'Invoice is no longer voided');
+        return ok(res, { invoice: serializeInvoice(r.rows[0]) });
+      }
+      if (inv.status === 'paid' || inv.status === 'voided') {
+        return badRequest(res, `Can't edit a ${inv.status} invoice${inv.status === 'voided' ? " - restore it with { status: 'draft' } first" : ''}`);
+      }
       const sets = [];
       const values = [];
       const push = (col, val) => { values.push(val); sets.push(`${col} = $${values.length}`); };

@@ -185,7 +185,7 @@ export default function SitePricing() {
       <section className="center">
         <div className="container">
           <span className="eyebrow">Do the math</span>
-          <h2>Save $100+/mo on average - most solos spend $150/month or even more on stitched-together SaaS.</h2>
+          <h2>Save $100+/mo on average - most solos spend $138/month or even more on stitched-together SaaS.</h2>
           <p className="section-sub">The tools most solo businesses end up running in parallel. Ivy does each of these - and then makes them talk to each other so the booking → invoice → message → follow-up is one fluid motion.</p>
           <div className="math">
             <div className="rowm"><span className="t">HoneyBook<small>clients + invoices + contracts</small></span><span className="p">$39/mo</span></div>
@@ -195,8 +195,7 @@ export default function SitePricing() {
             <div className="rowm"><span className="t">Mailchimp<small>newsletter + email blasts</small></span><span className="p">$13/mo</span></div>
             <div className="rowm"><span className="t">Squarespace<small>website + custom domain</small></span><span className="p">$23/mo</span></div>
             <div className="rowm"><span className="t">DocuSign<small>legally-binding e-signatures</small></span><span className="p">$15/mo</span></div>
-            <div className="rowm"><span className="t">Loom<small>product walkthroughs</small></span><span className="p">$15/mo</span></div>
-            <div className="rowm total"><span className="t">Total replaced</span><span className="p">$150+/mo on average → $8.99/week</span></div>
+            <div className="rowm total"><span className="t">Total replaced</span><span className="p">$138+/mo on average → $8.99/week</span></div>
           </div>
           <p style={{ marginTop: 20, fontSize: 14 }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>See the full comparison: Ivy vs HoneyBook vs Calendly →</a></p>
           <div className="trust-grid">

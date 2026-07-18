@@ -268,15 +268,24 @@ export default async function handler(req, res) {
         }
       }
 
+      // JSONB gotcha: JSON.stringify(null) is the STRING 'null', which casts
+      // to jsonb null (not SQL NULL) - COALESCE would select it and WIPE the
+      // column on any PUT that omitted the field. Every jsonb column below is
+      // therefore keyed on field presence in the body; `jp` maps an absent or
+      // null value to SQL NULL.
+      const jp = (v) => (v === undefined || v === null ? null : JSON.stringify(v));
       const updated = await sql`
         UPDATE websites SET
           handle             = COALESCE(${patch.handle ?? null},         handle),
           business_name      = COALESCE(${patch.businessName ?? null},   business_name),
           template           = COALESCE(${patch.template ?? null},       template),
-          font_pair          = COALESCE(${patch.fontPair ?? null},       font_pair),
+          font_pair          = CASE WHEN ${'fontPair' in body}
+            THEN ${patch.fontPair ?? null} ELSE font_pair END,
           custom_css         = COALESCE(${patch.customCss ?? null},      custom_css),
-          sections           = COALESCE(${JSON.stringify(patch.sections ?? null)}::jsonb, sections),
-          pages              = COALESCE(${JSON.stringify(patch.pages ?? null)}::jsonb,    pages),
+          sections           = CASE WHEN ${'sections' in body}
+            THEN COALESCE(${jp(patch.sections)}::jsonb, sections) ELSE sections END,
+          pages              = CASE WHEN ${'pages' in body}
+            THEN COALESCE(${jp(patch.pages)}::jsonb, pages) ELSE pages END,
           custom_domain      = CASE WHEN ${'customDomain' in body}
             THEN ${patch.customDomain ?? null} ELSE custom_domain END,
           domain_status      = CASE WHEN ${domainChanged}
@@ -287,10 +296,14 @@ export default async function handler(req, res) {
           seo_description    = COALESCE(${patch.seoDescription ?? null}, seo_description),
           seo_og_image       = COALESCE(${patch.seoOgImage ?? null},     seo_og_image),
           favicon_url        = COALESCE(${patch.faviconUrl ?? null},     favicon_url),
-          redirects          = COALESCE(${JSON.stringify(patch.redirects ?? null)}::jsonb, redirects),
-          form_destinations  = COALESCE(${JSON.stringify(patch.formDestinations ?? null)}::jsonb, form_destinations),
-          exit_intent_popup  = COALESCE(${JSON.stringify(patch.exitIntentPopup ?? null)}::jsonb, exit_intent_popup),
-          sticky_cta         = COALESCE(${JSON.stringify(patch.stickyCta ?? null)}::jsonb, sticky_cta),
+          redirects          = CASE WHEN ${'redirects' in body}
+            THEN COALESCE(${jp(patch.redirects)}::jsonb, redirects) ELSE redirects END,
+          form_destinations  = CASE WHEN ${'formDestinations' in body}
+            THEN COALESCE(${jp(patch.formDestinations)}::jsonb, form_destinations) ELSE form_destinations END,
+          exit_intent_popup  = CASE WHEN ${'exitIntentPopup' in body}
+            THEN ${jp(patch.exitIntentPopup)}::jsonb ELSE exit_intent_popup END,
+          sticky_cta         = CASE WHEN ${'stickyCta' in body}
+            THEN ${jp(patch.stickyCta)}::jsonb ELSE sticky_cta END,
           scheduled_publish_at = CASE WHEN ${'scheduledPublishAt' in body}
             THEN ${patch.scheduledPublishAt ?? null}::timestamptz ELSE scheduled_publish_at END,
           scheduled_pages    = CASE WHEN ${'scheduledPages' in body}

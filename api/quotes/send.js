@@ -9,7 +9,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedQuote, serializeQuote } from '../_lib/quotes.js';
-import { computeTotals } from '../_lib/finance.js';
+import { quoteTotals } from '../_lib/quotes.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
@@ -60,7 +60,10 @@ export default async function handler(req, res) {
 
     const rawToken = generateRawToken(32);
     const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-    const totals = computeTotals(q.items, q.tax_rate, q.discount);
+    // Included-items-only total (quoteTotals) - computeTotals over ALL
+    // items quoted a higher number in the email than the client sees and
+    // accepts on the public quote page (optional items excluded there).
+    const totals = quoteTotals(q.items, q.tax_rate, q.discount);
     const newActivity = [
       ...(q.activity || []),
       { ts: new Date().toISOString(), kind: 'sent', text: `Sent to ${recipientName}` },

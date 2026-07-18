@@ -8,6 +8,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedProject, serializeProject, VALID_STATUS } from '../_lib/projects.js';
+import { isIncluded } from '../_lib/quotes.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 // Invoices + quotes don't store `total` as a column - it's computed
@@ -76,7 +77,14 @@ export default async function handler(req, res) {
           })),
           quotes: quotes.rows.map((q) => ({
             id: q.id, number: q.number, status: q.status,
-            clientName: q.client_name, total: invoiceTotal(q),
+            clientName: q.client_name,
+            // Quotes exclude optional (not-included) line items from their
+            // total everywhere else - use the canonical predicate so the
+            // project drawer matches the quote editor and public page.
+            total: invoiceTotal({
+              ...q,
+              items: (Array.isArray(q.items) ? q.items : []).filter(isIncluded),
+            }),
           })),
           documents: documents.rows.map((d) => ({
             id: d.id, name: d.name, status: d.status,

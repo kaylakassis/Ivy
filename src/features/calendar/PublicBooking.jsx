@@ -944,7 +944,7 @@ export default function PublicBooking({ embedded = false }) {
           <div style={{ fontSize: 11, color: 'var(--muted)', textAlign: 'center', marginTop: 20 }}>
             {cal.settings.timezone
               ? `Times shown in ${tzDisplay(cal.settings.timezone)}`
-              : 'Times in the business’s local timezone'} · Free cancellation up to 24h before
+              : 'Times in the business’s local timezone'} · Instant confirmation
           </div>
         </>
       )}

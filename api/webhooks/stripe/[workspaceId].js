@@ -21,6 +21,8 @@ import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
 import { sendEmail, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
+import { appUrl } from '../../_lib/tokens.js';
+import { fetchWithTimeout } from '../../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 function escapeHtml(s) {
@@ -183,7 +185,7 @@ export default async function handler(req, res) {
         if (workspaceCreds.stripeAccount) {
           siHeaders['Stripe-Account'] = workspaceCreds.stripeAccount;
         }
-        const siResp = await fetch(
+        const siResp = await fetchWithTimeout(
           `https://api.stripe.com/v1/setup_intents/${encodeURIComponent(setupIntentId)}`,
           { headers: siHeaders },
         );
@@ -402,7 +404,7 @@ export default async function handler(req, res) {
                 <div style="font-family:ui-monospace,monospace;font-size:18px;font-weight:600;letter-spacing:0.04em;padding:10px 14px;background:#F6F5F1;border:1px solid #E8E4DC;border-radius:8px;display:inline-block;">${escapeHtml(rawCode)}</div>
                 <p style="font-size:12px;color:#85827B;margin-top:18px;">Apply it on your booking page during checkout. Save this email - the code is shown only here.</p>`,
               ctaText: 'Visit booking page',
-              ctaUrl: `${process.env.APP_URL || ''}`,
+              ctaUrl: appUrl(),
               footer: `Sent by ${escapeHtml(branding.businessName || 'an Ivy business')}.`,
               branding,
             }),

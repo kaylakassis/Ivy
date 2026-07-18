@@ -385,7 +385,16 @@ function recurringOccursOn(master, dateISO) {
     if (cursor.toISOString().slice(0, 10) === dateISO) return true;
     if (rule === 'weekly')        cursor = new Date(cursor.getTime() + 7 * 86400000);
     else if (rule === 'biweekly') cursor = new Date(cursor.getTime() + 14 * 86400000);
-    else if (rule === 'monthly')  { const n = new Date(cursor); n.setUTCMonth(n.getUTCMonth() + 1); cursor = n; }
+    else if (rule === 'monthly')  {
+      // Clamp to the target month's last day, preserving the SERIES
+      // anchor day (`d`, the master's start day-of-month): a booking
+      // anchored on the 31st occurs Jan 31 → Feb 28 → Mar 31, instead
+      // of setUTCMonth's "Feb 31" → Mar 3 overflow drift.
+      const n = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+      const lastDay = new Date(Date.UTC(n.getUTCFullYear(), n.getUTCMonth() + 1, 0)).getUTCDate();
+      n.setUTCDate(Math.min(d, lastDay));
+      cursor = n;
+    }
     else return false;
   }
   return false;

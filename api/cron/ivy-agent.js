@@ -6,7 +6,10 @@
 //
 // Only owners who aren't fully lapsed (trialing/active/past_due) are processed.
 // Keyset-paginated + deadline-bounded drain loop so a large account base can't
-// blow the function budget; unprocessed workspaces resume next run.
+// blow the function budget. The cursor is per-invocation only - every run
+// rescans from the first workspace id - but that's cheap: the per-day
+// dedupe keys make an already-processed workspace a fast no-op, so repeat
+// runs just skim past them.
 import { sql } from '../_lib/db.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { trackCron } from '../_lib/cronMetrics.js';
@@ -27,6 +30,8 @@ async function handler(req, res) {
 
   try {
     let scanned = 0, created = 0, batches = 0, complete = false;
+    // In-memory batch cursor - resets every invocation (full rescan each
+    // run); re-scanned workspaces no-op via the per-day dedupe keys.
     let lastId = '00000000-0000-0000-0000-000000000000';
     await withDeadline(async (deadline) => {
       while (Date.now() < deadline) {

@@ -36,7 +36,7 @@ export default function WaitlistPage() {
   const [betaBusy, setBetaBusy] = useState(false);
   const [betaErr, setBetaErr] = useState(null);
 
-  useEffect(() => { document.title = 'THRYVE - join the waitlist'; }, []);
+  useEffect(() => { document.title = 'Ivy - join the waitlist'; }, []);
 
   const join = async (e) => {
     e.preventDefault();
@@ -85,7 +85,7 @@ export default function WaitlistPage() {
             <Icons.Logo size={21} color="currentColor"/>
           </div>
           <span style={{ fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 20, letterSpacing: '-0.015em' }}>
-            THRYVE
+            Ivy
           </span>
         </Link>
 
@@ -230,7 +230,7 @@ export default function WaitlistPage() {
         </div>
 
         <footer style={{ paddingTop: 18, color: 'var(--muted)', fontSize: 12.5 }}>
-          © {new Date().getFullYear()} THRYVE · <Link to="/privacy" style={{ color: 'inherit' }}>Privacy</Link> · <Link to="/terms" style={{ color: 'inherit' }}>Terms</Link>
+          © {new Date().getFullYear()} Ivy · <Link to="/privacy" style={{ color: 'inherit' }}>Privacy</Link> · <Link to="/terms" style={{ color: 'inherit' }}>Terms</Link>
         </footer>
       </div>
     </div>

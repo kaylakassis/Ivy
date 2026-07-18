@@ -241,7 +241,12 @@ async function applyRefundToInvoice({ workspaceId, parsed }) {
     },
   ];
 
-  await sql`
+  // Concurrency predicate on the value we read (mirrors the charge.refunded
+  // guard in api/webhooks/stripe-platform.js): two overlapping deliveries
+  // would otherwise both read the same refunded_amount and the second write
+  // silently overwrites the first (lost update). 0 rows = the other writer
+  // already folded a refund in → already applied, nothing more to do.
+  const upd = await sql`
     UPDATE invoices SET
       status          = ${newStatus},
       refunded_amount = ${newRefunded},
@@ -249,5 +254,8 @@ async function applyRefundToInvoice({ workspaceId, parsed }) {
       activity        = ${JSON.stringify(newActivity)}::jsonb,
       updated_at      = NOW()
     WHERE id = ${inv.id} AND workspace_id = ${workspaceId}
+      AND COALESCE(refunded_amount, 0) = ${alreadyRefunded}
+    RETURNING id
   `;
+  if (upd.rows.length === 0) return;
 }

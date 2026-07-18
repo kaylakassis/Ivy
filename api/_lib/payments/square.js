@@ -24,6 +24,7 @@ import { sql } from '../db.js';
 import { encrypt, decrypt } from '../secrets.js';
 import { fetchFinanceSettings } from '../finance.js';
 import { appUrl } from '../tokens.js';
+import { fetchWithTimeout } from '../fetchTimeout.js';
 
 export function getProviderName() { return 'square'; }
 
@@ -80,7 +81,7 @@ export function buildAuthorizeUrl({ state, redirectUri }) {
 // access_token + refresh_token + merchant_id. Returns the decoded JSON
 // so the caller can encrypt + persist it.
 export async function exchangeOAuthCode({ code, redirectUri }) {
-  const res = await fetch(`${squareApiBase()}/oauth2/token`, {
+  const res = await fetchWithTimeout(`${squareApiBase()}/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Square-Version': '2024-10-17' },
     body: JSON.stringify({
@@ -90,7 +91,7 @@ export async function exchangeOAuthCode({ code, redirectUri }) {
       grant_type: 'authorization_code',
       redirect_uri: redirectUri,
     }),
-  });
+  }, 15000); // OAuth token exchanges get a longer leash than API calls
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`Square OAuth exchange failed (${res.status}): ${text.slice(0, 240)}`);
@@ -101,7 +102,7 @@ export async function exchangeOAuthCode({ code, redirectUri }) {
 // Fetch the merchant's first location - checkouts need a location_id.
 // Owners can change it later from settings if they have multiple.
 export async function fetchFirstLocation({ accessToken }) {
-  const res = await fetch(`${squareApiBase()}/v2/locations`, {
+  const res = await fetchWithTimeout(`${squareApiBase()}/v2/locations`, {
     headers: {
       'Authorization': `Bearer ${accessToken}`,
       'Square-Version': '2024-10-17',
@@ -184,7 +185,7 @@ export async function createCheckoutSession({
     .map(([k, v]) => `${k}=${String(v).slice(0, 16)}`).join(' ');
   if (noteBits) body.quick_pay.name = `${body.quick_pay.name} | ${noteBits}`.slice(0, 255);
 
-  const res = await fetch(`${squareApiBase(env)}/v2/online-checkout/payment-links`, {
+  const res = await fetchWithTimeout(`${squareApiBase(env)}/v2/online-checkout/payment-links`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${creds.access_token}`,
@@ -250,7 +251,7 @@ export async function createRefund({
     };
   }
 
-  const res = await fetch(`${squareApiBase(env)}/v2/refunds`, {
+  const res = await fetchWithTimeout(`${squareApiBase(env)}/v2/refunds`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${creds.access_token}`,

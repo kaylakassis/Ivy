@@ -613,9 +613,14 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
   const days = Number(cfg.daysInactive ?? cfg.daysAfter ?? 30);
 
   if (wf.trigger_type === 'client_inactive') {
-    // Active clients whose most-recent non-cancelled booking is older
-    // than N days. Excludes leads (they never had a "last booking" to
-    // be inactive from). One row per matching client.
+    // Active clients whose most-recent non-cancelled booking is EXACTLY
+    // N days old. Equality (not <=) means each inactivity episode fires
+    // once, the day the threshold is crossed - the old unbounded match
+    // combined with the per-UTC-day dedupe re-sent the same win-back to
+    // every still-inactive client every single day. Mirrors the
+    // booking_completed matcher's exact-day semantics. If the client
+    // books again and later goes quiet, MAX(b.date) moves and a fresh
+    // episode fires at the new threshold day.
     const { rows: clients } = await sql`
       SELECT c.*, MAX(b.date) AS last_booking
         FROM clients c
@@ -625,7 +630,7 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
          AND c.stage = 'active'
        GROUP BY c.id
        HAVING MAX(b.date) IS NOT NULL
-          AND MAX(b.date) <= CURRENT_DATE - (${days}::int || ' days')::interval
+          AND MAX(b.date) = (CURRENT_DATE - (${days}::int || ' days')::interval)::date
        LIMIT ${Math.max(1, Math.min(100, remaining))}
     `;
     return runWithConcurrency(clients, 10, async (c) => {

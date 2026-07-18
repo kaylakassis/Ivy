@@ -12,8 +12,7 @@ import {
   invalidateCalendarSettings,
 } from '../_lib/calendar.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
-import { isValidTimeZone } from '../_lib/tz.js';
-import { validateAvailability } from '../_lib/settingsValidation.js';
+import { validateAvailability, validateTimezone } from '../_lib/settingsValidation.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 
@@ -167,8 +166,14 @@ export default async function handler(req, res) {
         // IANA name (e.g. "America/New_York"). Drives every "today"/slot/.ics
         // computation; a bad value would silently mis-date bookings, so reject
         // it rather than store garbage. null clears it (callers fall back to UTC).
+        // validateTimezone checks Intl AND pg_timezone_names - crons inline
+        // this value into AT TIME ZONE, where a PG-unknown name throws for
+        // the whole batch query.
         const tz = body.timezone == null || body.timezone === '' ? null : String(body.timezone).trim();
-        if (tz && !isValidTimeZone(tz)) return badRequest(res, 'Invalid timezone');
+        if (tz) {
+          const v = await validateTimezone(tz);
+          if (v.error) return badRequest(res, 'Invalid timezone');
+        }
         push('timezone', tz);
       }
       if ('addressLabel' in body) {

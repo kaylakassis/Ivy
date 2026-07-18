@@ -19,6 +19,7 @@ import crypto from 'node:crypto';
 import { sql } from '../db.js';
 import { fetchFinanceSettings } from '../finance.js';
 import { appUrl } from '../tokens.js';
+import { fetchWithTimeout } from '../fetchTimeout.js';
 
 export function getProviderName() { return 'paypal'; }
 
@@ -46,14 +47,14 @@ async function platformAccessToken(env = paypalEnv()) {
   const secret = process.env.PAYPAL_CLIENT_SECRET;
   if (!id || !secret) throw new Error('PayPal platform credentials are not configured');
   const auth = Buffer.from(`${id}:${secret}`).toString('base64');
-  const res = await fetch(`${paypalApiBase(env)}/v1/oauth2/token`, {
+  const res = await fetchWithTimeout(`${paypalApiBase(env)}/v1/oauth2/token`, {
     method: 'POST',
     headers: {
       'Authorization': `Basic ${auth}`,
       'Content-Type': 'application/x-www-form-urlencoded',
     },
     body: 'grant_type=client_credentials',
-  });
+  }, 15000); // OAuth token exchanges get a longer leash than API calls
   if (!res.ok) {
     const text = await res.text().catch(() => '');
     throw new Error(`PayPal token mint failed (${res.status}): ${text.slice(0, 240)}`);
@@ -107,7 +108,7 @@ export async function buildOnboardingUrl({ workspaceId, returnUrl, trackingId })
       return_url_description: 'Return to Ivy',
     },
   };
-  const res = await fetch(`${paypalApiBase(env)}/v2/customer/partner-referrals`, {
+  const res = await fetchWithTimeout(`${paypalApiBase(env)}/v2/customer/partner-referrals`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -130,7 +131,7 @@ export async function buildOnboardingUrl({ workspaceId, returnUrl, trackingId })
 export async function fetchSellerStatus({ merchantId }) {
   const token = await platformAccessToken();
   const partnerId = process.env.PAYPAL_PARTNER_ID;
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${paypalApiBase()}/v1/customer/partners/${partnerId}/merchant-integrations/${merchantId}`,
     { headers: { 'Authorization': `Bearer ${token}` } },
   );
@@ -198,7 +199,7 @@ export async function createCheckoutSession({
     },
     payer: customerEmail ? { email_address: customerEmail } : undefined,
   };
-  const res = await fetch(`${paypalApiBase(env)}/v2/checkout/orders`, {
+  const res = await fetchWithTimeout(`${paypalApiBase(env)}/v2/checkout/orders`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -233,7 +234,7 @@ export async function captureOrder({ orderId, workspaceId, settings }) {
   if (!fs?.paypalMerchantId) throw new Error('PayPal is not connected for this workspace');
   const env = fs.paypalEnvironment || paypalEnv();
   const token = await platformAccessToken(env);
-  const res = await fetch(`${paypalApiBase(env)}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
+  const res = await fetchWithTimeout(`${paypalApiBase(env)}/v2/checkout/orders/${encodeURIComponent(orderId)}/capture`, {
     method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
@@ -296,7 +297,7 @@ export async function createRefund({
   })).toString('base64url');
   const authAssertion = `${assertHeader}.${assertPayload}.`;
 
-  const res = await fetch(
+  const res = await fetchWithTimeout(
     `${paypalApiBase(env)}/v2/payments/captures/${encodeURIComponent(paymentIntent)}/refund`,
     {
       method: 'POST',
@@ -341,7 +342,7 @@ export async function verifyWebhook({ rawBody, headers }) {
     webhook_id: webhookId,
     webhook_event: JSON.parse(typeof rawBody === 'string' ? rawBody : rawBody.toString('utf8')),
   };
-  const res = await fetch(`${paypalApiBase()}/v1/notifications/verify-webhook-signature`, {
+  const res = await fetchWithTimeout(`${paypalApiBase()}/v1/notifications/verify-webhook-signature`, {
     method: 'POST',
     headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(verifyBody),

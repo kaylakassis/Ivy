@@ -15,6 +15,7 @@ import { readRawBody } from '../../_lib/body.js';
 import { verifyTwilioSignature } from '../../_lib/twilio.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
+import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -31,6 +32,10 @@ function twiml(res, body = '') {
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') { res.statusCode = 405; return res.end('Method Not Allowed'); }
+  // Tracked across the try so the catch can release the dedup claim and let
+  // Twilio's retry re-process the message instead of getting silently
+  // deduped on a transient error. Same pattern as api/webhooks/billing.js.
+  let claimedSid = null;
   try {
     const raw = await readRawBody(req);
     const params = Object.fromEntries(new URLSearchParams(raw));
@@ -46,6 +51,16 @@ export default async function handler(req, res) {
       res.statusCode = 403;
       return res.end('Invalid signature');
     }
+
+    // Idempotency. Twilio redelivers on any non-2xx response or timeout;
+    // without this a redelivered inbound SMS would double-insert into the
+    // client's thread (and re-flip consent). Claim by MessageSid BEFORE
+    // acting, mirroring the other provider webhooks.
+    const messageSid = params.MessageSid || params.SmsSid || null;
+    if (messageSid && !(await markProcessed('twilio', messageSid))) {
+      return twiml(res); // already handled - ack so Twilio stops retrying
+    }
+    claimedSid = messageSid;
 
     const from = params.From || '';
     const text = (params.Body || '').toString().slice(0, 4000);
@@ -117,6 +132,12 @@ export default async function handler(req, res) {
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[twilio/sms] inbound failed:', err.message);
-    return twiml(res); // never 500 to Twilio - avoids retry storms
+    // Processing threw after we claimed the MessageSid - release the claim
+    // so Twilio's retry re-runs the handler rather than getting deduped.
+    if (claimedSid) await releaseProcessed('twilio', claimedSid);
+    // 500 (plain, not TwiML) so the failure is visible in Twilio's debugger
+    // and the message is retried instead of silently dropped with a 200.
+    res.statusCode = 500;
+    return res.end('Internal error');
   }
 }

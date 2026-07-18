@@ -197,7 +197,7 @@ function Timer({ running, defaultRate, onStart, onStop }) {
 
   useEffect(() => {
     api.get('/clients').then((r) => setClients(r.clients || [])).catch(() => {});
-    api.get('/calendar/services').then((r) => setServices(r.services || [])).catch(() => {});
+    api.get('/calendar').then((r) => setServices(r.calendar?.services || [])).catch(() => {});
   }, []);
 
   // Pre-fill controls from the running entry so the user sees what's
@@ -382,7 +382,7 @@ function EntryEditor({ entry, defaultRate, onClose, onSave, onDelete }) {
 
   useEffect(() => {
     api.get('/clients').then((r) => setClients(r.clients || [])).catch(() => {});
-    api.get('/calendar/services').then((r) => setServices(r.services || [])).catch(() => {});
+    api.get('/calendar').then((r) => setServices(r.calendar?.services || [])).catch(() => {});
   }, []);
 
   const submit = async () => {

@@ -147,7 +147,9 @@ export async function createDraftInvoice({
   items, taxRate = null, discount = 0, notes = null, dueInDays = 14,
 }) {
   const cleaned = cleanItems(items);
-  if (cleaned.length === 0) throw new Error('At least one line item is required');
+  // cleanItems returns null for structurally invalid input - guard both
+  // shapes or a bad workflow payload TypeErrors on null.length.
+  if (!cleaned || cleaned.length === 0) throw new Error('At least one valid line item is required');
   let tax = taxRate == null ? null : Number(taxRate);
   if (tax == null || !Number.isFinite(tax)) {
     const r = await sql`SELECT default_tax_rate FROM finance_settings WHERE workspace_id = ${workspaceId}`;

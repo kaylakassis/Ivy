@@ -892,6 +892,14 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS service_radius_miles INT
 -- onboarding so booking confirmations + Discover cards display the right
 -- local time. Nullable for legacy rows; consumers fall back to UTC.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS timezone TEXT;
+-- Repair timezones Postgres doesn't recognize. Historically the value was
+-- validated via Intl only, but crons inline it into AT TIME ZONE SQL where
+-- an Intl-valid-but-PG-unknown name throws for the WHOLE batch query - one
+-- bad row breaks the cron for every workspace. Reset those rows to UTC.
+-- Idempotent: 'UTC' is in pg_timezone_names, so repaired rows never re-match.
+UPDATE calendar_settings SET timezone = 'UTC'
+  WHERE timezone IS NOT NULL
+    AND timezone NOT IN (SELECT name FROM pg_timezone_names);
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_latlng
   ON calendar_settings(lat, lng) WHERE lat IS NOT NULL AND lng IS NOT NULL;
 -- Service-name search: pg_trgm makes ILIKE '%foo%' index-backed at scale.
@@ -3000,14 +3008,19 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_client_packages_stripe_session
 -- (pg_trgm is already enabled higher up; a second CREATE EXTENSION here
 -- would be a byte-identical statement, which collides in the migration
 -- ledger's batched ON CONFLICT upsert — so it's intentionally omitted.)
+--
+-- The first four are LOWER() variants of raw-column trgm indexes created
+-- earlier in this file — they need their own *_lower_trgm names, because
+-- reusing the raw-column index names meant IF NOT EXISTS silently no-oped
+-- and the LOWER() indexes /api/search actually matches on never existed.
 
-CREATE INDEX IF NOT EXISTS idx_clients_name_trgm
+CREATE INDEX IF NOT EXISTS idx_clients_name_lower_trgm
   ON clients USING gin (LOWER(name) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_clients_email_trgm
+CREATE INDEX IF NOT EXISTS idx_clients_email_lower_trgm
   ON clients USING gin (LOWER(email) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_services_name_trgm
+CREATE INDEX IF NOT EXISTS idx_services_name_lower_trgm
   ON services USING gin (LOWER(name) gin_trgm_ops);
-CREATE INDEX IF NOT EXISTS idx_invoices_number_trgm
+CREATE INDEX IF NOT EXISTS idx_invoices_number_lower_trgm
   ON invoices USING gin (LOWER(number) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_invoices_client_name_trgm
   ON invoices USING gin (LOWER(client_name) gin_trgm_ops);

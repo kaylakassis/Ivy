@@ -82,14 +82,24 @@ export default async function handler(req, res) {
       // is already baked into `totals.total`, so sending that would tax the
       // buyer twice. Send the tax-exclusive base and let Stripe be the only
       // tax layer. (No-op when stripe tax is off, or tax_rate is already 0.)
-      const amountCents = (name === 'stripe' && settings?.stripeTaxEnabled)
+      let amountCents = (name === 'stripe' && settings?.stripeTaxEnabled)
         ? Math.round((totals.total - totals.tax) * 100)
         : totalCents;
+      // Partial payments already recorded reduce what this link collects -
+      // charging the full recomputed total again over-collected.
+      const alreadyPaidCents = Math.round(Number(inv.paid_amount || 0) * 100);
+      if (alreadyPaidCents > 0) {
+        amountCents = Math.max(0, amountCents - alreadyPaidCents);
+        if (amountCents === 0) return badRequest(res, 'Nothing left to pay on this invoice.');
+      }
       session = await adapter.createCheckoutSession({
         workspaceId: inv.workspace_id,
         settings,
         amountCents,
-        currency: (settings?.currency || 'USD').toUpperCase(),
+        // The invoice's own currency wins - it is validated at creation.
+        // Falling back to the workspace default charged an EUR invoice's
+        // numeric total in USD.
+        currency: (inv.currency || settings?.currency || 'USD').toUpperCase(),
         description: `Invoice ${inv.number}`,
         metadata: { invoice_id: inv.id, invoice_number: inv.number, workspace_id: inv.workspace_id },
         successUrl,

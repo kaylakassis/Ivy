@@ -71,20 +71,25 @@ export default async function handler(req, res) {
       `;
 
       const snap = found.rows[0].snapshot;
+      // Same JSONB gotcha as the PUT in index.js: JSON.stringify(null) is
+      // the string 'null' → jsonb null (NOT SQL NULL) → COALESCE selects it
+      // and wipes the column when the snapshot lacks a field. `jp` maps
+      // absent/null to SQL NULL so COALESCE genuinely keeps the current value.
+      const jp = (v) => (v === undefined || v === null ? null : JSON.stringify(v));
       await sql`
         UPDATE websites SET
           template          = COALESCE(${snap.template ?? null}, template),
-          sections          = COALESCE(${JSON.stringify(snap.sections ?? null)}::jsonb, sections),
-          pages             = COALESCE(${JSON.stringify(snap.pages ?? null)}::jsonb, pages),
+          sections          = COALESCE(${jp(snap.sections)}::jsonb, sections),
+          pages             = COALESCE(${jp(snap.pages)}::jsonb, pages),
           custom_css        = COALESCE(${snap.custom_css ?? null}, custom_css),
           font_pair         = COALESCE(${snap.font_pair ?? null}, font_pair),
           seo_title         = COALESCE(${snap.seo_title ?? null}, seo_title),
           seo_description   = COALESCE(${snap.seo_description ?? null}, seo_description),
           seo_og_image      = COALESCE(${snap.seo_og_image ?? null}, seo_og_image),
           favicon_url       = COALESCE(${snap.favicon_url ?? null}, favicon_url),
-          redirects         = COALESCE(${JSON.stringify(snap.redirects ?? null)}::jsonb, redirects),
-          exit_intent_popup = COALESCE(${JSON.stringify(snap.exit_intent_popup ?? null)}::jsonb, exit_intent_popup),
-          sticky_cta        = COALESCE(${JSON.stringify(snap.sticky_cta ?? null)}::jsonb, sticky_cta),
+          redirects         = COALESCE(${jp(snap.redirects)}::jsonb, redirects),
+          exit_intent_popup = COALESCE(${jp(snap.exit_intent_popup)}::jsonb, exit_intent_popup),
+          sticky_cta        = COALESCE(${jp(snap.sticky_cta)}::jsonb, sticky_cta),
           updated_at        = NOW()
         WHERE id = ${siteId}
       `;

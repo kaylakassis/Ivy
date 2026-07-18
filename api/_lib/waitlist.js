@@ -159,7 +159,11 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
   `;
   const bizName = rows[0]?.biz_name || 'Your business';
   const serviceName = rows[0]?.service_name || 'Session';
-  const dateLabel = new Date(entry.date + 'T00:00:00Z').toLocaleDateString('en-US', {
+  // entry comes straight from a SELECT, so entry.date is a pg Date object,
+  // not a string - normalize the same way promoteWaitlistOnCancel does.
+  // (Date + 'T00:00:00Z' stringifies the Date and yields 'Invalid Date'.)
+  const dateStr = entry.date instanceof Date ? entry.date.toISOString().slice(0, 10) : entry.date;
+  const dateLabel = new Date(dateStr + 'T00:00:00Z').toLocaleDateString('en-US', {
     weekday: 'long', month: 'long', day: 'numeric', timeZone: 'UTC',
   });
   const timeLabel = fmtTime(entry.start_min);

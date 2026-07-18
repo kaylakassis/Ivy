@@ -101,10 +101,13 @@ async function run() {
     assert(await briefingStamp(w.ws) === null, 'no morning stamp at the wrong hour');
     assert(await feedRow(w.uid, 'daily-briefing') === null, 'no briefing notification at the wrong hour');
 
-    console.log('\n[4] morning skipped when the briefing is empty');
+    console.log('\n[4] morning skipped when the briefing is empty (but still stamped)');
     const e = track(await mkOwner(`${tag}-e`, { tz: zoneForLocalHour(8) })); // 8am but no invoices/bookings/clients
     await dailyReturn(cronReq(), mkRes());
-    assert(await briefingStamp(e.ws) === null, 'empty briefing → not stamped');
+    // Stamped even though nothing is sent - an unstamped skip would keep the
+    // row in the candidate set and busy-loop the batch scan (starving
+    // workspaces past the 250-row batch).
+    assert(await briefingStamp(e.ws) !== null, 'empty briefing → stamped so the scan advances');
     assert(await feedRow(e.uid, 'daily-briefing') === null, 'empty briefing → no notification');
 
     console.log('\n[5] evening streak-at-risk fires for a savable streak');

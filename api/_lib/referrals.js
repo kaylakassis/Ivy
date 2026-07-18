@@ -33,8 +33,9 @@ export function normalizeCode(raw) {
 
 // Reserved-ish words that would collide with admin affiliate codes or
 // look like system values. Cheap denylist; uniqueness index does the
-// real enforcement.
-const BLOCKED = new Set(['Ivy', 'ADMIN', 'SUPPORT', 'NULL', 'NONE', 'TEST']);
+// real enforcement. Entries MUST be all-uppercase - normalizeCode
+// uppercases before the check, so a mixed-case entry can never match.
+const BLOCKED = new Set(['IVY', 'ADMIN', 'SUPPORT', 'NULL', 'NONE', 'TEST']);
 
 // Read the owner's current referral code (or null).
 export async function getCode(userId) {

@@ -190,7 +190,11 @@ export default function OnboardingPage() {
         setCurrentStep('welcome');
       }
       if (stateRes?.businessType) setBusinessType(stateRes.businessType);
-      const s = calRes?.cal?.settings || {};
+      // GET /api/calendar returns { calendar: { settings, services, ... } }.
+      // This used to read a nonexistent `cal` key, so resume/replay never
+      // pre-filled - and the empty services list could wipe live services
+      // via the replace-all PUT on the services step.
+      const s = calRes?.calendar?.settings || {};
       if (s.bizName && s.bizName !== 'My business') setBizName(s.bizName);
       if (s.slug)     { setSlug(s.slug); setSlugTouched(true); }
       if (s.tagline)  setTagline(s.tagline);
@@ -198,8 +202,8 @@ export default function OnboardingPage() {
       if (s.brandLogoUrl || s.brandAccentColor) {
         setBranding({ logoUrl: s.brandLogoUrl || '', accent: s.brandAccentColor || '' });
       }
-      if (Array.isArray(calRes?.cal?.services) && calRes.cal.services.length > 0) {
-        setServices(calRes.cal.services);
+      if (Array.isArray(calRes?.calendar?.services) && calRes.calendar.services.length > 0) {
+        setServices(calRes.calendar.services);
       }
       if (s.availability && Object.keys(s.availability).length > 0) {
         setAvailability(s.availability);
@@ -478,7 +482,13 @@ export default function OnboardingPage() {
   const saveServices = async () => {
     setBusy(true); setErr(null);
     try {
-      await api.put('/calendar/services', { services });
+      // PUT /calendar/services is replace-all ("anything not in the list
+      // is deleted"). Never send an empty list from the wizard - a replay
+      // or a failed pre-load would otherwise wipe the owner's live
+      // services. With nothing to save, just advance.
+      if (Array.isArray(services) && services.length > 0) {
+        await api.put('/calendar/services', { services });
+      }
       await goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
@@ -1384,7 +1394,7 @@ function WebsiteStep({ websiteStatus, websiteTemplate, setWebsiteTemplate }) {
 
       <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
         Skip if you already have a site — you can embed an Ivy booking widget onto it instead.
-        Want to fine-tune sections, pages, colors right now? <a href="/website" style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Open the full builder</a> (you can come back to finish onboarding any time).
+        Want to fine-tune sections, pages, colors right now? <a href="/website" onClick={() => { try { localStorage.setItem('ivy_skip_onboarding_until', String(Date.now() + 24 * 3600_000)); } catch { /* private mode */ } }} style={{ color: 'var(--accent)', textDecoration: 'underline' }}>Open the full builder</a> (you can come back to finish onboarding any time).
       </div>
     </>
   );

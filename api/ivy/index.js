@@ -62,7 +62,10 @@ export default async function handler(req, res) {
       // before the user has sent their first message. Doesn't actually
       // call Anthropic - that happens on POST.
       const hasKey = !!process.env.ANTHROPIC_API_KEY;
-      const usage = await safe(getDailyUsage(workspaceId), { used: 0, limit: 0 });
+      // Fallback must match getDailyUsage's real shape - the usage meter
+      // reads usage.outputTokens.toLocaleString() and would TypeError on
+      // the old { used, limit } placeholder.
+      const usage = await safe(getDailyUsage(workspaceId), { requests: 0, outputTokens: 0, requestCap: 0, outputTokenCap: 0 });
       return ok(res, {
         sessions: sessions.rows.map((r) => serializeSession(r)),
         context,

@@ -27,6 +27,7 @@ import { notifyOwnerSafe } from '../_lib/push.js';
 import { notifyInvoicePaid } from '../_lib/invoiceNotify.js';
 import { markInvoicePaid } from '../_lib/invoicePayments.js';
 import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
+import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export const config = { api: { bodyParser: false } };
@@ -171,7 +172,7 @@ export default async function handler(req, res) {
             'Stripe-Account': acctId,
             Accept: 'application/json',
           };
-          const siResp = await fetch(
+          const siResp = await fetchWithTimeout(
             `https://api.stripe.com/v1/setup_intents/${encodeURIComponent(setupIntentId)}`,
             { headers: siHeaders },
           );

@@ -164,16 +164,17 @@ export default async function handler(req, res) {
       console.error('[clients/metrics] memberships query failed (continuing):', e.message);
     }
 
-    // Unpaid invoices with due dates. Status='sent' is the only state
-    // that's "owed but not paid"; 'overdue' is a UI label not a status
-    // we store. 'draft' / 'voided' / 'paid' / 'refunded' all excluded.
+    // Unpaid invoices with due dates. 'sent' and 'overdue' are both
+    // "owed but not paid" (the invoice-overdue cron flips sent→overdue
+    // once the due date passes). 'draft'/'voided'/'paid'/'refunded'
+    // excluded.
     let invoices = [];
     try {
       const r = await sql.query(
         `SELECT id, client_id, due_date
          FROM invoices
          WHERE workspace_id = $1 AND client_id = ANY($2::uuid[])
-           AND status = 'sent' AND due_date IS NOT NULL`,
+           AND status IN ('sent', 'overdue') AND due_date IS NOT NULL`,
         [workspaceId, clientIds],
       );
       invoices = r.rows;

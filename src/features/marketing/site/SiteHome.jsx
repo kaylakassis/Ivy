@@ -482,8 +482,8 @@ export default function SiteHome() {
       <section className="alt">
         <div className="container center">
           <span className="eyebrow">One price. Every tool you'd otherwise piece together.</span>
-          <h2>You're probably spending $150/month or more on stitched-together tools.</h2>
-          <p className="section-sub">On average, solo businesses spend $150/month - or even more - running tools like these in parallel. Ivy does each of them, then makes them talk to each other, so booking → invoice → message → follow-up is one fluid motion.</p>
+          <h2>You're probably spending $138/month or more on stitched-together tools.</h2>
+          <p className="section-sub">On average, solo businesses spend $138/month - or even more - running tools like these in parallel. Ivy does each of them, then makes them talk to each other, so booking → invoice → message → follow-up is one fluid motion.</p>
           <div className="replace-grid">
             <div className="replace-card"><div className="tool">HoneyBook</div><div className="price">$39/mo</div><div className="with">clients + invoices + contracts</div></div>
             <div className="replace-card"><div className="tool">Calendly</div><div className="price">$12/mo</div><div className="with">booking pages + reminders</div></div>
@@ -492,10 +492,9 @@ export default function SiteHome() {
             <div className="replace-card"><div className="tool">Mailchimp</div><div className="price">$13/mo</div><div className="with">newsletter + email blasts</div></div>
             <div className="replace-card"><div className="tool">Squarespace</div><div className="price">$23/mo</div><div className="with">website + custom domain</div></div>
             <div className="replace-card"><div className="tool">DocuSign</div><div className="price">$15/mo</div><div className="with">legally-binding e-signatures</div></div>
-            <div className="replace-card"><div className="tool">Loom</div><div className="price">$15/mo</div><div className="with">product walkthroughs</div></div>
           </div>
           <div className="replace-total">
-            <span className="old">$150+/mo on average</span>
+            <span className="old">$138+/mo on average</span>
             <span className="new">$8.99<small>/week · no transaction fees</small></span>
           </div>
           <p style={{ marginTop: '20px', fontSize: '14px' }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>See how Ivy compares to HoneyBook, Calendly, and the DIY stack →</a></p>

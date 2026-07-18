@@ -49,7 +49,11 @@ export default async function handler(req, res) {
         const newTotal = n > 0 ? cur.credits_total + n : cur.credits_total;
         push('credits_remaining', newRemaining);
         push('credits_total', newTotal);
-        if (newRemaining > 0 && (cur.status === 'exhausted' || cur.status === 'cancelled')) push('status', 'active');
+        // Auto-reactivate on top-up, but ONLY when the body doesn't set
+        // status explicitly - otherwise the UPDATE would carry two
+        // `status =` assignments (a Postgres error). Explicit status wins.
+        if (newRemaining > 0 && (cur.status === 'exhausted' || cur.status === 'cancelled')
+            && !('status' in body)) push('status', 'active');
       }
       if ('extendDays' in body) {
         const n = Number(body.extendDays);

@@ -7,6 +7,7 @@
 // tool-error shape.
 import { DISCOVER_CATEGORY_SET } from './calendar.js';
 import { isValidTimeZone } from './tz.js';
+import { sql } from './db.js';
 
 // Weekly-availability presets in the canonical API shape (weekday index string
 // 0=Sun … 6=Sat → array of {start,end} minutes-from-midnight). Ported from the
@@ -102,6 +103,25 @@ export function validateBookingRules(fields) {
   return { patch };
 }
 
+// Full timezone validation: the Intl check first (cheap), then Postgres.
+// Several crons inline the stored timezone into `AT TIME ZONE` SQL, and a
+// name Intl accepts but pg_timezone_names doesn't know (the two databases
+// drift across ICU/Postgres versions) throws for the WHOLE cron query — one
+// bad row breaks every workspace in the batch. So reject anything Postgres
+// doesn't recognize at write time. Returns { value } (the tz) or { error }.
+// Async (DB round-trip) — callers must await; validateBusinessBasics below
+// stays sync (Intl-only) for callers that can't.
+export async function validateTimezone(tz) {
+  if (!isValidTimeZone(tz)) {
+    return { error: `"${tz}" is not a valid IANA timezone (e.g. America/New_York)` };
+  }
+  const { rows } = await sql`SELECT 1 FROM pg_timezone_names WHERE name = ${tz}`;
+  if (rows.length === 0) {
+    return { error: `"${tz}" is not a recognized timezone name (e.g. America/New_York)` };
+  }
+  return { value: tz };
+}
+
 // Business-identity fields (NOT slug — that needs a DB uniqueness check the
 // caller performs). Only present keys are returned. { patch } or { error }.
 export function validateBusinessBasics(fields) {
@@ -118,6 +138,9 @@ export function validateBusinessBasics(fields) {
   }
   if ('timezone' in f) {
     const tz = f.timezone == null || f.timezone === '' ? null : String(f.timezone).trim();
+    // Intl-only here (this validator is sync); the async validateTimezone
+    // above additionally checks pg_timezone_names — the schema backfill
+    // resets any PG-unknown name to UTC so crons can't break either way.
     if (tz && !isValidTimeZone(tz)) return { error: `"${tz}" is not a valid IANA timezone (e.g. America/New_York)` };
     patch.timezone = tz;
   }

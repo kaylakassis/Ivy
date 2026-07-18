@@ -86,10 +86,10 @@ export default async function handler(req, res) {
     const upd = await sql`
       UPDATE bookings SET
         no_show_at         = NOW(),
-        fee_charged_amount = ${paymentIntentId ? feeAmount : 0},
-        fee_charged_at     = ${paymentIntentId ? new Date().toISOString() : null},
-        fee_charged_kind   = ${paymentIntentId ? 'no_show' : null},
-        fee_payment_intent = ${paymentIntentId},
+        fee_charged_amount = CASE WHEN ${!!paymentIntentId} THEN ${feeAmount} ELSE fee_charged_amount END,
+        fee_charged_at     = CASE WHEN ${!!paymentIntentId} THEN NOW() ELSE fee_charged_at END,
+        fee_charged_kind   = CASE WHEN ${!!paymentIntentId} THEN 'no_show' ELSE fee_charged_kind END,
+        fee_payment_intent = CASE WHEN ${!!paymentIntentId} THEN ${paymentIntentId} ELSE fee_payment_intent END,
         updated_at         = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
       RETURNING *

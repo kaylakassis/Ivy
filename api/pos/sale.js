@@ -50,6 +50,15 @@ export default async function handler(req, res) {
       const rawItems = Array.isArray(body.items) ? body.items : [];
       if (!rawItems.length) return { status: 400, body: { error: 'Add at least one item to the sale' } };
 
+      // Client linkage must stay inside the workspace - body.clientId is
+      // caller-supplied, and inserting it unchecked would let a sale attach
+      // to (and email receipts about) another tenant's client row. Mirrors
+      // the ownership check in api/invoices/index.js.
+      if (body.clientId) {
+        const cl = await sql`SELECT id FROM clients WHERE id = ${body.clientId} AND workspace_id = ${workspaceId}`;
+        if (cl.rows.length === 0) return { status: 400, body: { error: 'Unknown client' } };
+      }
+
       // Resolve referenced products (price + name come from the server, never
       // the client).
       const productIds = [...new Set(rawItems.map((i) => i.productId).filter(Boolean))];

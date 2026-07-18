@@ -230,7 +230,7 @@ async function buildStats({ workspaceId, from, to }) {
       SELECT COUNT(*)::int AS n, COALESCE(SUM(total), 0)::numeric AS total
         FROM invoices
        WHERE workspace_id = ${workspaceId}
-         AND status = 'sent'
+         AND status IN ('sent', 'overdue')
          AND due_date IS NOT NULL
          AND due_date < CURRENT_DATE
     `, { rows: [{ n: 0, total: 0 }] }),

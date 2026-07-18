@@ -1,6 +1,7 @@
 // Postgres-backed sliding-window rate limiter.
 // Counts recent attempts for a key; if under the limit, records a new attempt.
 // Cheap to operate at our scale (single SELECT count + single INSERT per request).
+import { createHash, timingSafeEqual } from 'node:crypto';
 import { sql } from './db.js';
 
 export async function rateLimit({ key, max, windowSeconds }) {
@@ -101,10 +102,23 @@ export async function enforce(req, res, limits) {
 async function isAdminBypass(req) {
   try {
     const secret = process.env.ADMIN_SECRET;
-    if (secret && req?.headers?.['x-admin-secret'] === secret) return true;
+    const provided = req?.headers?.['x-admin-secret'];
+    if (secret && typeof provided === 'string' && secretsMatch(provided, secret)) return true;
     const { isSuperAdminBySession } = await import('./admin.js');
     return await isSuperAdminBySession(req);
   } catch {
     return false;
   }
+}
+
+// Constant-time secret compare, same as admin.js's secretsMatch (copied
+// rather than imported to preserve the lazy-import decoupling above). Hash
+// both sides to a fixed 32 bytes first so timingSafeEqual gets equal-length
+// buffers and the comparison never leaks length or content via early-exit
+// timing - a plain === here let an attacker recover ADMIN_SECRET byte-by-
+// byte against the very endpoint the limiter protects.
+function secretsMatch(provided, expected) {
+  const a = createHash('sha256').update(provided).digest();
+  const b = createHash('sha256').update(expected).digest();
+  return timingSafeEqual(a, b);
 }

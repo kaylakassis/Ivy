@@ -43,6 +43,27 @@ async function handler(req, res) {
       await sql`ALTER TABLE invoices ADD COLUMN IF NOT EXISTS last_overdue_reminder_at TIMESTAMPTZ`;
     } catch {}
 
+    // Flip 'sent' → 'overdue' once the due date passes (and back, when an
+    // owner extends a due date). This status was previously never WRITTEN
+    // anywhere, leaving the Finance overdue KPI, the Overdue filter, and
+    // Ivy's overdue-invoice queries permanently empty. Idempotent; runs
+    // before the reminder loop so reminders and status agree.
+    await sql`
+      UPDATE invoices i SET status = 'overdue', updated_at = NOW()
+       WHERE i.status = 'sent'
+         AND i.due_date IS NOT NULL
+         AND i.due_date < (NOW() AT TIME ZONE COALESCE(
+               (SELECT cs.timezone FROM calendar_settings cs WHERE cs.workspace_id = i.workspace_id),
+               'UTC'))::date
+    `;
+    await sql`
+      UPDATE invoices i SET status = 'sent', updated_at = NOW()
+       WHERE i.status = 'overdue'
+         AND (i.due_date IS NULL OR i.due_date >= (NOW() AT TIME ZONE COALESCE(
+               (SELECT cs.timezone FROM calendar_settings cs WHERE cs.workspace_id = i.workspace_id),
+               'UTC'))::date)
+    `;
+
     const { shard, shards } = shardFromReq(req);
     const shardFilter = shardClause({ shard, shards }, 'i.workspace_id');
 
@@ -59,7 +80,7 @@ async function handler(req, res) {
              EXTRACT(DAY FROM NOW() - i.due_date::timestamp)::int AS days_overdue
            FROM invoices i
            LEFT JOIN calendar_settings cs ON cs.workspace_id = i.workspace_id
-           WHERE i.status = 'sent'
+           WHERE i.status IN ('sent', 'overdue')
              AND i.due_date IS NOT NULL
              AND i.due_date < (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date
              AND i.client_email IS NOT NULL

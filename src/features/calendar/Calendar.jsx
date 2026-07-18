@@ -565,7 +565,17 @@ export default function Calendar() {
 // ----- Week grid (extracted so the toolbar can switch between views) -----
 function WeekGrid({ anchor, cal, onPickBlock, onOpenEvent }) {
   const weekDays = Array.from({ length: 7 }, (_, i) => addDays(anchor, i));
-  const hours    = Array.from({ length: 11 }, (_, i) => i + 8); // 8am–6pm
+  // Default 8am-7pm, EXPANDED to include any booking/block outside that
+  // window - a 7am or 8pm appointment used to be absolutely-positioned
+  // off the grid and clipped invisible by the card's overflow:hidden.
+  const weekISO = new Set(weekDays.map((d) => fmtDateISO(d)));
+  let startH = 8, endH = 19;
+  for (const ev of [...(cal.bookings || []), ...(cal.blocks || [])]) {
+    if (!weekISO.has(ev.date) || ev.allDay) continue;
+    if (Number.isFinite(ev.startMin)) startH = Math.min(startH, Math.max(0, Math.floor(ev.startMin / 60)));
+    if (Number.isFinite(ev.endMin))   endH   = Math.max(endH, Math.min(24, Math.ceil(ev.endMin / 60)));
+  }
+  const hours    = Array.from({ length: endH - startH }, (_, i) => i + startH);
   const rowH     = 52;
   const todayISO = fmtDateISO(new Date());
 

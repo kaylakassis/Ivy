@@ -28,10 +28,13 @@ import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyPaymentFailed } from '../_lib/subscriptionNotify.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { trackCron } from '../_lib/cronMetrics.js';
+import { withDeadline } from '../_lib/cronShard.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 
 const GRACE_DAYS = 14;
 const DUNNING_EMAIL_EVERY_HOURS = 24;
+const DUNNING_BATCH = 500;
+const BUDGET_MS = 250_000; // under the api/cron/** 300s function cap
 
 async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET
@@ -76,50 +79,69 @@ async function handler(req, res) {
     }
 
     // 2. Dunning emails for workspaces still inside the grace
-    //    window, capped at one per day per workspace.
-    const dueForDunning = await sql`
-      SELECT id, subscription_past_due_since, subscription_failed_attempts
-      FROM workspaces
-      WHERE subscription_status = 'past_due'
-        AND subscription_past_due_since IS NOT NULL
-        AND subscription_suspended_at IS NULL
-        AND (
-          subscription_last_dunning_at IS NULL
-          OR subscription_last_dunning_at <= NOW() - (${DUNNING_EMAIL_EVERY_HOURS} || ' hours')::interval
-        )
-      LIMIT 500
-    `;
-
-    for (const w of dueForDunning.rows) {
-      scanned++;
-      try {
-        // We don't have the original amount/currency on the workspace
-        // row - that lives on the Stripe invoice. The notify helper
-        // already handles a minimal call (no nextAttemptAt is fine,
-        // it just omits that line). Owner gets a reminder; if they
-        // want detail they click into Billing.
-        await notifyPaymentFailed({ workspaceId: w.id });
-        notifyOwnerSafe({
-          workspaceId: w.id, type: 'payments',
-          payload: {
-            title: 'Subscription payment overdue',
-            body: "Stripe couldn't charge your card. Update it to keep your account active.",
-            url: '/account?tab=billing',
-            tag: `subscription-dunning-${w.id}`,
-          },
-        });
-        await sql`
-          UPDATE workspaces SET subscription_last_dunning_at = NOW()
-          WHERE id = ${w.id}
+    //    window, capped at one per day per workspace. Keyset-paginated
+    //    drain loop (mirrors api/cron/ivy-agent.js): the old bare
+    //    `LIMIT 500` with no ORDER BY silently dropped every workspace
+    //    past the cap - the same arbitrary 500 could be re-selected
+    //    each day while the rest never got a dunning email at all.
+    let complete = false;
+    let lastId = '00000000-0000-0000-0000-000000000000';
+    await withDeadline(async (deadline) => {
+      while (Date.now() < deadline) {
+        // eslint-disable-next-line no-await-in-loop
+        const dueForDunning = await sql`
+          SELECT id, subscription_past_due_since, subscription_failed_attempts
+          FROM workspaces
+          WHERE subscription_status = 'past_due'
+            AND subscription_past_due_since IS NOT NULL
+            AND subscription_suspended_at IS NULL
+            AND (
+              subscription_last_dunning_at IS NULL
+              OR subscription_last_dunning_at <= NOW() - (${DUNNING_EMAIL_EVERY_HOURS} || ' hours')::interval
+            )
+            AND id > ${lastId}::uuid
+          ORDER BY id ASC
+          LIMIT ${DUNNING_BATCH}
         `;
-        dunned++;
-      } catch (err) {
-        // eslint-disable-next-line no-console
-        console.error('[subscription-dunning] failed for workspace', w.id, err.message);
-      }
-    }
+        if (dueForDunning.rows.length === 0) { complete = true; break; }
 
-    return ok(res, { suspended, dunned, scanned });
+        for (const w of dueForDunning.rows) {
+          scanned++;
+          try {
+            // We don't have the original amount/currency on the workspace
+            // row - that lives on the Stripe invoice. The notify helper
+            // already handles a minimal call (no nextAttemptAt is fine,
+            // it just omits that line). Owner gets a reminder; if they
+            // want detail they click into Billing.
+            // eslint-disable-next-line no-await-in-loop
+            await notifyPaymentFailed({ workspaceId: w.id });
+            notifyOwnerSafe({
+              workspaceId: w.id, type: 'payments',
+              payload: {
+                title: 'Subscription payment overdue',
+                body: "Stripe couldn't charge your card. Update it to keep your account active.",
+                url: '/account?tab=billing',
+                tag: `subscription-dunning-${w.id}`,
+              },
+            });
+            // eslint-disable-next-line no-await-in-loop
+            await sql`
+              UPDATE workspaces SET subscription_last_dunning_at = NOW()
+              WHERE id = ${w.id}
+            `;
+            dunned++;
+          } catch (err) {
+            // eslint-disable-next-line no-console
+            console.error('[subscription-dunning] failed for workspace', w.id, err.message);
+          }
+          if (Date.now() >= deadline) break;
+        }
+        lastId = dueForDunning.rows[dueForDunning.rows.length - 1].id;
+        if (dueForDunning.rows.length < DUNNING_BATCH) { complete = true; break; }
+      }
+    }, { budgetMs: BUDGET_MS });
+
+    return ok(res, { suspended, dunned, scanned, complete });
   } catch (err) {
     return serverError(res, err);
   }

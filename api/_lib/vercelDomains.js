@@ -12,6 +12,7 @@
 // Token + project id come from Vercel → Account/Team Settings → Tokens and
 // Project → Settings → General. VERCEL_TEAM_ID is only needed when the
 // project lives under a Team.
+import { fetchWithTimeout } from './fetchTimeout.js';
 
 function creds() {
   const token = process.env.VERCEL_TOKEN;
@@ -33,7 +34,7 @@ export async function addProjectDomain(name) {
   const c = creds();
   if (!c) return { configured: false };
   try {
-    const r = await fetch(
+    const r = await fetchWithTimeout(
       `https://api.vercel.com/v10/projects/${encodeURIComponent(c.projectId)}/domains${c.teamQ}`,
       { method: 'POST', headers: authHeaders(c.token), body: JSON.stringify({ name }) },
     );
@@ -51,7 +52,7 @@ export async function removeProjectDomain(name) {
   const c = creds();
   if (!c || !name) return { configured: false };
   try {
-    const r = await fetch(
+    const r = await fetchWithTimeout(
       `https://api.vercel.com/v9/projects/${encodeURIComponent(c.projectId)}/domains/${encodeURIComponent(name)}${c.teamQ}`,
       { method: 'DELETE', headers: authHeaders(c.token) },
     );
@@ -70,7 +71,7 @@ export async function getDomainConfig(name) {
   const c = creds();
   if (!c || !name) return { configured: false, live: null };
   try {
-    const r = await fetch(
+    const r = await fetchWithTimeout(
       `https://api.vercel.com/v6/domains/${encodeURIComponent(name)}/config${c.teamQ}`,
       { headers: authHeaders(c.token) },
     );

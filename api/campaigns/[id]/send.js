@@ -40,8 +40,19 @@ export default async function handler(req, res) {
     // Atomically claim the send: only the request that flips draft→sending
     // proceeds. A racing double-click matches 0 rows here and bails, so the
     // audience is never emailed twice.
+    // Claim draft→sending. A stale 'sending' older than 15 minutes is
+    // reclaimable: a crash or hard function timeout mid-send used to
+    // wedge the campaign in 'sending' forever (retries rejected, PATCH
+    // requires draft, nothing ever reset it). Per-recipient sends are
+    // individually quota/pref-gated, so a re-run can't double-send to
+    // anyone Resend already accepted... but recipients are not tracked
+    // per-address; a reclaim may re-email early recipients. That beats
+    // a permanently-stuck campaign, and the 15-min window means it only
+    // happens after a genuine crash.
     const claim = await sql`UPDATE email_campaigns SET status = 'sending', updated_at = NOW()
-              WHERE id = ${id} AND workspace_id = ${workspaceId} AND status = 'draft'`;
+              WHERE id = ${id} AND workspace_id = ${workspaceId}
+                AND (status = 'draft'
+                     OR (status = 'sending' AND updated_at < NOW() - INTERVAL '15 minutes'))`;
     if (claim.rowCount === 0) {
       return badRequest(res, 'This campaign is already sending or was already sent');
     }
