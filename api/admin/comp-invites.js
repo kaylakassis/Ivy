@@ -119,12 +119,13 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      // Revoke by invite id OR by email (the Users tab only knows the email).
       const id = String(req.query.id || '');
-      if (!id) return badRequest(res, 'id is required');
-      const { rows } = await sql`
-        DELETE FROM comp_invites WHERE id = ${id}
-        RETURNING claimed_workspace_id
-      `;
+      const email = String(req.query.email || '').trim().toLowerCase();
+      if (!id && !email) return badRequest(res, 'id or email is required');
+      const { rows } = id
+        ? await sql`DELETE FROM comp_invites WHERE id = ${id} RETURNING claimed_workspace_id`
+        : await sql`DELETE FROM comp_invites WHERE LOWER(email) = ${email} RETURNING claimed_workspace_id`;
       if (rows.length === 0) return notFound(res, 'Invite not found');
       const wsId = rows[0].claimed_workspace_id;
       if (wsId) {

@@ -100,6 +100,13 @@ async function run() {
     assert(months3 > 80 * 86400e3 && months3 < 100 * 86400e3, '3-month comp window (~90 days)');
     assert(isWorkspaceActive(row2) === true, 'existing workspace unlocked');
 
+    console.log('\n[4b] revoke the EXISTING account by email (Users-tab path)');
+    r = mockRes();
+    await compHandler(req({ method: 'DELETE', cookie: adminCookie, query: { email: e2 } }), r);
+    assert(r.statusCode === 204, `revoke-by-email 204 (got ${r.statusCode})`);
+    row2 = await wsRow(w2.rows[0].id);
+    assert(row2.comp_until === null && isWorkspaceActive(row2) === false, 'existing workspace re-walled after email revoke');
+
     console.log('\n[5] revoke → paywall comes back');
     const invId = mine.id;
     r = mockRes();

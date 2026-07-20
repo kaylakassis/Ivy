@@ -40,7 +40,7 @@ export default async function handler(req, res) {
 
       const cli = await sql`
         INSERT INTO clients (workspace_id, name, email, phone, stage, source, tags, notes)
-        VALUES (${workspaceId}, 'Riley Sample', ${DEMO_EMAIL}, '+15555550123', 'active', 'demo',
+        VALUES (${workspaceId}, 'Jordan Sample', ${DEMO_EMAIL}, '+15555550123', 'active', 'demo',
                 ARRAY['sample']::text[], 'Sample record — remove anytime from your dashboard.')
         RETURNING id
       `;
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       const serviceId = svc.rows[0]?.id || null;
       await sql`
         INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, date, start_min, end_min, notes)
-        VALUES (${workspaceId}, ${serviceId}, ${clientId}, 'Riley Sample', ${DEMO_EMAIL},
+        VALUES (${workspaceId}, ${serviceId}, ${clientId}, 'Jordan Sample', ${DEMO_EMAIL},
                 (CURRENT_DATE + 1), 600, 660, '[Sample] Example appointment')
       `;
 
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       await sql`
         INSERT INTO invoices (workspace_id, number, client_id, client_name, client_email, items, status, notes)
         VALUES (
-          ${workspaceId}, ${number}, ${clientId}, 'Riley Sample', ${DEMO_EMAIL},
+          ${workspaceId}, ${number}, ${clientId}, 'Jordan Sample', ${DEMO_EMAIL},
           ${JSON.stringify([{ description: 'Sample service', quantity: 1, rate: 100 }])}::jsonb,
           'draft', '[Sample] Example invoice'
         )

@@ -83,6 +83,7 @@ async function listUsers(req, res) {
       w.subscription_status,
       w.trial_ends_at,
       w.subscription_period_end,
+      w.comp_until,
       EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id) AS is_client,
       af.code AS affiliate_code
     FROM users u
@@ -113,6 +114,7 @@ async function listUsers(req, res) {
       status: row.subscription_status,
       trialEndsAt: row.trial_ends_at,
       periodEndsAt: row.subscription_period_end,
+      comped: !!(row.comp_until && new Date(row.comp_until) > new Date()),
     } : null,
     isClient: !!row.is_client,
     affiliateCode: row.affiliate_code,
