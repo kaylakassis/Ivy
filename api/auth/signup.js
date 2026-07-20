@@ -186,6 +186,33 @@ export default async function handler(req, res) {
           RETURNING id
         `;
         const newWorkspaceId = wsIns.rows[0].id;
+        // Comp invite: if this email is on the admin allowlist, grant
+        // complimentary access immediately - the paywall never appears.
+        // Best-effort: a comp hiccup must never break signup.
+        try {
+          const inv = await sql`
+            SELECT id, note, comp_months FROM comp_invites
+             WHERE LOWER(email) = ${emailKey} AND claimed_at IS NULL
+             LIMIT 1
+          `;
+          if (inv.rows.length > 0) {
+            const months = inv.rows[0].comp_months;
+            const until = months
+              ? new Date(Date.now() + months * 30 * 86400 * 1000).toISOString()
+              : '9999-01-01T00:00:00Z';
+            await sql`
+              UPDATE workspaces SET comp_until = ${until}, comp_note = ${inv.rows[0].note || 'Comp invite'}
+               WHERE id = ${newWorkspaceId}
+            `;
+            await sql`
+              UPDATE comp_invites SET claimed_at = NOW(), claimed_workspace_id = ${newWorkspaceId}
+               WHERE id = ${inv.rows[0].id}
+            `;
+          }
+        } catch (compErr) {
+          // eslint-disable-next-line no-console
+          console.warn('[signup] comp-invite claim failed (continuing):', compErr.message);
+        }
         // Seed a LIVE booking handle immediately so /book/<slug> works the
         // moment they sign up (the natural shareable "aha") — instead of
         // 404'ing until they manually type a handle deep in onboarding.

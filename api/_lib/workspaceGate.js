@@ -113,7 +113,7 @@ export async function ensureActiveWorkspace(user, req, res) {
   let row;
   try {
     const { rows } = await sql`
-      SELECT subscription_status, trial_ends_at, subscription_period_end, onboarded_at
+      SELECT subscription_status, trial_ends_at, subscription_period_end, comp_until, onboarded_at
         FROM workspaces
        WHERE id = ${workspaceId}
        LIMIT 1

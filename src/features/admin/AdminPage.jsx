@@ -27,6 +27,7 @@ const TABS = [
   { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
   { id: 'waitlist',   label: 'Waitlist',   icon: 'Mail' },
+  { id: 'comps',      label: 'Comps',      icon: 'Gift' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
   { id: 'export',     label: 'Export',     icon: 'Doc' },
   { id: 'settings',   label: 'Settings',   icon: 'Settings' },
@@ -123,6 +124,7 @@ export default function AdminPage() {
       {tab === 'appeals'    && <AppealsTab/>}
       {tab === 'blast'      && <BlastTab/>}
       {tab === 'waitlist'   && <WaitlistTab/>}
+      {tab === 'comps'      && <CompsTab/>}
       {tab === 'audit'      && <AuditTab/>}
       {tab === 'export'     && <ExportTab/>}
       {tab === 'settings'   && <SettingsTab/>}
@@ -2975,6 +2977,116 @@ function ReadinessTab() {
         <strong>BLOCKER</strong> = launch is unsafe until fixed.
         <strong> WARN</strong> = the feature won't work but the app boots fine without it.
         See LAUNCH.md in the repo for the full go-live runbook.
+      </div>
+    </div>
+  );
+}
+
+
+// ---------- Comps (complimentary access invites) ----------
+// Add an email → they get an invite email; when they sign up with it (or
+// immediately, if the account already exists) their workspace bypasses the
+// paywall entirely - no card, no Stripe object. Revoke restores the normal
+// trial/paywall funnel.
+function CompsTab() {
+  const [invites, setInvites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [email, setEmail]     = useState('');
+  const [note, setNote]       = useState('');
+  const [months, setMonths]   = useState('');
+  const [busy, setBusy]       = useState(false);
+  const [msg, setMsg]         = useState(null);
+
+  const load = () => api.get('/admin/comp-invites')
+    .then((r) => setInvites(r.invites || []))
+    .catch(() => {})
+    .finally(() => setLoading(false));
+  useEffect(() => { load(); }, []);
+
+  const add = async (e) => {
+    e.preventDefault();
+    if (!email.trim()) return;
+    setBusy(true); setMsg(null);
+    try {
+      const r = await api.post('/admin/comp-invites', {
+        email: email.trim(), note: note.trim() || null,
+        months: months ? Number(months) : null,
+      });
+      setMsg(r.compedNow
+        ? `${r.email} already had an account - access granted immediately${r.emailed ? ' and they were emailed' : ''}.`
+        : `Invite ${r.emailed ? 'emailed' : 'saved (email failed - they can still just sign up with this address)'} for ${r.email}.`);
+      setEmail(''); setNote(''); setMonths('');
+      load();
+    } catch (ex) { setMsg(ex.message || 'Could not create the invite'); }
+    finally { setBusy(false); }
+  };
+
+  const revoke = async (inv) => {
+    if (!confirm(`Revoke free access for ${inv.email}? Their workspace returns to the normal trial/paywall.`)) return;
+    try { await api.del('/admin/comp-invites?id=' + inv.id); load(); }
+    catch (ex) { alert(ex.message || 'Could not revoke'); }
+  };
+
+  const inputSt = {
+    padding: '9px 12px', borderRadius: 8, fontSize: 13,
+    background: 'var(--surface)', border: '1px solid var(--border-strong)',
+    color: 'var(--fg)', outline: 'none',
+  };
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="card" style={{ padding: 20 }}>
+        <h3 style={{ margin: '0 0 4px', fontSize: 15, fontWeight: 600 }}>Give someone free access</h3>
+        <p style={{ margin: '0 0 14px', fontSize: 12.5, color: 'var(--muted)' }}>
+          They sign up with this email and never see the paywall - no card, no Stripe.
+          Leave duration empty for permanent access.
+        </p>
+        <form onSubmit={add} style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+            placeholder="email@example.com" style={{ ...inputSt, flex: 2, minWidth: 220 }}/>
+          <input value={note} onChange={(e) => setNote(e.target.value)}
+            placeholder="Note (e.g. beta tester)" style={{ ...inputSt, flex: 2, minWidth: 160 }}/>
+          <input type="number" min="1" max="120" value={months} onChange={(e) => setMonths(e.target.value)}
+            placeholder="Months (blank = forever)" style={{ ...inputSt, width: 180 }}/>
+          <button type="submit" className="btn btn-primary" disabled={busy} style={{ padding: '9px 16px' }}>
+            {busy ? 'Sending…' : 'Invite'}
+          </button>
+        </form>
+        {msg && <div style={{ marginTop: 10, fontSize: 12.5, color: 'var(--accent)' }}>{msg}</div>}
+      </div>
+
+      <div className="card" style={{ overflow: 'hidden' }}>
+        {loading ? (
+          <div style={{ padding: 32, fontSize: 13, color: 'var(--muted)' }}>Loading…</div>
+        ) : invites.length === 0 ? (
+          <div style={{ padding: 32, fontSize: 13, color: 'var(--muted)' }}>No comp invites yet.</div>
+        ) : invites.map((inv, i) => (
+          <div key={inv.id} style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '12px 18px',
+            borderTop: i === 0 ? 'none' : '1px solid var(--border)', flexWrap: 'wrap',
+          }}>
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 550 }}>{inv.email}</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
+                {inv.months ? `${inv.months} months` : 'Permanent'}
+                {inv.note ? ` · ${inv.note}` : ''}
+                {' · '}{new Date(inv.createdAt).toLocaleDateString()}
+              </div>
+            </div>
+            <span style={{
+              fontSize: 10.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+              padding: '2px 9px', borderRadius: 99,
+              background: inv.active ? 'color-mix(in srgb, var(--ok) 14%, transparent)' : 'var(--surface-2)',
+              color: inv.active ? 'var(--ok)' : 'var(--muted)',
+            }}>
+              {inv.active ? 'Active' : inv.claimedAt ? 'Revoked/expired' : 'Awaiting signup'}
+            </span>
+            <button className="btn btn-ghost" onClick={() => revoke(inv)}
+              style={{ padding: '5px 10px', fontSize: 12, color: 'var(--danger)' }}>
+              Revoke
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );

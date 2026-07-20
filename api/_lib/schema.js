@@ -3034,4 +3034,26 @@ CREATE INDEX IF NOT EXISTS idx_documents_name_trgm
   ON documents USING gin (LOWER(name) gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_tasks_title_trgm
   ON tasks USING gin (LOWER(title) gin_trgm_ops);
+
+-- ─── Complimentary access (comp invites) ────────────────────────────────
+-- Owner-granted free access that bypasses the paywall WITHOUT Stripe: no
+-- card, no $0 subscription polluting MRR, revocable in one click. A
+-- workspace is comped while comp_until is in the future (year 9999 =
+-- permanent). isWorkspaceActive() checks it before any subscription state.
+-- comp_invites is the admin-managed email allowlist: claimed at signup by
+-- matching email, or immediately when the email already has an account.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS comp_until TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS comp_note TEXT;
+
+CREATE TABLE IF NOT EXISTS comp_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  email TEXT NOT NULL,
+  note TEXT,
+  comp_months INTEGER,            -- NULL = permanent
+  created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  claimed_at TIMESTAMPTZ,
+  claimed_workspace_id UUID REFERENCES workspaces(id) ON DELETE SET NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_comp_invites_email ON comp_invites (LOWER(email));
 `;

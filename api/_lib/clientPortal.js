@@ -130,7 +130,7 @@ async function ownsWorkspaceFromDb(userId) {
   try {
     const { rows } = await sql`
       SELECT w.id, w.onboarded_at, w.business_type,
-             w.subscription_status, w.trial_ends_at, w.subscription_period_end,
+             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
              w.stripe_customer_id,
              cs.biz_name, cs.slug
       FROM workspaces w
@@ -194,8 +194,11 @@ async function ownsWorkspaceFromDb(userId) {
 // a half-broken app.
 export function isWorkspaceActive(row) {
   if (!row) return false;
-  const status = row.subscription_status || 'inactive';
   const now = Date.now();
+  // Complimentary access (comp invites) trumps subscription state -
+  // no card, no Stripe object, granted/revoked from Admin → Comps.
+  if (row.comp_until && new Date(row.comp_until).getTime() > now) return true;
+  const status = row.subscription_status || 'inactive';
   const trialEndsAt  = row.trial_ends_at ? new Date(row.trial_ends_at).getTime() : null;
   const periodEndsAt = row.subscription_period_end ? new Date(row.subscription_period_end).getTime() : null;
   if (status === 'trialing') return !!(trialEndsAt && trialEndsAt > now);
@@ -242,6 +245,9 @@ function deriveSubscription(row) {
     trialEndsAt: row.trial_ends_at,
     periodEndsAt: row.subscription_period_end,
     daysRemaining,
+    // Complimentary access (Admin → Comps). The paywall never shows for
+    // comped workspaces; the Account page can label the plan accordingly.
+    comped: !!(row.comp_until && new Date(row.comp_until).getTime() > now),
   };
 }
 
