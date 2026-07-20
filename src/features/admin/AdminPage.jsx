@@ -15,6 +15,7 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
+import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 
 const TABS = [
   { id: 'overview',   label: 'Overview',   icon: 'Trending' },
@@ -436,20 +437,39 @@ function Overview() {
   const dr = useDateRange('30d');
   const [data, setData] = useState(null);
   const [err, setErr]   = useState(null);
+  const [fetchedAt, setFetchedAt] = useState(null);
+  const [tick, setTick] = useState(0); // bump to force a refetch
 
   useEffect(() => {
     let cancelled = false;
-    setData(null); setErr(null);
+    // Keep the previous numbers on screen during auto-refreshes (only
+    // blank the view on the initial load / range change, not every 30s).
+    if (tick === 0) { setData(null); }
+    setErr(null);
     api.get(`/admin/analytics?from=${encodeURIComponent(dr.range.from)}&to=${encodeURIComponent(dr.range.to)}`)
-      .then((r) => { if (!cancelled) setData(r); })
+      .then((r) => { if (!cancelled) { setData(r); setFetchedAt(new Date()); } })
       .catch((e) => { if (!cancelled) setErr(e.message); });
     return () => { cancelled = true; };
-  }, [dr.range.from, dr.range.to]);
+  }, [dr.range.from, dr.range.to, tick]);
+
+  // Auto-refresh every 30s while the tab is visible - the operator
+  // shouldn't have to reload to see a signup land. Pairs with the
+  // server's 60s cache revalidation for near-real-time numbers.
+  useIntervalWhenVisible(() => setTick((t) => t + 1), 30_000);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <EmailHealthBanner/>
-      <DateRangeBar {...dr}/>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 240 }}><DateRangeBar {...dr}/></div>
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8 }}>
+          {fetchedAt && <span>Updated {fetchedAt.toLocaleTimeString()}</span>}
+          <button className="btn btn-ghost" style={{ padding: '4px 10px', fontSize: 11.5 }}
+            onClick={() => setTick((t) => t + 1)}>
+            Refresh
+          </button>
+        </div>
+      </div>
       {err && <ErrCard msg={err}/>}
       {!data && !err && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
       {data && (

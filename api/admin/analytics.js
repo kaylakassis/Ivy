@@ -61,8 +61,20 @@ export default async function handler(req, res) {
         FROM admin_analytics_cache
        WHERE key IN ('totals', 'platformImpact')
     `;
-    const cachedTotals = cacheRows.rows.find((r) => r.key === 'totals')?.value || null;
-    const cachedPlatform = cacheRows.rows.find((r) => r.key === 'platformImpact')?.value || null;
+    // Freshness: a cache older than 60s is treated as MISSING, so the
+    // fallback live queries below run and the operator sees near-real-
+    // time numbers ("it isn't updating" was the 15-min cron staleness).
+    // Cost stays bounded at scale: at most one live recompute per 60s
+    // per key - the cron remains the keep-warm for the common case.
+    const CACHE_MAX_AGE_MS = 60 * 1000;
+    const fresh = (key) => {
+      const row = cacheRows.rows.find((r) => r.key === key);
+      if (!row) return null;
+      const age = Date.now() - new Date(row.computed_at).getTime();
+      return age <= CACHE_MAX_AGE_MS ? row.value : null;
+    };
+    const cachedTotals = fresh('totals');
+    const cachedPlatform = fresh('platformImpact');
     const cacheComputedAt = cacheRows.rows.length
       ? cacheRows.rows
           .map((r) => new Date(r.computed_at).getTime())
