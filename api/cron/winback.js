@@ -64,7 +64,7 @@ async function handler(req, res) {
     const { rows: candidates } = await sql`
       SELECT w.id AS workspace_id, w.subscription_status, w.owner_id, u.email
         FROM workspaces w
-        JOIN users u ON u.id = w.owner_id
+        JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
        WHERE w.winback_offer_sent_at IS NULL
          AND w.paywall_first_seen_at IS NOT NULL
          AND w.paywall_first_seen_at <= NOW() - (${WINBACK.DWELL_DAYS} || ' days')::interval

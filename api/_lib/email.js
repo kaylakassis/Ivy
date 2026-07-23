@@ -80,6 +80,17 @@ function warnIfSandbox() {
 }
 
 export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, unsubscribeUrl, timeoutMs = 8000 }) {
+  // HARD STOP for deleted accounts. Deletion mangles the address to
+  // user+deleted-<id>@domain to free it for re-signup - but Gmail-style
+  // plus-addressing still DELIVERS that to the original inbox. Every
+  // sender should also filter deleted users at the query level; this is
+  // the belt-and-braces guarantee that no path can email a deleted
+  // account, present or future.
+  if (/\+deleted-[0-9a-f][0-9a-f-]*@/i.test(String(to || ''))) {
+    // eslint-disable-next-line no-console
+    console.warn('[email] refusing send to deleted-account address');
+    return { ok: false, skipped: 'deleted-account-address' };
+  }
   const key = process.env.RESEND_API_KEY;
   if (!key) throw new Error('RESEND_API_KEY not set');
   warnIfSandbox();
@@ -266,7 +277,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
 
   const headerRight = businessName
     ? '' // workspaces don't show "Business OS" tag; their name IS the brand
-    : `<div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;color:${C.muted};text-align:right;">Business OS</div>`;
+    : `<div style="font-size:10px;letter-spacing:0.14em;text-transform:uppercase;font-weight:700;color:${C.muted};text-align:right;">All-in-one for solopreneurs</div>`;
 
   // CTA button. Bulletproof double-table pattern so Outlook + Gmail +
   // Apple Mail all render the same pill.
@@ -388,7 +399,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
 
         <!-- Tagline below the card. Tiny, no boilerplate. -->
         <div style="margin-top:16px;font-size:11px;color:${C.muted2};line-height:1.5;max-width:600px;">
-          Ivy is the all-in-one business OS for solo entrepreneurs.<br/>
+          Ivy is the all-in-one business platform for solopreneurs.<br/>
           One workspace · clients, calendar, invoices, messages, docs.
         </div>
       </td>

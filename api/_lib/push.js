@@ -77,7 +77,12 @@ async function userAllowsType(userId, type) {
 // owner side - staff/team isn't a thing yet).
 export async function ownerUserIdForWorkspace(workspaceId) {
   if (!workspaceId) return null;
-  const { rows } = await sql`SELECT owner_id FROM workspaces WHERE id = ${workspaceId}`;
+  // Deleted owners get no pushes - their subscriptions may still exist
+  // in push_subscriptions, but the account is gone.
+  const { rows } = await sql`
+    SELECT w.owner_id FROM workspaces w
+      JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
+     WHERE w.id = ${workspaceId}`;
   return rows[0]?.owner_id || null;
 }
 

@@ -49,7 +49,7 @@ async function handler(req, res) {
         const { rows } = await sql.query(
           `SELECT w.id AS workspace_id, u.id AS user_id
              FROM workspaces w
-             JOIN users u ON u.id = w.owner_id
+             JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
             WHERE w.subscription_status IN ('trialing', 'active', 'past_due')
               AND w.onboarded_at IS NOT NULL
               AND u.last_active_at IS NOT NULL

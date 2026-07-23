@@ -51,7 +51,7 @@ async function loadOwner(workspaceId) {
   const { rows } = await sql`
     SELECT w.owner_id, u.email, u.name, cs.biz_name
     FROM workspaces w
-    LEFT JOIN users u ON u.id = w.owner_id
+    LEFT JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
     LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
     WHERE w.id = ${workspaceId}
   `;

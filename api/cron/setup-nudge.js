@@ -75,7 +75,7 @@ async function handler(req, res) {
                   cs.biz_name, cs.slug, cs.availability,
                   (SELECT COUNT(*)::int FROM services s WHERE s.workspace_id = w.id) AS svc_count
              FROM workspaces w
-             JOIN users u ON u.id = w.owner_id
+             JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
              LEFT JOIN calendar_settings cs ON cs.workspace_id = w.id
             WHERE w.subscription_status IN ('trialing', 'active')
               AND w.onboarded_at IS NOT NULL

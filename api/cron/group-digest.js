@@ -40,6 +40,7 @@ async function handler(req, res) {
         JOIN group_threads t
           ON t.id = m.thread_id AND t.workspace_id = m.workspace_id
        WHERE u.digest_groups_daily = TRUE
+         AND u.deleted_at IS NULL
          AND m.left_at IS NULL
          AND m.unread_count > 0
          AND t.archived = FALSE

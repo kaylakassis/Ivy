@@ -78,7 +78,7 @@ async function drainStage({ stage, stampCol, window, shardFilter, deadline }) {
     const { rows } = await sql.query(
       `SELECT w.id AS workspace_id, w.trial_ends_at
          FROM workspaces w
-         JOIN users u ON u.id = w.owner_id
+         JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
         WHERE w.subscription_status = 'trialing'
           AND ${window}
           AND w.${stampCol} IS NULL
