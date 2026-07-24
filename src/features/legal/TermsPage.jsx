@@ -48,6 +48,15 @@ export default function TermsPage() {
         output from the Service for material decisions affecting your
         business, finances, taxes, contracts, or compliance
         obligations.</P>
+      <P><strong>Ivy is not a HIPAA-compliant platform.</strong> The
+        Service is not designed for, and must not be used to create,
+        store, or transmit protected health information (PHI) as
+        defined by the Health Insurance Portability and Accountability
+        Act. Ivy does not sign Business Associate Agreements. If you
+        are a HIPAA covered entity or business associate (for example,
+        a licensed mental-health professional, chiropractor, physical
+        therapist, or dietitian handling PHI), do not use the Service
+        to store client health records, treatment notes, or other PHI.</P>
 
       <H2>3. AI output (Ivy and similar features)</H2>
       <P>Ivy and other AI-driven features generate output by

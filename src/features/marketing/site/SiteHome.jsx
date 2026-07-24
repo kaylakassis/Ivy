@@ -83,7 +83,7 @@ const P = {
 };
 
 const PERSONAS = [
-  ['default', 'Everyone'], ['therapist', 'Therapists'], ['coach', 'Coaches'],
+  ['default', 'Everyone'], ['therapist', 'Massage & bodywork'], ['coach', 'Coaches'],
   ['stylist', 'Stylists'], ['photographer', 'Photographers'], ['trainer', 'Trainers'],
   ['contractor', 'Contractors'], ['tutor', 'Tutors'],
 ];
@@ -281,7 +281,7 @@ export default function SiteHome() {
   useSiteFonts();
   usePageMeta({
     title: 'Ivy - All-in-One Business Platform for Solopreneurs | Booking, Invoicing, CRM & AI',
-    description: 'Ivy is the all-in-one business platform for solo service businesses - therapists, coaches, stylists, photographers, trainers, contractors, and tutors. Booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork. $8.99/week, no transaction fees, 14-day free trial.',
+    description: 'Ivy is the all-in-one business platform for solo service businesses - massage therapists, coaches, stylists, photographers, trainers, contractors, and tutors. Booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork. $8.99/week, no transaction fees, 14-day free trial.',
     canonical: 'https://joinivy.ai/',
     ogType: 'website',
     jsonLd: JSON_LD,
@@ -394,7 +394,7 @@ export default function SiteHome() {
               <a href="/tour" className="btn btn-ghost">Take the tour</a>
             </div>
             <p className="trust">$0 today · Cancel anytime · Your money goes straight to your Stripe - we never touch it</p>
-            <p className="verticals">Built for <b>therapists</b>, <b>coaches</b>, <b>stylists</b>, <b>photographers</b>, <b>personal trainers</b>, <b>contractors</b>, <b>tutors</b> - and every other business of one.</p>
+            <p className="verticals">Built for <b>massage therapists</b>, <b>coaches</b>, <b>stylists</b>, <b>photographers</b>, <b>personal trainers</b>, <b>contractors</b>, <b>tutors</b> - and every other business of one.</p>
           </div>
           <div className="chat">
             <div className="chat-head">
@@ -431,7 +431,7 @@ export default function SiteHome() {
       <section style={{ padding: '56px 0 0' }}>
         <div className="container">
           <div className="answer">
-            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $375/year) and charges no transaction fees - payments go directly to your own Stripe account.</p>
+            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $375/year) and charges no transaction fees - payments go directly to your own Stripe account.</p>
           </div>
         </div>
       </section>

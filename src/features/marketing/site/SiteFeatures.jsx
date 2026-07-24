@@ -59,7 +59,7 @@ export default function SiteFeatures() {
         <div className="container">
           <span className="eyebrow">Features</span>
           <h1>Everything your business needs.<br /><span className="lime">Nothing it doesn't.</span></h1>
-          <p className="lede">Every feature ships in the one plan - no tiers, no locked doors, no "contact sales." Built for therapists, coaches, stylists, photographers, trainers, contractors, tutors, and every other business of one. See <a href="/pricing" style={{ color: 'var(--lime)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>pricing</a>.</p>
+          <p className="lede">Every feature ships in the one plan - no tiers, no locked doors, no "contact sales." Built for massage therapists, coaches, stylists, photographers, trainers, contractors, tutors, and every other business of one. See <a href="/pricing" style={{ color: 'var(--lime)', textDecoration: 'underline', textUnderlineOffset: '3px' }}>pricing</a>.</p>
         </div>
       </header>
 

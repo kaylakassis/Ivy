@@ -19,7 +19,7 @@ export const CATEGORIES = [
   { id: 'Fitness',      label: 'Fitness',           icon: 'Trending',
     hint: 'Personal training, yoga, pilates, sports coaching' },
   { id: 'Health',       label: 'Health',            icon: 'Check',
-    hint: 'Therapy, nutrition, chiropractic, doulas' },
+    hint: 'Doulas, lactation support, wellness practitioners' },
   { id: 'Home',         label: 'Home services',     icon: 'Home',
     hint: 'Cleaning, handyman, lawn, pool, locksmith' },
   { id: 'Pet',          label: 'Pet services',      icon: 'Heart',
