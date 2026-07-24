@@ -213,6 +213,8 @@ export function expandBookings(bookings, rangeStart, rangeEnd) {
     const cancelledSet = new Set(b.cancelledOccurrences || []);
 
     let cursor = parseISO(b.date);
+    // Series anchor day-of-month for monthly clamping (see below).
+    const anchorDay = Number(String(b.date).slice(8, 10)) || cursor.getDate();
     let safety = 0;
 
     while (cursor.getTime() <= stop && safety < 1000) {
@@ -232,8 +234,15 @@ export function expandBookings(bookings, rangeStart, rangeEnd) {
       if (b.recurrenceRule === 'weekly')   cursor = addDays(cursor, 7);
       else if (b.recurrenceRule === 'biweekly') cursor = addDays(cursor, 14);
       else if (b.recurrenceRule === 'monthly') {
-        const next = new Date(cursor);
-        next.setMonth(next.getMonth() + 1);
+        // Clamp to the target month's last day, preserving the series
+        // anchor day: a booking anchored on the 31st occurs Jan 31 →
+        // Feb 28 → Mar 31, never setMonth's "Feb 31" → Mar 3 drift.
+        // MUST mirror recurringOccursOn (api/_lib/calendar.js) or the
+        // grid renders slots the server rejects and vice versa.
+        const next = new Date(cursor.getFullYear(), cursor.getMonth() + 1, 1,
+          cursor.getHours(), cursor.getMinutes());
+        const lastDay = new Date(next.getFullYear(), next.getMonth() + 1, 0).getDate();
+        next.setDate(Math.min(anchorDay, lastDay));
         cursor = next;
       }
       else break;

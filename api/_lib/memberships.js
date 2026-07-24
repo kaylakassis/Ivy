@@ -77,10 +77,15 @@ export function cleanMembershipInput(body) {
 // platform-level webhook (Account-Links) so they don't drift.
 export function mapSubStatus(s) {
   if (s === 'active' || s === 'trialing') return 'active';
-  if (s === 'past_due' || s === 'unpaid') return 'past_due';
+  // 'paused' = Stripe stopped billing but kept the sub alive - the
+  // member isn't paying, so surface it as past_due (needs attention),
+  // never as an entitled 'active'.
+  if (s === 'past_due' || s === 'unpaid' || s === 'paused') return 'past_due';
   if (s === 'canceled') return 'cancelled';
-  if (s === 'incomplete' || s === 'incomplete_expired') return 'incomplete';
-  return 'active';
+  // Unknown/future Stripe statuses fail CLOSED (not entitled) - the
+  // old default of 'active' granted membership perks on any status we
+  // didn't recognize.
+  return 'incomplete';
 }
 
 // Pulls the active price id off a Stripe Subscription object. Modern

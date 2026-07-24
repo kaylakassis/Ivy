@@ -1456,15 +1456,9 @@ async function search_bookings({ workspaceId, args }) {
 async function get_dashboard_summary({ workspaceId }) {
   const tz = await workspaceTimeZone(workspaceId); // "this month"/"upcoming" in the owner's zone
   const [revenue, clients, bookings, invoices, ltv] = await Promise.all([
-    // Revenue this month (sum of paid invoice totals).
-    sql`SELECT COALESCE(SUM(
-            (SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
-               FROM jsonb_array_elements(items) it)
-            - COALESCE(discount, 0)
-            + (COALESCE(tax_rate, 0) / 100.0) * GREATEST(0,
-                (SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
-                   FROM jsonb_array_elements(items) it) - COALESCE(discount, 0))
-          ), 0)::numeric AS total
+    // Revenue this month (sum of paid invoice totals). `total` is the
+    // trigger-maintained canonical computeTotals value (clamped + taxed).
+    sql`SELECT COALESCE(SUM(total), 0)::numeric AS total
         FROM invoices
         WHERE workspace_id = ${workspaceId}
           AND status = 'paid'
@@ -1481,12 +1475,10 @@ async function get_dashboard_summary({ workspaceId }) {
           AND date < (NOW() AT TIME ZONE ${tz})::date + 7`,
     sql`SELECT
           COUNT(*) FILTER (WHERE status IN ('sent','overdue'))::int AS open_count,
-          COALESCE(SUM(
-            CASE WHEN status IN ('sent','overdue') THEN
-              (SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
-                 FROM jsonb_array_elements(items) it) - COALESCE(discount, 0)
-            ELSE 0 END
-          ), 0)::numeric AS open_value
+          -- total is trigger-maintained via the canonical computeTotals
+          -- math (discount clamped at 0, tax included) - never re-derive
+          -- it here with different rounding/clamping.
+          COALESCE(SUM(total) FILTER (WHERE status IN ('sent','overdue')), 0)::numeric AS open_value
         FROM invoices WHERE workspace_id = ${workspaceId}`,
     sql`SELECT COALESCE(AVG(lifetime_value), 0)::numeric AS avg_ltv
         FROM clients WHERE workspace_id = ${workspaceId} AND lifetime_value > 0`,

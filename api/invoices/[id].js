@@ -9,6 +9,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice, cleanItems } from '../_lib/finance.js';
+import { decrementStock, restoreStock } from '../_lib/products.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -33,16 +34,57 @@ export default async function handler(req, res) {
       // first", so restore has to actually exist. A voided invoice accepts
       // exactly { status: 'draft' } and returns to editable draft state.
       if (inv.status === 'voided' && body.status === 'draft' && Object.keys(body).length === 1) {
+        // If voiding this POS sale returned units to inventory
+        // ('restocked' unmatched by a later 'stock-rededucted'), restoring
+        // the invoice must take them back out - otherwise void→restore
+        // cycles mint free stock. Insufficient stock blocks the restore.
+        const activity = inv.activity || [];
+        const stockItems = (Array.isArray(inv.items) ? inv.items : [])
+          .filter((it) => it.productId && Number(it.quantity) > 0);
+        const restocks  = activity.filter((a) => a.kind === 'restocked').length;
+        const rededucts = activity.filter((a) => a.kind === 'stock-rededucted').length;
+        const needsRededuct = stockItems.length > 0 && restocks > rededucts;
+        let newActivity = activity;
+        if (needsRededuct) {
+          const done = [];
+          for (const it of stockItems) {
+            // eslint-disable-next-line no-await-in-loop
+            const okk = await decrementStock({ workspaceId, productId: it.productId, qty: it.quantity });
+            if (!okk) {
+              for (const d of done) {
+                // eslint-disable-next-line no-await-in-loop
+                await restoreStock({ workspaceId, productId: d.productId, qty: d.quantity });
+              }
+              return badRequest(res, `Not enough stock to restore this sale (${it.description || 'item'} is out of stock)`);
+            }
+            done.push(it);
+          }
+          newActivity = [
+            ...activity,
+            { ts: new Date().toISOString(), kind: 'stock-rededucted', text: 'Stock re-deducted on restore' },
+          ];
+        }
         const r = await sql`
-          UPDATE invoices SET status = 'draft', updated_at = NOW()
+          UPDATE invoices SET status = 'draft',
+            activity = ${JSON.stringify(newActivity)}::jsonb,
+            updated_at = NOW()
            WHERE id = ${id} AND workspace_id = ${workspaceId} AND status = 'voided'
            RETURNING *
         `;
-        if (r.rows.length === 0) return badRequest(res, 'Invoice is no longer voided');
+        if (r.rows.length === 0) {
+          // Lost the race - put the stock back so nothing is double-held.
+          if (needsRededuct) {
+            for (const it of stockItems) {
+              // eslint-disable-next-line no-await-in-loop
+              await restoreStock({ workspaceId, productId: it.productId, qty: it.quantity });
+            }
+          }
+          return badRequest(res, 'Invoice is no longer voided');
+        }
         return ok(res, { invoice: serializeInvoice(r.rows[0]) });
       }
       if (inv.status === 'paid' || inv.status === 'voided') {
-        return badRequest(res, `Can't edit a ${inv.status} invoice${inv.status === 'voided' ? " - restore it with { status: 'draft' } first" : ''}`);
+        return badRequest(res, `Can't edit a ${inv.status} invoice${inv.status === 'voided' ? ' - use "Restore to draft" first' : ''}`);
       }
       const sets = [];
       const values = [];

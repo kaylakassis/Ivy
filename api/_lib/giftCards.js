@@ -96,3 +96,62 @@ export async function redeemAtomic({
   `;
   return upd.rows[0].balance_cents;
 }
+
+// Put a cancelled booking's gift-card credit back on the card.
+// Exactly-once: zeroing bookings.gift_card_credit_cents (only when > 0)
+// is the atomic claim, so double-invocation (owner delete + portal
+// cancel racing, or a retry) restores at most once. The card comes from
+// the redemption audit row written at booking time. Returns the number
+// of cents restored (0 = nothing to do / already restored).
+export async function restoreGiftCardCreditForBooking({ workspaceId, bookingId }) {
+  // Self-join so RETURNING gives the PRE-update amount (a plain
+  // RETURNING would hand back the 0 we just wrote), which the failure
+  // path below needs in order to hand the credit back.
+  const claim = await sql`
+    UPDATE bookings b SET gift_card_credit_cents = 0, updated_at = NOW()
+    FROM bookings prev
+    WHERE prev.id = b.id
+      AND b.id = ${bookingId} AND b.workspace_id = ${workspaceId}
+      AND b.gift_card_credit_cents > 0
+    RETURNING prev.gift_card_credit_cents AS before_cents
+  `;
+  if (claim.rows.length === 0) return 0;
+  const claimedBefore = Number(claim.rows[0]?.before_cents || 0);
+  let restored = 0;
+  try {
+    const reds = await sql`
+      SELECT gift_card_id, SUM(amount_cents)::int AS amt
+        FROM gift_card_redemptions
+       WHERE workspace_id = ${workspaceId}
+         AND applied_to_kind = 'booking'
+         AND applied_to_id = ${bookingId}
+       GROUP BY gift_card_id
+    `;
+    for (const row of reds.rows) {
+      const amt = Number(row.amt || 0);
+      if (amt <= 0) continue;
+      // Re-crediting revives a depleted card; voided/expired cards get the
+      // balance back too (harmless - they stay unusable until the owner
+      // reactivates them).
+      await sql`
+        UPDATE gift_cards SET
+          balance_cents = balance_cents + ${amt},
+          status        = CASE WHEN status = 'depleted' THEN 'active' ELSE status END,
+          updated_at    = NOW()
+        WHERE id = ${row.gift_card_id} AND workspace_id = ${workspaceId}
+      `;
+      restored += amt;
+    }
+  } catch (err) {
+    // The claim already zeroed the booking's credit. If crediting the
+    // card failed partway, hand the UNRESTORED remainder back to the
+    // booking so a later call can claim it again - otherwise a transient
+    // DB error would silently vaporize the customer's prepaid money.
+    await sql`
+      UPDATE bookings SET gift_card_credit_cents = ${Math.max(0, claimedBefore - restored)}
+      WHERE id = ${bookingId} AND workspace_id = ${workspaceId}
+    `.catch(() => {});
+    throw err;
+  }
+  return restored;
+}

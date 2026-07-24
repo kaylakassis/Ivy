@@ -417,6 +417,20 @@ function BookingExtraActions({ event, onBookingChanged }) {
     } finally { setBusy(false); }
   };
 
+  // Undo path for a stray click. Any charged fee stays on record - the
+  // server keeps fee_charged_*; refunds live in Stripe, not here.
+  const undoNoShow = async () => {
+    setBusy(true); setError(null);
+    try {
+      const r = await api.del('/calendar/bookings/no-show', { id: event.id });
+      if (r.booking) onBookingChanged?.(r.booking);
+      setOpenAction(null);
+    } catch (e) {
+      setOpenAction('no_show');
+      setError(e.message || 'Failed to undo');
+    } finally { setBusy(false); }
+  };
+
   const charge = async (kind, amount) => {
     setBusy(true); setError(null);
     try {

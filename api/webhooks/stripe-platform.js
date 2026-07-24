@@ -215,6 +215,16 @@ export default async function handler(req, res) {
         }
       }
 
+      // Gift-card purchase (public booking page). Previously handled ONLY
+      // by the legacy per-workspace webhook, so Express workspaces charged
+      // the buyer and never issued a card. Shared, idempotent issuer.
+      if (session.mode === 'payment' && session.metadata?.purpose === 'gift_card'
+          && session.payment_status === 'paid') {
+        const { issueGiftCardFromSession } = await import('../_lib/checkoutFulfillment.js');
+        const result = await issueGiftCardFromSession({ workspaceId, session });
+        return ok(res, { received: true, ...result });
+      }
+
       // Payment flow: invoice, booking-deposit, or package purchase.
       // Mark the invoice paid + record the payment intent for refunds.
       // Booking deposits route through the bookings table separately -
@@ -397,41 +407,10 @@ export default async function handler(req, res) {
       // row paid + decrements stock for any tracked products. Same
       // idempotency pattern as the invoice path (UPDATE … WHERE
       // status='pending'); a duplicate event is a no-op.
-      const orderId = pi.metadata?.order_id;
-      if (orderId) {
-        const upd = await sql`
-          UPDATE orders
-             SET status = 'paid', paid_at = NOW(),
-                 stripe_payment_intent = ${pi.id}, updated_at = NOW()
-           WHERE id = ${orderId} AND workspace_id = ${workspaceId}
-             AND status = 'pending'
-           RETURNING items, total, customer_name, customer_email, client_id
-        `;
-        if (upd.rows.length === 0) {
-          return ok(res, { received: true, ignored: 'order already paid or not found' });
-        }
-        const o = upd.rows[0];
-        // Stock decrement for tracked products. Safe to do
-        // unconditionally - products without track_stock leave
-        // stock_qty untouched at the WHERE-level guard.
-        const items = Array.isArray(o.items) ? o.items : [];
-        for (const it of items) {
-          await sql`
-            UPDATE products SET stock_qty = GREATEST(0, stock_qty - ${Number(it.qty || 0)})
-             WHERE id = ${it.productId} AND workspace_id = ${workspaceId}
-               AND track_stock = TRUE
-          `;
-        }
-        notifyOwnerSafe({
-          workspaceId, type: 'payments',
-          payload: {
-            title: 'Order paid 💸',
-            body: `${o.customer_name} · $${Number(o.total).toFixed(2)}`,
-            url: '/finance',
-            tag: `order-paid-${orderId}`,
-          },
-        });
-        return ok(res, { received: true, applied: 'order-paid' });
+      if (pi.metadata?.order_id) {
+        const { markOrderPaidFromPI } = await import('../_lib/checkoutFulfillment.js');
+        const result = await markOrderPaidFromPI({ workspaceId, pi });
+        return ok(res, { received: true, ...result });
       }
 
       // Invoice safety-net path (unchanged).

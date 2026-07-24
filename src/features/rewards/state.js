@@ -13,16 +13,27 @@ export function useRewards() {
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
 
+  // Shape guard: a mis-shaped 200 (proxy error page, partial outage)
+  // must degrade to the empty defaults, not crash the page on
+  // `settings.launched` of undefined.
+  const coerce = (rewards) => ({
+    settings:    rewards?.settings || { launched: false, launchedAt: null },
+    rules:       Array.isArray(rewards?.rules) ? rewards.rules : [],
+    redemptions: Array.isArray(rewards?.redemptions) ? rewards.redemptions : [],
+    kpis:        rewards?.kpis || { activeMembers: 0, rewardsRedeemed: 0, referralsConverted: 0, repeatRevenue: 0 },
+    pending:     Array.isArray(rewards?.pending) ? rewards.pending : [],
+  });
+
   const refresh = useCallback(async () => {
     const r = await api.get('/rewards');
-    setData(r.rewards);
-    return r.rewards;
+    setData(coerce(r?.rewards));
+    return r?.rewards;
   }, []);
 
   useEffect(() => {
     let live = true;
     api.get('/rewards')
-      .then((r) => live && setData(r.rewards))
+      .then((r) => live && setData(coerce(r?.rewards)))
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };

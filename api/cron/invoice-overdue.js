@@ -103,8 +103,16 @@ async function handler(req, res) {
             // the prior token was misplaced.
             const raw = generateRawToken(32);
             const hash = crypto.createHash('sha256').update(raw).digest('hex');
+            // Status guard: if a payment landed between the candidate
+            // SELECT and here, skip - don't re-mint a token and email
+            // "overdue" about a just-paid invoice.
             // eslint-disable-next-line no-await-in-loop
-            await sql`UPDATE invoices SET view_token_hash = ${hash} WHERE id = ${r.id}`;
+            const minted = await sql`
+              UPDATE invoices SET view_token_hash = ${hash}
+               WHERE id = ${r.id} AND status IN ('sent', 'overdue')
+               RETURNING id
+            `;
+            if (minted.rows.length === 0) continue;
             const viewUrl = `${appUrl()}/invoice/${encodeURIComponent(raw)}`;
             // eslint-disable-next-line no-await-in-loop
             await notifyInvoiceOverdue({

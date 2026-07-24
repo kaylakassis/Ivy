@@ -92,6 +92,12 @@ export default function PaymentProviderCard() {
     );
   }
 
+  // Shape guard: a mis-shaped 200 (proxy error page, partial outage)
+  // renders disconnected rows instead of crashing into the ErrorBoundary
+  // on `data.providers` / `data.platform` of undefined.
+  const providers = data?.providers || {};
+  const platform  = data?.platform || {};
+
   const switchTo = async (id) => {
     setBusy('switch');
     setErr(null);
@@ -129,9 +135,9 @@ export default function PaymentProviderCard() {
         <ProviderRow
           id="stripe" label="Stripe"
           description="Cards, Apple Pay, Google Pay. Best for card-on-file + recurring billing."
-          provider={data.providers.stripe}
-          platformReady={data.platform.stripeReady}
-          active={data.active === 'stripe'}
+          provider={providers.stripe}
+          platformReady={platform.stripeReady}
+          active={data?.active === 'stripe'}
           connectHref="/api/finance/stripe-oauth-init"
           disconnectPath="/finance/stripe-disconnect"
           onSwitch={() => switchTo('stripe')}
@@ -143,9 +149,9 @@ export default function PaymentProviderCard() {
             <ProviderRow
               id="square" label="Square"
               description="Cards + Cash App Pay (US) on Square's hosted checkout."
-              provider={data.providers.square}
-              platformReady={data.platform.squareReady}
-              active={data.active === 'square'}
+              provider={providers.square}
+              platformReady={platform.squareReady}
+              active={data?.active === 'square'}
               connectHref="/api/finance/square-oauth-init"
               disconnectPath="/finance/square-disconnect"
               onSwitch={() => switchTo('square')}
@@ -155,9 +161,9 @@ export default function PaymentProviderCard() {
             <ProviderRow
               id="paypal" label="PayPal"
               description="PayPal balance, cards, and Venmo (US) on PayPal's hosted checkout."
-              provider={data.providers.paypal}
-              platformReady={data.platform.paypalReady}
-              active={data.active === 'paypal'}
+              provider={providers.paypal}
+              platformReady={platform.paypalReady}
+              active={data?.active === 'paypal'}
               connectHref="/api/finance/paypal-onboard-init"
               disconnectPath="/finance/paypal-disconnect"
               onSwitch={() => switchTo('paypal')}

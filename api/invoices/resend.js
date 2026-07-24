@@ -71,8 +71,15 @@ export default async function handler(req, res) {
         activity = ${JSON.stringify(newActivity)}::jsonb,
         updated_at = NOW()
       WHERE id = ${id} AND workspace_id = ${workspaceId}
+        AND status NOT IN ('paid', 'voided', 'refunded')
       RETURNING *
     `;
+    // A payment webhook (or a void) can land between our read and this
+    // write; without the guard the row reverted to 'sent' with a fresh
+    // pay token - a double-payment window. 0 rows = lost that race.
+    if (updated.rows.length === 0) {
+      return badRequest(res, 'This invoice was just paid or voided - refresh to see its current state.');
+    }
 
     const link = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
     const branding = await fetchBranding(workspaceId);

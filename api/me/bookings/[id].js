@@ -16,6 +16,7 @@ import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } fr
 import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, slotEpochMs } from '../../_lib/calendar.js';
 import { syncOnBookingDeleted, syncOnBookingUpdated, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
+import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
@@ -43,6 +44,16 @@ export default async function handler(req, res) {
 
     if (req.method === 'DELETE') {
       if (booking.cancelled_at) return badRequest(res, 'Booking already cancelled');
+      // Delivered sessions are not cancellable: a completed or no-show
+      // booking (or one whose date already passed) must not restore
+      // package credits or fire cancellation flows.
+      if (booking.no_show_at) return badRequest(res, 'This session was marked as a no-show - contact the business if that seems wrong.');
+      if (booking.completion_log && Object.keys(booking.completion_log || {}).length > 0) {
+        return badRequest(res, 'This session was already completed and can no longer be cancelled.');
+      }
+      if (booking.date && String(booking.date).slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+        return badRequest(res, 'This session date has already passed - contact the business directly.');
+      }
 
       // Late-cancel auto-charge. If the booking starts within the
       // service's cancellation_window_hours AND a fee is configured AND
@@ -67,8 +78,9 @@ export default async function handler(req, res) {
       // cancel another tenant's booking. When a late-cancel fee was
       // charged, persist the charge fields in the same UPDATE so we
       // don't have a window where the booking is cancelled-but-no-fee.
+      let cancelRes;
       if (lateCancelCharged) {
-        await sql.query(
+        cancelRes = await sql.query(
           `UPDATE bookings SET
              cancelled_at       = NOW(),
              fee_charged_amount = $3,
@@ -79,11 +91,17 @@ export default async function handler(req, res) {
           [id, myIds, lateCancelCharged.amount, lateCancelCharged.paymentIntent],
         );
       } else {
-        await sql.query(
+        cancelRes = await sql.query(
           `UPDATE bookings SET cancelled_at = NOW()
            WHERE id = $1 AND client_id = ANY($2) AND cancelled_at IS NULL`,
           [id, myIds],
         );
+      }
+      // Lost a race with a concurrent cancel: the other request already
+      // ran the side effects (credit restore, waitlist promotion, notes).
+      // Running them again would restore the package credit TWICE.
+      if ((cancelRes.rowCount || 0) === 0) {
+        return ok(res, { cancelled: true, deduped: true });
       }
       // Drop a system note in the thread so the business sees the cancellation.
       await postCancellationNote({
@@ -98,6 +116,9 @@ export default async function handler(req, res) {
       });
       // Refund any consumed package credit.
       await restoreCredit({ workspaceId: booking.workspace_id, clientPackageId: booking.client_package_id });
+      // Put any gift-card credit back on the card (exactly-once inside).
+      await restoreGiftCardCreditForBooking({ workspaceId: booking.workspace_id, bookingId: booking.id })
+        .catch((err) => console.error('[portal cancel] gift card restore failed:', err.message));
       // Promote next waitlist entry. Best-effort.
       try {
         const promoted = await promoteWaitlistOnCancel({
@@ -139,6 +160,14 @@ export default async function handler(req, res) {
         if (booking.recurrence_rule) {
           return badRequest(res, 'Recurring bookings can\'t be rescheduled - cancel this occurrence and book a new one.');
         }
+        // Same delivered-session guards as cancel.
+        if (booking.no_show_at) return badRequest(res, 'This session was marked as a no-show - contact the business if that seems wrong.');
+        if (booking.completion_log && Object.keys(booking.completion_log || {}).length > 0) {
+          return badRequest(res, 'This session was already completed and can no longer be rescheduled.');
+        }
+        if (booking.date && String(booking.date).slice(0, 10) < new Date().toISOString().slice(0, 10)) {
+          return badRequest(res, 'This session date has already passed - contact the business directly.');
+        }
         const r = body.rescheduleTo;
         const newDate  = (r.date || '').toString();
         const newStart = Number(r.startMin);
@@ -158,17 +187,37 @@ export default async function handler(req, res) {
         // If the service was deleted (orphan booking), default capacity
         // to 1 and skip the service-availability narrow.
         const cs = await sql`
-          SELECT availability, buffer_minutes FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}
+          SELECT availability, buffer_minutes, timezone FROM calendar_settings WHERE workspace_id = ${booking.workspace_id}
         `;
         const availability = cs.rows[0]?.availability || {};
         const bufferMin = Math.max(0, Number(cs.rows[0]?.buffer_minutes || 0));
+        const workspaceTz = cs.rows[0]?.timezone || null;
 
         let capacity = 1;
         let serviceAvailability = null;
+        let cancelFee = 0;
+        let cancelWindowHours = 0;
         if (booking.service_id) {
-          const sv = await sql`SELECT capacity, availability FROM services WHERE id = ${booking.service_id} AND workspace_id = ${booking.workspace_id}`;
+          const sv = await sql`
+            SELECT capacity, availability, cancellation_fee_amount, cancellation_window_hours
+              FROM services WHERE id = ${booking.service_id} AND workspace_id = ${booking.workspace_id}
+          `;
           if (sv.rows[0]?.capacity) capacity = Number(sv.rows[0].capacity);
           serviceAvailability = sv.rows[0]?.availability || null;
+          cancelFee = Number(sv.rows[0]?.cancellation_fee_amount || 0);
+          cancelWindowHours = Number(sv.rows[0]?.cancellation_window_hours || 0);
+        }
+
+        // Cancellation-window policy applies to reschedules too: once the
+        // CURRENT slot is inside the fee window, moving it out for free
+        // would dodge the late-cancel fee (reschedule-then-cancel loophole).
+        if (cancelFee > 0 && cancelWindowHours > 0) {
+          const curDateISO = booking.date instanceof Date
+            ? booking.date.toISOString().slice(0, 10) : booking.date;
+          const curStartMs = slotEpochMs(curDateISO, booking.start_min, workspaceTz);
+          if (curStartMs < Date.now() + cancelWindowHours * 60 * 60 * 1000) {
+            return badRequest(res, `This session starts within the ${cancelWindowHours}-hour cancellation window and can't be rescheduled online anymore - contact the business directly.`);
+          }
         }
 
         // getUTCDay() (not getDay()) - matches the other booking paths

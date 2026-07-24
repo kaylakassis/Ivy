@@ -125,8 +125,14 @@ export default async function handler(req, res) {
         activity        = ${JSON.stringify(newActivity)}::jsonb,
         updated_at      = NOW()
       WHERE id = ${invoiceRow.id} AND workspace_id = ${workspaceId}
+        AND status NOT IN ('paid', 'voided', 'refunded')
       RETURNING *
     `;
+    // Same race guard as invoices/send: a payment landing between the
+    // read and this write must not be reverted to a payable state.
+    if (updated.rows.length === 0) {
+      return badRequest(res, 'This invoice was just paid or voided - refresh to see its current state.');
+    }
 
     const url = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
     return ok(res, {

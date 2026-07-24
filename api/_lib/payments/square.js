@@ -119,8 +119,11 @@ export async function fetchFirstLocation({ accessToken }) {
 // rotated pair.
 const TOKEN_REFRESH_WINDOW_MS = 7 * 24 * 3600 * 1000;
 
-async function refreshSquareToken(creds, workspaceId) {
-  const res = await fetchWithTimeout(`${squareApiBase()}/oauth2/token`, {
+async function refreshSquareToken(creds, workspaceId, env = squareEnv()) {
+  // env comes from the workspace's stored squareEnvironment - refreshing
+  // against the platform-default host silently fails for a merchant
+  // connected under a different environment than the current env var.
+  const res = await fetchWithTimeout(`${squareApiBase(env)}/oauth2/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Square-Version': '2024-10-17' },
     body: JSON.stringify({
@@ -164,7 +167,7 @@ async function loadSquareCreds(settings, workspaceId = null) {
   if (creds.refresh_token && nearExpiry) {
     let result;
     try {
-      result = await refreshSquareToken(creds, workspaceId);
+      result = await refreshSquareToken(creds, workspaceId, settings.squareEnvironment || squareEnv());
     } catch (e) {
       result = { ok: false, detail: e.message };
     }

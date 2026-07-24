@@ -154,6 +154,21 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'DELETE') {
+      // A live Stripe-billed membership must be cancelled first: the
+      // cascade would delete the membership row while Stripe kept
+      // charging, and the reconcile job would then auto-provision a
+      // brand-new client for the still-live subscription - silently
+      // resurrecting the person the owner just deleted.
+      const liveMem = await sql`
+        SELECT id FROM client_memberships
+         WHERE client_id = ${id} AND workspace_id = ${workspaceId}
+           AND status IN ('active', 'past_due')
+           AND stripe_subscription_id IS NOT NULL
+         LIMIT 1
+      `;
+      if (liveMem.rows.length > 0) {
+        return badRequest(res, "This client has an active membership that's still billing. Cancel their membership first (client profile → Memberships), then delete.");
+      }
       await sql`DELETE FROM clients WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       return noContent(res);
     }

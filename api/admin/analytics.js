@@ -519,6 +519,41 @@ export default async function handler(req, res) {
           return { day: d.rows[0]?.n || 0, week: w.rows[0]?.n || 0, month: m.rows[0]?.n || 0 };
         })();
 
+    // Write-back: when we fell back to live queries (cache row missing
+    // or older than 60s), store what we just computed so the next
+    // requests inside the freshness window hit the cache instead of
+    // re-running the full aggregation. Without this the "60s
+    // revalidation" recomputed live on EVERY request for ~14 of every
+    // 15 minutes (the cron is the only other writer), and the 30s
+    // Overview poll multiplied that per open tab. Best-effort - a
+    // failed upsert never breaks the response.
+    if (!cachedTotals) {
+      const totalsSnapshot = {
+        users:           usersRow.rows[0]?.n || 0,
+        businessActive:  bizActiveRow.rows[0]?.n || 0,
+        businessTrial:   bizTrialRow.rows[0]?.n || 0,
+        sponsored:       sponsoredRow.rows[0]?.n || 0,
+        affiliate:       affiliateRow.rows[0]?.n || 0,
+        clientOnly:      clientOnlyRow.rows[0]?.n || 0,
+        revenueAllTime:  Number(revenueAllRow.rows[0]?.total || 0),
+        activeOwnersDay:   activeOwners.day,
+        activeOwnersWeek:  activeOwners.week,
+        activeOwnersMonth: activeOwners.month,
+      };
+      await sql`
+        INSERT INTO admin_analytics_cache (key, value, computed_at)
+        VALUES ('totals', ${JSON.stringify(totalsSnapshot)}::jsonb, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, computed_at = NOW()
+      `.catch(() => {});
+    }
+    if (!cachedPlatform) {
+      await sql`
+        INSERT INTO admin_analytics_cache (key, value, computed_at)
+        VALUES ('platformImpact', ${JSON.stringify(platformImpact)}::jsonb, NOW())
+        ON CONFLICT (key) DO UPDATE SET value = EXCLUDED.value, computed_at = NOW()
+      `.catch(() => {});
+    }
+
     return ok(res, {
       range: { from: fromIso, to: toIso },
       totals: {

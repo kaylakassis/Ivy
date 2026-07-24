@@ -129,6 +129,9 @@ export function cleanItems(input) {
     if (!Number.isFinite(rate) || rate < 0) return null;
     out.push({
       id: it.id || `li_${Math.random().toString(36).slice(2, 8)}`,
+      // POS lines carry the source product so void/restore can restock;
+      // survive owner edits rather than being silently stripped.
+      ...(it.productId ? { productId: String(it.productId).slice(0, 64) } : {}),
       description: desc,
       quantity: Math.round(qty * 1000) / 1000,
       rate: Math.round(rate * 100) / 100,

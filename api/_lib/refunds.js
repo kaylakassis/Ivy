@@ -63,7 +63,16 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
   let stripeRefundId = null;
   if (inv.stripe_payment_intent) {
     const fs = await fetchFinanceSettings(workspaceId);
-    const provider = fs?.paymentProvider || 'stripe';
+    // Route the refund to the provider that CAPTURED the payment, not
+    // whatever provider is currently selected - owners who switch
+    // providers must still be able to refund older invoices. Each
+    // capture path leaves a distinct signature: PayPal stamps
+    // paid_method='paypal'; Stripe payment ids are pi_/ch_-prefixed;
+    // Square ids are neither.
+    const provider = inv.paid_method === 'paypal' ? 'paypal'
+      : /^(pi_|ch_)/.test(inv.stripe_payment_intent) ? 'stripe'
+      : (fs?.paymentProvider === 'square' || inv.paid_method === 'card') ? 'square'
+      : (fs?.paymentProvider || 'stripe');
     if (provider === 'square') {
       const out = await squareCreateRefund({
         workspaceId, settings: fs, paymentIntent: inv.stripe_payment_intent,

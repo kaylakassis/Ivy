@@ -101,7 +101,9 @@ export default async function handler(req, res) {
     const booking = r.rows[0];
     if (!booking) return notFound(res, 'Booking not found');
     if (booking.cancelled_at) return badRequest(res, "Can't complete a cancelled booking");
-    if (booking.no_show_at) return badRequest(res, "Can't complete a no-show booking");
+    if (booking.no_show_at && req.method === 'POST') {
+      return badRequest(res, "Can't complete a no-show booking - undo the no-show first");
+    }
 
     const cancelledOccs = (booking.cancelled_occurrences || []).map((d) =>
       d instanceof Date ? d.toISOString().slice(0, 10) : String(d),

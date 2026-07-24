@@ -36,16 +36,19 @@ async function handler(req, res) {
   try {
     await ensureSchemaApplied();
 
-    // Keyset-paginated + deadline-bounded loop (mirrors daily-return). The
-    // old unbounded serial loop pulled EVERY connected workspace in one
-    // pass - each pull is a Google round-trip, so past a few thousand
-    // connections the run blows the 300s function budget and the tail of
-    // the candidate set never syncs. Bail near the budget instead; the
-    // hourly cadence means the next run picks the stragglers up.
+    // Deadline-bounded, LEAST-RECENTLY-SYNCED-first loop. Ordering by the
+    // per-workspace progress stamp (google_inbound_last_sync_at, written
+    // by pullBusyTimes on success and below on failure) means a run that
+    // hits the budget leaves the untouched tail with the OLDEST stamps -
+    // so the next hourly run starts exactly there. The old fixed
+    // workspace_id keyset restarted from the same low-UUID prefix every
+    // run, permanently starving workspaces past the budget. The
+    // run-start cutoff stops one run from re-pulling rows it already
+    // stamped.
     const results = [];
     let ran = 0;
     let emptied = false;
-    let lastId = '00000000-0000-0000-0000-000000000000';
+    const runStart = new Date();
     await withDeadline(async (deadline) => {
       while (Date.now() < deadline) {
         // eslint-disable-next-line no-await-in-loop
@@ -53,8 +56,9 @@ async function handler(req, res) {
           SELECT workspace_id FROM calendar_settings
           WHERE google_refresh_token_encrypted IS NOT NULL
             AND google_block_inbound = TRUE
-            AND workspace_id > ${lastId}::uuid
-          ORDER BY workspace_id ASC
+            AND (google_inbound_last_sync_at IS NULL
+              OR google_inbound_last_sync_at < ${runStart})
+          ORDER BY google_inbound_last_sync_at ASC NULLS FIRST
           LIMIT ${BATCH_SIZE}
         `;
         if (rows.length === 0) { emptied = true; break; }
@@ -62,9 +66,14 @@ async function handler(req, res) {
           // eslint-disable-next-line no-await-in-loop
           const out = await pullBusyTimes({ workspaceId: r.workspace_id });
           if (!out.ok) {
+            // Stamp progress on failure too - otherwise a workspace with
+            // a permanently-bad token sorts first forever and starves
+            // the healthy tail behind it.
             // eslint-disable-next-line no-await-in-loop
             await sql`
-              UPDATE calendar_settings SET google_inbound_last_error = ${out.reason}
+              UPDATE calendar_settings SET
+                google_inbound_last_error = ${out.reason},
+                google_inbound_last_sync_at = NOW()
               WHERE workspace_id = ${r.workspace_id}
             `;
           }
@@ -72,7 +81,6 @@ async function handler(req, res) {
           ran++;
           if (Date.now() >= deadline) break;
         }
-        lastId = rows[rows.length - 1].workspace_id;
         if (rows.length < BATCH_SIZE) { emptied = true; break; }
       }
     }, { budgetMs: BUDGET_MS });

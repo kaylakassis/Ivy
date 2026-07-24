@@ -78,9 +78,15 @@ export default async function handler(req, res) {
       ? new Date(subscription.trial_end * 1000)
       : periodEnd;
 
+    // Apple guard: a fresh checkout session (sessionId path) is the owner
+    // explicitly choosing Stripe billing, so it reclaims the workspace from
+    // Apple/RevenueCat. The stored-subscription fallback must NOT clobber
+    // an Apple-billed workspace with stale Stripe state.
+    const isFreshCheckout = !!sessionId;
     await sql`
       UPDATE workspaces SET
         subscription_status     = ${mapped},
+        subscription_source     = CASE WHEN ${isFreshCheckout} THEN 'stripe' ELSE subscription_source END,
         stripe_customer_id      = ${customerId},
         stripe_subscription_id  = ${subscription.id},
         subscription_period_end = ${periodEnd},
@@ -94,6 +100,7 @@ export default async function handler(req, res) {
           ELSE converted_at
         END
       WHERE id = ${workspaceId}
+        AND (${isFreshCheckout} OR COALESCE(subscription_source, 'stripe') <> 'apple')
     `;
     if (PAYING_STATUSES.has(mapped)) {
       await attributePayment({

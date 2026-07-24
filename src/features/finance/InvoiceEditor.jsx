@@ -102,8 +102,25 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
               fontSize: 12.5, color: 'var(--muted)', display: 'flex', alignItems: 'center', gap: 8,
             }}>
               <Icons.Lock size={13}/>
-              {invoice.status === 'paid'   && 'Paid - invoice is locked.'}
-              {invoice.status === 'voided' && 'Voided - invoice is locked.'}
+              <span style={{ flex: 1 }}>
+                {invoice.status === 'paid'   && 'Paid - invoice is locked.'}
+                {invoice.status === 'voided' && 'Voided - invoice is locked. Restore it to edit or resend.'}
+                {invoice.status === 'refunded' && 'Refunded - invoice is locked.'}
+              </span>
+              {invoice.status === 'voided' && (
+                <button className="btn btn-outline" disabled={busy}
+                  onClick={async () => {
+                    setBusy(true); setErr(null);
+                    try {
+                      // The un-void endpoint accepts exactly { status: 'draft' }.
+                      await onSave({ status: 'draft' });
+                    } catch (e) { setErr(e.message || 'Restore failed'); }
+                    finally { setBusy(false); }
+                  }}
+                  style={{ fontSize: 12, padding: '5px 10px', flexShrink: 0 }}>
+                  Restore to draft
+                </button>
+              )}
             </div>
           )}
 

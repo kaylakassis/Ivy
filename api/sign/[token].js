@@ -323,6 +323,9 @@ async function signDoc(req, res) {
       // Last signer completed → finalize document with tamper-evident hash
       // and (if it's a PDF) stamp the flattened final artifact.
       const finalDoc = await finalizeCompletedDoc(doc.id);
+      if (!finalDoc) {
+        return badRequest(res, 'This document is no longer available to sign.');
+      }
       await maybeStampFinalPdf(finalDoc);
       await notifyOwnerOnCompletion(finalDoc);
       // Tell every signer who participated that the doc is fully
@@ -412,9 +415,14 @@ async function signDoc(req, res) {
         })},
         activity        = ${JSON.stringify(newActivity)}::jsonb,
         updated_at      = NOW()
-      WHERE id = ${doc.id}
+      WHERE id = ${doc.id} AND status = 'sent'
       RETURNING *
     `;
+    // A void racing this in-flight signature wins - never overwrite
+    // 'voided' (resolveByToken checked status at read time only).
+    if (updated.rows.length === 0) {
+      return badRequest(res, 'This document is no longer available to sign.');
+    }
     await maybeStampFinalPdf(updated.rows[0]);
     await notifyOwnerOnCompletion(updated.rows[0]);
     // Re-read the doc after stamping so the response includes the
@@ -584,10 +592,12 @@ async function finalizeCompletedDoc(docId) {
       completion_hash = ${completionHash},
       activity        = ${JSON.stringify(newActivity)}::jsonb,
       updated_at      = NOW()
-    WHERE id = ${docId}
+    WHERE id = ${docId} AND status = 'sent'
     RETURNING *
   `;
-  return updated.rows[0];
+  // 0 rows = a void won the race against this in-flight signature;
+  // callers bail rather than overwrite 'voided' with 'completed'.
+  return updated.rows[0] || null;
 }
 
 // Stable canonicalization: lowercase emails, ISO timestamps, sort

@@ -45,15 +45,23 @@ export default async function handler(req, res) {
         if (!Number.isInteger(n) || n === 0 || Math.abs(n) > 1000) {
           return badRequest(res, 'addCredits must be a non-zero integer (-1000…1000)');
         }
-        const newRemaining = Math.max(0, cur.credits_remaining + n);
-        const newTotal = n > 0 ? cur.credits_total + n : cur.credits_total;
-        push('credits_remaining', newRemaining);
-        push('credits_total', newTotal);
+        // Atomic SQL delta, matching consumeCredit/restoreCredit. The old
+        // read-modify-write (cur.credits_remaining + n computed in JS)
+        // could silently undo a concurrent portal booking's consume -
+        // a lost update worth a free session.
+        values.push(n);
+        const p = `$${values.length}`;
+        sets.push(`credits_remaining = GREATEST(0, credits_remaining + ${p})`);
+        if (n > 0) sets.push(`credits_total = credits_total + ${p}`);
         // Auto-reactivate on top-up, but ONLY when the body doesn't set
         // status explicitly - otherwise the UPDATE would carry two
         // `status =` assignments (a Postgres error). Explicit status wins.
-        if (newRemaining > 0 && (cur.status === 'exhausted' || cur.status === 'cancelled')
-            && !('status' in body)) push('status', 'active');
+        if (!('status' in body)) {
+          sets.push(`status = CASE
+            WHEN GREATEST(0, credits_remaining + ${p}) > 0
+             AND status IN ('exhausted', 'cancelled')
+            THEN 'active' ELSE status END`);
+        }
       }
       if ('extendDays' in body) {
         const n = Number(body.extendDays);

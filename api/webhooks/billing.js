@@ -126,9 +126,12 @@ async function onCheckoutCompleted(session, secretKey) {
   const isTrialing = status === 'trialing';
   const trialEnd = sub?.trial_end ? new Date(sub.trial_end * 1000) : periodEnd;
 
+  // A completed web checkout is the owner explicitly choosing Stripe
+  // billing, so it may reclaim a workspace previously billed via Apple.
   await sql`
     UPDATE workspaces SET
       subscription_status     = ${status},
+      subscription_source     = 'stripe',
       stripe_customer_id      = ${session.customer || null},
       stripe_subscription_id  = ${sub?.id || null},
       subscription_period_end = ${periodEnd},
@@ -176,7 +179,11 @@ async function onSubscriptionChanged(sub, eventType) {
   // trial that's the trialing→active flip; for a no-trial sub it's immediate.
   const isActive = status === 'active';
 
-  // Try by subscription id first.
+  // Try by subscription id first. The subscription_source guard keeps a
+  // lifecycle event for a leftover Stripe sub from clobbering the state
+  // of a workspace now billed through Apple (RevenueCat owns those rows;
+  // only an explicit new web checkout reclaims them - see
+  // onCheckoutCompleted).
   const updated = await sql`
     UPDATE workspaces SET
       subscription_status     = ${status},
@@ -185,11 +192,12 @@ async function onSubscriptionChanged(sub, eventType) {
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
     WHERE stripe_subscription_id = ${sub.id}
+      AND COALESCE(subscription_source, 'stripe') <> 'apple'
     RETURNING id
   `;
   let resolvedWorkspaceId = updated.rows[0]?.id || null;
   if (updated.rows.length === 0 && workspaceId) {
-    await sql`
+    const fallback = await sql`
       UPDATE workspaces SET
         subscription_status     = ${status},
         stripe_subscription_id  = ${sub.id},
@@ -199,8 +207,10 @@ async function onSubscriptionChanged(sub, eventType) {
         trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
         converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
       WHERE id = ${workspaceId}
+        AND COALESCE(subscription_source, 'stripe') <> 'apple'
+      RETURNING id
     `;
-    resolvedWorkspaceId = workspaceId;
+    resolvedWorkspaceId = fallback.rows[0]?.id || null;
   }
 
   if (resolvedWorkspaceId && PAYING_STATUSES.has(status)) {
@@ -265,6 +275,8 @@ async function onInvoiceEvent(invoice, type, secretKey) {
   // bookkeeping completely so a recovered subscription leaves no
   // ghosts. The api/cron/subscription-dunning cron reads
   // past_due_since to decide when to suspend.
+  // Same Apple guard as onSubscriptionChanged: invoice events for a
+  // leftover Stripe sub must not touch a workspace RevenueCat now owns.
   let r;
   if (type === 'invoice.payment_failed') {
     r = await sql`
@@ -274,6 +286,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
         subscription_past_due_since = COALESCE(subscription_past_due_since, NOW()),
         subscription_failed_attempts = subscription_failed_attempts + 1
       WHERE stripe_subscription_id = ${sub.id}
+        AND COALESCE(subscription_source, 'stripe') <> 'apple'
       RETURNING id
     `;
   } else if (type === 'invoice.payment_succeeded') {
@@ -287,6 +300,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
         subscription_last_dunning_at = NULL,
         converted_at                = COALESCE(converted_at, NOW())
       WHERE stripe_subscription_id = ${sub.id}
+        AND COALESCE(subscription_source, 'stripe') <> 'apple'
       RETURNING id
     `;
   } else {
@@ -295,6 +309,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
         subscription_status     = ${status},
         subscription_period_end = ${periodEnd}
       WHERE stripe_subscription_id = ${sub.id}
+        AND COALESCE(subscription_source, 'stripe') <> 'apple'
       RETURNING id
     `;
   }

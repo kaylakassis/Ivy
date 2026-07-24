@@ -76,7 +76,9 @@ export default async function handler(req, res) {
         if (it.productId) {
           const p = prodMap[it.productId];
           if (!p) return { status: 400, body: { error: 'Unknown product in sale' } };
-          lineItems.push({ id: lid(), description: p.name, quantity: qty, rate: Number(p.price) });
+          // productId is retained on the line item so voiding an unpaid
+          // sale can restock, and reporting can join back to the product.
+          lineItems.push({ id: lid(), productId: p.id, description: p.name, quantity: qty, rate: Number(p.price) });
           if (p.track_stock) decrements.push({ productId: p.id, name: p.name, qty });
         } else {
           const desc = (it.description || '').toString().slice(0, 500);

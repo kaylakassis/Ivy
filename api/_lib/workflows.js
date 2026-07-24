@@ -613,14 +613,18 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
   const days = Number(cfg.daysInactive ?? cfg.daysAfter ?? 30);
 
   if (wf.trigger_type === 'client_inactive') {
-    // Active clients whose most-recent non-cancelled booking is EXACTLY
-    // N days old. Equality (not <=) means each inactivity episode fires
-    // once, the day the threshold is crossed - the old unbounded match
-    // combined with the per-UTC-day dedupe re-sent the same win-back to
-    // every still-inactive client every single day. Mirrors the
-    // booking_completed matcher's exact-day semantics. If the client
-    // books again and later goes quiet, MAX(b.date) moves and a fresh
-    // episode fires at the new threshold day.
+    // Active clients whose most-recent non-cancelled booking crossed the
+    // N-day threshold within the last few days, EXCLUDING clients whose
+    // current inactivity episode already fired (any run of this workflow
+    // after their last booking). One fire per episode, like before, but:
+    //   - the catch-up window means a missed cron day (or >LIMIT overflow,
+    //     because fired clients drop out of the match) doesn't lose the
+    //     episode forever, which the old exact-day `=` did;
+    //   - the NOT EXISTS is the episode guard, so the widened window
+    //     can't re-send daily (the old bug the exact-day form fixed).
+    // If the client books again and later goes quiet, MAX(b.date) moves
+    // past the last run row and a fresh episode fires.
+    const CATCHUP_DAYS = 3;
     const { rows: clients } = await sql`
       SELECT c.*, MAX(b.date) AS last_booking
         FROM clients c
@@ -630,7 +634,15 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
          AND c.stage = 'active'
        GROUP BY c.id
        HAVING MAX(b.date) IS NOT NULL
-          AND MAX(b.date) = (CURRENT_DATE - (${days}::int || ' days')::interval)::date
+          AND MAX(b.date) <= (CURRENT_DATE - (${days}::int || ' days')::interval)::date
+          AND MAX(b.date) >  (CURRENT_DATE - ((${days}::int + ${CATCHUP_DAYS}) || ' days')::interval)::date
+          AND NOT EXISTS (
+            SELECT 1 FROM workflow_runs wr
+             WHERE wr.workflow_id = ${wf.id}
+               AND wr.client_id = c.id
+               AND (wr.triggered_at AT TIME ZONE 'UTC')::date > MAX(b.date)
+          )
+       ORDER BY MAX(b.date) ASC
        LIMIT ${Math.max(1, Math.min(100, remaining))}
     `;
     return runWithConcurrency(clients, 10, async (c) => {

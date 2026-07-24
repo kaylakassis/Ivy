@@ -10,6 +10,7 @@ import { readBody } from '../../_lib/body.js';
 import { serializeBooking, hasConflict, losesBookingRace, withinAvailability, VALID_RECURRENCE } from '../../_lib/calendar.js';
 import { syncOnBookingUpdated, syncOnBookingDeleted, syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { restoreCredit } from '../../_lib/packages.js';
+import { restoreGiftCardCreditForBooking } from '../../_lib/giftCards.js';
 import { promoteWaitlistOnCancel } from '../../_lib/waitlist.js';
 import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled } from '../../_lib/bookingNotify.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
@@ -280,6 +281,9 @@ export default async function handler(req, res) {
       notifyBookingCancellation({ workspaceId, bookingId: id, source: 'owner' });
       // Refund the package credit if this booking consumed one.
       await restoreCredit({ workspaceId, clientPackageId: cancelled.client_package_id });
+      // Put any gift-card credit back on the card (exactly-once inside).
+      await restoreGiftCardCreditForBooking({ workspaceId, bookingId: id })
+        .catch((err) => console.error('[booking cancel] gift card restore failed:', err.message));
       // Promote next waitlist entry into a real booking. Best-effort -
       // any failure logs but doesn't fail the cancel.
       try {

@@ -36,6 +36,14 @@ export default async function handler(req, res) {
     if (invite.used_count >= invite.max_uses) {
       return badRequest(res, 'This invite is fully claimed');
     }
+    // An archived group is closed to new joiners - old invite links must
+    // not let someone in (posting is already blocked, but joining would
+    // still fire an 'invite_accepted' system message into the thread).
+    const thread = (await sql`
+      SELECT name, archived FROM group_threads WHERE id = ${invite.thread_id} LIMIT 1
+    `).rows[0];
+    if (!thread) return badRequest(res, 'This group no longer exists');
+    if (thread.archived) return badRequest(res, 'This group has been archived by the business');
 
     // Resolve the user → clients-row in the invite's workspace. Prefer
     // an existing row (matched by user_id, then by email if verified).
@@ -103,8 +111,7 @@ export default async function handler(req, res) {
       VALUES (${invite.thread_id}, ${invite.workspace_id}, 'system', 'invite_accepted',
               ${`${user.name || user.email} joined via invite link.`})
     `;
-    const thr = await sql`SELECT name FROM group_threads WHERE id = ${invite.thread_id} LIMIT 1`;
-    return ok(res, { groupId: invite.thread_id, threadName: thr.rows[0]?.name || null });
+    return ok(res, { groupId: invite.thread_id, threadName: thread.name || null });
   } catch (err) {
     return serverError(res, err);
   }

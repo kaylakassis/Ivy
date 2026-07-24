@@ -1,4 +1,5 @@
 // POST /api/calendar/bookings/no-show   body: { id, chargeFee?: boolean }
+// DELETE /api/calendar/bookings/no-show body: { id }   → undo the mark
 //
 // Owner-only. Marks a booking as a no-show and (optionally) auto-
 // charges the service's no-show fee against the client's saved card.
@@ -6,6 +7,10 @@
 // chargeFee defaults to TRUE when the service has a non-zero fee +
 // the client has a card on file. The owner can pass FALSE to mark
 // the no-show without charging (e.g. they're letting it slide).
+//
+// DELETE clears no_show_at but deliberately KEEPS fee_charged_* -
+// if a fee was actually charged, undoing the flag must not erase the
+// record of real money moving (refunds happen in Stripe, not here).
 //
 // Lives as a static sibling to /api/calendar/bookings/[id].js so
 // Vercel routes /no-show here, /[id] to the dynamic handler.
@@ -20,7 +25,9 @@ import { serializeBooking } from '../../_lib/calendar.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
+  if (req.method !== 'POST' && req.method !== 'DELETE') {
+    return methodNotAllowed(res, ['POST', 'DELETE']);
+  }
   if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res);
@@ -31,6 +38,20 @@ export default async function handler(req, res) {
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
     if (!id) return badRequest(res, 'id is required');
+
+    if (req.method === 'DELETE') {
+      // Undo a stray no-show click. Fee columns stay untouched (see header).
+      const undone = await sql`
+        UPDATE bookings SET no_show_at = NULL, updated_at = NOW()
+        WHERE id = ${id} AND workspace_id = ${workspaceId}
+          AND no_show_at IS NOT NULL
+        RETURNING *
+      `;
+      if (undone.rows.length === 0) {
+        return badRequest(res, 'Booking not found or not marked as a no-show');
+      }
+      return ok(res, { booking: serializeBooking(undone.rows[0]), undone: true });
+    }
 
     // Owner-side ownership check + pull the bits we need to charge.
     const r = await sql`
