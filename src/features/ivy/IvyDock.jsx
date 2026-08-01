@@ -115,26 +115,108 @@ export default function IvyDock() {
 
 // ── FAB ────────────────────────────────────────────────────────────
 
+// Which corner the button parks in. Persisted per device so it stays
+// where the owner put it.
+const CORNER_KEY = 'ivy_fab_corner';
+const CORNERS = ['bottom-right', 'bottom-left', 'top-right', 'top-left'];
+
+function readCorner() {
+  try {
+    const v = localStorage.getItem(CORNER_KEY);
+    return CORNERS.includes(v) ? v : 'bottom-right';
+  } catch { return 'bottom-right'; }
+}
+
+// Offsets per corner. Bottom offsets clear the mobile tab bar + the
+// iOS home indicator; top offsets clear the header.
+function cornerStyle(corner, isMobile) {
+  const side = isMobile ? 16 : 24;
+  const bottom = isMobile
+    ? 'calc(env(safe-area-inset-bottom, 0px) + 84px)'
+    : 28;
+  const top = isMobile
+    ? 'calc(env(safe-area-inset-top, 0px) + 72px)'
+    : 88;
+  const vertical = corner.startsWith('bottom') ? { bottom, top: 'auto' } : { top, bottom: 'auto' };
+  const horizontal = corner.endsWith('right') ? { right: side, left: 'auto' } : { left: side, right: 'auto' };
+  return { ...vertical, ...horizontal };
+}
+
 function FabButton({ onClick, notify, isMobile }) {
+  const [corner, setCorner] = useState(readCorner);
+  // Live pixel position while dragging; null when parked in a corner.
+  const [drag, setDrag] = useState(null);
+  const movedRef = useRef(false);
+  const startRef = useRef(null);
+
+  const onPointerDown = (e) => {
+    // Ignore secondary buttons; let keyboard/AT activation fall through
+    // to onClick untouched.
+    if (e.button != null && e.button !== 0) return;
+    movedRef.current = false;
+    const rect = e.currentTarget.getBoundingClientRect();
+    startRef.current = {
+      dx: e.clientX - rect.left,
+      dy: e.clientY - rect.top,
+      x0: e.clientX,
+      y0: e.clientY,
+    };
+    e.currentTarget.setPointerCapture?.(e.pointerId);
+  };
+
+  const onPointerMove = (e) => {
+    const s = startRef.current;
+    if (!s) return;
+    // A few px of slop so a normal tap is never treated as a drag.
+    if (!movedRef.current
+      && Math.abs(e.clientX - s.x0) < 6 && Math.abs(e.clientY - s.y0) < 6) return;
+    movedRef.current = true;
+    setDrag({ left: e.clientX - s.dx, top: e.clientY - s.dy });
+  };
+
+  const onPointerUp = (e) => {
+    const s = startRef.current;
+    startRef.current = null;
+    e.currentTarget.releasePointerCapture?.(e.pointerId);
+    if (!movedRef.current) { setDrag(null); return; }  // tap → onClick handles it
+    // Snap to the nearest corner by which half of the viewport the
+    // button's center landed in.
+    const cx = e.clientX;
+    const cy = e.clientY;
+    const next = `${cy < window.innerHeight / 2 ? 'top' : 'bottom'}-${cx < window.innerWidth / 2 ? 'left' : 'right'}`;
+    setCorner(next);
+    setDrag(null);
+    try { localStorage.setItem(CORNER_KEY, next); } catch { /* private mode */ }
+  };
+
+  const placement = drag
+    ? { left: drag.left, top: drag.top, right: 'auto', bottom: 'auto' }
+    : cornerStyle(corner, isMobile);
+
   return (
     <button
       type="button"
-      aria-label="Open Ivy"
-      onClick={onClick}
+      aria-label="Open Ivy (drag to move)"
+      title="Drag to move me to any corner"
+      onClick={() => { if (!movedRef.current) onClick(); }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
       className="ivy-dock-fab"
       style={{
         position: 'fixed',
-        right: isMobile ? 16 : 24,
-        bottom: isMobile
-          ? 'calc(env(safe-area-inset-bottom, 0px) + 84px)'
-          : 28,
-        zIndex: 240,
+        ...placement,
+        // Sits ABOVE the nav (60-71) but BELOW every drawer / modal
+        // overlay (100+). Without this the button floated over drawer
+        // footers and covered their Save button.
+        zIndex: 75,
         width: 60, height: 60, borderRadius: 999,
-        border: 'none', cursor: 'pointer',
+        border: 'none', cursor: drag ? 'grabbing' : 'pointer',
+        touchAction: 'none',   // let us handle the drag, not the scroller
         background: 'var(--accent)', color: 'var(--accent-ink)',
         display: 'flex', alignItems: 'center', justifyContent: 'center',
         boxShadow: '0 12px 32px rgba(46,49,104,.28), 0 2px 8px rgba(0,0,0,.06)',
-        transition: 'transform .15s ease, box-shadow .15s ease',
+        transition: drag ? 'none' : 'transform .15s ease, box-shadow .15s ease',
       }}
     >
       <IvyMark size={26} />
