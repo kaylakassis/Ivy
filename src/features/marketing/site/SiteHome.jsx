@@ -3,6 +3,7 @@
 // from Chrome.jsx; page-specific CSS + interactivity live here.
 import { useEffect, useRef, useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
+import { STACK_TOTAL } from '../../../lib/pricing.js';
 
 const JSON_LD = {
   '@context': 'https://schema.org',
@@ -482,8 +483,8 @@ export default function SiteHome() {
       <section className="alt">
         <div className="container center">
           <span className="eyebrow">One price. Every tool you'd otherwise piece together.</span>
-          <h2>You're probably spending $138/month or more on stitched-together tools.</h2>
-          <p className="section-sub">On average, solo businesses spend $138/month - or even more - running tools like these in parallel. Ivy does each of them, then makes them talk to each other, so booking → invoice → message → follow-up is one fluid motion.</p>
+          <h2>You're probably spending {'$' + STACK_TOTAL}/month or more on stitched-together tools.</h2>
+          <p className="section-sub">On average, solo businesses spend {'$' + STACK_TOTAL}/month - or even more - running tools like these in parallel. Ivy does each of them, then makes them talk to each other, so booking → invoice → message → follow-up is one fluid motion.</p>
           <div className="replace-grid">
             <div className="replace-card"><div className="tool">HoneyBook</div><div className="price">$39/mo</div><div className="with">clients + invoices + contracts</div></div>
             <div className="replace-card"><div className="tool">Calendly</div><div className="price">$12/mo</div><div className="with">booking pages + reminders</div></div>
@@ -494,7 +495,7 @@ export default function SiteHome() {
             <div className="replace-card"><div className="tool">DocuSign</div><div className="price">$15/mo</div><div className="with">legally-binding e-signatures</div></div>
           </div>
           <div className="replace-total">
-            <span className="old">$138+/mo on average</span>
+            <span className="old">{'$' + STACK_TOTAL}+/mo on average</span>
             <span className="new">$8.99<small>/week · no transaction fees</small></span>
           </div>
           <p style={{ marginTop: '20px', fontSize: '14px' }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>See how Ivy compares to HoneyBook, Calendly, and the DIY stack →</a></p>
@@ -595,7 +596,7 @@ export default function SiteHome() {
             <div className="feat"><div className="icon">💬</div><h3>Two-way client messaging</h3><p>Direct and group threads with photos, voice memos, and auto-transcription. Replies land in your clients' free portal.</p></div>
             <div className="feat"><div className="icon">🌐</div><h3>Website builder + custom domain</h3><p>Drag-and-drop pages published to your own domain, SEO built in. Site forms turn visitors into leads automatically.</p></div>
             <div className="feat"><div className="icon">⚡</div><h3>Workflows + automated reminders</h3><p>"When a booking completes, wait 2 days, then ask for a review." Describe the rule - Ivy builds the workflow.</p></div>
-            <div className="feat"><div className="icon">💳</div><h3>Memberships, packages & gift cards</h3><p>Recurring revenue built in - plus in-person sales with Tap to Pay on iPhone/Android, and reviews + rewards.</p></div>
+            <div className="feat"><div className="icon">💳</div><h3>Memberships, packages & gift cards</h3><p>Recurring revenue built in - plus in-person QR checkout, and reviews + rewards.</p></div>
             <div className="feat"><div className="icon">📊</div><h3>Goals + finance dashboard</h3><p>Revenue, expenses, time tracking, and a Schedule-C-ready tax export compatible with QuickBooks and Xero.</p></div>
           </div>
         </div>

@@ -24,6 +24,7 @@
 // "Save & exit" exits without marking the wizard complete; the next
 // sign-in resumes here.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { browserTimeZone } from '../../lib/timezones.js';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
@@ -524,7 +525,14 @@ export default function OnboardingPage() {
   const saveAvailability = async () => {
     setBusy(true); setErr(null);
     try {
-      await api.patch('/calendar', { availability });
+      await api.patch('/calendar', {
+        availability,
+        // Seed the booking timezone from the browser (same as the
+        // Ivy-guided setup). Without this the workspace defaults to UTC
+        // and reminders / same-day cutoffs / calendar invites run hours
+        // off for every owner who picked the manual path.
+        ...(browserTimeZone() ? { timezone: browserTimeZone() } : {}),
+      });
       await goNext();
     } catch (e) { setErr(prettifyError(e)); }
     finally { setBusy(false); }
@@ -666,7 +674,12 @@ export default function OnboardingPage() {
           }}>{err}</div>
         )}
 
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8 }}>
+        {/* flexWrap: on optional steps this row holds FOUR buttons
+            (Back | Skip | Save & exit | Save & continue) ≈ 484px - at
+            390px the no-wrap row stretched the layout viewport and
+            clipped the primary CTA off-screen. Wrapping keeps every
+            button tappable on a phone. */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginTop: 8, flexWrap: 'wrap' }}>
           {stepIdx > 0 && stepIdx < steps.length - 1 && (
             <button onClick={goBack} className="btn btn-ghost" disabled={busy}>
               <Icons.ArrowLeft size={13}/> Back
@@ -1038,7 +1051,7 @@ function AvailabilityStep({ availability, setAvailability }) {
   return (
     <>
       <StepHeader title="When are you available?"
-        subtitle="Pick the days you take bookings and your working window. You can override individual days from Calendar → Availability later."/>
+        subtitle={`Pick the days you take bookings and your working window.${browserTimeZone() ? ` Times are in ${browserTimeZone().replace(/_/g, ' ')} (detected from your device).` : ''} You can override individual days from Calendar → Availability later.`}/>
 
       {/* Quick-set presets */}
       <div style={{

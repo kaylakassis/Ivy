@@ -62,11 +62,7 @@ export default async function handler(req, res) {
     try { ({ rows } = await sql.query(
       `SELECT i.id, i.client_id, i.number, i.status,
               i.issue_date, i.due_date, i.paid_at,
-              GREATEST(
-                (SELECT COALESCE(SUM((it->>'quantity')::numeric * (it->>'rate')::numeric), 0)
-                  FROM jsonb_array_elements(i.items) AS it) - i.discount,
-                0
-              ) * (1 + i.tax_rate / 100) AS total,
+              i.total, i.currency,
               i.tax_rate, i.discount
        FROM invoices i
        WHERE i.client_id = ANY($1)
@@ -98,6 +94,7 @@ export default async function handler(req, res) {
         dueDate:   r.due_date   instanceof Date ? r.due_date.toISOString().slice(0, 10)   : r.due_date,
         paidAt:    r.paid_at,
         total:     Number(r.total || 0),
+        currency:  r.currency || 'USD',
         businessName: m?.businessName || 'Business',
       };
     });

@@ -72,8 +72,14 @@ export default async function handler(req, res) {
     `;
 
     const url = `${appUrl()}/invoice/${encodeURIComponent(rawToken)}`;
+    // Tell the modal whether online card payment will actually work on
+    // this link, so it can warn the owner instead of promising "Apple
+    // Pay, Google Pay, or card" to a customer standing right there.
+    const { isPaymentReady } = await import('../invoice-view/[token].js');
+    const paymentEnabled = await isPaymentReady(workspaceId).catch(() => false);
     return ok(res, {
       url,
+      paymentEnabled,
       invoice: serializeInvoice(updated.rows[0]),
     });
   } catch (err) {

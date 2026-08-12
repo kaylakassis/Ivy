@@ -408,6 +408,9 @@ body.app-walled .view-toggle { display: none; }
   border-radius: 10px;
   align-self: flex-start;
   max-width: 100%;
+  /* Finance has 11 sub-tabs: without its own scroll container the row
+     pushed the WHOLE PAGE into horizontal scroll on desktop too. */
+  overflow-x: auto;
 }
 @media (max-width: 720px) {
   .tab-row {

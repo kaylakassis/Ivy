@@ -48,7 +48,7 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
 
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return badRequest(res, 'Attachment uploads not configured (BLOB_READ_WRITE_TOKEN missing)');
+      return badRequest(res, 'Uploads aren\'t available right now - please try again later or contact support');
     }
 
     const body = await readBody(req);

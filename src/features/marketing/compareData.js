@@ -16,7 +16,7 @@ export const FEATURE_ROWS = [
   { key: 'booking',       label: 'Online booking + reminders' },
   { key: 'invoicing',     label: 'Branded invoicing + recurring billing' },
   { key: 'cardonfile',    label: 'Card on file + auto-charge no-shows' },
-  { key: 'inperson',      label: 'In-person sales (Tap to Pay)' },
+  { key: 'inperson',      label: 'In-person sales (QR checkout)' },
   { key: 'memberships',   label: 'Memberships + packages' },
   { key: 'documents',     label: 'Documents + e-signature (multi-signer)' },
   { key: 'messaging',     label: 'Two-way client messaging' },

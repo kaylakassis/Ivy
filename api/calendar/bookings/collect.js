@@ -43,8 +43,8 @@ export default async function handler(req, res) {
       SELECT
         b.id, b.workspace_id, b.client_id, b.client_name, b.client_email,
         b.date, b.start_min, b.end_min,
-        b.booking_total, b.deposit_paid, b.collect_invoice_id,
-        b.cancelled_at,
+        b.booking_total, b.deposit_paid, b.gift_card_credit_cents,
+        b.collect_invoice_id, b.cancelled_at,
         s.id   AS service_id,
         s.name AS service_name,
         s.price AS service_price
@@ -58,7 +58,10 @@ export default async function handler(req, res) {
 
     const total       = Number(bk.booking_total || bk.service_price || 0);
     const depositPaid = Number(bk.deposit_paid || 0);
-    const balance     = Math.max(0, Math.round((total - depositPaid) * 100) / 100);
+    // Gift-card credit was redeemed at booking time - that value is
+    // already collected. Billing it again would charge the client twice.
+    const giftCredit  = Number(bk.gift_card_credit_cents || 0) / 100;
+    const balance     = Math.max(0, Math.round((total - depositPaid - giftCredit) * 100) / 100);
     if (balance <= 0) return badRequest(res, 'No balance to collect - already paid in full');
 
     const serviceName = bk.service_name || 'Booking';

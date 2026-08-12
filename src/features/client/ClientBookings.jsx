@@ -170,7 +170,7 @@ export default function ClientBookings() {
           {rows.map((b, i) => (
             <BookingRow key={b.id} booking={b} first={i === 0}
               cancellable={tab === 'upcoming' && !b.cancelledAt}
-              reschedulable={tab === 'upcoming' && !b.cancelledAt && !!b.bizSlug && !!b.serviceId}
+              reschedulable={tab === 'upcoming' && !b.cancelledAt && !!b.bizSlug && !!b.serviceId && !b.recurrenceRule}
               reviewable={tab === 'past' && pendingReviewIds.has(b.id)}
               onCancel={() => { setCancelErr(null); setConfirming(b); }}
               onReschedule={() => setRescheduling(b)}
@@ -258,7 +258,7 @@ function BookingRow({ booking, first, cancellable, reschedulable, reviewable, on
             color: booking.payment.fullyPaid ? 'var(--ok)' : 'var(--accent)' }}>
             {booking.payment.fullyPaid
               ? `Paid in full · $${booking.payment.total.toFixed(2)}`
-              : `$${booking.payment.balanceDue.toFixed(2)} balance due · $${booking.payment.total.toFixed(2)} total${booking.payment.depositPaid > 0 ? ` (deposit $${booking.payment.depositPaid.toFixed(2)} paid)` : ''}`}
+              : `$${booking.payment.balanceDue.toFixed(2)} balance due · $${booking.payment.total.toFixed(2)} total${booking.payment.depositPaid > 0 ? ` (deposit $${booking.payment.depositPaid.toFixed(2)} paid)` : ''}${booking.payment.giftCardCredit > 0 ? ` (gift card $${booking.payment.giftCardCredit.toFixed(2)} applied)` : ''}`}
           </div>
         )}
         {booking.notes && (
@@ -403,7 +403,12 @@ function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
         {(() => {
           const fee = Number(booking.cancellationFeeAmount || 0);
           const windowH = Number(booking.cancellationWindowHours || 0);
-          const startMs = Date.parse(`${booking.date}T00:00:00Z`) + (booking.startMin || 0) * 60000;
+          // startEpochMs is computed server-side in the WORKSPACE timezone -
+          // the same clock the fee charge uses. The old client-side UTC
+          // parse disagreed by the tz offset (charged-with-no-warning /
+          // warned-when-free).
+          const startMs = Number(booking.startEpochMs)
+            || (Date.parse(`${booking.date}T00:00:00Z`) + (booking.startMin || 0) * 60000);
           const insideWindow = fee > 0 && windowH > 0 && startMs < Date.now() + windowH * 3600 * 1000;
           if (!insideWindow) return null;
           return (
@@ -418,6 +423,16 @@ function CancelConfirmDialog({ booking, busy, error, onClose, onConfirm }) {
             </div>
           );
         })()}
+        {(booking.payment?.depositPaid > 0 || booking.payment?.giftCardCredit > 0) && (
+          <div style={{ fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+            {booking.payment.giftCardCredit > 0 && (
+              <div>Your ${booking.payment.giftCardCredit.toFixed(2)} gift-card credit goes back on your card.</div>
+            )}
+            {booking.payment.depositPaid > 0 && (
+              <div>You paid a ${booking.payment.depositPaid.toFixed(2)} deposit - contact the business about their refund policy.</div>
+            )}
+          </div>
+        )}
         <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
           The business will be notified through your message thread. This can't be undone - you'd need
           to book again from scratch.

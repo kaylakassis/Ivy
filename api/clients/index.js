@@ -102,18 +102,20 @@ export default async function handler(req, res) {
 
       if (!name) return badRequest(res, 'Name is required');
       if (name.length > 120) return badRequest(res, 'Name too long');
-      // Email is required so the client can be invited to the portal,
-      // get booking confirmations, and receive invoices.
-      if (!email) return badRequest(res, 'Email is required');
 
-      // Phone is OPTIONAL. SMS reminders / 2FA flows naturally degrade
-      // to email-only when no phone is on file. A missing phone is
-      // fine; a present-but-malformed phone still 400s so we don't
-      // persist junk we can't dial.
+      // Either contact channel works. Solo service businesses have
+      // phone-only and walk-in clients every day - forcing an email
+      // meant they literally couldn't be recorded (or got fake
+      // addresses that bounced invites). Everything email-dependent
+      // (portal invite, confirmations, invoices) already degrades
+      // gracefully when email is null.
       let phone = null;
       if (body.phone != null && String(body.phone).trim()) {
         phone = normalizePhone(body.phone);
         if (!phone) return badRequest(res, 'Phone number is not a valid format');
+      }
+      if (!email && !phone) {
+        return badRequest(res, 'Add an email or a phone number so you can reach them');
       }
       const smsConsentAt = body.smsConsent && phone ? new Date().toISOString() : null;
 
@@ -129,8 +131,10 @@ export default async function handler(req, res) {
         )
         RETURNING *
       `;
-      // Best-effort invite. Skip when no email or already invited.
-      if (rows[0]?.email) {
+      // Best-effort invite. Skip when no email, already invited, or the
+      // owner unchecked "Email them an invite" in the add modal
+      // (body.sendInvite === false). Default stays ON for single adds.
+      if (rows[0]?.email && body.sendInvite !== false) {
         sendClientInvite({ workspaceId, clientId: rows[0].id });
       }
       // First-client milestone (best-effort, one-time, ignores demo data).

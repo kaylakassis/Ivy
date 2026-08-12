@@ -34,7 +34,7 @@ export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   try {
     if (!process.env.BLOB_READ_WRITE_TOKEN) {
-      return badRequest(res, 'Logo uploads not configured (BLOB_READ_WRITE_TOKEN missing)');
+      return badRequest(res, 'Uploads aren\'t available right now - please try again later or contact support');
     }
 
     const body = await readBody(req);

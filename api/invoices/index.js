@@ -79,7 +79,16 @@ export default async function handler(req, res) {
         const items = cleanItems(body.items ?? []);
         if (items === null) return { status: 400, body: { error: 'Invalid items' } };
 
-        const taxRate  = Number(body.taxRate ?? 0);
+        // When the caller doesn't specify a rate, seed from the
+        // workspace's default sales tax so every new invoice doesn't
+        // silently start at 0% for retail-selling owners.
+        let taxRate;
+        if (body.taxRate == null) {
+          const fs = await sql`SELECT default_tax_rate FROM finance_settings WHERE workspace_id = ${workspaceId}`;
+          taxRate = Number(fs.rows[0]?.default_tax_rate || 0);
+        } else {
+          taxRate = Number(body.taxRate);
+        }
         const discount = Number(body.discount ?? 0);
         if (!Number.isFinite(taxRate) || taxRate < 0 || taxRate > 100)
           return { status: 400, body: { error: 'taxRate must be 0–100' } };

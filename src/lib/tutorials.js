@@ -219,7 +219,7 @@ export const TUTORIALS = {
     steps: [
       {
         title: 'One thread per client',
-        body: 'Pick a client from the left to open the thread. New messages from clients land here AND get pushed via email/SMS so nothing slips through.',
+        body: 'Pick a client from the conversation list to open the thread. New messages from clients land here AND get pushed via email/SMS so nothing slips through.',
       },
       {
         title: 'Voice memos + dictation',

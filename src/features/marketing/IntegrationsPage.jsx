@@ -11,12 +11,12 @@ import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 const LIVE = [
   { name: 'Stripe',           icon: 'Dollar',   sub: 'The full toolkit: card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
-  { name: 'Tap to Pay',       icon: 'Phone',    sub: 'Take in-person card payments straight from your phone (iPhone & Android). No reader required - and Stripe Terminal hardware works too.' },
+  { name: 'In-person checkout', icon: 'Phone',  sub: 'Ring up in-person sales from your phone: show a QR code and the client pays on theirs - Apple Pay, Google Pay, or card. Cash logging built in.' },
   { name: 'Video meetings',   icon: 'Camera',   sub: 'Virtual bookings auto-mint a private video room - or drop in your own link.' },
   { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in Ivy.' },
   { name: 'Apple Calendar',   icon: 'Calendar', sub: 'CalDAV subscription. Read-only view of your Ivy schedule.' },
   { name: 'Outlook Calendar', icon: 'Calendar', sub: 'Subscribe to your Ivy schedule via iCal feed (read-only view in Outlook).' },
-  { name: 'Webhooks',         icon: 'Globe',    sub: 'POST events on booking, payment, message - wire it to anywhere.' },
+  { name: 'Form webhooks',    icon: 'Globe',    sub: 'Route your website form submissions to Zapier or any URL you choose.' },
   { name: 'Embeddable widget', icon: 'Doc',     sub: 'One-line script to embed booking on any external site.' },
   { name: 'Custom domain',    icon: 'Globe',    sub: 'Point your domain at Ivy; DNS verification built-in.' },
   { name: 'CSV import',       icon: 'FileIcon', sub: 'Bring clients, bookings, invoices from any other tool.' },

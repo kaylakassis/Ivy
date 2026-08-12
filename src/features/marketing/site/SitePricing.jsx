@@ -145,7 +145,7 @@ export default function SitePricing() {
               <li>Branded invoices + recurring billing</li>
               <li>Card on file + auto-charges</li>
               <li>Memberships, packages & gift cards</li>
-              <li>In-person sales - Tap to Pay on iPhone/Android</li>
+              <li>In-person sales - QR checkout on any phone</li>
               <li>Documents + e-signature</li>
               <li>Two-way client messaging</li>
               <li>Free client portal</li>

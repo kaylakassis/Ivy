@@ -13,6 +13,7 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   const [serviceId, setServiceId] = useState(services[0]?.id || '');
   const [clientName, setClientName]   = useState('');
   const [clientEmail, setClientEmail] = useState('');
+  const [clientPhone, setClientPhone] = useState('');
 
   // Optional preset from "Book" quick-action in ClientDrawer. Looks up
   // the client by id and prefills name/email so the owner only needs
@@ -101,14 +102,20 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
   const submit = async (e) => {
     e.preventDefault();
     if (!svc) { setErr('Pick a service'); return; }
-    if (!clientName.trim() || !clientEmail.trim()) { setErr('Client name and email are required'); return; }
+    if (!clientName.trim()) { setErr("Client's name is required"); return; }
+    // Email OR phone - phone-only walk-ins are bookable. (No email just
+    // means no confirmation email goes out.)
+    if (!clientEmail.trim() && !clientPhone.trim()) {
+      setErr('Add an email or phone number for the client'); return;
+    }
     setBusy(true);
     setErr(null);
     try {
       await onSubmit({
         serviceId,
         clientName: clientName.trim(),
-        clientEmail: clientEmail.trim(),
+        clientEmail: clientEmail.trim() || null,
+        clientPhone: clientPhone.trim() || null,
         date,
         startMin: start,
         endMin: end,
@@ -174,7 +181,13 @@ export default function AddBookingModal({ services, onSubmit, onClose, defaultDa
                 <input value={clientName} onChange={(e) => setClientName(e.target.value)} required style={inputSty}/>
               </Field>
               <Field label="Client email">
-                <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)} required style={inputSty}/>
+                <input type="email" value={clientEmail} onChange={(e) => setClientEmail(e.target.value)}
+                  placeholder="Email, or leave blank and add a phone" style={inputSty}/>
+              </Field>
+              <Field label="Client phone">
+                <input type="tel" inputMode="tel" value={clientPhone}
+                  onChange={(e) => setClientPhone(e.target.value)}
+                  placeholder="For walk-ins without an email" style={inputSty}/>
               </Field>
             </div>
 

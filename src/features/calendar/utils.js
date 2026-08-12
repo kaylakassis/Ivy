@@ -130,6 +130,12 @@ export function slotsForDate(cal, date, serviceOrDur) {
   // travel time. Widens the conflict window so a slot too close to an
   // existing booking/block is greyed out (matches the server's hasConflict).
   const buf = Math.max(0, Number(cal.settings?.bufferMinutes || 0)) + Math.max(0, Number(service.travelBufferMinutes || 0));
+  // Recurring masters store only their FIRST occurrence; expand them to
+  // this date so a weekly 10am correctly occupies next week's grid too.
+  // The server's hasConflict already checks occurrences - without this,
+  // the public/reschedule grids showed slots the server then refused
+  // ("That slot was just taken") after the client filled the whole form.
+  const dayBookings = expandBookings(cal.bookings || [], date, date);
   const slots = [];
 
   for (const w of windows) {
@@ -146,7 +152,7 @@ export function slotsForDate(cal, date, serviceOrDur) {
         }
       }
       if (!reason) {
-        for (const bk of (cal.bookings || [])) {
+        for (const bk of dayBookings) {
           if (bk.date !== dateISO) continue;
           // Exact same slot is allowed up to capacity (no buffer applied to
           // itself); any OTHER booking within the buffer window conflicts.

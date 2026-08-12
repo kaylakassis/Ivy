@@ -21,14 +21,12 @@ export default function TutorialOverlay() {
   const { activeTabId, complete, skip, close } = useTutorial();
   const tutorial = activeTabId ? getTutorial(activeTabId) : null;
   const [stepIdx, setStepIdx] = useState(0);
-  const [skipConfirmOpen, setSkipConfirmOpen] = useState(false);
   const navigate = useNavigate();
 
   // Reset to step 0 every time a new tab's tutorial opens.
   useEffect(() => {
     if (activeTabId) {
       setStepIdx(0);
-      setSkipConfirmOpen(false);
     }
   }, [activeTabId]);
 
@@ -38,10 +36,9 @@ export default function TutorialOverlay() {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const onKey = (e) => {
-      if (skipConfirmOpen) return; // confirmation has its own handlers
       if (e.key === 'Escape') {
         e.preventDefault();
-        setSkipConfirmOpen(true);
+        skip(activeTabId);
       } else if (e.key === 'ArrowRight' || e.key === 'Enter') {
         e.preventDefault();
         if (stepIdx < (tutorial?.steps?.length || 1) - 1) setStepIdx((n) => n + 1);
@@ -56,7 +53,7 @@ export default function TutorialOverlay() {
       document.body.style.overflow = prev;
       window.removeEventListener('keydown', onKey);
     };
-  }, [activeTabId, stepIdx, tutorial, complete, skipConfirmOpen]);
+  }, [activeTabId, stepIdx, tutorial, complete]);
 
   const onCtaClick = useCallback((to) => {
     complete(activeTabId);
@@ -112,7 +109,7 @@ export default function TutorialOverlay() {
           <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
             {tutorial.title} · Step {stepIdx + 1} of {total}
           </div>
-          <button onClick={() => setSkipConfirmOpen(true)} aria-label="Close tutorial"
+          <button onClick={() => skip(activeTabId)} aria-label="Close tutorial"
             style={{
               padding: 6, borderRadius: 8,
               background: 'transparent', border: 'none',
@@ -174,13 +171,17 @@ export default function TutorialOverlay() {
           background: 'var(--surface-2)',
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
-          <button onClick={() => setSkipConfirmOpen(true)}
+          {/* One tap skips. The old two-step "Skip anyway" confirm with
+              guilt-trip copy cost two extra taps on EVERY tab in her
+              first week (~14 tabs). Replay lives behind the (i) icon. */}
+          <button onClick={() => skip(activeTabId)}
             style={{
               fontSize: 12, fontWeight: 500,
               padding: '6px 10px', borderRadius: 8,
               background: 'transparent', border: 'none',
               color: 'var(--muted)', cursor: 'pointer',
-            }}>
+            }}
+            title="You can replay this any time from the (i) icon next to the page title">
             Skip tutorial
           </button>
           <div style={{ display: 'flex', gap: 8 }}>
@@ -205,13 +206,6 @@ export default function TutorialOverlay() {
         </div>
       </div>
 
-      {skipConfirmOpen && (
-        <SkipWarning
-          tabTitle={tutorial.title}
-          onDismiss={() => setSkipConfirmOpen(false)}
-          onConfirmSkip={() => skip(activeTabId)}
-        />
-      )}
     </div>,
     document.body,
   );
@@ -220,66 +214,3 @@ export default function TutorialOverlay() {
 // Two-button confirmation. First option resumes the tutorial (the
 // recommended path). Second option is the explicit "skip anyway" with
 // the soft warning copy the user asked for.
-function SkipWarning({ tabTitle, onDismiss, onConfirmSkip }) {
-  return (
-    <div style={{
-      position: 'absolute', inset: 0,
-      background: 'rgba(0, 0, 0, 0.55)',
-      display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16, zIndex: 1,
-    }}
-      onClick={onDismiss}
-    >
-      <div onClick={(e) => e.stopPropagation()}
-        style={{
-          width: '100%', maxWidth: 460,
-          background: 'var(--surface)',
-          color: 'var(--fg)',
-          borderRadius: 16,
-          border: '1px solid var(--border)',
-          padding: 22,
-          boxShadow: '0 20px 40px rgba(0,0,0,.4)',
-        }}>
-        <div style={{
-          display: 'flex', alignItems: 'center', gap: 8,
-          fontSize: 11, color: 'var(--accent)', fontWeight: 600,
-          letterSpacing: '0.06em', textTransform: 'uppercase',
-          marginBottom: 8,
-        }}>
-          <Icons.Bell size={12}/> Heads up
-        </div>
-        <h3 style={{
-          margin: '0 0 10px', fontSize: 18,
-          fontFamily: 'var(--font-display)', letterSpacing: '-0.015em',
-          color: 'var(--fg)', fontWeight: 600,
-        }}>
-          Skip the {tabTitle} walkthrough?
-        </h3>
-        <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-          Ivy works best when you understand what each tab can do for
-          your business. Skipping risks missing features that could save
-          you hours every week or unlock revenue you didn't know was on
-          the table. You can always replay this from the (i) icon next
-          to the page title - but most owners say the in-context first-
-          visit walkthrough is what made it click.
-        </p>
-        <div style={{
-          marginTop: 18, display: 'flex', gap: 8, justifyContent: 'flex-end',
-        }}>
-          <button onClick={onConfirmSkip}
-            style={{
-              fontSize: 12.5, padding: '8px 14px', borderRadius: 10,
-              background: 'transparent', color: 'var(--muted)',
-              border: '1px solid var(--border)', cursor: 'pointer',
-            }}>
-            Skip anyway
-          </button>
-          <button onClick={onDismiss}
-            className="btn btn-primary" style={{ fontSize: 12.5, padding: '8px 16px' }}>
-            Continue tutorial
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}

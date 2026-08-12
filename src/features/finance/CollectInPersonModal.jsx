@@ -16,6 +16,7 @@ import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
   const [url, setUrl] = useState(null);
+  const [payReady, setPayReady] = useState(true);
   const [qrSvg, setQrSvg] = useState(null);
   const [err, setErr] = useState(null);
   const [busy, setBusy] = useState(true);
@@ -29,6 +30,7 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
         const r = await api.post('/invoices/pay-link', { id: invoice.id });
         if (!live) return;
         setUrl(r.url);
+        setPayReady(r.paymentEnabled !== false);
         // Lazy-import qrcode only when the modal actually opens - keeps it
         // out of the InvoiceEditor first-paint bundle.
         const { default: QRCode } = await import('qrcode');
@@ -93,9 +95,23 @@ export default function CollectInPersonModal({ invoice, onClose, onPaid }) {
           </button>
         </div>
 
-        <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 16 }}>
-          Show the QR or text the link. Your customer pays on their own phone - Apple Pay, Google Pay, or card.
-        </div>
+        {payReady ? (
+          <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 16 }}>
+            Show the QR or text the link. Your customer pays on their own phone - Apple Pay, Google Pay, or card.
+          </div>
+        ) : (
+          <div style={{
+            fontSize: 12.5, lineHeight: 1.55, marginBottom: 16, padding: '10px 12px',
+            borderRadius: 8, color: 'var(--fg-2)',
+            background: 'color-mix(in srgb, var(--warn) 12%, transparent)',
+            border: '1px solid color-mix(in srgb, var(--warn) 35%, var(--border))',
+          }}>
+            <strong>Card payment isn't set up yet</strong> - this link will show the
+            invoice but can't take a card. Connect a payment processor in
+            Finance to charge cards here; for now, take cash or a bank transfer
+            and mark the invoice paid.
+          </div>
+        )}
 
         <div style={{
           padding: '14px 16px', marginBottom: 16,

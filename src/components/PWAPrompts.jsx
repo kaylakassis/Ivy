@@ -109,7 +109,10 @@ const wrap = {
   position: 'fixed', left: 0, right: 0,
   bottom: 'calc(env(safe-area-inset-bottom, 0px) + 16px)',
   display: 'flex', justifyContent: 'center',
-  padding: '0 12px', zIndex: 4000, pointerEvents: 'none',
+  padding: '0 12px',
+  // Above the nav (60-71) but BELOW every sheet/drawer/modal (100+):
+  // the install banner must never cover an open action sheet's rows.
+  zIndex: 80, pointerEvents: 'none',
 };
 const banner = {
   pointerEvents: 'auto', display: 'flex', alignItems: 'center', gap: 14,

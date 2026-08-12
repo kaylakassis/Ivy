@@ -4,7 +4,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { myClientIds, ids } from '../_lib/clientPortal.js';
-import { computeBookingPayment } from '../_lib/calendar.js';
+import { computeBookingPayment, slotEpochMs } from '../_lib/calendar.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -26,11 +26,12 @@ export default async function handler(req, res) {
               b.date, b.start_min, b.end_min, b.notes, b.cancelled_at,
               b.video_room_url, b.location_address, b.tip_amount,
               b.completion_log, b.booking_total, b.deposit_paid,
+              b.gift_card_credit_cents, b.recurrence_rule,
               s.name AS service_name,
               s.duration_minutes, s.price, s.capacity AS service_capacity,
               s.location_type AS service_location_type,
               s.cancellation_fee_amount, s.cancellation_window_hours,
-              cs.slug AS biz_slug,
+              cs.slug AS biz_slug, cs.timezone AS biz_timezone,
               ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
@@ -74,11 +75,18 @@ export default async function handler(req, res) {
         durationMinutes: r.duration_minutes,
         price: r.price != null ? Number(r.price) : null,
         cancelledAt: r.cancelled_at,
+        recurrenceRule: r.recurrence_rule || null,
         // Cancellation policy - lets the portal warn the client BEFORE a
         // late-cancel fee is auto-charged on their card.
         cancellationFeeAmount: Number(r.cancellation_fee_amount || 0),
         cancellationWindowHours: Number.isInteger(r.cancellation_window_hours)
           ? r.cancellation_window_hours : 24,
+        // SERVER-computed session start epoch, in the workspace timezone.
+        // The portal's fee-window warning must compare against this -
+        // computing it client-side from the bare date string used UTC
+        // and disagreed with the charge by the tz offset (east-of-UTC
+        // clients were charged with no warning shown).
+        startEpochMs: slotEpochMs(dateISO, r.start_min, r.biz_timezone || null),
         videoRoomUrl: r.video_room_url || null,
         locationAddress: r.location_address || null,
         tipAmount: Number(r.tip_amount || 0),

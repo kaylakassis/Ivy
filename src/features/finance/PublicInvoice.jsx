@@ -233,6 +233,12 @@ export default function PublicInvoice() {
             {inv.taxRate > 0 && <Row label={`Tax (${inv.taxRate}%)`} value={fmtMoney(inv.tax)}/>}
             <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}/>
             <Row label="Total" value={fmtMoney(inv.total)} bold/>
+            {Number(inv.paidAmount) > 0 && inv.status !== 'paid' && inv.status !== 'refunded' && (
+              <>
+                <Row label="Already paid" value={'-' + fmtMoney(inv.paidAmount)}/>
+                <Row label="Remaining" value={fmtMoney(Math.max(0, inv.total - inv.paidAmount))} bold/>
+              </>
+            )}
           </div>
         </div>
 
@@ -256,7 +262,7 @@ export default function PublicInvoice() {
             }}><Icons.Check size={22} sw={2.4}/></div>
             <div style={{ fontSize: 14, fontWeight: 600 }}>Payment received - thanks!</div>
             <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              {inv.business?.name || 'The sender'} will get a confirmation as soon as Stripe confirms the charge.
+              {inv.business?.name || 'The sender'} will get a confirmation as soon as the payment processor confirms the charge.
             </div>
           </div>
         ) : submitted ? (
@@ -273,8 +279,8 @@ export default function PublicInvoice() {
         ) : inv.paymentEnabled ? (
           <>
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginBottom: 12, lineHeight: 1.55 }}>
-              Pay <strong>{fmtMoney(inv.total)}</strong> by card. You'll be taken to a secure
-              Stripe checkout - your card details never touch our servers.
+              Pay <strong>{fmtMoney(Math.max(0, inv.total - (Number(inv.paidAmount) || 0)))}</strong> by card.
+              You'll be taken to a secure checkout - your card details never touch our servers.
             </div>
             {cancelledFlag && (
               <div style={{
@@ -292,7 +298,7 @@ export default function PublicInvoice() {
             )}
             <button className="btn btn-primary" onClick={payWithCard} disabled={paying}
               style={{ padding: '12px 22px', minWidth: 220, justifyContent: 'center' }}>
-              {paying ? 'Redirecting…' : `Pay ${fmtMoney(inv.total)} with card`}
+              {paying ? 'Redirecting…' : `Pay ${fmtMoney(Math.max(0, inv.total - (Number(inv.paidAmount) || 0)))} with card`}
               {!paying && <Icons.Arrow size={14} sw={2.2}/>}
             </button>
             <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>

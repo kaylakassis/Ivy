@@ -160,10 +160,14 @@ export default function ImportClientsModal({ onClose, onComplete }) {
     }
   };
 
+  // Invite emails on import are opt-in: importing a whole client book
+  // must NEVER silently email everyone in it.
+  const [inviteAll, setInviteAll] = useState(false);
+
   const submit = async () => {
     setBusy(true); setImportErr(null);
     try {
-      const r = await api.post('/clients/import', { rows });
+      const r = await api.post('/clients/import', { rows, sendInvites: inviteAll });
       setResult({ ...r, sourceRecords: parsed.records, sourceHeaders: parsed.headers });
       setStage('done');
     } catch (e) {
@@ -220,6 +224,8 @@ export default function ImportClientsModal({ onClose, onComplete }) {
             rows={rows}
             onBack={() => setStage('upload')}
             onSubmit={submit}
+            inviteAll={inviteAll}
+            setInviteAll={setInviteAll}
             busy={busy}
             error={importErr}/>
         )}
@@ -284,8 +290,7 @@ function PreviewStep({
   parsed, mapping, setMapping,
   batchTags, setBatchTags,
   defaultStage, setDefaultStage,
-  rows, onBack, onSubmit, busy, error,
-}) {
+  rows, onBack, onSubmit, busy, error, inviteAll, setInviteAll }) {
   const setMappingAt = (idx, value) => {
     const next = mapping.slice();
     next[idx] = value;
@@ -431,6 +436,21 @@ function PreviewStep({
         Existing clients with the same email will be <strong>skipped</strong> - they won't be overwritten,
         so re-importing the same file is safe.
       </div>
+
+      <label style={{
+        display: 'flex', alignItems: 'flex-start', gap: 9, marginBottom: 14,
+        fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55, cursor: 'pointer',
+        padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)',
+        border: '1px solid var(--border)',
+      }}>
+        <input type="checkbox" checked={inviteAll}
+          onChange={(e) => setInviteAll(e.target.checked)} style={{ marginTop: 2 }}/>
+        <span>
+          <strong>Email everyone a portal invite as they're imported.</strong>{' '}
+          Leave this off to import quietly - no one gets an email, and you can
+          invite people individually from their profile whenever you're ready.
+        </span>
+      </label>
 
       {error && (
         <div style={{

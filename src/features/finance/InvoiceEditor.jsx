@@ -308,6 +308,12 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
             </>
           ) : confirm === 'refund' ? (
             <>
+              {invoice.paidMethod !== 'cash' && (
+                <span style={{ fontSize: 11.5, color: 'var(--muted)', width: '100%', lineHeight: 1.5 }}>
+                  Card fees from the original payment aren't returned by the processor -
+                  a full refund costs you the original ~2.9% + 30¢.
+                </span>
+              )}
               <input type="number" min="0.01" step="0.01" max={remaining}
                 value={refundAmount}
                 onChange={(e) => setRefundAmount(e.target.value)}
@@ -317,7 +323,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
                 style={inputS}>
                 <option value="">Reason (optional)</option>
                 <option value="requested_by_customer">Customer requested</option>
-                <option value="duplicate">Duplicate</option>
+                <option value="duplicate">Charged twice</option>
                 <option value="fraudulent">Fraudulent</option>
               </select>
               <button className="btn btn-ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</button>

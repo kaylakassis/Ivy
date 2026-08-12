@@ -118,7 +118,7 @@ export default function SiteFeatures() {
               <li><b>Branded invoices + recurring billing</b> with line items, tax, discounts, and public pay links</li>
               <li><b>Card on file + auto-charges</b> - no more chasing checks</li>
               <li><b>Memberships, packages &amp; gift cards</b> - recurring revenue, built in</li>
-              <li><b>In-person sales</b> - Tap to Pay on iPhone/Android</li>
+              <li><b>In-person sales</b> - show a QR, they pay on their phone</li>
               <li><b>Overdue autopilot:</b> due-soon warnings and overdue nudges without you lifting a finger</li>
               <li><b>Goals + finance dashboard</b> with a Schedule-C-ready tax export (QuickBooks/Xero compatible)</li>
             </ul>

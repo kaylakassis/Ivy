@@ -334,9 +334,6 @@ export default function Calendar() {
           {/* Services + Packages moved to Finance → Services / Packages.
               The drawer code remains so the ?service= deep-link below
               still resolves (now redirected to /finance). */}
-          <button className="btn btn-outline" onClick={() => setDrawer('staff')}>
-            <Icons.Users size={14}/> {!isTablet && 'Staff'}
-          </button>
           <button className="btn btn-outline" onClick={() => setDrawer('availability')}>
             <Icons.Clock size={14}/> {!isTablet && 'Availability'}
           </button>
@@ -349,6 +346,12 @@ export default function Calendar() {
               <Icons.Arrow size={14}/> {!isTablet && 'Sync'}
             </button>
           )}
+          {/* Staff intentionally LAST of the secondary buttons: Ivy is a
+              solo-first product - leading the toolbar with team features
+              read wrong to businesses of one. */}
+          <button className="btn btn-outline" onClick={() => setDrawer('staff')}>
+            <Icons.Users size={14}/> {!isTablet && 'Staff'}
+          </button>
           <button className="btn btn-outline" onClick={() => {
             // The block editor doubles as a general event editor -
             // owner picks "Block bookings" or "Reminder only" inside.

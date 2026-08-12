@@ -820,25 +820,34 @@ CREATE TABLE IF NOT EXISTS calendar_settings (
   -- (back-to-back) instead of the fixed slot_minutes grid.
   slot_fit_service BOOLEAN NOT NULL DEFAULT FALSE,
   buffer_minutes INT NOT NULL DEFAULT 0,
-  min_notice_hours INT NOT NULL DEFAULT 24,
+  min_notice_hours INT NOT NULL DEFAULT 4,
   -- How far in advance (days) a client may book on the public page.
-  -- 0 = no limit (any future date). Default 60 days.
-  max_advance_days INT NOT NULL DEFAULT 60,
+  -- 0 = no limit (any future date). Default 180 days.
+  max_advance_days INT NOT NULL DEFAULT 180,
   availability JSONB NOT NULL DEFAULT '{"0":[],"1":[{"start":540,"end":1020}],"2":[{"start":540,"end":1020}],"3":[{"start":540,"end":1020}],"4":[{"start":540,"end":1020}],"5":[{"start":540,"end":840}],"6":[]}'::jsonb,
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_calendar_settings_slug ON calendar_settings(slug);
 -- Minimum advance notice (hours) before a client can book on the public
--- page. Default 24h; owners lower it (incl. 0 for same-day) in settings.
--- Past times are always excluded regardless of this value.
-ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS min_notice_hours INT NOT NULL DEFAULT 24;
+-- page. Past times are always excluded regardless of this value.
+--
+-- Default 4h (was 24h): same-day fills are core revenue for the ICP
+-- (stylists, massage, trainers) and the old default silently refused
+-- them until the owner discovered the setting. SET DEFAULT only affects
+-- NEW workspaces - existing owners keep whatever they have.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS min_notice_hours INT NOT NULL DEFAULT 4;
+ALTER TABLE calendar_settings ALTER COLUMN min_notice_hours SET DEFAULT 4;
+-- Default 180d booking horizon (was 60d): doulas book by due date and
+-- photographers book seasons ahead - 60d showed their clients "no
+-- availability" with no explanation. NEW workspaces only.
+ALTER TABLE calendar_settings ALTER COLUMN max_advance_days SET DEFAULT 180;
 -- Start-time spacing. slot_minutes is the fixed grid (e.g. 60 = top of the
 -- hour). slot_fit_service=TRUE instead steps starts by each service's own
 -- length so appointments pack back-to-back.
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS slot_fit_service BOOLEAN NOT NULL DEFAULT FALSE;
 -- Booking horizon: clients can book at most this many days ahead on the
 -- public page (0 = no limit). Past days/times are always excluded.
-ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS max_advance_days INT NOT NULL DEFAULT 60;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS max_advance_days INT NOT NULL DEFAULT 180;
 -- Discover: opt-in directory listing on /me/discover. A business with
 -- discoverable=true and a slug is shown to all signed-in clients. Tagline
 -- is the one-line pitch shown under the business name on the listing.
@@ -1739,6 +1748,11 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gift_card_credit_cents INT NOT NUL
 -- flow. Letting re-clicks reuse the same draft instead of stacking up
 -- duplicate invoices in Finance.
 ALTER TABLE bookings ADD COLUMN IF NOT EXISTS collect_invoice_id UUID REFERENCES invoices(id) ON DELETE SET NULL;
+
+-- Phone-only / walk-in clients: a booking no longer requires an email
+-- address (confirmation email simply doesn't send). Idempotent - DROP
+-- NOT NULL on an already-nullable column is a no-op.
+ALTER TABLE bookings ALTER COLUMN client_email DROP NOT NULL;
 
 -- Memberships: self-serve recurring subscriptions. Owners define
 -- one or more "membership" tiers (name, price, perks). Each tier

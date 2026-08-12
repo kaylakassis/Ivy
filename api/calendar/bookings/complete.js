@@ -132,7 +132,7 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
-      if (existing) return badRequest(res, 'Already completed - use PATCH to edit');
+      if (existing) return badRequest(res, "This booking is already marked complete - edit or remove the completed entry instead");
       const notes = body.completionNotes == null
         ? '' : String(body.completionNotes).slice(0, 8000);
       const attachments = sanitizeAttachments(body.completionAttachments);

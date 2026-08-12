@@ -20,7 +20,6 @@ export const TOOL_STACK = [
   { name: 'Mailchimp',  monthly: 13, replaces: 'newsletter + email blasts' },
   { name: 'Squarespace', monthly: 23, replaces: 'website + custom domain' },
   { name: 'DocuSign',   monthly: 15, replaces: 'legally-binding e-signatures' },
-  { name: 'Loom',       monthly: 15, replaces: 'product walkthroughs' },
 ];
 
 export const STACK_TOTAL = TOOL_STACK.reduce((sum, t) => sum + t.monthly, 0);

@@ -110,8 +110,12 @@ export default async function handler(req, res) {
         created += result.rows.length;
         for (const cr of result.rows) {
           if (inserted.length < 50) inserted.push(serializeClient(cr));
-          // Fire invite email - best-effort, idempotent via invite_sent_at.
-          if (cr.email) {
+          // Invite emails on bulk import are EXPLICIT OPT-IN
+          // (body.sendInvites === true). The old always-on behavior
+          // cold-emailed an owner's entire imported book "«Business»
+          // added you on Ivy" the moment they tried the importer -
+          // unrecallable, and never disclosed in the UI.
+          if (cr.email && body.sendInvites === true) {
             sendClientInvite({ workspaceId, clientId: cr.id })
               .catch((e) => console.error('[import] sendClientInvite failed:', e?.message));
           }

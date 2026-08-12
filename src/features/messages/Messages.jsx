@@ -105,6 +105,10 @@ function DirectMessages() {
       gridTemplateColumns: isMobile ? '1fr' : '320px 1fr',
       flex: 1, minHeight: 0,
       borderTop: '1px solid var(--border)',
+      // Clear the fixed bottom nav (~64px + safe area) - without this
+      // the composer rendered UNDERNEATH it and Send was untappable on
+      // phones (the app's most-used surface).
+      paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 72px)' : 0,
     }}>
       {/* Thread list */}
       {showList && <div style={{

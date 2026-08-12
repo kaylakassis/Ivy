@@ -94,7 +94,10 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     // 2. Confirmation email to client. Prefs-gated by clients.id when we
     //    have one (rare to send when no client row exists; walk-ins go
     //    by the literal email and no clients row exists to check).
-    if (ctx.client_email) {
+    //    Waitlist promotions skip this - waitlist.js sends its own
+    //    "You're off the waitlist" email; sending both meant two
+    //    overlapping confirmations for the same seat.
+    if (ctx.client_email && source !== 'waitlist') {
       tasks.push(sendClientConfirm({
         clientId: ctx.client_id,
         to: ctx.client_email,

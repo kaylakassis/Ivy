@@ -114,7 +114,10 @@ export default async function handler(req, res) {
         label: 'Add at least one service',
         done: serviceCount > 0,
         required: true,
-        href: '/calendar',
+        // Services are managed under Finance (?section= deep-link) - on
+        // mobile the Calendar page has no add-service affordance, so
+        // linking there stranded owners on their very next setup step.
+        href: '/finance?section=services',
         why: 'Clients book a service, not a generic "appointment". Add what you offer.',
       },
       {
@@ -133,7 +136,7 @@ export default async function handler(req, res) {
         done: stripeConnected,
         required: false,
         href: '/finance',
-        why: 'Take card payments + deposits without chasing checks. Connects your existing Stripe account.',
+        why: "Take card payments + deposits without chasing checks. Works with your Stripe account - or we'll help you create one in a few minutes.",
       },
       {
         id: 'website',
@@ -149,7 +152,7 @@ export default async function handler(req, res) {
         done: clientCount > 0,
         required: false,
         href: '/clients?add=1',
-        why: 'Either import from a CSV or add a few you already work with - they get a "claim your portal" invite automatically.',
+        why: 'Either import from a CSV or add a few you already work with - you choose whether to send portal invites.',
       },
       {
         id: 'firstBooking',

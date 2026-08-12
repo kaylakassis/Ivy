@@ -118,9 +118,14 @@ export default function PaymentProviderCard() {
         <h3 style={{ margin: 0, fontSize: 15, fontWeight: 600 }}>Payment processor</h3>
       </div>
       <p style={{ margin: '6px 0 16px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Connect one or more processors. The <strong style={{ color: 'var(--fg-2)' }}>active</strong> one mints
-        the pay link on every invoice and booking deposit. Clients pay
-        through that processor's hosted checkout.
+        Connect one or more processors. The <strong style={{ color: 'var(--fg-2)' }}>active</strong> one
+        powers the Pay button on every invoice and booking deposit. Clients pay
+        through that processor's secure checkout page.
+      </p>
+      <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
+        Ivy takes <strong style={{ color: 'var(--fg-2)' }}>0%</strong> of your sales. Your processor's
+        standard card fee (Stripe: ~2.9% + 30¢ per payment) is deducted before payout,
+        and payouts typically land in your bank in about 2 business days.
       </p>
 
       {err && (
@@ -179,9 +184,9 @@ export default function PaymentProviderCard() {
           marginTop: 14, padding: '8px 12px', borderRadius: 8,
           background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55,
         }}>
-          <strong style={{ color: 'var(--fg-2)' }}>Provider parity:</strong> all three providers accept
-          payments + refunds (including refunds you issue directly from
-          the Square/PayPal dashboard - Ivy picks them up via webhook).
+          <strong style={{ color: 'var(--fg-2)' }}>Good to know:</strong> all three providers accept
+          payments + refunds - even refunds you issue directly from the
+          Square or PayPal dashboard show up in Ivy automatically.
           Saved-card auto-charges (no-show / late-cancel fees) and
           recurring invoice subscriptions still only run through Stripe.
         </div>

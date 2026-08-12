@@ -357,7 +357,7 @@ function CallbackBanner({ flag }) {
     connected:        { tone: 'ok',    text: "You're connected. Bookings will start syncing now." },
     denied:           { tone: 'muted', text: 'Connection cancelled - you can reconnect any time.' },
     'state-mismatch': { tone: 'warn',  text: 'Authorization mismatch (try again from this tab).' },
-    'no-refresh':     { tone: 'warn',  text: 'Google did not return a refresh token. Reconnect from your Google account settings to retry.' },
+      'no-refresh':     { tone: 'warn',  text: "Google didn't finish connecting. Remove Ivy from your Google account's third-party access list, then reconnect here." },
     invalid:          { tone: 'warn',  text: 'Invalid OAuth response.' },
     unconfigured:     { tone: 'warn',  text: 'Google integration not configured on this deployment.' },
     error:            { tone: 'warn',  text: 'Something went wrong. Try again.' },

@@ -92,7 +92,7 @@ export default function IvyDock() {
 
   return (
     <>
-      {!open && (
+      {!open && !(isMobile && location.pathname.startsWith('/messages')) && (
         <FabButton
           onClick={() => setOpen(true)}
           notify={hasNudge}

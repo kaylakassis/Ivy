@@ -44,7 +44,15 @@ export default async function handler(req, res) {
     if (!Number.isInteger(start) || start < 0 || start >= 24 * 60) return badRequest(res, 'invalid startMin');
     if (!Number.isInteger(end) || end <= start || end > 24 * 60) return badRequest(res, 'invalid endMin');
     if (!clientName) return badRequest(res, "Client's name is required");
-    if (!validEmail(clientEmail)) return badRequest(res, 'A valid email is required');
+    // Email OR phone. Walk-ins and phone-only clients are daily reality
+    // for solo service businesses - a manual booking must not force the
+    // owner to invent a fake email. Confirmation email simply doesn't
+    // send when there's no address (bookingNotify already guards).
+    const clientPhone = body.clientPhone ? String(body.clientPhone).trim().slice(0, 40) : null;
+    if (clientEmail && !validEmail(clientEmail)) return badRequest(res, 'That email doesn\'t look right');
+    if (!clientEmail && !clientPhone && !clientId) {
+      return badRequest(res, 'Add an email or phone number for the client');
+    }
     if (!VALID_RECURRENCE.has(recurrenceRule)) return badRequest(res, 'Invalid recurrence rule');
     if (recurrenceUntil && !/^\d{4}-\d{2}-\d{2}$/.test(recurrenceUntil)) return badRequest(res, 'recurrenceUntil must be YYYY-MM-DD');
 
@@ -64,16 +72,24 @@ export default async function handler(req, res) {
       const r = await sql`SELECT id FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
       if (r.rows.length === 0) return badRequest(res, 'Unknown client');
     } else {
-      // Try to attach by email; create a lead if missing.
-      const existing = await sql`
-        SELECT id FROM clients WHERE workspace_id = ${workspaceId} AND email = ${clientEmail} LIMIT 1
-      `;
+      // Try to attach by email, then by phone; create a client if missing.
+      let existing = { rows: [] };
+      if (clientEmail) {
+        existing = await sql`
+          SELECT id FROM clients WHERE workspace_id = ${workspaceId} AND email = ${clientEmail} LIMIT 1
+        `;
+      }
+      if (existing.rows.length === 0 && clientPhone) {
+        existing = await sql`
+          SELECT id FROM clients WHERE workspace_id = ${workspaceId} AND phone = ${clientPhone} LIMIT 1
+        `;
+      }
       if (existing.rows.length > 0) {
         resolvedClientId = existing.rows[0].id;
       } else {
         const newClient = await sql`
-          INSERT INTO clients (workspace_id, name, email, stage, source)
-          VALUES (${workspaceId}, ${clientName}, ${clientEmail}, 'active', 'Direct booking')
+          INSERT INTO clients (workspace_id, name, email, phone, stage, source)
+          VALUES (${workspaceId}, ${clientName}, ${clientEmail || null}, ${clientPhone}, 'active', 'Direct booking')
           RETURNING id
         `;
         resolvedClientId = newClient.rows[0].id;
@@ -159,7 +175,7 @@ export default async function handler(req, res) {
         client_package_id, staff_id
       )
       VALUES (
-        ${workspaceId}, ${serviceId}, ${resolvedClientId}, ${clientName}, ${clientEmail},
+        ${workspaceId}, ${serviceId}, ${resolvedClientId}, ${clientName}, ${clientEmail || null},
         ${date}, ${start}, ${end}, ${notes}, ${recurrenceRule}, ${recurrenceUntil},
         ${clientPackageId}, ${staffId}
       )

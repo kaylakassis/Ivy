@@ -198,13 +198,19 @@ export function computeBookingPayment(row) {
   const total = Number(row.booking_total || 0);
   if (total <= 0) return null;
   const depositPaid = Number(row.deposit_paid || 0);
+  // Gift-card credit redeemed at booking time is money the business has
+  // already collected (when the card was sold) - it MUST count as paid,
+  // or every balance surface (owner drawer, client portal, collect
+  // link) re-bills the client for value they already handed over.
+  const giftCardCredit = +(Number(row.gift_card_credit_cents || 0) / 100).toFixed(2);
   const balancePaid = row.collect_invoice_status === 'paid'
-    ? Number(row.collect_invoice_paid_amount ?? (total - depositPaid))
+    ? Number(row.collect_invoice_paid_amount ?? (total - depositPaid - giftCardCredit))
     : 0;
-  const amountPaid = +(depositPaid + balancePaid).toFixed(2);
+  const amountPaid = +(depositPaid + giftCardCredit + balancePaid).toFixed(2);
   return {
     total,
     depositPaid,
+    giftCardCredit,
     balancePaid,
     amountPaid,
     balanceDue: Math.max(0, +(total - amountPaid).toFixed(2)),

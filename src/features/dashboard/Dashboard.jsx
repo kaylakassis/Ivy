@@ -106,6 +106,7 @@ function dismissForAWeek() {
 function SetupChecklist() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
+  const [loadErr, setLoadErr] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [hidden, setHidden] = useState(() => isDismissed());
 
@@ -444,8 +445,14 @@ export default function Dashboard() {
   const businessType = ctx?.owns?.businessType || 'both';
 
   const loadDashboard = useCallback(async () => {
-    try { const r = await api.get('/dashboard'); setData(r); }
-    catch { /* leave panels in their empty state */ }
+    try { const r = await api.get('/dashboard'); setData(r); setLoadErr(null); }
+    catch (e) {
+      // A failed fetch must NOT masquerade as an empty business - on
+      // flaky mobile connections "No appointments / $0" reads as "my
+      // bookings are gone". Only surface the error when we have no
+      // previously-loaded data to keep showing.
+      setLoadErr(e?.message || 'Could not load');
+    }
     finally { setLoading(false); }
   }, []);
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
@@ -474,6 +481,30 @@ export default function Dashboard() {
   const rve      = data?.revenueVsExpenses;
   // "Empty" workspace: no real clients or bookings yet → offer sample data.
   const empty = !!data && (data.clients || 0) === 0 && (data.booked || 0) === 0;
+
+  // Fetch failed and there's nothing cached to show - render a retry
+  // card instead of empty-looking panels.
+  if (loadErr && !data && !loading) {
+    return (
+      <div>
+        <HeroBand />
+        <div className="page-pad">
+          <div className="card" style={{ padding: 28, textAlign: 'center' }}>
+            <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 6 }}>
+              Couldn't load your dashboard
+            </div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginBottom: 16, lineHeight: 1.55 }}>
+              Your data is safe - this is usually a connection blip.
+            </div>
+            <button className="btn btn-primary" style={{ padding: '9px 20px' }}
+              onClick={() => { setLoadErr(null); loadDashboard(); }}>
+              Try again
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div>
@@ -529,7 +560,7 @@ export default function Dashboard() {
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {today.map((b) => (
-                  <Link key={b.id} to="/calendar" style={{
+                  <Link key={b.id} to={`/calendar?booking=${b.id}`} style={{
                     display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
                     borderRadius: 8, border: '1px solid var(--border)', textDecoration: 'none', color: 'inherit',
                   }}>

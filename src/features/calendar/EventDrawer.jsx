@@ -282,7 +282,22 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
           background: 'var(--surface-2)', border: '1px solid var(--border)',
           fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.55,
         }}>
-          {event.noShowAt && <div>No-show recorded {new Date(event.noShowAt).toLocaleDateString()}.</div>}
+          {event.noShowAt && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ flex: 1 }}>No-show recorded {new Date(event.noShowAt).toLocaleDateString()}.</span>
+              <button className="btn btn-outline"
+                onClick={async () => {
+                  try {
+                    const r = await api.del('/calendar/bookings/no-show', { id: event.id });
+                    if (r.booking) onBookingChanged?.(r.booking);
+                  } catch { /* drawer stays as-is; next tap retries */ }
+                }}
+                style={{ fontSize: 11.5, padding: '4px 10px' }}
+                title="Clear the no-show flag. Any charged fee stays on record.">
+                Undo no-show
+              </button>
+            </div>
+          )}
           {Number(event.feeChargedAmount) > 0 && (
             <div>
               {event.feeChargedKind === 'late_cancel' ? 'Late-cancel fee' : 'No-show fee'} charged:
@@ -410,24 +425,10 @@ function BookingExtraActions({ event, onBookingChanged }) {
       if (r.booking) onBookingChanged?.(r.booking);
       setSuccess(r.charged
         ? `Marked no-show + charged $${r.chargeAmount.toFixed(2)}.`
-        : (r.chargeError ? `Marked no-show - charge failed: ${r.chargeError}` : 'Marked no-show.'));
+        : (r.chargeError ? `Marked no-show - their card couldn't be charged. You can retry from Charge fee.` : 'Marked no-show.'));
       setTimeout(close, 2500);
     } catch (e) {
       setError(e.message || 'Failed');
-    } finally { setBusy(false); }
-  };
-
-  // Undo path for a stray click. Any charged fee stays on record - the
-  // server keeps fee_charged_*; refunds live in Stripe, not here.
-  const undoNoShow = async () => {
-    setBusy(true); setError(null);
-    try {
-      const r = await api.del('/calendar/bookings/no-show', { id: event.id });
-      if (r.booking) onBookingChanged?.(r.booking);
-      setOpenAction(null);
-    } catch (e) {
-      setOpenAction('no_show');
-      setError(e.message || 'Failed to undo');
     } finally { setBusy(false); }
   };
 

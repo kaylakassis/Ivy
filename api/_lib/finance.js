@@ -85,6 +85,7 @@ export function serializeInvoice(row) {
     paidAt:       row.paid_at,
     paidMethod:   row.paid_method,
     refundedAmount: Number(row.refunded_amount || 0),
+    paidAmount:     row.paid_amount == null ? null : Number(row.paid_amount),
     refundedAt:   row.refunded_at,
     stripePaymentIntent: row.stripe_payment_intent || null,
     activity:     row.activity || [],

@@ -11,6 +11,7 @@ import { useViewport } from '../../lib/viewport.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
+import SalesTaxCard from './SalesTaxCard.jsx';
 import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
@@ -89,7 +90,9 @@ export default function Finance() {
     try {
       const inv = await create({
         items: [{ id: 'li1', description: '', quantity: 1, rate: 0 }],
-        taxRate: 0, discount: 0,
+        // taxRate omitted on purpose - the server seeds the workspace's
+        // default sales tax onto new drafts.
+        discount: 0,
         ...(clientId ? { clientId } : {}),
       });
       setOpenId(inv.id);
@@ -304,6 +307,7 @@ function InvoicesSection({
   return (
     <>
       <PaymentProviderCard/>
+      <SalesTaxCard/>
 
       {/* Summary cards */}
       <div className="grid-auto">

@@ -59,6 +59,14 @@ export default function PublicBooking({ embedded = false }) {
   // thank-you (paid) or a reassuring note (cancelled) instead of dumping the
   // visitor back on the empty booking form - the old dead-end.
   const [depositNotice, setDepositNotice] = useState(null); // 'paid' | 'cancelled' | null
+  // Same pattern for the OTHER checkout returns that land back on this
+  // page. Without these, someone who just paid $50-$500 got the plain
+  // booking form with zero acknowledgment.
+  const [paymentNotice, setPaymentNotice] = useState(null); // 'giftcard' | 'package' | 'membership' | null
+  // Deposit was required but no checkout could be minted (provider not
+  // connected / mint failed server-side). The confirmed screen must say
+  // the deposit is still owed instead of a clean "You're booked."
+  const [depositPending, setDepositPending] = useState(0);
   // Days the visitor expanded to see every available time (default shows the
   // first 8 so a busy day doesn't run the column off-screen). Keyed by ISO date.
   const [expandedDays, setExpandedDays] = useState(() => new Set());
@@ -66,11 +74,19 @@ export default function PublicBooking({ embedded = false }) {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const d = params.get('deposit');
-    if (d !== 'paid' && d !== 'cancelled') return;
-    setDepositNotice(d);
-    if (d === 'paid') setStep('deposit-paid');
-    // Strip the param so a refresh doesn't re-trigger the notice.
-    params.delete('deposit');
+    let dirty = false;
+    if (d === 'paid' || d === 'cancelled') {
+      setDepositNotice(d);
+      if (d === 'paid') setStep('deposit-paid');
+      params.delete('deposit');
+      dirty = true;
+    }
+    // Checkout returns from the non-booking purchases sold on this page.
+    if (params.get('giftcard') === 'ok')          { setPaymentNotice('giftcard');   params.delete('giftcard');   dirty = true; }
+    if (params.get('package') === 'purchased')    { setPaymentNotice('package');    params.delete('package');    dirty = true; }
+    if (params.get('membership') === 'joined')    { setPaymentNotice('membership'); params.delete('membership'); dirty = true; }
+    if (!dirty) return;
+    // Strip the params so a refresh doesn't re-trigger the notice.
     const qs = params.toString();
     window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
   }, []);
@@ -277,6 +293,9 @@ export default function PublicBooking({ embedded = false }) {
         window.location.href = r.depositCheckoutUrl;
         return;
       }
+      if (Number(r.booking?.depositRequired) > 0) {
+        setDepositPending(Number(r.booking.depositRequired));
+      }
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
       haptic(); // a little "done!" tap on the client's phone
@@ -309,6 +328,30 @@ export default function PublicBooking({ embedded = false }) {
             {' '}{cal.settings.bizName || 'The business'} will follow up about the deposit.
           </span>
           <button type="button" onClick={() => setDepositNotice(null)}
+            aria-label="Dismiss" className="btn btn-ghost" style={{ padding: 2, color: 'var(--muted)' }}>
+            <Icons.X size={13}/>
+          </button>
+        </div>
+      )}
+
+      {/* Post-payment acknowledgment for the page's other purchases
+          (gift card / package / membership) - the buyer just handed over
+          real money and must see it registered. */}
+      {paymentNotice && step === 'pick' && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '11px 14px', borderRadius: 10, marginBottom: 14,
+          background: 'color-mix(in srgb, var(--ok) 10%, var(--surface))',
+          border: '1px solid color-mix(in srgb, var(--ok) 40%, var(--border))',
+          fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5,
+        }}>
+          <Icons.Check size={15} stroke="var(--ok)"/>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            {paymentNotice === 'giftcard' && <>Payment received - the gift card is on its way to the recipient's inbox (check spam if it doesn't arrive in a few minutes).</>}
+            {paymentNotice === 'package' && <>Payment received - your package credits are ready. Book below, or sign in to your client portal to use them.</>}
+            {paymentNotice === 'membership' && <>You're in! Your membership is active - a confirmation email is on its way.</>}
+          </span>
+          <button type="button" onClick={() => setPaymentNotice(null)}
             aria-label="Dismiss" className="btn btn-ghost" style={{ padding: 2, color: 'var(--muted)' }}>
             <Icons.X size={13}/>
           </button>
@@ -426,7 +469,6 @@ export default function PublicBooking({ embedded = false }) {
             <h2 className="page-title" style={{ fontSize: 24, margin: '0 0 8px' }}>You're on the list.</h2>
             <p style={{ color: 'var(--muted)', fontSize: 14, margin: 0, lineHeight: 1.5 }}>
               We'll email <b style={{ color: 'var(--fg-2)' }}>{email}</b>
-              {smsOptIn && phone.trim() ? <> and text <b style={{ color: 'var(--fg-2)' }}>{phone}</b></> : null}
               {' '}the moment a spot opens up for{' '}
               <b style={{ color: 'var(--fg-2)' }}>
                 {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
@@ -449,6 +491,17 @@ export default function PublicBooking({ embedded = false }) {
                 {parseISO(slot.dateISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
               </b>{' '}at <b style={{ color: 'var(--fg-2)' }}>{minToHM(slot.start)}</b>.
             </p>
+            {depositPending > 0 && (
+              <p style={{
+                marginTop: 14, padding: '10px 14px', borderRadius: 10, fontSize: 13,
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                color: 'var(--fg-2)', lineHeight: 1.55, textAlign: 'left',
+              }}>
+                One more thing: a <b>${depositPending.toFixed(2)} deposit</b> is due for this
+                booking. Online payment isn't set up yet, so {cal.settings.bizName || 'the business'} will
+                follow up with you about it directly.
+              </p>
+            )}
           </div>
           {confirmedVideoUrl && (
             <div style={{
@@ -578,7 +631,7 @@ export default function PublicBooking({ embedded = false }) {
               redeemed server-side so concurrent uses can't overspend. */}
           <Field label="Gift card (optional)"
             hint={giftCardChecked
-              ? `Balance available: $${(giftCardChecked.balanceCents / 100).toFixed(2)}. Applied to this booking.`
+              ? `Balance available: $${(giftCardChecked.balanceCents / 100).toFixed(2)}. We'll redeem up to your booking total from this card the moment you book.`
               : 'Paste a gift card code to apply credit.'}>
             <div style={{ display: 'flex', gap: 6 }}>
               <input value={giftCardCode}
@@ -662,6 +715,11 @@ export default function PublicBooking({ embedded = false }) {
               ))}
             </>
           )}
+          <div style={{ fontSize: 12, color: 'var(--muted)', margin: '0 0 14px', lineHeight: 1.5 }}>
+            Already have a package or membership with {cal.settings.bizName || 'this business'}?{' '}
+            <a href="/signin?next=/me" style={{ color: 'var(--accent)', fontWeight: 600 }}>Sign in</a>{' '}
+            to book with your credits instead.
+          </div>
           {phone.trim() && (
             <label style={{
               display: 'flex', alignItems: 'flex-start', gap: 10, marginBottom: 14,
@@ -676,6 +734,48 @@ export default function PublicBooking({ embedded = false }) {
               </span>
             </label>
           )}
+          {/* Money summary BEFORE the commit button - nobody should tap
+              "Confirm booking" without seeing the total, what their gift
+              card covers, and exactly what happens next payment-wise. */}
+          {!waitlistMode && (() => {
+            const addOnTotal = (svc?.addOns || [])
+              .filter((a) => selectedAddOns.has(a.id))
+              .reduce((sum, a) => sum + Number(a.price || 0), 0);
+            const total = Number(svc?.price || 0) + addOnTotal;
+            if (total <= 0) return null;
+            const giftApplied = giftCardChecked
+              ? Math.min(Number(giftCardChecked.balanceCents || 0) / 100, total) : 0;
+            let deposit = 0;
+            if (svc?.depositType === 'percent') deposit = total * Number(svc.depositAmount || 0) / 100;
+            else if (svc?.depositType === 'fixed') deposit = Math.min(Number(svc.depositAmount || 0), total);
+            const depositDue = Math.max(0, Math.round((deposit - giftApplied) * 100) / 100);
+            const row = { display: 'flex', justifyContent: 'space-between', gap: 12 };
+            return (
+              <div style={{
+                marginBottom: 14, padding: '12px 14px', borderRadius: 10,
+                background: 'var(--surface-2)', border: '1px solid var(--border)',
+                fontSize: 13, lineHeight: 1.7,
+              }}>
+                <div style={row}><span>{svc.name}{addOnTotal > 0 ? ' + add-ons' : ''}</span><b>${total.toFixed(2)}</b></div>
+                {giftApplied > 0 && (
+                  <div style={{ ...row, color: 'var(--ok)' }}>
+                    <span>Gift card (applied when you book)</span><b>-${giftApplied.toFixed(2)}</b>
+                  </div>
+                )}
+                <div style={{ ...row, borderTop: '1px solid var(--border)', paddingTop: 6, marginTop: 4 }}>
+                  <span>Due now</span>
+                  <b>{depositDue > 0 ? `$${depositDue.toFixed(2)} deposit` : '$0.00'}</b>
+                </div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+                  {depositDue > 0
+                    ? "You'll be taken to a secure payment page after confirming. The rest is due at your appointment."
+                    : giftApplied >= total
+                      ? 'Fully covered by your gift card - nothing due at your appointment.'
+                      : 'Nothing due now - pay at your appointment.'}
+                </div>
+              </div>
+            );
+          })()}
           {bookErr && (
             <div style={{
               padding: '8px 12px', borderRadius: 8,
