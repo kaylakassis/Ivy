@@ -106,10 +106,20 @@ async function run() {
   await clientsHandler(req({ method: 'POST', cookie, body: { name: 'No Contact' } }), r);
   assert(r.statusCode === 400, `no contact at all still rejected (got ${r.statusCode})`);
 
+  // Next WEEKDAY 3-9 days out - default availability is Mon-Fri, so a
+  // fixed +5 landing on a weekend fails on availability, not the code
+  // under test.
+  const nextWeekday = (() => {
+    for (let d = 3; d <= 9; d++) {
+      const dt = new Date(Date.now() + d * 86400000);
+      const dow = dt.getUTCDay();
+      if (dow >= 1 && dow <= 5) return dt.toISOString().slice(0, 10);
+    }
+  })();
   r = mockRes();
   await bookingsHandler(req({ method: 'POST', cookie, body: {
     clientName: 'Walk In 2', clientPhone: '555-201-3000',
-    date: new Date(Date.now() + 5 * 86400000).toISOString().slice(0, 10),
+    date: nextWeekday,
     startMin: 600, endMin: 660,
   } }), r);
   assert(r.statusCode === 201 || r.statusCode === 200,

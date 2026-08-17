@@ -28,6 +28,7 @@ import { TutorialProvider } from '../../lib/tutorialState.jsx';
 import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
+import { initNativePushOnLaunch } from '../../lib/nativePush.js';
 import { UserContextProvider, useUserContext } from '../../lib/userContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 
@@ -93,6 +94,11 @@ function AppShellInner() {
     && subActive
     && walkthroughOverride !== false
     && (walkthroughOverride === true || walkthroughRequested);
+
+  // Native app: silently refresh the APNs device token on launch when
+  // the user already granted notifications (Apple rotates tokens; the
+  // server upserts). No-op on web, never prompts.
+  useEffect(() => { initNativePushOnLaunch(); }, []);
 
   // Mirror the direction class onto <body> so React portals (dropdowns, modals)
   // rendered into document.body inherit the same CSS variables we use everywhere.

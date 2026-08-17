@@ -25,6 +25,7 @@
     "@anthropic-ai/sdk": "^0.92.0",
     "@capacitor/core": "^6.1.2",
     "@capacitor/preferences": "^6.0.2",
+    "@capacitor/push-notifications": "^6.0.4",
     "@neondatabase/serverless": "^1.1.0",
     "@revenuecat/purchases-capacitor": "^9.2.0",
     "@sentry/node": "^10.51.0",

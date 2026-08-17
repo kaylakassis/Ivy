@@ -763,6 +763,22 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_push_subscriptions_user_endpoint
 CREATE INDEX IF NOT EXISTS idx_push_subscriptions_user
   ON push_subscriptions(user_id);
 
+-- Native (APNs) device tokens - the iOS-app sibling of web
+-- push_subscriptions. token is globally unique: a device that changes
+-- hands between accounts re-registers and the upsert moves the row to
+-- the new user. Rows die on user deletion (CASCADE) and on Apple
+-- telling us the token is gone (410/Unregistered → DELETE in apns fanout).
+CREATE TABLE IF NOT EXISTS push_device_tokens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token TEXT NOT NULL UNIQUE,
+  platform TEXT NOT NULL DEFAULT 'ios' CHECK (platform IN ('ios', 'android')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  last_used_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_push_device_tokens_user
+  ON push_device_tokens(user_id);
+
 -- Client portal: when an end-customer signs up to Ivy, we link their user
 -- account to every existing 'clients' row that matches their email so they
 -- can see their data across multiple businesses they book with. user_id

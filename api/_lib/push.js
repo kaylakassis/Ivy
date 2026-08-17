@@ -13,6 +13,7 @@
 //   node -e "console.log(require('web-push').generateVAPIDKeys())"
 import webpush from 'web-push';
 import { sql } from './db.js';
+import { isApnsConfigured, sendApnsToTokens } from './apns.js';
 
 let _configured = null;
 
@@ -165,7 +166,6 @@ export function notifyOwnerSafe(args)  { return notifyOwner(args).catch((e) => c
 export function notifyClientSafe(args) { return notifyClient(args).catch((e) => console.warn('[push] notifyClient', e.message)); }
 
 export async function sendPushToUser({ userId, payload, type }) {
-  if (!configure()) return { ok: false, reason: 'not configured', sent: 0 };
   if (!userId || !payload?.title) return { ok: false, reason: 'bad args', sent: 0 };
 
   // Honor the user's per-type opt-out before any DB / network work.
@@ -173,11 +173,25 @@ export async function sendPushToUser({ userId, payload, type }) {
     return { ok: true, sent: 0, reason: 'muted' };
   }
 
+  // Native iOS devices (APNs) ride alongside web push - one logical
+  // send, two transports. Fired first (not awaited) so the web fanout
+  // below runs concurrently; the await lands before the return.
+  const apnsPromise = sendApnsToUser({ userId, payload });
+
+  // Web push requires VAPID config; APNs can still deliver without it.
+  if (!configure()) {
+    const apnsSent = await apnsPromise;
+    return { ok: true, sent: apnsSent, reason: apnsSent === 0 ? 'not configured' : undefined };
+  }
+
   const { rows } = await sql`
     SELECT id, endpoint, p256dh_key, auth_key
     FROM push_subscriptions WHERE user_id = ${userId}
   `;
-  if (rows.length === 0) return { ok: true, sent: 0 };
+  if (rows.length === 0) {
+    const apnsSent = await apnsPromise;
+    return { ok: true, sent: apnsSent };
+  }
 
   const body = JSON.stringify(payload);
 
@@ -223,5 +237,45 @@ export async function sendPushToUser({ userId, payload, type }) {
       [expiredIds],
     );
   }
-  return { ok: true, sent: sentIds.length, removed: expiredIds.length };
+  const apnsSent = await apnsPromise;
+  return { ok: true, sent: sentIds.length + apnsSent, removed: expiredIds.length };
+}
+
+// APNs leg of the fanout. Same contract as the web leg: best-effort,
+// dead tokens deleted, count of successful sends returned. Never
+// throws - a push transport failure must not break the caller.
+async function sendApnsToUser({ userId, payload }) {
+  try {
+    if (!isApnsConfigured()) return 0;
+    const { rows } = await sql`
+      SELECT token FROM push_device_tokens WHERE user_id = ${userId} AND platform = 'ios'
+    `;
+    if (rows.length === 0) return 0;
+    const results = await sendApnsToTokens({ tokens: rows.map((r) => r.token), payload });
+    const sent = results.filter((r) => r.kind === 'sent').map((r) => r.token);
+    const gone = results.filter((r) => r.kind === 'gone').map((r) => r.token);
+    for (const r of results) {
+      if (r.kind === 'error') {
+        // eslint-disable-next-line no-console
+        console.warn('[apns] send failed:', r.status, r.reason);
+      }
+    }
+    if (sent.length > 0) {
+      await sql.query(
+        `UPDATE push_device_tokens SET last_used_at = NOW() WHERE token = ANY($1::text[])`,
+        [sent],
+      );
+    }
+    if (gone.length > 0) {
+      await sql.query(
+        `DELETE FROM push_device_tokens WHERE token = ANY($1::text[])`,
+        [gone],
+      );
+    }
+    return sent.length;
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.warn('[apns] fanout failed:', err.message);
+    return 0;
+  }
 }

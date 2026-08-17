@@ -33,6 +33,13 @@ const config = {
   // (Capacitor reads CAPACITOR_SERVER_URL etc.); intentionally omitted
   // from the static config so prod builds don't accidentally point at
   // an external URL.
+  plugins: {
+    PushNotifications: {
+      // Show notifications even while the app is foregrounded - an
+      // owner mid-invoice still wants to see "New booking" arrive.
+      presentationOptions: ['badge', 'sound', 'alert'],
+    },
+  },
   server: {
     // iOS WebView origin becomes `https://localhost` (not `capacitor://`).
     // Some third-party SDKs (Stripe.js, OAuth providers) reject the

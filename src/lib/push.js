@@ -5,10 +5,25 @@
 //     messages so the settings UI can guide the user instead of
 //     silently failing
 import { api } from './api.js';
+import { isNative } from './platform.js';
+import {
+  nativePermissionState, registerNativePush, unregisterNativePush,
+} from './nativePush.js';
 
 const SW_PATH = '/sw.js';
 
+// Native permission is only knowable async; cache the last answer so
+// the sync permissionState() contract the UI depends on keeps working.
+// primeNativePermission() refreshes it (called by the consumers'
+// effects via getSubscription()).
+let nativePermCache = 'default';
+async function primeNativePermission() {
+  nativePermCache = await nativePermissionState();
+  return nativePermCache;
+}
+
 export function pushSupported() {
+  if (isNative()) return true; // APNs path - no service worker involved
   return typeof window !== 'undefined'
     && 'serviceWorker' in navigator
     && 'PushManager' in window
@@ -16,6 +31,7 @@ export function pushSupported() {
 }
 
 export function permissionState() {
+  if (isNative()) return nativePermCache;
   if (!pushSupported()) return 'unsupported';
   return Notification.permission; // 'default' | 'granted' | 'denied'
 }
@@ -27,6 +43,13 @@ async function getRegistration() {
 }
 
 export async function getSubscription() {
+  if (isNative()) {
+    // "Subscribed" on native = OS permission granted (the launch init
+    // re-registers the token whenever that's true). Truthy sentinel
+    // keeps the settings toggle rendering identically to web.
+    const perm = await primeNativePermission();
+    return perm === 'granted' ? { native: true } : null;
+  }
   if (!pushSupported()) return null;
   const reg = await getRegistration();
   return reg.pushManager.getSubscription();
@@ -47,6 +70,11 @@ function urlBase64ToUint8Array(base64String) {
 // gesture caller-side), subscribe to PushManager, persist on the server.
 // Returns the resulting subscription on success or throws on failure.
 export async function subscribePush() {
+  if (isNative()) {
+    await registerNativePush();
+    nativePermCache = 'granted';
+    return { native: true };
+  }
   if (!pushSupported()) throw new Error('Push not supported in this browser');
   const perm = await Notification.requestPermission();
   if (perm !== 'granted') throw new Error('Notifications permission was not granted');
@@ -74,6 +102,10 @@ export async function subscribePush() {
 }
 
 export async function unsubscribePush() {
+  if (isNative()) {
+    await unregisterNativePush();
+    return;
+  }
   if (!pushSupported()) return;
   const reg = await getRegistration();
   const sub = await reg.pushManager.getSubscription();

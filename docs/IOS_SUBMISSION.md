@@ -124,6 +124,37 @@ In Xcode, with the `App` target selected:
 4. **Build Settings → Versioning:** Marketing Version = `1.0.0`, Build
    number = `1`. Bump build number on every TestFlight upload.
 
+## Push notifications (APNs)
+
+Native pushes ride the SAME pipeline as web push - every existing
+`notifyOwnerSafe` call fans out to iOS devices automatically once this
+is configured. Code: `api/_lib/apns.js` (sender), `api/push/device.js`
+(token registry), `src/lib/nativePush.js` (registration + tap routing).
+
+1. **Developer portal → Certificates, IDs & Profiles → Keys → “+”.**
+   Create a key with **Apple Push Notifications service (APNs)**
+   enabled. Download the `.p8` file (one-time download - keep it), note
+   the **Key ID** and your **Team ID** (Membership page).
+2. **Xcode → target → Signing & Capabilities → “+ Capability” → Push
+   Notifications.** (No Background Modes needed for alert pushes.)
+3. **Vercel env (Production):**
+   - `APNS_TEAM_ID`     - 10-char Team ID
+   - `APNS_KEY_ID`      - 10-char Key ID
+   - `APNS_PRIVATE_KEY` - the full contents of the `.p8` file
+   - `APNS_BUNDLE_ID`   - `com.getivyos.app` (only if you changed it)
+   - `APNS_ENV`         - leave unset. TestFlight + App Store use
+     production APNs; set `sandbox` ONLY when testing a build run
+     directly from Xcode.
+4. Redeploy, then install a TestFlight build, allow notifications, and
+   send yourself a booking - the phone should light up.
+
+Notes:
+- Permission is requested in-app from the notifications prompt /
+  Account → Notifications toggle (same surfaces as web push), never
+  cold on launch - Apple rejects permission ambushes.
+- Dead tokens self-clean: Apple's 410/Unregistered responses delete the
+  row, same as web push 404/410 handling.
+
 ## Submission
 
 ```bash
