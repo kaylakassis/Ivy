@@ -47,5 +47,47 @@ jobs:
       - name: Lint
         run: npm run lint
 
+      - name: Build
+        run: npm run build
+
       - name: Test (full suite)
         run: npm test
+
+  # ── Gated production deploy ─────────────────────────────────────────
+  # Vercel's git auto-deploy for main is DISABLED (vercel.json →
+  # git.deploymentEnabled.main: false), so this job is the only path to
+  # production: it runs strictly after lint + build + the full test
+  # suite pass. A commit that fails CI never reaches joinivy.ai.
+  #
+  # Requires three repo secrets (Settings → Secrets and variables →
+  # Actions): VERCEL_TOKEN, VERCEL_ORG_ID, VERCEL_PROJECT_ID.
+  deploy:
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check deploy secrets
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          if [ -z "$VERCEL_TOKEN" ] || [ -z "$VERCEL_ORG_ID" ] || [ -z "$VERCEL_PROJECT_ID" ]; then
+            echo "::error::Production deploys are paused: add VERCEL_TOKEN, VERCEL_ORG_ID and VERCEL_PROJECT_ID as GitHub Actions secrets to enable CI-gated deploys. Production stays on the last deployed commit until then."
+            exit 1
+          fi
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+
+      - name: Deploy to Vercel (production)
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        # Remote build on Vercel's infra with the project's own env vars -
+        # identical to what a git push used to trigger, just gated.
+        run: npx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"

@@ -1,5 +1,10 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "git": {
+    "deploymentEnabled": {
+      "main": false
+    }
+  },
   "buildCommand": "node scripts/migrate.mjs && vite build",
   "outputDirectory": "dist",
   "framework": "vite",
