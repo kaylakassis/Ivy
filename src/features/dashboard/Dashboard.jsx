@@ -106,7 +106,6 @@ function dismissForAWeek() {
 function SetupChecklist() {
   const { user } = useAuth();
   const [data, setData] = useState(null);
-  const [loadErr, setLoadErr] = useState(null);
   const [collapsed, setCollapsed] = useState(false);
   const [hidden, setHidden] = useState(() => isDismissed());
 
@@ -440,6 +439,7 @@ function GoalsMomentum({ goals, currency }) {
 
 export default function Dashboard() {
   const [data, setData] = useState(null);
+  const [loadErr, setLoadErr] = useState(null);
   const [loading, setLoading] = useState(true);
   const { ctx } = useUserContext();
   const businessType = ctx?.owns?.businessType || 'both';
