@@ -14,7 +14,7 @@ import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
-const DEMO_EMAIL = 'riley.sample@example.com';
+const DEMO_EMAIL = 'john.doe@example.com';
 
 async function demoClientIds(workspaceId) {
   const { rows } = await sql`SELECT id FROM clients WHERE workspace_id = ${workspaceId} AND source = 'demo'`;
@@ -40,7 +40,7 @@ export default async function handler(req, res) {
 
       const cli = await sql`
         INSERT INTO clients (workspace_id, name, email, phone, stage, source, tags, notes)
-        VALUES (${workspaceId}, 'Jordan Sample', ${DEMO_EMAIL}, '+15555550123', 'active', 'demo',
+        VALUES (${workspaceId}, 'John Doe', ${DEMO_EMAIL}, '+15555550123', 'active', 'demo',
                 ARRAY['sample']::text[], 'Sample record — remove anytime from your dashboard.')
         RETURNING id
       `;
@@ -52,7 +52,7 @@ export default async function handler(req, res) {
       const serviceId = svc.rows[0]?.id || null;
       await sql`
         INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, date, start_min, end_min, notes)
-        VALUES (${workspaceId}, ${serviceId}, ${clientId}, 'Jordan Sample', ${DEMO_EMAIL},
+        VALUES (${workspaceId}, ${serviceId}, ${clientId}, 'John Doe', ${DEMO_EMAIL},
                 (CURRENT_DATE + 1), 600, 660, '[Sample] Example appointment')
       `;
 
@@ -61,7 +61,7 @@ export default async function handler(req, res) {
       await sql`
         INSERT INTO invoices (workspace_id, number, client_id, client_name, client_email, items, status, notes)
         VALUES (
-          ${workspaceId}, ${number}, ${clientId}, 'Jordan Sample', ${DEMO_EMAIL},
+          ${workspaceId}, ${number}, ${clientId}, 'John Doe', ${DEMO_EMAIL},
           ${JSON.stringify([{ description: 'Sample service', quantity: 1, rate: 100 }])}::jsonb,
           'draft', '[Sample] Example invoice'
         )
