@@ -62,13 +62,11 @@ export default function ViewToggle() {
   // pill doesn't sit on top of action sheets and bottom-row controls.
   if (isMobile) return null;
 
-  const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
-  // On DESKTOP owner routes the switch now lives inline in the sidebar (under
-  // the brand), so suppress the floating pill there. Keep it for the client
-  // portal (/me — no owner sidebar), for tablet (compact sidebar has no room),
-  // and everywhere the paywall covers the sidebar (the Paywall carries its own
-  // client/logout escapes).
-  if (isDesktop && !onClient) return null;
+  // On DESKTOP the switch lives inline in BOTH sidebars now (business and
+  // client), so the floating pill only remains for tablet (compact sidebars
+  // have no room) and for the paywall overlay (which covers the sidebar; the
+  // Paywall carries its own client/logout escapes via this pill).
+  if (isDesktop) return null;
   // On chat-style routes the default bottom-center position lands the
   // pill directly on top of the composer. Add a class so global.css can
   // lift it above the composer without affecting any other route.

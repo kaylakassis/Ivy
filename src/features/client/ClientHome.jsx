@@ -42,15 +42,32 @@ export default function ClientHome() {
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       <FirstVisitWelcome/>
-      <div>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>
-          {greet}{user?.name ? `, ${user.name.split(' ')[0]}` : ''}.
-        </h2>
-        <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-          {isClient
-            ? `${memberships.length} business${memberships.length === 1 ? '' : 'es'} on Ivy.`
-            : "You're not yet linked to any businesses."}
+      {/* Hero mirrors the business dashboard's HeroBand (date kicker +
+          display greeting + subtitle) so the two views feel like one app. */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 20, flexWrap: 'wrap' }}>
+        <div style={{ flex: 1, minWidth: 240 }}>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 6, letterSpacing: '0.04em' }}>
+            {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' }).toUpperCase()}
+          </div>
+          <h2 className="page-title" style={{ margin: 0, fontSize: 36 }}>
+            {greet}{user?.name ? `, ${user.name.split(' ')[0]}` : ''}.
+          </h2>
+          <p style={{ margin: '8px 0 0', fontSize: 14, color: 'var(--fg-2)', maxWidth: 560 }}>
+            {isClient
+              ? `Everything from ${memberships.length === 1 ? 'your business' : `your ${memberships.length} businesses`} on Ivy - bookings, payments, and messages in one place.`
+              : "You're not yet linked to any businesses."}
+          </p>
         </div>
+        {isClient && (
+          <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+            <Link to="/me/discover" className="btn btn-outline">
+              <Icons.Globe size={14}/>Discover
+            </Link>
+            <Link to="/me/bookings" className="btn btn-primary">
+              <Icons.Calendar size={14}/>My bookings
+            </Link>
+          </div>
+        )}
       </div>
 
       {!isClient && (

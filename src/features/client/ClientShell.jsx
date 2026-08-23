@@ -13,16 +13,19 @@ import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useClientPortal, ClientPortalProvider } from './clientContext.jsx';
+import { ViewSwitch } from '../../components/ViewToggle.jsx';
 
+// Sections mirror the business sidebar's RUN / MONEY / GROW grouping so
+// toggling between views feels like the same product, not two apps.
 const NAV = [
   { to: '/me',           label: 'Home',      icon: 'Home',     end: true },
-  { to: '/me/messages',  label: 'Messages',  icon: 'Chat' },
-  { to: '/me/bookings',  label: 'Bookings',  icon: 'Calendar' },
-  { to: '/me/orders',    label: 'Orders',    icon: 'Gift' },
-  { to: '/me/invoices',  label: 'Payments',  icon: 'Dollar' },
-  { to: '/me/documents', label: 'Documents', icon: 'Doc' },
-  { to: '/me/billing',   label: 'Billing',   icon: 'Lock' },
-  { to: '/me/discover',  label: 'Discover',  icon: 'Globe' },
+  { to: '/me/messages',  label: 'Messages',  icon: 'Chat',     section: 'Activity' },
+  { to: '/me/bookings',  label: 'Bookings',  icon: 'Calendar', section: 'Activity' },
+  { to: '/me/orders',    label: 'Orders',    icon: 'Gift',     section: 'Activity' },
+  { to: '/me/invoices',  label: 'Payments',  icon: 'Dollar',   section: 'Money' },
+  { to: '/me/billing',   label: 'Billing',   icon: 'Lock',     section: 'Money' },
+  { to: '/me/documents', label: 'Documents', icon: 'Doc',      section: 'Tools' },
+  { to: '/me/discover',  label: 'Discover',  icon: 'Globe',    section: 'Tools' },
 ];
 
 export default function ClientShell() {
@@ -103,29 +106,45 @@ function ClientSidebar({ variant, data, direction }) {
     }}>
       <BrandMark direction={direction} compact={compact}/>
 
-      <nav style={{ display: 'flex', flexDirection: 'column', gap: compact ? 4 : 2 }}>
-        {NAV.map((item) => {
+      {/* Business ↔ Client switch, inline under the brand - same spot as
+          the business sidebar so the two views read as one product. */}
+      {!compact && <ViewSwitch/>}
+
+      <nav style={{
+        display: 'flex', flexDirection: 'column', gap: compact ? 4 : 2,
+        flex: '1 1 auto', minHeight: 0, overflowY: 'auto', overscrollBehavior: 'contain',
+      }}>
+        {NAV.map((item, i) => {
           const Icon = Icons[item.icon] || Icons.Home;
+          const showHeader = !compact && item.section && item.section !== NAV[i - 1]?.section;
           return (
-            <NavLink key={item.to} to={item.to} end={item.end} title={item.label}
-              className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
-              style={compact ? { justifyContent: 'center', padding: 10 } : null}
-            >
-              {({ isActive }) => (
-                <>
-                  <Icon size={compact ? 19 : 17} sw={isActive ? 1.9 : 1.5}/>
-                  {!compact && <span>{item.label}</span>}
-                  {!compact && item.to === '/me/messages' && data?.summary?.unreadMessages > 0 && (
-                    <span className="nav-badge">{data.summary.unreadMessages}</span>
-                  )}
-                </>
+            <React.Fragment key={item.to}>
+              {showHeader && (
+                <div style={{
+                  fontSize: 10, fontWeight: 700, letterSpacing: '0.08em',
+                  textTransform: 'uppercase', color: 'var(--muted)',
+                  padding: '12px 12px 4px', opacity: 0.75,
+                }}>{item.section}</div>
               )}
-            </NavLink>
+              <NavLink to={item.to} end={item.end} title={item.label}
+                className={({ isActive }) => `nav-item ${isActive ? 'active' : ''}`}
+                style={compact ? { justifyContent: 'center', padding: 10 } : null}
+              >
+                {({ isActive }) => (
+                  <>
+                    <Icon size={compact ? 19 : 17} sw={isActive ? 1.9 : 1.5}/>
+                    {!compact && <span>{item.label}</span>}
+                    {!compact && item.to === '/me/messages' && data?.summary?.unreadMessages > 0 && (
+                      <span className="nav-badge">{data.summary.unreadMessages}</span>
+                    )}
+                  </>
+                )}
+              </NavLink>
+            </React.Fragment>
           );
         })}
       </nav>
 
-      <div style={{ flex: 1 }}/>
       <UserBlock data={data} compact={compact}/>
     </aside>
   );
