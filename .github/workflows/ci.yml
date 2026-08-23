@@ -6,6 +6,10 @@ on:
   pull_request:
     branches: [main]
 
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -65,6 +69,7 @@ jobs:
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
 
@@ -90,4 +95,4 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
         # Remote build on Vercel's infra with the project's own env vars -
         # identical to what a git push used to trigger, just gated.
-        run: npx vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
+        run: npx --yes vercel@latest deploy --prod --yes --token="$VERCEL_TOKEN"
