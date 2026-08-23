@@ -395,7 +395,7 @@ export async function createWaitlistCoupon({ secretKey, percentOff = 20, duratio
       duration: 'repeating',
       duration_in_months: String(durationMonths),
       percent_off: String(percentOff),
-      name: `THRYVE waitlist ${percentOff}% / ${durationMonths}mo`,
+      name: `Ivy waitlist ${percentOff}% / ${durationMonths}mo`,
       'metadata[kind]': 'waitlist',
     },
     idempotencyKey: `waitlist-coupon-${percentOff}x${durationMonths}-v1`,

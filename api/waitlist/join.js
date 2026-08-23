@@ -54,13 +54,13 @@ export default async function handler(req, res) {
       try {
         await sendEmail({
           to: email,
-          subject: "You're on the THRYVE waitlist 🎉",
+          subject: "You're on the Ivy waitlist 🎉",
           html: emailShell({
             heading: "You're on the list!",
-            body: `<p>Thanks for joining the THRYVE waitlist${name ? `, ${escapeHtml(name.split(/\s+/)[0])}` : ''}.</p>
+            body: `<p>Thanks for joining the Ivy waitlist${name ? `, ${escapeHtml(name.split(/\s+/)[0])}` : ''}.</p>
                    <p>We'll email you the moment we launch — and because you're an early supporter, you'll get <b>20% off for your first 12 months</b> when you sign up with this email address.</p>
                    <p>Talk soon 👋</p>`,
-            footer: 'You received this because you joined the THRYVE waitlist.',
+            footer: 'You received this because you joined the Ivy waitlist.',
           }),
         });
       } catch (mailErr) {

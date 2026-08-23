@@ -26,7 +26,7 @@ Mac - Xcode is required.
 
 ## App Store Connect setup
 
-1. **Bundle ID:** `com.getivyos.app` - must match `capacitor.config.ts`.
+1. **Bundle ID:** `ai.joinivy.app` - must match `capacitor.config.ts`.
 2. **App record:** create under "My Apps" → primary language English,
    bundle ID matching above.
 3. **In-app purchases:**
@@ -141,7 +141,7 @@ is configured. Code: `api/_lib/apns.js` (sender), `api/push/device.js`
    - `APNS_TEAM_ID`     - 10-char Team ID
    - `APNS_KEY_ID`      - 10-char Key ID
    - `APNS_PRIVATE_KEY` - the full contents of the `.p8` file
-   - `APNS_BUNDLE_ID`   - `com.getivyos.app` (only if you changed it)
+   - `APNS_BUNDLE_ID`   - `ai.joinivy.app` (only if you changed it)
    - `APNS_ENV`         - leave unset. TestFlight + App Store use
      production APNs; set `sandbox` ONLY when testing a build run
      directly from Xcode.

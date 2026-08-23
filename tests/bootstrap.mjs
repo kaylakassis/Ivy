@@ -15,7 +15,7 @@ process.env.PUBLIC_HOST ||= 'localhost:3001';
 // Mute outbound mail/SMS/push in tests - set fake but non-empty so
 // handlers don't refuse on missing-config branches.
 process.env.RESEND_API_KEY ||= '__test__';
-process.env.EMAIL_FROM ||= 'Ivy OS <test@example.com>';
+process.env.EMAIL_FROM ||= 'Ivy <test@example.com>';
 // Bypass the in-process hot cache (api/_lib/hotCache.js) for integration
 // tests. Tests mutate the DB out-of-band between handler calls (e.g.
 // promote a user to super_admin via raw SQL, then call an admin

@@ -16,8 +16,8 @@
 // Cross-origin XHR is handled with CORS headers (vercel.json) +
 // Authorization: Bearer auth (api/_lib/auth.js readSession).
 const config = {
-  appId: 'com.getivyos.app',
-  appName: 'Ivy OS',
+  appId: 'ai.joinivy.app',
+  appName: 'Ivy',
   webDir: 'dist',
   ios: {
     // Standard WebKit content inset behavior - prevents iOS bouncing

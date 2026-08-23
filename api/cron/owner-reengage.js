@@ -1,4 +1,4 @@
-// Dormant-owner re-engagement. THRYVE catches billing churn (dunning,
+// Dormant-owner re-engagement. Ivy catches billing churn (dunning,
 // win-back) but nothing catches USAGE churn: a subscribed/trialing owner who
 // simply stops logging in was invisible until they cancelled. This cron reaches
 // them while they're still paying — the moment we can still save the account.

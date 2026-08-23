@@ -1,5 +1,5 @@
 // /api/cron/daily-return - the daily-return push loop. Two timezone-aware
-// "beats" turn THRYVE's passive habit primitives (the streak + the Ivy
+// "beats" turn Ivy's passive habit primitives (the streak + the Ivy
 // briefing) into active reasons to come back:
 //
 //   • Morning (~8am local): a briefing push built from buildBriefing() -

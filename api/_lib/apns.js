@@ -12,7 +12,7 @@
 //   APNS_PRIVATE_KEY   contents of the .p8 file (BEGIN PRIVATE KEY...).
 //                      Vercel env vars keep newlines; literal "\n" is
 //                      also tolerated.
-//   APNS_BUNDLE_ID     defaults to com.getivyos.app
+//   APNS_BUNDLE_ID     defaults to ai.joinivy.app
 //   APNS_ENV           'production' (default) | 'sandbox'. TestFlight
 //                      and App Store builds use PRODUCTION; sandbox is
 //                      only for direct-from-Xcode development builds.
@@ -97,7 +97,7 @@ export async function sendApnsToTokens({ tokens, payload }) {
   if (!isApnsConfigured() || !tokens?.length) return [];
   const env = (process.env.APNS_ENV || 'production') === 'sandbox' ? 'sandbox' : 'production';
   const host = APNS_HOSTS[env];
-  const bundleId = process.env.APNS_BUNDLE_ID || 'com.getivyos.app';
+  const bundleId = process.env.APNS_BUNDLE_ID || 'ai.joinivy.app';
   const body = buildApnsBody(payload);
   const jwt = providerJwt();
 

@@ -102,7 +102,7 @@ Twilio Console:
 RevenueCat dashboard:
 
 - [ ] **Create or rename project** → "Ivy".
-- [ ] **Add an iOS app** with bundle id **`com.getivyos.app`**.
+- [ ] **Add an iOS app** with bundle id **`ai.joinivy.app`**.
 - [ ] **Add two products** with exact ids:
   - `ivyos_weekly` ($8.99 / week)
   - `ivyos_yearly` ($375 / year)
@@ -116,7 +116,7 @@ RevenueCat dashboard:
 
 ## 9. Apple - App Store Connect + Developer
 
-- [ ] **Register the bundle id `com.getivyos.app`** (Apple Developer → Identifiers → +).
+- [ ] **Register the bundle id `ai.joinivy.app`** (Apple Developer → Identifiers → +).
 - [ ] **Create the App Store Connect app record** with that bundle id, name "Ivy".
 - [ ] **Subscription group** called `ivyos`. Add the two auto-renewable subscriptions with ids matching RevenueCat: `ivyos_weekly` and `ivyos_yearly`.
 - [ ] In Xcode (`capacitor.config.ts` already has the new appId), enable capabilities: **In-App Purchase**, **Sign in with Apple**, **Push Notifications**.

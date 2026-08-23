@@ -1,6 +1,6 @@
 // useEmbedResize - posts the document height to the parent window
 // whenever the embed body's content changes. The host site's embed.js
-// listens for { type: 'Ivy:resize', height, slug } and resizes the
+// listens for { type: 'ivy:resize', height, slug } and resizes the
 // iframe to match. Without this, the iframe would either need a fixed
 // height (looks bad) or scrolling (also looks bad).
 import { useEffect } from 'react';
@@ -17,7 +17,7 @@ export function useEmbedResize(slug) {
         document.documentElement.scrollHeight,
         document.body?.scrollHeight || 0,
       );
-      window.parent.postMessage({ type: 'Ivy:resize', slug, height: h }, '*');
+      window.parent.postMessage({ type: 'ivy:resize', slug, height: h }, '*');
     };
 
     // Initial paint + a debounce for fast-changing layouts (mounting

@@ -454,8 +454,8 @@ function LinkTest({ slug }) {
 function EmbedSnippets({ slug }) {
   const origin = (typeof window !== 'undefined' && window.location)
     ? window.location.origin : 'https://joinivy.ai';
-  const bookSnippet = `<script async src="${origin}/embed.js" data-Ivy="book" data-slug="${slug}"></script>`;
-  const contactSnippet = `<script async src="${origin}/embed.js" data-Ivy="contact" data-slug="${slug}"></script>`;
+  const bookSnippet = `<script async src="${origin}/embed.js" data-ivy="book" data-slug="${slug}"></script>`;
+  const contactSnippet = `<script async src="${origin}/embed.js" data-ivy="contact" data-slug="${slug}"></script>`;
   const [tab, setTab] = useState('book'); // 'book' | 'contact'
   const [copied, setCopied] = useState(false);
 

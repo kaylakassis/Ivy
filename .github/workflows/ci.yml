@@ -35,7 +35,7 @@ jobs:
       DATABASE_URL: postgres://ivy_test:test@localhost:5432/ivy_test
       JWT_SECRET: test_secret_for_ci_only_at_least_32_chars_long
       RESEND_API_KEY: __test__
-      EMAIL_FROM: Ivy OS <test@example.com>
+      EMAIL_FROM: Ivy <test@example.com>
 
     steps:
       - uses: actions/checkout@v4

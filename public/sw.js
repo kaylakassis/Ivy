@@ -1,4 +1,4 @@
-// Ivy OS service worker - offline app shell + push notifications.
+// Ivy service worker - offline app shell + push notifications.
 //
 // Two responsibilities:
 //   1. Offline: precache the app shell on install and serve cached
@@ -113,9 +113,9 @@ async function staleWhileRevalidate(request) {
 self.addEventListener('push', (event) => {
   let payload = {};
   try { payload = event.data ? event.data.json() : {}; }
-  catch { payload = { title: 'Ivy OS', body: event.data ? event.data.text() : '' }; }
+  catch { payload = { title: 'Ivy', body: event.data ? event.data.text() : '' }; }
 
-  const title = payload.title || 'Ivy OS';
+  const title = payload.title || 'Ivy';
   const options = {
     body: payload.body || '',
     icon: payload.icon || '/icon.svg',
@@ -132,7 +132,7 @@ self.addEventListener('notificationclick', (event) => {
   const target = event.notification.data?.url || '/';
   event.waitUntil((async () => {
     const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
-    // If Ivy OS is already open, focus that tab and navigate it.
+    // If Ivy is already open, focus that tab and navigate it.
     for (const client of all) {
       const url = new URL(client.url);
       if (url.origin === self.location.origin) {
