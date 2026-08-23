@@ -47,7 +47,10 @@ export default async function handler(req, res) {
 
     // Resolve workspace by website handle.
     const w = await sql`
-      SELECT workspace_id FROM websites WHERE handle = ${handle}
+      SELECT w2.workspace_id FROM websites w2
+        JOIN workspaces ws ON ws.id = w2.workspace_id
+        JOIN users u ON u.id = ws.owner_id AND u.deleted_at IS NULL
+      WHERE w2.handle = ${handle}
         AND published_at IS NOT NULL
        LIMIT 1
     `;

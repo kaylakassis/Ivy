@@ -738,10 +738,13 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
           </button>
         </div>
 
-        {/* Header card - overlaps the hero */}
-        <div style={{ padding: '0 22px', marginTop: -38 }}>
+        {/* Header card. Only the LOGO overlaps the hero - the text must
+            stay on the sheet background: overlapping the whole row put
+            the (theme-colored) business name on top of the pale hero,
+            where it was unreadable in dark mode. */}
+        <div style={{ padding: '0 22px' }}>
           <div style={{
-            display: 'flex', alignItems: 'center', gap: 14,
+            display: 'flex', alignItems: 'flex-end', gap: 14, marginTop: -38,
           }}>
             {biz?.logoUrl ? (
               <img src={biz.logoUrl} alt={biz.bizName}
@@ -760,7 +763,7 @@ function BusinessExpandedView({ slug, onClose, onReviewPosted }) {
                 color: accent, flexShrink: 0,
               }}>{(biz?.bizName || slug)[0]?.toUpperCase()}</div>
             )}
-            <div style={{ flex: 1, minWidth: 0, paddingBottom: 8 }}>
+            <div style={{ flex: 1, minWidth: 0, paddingBottom: 2, paddingTop: 44 }}>
               <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--fg)' }}>
                 {biz?.bizName || slug}
               </div>

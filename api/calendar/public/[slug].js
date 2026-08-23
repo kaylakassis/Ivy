@@ -62,7 +62,12 @@ async function getCalendar(req, res) {
     if (blocked) return;
 
     const settings = await sql`
-      SELECT * FROM calendar_settings WHERE slug = ${slug}
+      SELECT cs.* FROM calendar_settings cs
+        -- Deleted accounts' booking pages go dark (soft-delete leaves
+        -- the workspace row behind).
+        JOIN workspaces w ON w.id = cs.workspace_id
+        JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
+      WHERE cs.slug = ${slug}
     `;
     if (settings.rows.length === 0) return notFound(res, 'No booking page for that handle');
     const s = settings.rows[0];
@@ -238,7 +243,11 @@ async function createBooking(req, res) {
 
     // Resolve workspace by slug.
     const settingsRows = await sql`
-      SELECT workspace_id, availability, slot_minutes, min_notice_hours, slot_fit_service, buffer_minutes, max_advance_days, timezone FROM calendar_settings WHERE slug = ${slug}
+      SELECT cs.workspace_id, cs.availability, cs.slot_minutes, cs.min_notice_hours, cs.slot_fit_service, cs.buffer_minutes, cs.max_advance_days, cs.timezone
+      FROM calendar_settings cs
+        JOIN workspaces w ON w.id = cs.workspace_id
+        JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL
+      WHERE cs.slug = ${slug}
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];

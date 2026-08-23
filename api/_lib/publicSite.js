@@ -40,10 +40,15 @@ export async function loadPublicSite({ handle, slug, host }) {
              custom_css, font_pair, published_at, visibility, custom_domain,
              seo_title, seo_description, seo_og_image, favicon_url,
              redirects, exit_intent_popup, sticky_cta
-      FROM websites
-      WHERE handle = ${handle.toLowerCase()}
-        AND published_at IS NOT NULL
-        AND visibility != 'only_me'
+      FROM websites w2
+        -- Deleted accounts' sites go dark: account deletion is a SOFT
+        -- delete (users.deleted_at), so without this gate the website
+        -- kept serving forever.
+        JOIN workspaces ws ON ws.id = w2.workspace_id
+        JOIN users u ON u.id = ws.owner_id AND u.deleted_at IS NULL
+      WHERE w2.handle = ${handle.toLowerCase()}
+        AND w2.published_at IS NOT NULL
+        AND w2.visibility != 'only_me'
     `);
   } else if (host && typeof host === 'string') {
     const variants = hostVariants(host);
@@ -55,11 +60,13 @@ export async function loadPublicSite({ handle, slug, host }) {
              custom_css, font_pair, published_at, visibility, custom_domain,
              seo_title, seo_description, seo_og_image, favicon_url,
              redirects, exit_intent_popup, sticky_cta
-      FROM websites
-      WHERE lower(custom_domain) = ANY(${variants})
-        AND domain_status = 'verified'
-        AND published_at IS NOT NULL
-        AND visibility != 'only_me'
+      FROM websites w2
+        JOIN workspaces ws ON ws.id = w2.workspace_id
+        JOIN users u ON u.id = ws.owner_id AND u.deleted_at IS NULL
+      WHERE lower(w2.custom_domain) = ANY(${variants})
+        AND w2.domain_status = 'verified'
+        AND w2.published_at IS NOT NULL
+        AND w2.visibility != 'only_me'
     `);
   } else {
     return { kind: 'not_found' };

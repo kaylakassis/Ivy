@@ -70,6 +70,9 @@ async function handler(req, res) {
                  WHERE p.workspace_id = cs.workspace_id AND p.active = TRUE),
         NOW()
       FROM calendar_settings cs
+        JOIN workspaces w ON w.id = cs.workspace_id
+        JOIN users u ON u.id = w.owner_id
+      WHERE u.deleted_at IS NULL
       ON CONFLICT (workspace_id) DO UPDATE SET
         service_count   = EXCLUDED.service_count,
         min_price       = EXCLUDED.min_price,
@@ -87,7 +90,12 @@ async function handler(req, res) {
     // the (rare) case where someone wipes calendar_settings directly.
     const pruned = await sql`
       DELETE FROM discover_snapshots
-      WHERE workspace_id NOT IN (SELECT workspace_id FROM calendar_settings)
+      WHERE workspace_id NOT IN (
+        SELECT cs.workspace_id FROM calendar_settings cs
+          JOIN workspaces w ON w.id = cs.workspace_id
+          JOIN users u ON u.id = w.owner_id
+        WHERE u.deleted_at IS NULL
+      )
     `;
 
     return ok(res, {

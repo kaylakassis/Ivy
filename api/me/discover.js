@@ -90,7 +90,18 @@ export default async function handler(req, res) {
       .replace(/\$2::float/g, `${dist2}::float`)
       : 'NULL';
 
-    const whereParts = ['cs.discoverable = TRUE', 'cs.slug IS NOT NULL'];
+    const whereParts = [
+      'cs.discoverable = TRUE',
+      'cs.slug IS NOT NULL',
+      // Only living, operating businesses with something to book/buy.
+      // Deleted accounts (soft delete), lapsed workspaces, and empty
+      // 0-service shells all previously listed here.
+      'u.deleted_at IS NULL',
+      `(w.comp_until > NOW()
+        OR w.subscription_status IN ('active', 'past_due')
+        OR (w.subscription_status = 'trialing' AND w.trial_ends_at > NOW()))`,
+      `(COALESCE(ds.service_count, 0) > 0 OR COALESCE(ds.has_products, FALSE))`,
+    ];
 
     if (category) {
       whereParts.push(`cs.category = ${push(category)}`);
@@ -185,6 +196,8 @@ export default async function handler(req, res) {
             ${priceMax != null ? `AND s2.price <= ${push(priceMax)}` : ''}
         ) AS matching_services
       FROM calendar_settings cs
+      JOIN workspaces w ON w.id = cs.workspace_id
+      JOIN users u ON u.id = w.owner_id
       LEFT JOIN discover_snapshots ds ON ds.workspace_id = cs.workspace_id
       WHERE ${whereParts.join(' AND ')}
       ORDER BY ${dist1 !== 'NULL' ? 'distance_km ASC NULLS LAST,' : ''} cs.biz_name ASC
