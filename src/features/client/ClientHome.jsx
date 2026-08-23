@@ -86,7 +86,11 @@ export default function ClientHome() {
           </div>
 
           <div className="card" style={{ padding: 18 }}>
-            <div className="metric-label" style={{ marginBottom: 12 }}>Your businesses</div>
+            <div className="metric-label" style={{ marginBottom: 4 }}>Businesses you're a client of</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 12, lineHeight: 1.5 }}>
+              These are businesses that have you in their client list - book,
+              message, and pay them from here. This isn't about businesses you own.
+            </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {memberships.map((m) => (
                 <div key={m.clientId} style={{
@@ -103,13 +107,25 @@ export default function ClientHome() {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600 }}>{m.businessName}</div>
                     <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                      Listed as {m.clientName}
+                      They have you saved as {m.clientName}
                     </div>
                   </div>
                   <Link to={`/me/messages?clientId=${encodeURIComponent(m.clientId)}`}
                     className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>
                     Message <Icons.Chat size={12} sw={1.8}/>
                   </Link>
+                  <button className="btn btn-ghost"
+                    title="Hide this business from your portal. They keep their own records; you can ask them to re-invite you if you change your mind."
+                    onClick={async () => {
+                      if (!confirm(`Hide ${m.businessName} from your portal? Their bookings, invoices, and messages will stop showing here. They keep their own records - nothing changes on their side.`)) return;
+                      try {
+                        await api.post('/me/businesses/hide', { clientId: m.clientId });
+                        window.location.reload();
+                      } catch { /* row stays; retry available */ }
+                    }}
+                    style={{ padding: '6px 8px', fontSize: 12, color: 'var(--muted)' }}>
+                    Hide
+                  </button>
                 </div>
               ))}
             </div>

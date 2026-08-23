@@ -48,6 +48,7 @@ export async function myClientIds(user) {
       JOIN workspaces w ON w.id = c.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = c.workspace_id
       WHERE c.user_id = ${user.id}
+        AND c.portal_hidden_at IS NULL
       ORDER BY COALESCE(cs.biz_name, w.name) ASC
     `;
     return rows.map((r) => ({

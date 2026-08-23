@@ -1770,6 +1770,12 @@ ALTER TABLE bookings ADD COLUMN IF NOT EXISTS collect_invoice_id UUID REFERENCES
 -- NOT NULL on an already-nullable column is a no-op.
 ALTER TABLE bookings ALTER COLUMN client_email DROP NOT NULL;
 
+-- Client-side "hide this business from my portal". Set by the client
+-- (POST /api/me/businesses/hide); the business's OWN client record is
+-- untouched - this only stops the connection from surfacing in the
+-- client's portal (myClientIds filters on it). NULL = visible.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS portal_hidden_at TIMESTAMPTZ;
+
 -- Memberships: self-serve recurring subscriptions. Owners define
 -- one or more "membership" tiers (name, price, perks). Each tier
 -- gets a Stripe Product + Price provisioned on the connected
