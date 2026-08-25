@@ -26,6 +26,15 @@ Mac - Xcode is required.
 
 ## App Store Connect setup
 
+0. **Paid Applications Agreement - DO THIS FIRST.** Developer Program
+   membership alone does not let you sell anything. Go to App Store
+   Connect -> Business -> Agreements, Tax, and Banking, accept the
+   **Paid Applications** agreement, then add a bank account and complete
+   the tax forms. Subscriptions cannot be approved (and the app cannot
+   ship) until the status reads **Active**. Bank/tax verification is the
+   single slowest step in this document - it can take several business
+   days - so start it before anything else and let it process while you
+   work through the rest.
 1. **Bundle ID:** `ai.joinivy.app` - must match `capacitor.config.ts`.
 2. **App record:** create under "My Apps" → primary language English,
    bundle ID matching above.
@@ -54,9 +63,13 @@ Mac - Xcode is required.
    - User Content (messages, files): yes - linked to user.
    - Identifiers (user ID): yes - linked to user.
    - Health / Financial / Location data: no.
-5. **Sign in with Apple:** required because we offer a non-Apple sign-in
-   (email/password). The web app's social login is already prepared;
-   wire it in Xcode with the "Sign In with Apple" capability.
+5. **Sign in with Apple: NOT required.** Guideline 4.8 only applies to
+   apps that offer a *third-party or social* login (Google, Facebook,
+   etc.) for the primary account. Ivy authenticates with email +
+   password only - the Google OAuth in this codebase is Calendar sync,
+   not sign-in - so plain email/password does not trigger the
+   requirement. Do not add the capability; it costs setup time and an
+   extra review surface for nothing.
 
 ## RevenueCat setup
 
@@ -105,9 +118,9 @@ In Xcode, with the `App` target selected:
 1. **Signing & Capabilities:**
    - Team: your Apple Developer team.
    - Add capability: **In-App Purchase**.
-   - Add capability: **Sign in with Apple**.
-   - Add capability: **Push Notifications** (we already have web push;
-     the native plumbing comes in a follow-up).
+   - Add capability: **Push Notifications**.
+   - Do NOT add **Sign in with Apple** - see the App Store Connect
+     section above; email/password-only apps don't need it.
    - Add capability: **Associated Domains** if/when we want universal
      links - not required for v1.
 2. **Info → Custom iOS Target Properties:**
@@ -121,6 +134,9 @@ In Xcode, with the `App` target selected:
      to autofill your business address when setting up your booking
      site."
 3. **General → Minimum Deployments:** iOS 16.0.
+   - **Supported Destinations:** remove iPad, keep iPhone. Shipping
+     iPhone-only means App Store Connect stops requiring a separate
+     iPad screenshot set for every release.
 4. **Build Settings → Versioning:** Marketing Version = `1.0.0`, Build
    number = `1`. Bump build number on every TestFlight upload.
 
