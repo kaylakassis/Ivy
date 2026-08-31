@@ -14,15 +14,29 @@ Mac - Xcode is required.
   native dependencies via Pods.
 - **RevenueCat account** (free up to $2.5K MRR). Create a project named
   "Ivy" with one iOS app entry.
-- The repo's `VITE_API_BASE_URL` env var set in Vercel for production
-  (e.g. `https://joinivy.ai`). The native build uses this as the
-  cross-origin API base - without it, every API call from the device
-  resolves to `https://localhost/api/…` and 404s.
-- The repo's `VITE_REVENUECAT_PUBLIC_KEY_IOS` env var set (it ships in
-  the JS bundle - it's the iOS-app public SDK key, NOT a secret).
-- A server-side `REVENUECAT_WEBHOOK_SECRET` set in Vercel: a long
-  random string we use as the bearer token for
-  `/api/billing/revenuecat-webhook`.
+- **A `.env` file ON THE MAC** carrying the two build-time values below.
+  This trips people up: the iOS bundle is produced by `npm run build`
+  *on the Mac* and copied into the `.ipa` by `cap sync`, so these are
+  baked in from the Mac's environment. Setting them in Vercel does
+  nothing for the app - Vercel only builds the web app.
+  - `VITE_API_BASE_URL` (e.g. `https://joinivy.ai`) - the cross-origin
+    API base. Without it every API call from the device resolves to
+    `https://localhost/api/…` and fails, in a signed build you won't
+    notice until TestFlight.
+  - `VITE_REVENUECAT_PUBLIC_KEY_IOS` - the iOS public SDK key (it ships
+    in the JS bundle; it is NOT a secret). Without it the paywall loads
+    with nothing to buy, which is a 3.1.1 rejection.
+
+  `npm run ios:sync` runs `scripts/check-ios-env.mjs` first and refuses
+  to build if either is missing or malformed, so a broken bundle can't
+  reach Xcode by accident.
+
+  Both stay EMPTY in Vercel: the web app calls `/api` relatively and
+  never touches StoreKit.
+- Server-side vars that DO belong in Vercel (runtime, read by the API
+  routes): `REVENUECAT_WEBHOOK_SECRET` - a long random string used as
+  the bearer token for `/api/billing/revenuecat-webhook` - plus the
+  `APNS_*` set in the push section below.
 
 ## App Store Connect setup
 
@@ -99,10 +113,10 @@ Mac - Xcode is required.
 From the repo root, on the Mac:
 
 ```bash
+cp .env.example .env        # then fill in the two VITE_* values
 npm install
-npm run build              # produces dist/
 npx cap add ios            # one-time - creates ios/ tree
-npx cap sync ios           # copy dist/ into ios/App/App/public + install pods
+npm run ios:sync           # env preflight + build + copy into ios/ + pods
 npm run ios:open           # opens ios/App/App.xcworkspace in Xcode
 ```
 

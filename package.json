@@ -18,8 +18,9 @@
     "test:tpls": "node --import ./tests/bootstrap.mjs ./tests/workflow-templates.test.mjs",
     "test:smoke": "node --import ./tests/bootstrap.mjs ./tests/smoke-runner.mjs",
     "test": "node tests/run-all.mjs",
-    "ios:sync": "npm run build && npx cap sync ios",
-    "ios:open": "npx cap open ios"
+    "ios:sync": "npm run ios:check && npm run build && npx cap sync ios",
+    "ios:open": "npx cap open ios",
+    "ios:check": "node scripts/check-ios-env.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.92.0",
