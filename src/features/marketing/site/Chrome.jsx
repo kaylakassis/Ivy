@@ -95,7 +95,7 @@ export function SiteFooter() {
         </div>
         <div className="foot-cols">
           <div className="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/compare">Compare</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
-          <div className="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a></div>
+          <div className="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a></div>
           <div className="foot-col"><h5>Account</h5><a href="/signin">Sign in</a><a href="/signup">Get started</a><a href="/me">Client portal</a></div>
         </div>
       </div>

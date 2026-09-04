@@ -73,6 +73,7 @@ const PrivacyPage   = lazy(() => import('./features/legal/PrivacyPage.jsx'));
 const TermsPage     = lazy(() => import('./features/legal/TermsPage.jsx'));
 const DoNotSellPage = lazy(() => import('./features/legal/DoNotSellPage.jsx'));
 const SiteAbout     = lazy(() => import('./features/marketing/site/SiteAbout.jsx'));
+const SiteSupport   = lazy(() => import('./features/marketing/site/SiteSupport.jsx'));
 const VerticalPage  = lazy(() => import('./features/marketing/VerticalPage.jsx'));
 const SitePricing     = lazy(() => import('./features/marketing/site/SitePricing.jsx'));
 const SiteTour        = lazy(() => import('./features/marketing/site/SiteTour.jsx'));
@@ -239,6 +240,7 @@ export default function App() {
 
         {/* Marketing - extra public surfaces beyond the home page. */}
         <Route path="/about"       element={<SiteAbout />} />
+        <Route path="/support"     element={<SiteSupport />} />
         <Route path="/tour"        element={<SiteTour />} />
         <Route path="/features"    element={<SiteFeatures />} />
         <Route path="/compare"     element={<SiteCompare />} />

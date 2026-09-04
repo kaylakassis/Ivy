@@ -14,6 +14,7 @@ const STATIC_PATHS = [
   '/features',
   '/compare',
   '/about',
+  '/support',
   '/security',
   '/mobile',
   '/integrations',

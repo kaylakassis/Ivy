@@ -38,7 +38,7 @@ const HIDE_PREFIXES = [
   '/signin', '/signup', '/forgot-password', '/reset-password', '/verify-email',
   '/onboarding',
   '/book/', '/sign/', '/invoice/', '/quote/', '/review/', '/site/', '/embed/',
-  '/privacy', '/terms',
+  '/privacy', '/terms', '/support',
   '/tour', '/features', '/compare', '/waitlist', '/account-recover', '/do-not-sell',
   // Marketing pages: the floating pill overlapped page content (e.g. the
   // pricing card) and confused logged-out visitors. The Business/Client
