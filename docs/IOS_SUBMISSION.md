@@ -12,6 +12,11 @@ Mac - Xcode is required.
   (`xcode-select --install`).
 - **CocoaPods 1.15+** (`sudo gem install cocoapods`). Capacitor pulls
   native dependencies via Pods.
+- No TypeScript needed. The Capacitor config is `capacitor.config.js`
+  (plain ESM, which `"type": "module"` makes native) precisely so a
+  fresh clone can run `npx cap add ios` without installing a compiler
+  the project otherwise has no use for. If you rename it back to
+  `.ts`, `cap` refuses to run until `typescript` is installed.
 - **RevenueCat account** (free up to $2.5K MRR). Create a project named
   "Ivy" with one iOS app entry.
 - **A `.env` file ON THE MAC** carrying the two build-time values below.
@@ -55,7 +60,7 @@ Mac - Xcode is required.
    single slowest step in this document - it can take several business
    days - so start it before anything else and let it process while you
    work through the rest.
-1. **Bundle ID:** `ai.joinivy.app` - must match `capacitor.config.ts`.
+1. **Bundle ID:** `ai.joinivy.app` - must match `capacitor.config.js`.
 2. **App record:** create under "My Apps" → primary language English,
    bundle ID matching above.
 3. **In-app purchases:**

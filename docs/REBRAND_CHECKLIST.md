@@ -119,7 +119,7 @@ RevenueCat dashboard:
 - [ ] **Register the bundle id `ai.joinivy.app`** (Apple Developer → Identifiers → +).
 - [ ] **Create the App Store Connect app record** with that bundle id, name "Ivy".
 - [ ] **Subscription group** called `ivyos`. Add the two auto-renewable subscriptions with ids matching RevenueCat: `ivyos_weekly` and `ivyos_yearly`.
-- [ ] In Xcode (`capacitor.config.ts` already has the new appId), enable capabilities: **In-App Purchase**, **Sign in with Apple**, **Push Notifications**.
+- [ ] In Xcode (`capacitor.config.js` already has the new appId), enable capabilities: **In-App Purchase**, **Sign in with Apple**, **Push Notifications**.
 - [ ] Full step-by-step is in `docs/IOS_SUBMISSION.md`.
 
 ## 10. Google OAuth (Calendar / Sign-in)
