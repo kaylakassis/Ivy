@@ -4,15 +4,27 @@
 // the .ipa by `npx cap sync ios`. That means the two VITE_* values below
 // are baked in from the MAC's environment at that moment - Vercel's
 // environment variables have nothing to do with it. Setting them only in
-// Vercel produces an app that installs, launches, and then fails every
-// single API call (relative `/api/...` resolves to https://localhost on
-// the Capacitor origin) with an unsellable paywall.
+// Vercel produces a signed build whose failures only surface after a
+// TestFlight round-trip, which is an expensive way to find out.
 //
-// That failure is silent, ships in a signed build, and is only visible
-// after a TestFlight round-trip - so we fail the build here instead.
+// The two values are NOT equally important, so they fail differently:
 //
-// Escape hatch: IVY_SKIP_IOS_ENV_CHECK=1 (for building a throwaway
-// simulator bundle you don't intend to sign or ship).
+//   VITE_API_BASE_URL           FATAL. Without it every API call resolves
+//                               to https://localhost/api/... and the app
+//                               is completely non-functional. Nothing
+//                               about the build is salvageable.
+//
+//   VITE_REVENUECAT_PUBLIC_KEY_IOS
+//                               WARNS. The app works fine and is worth
+//                               installing through TestFlight; only the
+//                               paywall comes up with nothing to buy. That
+//                               is a legitimate state while you are still
+//                               setting RevenueCat up, but such a build
+//                               must not be submitted for sale (App Store
+//                               guideline 3.1.1).
+//
+// Escape hatch for the fatal one: IVY_SKIP_IOS_ENV_CHECK=1, for building
+// a throwaway simulator bundle you have no intention of signing.
 import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
@@ -32,47 +44,50 @@ function fromEnvFiles(key) {
 
 const read = (key) => (process.env[key] || fromEnvFiles(key) || '').trim();
 
-const problems = [];
+const RED = '\x1b[31m';
+const YEL = '\x1b[33m';
+const OFF = '\x1b[0m';
 
+// ── Fatal: the API base ────────────────────────────────────────────────
 const base = read('VITE_API_BASE_URL');
+let fatal = null;
 if (!base) {
-  problems.push(
-    'VITE_API_BASE_URL is not set.\n' +
-    '      The app would call https://localhost/api/... and every request\n' +
-    '      would fail. Set it to your API host, e.g. https://joinivy.ai',
-  );
+  fatal = 'VITE_API_BASE_URL is not set.\n'
+    + '     Without it the app calls https://localhost/api/... and every\n'
+    + '     request fails. The build would install and then do nothing.';
 } else if (!/^https:\/\/[^/\s]+$/.test(base.replace(/\/+$/, ''))) {
-  problems.push(
-    `VITE_API_BASE_URL is "${base}", which is not a bare https origin.\n` +
-    '      Expected something like https://joinivy.ai (no path, no trailing slash).',
-  );
+  fatal = `VITE_API_BASE_URL is "${base}", which is not a bare https origin.\n`
+    + '     Expected something like https://joinivy.ai (no path, no trailing slash).';
 }
 
-if (!read('VITE_REVENUECAT_PUBLIC_KEY_IOS')) {
-  problems.push(
-    'VITE_REVENUECAT_PUBLIC_KEY_IOS is not set.\n' +
-    '      The paywall would load with nothing to purchase, which Apple\n' +
-    '      rejects under guideline 3.1.1. Copy the iOS public SDK key from\n' +
-    '      RevenueCat (Project settings > API keys).',
-  );
-}
-
-if (problems.length && process.env.IVY_SKIP_IOS_ENV_CHECK !== '1') {
-  console.error('\n\x1b[31m✖ iOS build preflight failed\x1b[0m\n');
-  for (const p of problems) console.error('   • ' + p + '\n');
+if (fatal && process.env.IVY_SKIP_IOS_ENV_CHECK !== '1') {
+  console.error(`\n${RED}✖ iOS build stopped${OFF}\n`);
+  console.error('   • ' + fatal + '\n');
   console.error(
-    '   Fix: create a .env file in the repo root on this Mac:\n\n' +
-    '     VITE_API_BASE_URL=https://joinivy.ai\n' +
-    '     VITE_REVENUECAT_PUBLIC_KEY_IOS=appl_xxxxxxxxxxxx\n\n' +
-    '   These are build-time values baked into the app bundle. They are\n' +
-    '   NOT read from Vercel - Vercel only serves the web app.\n' +
-    '   (Override for a throwaway build: IVY_SKIP_IOS_ENV_CHECK=1)\n',
+    '   Fix: open the .env file in this folder and set:\n\n'
+    + '     VITE_API_BASE_URL=https://joinivy.ai\n\n'
+    + '   This is a build-time value baked into the app. It is NOT read\n'
+    + '   from Vercel, which only builds the website.\n',
   );
   process.exit(1);
 }
+if (fatal) {
+  console.warn(`\n${YEL}! IVY_SKIP_IOS_ENV_CHECK is set and ${'VITE_API_BASE_URL'} is bad. This build cannot work. Do not ship it.${OFF}\n`);
+}
 
-if (problems.length) {
-  console.warn('\n\x1b[33m! iOS env check skipped via IVY_SKIP_IOS_ENV_CHECK - do not ship this build.\x1b[0m\n');
-} else {
+// ── Non-fatal: the store key ───────────────────────────────────────────
+if (!read('VITE_REVENUECAT_PUBLIC_KEY_IOS')) {
+  console.warn(
+    `\n${YEL}! Building WITHOUT a RevenueCat key.${OFF}\n\n`
+    + '   VITE_REVENUECAT_PUBLIC_KEY_IOS is not set, so the subscription\n'
+    + '   screen will load with nothing to purchase.\n\n'
+    + '   This is fine for a build you install through TestFlight to try\n'
+    + '   the app out. It CANNOT be submitted for review: Apple rejects a\n'
+    + '   non-working paywall under guideline 3.1.1.\n\n'
+    + '   When you are ready, put the key from RevenueCat (Project settings\n'
+    + '   > API keys, the public one starting with appl_) into .env and\n'
+    + '   run this again.\n',
+  );
+} else if (!fatal) {
   console.log(`✓ iOS build preflight passed (API base: ${base})`);
 }

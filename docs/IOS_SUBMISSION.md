@@ -27,9 +27,15 @@ Mac - Xcode is required.
     in the JS bundle; it is NOT a secret). Without it the paywall loads
     with nothing to buy, which is a 3.1.1 rejection.
 
-  `npm run ios:sync` runs `scripts/check-ios-env.mjs` first and refuses
-  to build if either is missing or malformed, so a broken bundle can't
-  reach Xcode by accident.
+  `npm run ios:sync` runs `scripts/check-ios-env.mjs` first. The two are
+  treated differently, because they are not equally fatal:
+  a missing/malformed `VITE_API_BASE_URL` **stops the build** (the app
+  would be completely non-functional), while a missing
+  `VITE_REVENUECAT_PUBLIC_KEY_IOS` only **warns and continues** - that
+  build is perfectly good for trying the app through TestFlight, it just
+  has an empty paywall and must not be submitted for review. Override the
+  fatal one with `IVY_SKIP_IOS_ENV_CHECK=1` for a throwaway simulator
+  bundle.
 
   Both stay EMPTY in Vercel: the web app calls `/api` relatively and
   never touches StoreKit.
