@@ -21,7 +21,7 @@ export default function ClientPrograms() {
       {programs === null ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>
         : programs.length === 0 ? <EmptyNote icon="Gift" title="No programs yet" hint="When a business you work with gives you access to a program, it shows up here."/>
         : (
-          <div className="grid-auto" style={{ gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
             {programs.map((p) => (
               <Link key={p.id} to={`/me/programs/${p.id}`} className="card" style={{ padding: 16, textDecoration: 'none', color: 'inherit', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent)' }}>{p.businessName}</div>

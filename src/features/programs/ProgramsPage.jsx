@@ -33,20 +33,21 @@ function ComingSoon({ onUnlock }) {
   const [pw, setPw] = useState(''); const [err, setErr] = useState(false); const [show, setShow] = useState(false);
   const submit = (e) => { e.preventDefault(); if (pw.trim() === PREVIEW_PASSWORD) onUnlock(); else { setErr(true); setPw(''); } };
   return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 820 }}>
-      <div>
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 999, background: 'var(--accent-soft)', color: 'var(--accent)', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}><Icons.Spark size={13} sw={2}/> Coming soon</div>
-        <h2 className="page-title" style={{ margin: '14px 0 0', fontSize: 32 }}>Programs</h2>
-        <p style={{ margin: '8px 0 0', fontSize: 15, color: 'var(--fg-2)', maxWidth: 560, lineHeight: 1.55 }}>Package what you know into a program your clients can buy: coaching curricula, training plans, courses and paid communities. Built for fitness coaches, business coaches and every expert whose clients want more than a session.</p>
+    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 1040 }}>
+      <div className="card" style={{ padding: 'clamp(22px, 4vw, 40px)', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--accent-soft), var(--surface))' }}>
+        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 999, background: 'var(--accent)', color: 'var(--accent-ink)', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}><Icons.Spark size={13} sw={2}/> Coming soon</div>
+        <h2 className="page-title" style={{ margin: 0, fontSize: 'clamp(28px, 4vw, 40px)' }}>Sell what you know, not just your hours.</h2>
+        <p style={{ margin: 0, fontSize: 16, color: 'var(--fg-2)', maxWidth: 640, lineHeight: 1.6 }}>Programs turn your expertise into something clients can buy: coaching curricula, training plans, courses and paid communities. Built for fitness coaches, business coaches and every expert whose clients want more than a session.</p>
       </div>
-      <div className="grid-auto" style={{ gap: 12 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
         {FEATURES.map((f) => { const Icon = Icons[f.icon] || Icons.Spark; return (
-          <div key={f.title} className="card" style={{ padding: 16, display: 'flex', gap: 12, alignItems: 'flex-start' }}>
-            <span style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={16} sw={1.8}/></span>
-            <div><div style={{ fontSize: 14, fontWeight: 600 }}>{f.title}</div><div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3, lineHeight: 1.45 }}>{f.body}</div></div>
+          <div key={f.title} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
+            <span style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={18} sw={1.8}/></span>
+            <div style={{ fontSize: 16, fontWeight: 600 }}>{f.title}</div>
+            <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.55 }}>{f.body}</div>
           </div>); })}
       </div>
-      <form onSubmit={submit} className="card" style={{ padding: 16, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 420 }}>
+      <form onSubmit={submit} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 440 }}>
         <div style={{ fontSize: 13, fontWeight: 600 }}>Have a preview password?</div>
         <div style={{ position: 'relative' }}>
           <input className="input" type={show ? 'text' : 'password'} value={pw} autoComplete="off" onChange={(e) => { setPw(e.target.value); setErr(false); }} placeholder="Preview password" style={{ paddingRight: 40 }}/>
@@ -84,7 +85,7 @@ function Builder({ onLock }) {
       {programs === null ? <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>
         : programs.length === 0 ? <EmptyNote icon="Gift" title="No programs yet" hint="Create your first program, add lessons, PDFs and videos, then publish it to start selling." action={<button className="btn btn-primary" onClick={() => setCreating(true)}>Create a program</button>}/>
         : (
-          <div className="grid-auto" style={{ gap: 12 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: 14 }}>
             {programs.map((p) => (
               <button key={p.id} type="button" className="card" onClick={() => setOpenId(p.id)} style={{ padding: 16, textAlign: 'left', display: 'flex', flexDirection: 'column', gap: 8 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
