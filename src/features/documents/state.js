@@ -115,8 +115,8 @@ export function useDocuments() {
 // upload time without a server round trip. Re-uses the pdfjs-dist
 // import the editor + viewer already load.
 async function countPdfPages(file) {
-  const lib = await import('pdfjs-dist/build/pdf.mjs');
-  const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+  const lib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+  const workerUrl = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
   lib.GlobalWorkerOptions.workerSrc = workerUrl;
   const buf = await file.arrayBuffer();
   const pdf = await lib.getDocument({ data: buf }).promise;

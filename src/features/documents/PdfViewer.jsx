@@ -4,6 +4,13 @@
 //
 // Hosts a worker via `?url` import so Vite emits it as a static asset
 // instead of trying to bundle it.
+//
+// Uses pdfjs-dist's LEGACY build deliberately. The default build targets
+// very recent engines - it calls Map.prototype.getOrInsertComputed, a 2025
+// proposal - and throws "getOrInsertComputed is not a function" on anything
+// older, which shows up as a blank page rather than an error. The legacy
+// build is transpiled and polyfilled, so contracts still render for a client
+// signing on an older phone or browser.
 import React, { useEffect, useRef, useState } from 'react';
 
 let pdfjsPromise = null;
@@ -11,8 +18,8 @@ let pdfjsPromise = null;
 async function loadPdfjs() {
   if (pdfjsPromise) return pdfjsPromise;
   pdfjsPromise = (async () => {
-    const lib = await import('pdfjs-dist/build/pdf.mjs');
-    const workerUrl = (await import('pdfjs-dist/build/pdf.worker.min.mjs?url')).default;
+    const lib = await import('pdfjs-dist/legacy/build/pdf.mjs');
+    const workerUrl = (await import('pdfjs-dist/legacy/build/pdf.worker.min.mjs?url')).default;
     lib.GlobalWorkerOptions.workerSrc = workerUrl;
     return lib;
   })();
@@ -31,64 +38,90 @@ export default function PdfViewer({
   onPageDimensions,
   renderOverlay,
 }) {
-  const [pages, setPages] = useState([]); // [{ idx, width, height, canvasRef }]
+  const [doc, setDoc] = useState(null);
+  const [pages, setPages] = useState([]); // [{ idx, width, height }]
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
   const containerRefs = useRef({});
-  const renderToken = useRef(0);
 
+  // Latest callbacks without making them effect dependencies: callers pass
+  // inline arrows, which would re-run the effect on every parent render.
+  const cbs = useRef({ onPagesReady, onPageDimensions });
+  cbs.current = { onPagesReady, onPageDimensions };
+
+  // 1. Load the document and work out page sizes. This only sets state -
+  //    it deliberately does NOT draw, because the canvases it would draw
+  //    into do not exist until React has committed `pages`.
   useEffect(() => {
     let cancelled = false;
-    renderToken.current += 1;
-    const myToken = renderToken.current;
-    setLoading(true); setError(null); setPages([]);
-
+    setLoading(true); setError(null); setPages([]); setDoc(null);
+    containerRefs.current = {};
     (async () => {
       try {
         const pdfjs = await loadPdfjs();
-        const loadingTask = pdfjs.getDocument({ url });
-        const pdf = await loadingTask.promise;
-        if (cancelled || myToken !== renderToken.current) return;
-        const count = pdf.numPages;
-        if (typeof onPagesReady === 'function') onPagesReady(count);
+        const loaded = await pdfjs.getDocument({ url }).promise;
+        if (cancelled) return;
+        const count = loaded.numPages;
+        cbs.current.onPagesReady?.(count);
         const pageList = [];
         for (let i = 1; i <= count; i++) {
           // eslint-disable-next-line no-await-in-loop
-          const page = await pdf.getPage(i);
+          const page = await loaded.getPage(i);
           const viewport = page.getViewport({ scale });
           pageList.push({ idx: i - 1, width: viewport.width, height: viewport.height });
-          if (typeof onPageDimensions === 'function') {
-            onPageDimensions(i - 1, viewport.width, viewport.height);
-          }
+          cbs.current.onPageDimensions?.(i - 1, viewport.width, viewport.height);
         }
-        if (cancelled || myToken !== renderToken.current) return;
+        if (cancelled) return;
+        setDoc(loaded);
         setPages(pageList);
         setLoading(false);
-
-        // Render after pages mount.
-        for (const p of pageList) {
-          // eslint-disable-next-line no-await-in-loop
-          const page = await pdf.getPage(p.idx + 1);
-          const viewport = page.getViewport({ scale });
-          const canvas = containerRefs.current[p.idx];
-          if (!canvas) continue;
-          canvas.width  = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext('2d');
-          // eslint-disable-next-line no-await-in-loop
-          await page.render({ canvasContext: ctx, viewport }).promise;
-          if (cancelled || myToken !== renderToken.current) return;
-        }
       } catch (e) {
-        if (!cancelled) {
-          setError(e);
-          setLoading(false);
+        if (!cancelled) { setError(e); setLoading(false); }
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [url, scale]);
+
+  // 2. Draw, once the canvases are actually on screen. Running this in the
+  //    same pass as the load raced React's commit: the refs were still empty,
+  //    every page was skipped, and the viewer showed blank 300x150 canvases
+  //    with no error - which is what a signer would have seen.
+  useEffect(() => {
+    if (!doc || pages.length === 0) return undefined;
+    let cancelled = false;
+    const tasks = [];
+    (async () => {
+      for (const p of pages) {
+        if (cancelled) return;
+        const canvas = containerRefs.current[p.idx];
+        if (!canvas) continue;
+        // eslint-disable-next-line no-await-in-loop
+        const page = await doc.getPage(p.idx + 1);
+        if (cancelled) return;
+        const viewport = page.getViewport({ scale });
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const task = page.render({ canvasContext: canvas.getContext('2d'), viewport });
+        tasks.push(task);
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          await task.promise;
+        } catch (e) {
+          // A cancelled render (url/scale changed mid-draw) is expected.
+          if (!cancelled && e?.name !== 'RenderingCancelledException') {
+            setError(e);
+            return;
+          }
         }
       }
     })();
-
-    return () => { cancelled = true; };
-  }, [url, scale]);
+    return () => {
+      cancelled = true;
+      // Stop in-flight rasterisation so a fast url change can't have two
+      // renders writing to the same canvas.
+      tasks.forEach((t) => { try { t.cancel(); } catch { /* already done */ } });
+    };
+  }, [doc, pages, scale]);
 
   if (error) {
     return (
