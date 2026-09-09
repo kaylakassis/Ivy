@@ -10,7 +10,7 @@ const JSON_LD = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
   mainEntity: [
-    { '@type': 'Question', name: 'How much does Ivy cost?', acceptedAnswer: { '@type': 'Answer', text: 'Ivy costs $8.99/week once you subscribe, or $375/year with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.' } },
+    { '@type': 'Question', name: 'How much does Ivy cost?', acceptedAnswer: { '@type': 'Answer', text: 'Ivy costs $8.99/week once you subscribe, or $374.99/year with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.' } },
     { '@type': 'Question', name: 'Does Ivy take a cut of my payments?', acceptedAnswer: { '@type': 'Answer', text: "Never. Payments go directly from your client to your own Stripe account - Ivy never touches your money. You only pay Stripe's standard processing rate, and nothing to Ivy beyond the subscription." } },
     { '@type': 'Question', name: 'Does Ivy charge per-client or per-seat fees?', acceptedAnswer: { '@type': 'Answer', text: 'No. Unlimited clients, unlimited bookings, unlimited invoices - one flat subscription. No per-seat math.' } },
     { '@type': 'Question', name: 'Can I cancel Ivy anytime?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. No contracts, no notice period - cancel from your account page in two clicks. Your data stays exportable.' } },
@@ -96,7 +96,7 @@ export default function SitePricing() {
   useSiteFonts();
   usePageMeta({
     title: 'Ivy Pricing - $8.99/week, No Transaction Fees | 14-Day Free Trial',
-    description: 'Ivy costs $8.99/week (or $375/year) with a 14-day free trial, $0 today. One plan includes booking, invoicing, CRM, e-signature, website builder, and the Ivy AI assistant. No transaction fees, no per-seat math - an affordable HoneyBook, Calendly, and Squarespace alternative.',
+    description: 'Ivy costs $8.99/week (or $374.99/year) with a 14-day free trial, $0 today. One plan includes booking, invoicing, CRM, e-signature, website builder, and the Ivy AI assistant. No transaction fees, no per-seat math - an affordable HoneyBook, Calendly, and Squarespace alternative.',
     canonical: 'https://joinivy.ai/pricing',
     jsonLd: JSON_LD,
   });
@@ -138,7 +138,7 @@ export default function SitePricing() {
             <div className="plan-sub">Everything to run your business, in one place.</div>
             <div className="amount">14 days free</div>
             <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no transaction fees.</p>
-            <p className="annual">Or save with annual - <b>$375/yr</b> (save about 20%).</p>
+            <p className="annual">Or save with annual - <b>$374.99/yr</b> (save about 20%).</p>
             <a href="/signup" className="btn">Start your 14-day free trial →</a>
             <ul>
               <li>Unlimited clients + pipeline</li>
@@ -215,7 +215,7 @@ export default function SitePricing() {
           <div className="faq">
             <details open>
               <summary>How much does Ivy cost?</summary>
-              <div className="a">$8.99/week once you subscribe, or $375/yr with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.</div>
+              <div className="a">$8.99/week once you subscribe, or $374.99/yr with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.</div>
             </details>
             <details>
               <summary>Do you take a cut of my payments?</summary>

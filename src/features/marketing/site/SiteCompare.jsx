@@ -79,7 +79,7 @@ export default function SiteCompare() {
                 </tr>
                 <tr>
                   <td>Price</td>
-                  <td className="ivy-col"><span className="yes">$8.99/week</span> (or $375/yr)</td>
+                  <td className="ivy-col"><span className="yes">$8.99/week</span> (or $374.99/yr)</td>
                   <td>from ~$39/mo</td>
                   <td>from ~$12/mo</td>
                   <td>$138+/mo on average</td>

@@ -24,7 +24,7 @@ const JSON_LD = {
       description: "All-in-one business platform for solo service businesses: online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, website builder, and an AI assistant that performs real tasks. No transaction fees - payments go directly to the owner's Stripe account.",
       offers: [
         { '@type': 'Offer', price: '8.99', priceCurrency: 'USD', description: '$8.99 per week after a 14-day free trial ($0 today)' },
-        { '@type': 'Offer', price: '375', priceCurrency: 'USD', description: 'Annual plan, $375/year (save about 20%)' },
+        { '@type': 'Offer', price: '374.99', priceCurrency: 'USD', description: 'Annual plan, $374.99/year (save about 20%)' },
       ],
       publisher: { '@id': 'https://joinivy.ai/#org' },
     },
@@ -432,7 +432,7 @@ export default function SiteHome() {
       <section style={{ padding: '56px 0 0' }}>
         <div className="container">
           <div className="answer">
-            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $375/year) and charges no transaction fees - payments go directly to your own Stripe account.</p>
+            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $374.99/year) and charges no transaction fees - payments go directly to your own Stripe account.</p>
           </div>
         </div>
       </section>
@@ -623,7 +623,7 @@ export default function SiteHome() {
             <div className="plan-sub">Everything to run your business, in one place.</div>
             <div className="amount">14 days free</div>
             <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no transaction fees.</p>
-            <p className="annual">Or save with annual - <b>$375/yr</b> (save about 20%).</p>
+            <p className="annual">Or save with annual - <b>$374.99/yr</b> (save about 20%).</p>
             <ul>
               <li>Unlimited clients + pipeline</li>
               <li>Ivy AI assistant (chat + actions, personalized to you)</li>

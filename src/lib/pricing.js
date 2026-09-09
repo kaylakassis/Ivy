@@ -54,7 +54,9 @@ export const CYCLES_PER_YEAR = 365 / BILLING_CYCLE_DAYS;
 // Annual plan ("Active, billed yearly"). Priced below ~52 × the weekly rate so
 // it's a genuine discount. Surfaced as the highlighted LTV option on the paywall
 // + pricing page; the weekly plan stays the honest default.
-export const IVY_PRICE_ANNUAL = 375;
+// $374.99 - an App Store price point. Apple charges this exactly, so the
+// figure shown anywhere has to match it to the cent.
+export const IVY_PRICE_ANNUAL = 374.99;
 
 // Derived once so copy never hardcodes the math (same discipline as
 // STACK_TOTAL): the yearly saving vs paying weekly, and the per-week
