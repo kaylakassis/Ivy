@@ -154,10 +154,10 @@ just needs the products and the intro offer set up.
 2. Click **"+"** next to "Subscription Groups" → name it `ivyos` → **Create**.
 3. Inside the group, click **"+"** to add the first product:
    - **Reference Name:** `Ivy — Weekly`
-   - **Product ID:** **exactly** `ivyos_weekly` (matches the code).
+   - **Product ID:** **exactly** `ivyos_monthly` (matches the code).
 4. Click **Create** → fill in:
    - **Subscription Duration:** 1 Week
-   - **Subscription Prices:** $8.99 USD (and any other currencies)
+   - **Subscription Prices:** $39 USD (and any other currencies)
    - **Localizations:** add at least English:
      - **Display Name:** `Ivy Pro`
      - **Description:** `The all-in-one business OS for solo entrepreneurs. Clients, calendar, invoicing, AI assistant, all in one workspace.`
@@ -171,7 +171,7 @@ just needs the products and the intro offer set up.
 6. **Review Information:**
    - **Review Screenshot:** upload a screenshot of your Paywall in the app
      showing the trial (1024×2048 or similar — required for Apple review).
-   - **Review Notes:** "14-day free trial then $8.99/week. Tap 'Start
+   - **Review Notes:** "14-day free trial then $39/month. Tap 'Start
      14-day free trial' on the paywall to begin."
 7. Repeat steps 3–6 for the annual product:
    - **Product ID:** `ivyos_yearly`
@@ -183,10 +183,10 @@ just needs the products and the intro offer set up.
    Review").
 
 **Verify:**
-- RevenueCat dashboard → Products → both `ivyos_weekly` and `ivyos_yearly`
+- RevenueCat dashboard → Products → both `ivyos_monthly` and `ivyos_yearly`
   should pull through from App Store Connect (may take ~30 min for sync).
 - Push a TestFlight build → open the paywall → StoreKit sheet should read
-  **"Free for 14 days, then $8.99/week."**
+  **"Free for 14 days, then $39/month."**
 
 **Note:** Apple gives one intro offer per Apple ID per subscription group,
 ever. Customers who've already redeemed the free trial on iOS won't see

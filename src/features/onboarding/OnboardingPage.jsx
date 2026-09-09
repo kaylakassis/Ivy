@@ -1505,7 +1505,7 @@ function TrialTimeline({ trialEndsAt }) {
     { when: fmt(remind), icon: 'Bell',
       text: "We'll email you a friendly heads-up that your trial is ending - no surprises." },
     { when: fmt(ends), icon: 'Clock',
-      text: `Your ${TRIAL_DAYS}-day trial ends. Keep everything running for $${IVY_PRICE}/week, or cancel anytime - your data's always yours.` },
+      text: `Your ${TRIAL_DAYS}-day trial ends. Keep everything running for $${IVY_PRICE}/month, or cancel anytime - your data's always yours.` },
   ];
 
   return (
@@ -1825,7 +1825,7 @@ function ImpactStep({ about, businessType }) {
     { key: 'hours',     label: 'Admin hours back',  value: `${impact.reclaimedHours} hrs/mo`, sub: 'billing + reminders, automated' },
     { key: 'recovered', label: 'Revenue recovered', value: `~$${impact.recovered.toLocaleString()}/mo`,
       sub: impact.takesAppointments ? 'reclaimed time + fewer no-shows' : 'reclaimed admin time' },
-    { key: 'total',     label: 'Tools replaced',    value: `$${STACK_TOTAL}/mo → $${IVY_PRICE}/wk`, sub: 'one app instead of a stack' },
+    { key: 'total',     label: 'Tools replaced',    value: `$${STACK_TOTAL}/mo → $${IVY_PRICE}/mo`, sub: 'one app instead of a stack' },
   ];
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
