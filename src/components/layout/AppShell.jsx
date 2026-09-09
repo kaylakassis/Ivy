@@ -29,6 +29,7 @@ import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { initNativePushOnLaunch } from '../../lib/nativePush.js';
+import { identifyIapUser, onIapCustomerInfoChange } from '../../lib/iap.js';
 import { UserContextProvider, useUserContext } from '../../lib/userContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { isNative } from '../../lib/platform.js';
@@ -133,6 +134,22 @@ function AppShellInner() {
   // the user already granted notifications (Apple rotates tokens; the
   // server upserts). No-op on web, never prompts.
   useEffect(() => { Promise.resolve().then(() => initNativePushOnLaunch()).catch(() => {}); }, []);
+
+  // iOS in-app purchases: bind the RevenueCat customer to this workspace as
+  // soon as we know it. The billing webhook matches on app_user_id, so an
+  // unidentified purchase would take the money and never unlock anything.
+  // Also listen for entitlement changes (renewal, cancellation, a purchase
+  // made on another device) and re-read /api/me when one lands.
+  const workspaceId = ctx?.owns?.id || null;
+  useEffect(() => {
+    if (!workspaceId) return undefined;
+    let stop = null; let live = true;
+    identifyIapUser(workspaceId).catch(() => {});
+    onIapCustomerInfoChange(() => { refresh?.(); })
+      .then((off) => { if (live) stop = off; else off?.(); })
+      .catch(() => {});
+    return () => { live = false; stop?.(); };
+  }, [workspaceId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Mirror the direction class onto <body> so React portals (dropdowns, modals)
   // rendered into document.body inherit the same CSS variables we use everywhere.

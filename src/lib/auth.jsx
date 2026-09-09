@@ -5,6 +5,7 @@ import { isNative } from './platform.js';
 import { setNativeAuthToken, clearNativeAuthToken } from './nativeAuth.js';
 import { clearMeCache, forgetLanding } from './landing.js';
 import { clearDeviceCache } from './deviceCache.js';
+import { logOutIap } from './iap.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from './legal.js';
 
 const Ctx = createContext(null);
@@ -115,6 +116,9 @@ export function AuthProvider({ children }) {
     finally {
       // Native: forget the token stored on the device, network or not.
       if (isNative()) await clearNativeAuthToken().catch(() => {});
+      // Drop the RevenueCat customer as well, so the next account on this
+      // device cannot inherit this owner's subscription.
+      await logOutIap().catch(() => {});
       setUser(null); setImpersonating(null); setTerms(null);
       stampSessionHint(false);
       // Forget this account's role answer and remembered landing so the next

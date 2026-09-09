@@ -4,6 +4,64 @@ End-to-end checklist for taking a release from `main` to the App Store.
 Everything past the "Generate the iOS project" step has to happen on a
 Mac - Xcode is required.
 
+## RevenueCat (iOS in-app purchases)
+
+Apple requires that a subscription sold inside the app is bought with
+StoreKit, so iOS uses RevenueCat while the web uses Stripe. The native
+SDK is already linked through the Capacitor plugin
+(`@revenuecat/purchases-capacitor` → `PurchasesHybridCommon` →
+`RevenueCat`, installed by `pod install`). **Do not add the RevenueCat
+Swift Package** - that links a second copy of the framework into the same
+binary and the build fails on duplicate symbols. There is no SwiftUI in
+Ivy either: the whole interface is the web app inside a WKWebView, so
+RevenueCat's SwiftUI snippets do not apply here.
+
+Dashboard setup, in this order:
+
+1. **Products** - App Store Connect → your app → Subscriptions. Create the
+   subscription group and both products, then copy their exact product ids.
+   Ivy's paywall matches on RevenueCat *package type* (ANNUAL vs the
+   recurring one), not on the product id, so the ids themselves are yours
+   to choose; they only have to match between App Store Connect and
+   RevenueCat.
+2. **RevenueCat → Products** - import the two products from App Store
+   Connect.
+3. **RevenueCat → Entitlements** - create one entitlement, identifier
+   `ivy_for_solo_businesses_pro`, and attach both products to it. If you
+   name it something else, set `VITE_REVENUECAT_ENTITLEMENT_ID` to match.
+4. **RevenueCat → Offerings** - one offering, marked **current**, with a
+   package per product. Use the standard package types (Weekly / Annual)
+   so the paywall's toggle picks the right one.
+5. **API key** - Project → API keys → App Store. The iOS public key starts
+   with `appl_`; put it in `.env` as `VITE_REVENUECAT_PUBLIC_KEY_IOS` and
+   in the Xcode Cloud workflow's environment. A `test_` key is a Test
+   Store key: fine for exercising the flow, but it cannot take real money.
+6. **Webhook** - RevenueCat → Integrations → Webhooks →
+   `https://www.joinivy.ai/api/billing/revenuecat-webhook`, Authorization
+   header set to `REVENUECAT_WEBHOOK_SECRET`.
+
+How the pieces line up at runtime: the workspace id is the RevenueCat
+`appUserID`. `AppShell` calls `identifyIapUser(workspace.id)` on launch,
+the purchase happens against that identity, and the webhook reads
+`event.app_user_id` and activates that workspace. If the SDK were still
+anonymous at purchase time, the payment would land on an id we cannot
+match and the customer would pay without getting access - which is why
+the paywall refuses to start a purchase when identification fails.
+
+Signing out calls `logOutIap()`, so the next account on the device starts
+as a fresh anonymous customer instead of inheriting the previous
+subscription.
+
+### RevenueCat Paywalls and Customer Center
+
+Both are native UI shipped in `@revenuecat/purchases-capacitor-ui`. Every
+published version of that package requires **Capacitor 7 or newer**; Ivy
+is on Capacitor 6, so they cannot be added without upgrading Capacitor
+and the plugin set first. Ivy's own paywall
+(`src/features/billing/Paywall.jsx`) covers the same ground today, in
+Ivy's brand, and satisfies Apple's requirements including Restore
+Purchases. Revisit after the first release, not before it.
+
 ## Prerequisites (one-time)
 
 - **Apple Developer Program** membership ($99/yr) on the Apple ID you'll

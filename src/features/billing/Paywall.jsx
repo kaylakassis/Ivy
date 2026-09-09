@@ -25,7 +25,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
-import { isIos } from '../../lib/platform.js';
+import { isIos, isNative } from '../../lib/platform.js';
+import { useAuth } from '../../lib/auth.jsx';
 import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS } from '../../lib/pricing.js';
 
@@ -45,6 +46,7 @@ const PERKS = [
 ];
 
 export default function Paywall({ ctx, onRefresh }) {
+  const { signOut } = useAuth();
   const sub = ctx?.subscription || null;
   const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
@@ -145,7 +147,13 @@ export default function Paywall({ ctx, onRefresh }) {
       try {
         // Tie the RC customer to this workspace BEFORE buying so the
         // resulting webhook carries our workspace id as app_user_id.
-        if (ctx?.workspace?.id) await identifyIapUser(ctx.workspace.id);
+        // ctx.owns.id is the workspace - the value the webhook matches on.
+        const identified = await identifyIapUser(ctx?.owns?.id);
+        if (!identified) {
+          setErr('We could not start a purchase on this account. Please sign out and back in, then try again.');
+          setBusy(null);
+          return;
+        }
         const offerings = await getIapOfferings();
         // Match by package type so the user's toggle picks the right Apple
         // product: the annual toggle → the ANNUAL package; otherwise the first
@@ -209,14 +217,14 @@ export default function Paywall({ ctx, onRefresh }) {
   const restorePurchases = async () => {
     setBusy('restore'); setErr(null);
     try {
-      if (ctx?.workspace?.id) await identifyIapUser(ctx.workspace.id);
+      await identifyIapUser(ctx?.owns?.id);
       const r = await restoreIapPurchases();
       if (!r.ok) { setErr(r.error || 'Restore failed'); setBusy(null); return; }
       // Give RC's webhook a moment to land, then refresh.
       await new Promise((res) => setTimeout(res, 1500));
       await onRefresh?.();
       setBusy(null);
-      if (!r.hasActive) setErr('No active purchases found on this Apple ID.');
+      if (!r.hasPro) setErr('No active subscription found on this Apple ID.');
     } catch (e) {
       setErr(e?.message || 'Restore failed');
       setBusy(null);
@@ -239,12 +247,14 @@ export default function Paywall({ ctx, onRefresh }) {
 
   const logout = async () => {
     setBusy('logout'); setErr(null);
-    try {
-      await api.post('/auth/logout', {});
-    } catch {
-      // Best-effort: if the logout call fails, still clear locally.
-    }
-    window.location.href = '/signin';
+    // Go through the auth provider's signOut, never a bare /auth/logout:
+    // it is what clears the native session token from the Keychain, the
+    // on-device cache of /me and /dashboard, the remembered landing and
+    // the RevenueCat identity. Posting to the endpoint directly logs the
+    // browser out but leaves all of that behind for the next person who
+    // signs in on this device.
+    try { await signOut(); } catch { /* clearing locally is what matters */ }
+    window.location.href = isNative() ? '/welcome' : '/signin';
   };
 
   // Distinguish trial-expired from never-trialed so the copy matches.
