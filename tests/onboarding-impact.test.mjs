@@ -4,7 +4,7 @@
 //
 // Run: node ./tests/onboarding-impact.test.mjs
 import { computeImpact } from '../src/features/onboarding/impact.js';
-import { STACK_TOTAL, IVY_PRICE } from '../src/lib/pricing.js';
+import { STACK_TOTAL, IVY_PRICE_MONTHLY_EQUIV } from '../src/lib/pricing.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -15,8 +15,8 @@ for (const k of ['clientsPerMonth', 'reclaimedHours', 'noShowsPrevented', 'recov
   assert(Number.isFinite(base[k]) && base[k] >= 0, `${k} is a non-negative number (${base[k]})`);
 }
 assert(base.totalUpside === base.recovered + base.toolSavings, 'totalUpside = recovered + toolSavings');
-assert(base.toolSavings === Math.round(STACK_TOTAL - IVY_PRICE),
-  `tool savings is the stack total minus Ivy, monthly vs monthly (${base.toolSavings})`);
+assert(base.toolSavings === Math.round(STACK_TOTAL - IVY_PRICE_MONTHLY_EQUIV),
+  `tool savings compares month against month, not month against week (${base.toolSavings})`);
 
 console.log('\n[2] emphasis keys off the stated pain point');
 assert(computeImpact({ challengeIds: ['getting_paid'] }).emphasis === 'recovered', 'getting_paid → emphasis recovered');

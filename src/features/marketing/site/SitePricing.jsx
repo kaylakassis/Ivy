@@ -4,12 +4,13 @@
 // React state (two sliders + derived values, same conservative math).
 import React, { useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { MONTHLY_STACK_SAVINGS } from '../../../lib/pricing.js';
 
 const JSON_LD = {
   '@context': 'https://schema.org',
   '@type': 'FAQPage',
   mainEntity: [
-    { '@type': 'Question', name: 'How much does Ivy cost?', acceptedAnswer: { '@type': 'Answer', text: 'Ivy costs $39/month once you subscribe, or $375/year with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.' } },
+    { '@type': 'Question', name: 'How much does Ivy cost?', acceptedAnswer: { '@type': 'Answer', text: 'Ivy costs $8.99/week once you subscribe, or $375/year with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.' } },
     { '@type': 'Question', name: 'Does Ivy take a cut of my payments?', acceptedAnswer: { '@type': 'Answer', text: "Never. Payments go directly from your client to your own Stripe account - Ivy never touches your money. You only pay Stripe's standard processing rate, and nothing to Ivy beyond the subscription." } },
     { '@type': 'Question', name: 'Does Ivy charge per-client or per-seat fees?', acceptedAnswer: { '@type': 'Answer', text: 'No. Unlimited clients, unlimited bookings, unlimited invoices - one flat subscription. No per-seat math.' } },
     { '@type': 'Question', name: 'Can I cancel Ivy anytime?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. No contracts, no notice period - cancel from your account page in two clicks. Your data stays exportable.' } },
@@ -94,18 +95,18 @@ const PAGE_CSS = `
 export default function SitePricing() {
   useSiteFonts();
   usePageMeta({
-    title: 'Ivy Pricing - $39/month, No Transaction Fees | 14-Day Free Trial',
-    description: 'Ivy costs $39/month (or $375/year) with a 14-day free trial, $0 today. One plan includes booking, invoicing, CRM, e-signature, website builder, and the Ivy AI assistant. No transaction fees, no per-seat math - an affordable HoneyBook, Calendly, and Squarespace alternative.',
+    title: 'Ivy Pricing - $8.99/week, No Transaction Fees | 14-Day Free Trial',
+    description: 'Ivy costs $8.99/week (or $375/year) with a 14-day free trial, $0 today. One plan includes booking, invoicing, CRM, e-signature, website builder, and the Ivy AI assistant. No transaction fees, no per-seat math - an affordable HoneyBook, Calendly, and Squarespace alternative.',
     canonical: 'https://joinivy.ai/pricing',
     jsonLd: JSON_LD,
   });
 
   // ROI calculator, same conservative math as the prototype's calc():
   // $75/hr rate, 60% of admin automated, 8% no-show rate recovered,
-  // $100/mo average tool savings.
+  // tool savings = the stack total minus what Ivy costs over the same month.
   const [clients, setClients] = useState(40);
   const [hours, setHours] = useState(8);
-  const tools = 100;
+  const tools = MONTHLY_STACK_SAVINGS;
   const adminBack = Math.round(hours * 4.33 * 0.6);
   const noShows = Math.max(1, Math.round(clients * 0.08));
   const rate = 75;
@@ -121,11 +122,11 @@ export default function SitePricing() {
         <div className="container">
           <span className="eyebrow">One price. Every tool you'd otherwise piece together.</span>
           <h1>Simple pricing.<br />No transaction fees, no per-seat math.</h1>
-          <p className="lede">Replace your full stack - CRM, scheduler, invoicing, contracts, website, email, AI - with one subscription. 14-day free trial, $0 today. Then a simple $39/month when you're ready.</p>
+          <p className="lede">Replace your full stack - CRM, scheduler, invoicing, contracts, website, email, AI - with one subscription. 14-day free trial, $0 today. Then a simple $8.99/week when you're ready.</p>
           <div className="flow">
             <div className="stage free"><b>14 days free</b><span>the whole product, $0 today</span></div>
             <span className="arrow">→</span>
-            <div className="stage active"><b>Active</b><span>$39/month when subscribed</span></div>
+            <div className="stage active"><b>Active</b><span>$8.99/week when subscribed</span></div>
           </div>
         </div>
       </header>
@@ -136,7 +137,7 @@ export default function SitePricing() {
             <div className="plan">Ivy</div>
             <div className="plan-sub">Everything to run your business, in one place.</div>
             <div className="amount">14 days free</div>
-            <p className="terms">then $39 / month once you subscribe. No per-seat math, no transaction fees.</p>
+            <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no transaction fees.</p>
             <p className="annual">Or save with annual - <b>$375/yr</b> (save about 20%).</p>
             <a href="/signup" className="btn">Start your 14-day free trial →</a>
             <ul>
@@ -172,12 +173,12 @@ export default function SitePricing() {
             <label>Hours a week you spend on admin (billing, scheduling, follow-ups) <output>{hours} hrs/wk</output></label>
             <input type="range" min="1" max="30" value={hours} onChange={(e) => setHours(+e.target.value)} />
             <div className="calc-grid">
-              <div className="calc-cell"><div className="k">Tool savings</div><div className="v">+$100/month on average</div><div className="d">replacing the separate tools most solos run in parallel</div></div>
+              <div className="calc-cell"><div className="k">Tool savings</div><div className="v">+${MONTHLY_STACK_SAVINGS}/month on average</div><div className="d">replacing the separate tools most solos run in parallel</div></div>
               <div className="calc-cell"><div className="k">Admin hours back</div><div className="v">{adminBack} hrs/mo</div><div className="d">billing + reminders, automated</div></div>
               <div className="calc-cell"><div className="k">No-shows prevented</div><div className="v">{noShows}/mo</div><div className="d">card on file + auto reminders</div></div>
             </div>
             <div className="calc-total"><span className="k">Total monthly upside</span><span className="v">{totalLabel}</span></div>
-            <p className="fine">Ivy is $39/month, and you start with a 14-day free trial ($0 today). The math is deliberately conservative: a $75/hr billable rate, Ivy automating 60% of your admin time, an 8% no-show rate that reminders + card-on-file recover, and $100/mo average tool savings - many solos save even more. Your real numbers are usually higher.</p>
+            <p className="fine">Ivy is $8.99/week, and you start with a 14-day free trial ($0 today). The math is deliberately conservative: a $75/hr billable rate, Ivy automating 60% of your admin time, an 8% no-show rate that reminders + card-on-file recover, and about ${MONTHLY_STACK_SAVINGS}/mo average tool savings - many solos save even more. Your real numbers are usually higher.</p>
           </div>
         </div>
       </section>
@@ -195,7 +196,7 @@ export default function SitePricing() {
             <div className="rowm"><span className="t">Mailchimp<small>newsletter + email blasts</small></span><span className="p">$13/mo</span></div>
             <div className="rowm"><span className="t">Squarespace<small>website + custom domain</small></span><span className="p">$23/mo</span></div>
             <div className="rowm"><span className="t">DocuSign<small>legally-binding e-signatures</small></span><span className="p">$15/mo</span></div>
-            <div className="rowm total"><span className="t">Total replaced</span><span className="p">$138+/mo on average → $39/month</span></div>
+            <div className="rowm total"><span className="t">Total replaced</span><span className="p">$138+/mo on average → $8.99/week</span></div>
           </div>
           <p style={{ marginTop: 20, fontSize: 14 }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: 3 }}>See the full comparison: Ivy vs HoneyBook vs Calendly →</a></p>
           <div className="trust-grid">
@@ -214,7 +215,7 @@ export default function SitePricing() {
           <div className="faq">
             <details open>
               <summary>How much does Ivy cost?</summary>
-              <div className="a">$39/month once you subscribe, or $375/yr with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.</div>
+              <div className="a">$8.99/week once you subscribe, or $375/yr with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.</div>
             </details>
             <details>
               <summary>Do you take a cut of my payments?</summary>

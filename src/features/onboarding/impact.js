@@ -9,7 +9,7 @@
 // the user as "typical for a business like yours" - never presented as a
 // scan of their real account.
 import {
-  STACK_TOTAL, IVY_PRICE, BILLABLE_RATE, ADMIN_AUTOMATED,
+  STACK_TOTAL, IVY_PRICE_MONTHLY_EQUIV, BILLABLE_RATE, ADMIN_AUTOMATED,
   NO_SHOW_RATE, WEEKS_PER_MONTH,
 } from '../../lib/pricing.js';
 
@@ -48,7 +48,7 @@ export function computeImpact({ challengeIds = [], stageIds = [], businessType =
   const noShowRevenue = noShowsPrevented * BILLABLE_RATE;
 
   const recovered = hoursRevenue + noShowRevenue;
-  const toolSavings = Math.max(0, Math.round(STACK_TOTAL - IVY_PRICE));
+  const toolSavings = Math.max(0, Math.round(STACK_TOTAL - IVY_PRICE_MONTHLY_EQUIV));
   const totalUpside = recovered + toolSavings;
 
   // Which stat to visually emphasize, keyed off the owner's stated pain:

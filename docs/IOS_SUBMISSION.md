@@ -30,7 +30,7 @@ Dashboard setup, in this order:
    `ivy_for_solo_businesses_pro`, and attach both products to it. If you
    name it something else, set `VITE_REVENUECAT_ENTITLEMENT_ID` to match.
 4. **RevenueCat → Offerings** - one offering, marked **current**, with a
-   package per product. Use the standard package types (Monthly / Annual)
+   package per product. Use the standard package types (Weekly / Annual)
    so the paywall's toggle picks the right one.
 5. **API key** - Project → API keys → App Store. The iOS public key starts
    with `appl_`; put it in `.env` as `VITE_REVENUECAT_PUBLIC_KEY_IOS` and
@@ -135,7 +135,7 @@ Purchases. Revisit after the first release, not before it.
 3. **In-app purchases:**
    - Create a **Subscription Group** called `Ivy`.
    - Add two auto-renewable subscriptions in that group:
-     - Product ID `ivyos_monthly`, price $39 / month (Monthly is a native
+     - Product ID `ivyos_weekly`, price $8.99 / week (Weekly is a native
        StoreKit duration, so it matches the web weekly plan exactly)
      - Product ID `ivyos_yearly`, price $375 / year
    - Both must be in the same group so Apple offers proration when
@@ -169,14 +169,14 @@ Purchases. Revisit after the first release, not before it.
 
 1. **Project → API keys:** copy the **iOS app public SDK key** into
    `VITE_REVENUECAT_PUBLIC_KEY_IOS` in Vercel.
-2. **Products:** add `ivyos_monthly` and `ivyos_yearly` exactly as in
+2. **Products:** add `ivyos_weekly` and `ivyos_yearly` exactly as in
    App Store Connect.
 3. **Entitlement:** create a single entitlement called `pro`. Attach
    both products to it. (We don't check entitlement name server-side
    - RC tells us *which* product was bought and we route on that - but
    the SDK needs an entitlement to surface the offering.)
-4. **Offering:** create the default offering, add a "Monthly" package
-   (linked to `ivyos_monthly`) and an "Annual" package (linked to
+4. **Offering:** create the default offering, add a "Weekly" package
+   (linked to `ivyos_weekly`) and an "Annual" package (linked to
    `ivyos_yearly`). Order them Annual first so it's the highlighted
    default in the paywall.
 5. **App Store Connect integration:** RC walks you through generating

@@ -152,7 +152,7 @@ export default function SiteTour() {
   useSiteFonts();
   usePageMeta({
     title: 'Take the Tour - See Ivy Run a Business | Ivy',
-    description: "Scroll through a day with Ivy: the dashboard, self-serve booking, invoices that chase themselves, an AI assistant that acts, and a website that builds itself. The all-in-one platform for solopreneurs, $39/month.",
+    description: "Scroll through a day with Ivy: the dashboard, self-serve booking, invoices that chase themselves, an AI assistant that acts, and a website that builds itself. The all-in-one platform for solopreneurs, $8.99/week.",
     canonical: 'https://joinivy.ai/tour',
     ogType: 'website',
   });
@@ -471,7 +471,7 @@ export default function SiteTour() {
       <section className="t-final" id="s6">
         <div className="container" style={{ position: 'relative' }}>
           <h2 className="reveal">One login.<br /><span className="pulseglow">Zero busywork.</span></h2>
-          <p className="reveal" style={{ '--d': '.1s' }}>Everything you just scrolled through is one plan - $39/month after a 14-day free trial. Or try the interactive demo and ask Ivy something yourself.</p>
+          <p className="reveal" style={{ '--d': '.1s' }}>Everything you just scrolled through is one plan - $8.99/week after a 14-day free trial. Or try the interactive demo and ask Ivy something yourself.</p>
           <div className="cta-row reveal" style={{ '--d': '.2s' }}>
             <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
             <a href="/#tour" className="btn" style={{ border: '1px solid var(--border2)', color: 'var(--text)' }}>Ask Ivy something</a>

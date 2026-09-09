@@ -23,7 +23,7 @@ const JSON_LD = {
       operatingSystem: 'Web, iOS, Android',
       description: "All-in-one business platform for solo service businesses: online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, website builder, and an AI assistant that performs real tasks. No transaction fees - payments go directly to the owner's Stripe account.",
       offers: [
-        { '@type': 'Offer', price: '39', priceCurrency: 'USD', description: '$39 per month after a 14-day free trial ($0 today)' },
+        { '@type': 'Offer', price: '8.99', priceCurrency: 'USD', description: '$8.99 per week after a 14-day free trial ($0 today)' },
         { '@type': 'Offer', price: '375', priceCurrency: 'USD', description: 'Annual plan, $375/year (save about 20%)' },
       ],
       publisher: { '@id': 'https://joinivy.ai/#org' },
@@ -282,7 +282,7 @@ export default function SiteHome() {
   useSiteFonts();
   usePageMeta({
     title: 'Ivy - All-in-One Business Platform for Solopreneurs | Booking, Invoicing, CRM & AI',
-    description: 'Ivy is the all-in-one business platform for solo service businesses - massage therapists, coaches, stylists, photographers, trainers, contractors, and tutors. Booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork. $39/month, no transaction fees, 14-day free trial.',
+    description: 'Ivy is the all-in-one business platform for solo service businesses - massage therapists, coaches, stylists, photographers, trainers, contractors, and tutors. Booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork. $8.99/week, no transaction fees, 14-day free trial.',
     canonical: 'https://joinivy.ai/',
     ogType: 'website',
     jsonLd: JSON_LD,
@@ -432,7 +432,7 @@ export default function SiteHome() {
       <section style={{ padding: '56px 0 0' }}>
         <div className="container">
           <div className="answer">
-            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $39/month after a 14-day free trial (or $375/year) and charges no transaction fees - payments go directly to your own Stripe account.</p>
+            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $375/year) and charges no transaction fees - payments go directly to your own Stripe account.</p>
           </div>
         </div>
       </section>
@@ -496,7 +496,7 @@ export default function SiteHome() {
           </div>
           <div className="replace-total">
             <span className="old">{'$' + STACK_TOTAL}+/mo on average</span>
-            <span className="new">$39<small>/week · no transaction fees</small></span>
+            <span className="new">$8.99<small>/week · no transaction fees</small></span>
           </div>
           <p style={{ marginTop: '20px', fontSize: '14px' }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>See how Ivy compares to HoneyBook, Calendly, and the DIY stack →</a></p>
         </div>
@@ -622,7 +622,7 @@ export default function SiteHome() {
             <div className="plan">Ivy</div>
             <div className="plan-sub">Everything to run your business, in one place.</div>
             <div className="amount">14 days free</div>
-            <p className="terms">then $39 / month once you subscribe. No per-seat math, no transaction fees.</p>
+            <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no transaction fees.</p>
             <p className="annual">Or save with annual - <b>$375/yr</b> (save about 20%).</p>
             <ul>
               <li>Unlimited clients + pipeline</li>
