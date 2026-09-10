@@ -187,10 +187,15 @@ function AppShellInner() {
         {viewport.isDesktop && <Sidebar direction={tweaks.direction} variant="full" />}
         {viewport.isTablet  && <Sidebar direction={tweaks.direction} variant="compact" />}
 
+        {/* No min-height here. The wrapper below is already min-height:100vh
+            with border-box padding, and align-items:stretch sizes <main> to
+            it. Adding 100vh again made the page taller than the screen by
+            exactly the tab-bar/pill padding, which is the strip of blank
+            page you could scroll into on every short screen. */}
         <main style={{
           flex: 1, minWidth: 0,
           display: 'flex', flexDirection: 'column',
-          minHeight: '100vh',
+          minHeight: 0,
         }}>
           <SubscriptionBanner />
           <VerifyEmailBanner />
