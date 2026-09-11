@@ -142,10 +142,16 @@ function RouteCrash({ resetError, error }) {
     window.location.href = '/';
   };
   const mail = `mailto:hello@joinivy.ai?subject=${encodeURIComponent('Error on Ivy')}&body=${encodeURIComponent(`I hit an error: ${msg}\n\nURL: ${typeof window !== 'undefined' ? window.location.href : ''}\n\n`)}`;
+  // The colour tokens live on .dir-calm / .dir-bold, which the app shell
+  // puts on <body> and removes when it unmounts - and a crash unmounts it.
+  // Without the class this card rendered black text on a black page and
+  // was unreadable. Carry the owner's direction on the wrapper itself.
+  let direction = 'bold';
+  try { direction = JSON.parse(localStorage.getItem('Ivy:tweaks') || '{}').direction || 'bold'; } catch { /* default */ }
   return (
-    <div style={{
-      minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 24,
+    <div className={`dir-${direction}`} style={{
+      minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
+      padding: 24, background: 'var(--page)', color: 'var(--fg)', fontFamily: 'var(--font-sans)',
     }}>
       <div className="card" style={{
         maxWidth: 480, padding: 28, textAlign: 'center',

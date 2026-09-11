@@ -23,12 +23,9 @@ export default function TutorialOverlay() {
   const [stepIdx, setStepIdx] = useState(0);
   const navigate = useNavigate();
 
-  // Reset to step 0 every time a new tab's tutorial opens.
-  useEffect(() => {
-    if (activeTabId) {
-      setStepIdx(0);
-    }
-  }, [activeTabId]);
+  // Reset to step 0 whenever the open tutorial changes - including when it
+  // closes, so the next one never inherits the previous one's position.
+  useEffect(() => { setStepIdx(0); }, [activeTabId]);
 
   // Lock the page scroll while open. Keyboard nav.
   useEffect(() => {
@@ -60,12 +57,18 @@ export default function TutorialOverlay() {
     navigate(to);
   }, [activeTabId, complete, navigate]);
 
-  if (!activeTabId || !tutorial) return null;
+  if (!activeTabId || !tutorial || !tutorial.steps?.length) return null;
 
+  // The reset effect above runs AFTER the first render of a newly opened
+  // tutorial, so on that render stepIdx can still be the previous
+  // tutorial's position. If that one had more steps than this one, the
+  // index points past the end and the whole app used to crash with
+  // "Cannot read properties of undefined (reading 'title')". Clamp it.
   const total = tutorial.steps.length;
-  const step = tutorial.steps[stepIdx];
-  const isFirst = stepIdx === 0;
-  const isLast  = stepIdx === total - 1;
+  const idx = Math.min(stepIdx, total - 1);
+  const step = tutorial.steps[idx];
+  const isFirst = idx === 0;
+  const isLast  = idx === total - 1;
 
   return createPortal(
     <div style={{
@@ -95,7 +98,7 @@ export default function TutorialOverlay() {
           {tutorial.steps.map((_, i) => (
             <div key={i} style={{
               flex: 1, height: 3, borderRadius: 999,
-              background: i <= stepIdx ? 'var(--accent)' : 'var(--border)',
+              background: i <= idx ? 'var(--accent)' : 'var(--border)',
               transition: 'background .2s ease',
             }}/>
           ))}
@@ -107,7 +110,7 @@ export default function TutorialOverlay() {
           display: 'flex', alignItems: 'center', justifyContent: 'space-between',
         }}>
           <div style={{ fontSize: 11, color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em', fontWeight: 600 }}>
-            {tutorial.title} · Step {stepIdx + 1} of {total}
+            {tutorial.title} · Step {idx + 1} of {total}
           </div>
           <button onClick={() => skip(activeTabId)} aria-label="Close tutorial"
             style={{
