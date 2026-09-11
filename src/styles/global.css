@@ -56,6 +56,31 @@ textarea.input::placeholder {
    etc.) bleeds into the notch area. env() resolves to 0 on every
    non-iOS platform so this is a no-op there. */
 .app-root { min-height: 100vh; background: var(--page); color: var(--fg); padding-top: env(safe-area-inset-top, 0); }
+.app-frame { display: flex; align-items: stretch; min-height: 100vh; }
+
+/* Screens that must fit the viewport exactly (Ivy). Everything above is
+   min-height (a floor), which gives a flex child nothing to grow into, so
+   the page used to measure the leftover space and guess its own height -
+   and every guess was wrong on some phone. Instead, for these screens the
+   whole chain becomes a definite height: the root is the viewport, the
+   frame fills it, and the page flexes into whatever is left under the
+   header and above the tab bar. Nothing is measured.
+   The tab bar is position:fixed, so the frame keeps a bottom padding equal
+   to the bar's real height (MobileBottomNav publishes --mobile-nav-h). */
+body.ivy-fill { padding-bottom: 0; }
+body.ivy-fill .app-root {
+  height: 100dvh; min-height: 0; overflow: hidden;
+  display: flex; flex-direction: column;
+}
+body.ivy-fill .app-frame { flex: 1 1 0; min-height: 0; }
+html body.ivy-fill.has-mobile-nav .app-root > .app-frame { padding-bottom: var(--mobile-nav-h, 64px); }
+body.ivy-fill .app-page > .ivy-fill-page { flex: 1 1 0; min-height: 0; }
+/* The page's bottom padding reserves room for the floating view-toggle
+   pill, which only renders on tablet; on desktop it is a blank strip. */
+@media (min-width: 1025px) { body.ivy-fill .app-page { padding-bottom: 0 !important; } }
+/* On tablet that reservation already keeps the panel clear of the pill, so
+   the pill does not also need lifting - lifted, it sat on Ivy's caption. */
+body.ivy-fill .view-toggle.view-toggle-raised { bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); }
 
 .mono-num {
   font-variant-numeric: tabular-nums;

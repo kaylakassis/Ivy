@@ -27,50 +27,14 @@ export default function IvyPro() {
   // Mobile: 'chat' | 'history' | 'data' tab. Default to chat.
   const [mobileTab, setMobileTab] = useState('chat');
 
-  // Size the panel to the space the shell actually leaves it.
-  //
-  // Pure flex does not work here: every ancestor uses min-height, which is a
-  // floor rather than a definite height, so a flex child has nothing to grow
-  // into and just sizes to its content. And the earlier attempt to measure
-  // subtracted the empty space BELOW the panel - the very space it should
-  // occupy - so once the panel was short it could only stay short.
-  //
-  // Both inputs below are independent of our own height, so there is no loop:
-  //   top     - distance from the top of the document, i.e. banners + header
-  //   reserve - padding the shell keeps for the tab bar / floating pill,
-  //             read from the stylesheet, not from whatever gap exists now
-  const [rootEl, setRootEl] = useState(null);
-  const [fillHeight, setFillHeight] = useState(null);
+  // This screen fits the viewport exactly: no page scroll, the composer sits
+  // right above the tab bar. body.ivy-fill (global.css) turns the shell's
+  // wrapper chain into a definite height so the panel below can simply flex
+  // into it. Nothing is measured, so there is nothing to get wrong.
   useLayoutEffect(() => {
-    if (!rootEl) return undefined;
-    let raf = 0;
-    const measure = () => {
-      raf = 0;
-      const page = rootEl.closest('.app-page');
-      const main = page?.parentElement;
-      const wrapper = main?.parentElement;
-      const padBottom = (el) => (el ? parseFloat(getComputedStyle(el).paddingBottom) || 0 : 0);
-      const top = rootEl.getBoundingClientRect().top + window.scrollY;
-      const reserve = padBottom(wrapper) + padBottom(page);
-      const vh = window.visualViewport?.height || window.innerHeight;
-      const next = Math.max(320, Math.round(vh - top - reserve));
-      setFillHeight((prev) => (prev != null && Math.abs(prev - next) < 2 ? prev : next));
-    };
-    const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
-    schedule();
-    window.addEventListener('resize', schedule);
-    window.visualViewport?.addEventListener('resize', schedule);
-    // Banners appear and disappear above us; re-measure when they do.
-    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(schedule) : null;
-    const header = rootEl.closest('.app-page')?.parentElement;
-    if (header) ro?.observe(header);
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener('resize', schedule);
-      window.visualViewport?.removeEventListener('resize', schedule);
-      ro?.disconnect();
-    };
-  }, [rootEl]);
+    document.body.classList.add('ivy-fill');
+    return () => document.body.classList.remove('ivy-fill');
+  }, []);
   // Today's insight can be closed; it stays closed for the rest of the day.
   const todayKey = new Date().toISOString().slice(0, 10);
   const [insightHidden, setInsightHidden] = useState(() => {
@@ -133,15 +97,7 @@ export default function IvyPro() {
   const showData    = (!isMobile && !isTablet) || (isMobile && mobileTab === 'data');
 
   return (
-    // Fill whatever the shell leaves us. The wrappers are already a column
-    // flex chain (main > .app-page), so growing into it needs no measuring
-    // and adapts on its own to a taller header or the verify-email banner.
-    // Measuring was worse than a fixed height: it subtracted the empty space
-    // BELOW the panel, which is the space it is supposed to occupy, so the
-    // panel could only ever shrink - once short, it stayed short.
-    <div ref={setRootEl} style={{
-      height: fillHeight ? `${fillHeight}px` : (isMobile ? 'calc(100dvh - 128px)' : 'calc(100vh - 60px)'),
-      minHeight: 0,
+    <div className="ivy-fill-page" style={{
       display: 'grid',
       gridTemplateColumns: cols,
       gridTemplateRows: isMobile ? 'auto minmax(0, 1fr)' : 'minmax(0, 1fr)',

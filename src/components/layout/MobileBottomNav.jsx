@@ -2,7 +2,7 @@
 // hamburger drawer covers the rest (Finance, Goals, Rewards, Documents, Website).
 // Super-admins get a 6th slot so the Admin console is reachable without
 // opening the drawer - they tend to bounce in/out of it constantly.
-import React from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { NavLink } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
@@ -40,8 +40,22 @@ export default function MobileBottomNav() {
   const native = isNative();
   const primary = (native ? NATIVE : PRIMARY).filter((i) => i.id === 'more' || !hidden.has(i.id));
   const items = user?.isSuperAdmin && !native ? [...primary, ADMIN_ITEM] : primary;
+  // Publish the bar's real height (it varies with the home-indicator inset
+  // and the native/web styling) so full-height screens can reserve exactly
+  // that much and sit flush against it. See body.ivy-fill in global.css.
+  const navRef = useRef(null);
+  useLayoutEffect(() => {
+    const el = navRef.current;
+    if (!el) return undefined;
+    const root = document.documentElement;
+    const publish = () => root.style.setProperty('--mobile-nav-h', `${Math.ceil(el.getBoundingClientRect().height)}px`);
+    publish();
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(publish) : null;
+    ro?.observe(el);
+    return () => { ro?.disconnect(); root.style.removeProperty('--mobile-nav-h'); };
+  }, []);
   return (
-    <nav className={native ? 'mobile-nav native' : 'mobile-nav'} aria-label="Primary">
+    <nav ref={navRef} className={native ? 'mobile-nav native' : 'mobile-nav'} aria-label="Primary">
       {items.map((item) => {
         const Icon = Icons[item.icon] || Icons.Home;
         return (

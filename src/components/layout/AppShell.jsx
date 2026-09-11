@@ -183,7 +183,10 @@ function AppShellInner() {
   return (
     <div className={`app-root dir-${tweaks.direction}`}>
       <ImpersonationBanner/>
-      <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
+      {/* .app-frame: min-height 100vh in global.css. Screens that must fit
+          the viewport exactly (Ivy) add body.ivy-fill, which turns the
+          whole chain into a definite height so the page can flex into it. */}
+      <div className="app-frame">
         {viewport.isDesktop && <Sidebar direction={tweaks.direction} variant="full" />}
         {viewport.isTablet  && <Sidebar direction={tweaks.direction} variant="compact" />}
 
