@@ -14,6 +14,7 @@ import PdfFieldEditor from './PdfFieldEditor.jsx';
 import RichTextEditor from './RichTextEditor.jsx';
 import DocumentPreview from './DocumentPreview.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
+import { useEscapeKey } from '../../lib/useEscapeKey.js';
 
 const FIELD_TYPES = [
   { id: 'signature', label: 'Signature',     icon: 'Edit'     },
@@ -22,7 +23,7 @@ const FIELD_TYPES = [
   { id: 'text',      label: 'Text response', icon: 'Doc'      },
 ];
 
-export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf, onVoid }) {
+export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend, onResend, onUploadPdf, onVoid, onSelfSign }) {
   const { ctx } = useUserContext();
   const businessName = ctx?.bizName || null;
 
@@ -39,8 +40,16 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
   const [mobileTab, setMobileTab] = useState('edit');
   const fileInputRef = useRef(null);
 
+  useEscapeKey(onClose);
+
   const isEditable = doc.status === 'draft' || doc.status === 'voided';
   const isPdf = doc.kind === 'pdf' && !!doc.fileUrl;
+  // The owner is a signer and it's their turn right now.
+  const myTurn = doc.status === 'sent'
+    && (doc.signers || []).some((s) => s.isOwner && (s.status === 'awaiting' || s.status === 'viewed'));
+  const waitingOnMeLater = doc.status === 'sent'
+    && (doc.signers || []).some((s) => s.isOwner && s.status === 'pending');
+  const [selfSigning, setSelfSigning] = useState(false);
 
   useEffect(() => {
     setName(doc.name);
@@ -138,7 +147,11 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
             display: 'flex', alignItems: 'center', gap: 8,
           }}>
             <Icons.Lock size={13}/>
-            {doc.status === 'sent'      && 'Sent - content is locked while awaiting signature. Void to edit again.'}
+            {doc.status === 'sent'      && (myTurn
+              ? "Sent - it's your turn to sign. Use \"Sign now\" below."
+              : waitingOnMeLater
+                ? 'Sent - you sign after the client finishes. Content is locked meanwhile.'
+                : 'Sent - content is locked while awaiting signature. Void to edit again.')}
             {doc.status === 'completed' && 'Completed - this document is locked.'}
             {doc.status === 'declined'  && 'Declined - content is locked. Void and resend a new draft if needed.'}
           </div>
@@ -324,7 +337,18 @@ export default function DocumentEditor({ doc, onClose, onSave, onDelete, onSend,
                   </button>
                 </>
               )}
-              {doc.status === 'sent' && (
+              {myTurn && onSelfSign && (
+                <button className="btn btn-primary" disabled={selfSigning}
+                  onClick={async () => {
+                    setSelfSigning(true); setErr(null);
+                    try { await onSelfSign(); }
+                    catch (e) { setErr(e.message || 'Could not open your signing page'); }
+                    finally { setSelfSigning(false); }
+                  }}>
+                  <Icons.Edit size={13}/> {selfSigning ? 'Opening…' : 'Sign now'}
+                </button>
+              )}
+              {doc.status === 'sent' && !myTurn && (
                 <>
                   {/* One-click resend to the current pending signer.
                       No recipient picker - uses the already-stored
@@ -582,7 +606,7 @@ function SignersPanel({ doc }) {
             }}>{i + 1}</span>
             <div style={{ minWidth: 0 }}>
               <div style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {s.name}
+                {s.name}{s.isOwner && <span style={{ color: 'var(--muted)', fontWeight: 500 }}> (you)</span>}
               </div>
               <div style={{ fontSize: 11, color: 'var(--muted)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                 {s.email}

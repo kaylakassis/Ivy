@@ -80,7 +80,7 @@ export const TITLES = {
   reviews:   { title: 'Reviews',       subtitle: 'Publish & respond to client reviews' },
   comms:     { title: 'Messages',      subtitle: 'Inbox' },
   campaigns: { title: 'Campaigns',     subtitle: 'Newsletters & announcements' },
-  docs:      { title: 'Documents',     subtitle: 'Notes & files' },
+  docs:      { title: 'Documents',     subtitle: 'Waivers, agreements, signatures' },
   website:   { title: 'Website',       subtitle: 'Public presence' },
   ivy:       { title: 'Ivy',       subtitle: 'Your AI copilot' },
   admin:     { title: 'Admin',         subtitle: 'Operator console' },

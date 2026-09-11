@@ -18,7 +18,8 @@ const STATUS_META = {
 };
 
 export default function Documents() {
-  const { documents, loading, error, create, createFromTemplate, update, remove, send, resend, uploadPdf, void: voidDoc } = useDocuments();
+  const { documents, loading, error, create, createFromTemplate, update, remove, send, resend, uploadPdf, void: voidDoc, selfSignLink } = useDocuments();
+  const navigate = useNavigate();
   const [tab, setTab]               = useState('all');
   const [openId, setOpenId]         = useState(null);
   const [creatingOpen, setCreating] = useState(false);
@@ -28,7 +29,6 @@ export default function Documents() {
   // editor. Param is stripped after consumption so a refresh doesn't
   // re-open the drawer on a doc the user already closed.
   const location = useLocation();
-  const navigate = useNavigate();
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const docId = params.get('doc');
@@ -178,12 +178,29 @@ export default function Documents() {
           onResend={async () => { await resend(openDoc.id); }}
           onUploadPdf={(file) => uploadPdf(openDoc.id, file)}
           onVoid={async () => { await voidDoc(openDoc.id); }}
+          onSelfSign={async () => {
+            const url = await selfSignLink(openDoc.id);
+            // The sign page is a route in this same app, so stay in-app
+            // (works on the phone too, where a new tab would be lost).
+            const u = new URL(url, window.location.origin);
+            navigate(u.pathname + u.search);
+          }}
         />
       )}
       {sendingDoc && (
         <SendDocumentModal
           documentName={sendingDoc.name}
-          onSend={async (clientId) => { await send(sendingDoc.id, clientId); setSending(null); }}
+          fields={sendingDoc.fields || []}
+          onSend={async (recipients) => {
+            const r = await send(sendingDoc.id, recipients);
+            setSending(null);
+            // Owner goes first: take them straight to their signature.
+            if (r?.selfSignUrl) {
+              const u = new URL(r.selfSignUrl, window.location.origin);
+              u.searchParams.set('back', 'documents');
+              navigate(u.pathname + u.search);
+            }
+          }}
           onClose={() => setSending(null)}
         />
       )}

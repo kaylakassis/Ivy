@@ -41,6 +41,7 @@ export function serializeSigner(row) {
     id:            row.id,
     orderIndex:    row.order_index,
     clientId:      row.client_id,
+    isOwner:       !!row.is_owner,
     name:          row.name,
     email:         row.email,
     status:        row.status,
@@ -58,7 +59,7 @@ export function serializeSigner(row) {
 export async function fetchSigners(documentId) {
   if (!documentId) return [];
   const { rows } = await sql`
-    SELECT id, order_index, client_id, name, email, status,
+    SELECT id, order_index, client_id, is_owner, name, email, status,
            signed_at, declined_at, decline_reason, ip, user_agent
       FROM document_signers
      WHERE document_id = ${documentId}
@@ -72,7 +73,7 @@ export async function fetchSigners(documentId) {
 export async function fetchSignersBulk(docIds) {
   if (!Array.isArray(docIds) || docIds.length === 0) return new Map();
   const { rows } = await sql.query(
-    `SELECT id, document_id, order_index, client_id, name, email, status,
+    `SELECT id, document_id, order_index, client_id, is_owner, name, email, status,
             signed_at, declined_at, decline_reason, ip, user_agent
        FROM document_signers
       WHERE document_id = ANY($1)

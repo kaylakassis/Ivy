@@ -39,7 +39,12 @@ export default function RichTextEditor({
   // user is typing we never sync `value` back into the DOM (would reset
   // the caret); we only push value -> DOM when the prop changes from
   // outside (loading a different doc, etc.).
-  const lastHtml = useRef(value || '');
+  // Starts as null (not `value`) so the first effect run always writes
+  // the initial body into the DOM. Seeding it with `value` meant the
+  // comparison below was already equal on mount, the DOM stayed empty,
+  // and a template opened to a blank editor beside a full preview -
+  // and the first keystroke replaced the whole body with that keystroke.
+  const lastHtml = useRef(null);
 
   useEffect(() => {
     if (!ref.current) return;

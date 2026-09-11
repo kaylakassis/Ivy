@@ -30,7 +30,7 @@ import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from '../_l
 import { fetchBranding } from '../_lib/branding.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
-import { stampCompletedPdf, uploadStampedPdf } from '../_lib/pdfStamp.js';
+import { stampCompletedPdf, renderWrittenPdf, uploadStampedPdf } from '../_lib/pdfStamp.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 
@@ -326,8 +326,9 @@ async function signDoc(req, res) {
       if (!finalDoc) {
         return badRequest(res, 'This document is no longer available to sign.');
       }
-      await maybeStampFinalPdf(finalDoc);
-      await notifyOwnerOnCompletion(finalDoc);
+      const pdfBytes = await maybeStampFinalPdf(finalDoc);
+      const attachments = attachmentFor(finalDoc, pdfBytes);
+      await notifyOwnerOnCompletion(finalDoc, attachments);
       // Tell every signer who participated that the doc is fully
       // executed - important for long-running multi-signer flows
       // where signer 1 might have signed days before signer N
@@ -337,10 +338,14 @@ async function signDoc(req, res) {
         // Exclude declined signers - they walked away. Including them
         // sends a "fully signed" email/push to someone who never agreed,
         // which is misleading and a small compliance risk.
+        // The owner already got their own completion email above (with
+        // the PDF), so an owner signer row is skipped here - otherwise
+        // they'd get the same attachment twice.
         const { rows: allSigners } = await sql`
           SELECT client_id, name, email FROM document_signers
           WHERE document_id = ${doc.id}
             AND status <> 'declined'
+            AND is_owner = FALSE
         `;
         const branding = await fetchBranding(doc.workspace_id);
         const portalLink = `${appUrl()}/me/documents`;
@@ -371,11 +376,14 @@ async function signDoc(req, res) {
                 to: s.email,
                 subject: `Signed: "${doc.name}" is complete`,
                 replyTo: branding.replyTo,
+                attachments,
                 html: emailShell({
                   heading: 'Document fully signed',
                   body: `<p>Hi ${escapeHtml(s.name || 'there')},</p>
                     <p><strong>${escapeHtml(doc.name)}</strong> is now complete - every signer is in.</p>
-                    <p>You can view a copy of the signed document any time from your portal.</p>`,
+                    ${attachments.length
+                      ? '<p>Your signed copy is attached to this email as a PDF. Keep it for your records.</p>'
+                      : '<p>You can view a copy of the signed document any time from your portal.</p>'}`,
                   ctaText: 'View signed copy',
                   ctaUrl: portalLink,
                   footer: 'Keep this email for your records.',
@@ -423,8 +431,38 @@ async function signDoc(req, res) {
     if (updated.rows.length === 0) {
       return badRequest(res, 'This document is no longer available to sign.');
     }
-    await maybeStampFinalPdf(updated.rows[0]);
-    await notifyOwnerOnCompletion(updated.rows[0]);
+    const legacyBytes = await maybeStampFinalPdf(updated.rows[0]);
+    const legacyAttachments = attachmentFor(updated.rows[0], legacyBytes);
+    await notifyOwnerOnCompletion(updated.rows[0], legacyAttachments);
+    // The signer gets their executed copy too - same as the multi-signer
+    // path, otherwise a single-signer waiver leaves them with nothing.
+    if (doc.recipient_email) {
+      try {
+        const branding = await fetchBranding(doc.workspace_id);
+        await sendEmailToClient({
+          clientId: doc.recipient_client_id || null,
+          type: 'documents',
+          to: doc.recipient_email,
+          subject: `Signed: "${doc.name}" is complete`,
+          replyTo: branding.replyTo,
+          attachments: legacyAttachments,
+          html: emailShell({
+            heading: 'Document fully signed',
+            body: `<p>Hi ${escapeHtml(doc.recipient_name || 'there')},</p>
+              <p><strong>${escapeHtml(doc.name)}</strong> is complete.</p>
+              ${legacyAttachments.length
+                ? '<p>Your signed copy is attached to this email as a PDF. Keep it for your records.</p>'
+                : '<p>You can view a copy of the signed document any time from your portal.</p>'}`,
+            ctaText: 'View signed copy',
+            ctaUrl: `${appUrl()}/me/documents`,
+            footer: 'Keep this email for your records.',
+            branding,
+          }),
+        });
+      } catch (mailErr) {
+        console.error('[sign] completion email failed:', mailErr.message);
+      }
+    }
     // Re-read the doc after stamping so the response includes the
     // final_pdf_url, otherwise the sign-page success state can't link
     // the recipient back to a downloadable copy.
@@ -621,51 +659,143 @@ function computeHash({ contentHtml, signers }) {
     .digest('hex');
 }
 
-// If the doc is a PDF with placed fields, render the flattened final
-// PDF (signatures + text drawn into the document, plus an audit page)
-// and store its blob URL on documents.final_pdf_url. Best-effort: a
-// stamping failure is logged but doesn't roll back completion - the
-// canonical record is the document_signers rows + completion_hash.
+// Build the executed copy. Uploaded PDFs get the signer values drawn
+// onto the original pages; written documents (templates, typed text) are
+// laid out fresh. Both get the signing record appended. The bytes are
+// uploaded to Blob (documents.final_pdf_url) and also returned so the
+// completion emails can carry the PDF as an attachment - a signer should
+// never have to log in anywhere to hold their own signed copy.
+// Best-effort: a failure is logged but doesn't roll back completion -
+// the canonical record is the document_signers rows + completion_hash.
 async function maybeStampFinalPdf(doc) {
-  if (!doc) return;
-  if (doc.kind !== 'pdf' || !doc.file_url) return;
+  if (!doc) return null;
+  const isPdf = doc.kind === 'pdf' && !!doc.file_url;
+  const isWritten = doc.kind === 'written' || (!doc.kind && doc.content_html);
+  if (!isPdf && !isWritten) return null;
   try {
-    const signers = await sql`
+    const signerRows = await sql`
       SELECT id, order_index, name, email, signed_at, declined_at,
              decline_reason, ip, user_agent, field_values
         FROM document_signers
        WHERE document_id = ${doc.id}
        ORDER BY order_index ASC
     `;
-    const bytes = await stampCompletedPdf({
-      pdfUrl: doc.file_url,
-      fields: doc.fields || [],
-      signers: signers.rows,
-      doc,
-      hash: doc.completion_hash,
-    });
-    if (!bytes) return;
-    const { url, pathname } = await uploadStampedPdf({
-      workspaceId: doc.workspace_id,
-      docId: doc.id,
-      bytes,
-    });
-    await sql`
-      UPDATE documents SET
-        final_pdf_url = ${url},
-        final_pdf_blob_pathname = ${pathname},
-        updated_at = NOW()
-      WHERE id = ${doc.id}
-    `;
-    doc.final_pdf_url = url;
-    doc.final_pdf_blob_pathname = pathname;
+    // Legacy single-signer docs have no signer rows: synthesize one from
+    // the document itself so the record still names who signed and when.
+    let signers = signerRows.rows;
+    if (signers.length === 0) {
+      const done = [...(doc.activity || [])].reverse().find((a) => a.kind === 'completed');
+      signers = [{
+        order_index: 0,
+        name: doc.recipient_name || 'Signer',
+        email: doc.recipient_email || '',
+        signed_at: doc.completed_at || new Date(),
+        ip: done?.ip || null,
+        user_agent: null,
+        field_values: doc.fields || [],
+      }];
+    }
+    let bytes;
+    if (isPdf) {
+      bytes = await stampCompletedPdf({
+        pdfUrl: doc.file_url,
+        fields: doc.fields || [],
+        signers,
+        doc,
+        hash: doc.completion_hash,
+      });
+    } else {
+      const branding = await fetchBranding(doc.workspace_id);
+      bytes = await renderWrittenPdf({
+        doc,
+        fields: doc.fields || [],
+        signers,
+        hash: doc.completion_hash,
+        business: branding.businessName || null,
+      });
+    }
+    if (!bytes) return null;
+    try {
+      const { url, pathname } = await uploadStampedPdf({
+        workspaceId: doc.workspace_id,
+        docId: doc.id,
+        bytes,
+      });
+      await sql`
+        UPDATE documents SET
+          final_pdf_url = ${url},
+          final_pdf_blob_pathname = ${pathname},
+          updated_at = NOW()
+        WHERE id = ${doc.id}
+      `;
+      doc.final_pdf_url = url;
+      doc.final_pdf_blob_pathname = pathname;
+    } catch (upErr) {
+      // No storage configured (or a Blob outage): the emails still carry
+      // the PDF, only the in-app download link is missing.
+      // eslint-disable-next-line no-console
+      console.error('[sign] signed PDF upload failed:', upErr.message);
+    }
+    return bytes;
   } catch (err) {
     // eslint-disable-next-line no-console
-    console.error('[sign] PDF stamping failed:', err.message);
+    console.error('[sign] signed PDF build failed:', err.message);
+    return null;
   }
 }
 
-async function notifyOwnerOnCompletion(doc) {
+// Resend caps a message at 40MB; keep attachments well under it and fall
+// back to the link-only email for anything bigger.
+const MAX_ATTACH_BYTES = 12 * 1024 * 1024;
+function attachmentFor(doc, bytes) {
+  if (!bytes || bytes.length === 0 || bytes.length > MAX_ATTACH_BYTES) return [];
+  const base = String(doc.name || 'document').replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '').slice(0, 60) || 'document';
+  return [{ filename: `${base}-signed.pdf`, content: Buffer.from(bytes).toString('base64'), contentType: 'application/pdf' }];
+}
+
+async function notifyOwnerOnCompletion(doc, attachments = []) {
+  // The owner gets an email with the executed copy attached - the push
+  // and thread message below are nice, but the email is the record.
+  try {
+    const owner = await sql`
+      SELECT w.owner_id, u.email, u.name
+        FROM workspaces w JOIN users u ON u.id = w.owner_id
+       WHERE w.id = ${doc.workspace_id}
+    `;
+    const o = owner.rows[0];
+    if (o?.email) {
+      const branding = await fetchBranding(doc.workspace_id);
+      const { rows: signerRows } = await sql`
+        SELECT name, email FROM document_signers
+         WHERE document_id = ${doc.id} AND status = 'completed'
+         ORDER BY order_index ASC
+      `;
+      const who = signerRows.length
+        ? signerRows.map((s) => escapeHtml(s.name)).join(', ')
+        : escapeHtml(doc.recipient_name || 'The signer');
+      await sendEmailToUser({
+        userId: o.owner_id, type: 'documents',
+        to: o.email,
+        subject: `Signed: "${doc.name}"`,
+        attachments,
+        html: emailShell({
+          heading: 'Document fully signed',
+          body: `<p>Hi ${escapeHtml(o.name || 'there')},</p>
+                 <p><strong>${who}</strong> signed <b>${escapeHtml(doc.name)}</b>. It's complete.</p>
+                 ${attachments.length
+                   ? '<p>The signed PDF is attached, with a signing record on the last page (who signed, when, from where) and the tamper-evident hash.</p>'
+                   : '<p>Open it in Ivy to see the signatures and the signing record.</p>'}`,
+          ctaText: 'Open in Ivy',
+          ctaUrl: `${appUrl()}/documents?doc=${encodeURIComponent(doc.id)}`,
+          footer: 'Ivy keeps the signed copy on the document itself, under Documents.',
+          branding,
+        }),
+      });
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[sign] owner completion email failed:', err.message);
+  }
   // Best-effort: chat thread system message + push.
   try {
     if (doc.recipient_client_id) {

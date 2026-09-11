@@ -58,7 +58,8 @@ export function useDocuments() {
       : { id, clientId: recipientsOrClientId };
     const r = await api.post('/documents/send', body);
     setDocuments((ds) => ds.map((d) => d.id === id ? r.document : d));
-    return r.document;
+    // Whole response: callers need selfSignUrl / warning, not just the doc.
+    return r;
   }, []);
 
   // Resend a pending document to its current awaiting signer. Mints a
@@ -108,7 +109,13 @@ export function useDocuments() {
     return patched.document;
   }, []);
 
-  return { documents, loading, error, refresh, create, createFromTemplate, update, remove, send, resend, void: voidDoc, uploadPdf };
+  // Owner-as-signer: mint a link for their own turn (see api/documents/self-sign.js).
+  const selfSignLink = useCallback(async (id) => {
+    const r = await api.post('/documents/self-sign', { id });
+    return r.url;
+  }, []);
+
+  return { documents, loading, error, refresh, create, createFromTemplate, update, remove, send, resend, void: voidDoc, uploadPdf, selfSignLink };
 }
 
 // Local-only page counter so we can stamp page_count on the row at

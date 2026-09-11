@@ -18,7 +18,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedDoc, serializeDoc } from '../_lib/documents.js';
+import { fetchOwnedDoc, serializeDoc, fetchSigners } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmail, sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
@@ -74,6 +74,18 @@ export default async function handler(req, res) {
     // email. Build the rows we'll insert.
     const resolved = [];
     for (const r of recipients) {
+      // { self: true } - the owner signs too (countersigning an agreement,
+      // or a template with a "Coach signature" line). No client row; the
+      // email is the account email.
+      if (r.self) {
+        const email = (user.email || '').toString().toLowerCase().trim();
+        if (!email) return { status: 400, body: { error: 'Your account has no email address to send your signing link to' } };
+        if (resolved.some((x) => x.isOwner)) return { status: 400, body: { error: 'You can only be added as a signer once' } };
+        const branding = await fetchBranding(workspaceId);
+        const name = (r.name || user.name || branding.businessName || 'Business owner').toString().slice(0, 200);
+        resolved.push({ clientId: null, name, email, isOwner: true });
+        continue;
+      }
       const cid = r.clientId ? String(r.clientId) : null;
       if (!cid) return { status: 400, body: { error: 'Each recipient needs a clientId' } };
       const cl = await sql`
@@ -112,10 +124,10 @@ export default async function handler(req, res) {
       const isFirst = i === 0;
       await sql`
         INSERT INTO document_signers (
-          document_id, order_index, client_id, name, email,
+          document_id, order_index, client_id, is_owner, name, email,
           sign_token_hash, status
         ) VALUES (
-          ${id}, ${i}, ${r.clientId}, ${r.name}, ${r.email},
+          ${id}, ${i}, ${r.clientId}, ${!!r.isOwner}, ${r.name}, ${r.email},
           ${isFirst ? firstHash : null},
           ${isFirst ? 'awaiting' : 'pending'}
         )
@@ -198,7 +210,7 @@ export default async function handler(req, res) {
       emailWarning = `We saved the document but couldn't email ${first.name || first.email} - try Resend in a moment.`;
     }
 
-    try {
+    if (first.clientId) try {
       const threadRow = await sql`
         INSERT INTO message_threads (workspace_id, client_id)
         VALUES (${workspaceId}, ${first.clientId})
@@ -224,7 +236,7 @@ export default async function handler(req, res) {
       console.error('[documents/send] thread message failed:', msgErr.message);
     }
 
-    notifyClientSafe({
+    if (first.clientId) notifyClientSafe({
       clientId: first.clientId,
       type: 'documents',
       payload: {
@@ -236,10 +248,14 @@ export default async function handler(req, res) {
       },
     });
 
+    const signers = await fetchSigners(id);
     return {
       status: 200,
       body: {
-        document: serializeDoc(updated.rows[0]),
+        document: serializeDoc(updated.rows[0], signers),
+        // When the owner is up first they can sign right away - no need
+        // to go find the email.
+        ...(first.isOwner ? { selfSignUrl: link } : {}),
         ...(emailWarning ? { warning: emailWarning } : {}),
       },
     };

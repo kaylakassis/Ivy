@@ -1440,6 +1440,10 @@ CREATE INDEX IF NOT EXISTS idx_document_signers_doc
   ON document_signers(document_id, order_index);
 CREATE INDEX IF NOT EXISTS idx_document_signers_client
   ON document_signers(client_id) WHERE client_id IS NOT NULL;
+-- The business owner can be a signer too (countersigning an agreement).
+-- Their row has no client; is_owner marks it so the editor can offer a
+-- "Sign now" button and the portal never treats it as a client's row.
+ALTER TABLE document_signers ADD COLUMN IF NOT EXISTS is_owner BOOLEAN NOT NULL DEFAULT FALSE;
 
 -- Tamper-evidence: SHA-256 of (document body + ordered signer field
 -- values + signed_at timestamps) computed at completion time. Makes a

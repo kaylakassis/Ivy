@@ -490,7 +490,7 @@ async function workspaceForClient(clientId) {
 }
 
 // Send a categorized email to a workspace owner (lookup by userId).
-export async function sendEmailToUser({ userId, type, to, subject, html, text, replyTo, headers, timeoutMs }) {
+export async function sendEmailToUser({ userId, type, to, subject, html, text, replyTo, headers, attachments, timeoutMs }) {
   if (type && !(await userAllowsEmail(userId, type))) {
     return { ok: true, sent: false, reason: 'muted' };
   }
@@ -506,7 +506,7 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
     ? unsubscribeUrlFor({ scope: 'user', id: userId, type })
     : null;
   try {
-    const result = await sendEmail({ to, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl });
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     // Log loudly even though we don't throw - callers commonly wrap us

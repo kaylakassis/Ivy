@@ -61,14 +61,29 @@ export default function SignPage() {
   // fill; for legacy/written documents, every field shown belongs to
   // the active signer (single-signer flow uses signerIndex 0 and
   // multi-signer flow lists fields uniformly).
+  // Only this signer's fields are theirs to fill. Written documents used
+  // to show every field to every signer, so signer 1 was asked to fill
+  // "Party 2 signature" and could never submit. The server scopes the
+  // required check per signer; the page now matches it.
   const myFields = useMemo(() => {
     if (!doc) return [];
-    if (doc.kind === 'pdf') {
-      const myIdx = signerInfo?.position ? (signerInfo.position - 1) : 0;
-      return (doc.fields || []).filter((f) => (f.signerIndex || 0) === myIdx);
-    }
-    return doc.fields || [];
+    const myIdx = signerInfo?.position ? (signerInfo.position - 1) : 0;
+    const all = doc.fields || [];
+    const mine = all.filter((f) => (f.signerIndex || 0) === myIdx);
+    // Legacy single-signer documents (no signer context) own everything.
+    return signerInfo ? mine : all;
   }, [doc, signerInfo]);
+  // Fields earlier signers already completed - shown read-only so signer 2
+  // sees signer 1's name and date on the same page they are signing.
+  const priorFields = useMemo(() => {
+    if (!doc || !signerInfo) return [];
+    const myIdx = signerInfo.position - 1;
+    return (doc.fields || []).filter((f) => (f.signerIndex || 0) < myIdx && f.value);
+  }, [doc, signerInfo]);
+  // The owner signing their own document arrives from the editor; give
+  // them a way back instead of a dead end.
+  const backTo = new URLSearchParams(window.location.search).get('back') === 'documents'
+    ? `/documents${doc?.id ? `?doc=${encodeURIComponent(doc.id)}` : ''}` : null;
 
   const submit = async () => {
     if (!doc) return;
@@ -196,6 +211,18 @@ export default function SignPage() {
               <Icons.Doc size={14}/> Download signed PDF
             </a>
           )}
+          {!finalPdfUrl && !handedOff && (
+            <p style={{ color: 'var(--muted)', marginTop: 18, fontSize: 12.5 }}>
+              A copy of the signed document is on its way to your email.
+            </p>
+          )}
+          {backTo && (
+            <div style={{ marginTop: 18 }}>
+              <a href={backTo} className="btn btn-primary" style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+                Back to Documents <Icons.Arrow size={12} sw={2}/>
+              </a>
+            </div>
+          )}
         </div>
       </PageWrap>
     );
@@ -258,6 +285,21 @@ export default function SignPage() {
       )}
 
       <div className="card" style={{ padding: 24 }}>
+        {doc.kind !== 'pdf' && priorFields.length > 0 && (
+          <div style={{ marginBottom: 20 }}>
+            <div className="metric-label" style={{ marginBottom: 10 }}>Already signed</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              {priorFields.map((f) => (
+                <div key={f.id} style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--fg-2)' }}>
+                  <span style={{ minWidth: 120, color: 'var(--muted)', fontSize: 12 }}>{f.label || f.type}</span>
+                  {f.type === 'signature' && String(f.value).startsWith('data:image')
+                    ? <img src={f.value} alt="Signature" style={{ height: 34, background: '#fff', borderRadius: 6, padding: '2px 8px' }}/>
+                    : <span style={{ fontWeight: f.type === 'signature' ? 600 : 400 }}>{f.value}</span>}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {doc.kind !== 'pdf' && (
           <>
             <div className="metric-label" style={{ marginBottom: 16 }}>Please complete the following</div>

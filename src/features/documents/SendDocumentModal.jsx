@@ -6,9 +6,33 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
+import { useAuth } from '../../lib/auth.jsx';
 
-export default function SendDocumentModal({ documentName, onSend, onClose }) {
+const SELF_ID = '__self';
+// Field labels that name the business side of an agreement - if the
+// document has one of these, the owner is meant to sign it too.
+const OWNER_ROLE = /\b(coach|provider|trainer|business|owner|company|therapist|stylist|photographer|consultant)\b/i;
+const looksLikeEmail = (s) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+
+export default function SendDocumentModal({ documentName, fields = [], onSend, onClose }) {
+  const { user } = useAuth();
+  const self = useMemo(() => ({
+    id: SELF_ID, self: true,
+    name: `${user?.name || 'You'} (you)`,
+    email: user?.email || '',
+  }), [user]);
+  // Does this document have a line for the business to sign? If so, and
+  // at which position (e.g. a "Coach signature" at signerIndex 0 means
+  // the owner is meant to be signer 1).
+  const ownerRole = useMemo(() => {
+    const f = (fields || []).find((x) => x.type === 'signature' && OWNER_ROLE.test(x.label || ''));
+    return f ? { label: f.label, index: Number.isInteger(f.signerIndex) ? f.signerIndex : 0 } : null;
+  }, [fields]);
   const [clients, setClients] = useState([]);
+  // Inline "add a new person" form - shown when the search finds nobody.
+  const [newName, setNewName] = useState('');
+  const [newEmail, setNewEmail] = useState('');
+  const [adding, setAdding] = useState(false);
   const [loading, setLoading] = useState(true);
   const [query, setQuery]     = useState('');
   // Ordered array of selected clients. Order = signing order.
@@ -35,6 +59,39 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
   }, [clients, picked, query]);
 
   const add = (c) => setPicked((p) => [...p, c]);
+  // Put the owner in the slot the document expects (signer 1 for a
+  // "Coach signature" line), keeping everyone else in their order.
+  const addSelfAt = (index) => setPicked((p) => {
+    if (p.some((x) => x.id === SELF_ID)) return p;
+    const next = p.slice();
+    next.splice(Math.min(index, next.length), 0, self);
+    return next;
+  });
+  const addNewPerson = async () => {
+    const name = newName.trim();
+    const email = newEmail.trim().toLowerCase();
+    if (!name) { setErr('Enter their name'); return; }
+    if (!looksLikeEmail(email)) { setErr('Enter a valid email address'); return; }
+    setAdding(true); setErr(null);
+    try {
+      const r = await api.post('/clients', { name, email, source: 'document' });
+      const c = r.client || r;
+      setClients((cs) => [...cs, c]);
+      add(c);
+      setNewName(''); setNewEmail(''); setQuery('');
+    } catch (e) {
+      setErr(e.message || 'Could not add them');
+    } finally {
+      setAdding(false);
+    }
+  };
+  // Prefill the new-person form from whatever was typed in the search.
+  useEffect(() => {
+    const q = query.trim();
+    if (looksLikeEmail(q)) { setNewEmail(q); }
+    else if (q && !newName) { setNewName(q); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
   const remove = (id) => setPicked((p) => p.filter((x) => x.id !== id));
   const moveUp = (i) => setPicked((p) => i === 0 ? p : [
     ...p.slice(0, i - 1), p[i], p[i - 1], ...p.slice(i + 1),
@@ -49,7 +106,7 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
     try {
       // Pass an ordered recipients array. The send endpoint accepts
       // either this OR the legacy { clientId } shape.
-      await onSend(picked.map((c) => ({ clientId: c.id })));
+      await onSend(picked.map((c) => (c.self ? { self: true } : { clientId: c.id })));
     } catch (e) {
       setErr(e.message || 'Could not send');
       setBusy(false);
@@ -128,6 +185,24 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
           </div>
         )}
 
+        {/* This document has a line for the business to sign. */}
+        {ownerRole && !picked.some((c) => c.id === SELF_ID) && (
+          <div style={{
+            margin: '12px 16px 0', padding: '10px 12px', borderRadius: 10,
+            background: 'var(--accent-soft)', border: '1px solid var(--accent)',
+            display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5,
+          }}>
+            <Icons.Edit size={14} sw={1.8} stroke="var(--accent)"/>
+            <span style={{ flex: 1, color: 'var(--fg-2)' }}>
+              This document has a <b>{ownerRole.label}</b> line, so you sign it too.
+            </span>
+            <button type="button" className="btn btn-primary" style={{ padding: '5px 10px', fontSize: 12 }}
+              onClick={() => addSelfAt(ownerRole.index)}>
+              Add me as signer {ownerRole.index + 1}
+            </button>
+          </div>
+        )}
+
         {/* Search + candidate list */}
         <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border)' }}>
           <div style={{
@@ -143,13 +218,48 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
         </div>
 
         <div className="scroll" style={{ flex: 1, overflowY: 'auto', minHeight: 160 }}>
+          {/* The owner can always sign too. Sits above the client list. */}
+          {!loading && self.email && !picked.some((c) => c.id === SELF_ID) && !query.trim() && (
+            <button onClick={() => add(self)} style={{
+              width: '100%', display: 'flex', alignItems: 'center', gap: 12,
+              padding: '10px 16px', border: 0, background: 'transparent',
+              borderBottom: '1px solid var(--border)', cursor: 'pointer', textAlign: 'left',
+            }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{
+                width: 36, height: 36, borderRadius: 99,
+                background: 'var(--accent)', color: 'var(--accent-ink)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+              }}><Icons.Edit size={15} sw={1.8}/></div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{self.name}</div>
+                <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 1 }}>Countersign it yourself · {self.email}</div>
+              </div>
+              <Icons.Plus size={14} stroke="var(--accent)" sw={2}/>
+            </button>
+          )}
           {loading ? (
             <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>Loading…</div>
           ) : candidates.length === 0 ? (
-            <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
-              {clients.length === 0
-                ? 'Add clients first to send them documents.'
-                : picked.length > 0 ? 'No more matching clients.' : 'Clients need an email to receive a signing link.'}
+            <div style={{ padding: '18px 16px 22px' }}>
+              <div style={{ color: 'var(--muted)', fontSize: 13, textAlign: 'center', marginBottom: 12 }}>
+                {clients.length === 0
+                  ? 'No clients yet. Add the person here and they become a client too.'
+                  : query.trim() ? `No client matches "${query.trim()}". Add them as a new person:` : picked.length > 0 ? 'No more matching clients.' : 'Clients need an email to receive a signing link.'}
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                <input value={newName} onChange={(e) => setNewName(e.target.value)} placeholder="Their name"
+                  aria-label="New signer name" style={newInput}/>
+                <input value={newEmail} onChange={(e) => setNewEmail(e.target.value)} placeholder="Their email" type="email"
+                  aria-label="New signer email" style={newInput}
+                  onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewPerson(); } }}/>
+                <button type="button" className="btn btn-outline" onClick={addNewPerson} disabled={adding}
+                  style={{ justifyContent: 'center' }}>
+                  <Icons.Plus size={12} sw={2}/> {adding ? 'Adding…' : 'Add as signer'}
+                </button>
+              </div>
             </div>
           ) : candidates.map((c) => {
             const initials = (c.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
@@ -208,3 +318,9 @@ export default function SendDocumentModal({ documentName, onSend, onClose }) {
     </div>
   );
 }
+
+const newInput = {
+  width: '100%', padding: '9px 12px', borderRadius: 10,
+  background: 'var(--surface)', border: '1px solid var(--border-strong)',
+  color: 'var(--fg)', fontSize: 13.5, outline: 'none',
+};
