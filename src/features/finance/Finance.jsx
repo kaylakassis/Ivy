@@ -11,7 +11,6 @@ import { useViewport } from '../../lib/viewport.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
-import SalesTaxCard from './SalesTaxCard.jsx';
 import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
@@ -307,7 +306,6 @@ function InvoicesSection({
   return (
     <>
       <PaymentProviderCard/>
-      <SalesTaxCard/>
 
       {/* Summary cards */}
       <div className="grid-auto">
