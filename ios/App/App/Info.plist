@@ -46,5 +46,13 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<!-- Export compliance. Ivy implements no encryption of its own: TLS, the
+	     Keychain and Face ID all come from iOS. The only standard-algorithm
+	     code in the bundle is pdf.js's AES/RC4 used solely to OPEN
+	     password-protected PDFs (decryption of files), which is an exempt
+	     use under EAR Category 5 Part 2. Declared here so every build skips
+	     the App Store Connect questionnaire with the same answer. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 </dict>
 </plist>
