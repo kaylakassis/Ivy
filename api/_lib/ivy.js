@@ -16,6 +16,7 @@ import {
 import { listGoalsWithProgress } from './goals.js';
 import { readStreak } from './streak.js';
 import { listMemories } from './ivyMemory.js';
+import { reportError } from './monitoring.js';
 
 // Single shared client. Reads ANTHROPIC_API_KEY from env automatically.
 let _client = null;
@@ -37,6 +38,43 @@ export async function currentIvyModel() {
   currentModel = await resolveIvyModel(anthropic());
   return currentModel;
 }
+// Turn an Anthropic SDK error into one plain sentence an owner can act on.
+// The raw messages are engineer-speak ("400 {"type":"error",...}"); this is
+// what the chat, the mode chip and the readiness page show instead.
+export function explainClaudeError(err) {
+  const status = Number(err?.status) || 0;
+  const msg = String(err?.error?.error?.message || err?.message || '');
+  if (/credit|billing|balance|purchase/i.test(msg)) return 'the Anthropic account is out of credit - add credit at console.anthropic.com under Billing';
+  if (status === 401) return 'the Anthropic API key was rejected - check ANTHROPIC_API_KEY in Vercel';
+  if (status === 403) return 'the Anthropic API key is not allowed to use this model';
+  if (status === 404) return `the model "${currentModel}" is not available to this account`;
+  if (status === 429) return 'Anthropic is rate-limiting Ivy right now';
+  if (status === 529 || /overloaded/i.test(msg)) return 'Claude is overloaded right now';
+  if (!status && /timed? ?out|abort|ECONN|ENOTFOUND|fetch failed/i.test(msg)) return 'Claude took too long to answer';
+  if (status === 400) return `Anthropic rejected the request (${msg.replace(/\s+/g, ' ').slice(0, 140)})`;
+  if (status >= 500) return 'Anthropic had a server error';
+  return msg.replace(/\s+/g, ' ').slice(0, 160) || 'unknown error';
+}
+
+// One real, one-token call so the readiness page can say whether Ivy can
+// actually reach Claude with this key and model - the env var being set
+// proves nothing when the account is out of credit or the key is revoked.
+export async function probeClaude() {
+  const client = anthropic();
+  if (!client) return { ok: false, error: 'ANTHROPIC_API_KEY is not set in Vercel' };
+  const model = await currentIvyModel();
+  const t0 = Date.now();
+  try {
+    await client.messages.create(
+      { model, max_tokens: 1, messages: [{ role: 'user', content: 'ping' }] },
+      { timeout: 8000, maxRetries: 0 },
+    );
+    return { ok: true, model, ms: Date.now() - t0 };
+  } catch (err) {
+    return { ok: false, model, status: err?.status || null, error: explainClaudeError(err) };
+  }
+}
+
 const IVY_MAX_TOKENS = 1024;
 const IVY_HISTORY_TURNS = 10;
 // Cap on tool-use loop iterations per user message. Real conversations
@@ -485,10 +523,16 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[ivy] Anthropic call failed, falling back to mock:', err?.message || err);
+    // Loud, not silent: the owner sees WHY in the chat itself (a canned
+    // answer that looked like a real one is how "Ivy seems broken" reports
+    // start), the mode chip shows the same reason, and Sentry gets the
+    // raw error so it is visible without digging through function logs.
+    reportError(err, { workspaceId, extra: { where: 'ivy.generateReply', model } });
+    const reason = explainClaudeError(err);
     return {
-      text: sanitizeIvyReply(mockReply(text, ctx, attachment)),
+      text: sanitizeIvyReply(`I couldn't reach Claude just now: ${reason}. Here's a quick take from your numbers in the meantime:\n\n${mockReply(text, ctx, attachment)}`),
       mode: 'mock',
-      error: (err && err.message) ? err.message.slice(0, 200) : 'unknown-error',
+      error: reason,
     };
   }
 }
