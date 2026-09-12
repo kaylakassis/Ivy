@@ -43,7 +43,7 @@ const email = `runner-${Date.now()}@test.local`;
 const r1 = await call('../api/auth/signup.js', {
   method: 'POST',
   body: {
-    email, password: 'password1234', name: 'Runner', mode: 'owner',
+    email, password: 'password1234', name: 'Runner', username: 'u' + Math.random().toString(36).slice(2, 10), mode: 'owner',
     acceptedTermsVersion: CURRENT_TERMS_VERSION,
     acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,
   },

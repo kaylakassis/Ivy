@@ -86,6 +86,7 @@ export default function AccountPage() {
       <div className="card" style={{ padding: 22 }}>
         <div className="metric-label" style={{ marginBottom: 12 }}>Profile</div>
         <Row label="Name"  value={user?.name || '-'}/>
+        <Row label="Username" value={user?.username ? `@${user.username}` : '-'}/>
         <Row label="Email" value={user?.email || '-'}/>
         <Row label="Email verified" value={user?.email_verified_at ? 'Yes' : 'No'}/>
         <Row label="Member since" value={user?.created_at ? new Date(user.created_at).toLocaleDateString([], { dateStyle: 'long' }) : '-'}/>

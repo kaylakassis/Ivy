@@ -54,7 +54,7 @@ async function run() {
   assert(r.statusCode === 400, 'rejects an invalid email (400)');
 
   r = makeRes();
-  await joinHandler(req({ body: { email: wlEmail.toUpperCase(), name: 'WL Tester' } }), r);
+  await joinHandler(req({ body: { username: 'u' + Math.random().toString(36).slice(2, 10), email: wlEmail.toUpperCase(), name: 'WL Tester' } }), r);
   assert(r.statusCode === 200, 'accepts a valid email (200)');
   let cnt = (await sql`SELECT COUNT(*)::int n FROM waitlist_signups WHERE LOWER(email) = ${wlEmail}`).rows[0].n;
   assert(cnt === 1, 'one row stored, email lower-cased');
@@ -81,7 +81,7 @@ async function run() {
   await setLaunchMode('waitlist');
   await setGatePassword(''); // no bypass password configured
   r = makeRes();
-  await signupHandler(req({ body: { email: noWlEmail, password: 'a-sufficiently-long-password', name: 'No WL', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), r);
+  await signupHandler(req({ body: { username: 'u' + Math.random().toString(36).slice(2, 10), email: noWlEmail, password: 'a-sufficiently-long-password', name: 'No WL', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), r);
   assert(r.statusCode === 403, 'signup blocked with 403 in waitlist mode');
   assert(r.body?.code === 'waitlist_only', 'block carries code waitlist_only');
   assert((await sql`SELECT COUNT(*)::int n FROM users WHERE email = ${noWlEmail}`).rows[0].n === 0, 'no user created');
@@ -92,7 +92,7 @@ async function run() {
   assert(bypass.ok && bypass.cookieValue, 'attemptBypass validates the configured password');
   r = makeRes();
   await signupHandler(req({
-    body: { email: noWlEmail, password: 'a-sufficiently-long-password', name: 'No WL', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION },
+    body: { username: 'u' + Math.random().toString(36).slice(2, 10), email: noWlEmail, password: 'a-sufficiently-long-password', name: 'No WL', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION },
     headers: { cookie: `ea_pass=${bypass.cookieValue}` },
   }), r);
   assert(r.statusCode === 200 || r.statusCode === 201, 'signup succeeds with bypass cookie');
@@ -105,7 +105,7 @@ async function run() {
 
   // Now sign up with the waitlisted email (still in waitlist mode, using bypass).
   await signupHandler(req({
-    body: { email: wlEmail, password: 'a-sufficiently-long-password', name: 'WL Tester', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION },
+    body: { username: 'u' + Math.random().toString(36).slice(2, 10), email: wlEmail, password: 'a-sufficiently-long-password', name: 'WL Tester', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION },
     headers: { cookie: `ea_pass=${bypass.cookieValue}` },
   }), makeRes());
   ws = (await sql`SELECT w.waitlist_discount_at FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE u.email = ${wlEmail}`).rows[0];

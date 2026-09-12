@@ -20,6 +20,7 @@ export default function ClientProfile() {
   // Local form state - initialized from the loaded profile so the
   // user can type freely without re-fetching on every keystroke.
   const [name, setName] = useState('');
+  const [username, setUsername] = useState('');
   const [phone, setPhone] = useState('');
   const [address, setAddress] = useState('');
   const [photoUrl, setPhotoUrl] = useState('');
@@ -31,6 +32,7 @@ export default function ClientProfile() {
         if (!live) return;
         setProfile(r.profile);
         setName(r.profile.name || '');
+        setUsername(r.profile.username || '');
         setPhone(r.profile.phone || '');
         setAddress(r.profile.address || '');
         setPhotoUrl(r.profile.photoUrl || '');
@@ -42,6 +44,7 @@ export default function ClientProfile() {
 
   const dirty =
     name !== (profile?.name || '') ||
+    username !== (profile?.username || '') ||
     phone !== (profile?.phone || '') ||
     address !== (profile?.address || '') ||
     photoUrl !== (profile?.photoUrl || '');
@@ -51,7 +54,7 @@ export default function ClientProfile() {
     setBusy(true); setErr(null); setSaved(false);
     try {
       const r = await api.patch('/me/profile', {
-        name, phone, address, photoUrl,
+        name, username, phone, address, photoUrl,
       });
       setProfile(r.profile);
       setSaved(true);
@@ -94,6 +97,11 @@ export default function ClientProfile() {
             maxLength={120}
             required
             style={inputStyle}/>
+        </Field>
+        <Field label="Username" hint="Letters, numbers, periods and underscores. 3 to 24 characters.">
+          <input className="input" value={username} onChange={(e) => setUsername(e.target.value.replace(/\s+/g, ''))}
+            minLength={3} maxLength={24} autoCapitalize="none" autoCorrect="off" spellCheck={false}
+            placeholder="yourname" style={{ width: '100%' }}/>
         </Field>
 
         <Field label="Email" hint="Read-only - used to sign in + link you to businesses. Contact support to change it.">

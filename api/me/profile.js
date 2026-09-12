@@ -18,6 +18,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
+import { validateUsername, usernameTaken } from '../_lib/username.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { normalizePhone } from '../_lib/sms.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -34,7 +35,7 @@ export default async function handler(req, res) {
       // values diverge (owner edited it differently in each), we show
       // the first (alphabetical by business name, matching myClientIds
       // ordering) and document that PATCH overwrites them all.
-      const u = await sql`SELECT name, email FROM users WHERE id = ${user.id}`;
+      const u = await sql`SELECT name, email, username FROM users WHERE id = ${user.id}`;
       const ux = u.rows[0] || {};
       let phone = null;
       let address = null;
@@ -58,6 +59,7 @@ export default async function handler(req, res) {
       return ok(res, {
         profile: {
           name:     ux.name || '',
+          username: ux.username || '',
           email:    ux.email || '',
           phone, address, photoUrl,
         },
@@ -74,6 +76,12 @@ export default async function handler(req, res) {
         if (!name) errors.push('Name is required');
         else if (name.length > 120) errors.push('Name is too long');
         else patch.name = name;
+      }
+      if ('username' in body) {
+        const check = validateUsername(body.username);
+        if (!check.ok) errors.push(check.error);
+        else if (await usernameTaken(check.value, user.id)) errors.push('That username is taken');
+        else patch.username = check.value;
       }
 
       let phoneToSet; // undefined = don't touch; null = explicitly clear
@@ -113,6 +121,9 @@ export default async function handler(req, res) {
 
       if (errors.length) return badRequest(res, errors.join(' · '));
 
+      if (patch.username !== undefined) {
+        await sql`UPDATE users SET username = ${patch.username}, updated_at = NOW() WHERE id = ${user.id}`;
+      }
       if (patch.name !== undefined) {
         await sql`UPDATE users SET name = ${patch.name}, updated_at = NOW() WHERE id = ${user.id}`;
       }

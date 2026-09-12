@@ -2870,6 +2870,11 @@ CREATE INDEX IF NOT EXISTS idx_group_invite_tokens_thread
 -- Per-thread mute is already in group_thread_members.muted.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_groups_daily BOOLEAN NOT NULL DEFAULT TRUE;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS digest_last_sent_at TIMESTAMPTZ;
+-- Username: required at sign-up, unique among live accounts (a deleted
+-- account releases its handle). Stored lowercase; see _lib/username.js.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS username TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS users_username_live_unique
+  ON users (username) WHERE username IS NOT NULL AND deleted_at IS NULL;
 
 -- ─── Client ↔ client direct messages ─────────────────────────────────
 -- Permission rule: two clients can DM each other only if they share at

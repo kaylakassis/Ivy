@@ -5,6 +5,7 @@ import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClie
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
 import { countRecent, recordAttempt, clearRateLimit, isAdminBypass, getClientIp } from '../_lib/rate-limit.js';
+import { validateUsername, normalizeUsername } from '../_lib/username.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireGate } from '../_lib/earlyAccess.js';
 import { recordAudit } from '../_lib/audit.js';
@@ -62,12 +63,18 @@ export default async function handler(req, res) {
     // below. Bootstrap explicitly - login is a public endpoint that
     // doesn't call requireUser.
     await ensureSchemaApplied();
+    // The first field accepts an email address or a username.
     const { email, password } = await readBody(req);
-    if (!validEmail(email) || typeof password !== 'string') {
+    const ident = typeof email === 'string' ? email.trim() : '';
+    const byEmail = ident.includes('@');
+    const identOk = byEmail ? validEmail(ident) : validateUsername(ident).ok;
+    if (!identOk || typeof password !== 'string') {
       return badRequest(res, 'Invalid credentials');
     }
     const ip = getClientIp(req);
-    const emailKey = email.toLowerCase();
+    // Lock keys and audit rows use this; usernames get a prefix so a
+    // handle can never collide with an address.
+    const emailKey = byEmail ? ident.toLowerCase() : `@${normalizeUsername(ident)}`;
 
     // Lockout counts FAILED attempts only. Five wrong passwords for an
     // email lock it for 60 minutes; each miss tells the person how many
@@ -97,10 +104,15 @@ export default async function handler(req, res) {
       });
     };
 
-    const { rows } = await sql`
-      SELECT id, email, name, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at
-      FROM users WHERE email = ${emailKey}
-    `;
+    const { rows } = byEmail
+      ? await sql`
+          SELECT id, email, name, username, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at
+          FROM users WHERE email = ${emailKey}
+        `
+      : await sql`
+          SELECT id, email, name, username, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at
+          FROM users WHERE username = ${normalizeUsername(ident)} AND deleted_at IS NULL
+        `;
     // Always run a bcrypt compare so the timing of the no-user branch
     // matches the wrong-password branch. Otherwise an attacker can
     // distinguish registered vs unregistered emails from response

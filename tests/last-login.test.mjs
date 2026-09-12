@@ -38,7 +38,7 @@ async function run() {
 
     console.log('\n[1] signup does not stamp last_login_at');
     let r = makeRes();
-    await signupHandler(req({ body: { email: EMAIL, password: 'a-sufficiently-long-password', name: 'LL', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), r);
+    await signupHandler(req({ body: { username: 'u' + Math.random().toString(36).slice(2, 10), email: EMAIL, password: 'a-sufficiently-long-password', name: 'LL', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), r);
     assert(r.statusCode === 200 || r.statusCode === 201, 'signup ok');
     let row = (await sql`SELECT last_login_at FROM users WHERE email = ${EMAIL}`).rows[0];
     assert(row && row.last_login_at === null, 'last_login_at is NULL right after signup');

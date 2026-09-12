@@ -60,6 +60,7 @@ async function run() {
     console.log('\n[2] signup with the invited email → workspace comped, paywall gone');
     r = mockRes();
     await signupHandler(req({ method: 'POST', body: {
+      username: 'u' + Math.random().toString(36).slice(2, 10),
       email: `comp-new-${STAMP}@example.com`, name: 'Comped User',
       password: 'sufficiently-long-pass-123',
       acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,

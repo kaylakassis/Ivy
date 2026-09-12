@@ -44,7 +44,7 @@ function makeReq(body) {
   };
 }
 const signupBody = (email, name) => ({
-  email, name, password: 'sufficiently-long-pass-123',
+  email, name, username: 'u' + Math.random().toString(36).slice(2, 10), password: 'sufficiently-long-pass-123',
   acceptedTermsVersion: CURRENT_TERMS_VERSION,
   acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION,
 });

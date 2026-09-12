@@ -1,4 +1,4 @@
-// POST /api/auth/signup  { email, password, name?, acceptedTermsVersion }
+// POST /api/auth/signup  { email, password, name, username, acceptedTermsVersion }
 //
 // `acceptedTermsVersion` is required. It must equal the server's
 // CURRENT_TERMS_VERSION; we record an immutable acceptance row in
@@ -8,6 +8,7 @@
 import { sql } from '../_lib/db.js';
 import { hashPassword, signSession, setSessionCookie, validEmail, isNativeClient } from '../_lib/auth.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
+import { validateUsername, usernameTaken } from '../_lib/username.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -69,8 +70,10 @@ export default async function handler(req, res) {
     // schema hasn't been applied yet, the SELECT users at line ~85
     // would 500. Bootstrap explicitly here.
     await ensureSchemaApplied();
-    const { email, password, name, mode, ref, acceptedTermsVersion, acceptedPrivacyVersion } = await readBody(req);
+    const { email, password, name, username, mode, ref, acceptedTermsVersion, acceptedPrivacyVersion } = await readBody(req);
     if (!validEmail(email)) return badRequest(res, 'Invalid email');
+    const uname = validateUsername(username);
+    if (!uname.ok) return badRequest(res, uname.error);
     const pwCheck = validatePassword(password);
     if (!pwCheck.ok) return badRequest(res, pwCheck.error);
     // Name is required so we can address the user in emails + show
@@ -136,19 +139,21 @@ export default async function handler(req, res) {
       }
     }
 
+    if (await usernameTaken(uname.value)) return badRequest(res, 'That username is taken');
+
     const password_hash = await hashPassword(password);
     const insertUser = await sql`
       INSERT INTO users (
-        email, password_hash, name,
+        email, password_hash, name, username,
         terms_version, terms_accepted_at,
         privacy_version, privacy_accepted_at
       )
       VALUES (
-        ${emailKey}, ${password_hash}, ${cleanName},
+        ${emailKey}, ${password_hash}, ${cleanName}, ${uname.value},
         ${CURRENT_TERMS_VERSION}, NOW(),
         ${CURRENT_PRIVACY_VERSION}, NOW()
       )
-      RETURNING id, email, name, created_at, email_verified_at
+      RETURNING id, email, name, username, created_at, email_verified_at
     `;
     const user = insertUser.rows[0];
 
