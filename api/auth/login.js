@@ -4,7 +4,7 @@ import { sql, warmupDb, isConnectionError } from '../_lib/db.js';
 import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient, signMfaToken, setMfaCookie } from '../_lib/auth.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
-import { enforce, getClientIp, clearRateLimit, forgiveLastAttempt } from '../_lib/rate-limit.js';
+import { countRecent, recordAttempt, clearRateLimit, isAdminBypass, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireGate } from '../_lib/earlyAccess.js';
 import { recordAudit } from '../_lib/audit.js';
@@ -22,6 +22,26 @@ import { maybeNotifyNewSignIn } from '../_lib/securityNotify.js';
 // the same comparison cost as real logins on subsequent requests. Cost
 // factor 10 matches hashPassword() in api/_lib/auth.js so timing aligns.
 const DECOY_PASSWORD_HASH = bcrypt.hashSync('ivy-decoy-not-a-real-password', 10);
+
+const LOCK_MAX_FAILURES = 5;
+const IP_MAX_FAILURES = 20;
+const LOCK_WINDOW_SECONDS = 60 * 60;
+
+// 429 with a message that says how long is left on the lock. The lock
+// lasts 60 minutes from the OLDEST failure still in the window, so it
+// counts down rather than restarting on every retry.
+function lockedOut(res, oldestAt) {
+  const remainingSec = Math.max(60, Math.ceil(((oldestAt || Date.now()) + LOCK_WINDOW_SECONDS * 1000 - Date.now()) / 1000));
+  const mins = Math.ceil(remainingSec / 60);
+  res.setHeader('Retry-After', String(remainingSec));
+  return res.status(429).json({
+    error: mins >= 60
+      ? 'Too many failed attempts. This account is locked for 60 minutes.'
+      : `Too many failed attempts. This account is locked for ${mins} more minute${mins === 1 ? '' : 's'}.`,
+    locked: true,
+    retryAfterSeconds: remainingSec,
+  });
+}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -49,14 +69,33 @@ export default async function handler(req, res) {
     const ip = getClientIp(req);
     const emailKey = email.toLowerCase();
 
-    // 10/hr per IP and 5/hr per email - same window so an attacker can't burn
-    // through accounts from one IP, and a victim can't be locked out forever
-    // by a distributed attack on their email.
-    const blocked = await enforce(req, res, [
-      { key: `login:ip:${ip}`,        max: 10, windowSeconds: 60 * 60 },
-      { key: `login:email:${emailKey}`, max:  5, windowSeconds: 60 * 60 },
-    ]);
-    if (blocked) return;
+    // Lockout counts FAILED attempts only. Five wrong passwords for an
+    // email lock it for 60 minutes; each miss tells the person how many
+    // attempts remain. A correct sign-in never counts. The per-IP ceiling
+    // (20 failures/hour across any emails) stops one machine from
+    // spraying guesses at many accounts.
+    const emailFailKey = `login:fail:${emailKey}`;
+    const ipFailKey = `login:ipfail:${ip}`;
+    const bypass = await isAdminBypass(req);
+    let emailFails = { count: 0, oldestAt: null };
+    if (!bypass) {
+      emailFails = await countRecent(emailFailKey, LOCK_WINDOW_SECONDS);
+      if (emailFails.count >= LOCK_MAX_FAILURES) return lockedOut(res, emailFails.oldestAt);
+      const ipFails = await countRecent(ipFailKey, LOCK_WINDOW_SECONDS);
+      if (ipFails.count >= IP_MAX_FAILURES) return lockedOut(res, ipFails.oldestAt);
+    }
+    // One wrong attempt: record it, then tell them how many remain.
+    const miss = async () => {
+      if (bypass) return unauthorized(res, 'Invalid email or password');
+      await recordAttempt(emailFailKey);
+      await recordAttempt(ipFailKey);
+      const left = Math.max(0, LOCK_MAX_FAILURES - (emailFails.count + 1));
+      if (left === 0) return lockedOut(res, Date.now());
+      return res.status(401).json({
+        error: `Invalid email or password. ${left} attempt${left === 1 ? '' : 's'} left before this account is locked for 60 minutes.`,
+        attemptsLeft: left,
+      });
+    };
 
     const { rows } = await sql`
       SELECT id, email, name, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at
@@ -69,20 +108,16 @@ export default async function handler(req, res) {
     if (rows.length === 0) {
       await verifyPassword(password, DECOY_PASSWORD_HASH);
       recordAudit(req, { action: 'auth.login_fail', meta: { email: emailKey, reason: 'no_user' } });
-      return unauthorized(res, 'Invalid email or password');
+      return miss();
     }
     const user = rows[0];
     const okPw = await verifyPassword(password, user.password_hash);
     if (!okPw) {
       recordAudit(req, { actor: user, action: 'auth.login_fail', meta: { email: emailKey, reason: 'bad_password' } });
-      return unauthorized(res, 'Invalid email or password');
+      return miss();
     }
-    // Right password: only failures should count toward the lockout. Reset
-    // this email's window entirely and forgive the IP attempt just recorded,
-    // so five legitimate sign-ins across devices in an hour never lock the
-    // owner out. Five wrong passwords still do.
-    await clearRateLimit(`login:email:${emailKey}`);
-    await forgiveLastAttempt(`login:ip:${ip}`);
+    // Right password: the slate is clean again.
+    await clearRateLimit(emailFailKey);
 
     // 2FA gate: if this user has TOTP enrolled, DON'T issue a session yet.
     // Hand back a short-lived MFA-pending token; they must clear

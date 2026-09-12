@@ -87,7 +87,9 @@ export default function AuthPage({ mode = 'signin' }) {
       // Wrong credentials come back as a 401. Say so plainly - and say
       // "email or password", not just "password": confirming that an
       // email exists would let anyone probe which addresses have accounts.
-      if (ex.status === 401 && mode === 'signin') setErr('Incorrect email or password.');
+      // The server's own words carry the attempts-left count and the
+      // 60-minute lock; it never confirms whether the email exists.
+      if ((ex.status === 401 || ex.status === 429) && mode === 'signin') setErr(ex.details?.error || ex.message || 'Incorrect email or password.');
       else if (ex.status === 0) setErr(ex.message);
       else setErr(ex.message || 'Something went wrong');
     } finally {

@@ -29,6 +29,36 @@ export async function rateLimit({ key, max, windowSeconds }) {
   }
 }
 
+// Failure-only counting for sign-in. countRecent says how many times a key
+// was recorded in the window and when the oldest of those was (so a
+// lock message can say how many minutes remain); recordAttempt adds one.
+// Both fall back to the in-memory window if the database is unreachable,
+// same as rateLimit above - a DB blip must not disable the lock.
+export async function countRecent(key, windowSeconds) {
+  const since = new Date(Date.now() - windowSeconds * 1000).toISOString();
+  try {
+    const { rows } = await sql`
+      SELECT COUNT(*)::int AS n, MIN(attempted_at) AS oldest
+        FROM rate_limits
+       WHERE key = ${key} AND attempted_at > ${since}
+    `;
+    return { count: rows[0].n, oldestAt: rows[0].oldest ? new Date(rows[0].oldest).getTime() : null };
+  } catch {
+    const cutoff = Date.now() - windowSeconds * 1000;
+    const hits = (memHits.get(key) || []).filter((t) => t > cutoff);
+    return { count: hits.length, oldestAt: hits.length ? Math.min(...hits) : null };
+  }
+}
+export async function recordAttempt(key) {
+  try { await sql`INSERT INTO rate_limits (key, attempted_at) VALUES (${key}, NOW())`; }
+  catch {
+    const hits = memHits.get(key) || [];
+    hits.push(Date.now());
+    if (!memHits.has(key) && memHits.size >= MEM_MAX_KEYS) memHits.delete(memHits.keys().next().value);
+    memHits.set(key, hits);
+  }
+}
+
 // A successful sign-in proves the person is who they say they are, so the
 // attempts that led up to it should not count against them. Without this,
 // signing in on a phone, a laptop and a private window in one hour locked
@@ -124,7 +154,7 @@ export async function enforce(req, res, limits) {
 
 // Lazy import to avoid the rate limiter pulling in admin.js (which
 // imports auth.js → rate-limit.js circular).
-async function isAdminBypass(req) {
+export async function isAdminBypass(req) {
   try {
     const secret = process.env.ADMIN_SECRET;
     const provided = req?.headers?.['x-admin-secret'];

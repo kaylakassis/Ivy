@@ -41,15 +41,18 @@ async function run() {
   for (let i = 0; i < 6; i++) { const r = mockRes(); await loginHandler(req({ email: EMAIL, password: PW }), r); codes.push(r.statusCode); }
   assert(codes.every((c) => c === 200), `all 200 (got ${codes.join(',')})`);
 
-  console.log('\n[2] five wrong passwords lock the email; the message says how long');
-  codes = [];
-  let last;
-  for (let i = 0; i < 6; i++) { const r = mockRes(); await loginHandler(req({ email: EMAIL, password: 'nope-' + i }), r); codes.push(r.statusCode); last = r; }
-  assert(codes.slice(0, 5).every((c) => c === 401), `first five are 401 (got ${codes.slice(0, 5).join(',')})`);
-  assert(codes[5] === 429, `sixth is 429 (got ${codes[5]})`);
-  assert(/hour/.test(last.body?.error || ''), `message says to wait about an hour ("${last.body?.error}")`);
+  console.log('\n[2] each miss says how many attempts are left; the fifth locks for 60 minutes');
+  const results = [];
+  for (let i = 0; i < 5; i++) { const r = mockRes(); await loginHandler(req({ email: EMAIL, password: 'nope-' + i }), r); results.push(r); }
+  assert(results.slice(0, 4).every((r) => r.statusCode === 401), `misses 1-4 are 401 (got ${results.map((r) => r.statusCode).join(',')})`);
+  assert(results.slice(0, 4).map((r) => r.body?.attemptsLeft).join(',') === '4,3,2,1', `attempts left count down 4,3,2,1 (got ${results.map((r) => r.body?.attemptsLeft).join(',')})`);
+  assert(/4 attempts left/.test(results[0].body?.error || ''), `first miss says "4 attempts left" ("${results[0].body?.error}")`);
+  assert(/1 attempt left/.test(results[3].body?.error || ''), `fourth miss says "1 attempt left" ("${results[3].body?.error}")`);
+  assert(results[4].statusCode === 429 && results[4].body?.locked === true, `fifth miss locks (got ${results[4].statusCode})`);
+  assert(/locked for 60 minutes/.test(results[4].body?.error || ''), `lock message says 60 minutes ("${results[4].body?.error}")`);
   const r = mockRes(); await loginHandler(req({ email: EMAIL, password: PW }), r);
-  assert(r.statusCode === 429, 'even the right password waits out the lock (429)');
+  assert(r.statusCode === 429 && /locked for (60|59) /.test(r.body?.error || ''), `right password is refused while locked, with the time left ("${r.body?.error}")`);
+  assert(Number(r.headers['retry-after']) > 3500, 'Retry-After header is about an hour');
 
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
