@@ -355,7 +355,9 @@ function InvoicesSection({
       </div>
 
       {/* Table (desktop) / stacked cards (mobile) */}
-      <div className="card table-scroll" style={{ overflow: isMobile ? 'visible' : 'auto' }}>
+      {/* table-scroll forces a 760px minimum on phones (for real tables);
+          the stacked cards don't want it - it made the page scroll sideways. */}
+      <div className={isMobile ? 'card' : 'card table-scroll'} style={{ overflow: isMobile ? 'visible' : 'auto' }}>
         <div>
           {!isMobile && (
             <div style={{

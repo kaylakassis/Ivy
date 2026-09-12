@@ -6,6 +6,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
 import { useDocuments } from './state.js';
+import { useViewport } from '../../lib/viewport.js';
 import DocumentEditor from './DocumentEditor.jsx';
 import SendDocumentModal from './SendDocumentModal.jsx';
 
@@ -24,6 +25,8 @@ export default function Documents() {
   const [openId, setOpenId]         = useState(null);
   const [creatingOpen, setCreating] = useState(false);
   const [sendingId, setSending]     = useState(null);
+  // Phones get stacked cards instead of the 5-column table.
+  const { isMobile } = useViewport();
 
   // Cmd+K palette deep-link: /documents?doc=<id> opens that document's
   // editor. Param is stripped after consumption so a refresh doesn't
@@ -128,17 +131,19 @@ export default function Documents() {
         ))}
       </div>
 
-      {/* Table */}
-      <div className="card table-scroll" style={{ overflow: 'auto' }}>
+      {/* Table (desktop) / stacked cards (mobile) */}
+      <div className={isMobile ? 'card' : 'card table-scroll'} style={{ overflow: isMobile ? 'visible' : 'auto' }}>
         <div>
-          <div style={{
-            display: 'grid', gridTemplateColumns: '2fr 110px 140px 160px 140px',
-            padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
-            fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
-            background: 'var(--surface-2)',
-          }}>
-            <div>Document</div><div>Status</div><div>Signers</div><div>Updated</div><div/>
-          </div>
+          {!isMobile && (
+            <div style={{
+              display: 'grid', gridTemplateColumns: '2fr 110px 140px 160px 140px',
+              padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
+              fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
+              background: 'var(--surface-2)',
+            }}>
+              <div>Document</div><div>Status</div><div>Signers</div><div>Updated</div><div/>
+            </div>
+          )}
           {rows.length === 0 ? (
             <div style={{ padding: 48, textAlign: 'center' }}>
               <EmptyNote
@@ -156,7 +161,7 @@ export default function Documents() {
               )}
             </div>
           ) : rows.map((d, i) => (
-            <DocRow key={d.id} doc={d} first={i === 0} onOpen={() => setOpenId(d.id)}/>
+            <DocRow key={d.id} doc={d} first={i === 0} isMobile={isMobile} onOpen={() => setOpenId(d.id)}/>
           ))}
         </div>
       </div>
@@ -208,8 +213,44 @@ export default function Documents() {
   );
 }
 
-function DocRow({ doc, first, onOpen }) {
+function DocRow({ doc, first, onOpen, isMobile }) {
   const meta = STATUS_META[doc.status] || STATUS_META.draft;
+  const statusPill = (
+    <span style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 99,
+      fontSize: 11, fontWeight: 600,
+      background: 'var(--surface-2)', border: '1px solid var(--border)', color: meta.color,
+    }}>
+      <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
+    </span>
+  );
+  if (isMobile) {
+    // Stacked card: name + status, then signers + updated. 44px+ tap target.
+    return (
+      <div onClick={onOpen} style={{
+        padding: '14px 16px', cursor: 'pointer', minHeight: 44,
+        borderTop: first ? 'none' : '1px solid var(--border)',
+        display: 'flex', flexDirection: 'column', gap: 8,
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{
+            fontSize: 9, fontWeight: 700, letterSpacing: '0.06em', color: 'var(--muted)',
+            padding: '3px 6px', borderRadius: 4, border: '1px solid var(--border)', background: 'var(--surface-2)',
+          }}>{doc.kind === 'pdf' ? 'PDF' : 'DOC'}</span>
+          <span style={{ flex: 1, minWidth: 0, fontSize: 14, fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            {doc.name}
+          </span>
+          {statusPill}
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: 'var(--muted)' }}>
+          <SignerCell doc={doc}/>
+          <span style={{ marginLeft: 'auto' }}>
+            {new Date(doc.updatedAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}
+          </span>
+        </div>
+      </div>
+    );
+  }
   return (
     <div onClick={onOpen} style={{
       display: 'grid', gridTemplateColumns: '2fr 110px 140px 160px 140px',
