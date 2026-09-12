@@ -25,4 +25,14 @@ end
 
 post_install do |installer|
   assertDeploymentTarget(installer)
+  # Newer Xcode treats CapacitorCordova's own `#import "CDV...h"` lines
+  # as errors ("double-quoted include in framework header"), which fails
+  # the build with 21 errors in code we don't own. Those headers are
+  # Apache Cordova's and Capacitor 6 ships them as-is; silence the check
+  # for the Pods project only. Our own code is unaffected.
+  installer.pods_project.targets.each do |target|
+    target.build_configurations.each do |config|
+      config.build_settings['CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER'] = 'NO'
+    end
+  end
 end
