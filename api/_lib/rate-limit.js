@@ -29,6 +29,28 @@ export async function rateLimit({ key, max, windowSeconds }) {
   }
 }
 
+// A successful sign-in proves the person is who they say they are, so the
+// attempts that led up to it should not count against them. Without this,
+// signing in on a phone, a laptop and a private window in one hour locked
+// the owner out of her own product with the right password.
+export async function clearRateLimit(key) {
+  try { await sql`DELETE FROM rate_limits WHERE key = ${key}`; } catch { /* best effort */ }
+  memHits.delete(key);
+}
+
+// Forgive only the most recent attempt for a key (the one this successful
+// request just recorded), leaving any genuine failures counted.
+export async function forgiveLastAttempt(key) {
+  try {
+    await sql`
+      DELETE FROM rate_limits
+       WHERE ctid = (SELECT ctid FROM rate_limits WHERE key = ${key} ORDER BY attempted_at DESC LIMIT 1)
+    `;
+  } catch { /* best effort */ }
+  const hits = memHits.get(key);
+  if (hits?.length) hits.pop();
+}
+
 // Per-process sliding-window fallback. Bounded so a DB outage can't grow it
 // without limit (oldest keys are evicted past MEM_MAX_KEYS).
 const memHits = new Map(); // key -> number[] (ms timestamps)
@@ -87,8 +109,11 @@ export async function enforce(req, res, limits) {
     const r = await rateLimit(limit);
     if (!r.allowed) {
       res.setHeader('Retry-After', String(r.retryAfterSeconds));
+      const mins = Math.max(1, Math.ceil(r.retryAfterSeconds / 60));
       res.status(429).json({
-        error: 'Too many attempts. Please wait and try again.',
+        error: mins >= 60
+          ? 'Too many attempts. Please wait about an hour and try again.'
+          : `Too many attempts. Please wait about ${mins} minute${mins === 1 ? '' : 's'} and try again.`,
         retryAfterSeconds: r.retryAfterSeconds,
       });
       return true;

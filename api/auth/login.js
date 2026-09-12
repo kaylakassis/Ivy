@@ -4,7 +4,7 @@ import { sql, warmupDb, isConnectionError } from '../_lib/db.js';
 import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient, signMfaToken, setMfaCookie } from '../_lib/auth.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
-import { enforce, getClientIp } from '../_lib/rate-limit.js';
+import { enforce, getClientIp, clearRateLimit, forgiveLastAttempt } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireGate } from '../_lib/earlyAccess.js';
 import { recordAudit } from '../_lib/audit.js';
@@ -77,6 +77,12 @@ export default async function handler(req, res) {
       recordAudit(req, { actor: user, action: 'auth.login_fail', meta: { email: emailKey, reason: 'bad_password' } });
       return unauthorized(res, 'Invalid email or password');
     }
+    // Right password: only failures should count toward the lockout. Reset
+    // this email's window entirely and forgive the IP attempt just recorded,
+    // so five legitimate sign-ins across devices in an hour never lock the
+    // owner out. Five wrong passwords still do.
+    await clearRateLimit(`login:email:${emailKey}`);
+    await forgiveLastAttempt(`login:ip:${ip}`);
 
     // 2FA gate: if this user has TOTP enrolled, DON'T issue a session yet.
     // Hand back a short-lived MFA-pending token; they must clear
