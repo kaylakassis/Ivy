@@ -17,7 +17,7 @@ import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { notifyClientSafe } from '../_lib/push.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { withIdempotency } from '../_lib/idempotency.js';
-import { methodNotAllowed, serverError } from '../_lib/json.js';
+import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
 
 function escapeHtml(s) {

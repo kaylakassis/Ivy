@@ -509,7 +509,7 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   }
 
   try {
-    const { reply, aggregateUsage, pendingActions } = await claudeReply(client, text, ctx, history, attachment, workspaceId);
+    const { reply, aggregateUsage, pendingActions } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId);
     // Record SUM of all turns toward the daily cap - tool loops can
     // burn many turns per user message.
     if (workspaceId && aggregateUsage) {
@@ -837,7 +837,12 @@ ACCOUNT (avatar → "Account settings", bottom-left of sidebar)
 // `response` is the FINAL Claude response (the one with the text reply);
 // `usage` is the SUM of input + output tokens across every turn so the
 // daily cap accounts for a multi-tool conversation correctly.
-async function claudeReply(client, text, ctx, history, attachment, workspaceId) {
+// `model` is passed in rather than read from module state: when the live
+// model resolution landed, this function kept a bare `model` that no longer
+// existed in its scope, and every real chat threw "model is not defined"
+// before reaching Claude - silently, as a canned reply. The api/ lint block
+// (no-undef) now fails the build on that class of mistake.
+async function claudeReply(client, model, text, ctx, history, attachment, workspaceId) {
   const messages = buildMessages(text, ctx, history, attachment);
 
   let response = null;

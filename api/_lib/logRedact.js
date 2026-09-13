@@ -26,7 +26,7 @@
 
 const EMAIL_RE = /([a-zA-Z0-9._%+-])[a-zA-Z0-9._%+-]*(@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})/g;
 const PHONE_RE = /(\+?[1-9]\d{1,3})[\s().-]?(\d{2,4})[\s().-]?(\d{2,4})[\s().-]?(\d{2,6})/g;
-const BEARER_RE = /\b(bearer\s+)([A-Za-z0-9._\-]+)/gi;
+const BEARER_RE = /\b(bearer\s+)([A-Za-z0-9._-]+)/gi;
 const STRIPE_KEY_RE = /\b((?:sk|pk|whsec|rk)_(?:test|live)?_)[A-Za-z0-9]+/g;
 const PASSWORD_FIELD_RE = /("?(?:password|passwd|pwd|secret|token|api_?key)"?\s*[:=]\s*"?)[^",\s}]+/gi;
 

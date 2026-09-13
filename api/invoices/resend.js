@@ -18,7 +18,7 @@ import { generateRawToken, appUrl } from '../_lib/tokens.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { withIdempotency } from '../_lib/idempotency.js';
-import { methodNotAllowed, serverError } from '../_lib/json.js';
+import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));

@@ -9,6 +9,27 @@ import globals from 'globals';
 
 export default [
   { ignores: ['dist/**', 'node_modules/**', 'public/**', 'project/**'] },
+  // Server code (Vercel functions). Until this block existed, api/ was not
+  // linted at all: a bare `model` variable that no longer existed in its
+  // function shipped to production and silently turned every Ivy chat into
+  // a canned reply, and two invoice endpoints called an unimported
+  // badRequest(). no-undef is an error here on purpose - it fails CI.
+  {
+    files: ['api/**/*.js'],
+    languageOptions: {
+      ecmaVersion: 2024,
+      sourceType: 'module',
+      globals: { ...globals.node, ...globals.es2021 },
+    },
+    rules: {
+      ...js.configs.recommended.rules,
+      'no-unused-vars': ['warn', { argsIgnorePattern: '^_', varsIgnorePattern: '^_' }],
+      'no-empty': ['warn', { allowEmptyCatch: true }],
+      // Input sanitizers match control and zero-width characters on purpose.
+      'no-control-regex': 'off',
+      'no-irregular-whitespace': ['error', { skipRegExps: true, skipStrings: true, skipTemplates: true }],
+    },
+  },
   {
     files: ['src/**/*.{js,jsx}'],
     languageOptions: {
