@@ -64,7 +64,9 @@ async function run() {
     const r1 = mkRes();
     await ivyNudges(cronReq(), r1);
     assert(r1.statusCode === 200, `cron → 200 (got ${r1.statusCode})`);
-    assert(r1.body?.awaitingFired === 1, `awaiting fired (got ${JSON.stringify(r1.body)})`);
+    // The cron scans every workspace, so other suites' leftovers can add to
+    // the count; the per-workspace feed and dedup rows below are the proof.
+    assert(r1.body?.awaitingFired >= 1, `awaiting fired (got ${JSON.stringify(r1.body)})`);
     const feed = await sql`SELECT title, tag FROM notifications WHERE user_id = ${uid} AND tag = ${`ivy-awaiting-${cAct}`}`;
     assert(feed.rows.length === 1 && feed.rows[0].title.includes('Ivy'), 'awaiting_reply push recorded in feed');
 
@@ -86,7 +88,7 @@ async function run() {
 
     const r3 = mkRes();
     await ivyNudges(cronReq(), r3);
-    assert(r3.body?.quietFired === 1, `gone_quiet fired (got ${JSON.stringify(r3.body)})`);
+    assert(r3.body?.quietFired >= 1, `gone_quiet fired (got ${JSON.stringify(r3.body)})`);
     const feedQuiet = await sql`SELECT title, tag FROM notifications WHERE user_id = ${uid} AND tag = ${`ivy-quiet-${cQuiet}`}`;
     assert(feedQuiet.rows.length === 1, 'gone_quiet push recorded');
     assert(feedQuiet.rows[0].title.toLowerCase().includes('check in'), 'gone_quiet push titled correctly');
