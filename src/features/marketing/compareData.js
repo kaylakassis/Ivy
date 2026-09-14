@@ -27,7 +27,6 @@ export const FEATURE_ROWS = [
   { key: 'rewards',       label: 'Loyalty + referral rewards' },
   { key: 'ai',            label: 'Native AI assistant (takes actions)' },
   { key: 'export',        label: 'Full data export, any time' },
-  { key: 'noTxnFee',      label: 'No transaction fees (Stripe direct)' },
 ];
 
 // "y" = yes, "n" = no, "l" = limited / paid add-on.

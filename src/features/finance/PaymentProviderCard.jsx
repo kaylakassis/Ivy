@@ -123,7 +123,7 @@ export default function PaymentProviderCard() {
         through that processor's secure checkout page.
       </p>
       <p style={{ margin: '0 0 16px', fontSize: 12, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Ivy takes <strong style={{ color: 'var(--fg-2)' }}>0%</strong> of your sales. Your processor's
+        Your processor's
         standard card fee (Stripe: ~2.9% + 30¢ per payment) is deducted before payout,
         and payouts typically land in your bank in about 2 business days.
       </p>

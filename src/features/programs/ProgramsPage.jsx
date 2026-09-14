@@ -21,7 +21,7 @@ export default function ProgramsPage() {
 }
 
 const FEATURES = [
-  { icon: 'Dollar', title: 'Sell it your way',           body: 'One-time purchase or a monthly subscription, paid straight to your Stripe. No transaction fees from Ivy.' },
+  { icon: 'Dollar', title: 'Sell it your way',           body: 'One-time purchase or a monthly subscription, paid straight to your Stripe account.' },
   { icon: 'Doc',    title: 'PDFs and written lessons',   body: 'Upload workout plans, meal guides, workbooks and templates. Write lessons right inside Ivy.' },
   { icon: 'Globe',  title: 'Video lessons',              body: 'Drop in an unlisted YouTube link and it plays inside the app and the client portal, never in a separate tab.' },
   { icon: 'Users',  title: 'A private community',        body: 'A members-only feed where clients share wins, ask questions and cheer each other on.' },

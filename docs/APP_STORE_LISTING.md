@@ -48,7 +48,7 @@ CLIENTS
 Every client in one record: their history, notes, photos, documents and messages. No more scrolling back through your texts to remember what you quoted. Import your list from a spreadsheet, and send intake forms clients fill in from their phone.
 
 INVOICES AND PAYMENTS
-Send an invoice in seconds and get paid through your own Stripe, Square or PayPal account. Ivy takes no cut of your sales. Set up recurring invoices for retainers and collect deposits up front. Ivy stays on top of reminding clients about late payments so you do not have to.
+Send an invoice in seconds and get paid through your own Stripe, Square or PayPal account at their standard rates. Set up recurring invoices for retainers and collect deposits up front. Ivy stays on top of reminding clients about late payments so you do not have to.
 
 CONTRACTS AND DOCUMENTS
 Send a contract, get it signed. E-signatures are built in, with reusable templates for waivers, intake forms, agreements and NDAs, several signers in order (including you), and automatic reminders for anything still unsigned. Everyone gets the signed PDF, and it stays attached to the client's record.

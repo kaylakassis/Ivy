@@ -21,7 +21,7 @@ const JSON_LD = {
       url: 'https://joinivy.ai',
       applicationCategory: 'BusinessApplication',
       operatingSystem: 'Web, iOS, Android',
-      description: "All-in-one business platform for solo service businesses: online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, website builder, and an AI assistant that performs real tasks. No transaction fees - payments go directly to the owner's Stripe account.",
+      description: "All-in-one business platform for solo service businesses: online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, website builder, and an AI assistant that performs real tasks. Payments go directly to the owner's own Stripe account at Stripe's standard rate.",
       offers: [
         { '@type': 'Offer', price: '8.99', priceCurrency: 'USD', description: '$8.99 per week after a 14-day free trial ($0 today)' },
         { '@type': 'Offer', price: '374.99', priceCurrency: 'USD', description: 'Annual plan, $374.99/year (save about 20%)' },
@@ -282,7 +282,7 @@ export default function SiteHome() {
   useSiteFonts();
   usePageMeta({
     title: 'Ivy - All-in-One Business Platform for Solopreneurs | Booking, Invoicing, CRM & AI',
-    description: 'Ivy is the all-in-one business platform for solo service businesses - massage therapists, coaches, stylists, photographers, trainers, contractors, and tutors. Booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork. $8.99/week, no transaction fees, 14-day free trial.',
+    description: 'Ivy is the all-in-one business platform for solo service businesses - massage therapists, coaches, stylists, photographers, trainers, contractors, and tutors. Booking, invoicing, CRM, e-signature, website builder, and an AI assistant that does your busywork. $8.99/week, one plan, 14-day free trial.',
     canonical: 'https://joinivy.ai/',
     ogType: 'website',
     jsonLd: JSON_LD,
@@ -389,7 +389,7 @@ export default function SiteHome() {
           <div>
             <span className="eyebrow">All-in-one, for solopreneurs</span>
             <h1>The business platform with an AI that <em className="lime" style={{ fontStyle: 'normal' }}>does</em> the work.</h1>
-            <p className="hero-sub">Meet Ivy. She knows your clients, your numbers, and your calendar - and she actually <strong>does your busywork</strong>: invoicing, booking, follow-ups, contracts, and more. One workspace, <strong>no transaction fees</strong>.</p>
+            <p className="hero-sub">Meet Ivy. She knows your clients, your numbers, and your calendar - and she actually <strong>does your busywork</strong>: invoicing, booking, follow-ups, contracts, and more. One workspace, <strong>one plan</strong>.</p>
             <div className="hero-ctas">
               <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
               <a href="/tour" className="btn btn-ghost">Take the tour</a>
@@ -422,7 +422,7 @@ export default function SiteHome() {
 
       <div className="stats">
         <div className="container stats-inner">
-          <div className="stat"><div className="num lime" data-start="2.9" data-end="0" data-decimals="1" data-suffix="%" data-final="0%">0%</div><div className="lbl">transaction fees, forever</div></div>
+          <div className="stat"><div className="num lime" data-start="0" data-end="8.99" data-decimals="2" data-prefix="$" data-final="$8.99">$8.99</div><div className="lbl">per week, everything included</div></div>
           <div className="stat"><div className="num" data-start="0" data-end="99" data-prefix="$" data-final="$99">$99</div><div className="lbl">average monthly savings</div></div>
           <div className="stat"><div className="num" data-start="0" data-end="8" data-suffix=" tools" data-final="8 tools">8 tools</div><div className="lbl">replaced with one login</div></div>
           <div className="stat"><div className="num" data-start="0" data-end="14" data-suffix=" days" data-final="14 days">14 days</div><div className="lbl">free trial, $0 today</div></div>
@@ -432,7 +432,7 @@ export default function SiteHome() {
       <section style={{ padding: '56px 0 0' }}>
         <div className="container">
           <div className="answer">
-            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $374.99/year) and charges no transaction fees - payments go directly to your own Stripe account.</p>
+            <p><b>What is Ivy?</b> Ivy (joinivy.ai) is an all-in-one business platform for solopreneurs - solo service-business owners like massage therapists, coaches, stylists, photographers, personal trainers, contractors, and tutors. It combines online booking, invoicing, client CRM, e-signature, two-way messaging, email campaigns, and a website builder with an AI assistant that performs real tasks on your behalf. Ivy costs $8.99/week after a 14-day free trial (or $374.99/year) with payments going directly to your own Stripe account at Stripe's standard rate.</p>
           </div>
         </div>
       </section>
@@ -496,7 +496,7 @@ export default function SiteHome() {
           </div>
           <div className="replace-total">
             <span className="old">{'$' + STACK_TOTAL}+/mo on average</span>
-            <span className="new">$8.99<small>/week · no transaction fees</small></span>
+            <span className="new">$8.99<small>/week · everything included</small></span>
           </div>
           <p style={{ marginTop: '20px', fontSize: '14px' }}><a href="/compare" className="lime" style={{ textDecoration: 'underline', textUnderlineOffset: '3px' }}>See how Ivy compares to HoneyBook, Calendly, and the DIY stack →</a></p>
         </div>
@@ -590,7 +590,7 @@ export default function SiteHome() {
           <p className="section-sub">Every feature ships in the one plan. No tiers, no add-ons, no per-seat math.</p>
           <div className="feat-grid">
             <div className="feat"><div className="icon">📅</div><h3>Online booking + calendar sync</h3><p>A public booking page clients use without logging in - services, packages, deposits, and automatic email + SMS reminders.</p></div>
-            <div className="feat"><div className="icon">🧾</div><h3>Branded invoices + recurring billing</h3><p>Invoices, quotes, card on file + auto-charges, and public pay links - straight to your Stripe with no transaction fees.</p></div>
+            <div className="feat"><div className="icon">🧾</div><h3>Branded invoices + recurring billing</h3><p>Invoices, quotes, card on file + auto-charges, and public pay links - straight to your own Stripe account.</p></div>
             <div className="feat"><div className="icon">👥</div><h3>Unlimited clients + pipeline</h3><p>Every client's bookings, invoices, documents, notes, and messages in one place. Import from CSV in minutes.</p></div>
             <div className="feat"><div className="icon">✍️</div><h3>Documents + e-signature</h3><p>Waivers, intakes, and agreements - built from templates or your own PDFs, auto-sent on booking, legally binding.</p></div>
             <div className="feat"><div className="icon">💬</div><h3>Two-way client messaging</h3><p>Direct and group threads with photos, voice memos, and auto-transcription. Replies land in your clients' free portal.</p></div>
@@ -617,17 +617,17 @@ export default function SiteHome() {
       <section>
         <div className="container center">
           <span className="eyebrow">Simple pricing</span>
-          <h2>No transaction fees, no per-seat math.</h2>
+          <h2>One plan, no per-seat math.</h2>
           <div className="price-card">
             <div className="plan">Ivy</div>
             <div className="plan-sub">Everything to run your business, in one place.</div>
             <div className="amount">14 days free</div>
-            <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no transaction fees.</p>
+            <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no add-ons.</p>
             <p className="annual">Or save with annual - <b>$374.99/yr</b> (save about 20%).</p>
             <ul>
               <li>Unlimited clients + pipeline</li>
               <li>Ivy AI assistant (chat + actions, personalized to you)</li>
-              <li>Stripe payments (no transaction fee)</li>
+              <li>Stripe payments, settled in your own account</li>
               <li>Free client portal - forever</li>
             </ul>
             <a href="/signup" className="btn">Start your 14-day free trial →</a>

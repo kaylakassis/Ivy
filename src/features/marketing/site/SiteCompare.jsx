@@ -42,7 +42,7 @@ export default function SiteCompare() {
   useSiteFonts();
   usePageMeta({
     title: 'Ivy vs HoneyBook vs Calendly vs the DIY Stack - Honest Comparison',
-    description: "Looking for a HoneyBook alternative or Calendly alternative? An honest comparison of Ivy vs HoneyBook, Calendly, and the DIY tool stack for solo service businesses - including when Ivy might NOT be right for you. Ivy is $8.99/week with no transaction fees.",
+    description: "Looking for a HoneyBook alternative or Calendly alternative? An honest comparison of Ivy vs HoneyBook, Calendly, and the DIY tool stack for solo service businesses - including when Ivy might NOT be right for you. Ivy is $8.99/week, one plan.",
     canonical: 'https://joinivy.ai/compare',
   });
   return (
@@ -141,8 +141,8 @@ export default function SiteCompare() {
                   <td><span className="no">you are the integration</span></td>
                 </tr>
                 <tr>
-                  <td>Platform transaction fees</td>
-                  <td className="ivy-col"><span className="yes">0% - straight to your Stripe</span></td>
+                  <td>Card processing</td>
+                  <td className="ivy-col"><span className="yes">your own Stripe account, Stripe's standard rate</span></td>
                   <td>varies by payment type</td>
                   <td>n/a</td>
                   <td>varies per tool</td>

@@ -95,8 +95,8 @@ const PAGE_CSS = `
 export default function SitePricing() {
   useSiteFonts();
   usePageMeta({
-    title: 'Ivy Pricing - $8.99/week, No Transaction Fees | 14-Day Free Trial',
-    description: 'Ivy costs $8.99/week (or $374.99/year) with a 14-day free trial, $0 today. One plan includes booking, invoicing, CRM, e-signature, website builder, and the Ivy AI assistant. No transaction fees, no per-seat math - an affordable HoneyBook, Calendly, and Squarespace alternative.',
+    title: 'Ivy Pricing - $8.99/week, One Plan | 14-Day Free Trial',
+    description: 'Ivy costs $8.99/week (or $374.99/year) with a 14-day free trial, $0 today. One plan includes booking, invoicing, CRM, e-signature, website builder, and the Ivy AI assistant. One plan, no per-seat math - an affordable HoneyBook, Calendly, and Squarespace alternative.',
     canonical: 'https://joinivy.ai/pricing',
     jsonLd: JSON_LD,
   });
@@ -121,7 +121,7 @@ export default function SitePricing() {
       <header className="page-head">
         <div className="container">
           <span className="eyebrow">One price. Every tool you'd otherwise piece together.</span>
-          <h1>Simple pricing.<br />No transaction fees, no per-seat math.</h1>
+          <h1>Simple pricing.<br />One plan, no per-seat math.</h1>
           <p className="lede">Replace your full stack - CRM, scheduler, invoicing, contracts, website, email, AI - with one subscription. 14-day free trial, $0 today. Then a simple $8.99/week when you're ready.</p>
           <div className="flow">
             <div className="stage free"><b>14 days free</b><span>the whole product, $0 today</span></div>
@@ -137,7 +137,7 @@ export default function SitePricing() {
             <div className="plan">Ivy</div>
             <div className="plan-sub">Everything to run your business, in one place.</div>
             <div className="amount">14 days free</div>
-            <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no transaction fees.</p>
+            <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no add-ons.</p>
             <p className="annual">Or save with annual - <b>$374.99/yr</b> (save about 20%).</p>
             <a href="/signup" className="btn">Start your 14-day free trial →</a>
             <ul>
@@ -155,7 +155,7 @@ export default function SitePricing() {
               <li>Goals + finance dashboard</li>
               <li>Reviews + rewards</li>
               <li>Ivy AI assistant (chat + actions, personalized to you)</li>
-              <li>Stripe payments (no transaction fee)</li>
+              <li>Stripe payments, settled in your own account</li>
               <li>Email support</li>
             </ul>
           </div>
@@ -203,7 +203,7 @@ export default function SitePricing() {
             <div className="trust-card"><h4>Stripe-verified partner</h4><p>Your money goes straight to your Stripe - we never touch it.</p></div>
             <div className="trust-card"><h4>Cancel anytime</h4><p>No contracts, no notice period. Cancel from account page.</p></div>
             <div className="trust-card"><h4>Export your data</h4><p>Download everything any time. Your data stays yours.</p></div>
-            <div className="trust-card"><h4>No transaction fees</h4><p>You only pay Stripe's standard processing rate.</p></div>
+            <div className="trust-card"><h4>One plan</h4><p>Everything included. No add-ons, no upgrade tiers.</p></div>
           </div>
         </div>
       </section>

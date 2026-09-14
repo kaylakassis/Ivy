@@ -476,7 +476,7 @@ export default function SiteTour() {
             <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
             <a href="/#tour" className="btn" style={{ border: '1px solid var(--border2)', color: 'var(--text)' }}>Ask Ivy something</a>
           </div>
-          <p className="trust reveal" style={{ marginTop: '16px', '--d': '.3s' }}>$0 today · Cancel anytime · No transaction fees</p>
+          <p className="trust reveal" style={{ marginTop: '16px', '--d': '.3s' }}>$0 today · Cancel anytime · One plan, everything included</p>
         </div>
       </section>
 

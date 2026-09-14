@@ -113,7 +113,7 @@ export default function SiteFeatures() {
           <div>
             <div className="k-label">Money</div>
             <h2>Get paid without chasing.</h2>
-            <p className="section-sub">Payments go straight to your Stripe account - Ivy never touches your money and takes no transaction fee. You only pay Stripe's standard processing rate.</p>
+            <p className="section-sub">Payments go straight to your Stripe account at Stripe's standard processing rate. Ivy never touches your money.</p>
             <ul className="checks">
               <li><b>Branded invoices + recurring billing</b> with line items, tax, discounts, and public pay links</li>
               <li><b>Card on file + auto-charges</b> - no more chasing checks</li>
@@ -127,7 +127,7 @@ export default function SiteFeatures() {
             <div className="row"><span className="l">Invoice #1042 - $360<small>paid via public link, no client login</small></span><span className="tag green">paid</span></div>
             <div className="row"><span className="l">Monthly retainer - $500<small>recurring, auto-charged on the 1st</small></span><span className="tag grey">scheduled</span></div>
             <div className="row"><span className="l">Invoice #1039 - $180<small>due-soon reminder went out today</small></span><span className="tag amber">due in 3 days</span></div>
-            <div className="row"><span className="l">Transaction fee to Ivy<small>on every payment, forever</small></span><span className="tag green">$0.00</span></div>
+            <div className="row"><span className="l">Deposit - $120<small>collected at booking</small></span><span className="tag green">paid</span></div>
           </div>
         </div>
       </section>
