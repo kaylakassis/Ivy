@@ -1,10 +1,10 @@
-// "Download on the App Store" badge. One constant controls it everywhere:
-// while APP_STORE_URL is empty (the app is still in review) the badge is
-// not rendered at all, so no visitor ever lands on a dead link. Paste the
-// App Store URL here once Apple approves and every placement lights up.
+// "Download on the App Store" badge. One constant controls it everywhere.
+// Until Apple approves the app this opens the App Store itself (Kayla's
+// call: show the badge now); replace with the app's own page URL, e.g.
+// https://apps.apple.com/us/app/ivy-for-solo-businesses/id..., on approval.
 import React from 'react';
 
-export const APP_STORE_URL = '';
+export const APP_STORE_URL = 'https://apps.apple.com/';
 
 export default function AppStoreBadge({ height = 40, className = '' }) {
   if (!APP_STORE_URL) return null;
