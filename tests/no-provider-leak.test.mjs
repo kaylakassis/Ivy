@@ -6,7 +6,7 @@
 // Run: node --import ./tests/bootstrap.mjs ./tests/no-provider-leak.test.mjs
 import fs from 'node:fs';
 import path from 'node:path';
-import { userFacingReason } from '../api/_lib/ivy.js';
+import { userFacingReason, explainProviderError } from '../api/_lib/ivy.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -18,6 +18,14 @@ function walk(dir, out = []) {
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
     const p = path.join(dir, e.name);
     if (e.isDirectory()) walk(p, out); else if (/\.(jsx?|mjs)$/.test(e.name)) out.push(p);
+  }
+  return out;
+}
+// Same, but for any extensions (site HTML, built output, source maps).
+function walkExt(dir, exts, out = []) {
+  for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+    const p = path.join(dir, e.name);
+    if (e.isDirectory()) walkExt(p, exts, out); else if (exts.some((x) => e.name.endsWith(x))) out.push(p);
   }
   return out;
 }
@@ -34,6 +42,26 @@ for (const f of walk('src')) {
   code.split('\n').forEach((line, i) => { if (VENDOR.test(line)) leaks.push(`${f}:${i + 1}: ${line.trim().slice(0, 100)}`); });
 }
 assert(leaks.length === 0, leaks.length ? `vendor names found:\n    ${leaks.join('\n    ')}` : 'src/ is clean');
+
+console.log('\n[1b] marketing site HTML, blog and the built app');
+const staticLeaks = [];
+const staticFiles = [...walkExt('public', ['.html', '.webmanifest', '.txt', '.xml']), 'index.html'];
+if (fs.existsSync('dist')) staticFiles.push(...walkExt('dist', ['.js', '.html', '.css', '.json', '.txt', '.xml']));
+for (const f of staticFiles) {
+  const text = fs.readFileSync(f, 'utf8');
+  const m = text.match(VENDOR);
+  if (m) staticLeaks.push(`${f}: …${text.slice(Math.max(0, m.index - 40), m.index + 40).replace(/\s+/g, ' ')}…`);
+}
+assert(staticLeaks.length === 0, staticLeaks.length ? `vendor names found:\n    ${staticLeaks.join('\n    ')}` : `${staticFiles.length} static/built files are clean${fs.existsSync('dist') ? ' (dist included)' : ''}`);
+assert(!fs.existsSync('dist') || walkExt('dist', ['.map']).length === 0, 'no source maps in the built output');
+
+console.log('\n[1c] operator-only readiness text names no vendor either');
+const readiness = fs.readFileSync('api/admin/prod-readiness.js', 'utf8').replace(/process\.env\.[A-Z_]+/g, '');
+assert(!VENDOR.test(readiness), 'prod-readiness labels and details are neutral');
+for (const e of [Object.assign(new Error('credit balance too low'), { status: 400 }), Object.assign(new Error('invalid x-api-key'), { status: 401 }), Object.assign(new Error('overloaded'), { status: 529 })]) {
+  const r = explainProviderError(e);
+  assert(!VENDOR.test(r), `operator reason for ${e.status}: "${r}"`);
+}
 
 console.log('\n[2] the assistant is told to keep the technology confidential');
 const ivySrc = fs.readFileSync('api/_lib/ivy.js', 'utf8');

@@ -18,7 +18,7 @@
 import { sql } from '../_lib/db.js';
 import { requireSuperAdmin } from '../_lib/admin.js';
 import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
-import { probeClaude } from '../_lib/ivy.js';
+import { probeProvider } from '../_lib/ivy.js';
 
 const REQUIRED_LEN = 32;
 const DEFAULT_PLACEHOLDERS = new Set([
@@ -224,10 +224,10 @@ export default async function handler(req, res) {
 
     // ── Ivy (WARN - falls back to deterministic mock) ───────────────
     if (!process.env.ANTHROPIC_API_KEY) {
-      checks.push(check('ivy', 'ANTHROPIC_API_KEY', 'warn',
+      checks.push(check('ivy', 'AI model API key', 'warn',
         "Ivy will return canned mock responses instead of reasoning."));
     } else {
-      checks.push(check('ivy', 'ANTHROPIC_API_KEY', 'ok'));
+      checks.push(check('ivy', 'AI model API key', 'ok'));
     }
 
     // ── Sentry (NICE-TO-HAVE) ───────────────────────────────────────
@@ -263,12 +263,12 @@ export default async function handler(req, res) {
       checks.push(check('node_env', 'NODE_ENV', 'ok', 'production'));
     }
 
-    // ── Ivy assistant (Claude) - a real one-token call, not an env probe ──
-    const claude = await probeClaude();
-    checks.push(check('claude', 'Ivy assistant (AI model)', claude.ok ? 'ok' : 'fail',
-      claude.ok
-        ? `${claude.model} answered in ${claude.ms}ms`
-        : `Ivy is answering with canned replies because ${claude.error}.`));
+    // ── Ivy assistant - a real one-token call, not an env probe ──
+    const ai = await probeProvider();
+    checks.push(check('ai_model', 'Ivy assistant (AI model)', ai.ok ? 'ok' : 'fail',
+      ai.ok
+        ? `answered in ${ai.ms}ms`
+        : `Ivy is answering with canned replies because ${ai.error}.`));
 
     const blockers = checks.filter((c) => c.level === 'fail').length;
     const warnings = checks.filter((c) => c.level === 'warn').length;

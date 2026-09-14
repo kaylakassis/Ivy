@@ -38,30 +38,30 @@ export async function currentIvyModel() {
   currentModel = await resolveIvyModel(anthropic());
   return currentModel;
 }
-// Turn an Anthropic SDK error into one plain sentence an owner can act on.
-// The raw messages are engineer-speak ("400 {"type":"error",...}"); this is
-// what the chat, the mode chip and the readiness page show instead.
-export function explainClaudeError(err) {
+// Turn an SDK error into one plain sentence the operator can act on. The
+// provider is not named even here: this text can appear on the (super-admin
+// only) readiness page, and nothing the site emits may name it.
+export function explainProviderError(err) {
   const status = Number(err?.status) || 0;
   const msg = String(err?.error?.error?.message || err?.message || '');
-  if (/credit|billing|balance|purchase/i.test(msg)) return 'the Anthropic account is out of credit - add credit at console.anthropic.com under Billing';
-  if (status === 401) return 'the Anthropic API key was rejected - check ANTHROPIC_API_KEY in Vercel';
-  if (status === 403) return 'the Anthropic API key is not allowed to use this model';
-  if (status === 404) return `the model "${currentModel}" is not available to this account`;
-  if (status === 429) return 'Anthropic is rate-limiting Ivy right now';
-  if (status === 529 || /overloaded/i.test(msg)) return 'Claude is overloaded right now';
-  if (!status && /timed? ?out|abort|ECONN|ENOTFOUND|fetch failed/i.test(msg)) return 'Claude took too long to answer';
-  if (status === 400) return `Anthropic rejected the request (${msg.replace(/\s+/g, ' ').slice(0, 140)})`;
-  if (status >= 500) return 'Anthropic had a server error';
+  if (/credit|billing|balance|purchase/i.test(msg)) return 'the AI provider account is out of credit - add credit in the provider billing console';
+  if (status === 401) return 'the AI provider API key was rejected - check the key in Vercel';
+  if (status === 403) return 'the AI provider API key is not allowed to use this model';
+  if (status === 404) return 'the configured model is not available to this account';
+  if (status === 429) return 'the AI provider is rate-limiting Ivy right now';
+  if (status === 529 || /overloaded/i.test(msg)) return 'the AI provider is overloaded right now';
+  if (!status && /timed? ?out|abort|ECONN|ENOTFOUND|fetch failed/i.test(msg)) return 'the AI provider took too long to answer';
+  if (status === 400) return `the AI provider rejected the request (${msg.replace(/\s+/g, ' ').slice(0, 140)})`;
+  if (status >= 500) return 'the AI provider had a server error';
   return msg.replace(/\s+/g, ' ').slice(0, 160) || 'unknown error';
 }
 
 // One real, one-token call so the readiness page can say whether Ivy can
 // actually reach Claude with this key and model - the env var being set
 // proves nothing when the account is out of credit or the key is revoked.
-export async function probeClaude() {
+export async function probeProvider() {
   const client = anthropic();
-  if (!client) return { ok: false, error: 'ANTHROPIC_API_KEY is not set in Vercel' };
+  if (!client) return { ok: false, error: 'the AI provider API key is not set in Vercel' };
   const model = await currentIvyModel();
   const t0 = Date.now();
   try {
@@ -71,13 +71,13 @@ export async function probeClaude() {
     );
     return { ok: true, model, ms: Date.now() - t0 };
   } catch (err) {
-    return { ok: false, model, status: err?.status || null, error: explainClaudeError(err) };
+    return { ok: false, model, status: err?.status || null, error: explainProviderError(err) };
   }
 }
 
 // What the OWNER sees when a reply fails. Never names the provider or the
 // model: the technology behind Ivy is confidential (see the system prompt).
-// explainClaudeError above is for the operator's readiness page only.
+// explainProviderError above is for the operator's readiness page only.
 export function userFacingReason(err) {
   const status = Number(err?.status) || 0;
   const msg = String(err?.error?.error?.message || err?.message || '');

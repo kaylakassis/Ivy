@@ -20,7 +20,12 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    // No public source maps. Vite writes them into dist/, and everything in
+    // dist/ is served, so `true` published the entire front-end source
+    // (comments included) to anyone who asked for the .map URL. Sentry
+    // stack traces are minified as a result; if that ever matters, upload
+    // maps to Sentry at build time instead of shipping them.
+    sourcemap: false,
     // Group big third-party libs into vendor chunks so they cache long-term
     // independently of our app code. Pure caching win - when we redeploy a
     // copy edit, returning users only re-download the small index chunk.
