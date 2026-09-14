@@ -2,7 +2,6 @@
 // prototype (index.html). Chrome (nav/footer/sticky CTA/meta/fonts) comes
 // from Chrome.jsx; page-specific CSS + interactivity live here.
 import { useEffect, useRef, useState } from 'react';
-import AppStoreBadge, { APP_STORE_URL } from './AppStoreBadge.jsx';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
 import { STACK_TOTAL } from '../../../lib/pricing.js';
 
@@ -143,7 +142,6 @@ const PAGE_CSS = `
 .site-root .hero-sub{font-size:18px;color:var(--muted);max-width:520px;margin-bottom:32px}
 .site-root .hero-sub strong{color:var(--text);font-weight:600}
 .site-root .hero-ctas{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
-.site-root .hero-badges{display:flex;align-items:center;gap:12px;margin:6px 0 18px}.site-root .hero-badges-note{font-size:13px;color:var(--dim)}
 /* CHAT DEMO */
 .site-root .chat{background:var(--panel);border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)}
 .site-root .chat-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--panel2)}
@@ -397,9 +395,6 @@ export default function SiteHome() {
               <a href="/tour" className="btn btn-ghost">Take the tour</a>
             </div>
             <p className="trust">$0 today · Cancel anytime · Your money goes straight to your Stripe - we never touch it</p>
-            {APP_STORE_URL && (
-              <div className="hero-badges"><AppStoreBadge height={44}/><span className="hero-badges-note">Also on iPhone.</span></div>
-            )}
             <p className="verticals">Built for <b>massage therapists</b>, <b>coaches</b>, <b>stylists</b>, <b>photographers</b>, <b>personal trainers</b>, <b>contractors</b>, <b>tutors</b> - and every other business of one.</p>
           </div>
           <div className="chat">
