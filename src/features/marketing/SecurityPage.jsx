@@ -52,12 +52,12 @@ export default function SecurityPage() {
         </Section>
 
         <Section title="Who sees your data">
-          <p>The short list: you, your invited staff, your clients (in the limited views they're shown), and Anthropic (when Ivy generates a response - see below).</p>
+          <p>The short list: you, your invited staff, your clients (in the limited views they're shown), and our AI model provider (when Ivy generates a response - see below).</p>
           <p>Ivy staff access is logged and only happens when you explicitly request support help on a specific record. No automated mining of customer data, ever.</p>
         </Section>
 
         <Section title="AI (Ivy) data handling">
-          <p>Ivy is built on Anthropic Claude. When you chat with Ivy, the request (plus the relevant business context - e.g. revenue numbers, client list relevant to the question) is sent to Anthropic's API. Anthropic does not train models on API customer data per their published policy.</p>
+          <p>When you chat with Ivy, the request (plus the relevant business context - e.g. revenue numbers, the clients relevant to the question) is sent to our AI model provider to generate the reply. Under our agreement with them, they do not train models on this data, and we send only what the question needs.</p>
           <p>You can disable Ivy site-wide from your account page.</p>
         </Section>
 

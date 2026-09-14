@@ -51,7 +51,6 @@ function useIvyState({ enabled = true } = {}) {
   const [error, setError]         = useState(null);
   const [mode, setMode]           = useState(null);     // 'live' | 'mock' | null (unknown)
   const [modeError, setModeError] = useState(null);
-  const [model, setModel]         = useState(null);     // e.g. 'claude-opus-4-8'
   const [usage, setUsage]         = useState(null);
   const msgCacheRef = useRef(new Map()); // sessionId -> messages[]
 
@@ -68,7 +67,6 @@ function useIvyState({ enabled = true } = {}) {
         setBriefing(r.briefing || null);
         if (r.mode) setMode(r.mode);
         setModeError(r.modeError || null);
-        if (r.model) setModel(r.model);
         if (r.usage) setUsage(r.usage);
       })
       .catch((e) => live && setError(e))
@@ -177,7 +175,7 @@ function useIvyState({ enabled = true } = {}) {
 
   return {
     sessions, activeId, messages, context, briefing,
-    loading, thinking, error, mode, modeError, model, usage,
+    loading, thinking, error, mode, modeError, usage,
     openSession, newChat, send, removeSession,
     approvePending, dismissPending,
   };

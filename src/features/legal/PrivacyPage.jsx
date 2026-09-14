@@ -64,8 +64,8 @@ export default function PrivacyPage() {
             messages your account requires.</li>
       </UL>
       <P>We don't use your data to train AI models. Conversations with Ivy are
-        sent to Anthropic's API to generate replies; Anthropic does not train
-        on API content per their data usage policy. We send only what's needed
+        sent to our AI model provider to generate replies; under our agreement
+        with them they do not train on that content. We send only what's needed
         to answer the question - not your raw client list or financial data
         unless you reference it explicitly.</P>
 
@@ -74,7 +74,7 @@ export default function PrivacyPage() {
         <li><strong>Vercel</strong> - hosts the application and the static files.</li>
         <li><strong>Neon</strong> - hosts the Postgres database where your workspace data lives.</li>
         <li><strong>Resend</strong> - sends transactional email on our behalf.</li>
-        <li><strong>Anthropic</strong> - processes your messages to Ivy and returns AI replies.</li>
+        <li><strong>AI model provider</strong> - a US-based, contracted sub-processor that processes your messages to Ivy and returns AI replies. Name available on request.</li>
         <li><strong>Stripe</strong> - processes any payments you or your clients make through Ivy (when enabled).</li>
       </UL>
       <P>Each of these is a contracted sub-processor under their own privacy

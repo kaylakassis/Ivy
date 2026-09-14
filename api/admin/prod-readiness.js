@@ -265,7 +265,7 @@ export default async function handler(req, res) {
 
     // ── Ivy assistant (Claude) - a real one-token call, not an env probe ──
     const claude = await probeClaude();
-    checks.push(check('claude', 'Ivy assistant (Claude)', claude.ok ? 'ok' : 'fail',
+    checks.push(check('claude', 'Ivy assistant (AI model)', claude.ok ? 'ok' : 'fail',
       claude.ok
         ? `${claude.model} answered in ${claude.ms}ms`
         : `Ivy is answering with canned replies because ${claude.error}.`));

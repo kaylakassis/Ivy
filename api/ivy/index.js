@@ -11,10 +11,9 @@ import { requireSameOrigin } from '../_lib/security.js';
 import {
   serializeSession, serializeMessage, workspaceContext, buildBriefing,
   generateReply, fetchOwnedSession, getDailyUsage, sanitizeUserText,
-  stripInlineMarkdown, currentIvyModel,
-} from '../_lib/ivy.js';
+  stripInlineMarkdown, } from '../_lib/ivy.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
-import { IVY_DEFAULT_MODEL } from '../_lib/ivyModel.js';
+import { } from '../_lib/ivyModel.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 
 const MAX_MESSAGE_CHARS = 4000;
@@ -73,7 +72,6 @@ export default async function handler(req, res) {
         briefing,
         mode: hasKey ? 'live' : 'mock',
         modeError: hasKey ? null : 'no-api-key',
-        model: await safe(currentIvyModel(), IVY_DEFAULT_MODEL),
         usage,
       });
     }

@@ -46,7 +46,7 @@ async function run() {
   const msgCall = calls.find((c) => c.url.includes('/v1/messages'));
   assert(!!msgCall, 'messages.create was called');
   assert(msgCall?.body?.model === 'claude-opus-5', `request names the model (got ${msgCall?.body?.model})`);
-  assert(!/couldn't reach Claude/.test(r.text || ''), 'no fallback wording');
+  assert(!/couldn't generate a full answer/.test(r.text || ''), 'no fallback wording');
 
   console.log('\n[2] usage was recorded for the day');
   const usage = await sql`SELECT request_count, output_tokens FROM ivy_usage WHERE workspace_id = ${wsId}`;

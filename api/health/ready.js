@@ -52,7 +52,7 @@ export default async function handler(req, res) {
 
   const vapid = (process.env.VAPID_PUBLIC_KEY && process.env.VAPID_PRIVATE_KEY) ? 'ok' : 'unconfigured';
 
-  const anthropic = process.env.ANTHROPIC_API_KEY ? 'ok' : 'unconfigured';
+  const ai = process.env.ANTHROPIC_API_KEY ? 'ok' : 'unconfigured';
 
   // Critical env vars without which the app boots but instantly 500s
   // on first auth-gated request. Surface these so ops sees them
@@ -74,7 +74,7 @@ export default async function handler(req, res) {
     stripe,    // ok | unconfigured
     twilio,    // ok | unconfigured  (graceful degrade)
     vapid,     // ok | unconfigured  (graceful degrade)
-    anthropic, // ok | unconfigured  (graceful degrade)
+    ai, // ok | unconfigured  (graceful degrade)
     missingCritical, // empty when healthy
   });
 }

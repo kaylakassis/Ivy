@@ -92,7 +92,7 @@ export default function TermsPage() {
       <P>The Service integrates with services operated by third
         parties, including but not limited to:</P>
       <UL>
-        <li><strong>Anthropic</strong> (large language model behind Ivy)</li>
+        <li><strong>An AI model provider</strong> (the large language model behind Ivy)</li>
         <li><strong>Stripe</strong> (payments + Stripe Connect)</li>
         <li><strong>Twilio</strong> (SMS, when you connect your account)</li>
         <li><strong>Google</strong> (calendar sync, when you connect)</li>
