@@ -37,95 +37,54 @@ Terms and Privacy links in the description. They are the last block -
 do not delete them.
 
 ```
-Ivy is the all-in-one business platform for people who run a business of one: coaches, trainers, stylists, massage therapists, photographers, tutors, contractors and consultants. Clients, booking, invoices, contracts, messages, marketing and your own website, in one app on your phone, with an AI assistant that knows your numbers.
+We believe anyone should be able to run a real business on their own. We build the software that makes that possible.
+
+Running a business by yourself means being the owner, the scheduler, the bookkeeper and the support team, 24/7. Ivy puts all of it in one place, and gives you an assistant that does the work alongside you.
+
+BOOKINGS
+Share a booking link or your own site and let clients book themselves. Set your hours, buffers, deposits and booking notice once, and reminders go out on their own. Connect Google Calendar so your personal commitments block out automatically. Sell packages and memberships for sessions bought in advance.
 
 CLIENTS
-Every person you work with, in one place.
-- Client list with history, notes and payments
-- Import existing clients from a spreadsheet
-- Intake forms clients fill in from their phone
-- Leads and active clients kept separate
-- See who has gone quiet before they churn
-
-BOOKING AND CALENDAR
-Let clients book you without the back-and-forth.
-- Your own booking link with your real availability
-- Services with lengths, prices and buffers
-- Deposits collected at booking
-- Recurring appointments
-- Automatic reminders so fewer people forget
-- Packages and memberships for sessions bought in advance
-- Two-way sync with Google Calendar
+Every client in one record: their history, notes, photos, documents and messages. No more scrolling back through your texts to remember what you quoted. Import your list from a spreadsheet, and send intake forms clients fill in from their phone.
 
 INVOICES AND PAYMENTS
-Get paid faster, on your own terms.
-- Send an invoice in seconds, paid by card
-- Deposits and partial payments
-- Recurring invoices
-- Automatic overdue reminders
-- Gift cards clients can buy and redeem
-- Payments through your own Stripe, Square or PayPal account, straight to your bank
-- Ivy takes no cut of your sales
+Send an invoice in seconds and get paid through your own Stripe, Square or PayPal account. Ivy takes no cut of your sales. Set up recurring invoices for retainers and collect deposits up front. Ivy stays on top of reminding clients about late payments so you do not have to.
 
-DOCUMENTS AND SIGNATURES
-Contracts and waivers signed on a phone.
-- Ready-to-use templates for waivers, intake forms, agreements and NDAs
-- Write your own or upload a PDF and place the fields
-- Clients sign from their email, no account needed
-- Several signers in order, including you
-- Everyone receives the signed PDF with a signing record
+CONTRACTS AND DOCUMENTS
+Send a contract, get it signed. E-signatures are built in, with reusable templates for waivers, intake forms, agreements and NDAs, several signers in order (including you), and automatic reminders for anything still unsigned. Everyone gets the signed PDF, and it stays attached to the client's record.
 
-MESSAGES
-One inbox for every client conversation.
-- Chat with clients in the app
-- Text messages when you connect your business number
-- Booking, invoice and document updates land in the same thread
+YOUR OWN WEBSITE
+A booking site with your services, prices and photos, live on your own custom domain. Sell products, packages and gift cards straight from it.
 
-YOUR WEBSITE
-A professional site, live in minutes.
-- Pages and sections you edit in place
-- Services, hours and prices that stay in step with your booking page
-- Use your own domain
+MESSAGING
+One inbox for every client conversation, so nothing gets lost between your texts, your email and your DMs. Text messages too, when you connect your business number.
 
-MARKETING THAT RUNS ITSELF
-- Email campaigns to your clients
-- Review requests sent at the right moment
-- Loyalty rewards for repeat clients
-- A referral program with tracked codes
-- Workflows: automatic follow-ups, reminders and tasks triggered by what happens in your business
+GROWTH
+Email campaigns to your clients. Review requests sent at the right moment. Loyalty rewards for the regulars and a referral program with tracked codes. Workflows that send the follow-up, the reminder or the thank-you for you, triggered by what happens in your business.
 
-MONEY AND GOALS
-Know where you stand without a spreadsheet.
-- Dashboard with revenue, outstanding invoices and today's schedule
-- Expense tracking and a profit and loss summary
-- Goals with progress, and tasks for the week
+THE MONEY SIDE
+Track expenses, see your profit and loss, set goals and log your time. A dashboard with revenue, unpaid invoices and today's schedule. Export everything whenever you want, because it is your data, and lock the app with Face ID.
 
-IVY, YOUR AI ASSISTANT
-Ask a plain question and get an answer from your real data.
-- Where is my money coming from this month?
-- Which clients are at risk of churning?
-- Am I ready to raise my rates?
-- Drafts client messages and follow-ups for you
-- Upload a spreadsheet or PDF and Ivy pulls out the takeaways
-- A short briefing each morning with what needs your attention
+IVY, YOUR ASSISTANT
+Ask Ivy to book a client, send an invoice, chase the overdue ones, draft a message or tell you how the month is going. Upload a spreadsheet or PDF and Ivy pulls out the takeaways. It knows your business, remembers what you tell it, and flags what needs you before it turns into a problem.
 
-A FREE CLIENT PORTAL
+A FREE PORTAL FOR YOUR CLIENTS
 Your clients get their own place to see bookings, invoices, documents and messages, at no cost to them or you.
 
-BUILT FOR ONE PERSON
-- Face ID lock and two-factor sign-in
-- Export everything you own at any time, and delete your account from inside the app
-- No per-seat pricing and no annual contract
+WHO IT IS FOR
+Ivy is built for people who run the whole business themselves. Stylists, cleaners, trainers, coaches, photographers, consultants, contractors, and anyone else who IS the entire company.
 
-PRICING
-Start with a 14-day free trial. No card is charged today. After the trial, Ivy is $8.99 per week, or $374.99 per year to save about 20%. A subscription unlocks the entire app; there are no add-ons or upgrade tiers.
+TRY IT FREE
+Every account starts with a 14 day free trial. Nothing is charged until it ends, and you can cancel anytime.
 
-Subscriptions renew automatically unless turned off at least 24 hours before the period ends. Manage or cancel in your Apple ID settings after purchase.
+SUBSCRIPTION DETAILS
+Ivy Weekly: $8.99 per week
+Ivy Annual: $374.99 per year, about $7.19 per week
 
-Terms of Service: https://www.joinivy.ai/terms
+Payment is charged to your Apple ID at confirmation of purchase. Subscriptions renew automatically unless auto renew is turned off at least 24 hours before the end of the current period. You can manage or cancel your subscription in your Apple ID settings.
+
+Terms of Use: https://www.joinivy.ai/terms
 Privacy Policy: https://www.joinivy.ai/privacy
-
-Questions? Email support@joinivy.ai and a person answers, usually within one business day.
 ```
 
 ## Keywords (100 max, commas, no spaces after commas)
