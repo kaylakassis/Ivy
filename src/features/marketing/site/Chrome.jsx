@@ -6,6 +6,7 @@
 // green for the footer. Base styles live in BASE_CSS, injected once per page via a
 // <style> tag so the pages stay pixel-faithful to the prototype.
 import React, { useEffect, useState } from 'react';
+import AppStoreBadge from './AppStoreBadge.jsx';
 
 // Nav items: internal SPA routes. Blog is a static page (public/blog.html,
 // served at /blog via Vercel cleanUrls) so it's a plain full-page link, as are
@@ -73,6 +74,7 @@ export function SiteNav({ active }) {
             ))}
           </div>
           <div className="nav-cta">
+            <AppStoreBadge height={30} className="nav-badge"/>
             <a href="/signin" className="login">Sign in</a>
             <a href="/signup" className="btn btn-primary btn-sm">Get started</a>
             <button className="menu-btn" aria-label="Menu" onClick={() => setOpen((v) => !v)}>☰</button>
@@ -82,6 +84,7 @@ export function SiteNav({ active }) {
       <div className={`mobile-menu${open ? ' open' : ''}`}>
         {NAV.map(([to, label]) => <a key={to} href={to}>{label}</a>)}
         <a href="/signin">Sign in</a>
+        <AppStoreBadge height={40} className="menu-badge"/>
       </div>
     </>
   );
@@ -94,6 +97,7 @@ export function SiteFooter() {
         <div className="foot-brand">
           <a href="/" className="logo"><img className="logo-mark" src="/icon-512.png" alt=""/>Ivy</a>
           <p>The all-in-one business platform for solopreneurs, with an AI assistant that does your busywork.</p>
+          <AppStoreBadge height={40} className="foot-badge"/>
         </div>
         <div className="foot-cols">
           <div className="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/compare">Compare</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
@@ -147,6 +151,7 @@ export const BASE_CSS = `
 .site-root .nav-links a:hover{color:var(--text)}
 .site-root .nav-links a.active{color:var(--lime)}
 .site-root .nav-cta{display:flex;gap:14px;align-items:center}
+.site-root .app-badge{display:inline-block;line-height:0;border-radius:6px;transition:transform .15s,opacity .15s}.site-root .app-badge:hover{transform:translateY(-1px);opacity:.92}.site-root .app-badge img{display:block;height:auto}.site-root .foot-badge{margin-top:18px}.site-root .menu-badge{margin-top:8px}
 .site-root .nav-cta .login{font-size:14.5px;color:var(--muted);font-weight:500;text-decoration:underline;text-underline-offset:3px}
 .site-root .btn-sm{padding:8px 18px;font-size:14px}
 .site-root h1,.site-root h2,.site-root h3,.site-root h4{font-family:var(--head);font-weight:500}
@@ -174,7 +179,7 @@ export const BASE_CSS = `
 .site-root .foot-col a{display:block;font-size:14px;color:var(--muted);margin-bottom:9px}
 .site-root .foot-col a:hover{color:var(--lime)}
 .site-root .foot-bottom{margin-top:44px;padding-top:24px;border-top:1px solid var(--border);display:flex;justify-content:space-between;font-size:13px;color:var(--dim);flex-wrap:wrap;gap:12px}
-@media(max-width:900px){.site-root .nav-links{display:none}.site-root .menu-btn{display:block}.site-root .sticky-cta{display:block}}
+@media(max-width:900px){.site-root .nav-links{display:none}.site-root .nav-badge{display:none}.site-root .menu-btn{display:block}.site-root .sticky-cta{display:block}}
 `;
 
 // Loads the Google Fonts the prototype uses, once.
