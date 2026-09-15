@@ -74,6 +74,7 @@ const PublicBooking = lazy(() => import('./features/calendar/PublicBooking.jsx')
 const PublicSite    = lazy(() => import('./features/website/PublicSite.jsx'));
 const EmbedContact  = lazy(() => import('./features/embed/EmbedContact.jsx'));
 const SignPage      = lazy(() => import('./features/documents/SignPage.jsx'));
+const ConnectedPage = lazy(() => import('./features/finance/ConnectedPage.jsx'));
 const PublicInvoice = lazy(() => import('./features/finance/PublicInvoice.jsx'));
 const PublicQuote   = lazy(() => import('./features/finance/PublicQuote.jsx'));
 const ReviewPage    = lazy(() => import('./features/reviews/ReviewPage.jsx'));
@@ -251,6 +252,9 @@ export default function App() {
         <Route path="/site/:handle"        element={<PublicSite />} />
         <Route path="/site/:handle/:slug"  element={<PublicSite />} />
         <Route path="/sign/:token"     element={<SignPage />} />
+        {/* Payment-processor return page for the phone flow (public; Safari
+            has no session when the processor sends the owner back). */}
+        <Route path="/connected"       element={<ConnectedPage />} />
         <Route path="/invoice/:token"  element={<PublicInvoice />} />
         <Route path="/quote/:token"    element={<PublicQuote />} />
         <Route path="/review/:token"   element={<ReviewPage />} />

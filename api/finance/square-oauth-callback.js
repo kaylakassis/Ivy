@@ -7,10 +7,19 @@ import jwt from 'jsonwebtoken';
 import { exchangeOAuthCode, fetchFirstLocation, persistConnection, squareEnv, squareRedirectUri } from '../_lib/payments/square.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
+import { connectedPageUrl } from '../_lib/connectReturn.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
+  // Phone flow (state.from === 'app'): Safari has no Ivy session, so end
+  // on the public "back to the app" page rather than /finance.
+  let appFlow = false;
   const back = (status, msg) => {
+    if (appFlow) {
+      res.writeHead(302, { Location: connectedPageUrl('square', status, msg) });
+      res.end();
+      return;
+    }
     const u = new URL(`${appUrl()}/finance`);
     u.searchParams.set('square', status);
     if (msg) u.searchParams.set('msg', msg.slice(0, 200));
@@ -20,6 +29,7 @@ export default async function handler(req, res) {
 
   try {
     const { code, state, error } = req.query || {};
+    try { appFlow = jwt.decode(String(state || ''))?.from === 'app'; } catch { /* not ours */ }
     if (error) return back('error', String(error));
     if (!code || !state) return back('error', 'Missing code or state');
 

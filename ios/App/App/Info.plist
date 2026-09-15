@@ -18,6 +18,20 @@
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
 	<string>$(MARKETING_VERSION)</string>
+	<!-- ivy:// lets the "Open Ivy" button on the payment-connection return
+	     page (joinivy.ai/connected) bring the app back to the front after the
+	     owner finishes Stripe / Square / PayPal in Safari. -->
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>ai.joinivy.app</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ivy</string>
+			</array>
+		</dict>
+	</array>
 	<key>CFBundleVersion</key>
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>

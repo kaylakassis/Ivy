@@ -14,6 +14,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { appUrl } from '../_lib/tokens.js';
 import { platformStripeSecret, fetchAccountSummary } from '../_lib/stripe.js';
 import { methodNotAllowed } from '../_lib/json.js';
+import { verifyReturnState, connectedPageUrl } from '../_lib/connectReturn.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -24,18 +25,31 @@ export default async function handler(req, res) {
   // bounce the user back to /onboarding instead of /finance so they
   // don't lose their place mid-wizard.
   const returnTo = req.query.from === 'onboarding' ? '/onboarding' : '/finance';
+  // Phone flow: Stripe returns Safari here with our signed state and no
+  // session. Finish with the state's workspace and land on the public
+  // "back to the app" page instead of /finance.
+  const appState = verifyReturnState(req.query.state, 'stripe_return');
   const safeRedirect = (params) => {
-    const qs = new URLSearchParams(params).toString();
     res.statusCode = 302;
-    res.setHeader('Location', `${home}${returnTo}?${qs}`);
+    if (appState) {
+      res.setHeader('Location', connectedPageUrl('stripe', params.stripe, params.detail));
+    } else {
+      const qs = new URLSearchParams(params).toString();
+      res.setHeader('Location', `${home}${returnTo}?${qs}`);
+    }
     res.end();
   };
 
   try {
-    const user = await requireUser(req, res);
-    if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
-    if (!workspaceId) return;
+    let workspaceId;
+    if (appState) {
+      workspaceId = appState.workspaceId;
+    } else {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      workspaceId = await ensureActiveWorkspace(user, req, res);
+      if (!workspaceId) return;
+    }
 
     const platformKey = platformStripeSecret();
     if (!platformKey) return safeRedirect({ stripe: 'error', detail: 'no-platform-secret' });

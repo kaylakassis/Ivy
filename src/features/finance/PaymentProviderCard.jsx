@@ -16,6 +16,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { isNative } from '../../lib/platform.js';
 import { FLAGS } from '../../lib/featureFlags.js';
 
 export default function PaymentProviderCard() {
@@ -32,6 +33,14 @@ export default function PaymentProviderCard() {
     }
   }, []);
   useEffect(() => { refresh(); }, [refresh]);
+  // Phone: the processor's form runs in Safari. When the owner switches
+  // back to the app, re-read the connection so the card updates itself.
+  useEffect(() => {
+    if (!isNative()) return undefined;
+    const onShow = () => { if (document.visibilityState === 'visible') refresh(); };
+    document.addEventListener('visibilitychange', onShow);
+    return () => document.removeEventListener('visibilitychange', onShow);
+  }, [refresh]);
 
   // Surface the ?stripe / ?square / ?paypal flags from OAuth callbacks
   // so the user gets immediate feedback on the connect attempt. The
@@ -147,6 +156,7 @@ export default function PaymentProviderCard() {
           disconnectPath="/finance/stripe-disconnect"
           onSwitch={() => switchTo('stripe')}
           onChanged={refresh}
+          onError={setErr}
           busy={busy}
         />
         {FLAGS.squarePaypal && (
@@ -161,6 +171,7 @@ export default function PaymentProviderCard() {
               disconnectPath="/finance/square-disconnect"
               onSwitch={() => switchTo('square')}
               onChanged={refresh}
+          onError={setErr}
               busy={busy}
             />
             <ProviderRow
@@ -173,6 +184,7 @@ export default function PaymentProviderCard() {
               disconnectPath="/finance/paypal-disconnect"
               onSwitch={() => switchTo('paypal')}
               onChanged={refresh}
+          onError={setErr}
               busy={busy}
             />
           </>
@@ -199,10 +211,11 @@ function ProviderRow({
   id, label, description,
   provider, platformReady, active,
   connectHref, disconnectPath,
-  onSwitch, onChanged, busy,
+  onSwitch, onChanged, onError, busy,
   comingSoon = false,
 }) {
   const [disconnecting, setDisconnecting] = useState(false);
+  const [connecting, setConnecting] = useState(false);
   const disconnect = async () => {
     if (!confirm(`Disconnect ${label}?`)) return;
     setDisconnecting(true);
@@ -263,10 +276,32 @@ function ProviderRow({
             Not configured on this deploy
           </span>
         ) : !connected ? (
-          <a className="btn btn-primary" href={connectHref}
-            style={{ fontSize: 12, padding: '6px 14px', textDecoration: 'none' }}>
-            Connect
-          </a>
+          isNative() ? (
+            // Phone: a relative /api link would 404 inside the app bundle and
+            // couldn't carry the Bearer token anyway. Ask the API for the
+            // processor's URL, then open it in Safari.
+            <button className="btn btn-primary" disabled={connecting}
+              style={{ fontSize: 12, padding: '6px 14px' }}
+              onClick={async () => {
+                setConnecting(true); onError?.(null);
+                try {
+                  const r = await api.get(`${connectHref.replace(/^\/api/, '')}?mode=json&from=app`);
+                  if (!r?.url) throw new Error('No connection link came back');
+                  window.open(r.url, '_blank');
+                } catch (e) {
+                  onError?.(e.message || `Could not start the ${label} connection`);
+                } finally {
+                  setConnecting(false);
+                }
+              }}>
+              {connecting ? 'Opening…' : 'Connect'}
+            </button>
+          ) : (
+            <a className="btn btn-primary" href={connectHref}
+              style={{ fontSize: 12, padding: '6px 14px', textDecoration: 'none' }}>
+              Connect
+            </a>
+          )
         ) : (
           <>
             {!active && (

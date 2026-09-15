@@ -30,7 +30,8 @@ import { appUrl } from '../_lib/tokens.js';
 import {
   platformStripeSecret, createConnectedAccount, createAccountLink,
 } from '../_lib/stripe.js';
-import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
+import { badRequest, methodNotAllowed, serverError, ok } from '../_lib/json.js';
+import { wantsJson, fromApp, signReturnState, verifyReturnState } from '../_lib/connectReturn.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -44,17 +45,31 @@ export default async function handler(req, res) {
     // would just appear in the address bar. Sniff the cookie first;
     // if there's no session, redirect to /signin so the user lands
     // somewhere useful.
-    if (!req.headers.cookie || !/(?:^|;\s*)ivy_session=/.test(req.headers.cookie)) {
-      const dest = encodeURIComponent('/finance');
-      res.writeHead(302, { Location: `/signin?next=${dest}` });
-      res.end();
-      return;
+    // Phone flow: the app calls this with a Bearer token and ?mode=json,
+    // then opens the returned URL in Safari. If Stripe's link expires it
+    // sends Safari back here with our signed `state` (no session), which
+    // is enough to mint a fresh link for the same account.
+    const asJson = wantsJson(req);
+    const appState = verifyReturnState(req.query.state, 'stripe_return');
+    let user = null;
+    let workspaceId = null;
+    if (appState) {
+      workspaceId = appState.workspaceId;
+      user = { id: appState.userId };
+    } else {
+      if (!asJson && (!req.headers.cookie || !/(?:^|;\s*)ivy_session=/.test(req.headers.cookie))
+          && !req.headers.authorization) {
+        const dest = encodeURIComponent('/finance');
+        res.writeHead(302, { Location: `/signin?next=${dest}` });
+        res.end();
+        return;
+      }
+      user = await requireUser(req, res);
+      if (!user) return;
+      step = 'workspace';
+      workspaceId = await ensureActiveWorkspace(user, req, res);
+      if (!workspaceId) return;
     }
-    const user = await requireUser(req, res);
-    if (!user) return;
-    step = 'workspace';
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
-    if (!workspaceId) return;
 
     step = 'platform-key';
     const platformKey = platformStripeSecret();
@@ -63,6 +78,7 @@ export default async function handler(req, res) {
       // /onboarding if they came from the wizard) with an error code
       // in the query string so the React app can render a proper
       // banner instead of a raw API page.
+      if (asJson) return badRequest(res, 'Card payments are not set up on this deployment yet.');
       const base = req.query.from === 'onboarding' ? '/onboarding' : '/finance';
       const sep = req.query.from === 'onboarding' ? '?' : '?';
       res.writeHead(302, { Location: `${base}${sep}stripeError=no_key` });
@@ -82,6 +98,7 @@ export default async function handler(req, res) {
 
     if (!accountId) {
       step = 'create-account';
+      if (appState) return badRequest(res, 'Start the Stripe connection from the Ivy app.');
       const acct = await createConnectedAccount({
         secretKey: platformKey,
         email:     user.email || undefined,
@@ -113,7 +130,10 @@ export default async function handler(req, res) {
     // /finance - preventing the "I clicked Connect Stripe mid-wizard
     // and got dumped onto the dashboard" UX trap.
     const base = appUrl();
-    const fromParam = req.query.from === 'onboarding' ? '?from=onboarding' : '';
+    const isApp = fromApp(req) || !!appState;
+    const fromParam = isApp
+      ? `?from=app&state=${encodeURIComponent(signReturnState({ workspaceId, userId: user.id, kind: 'stripe_return' }))}`
+      : (req.query.from === 'onboarding' ? '?from=onboarding' : '');
     const link = await createAccountLink({
       secretKey:  platformKey,
       accountId,
@@ -122,6 +142,7 @@ export default async function handler(req, res) {
       type:       'account_onboarding',
     });
 
+    if (asJson) return ok(res, { url: link.url });
     res.writeHead(302, { Location: link.url });
     res.end();
   } catch (err) {
@@ -132,6 +153,7 @@ export default async function handler(req, res) {
     // /finance page can map to a proper UI banner. Top-level navigation
     // lands HERE on failure, so a raw JSON response is the wrong UX -
     // bounce back to /finance with the code in the query string instead.
+    if (wantsJson(req)) return badRequest(res, `Could not start the Stripe connection (${(err.message || String(err)).slice(0, 120)})`);
     const raw = (err.message || String(err)).toLowerCase();
     let code = 'unknown';
     if (raw.includes('signed up for connect') || raw.includes('apply for connect')) {

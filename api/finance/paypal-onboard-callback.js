@@ -7,10 +7,19 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { fetchSellerStatus, persistConnection, paypalEnv } from '../_lib/payments/paypal.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed } from '../_lib/json.js';
+import { verifyReturnState, connectedPageUrl } from '../_lib/connectReturn.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
+  // Phone flow: our signed state stands in for the session Safari lacks,
+  // and the owner ends on the public "back to the app" page.
+  const appState = verifyReturnState(req.query?.state, 'paypal_return');
   const back = (status, msg) => {
+    if (appState) {
+      res.writeHead(302, { Location: connectedPageUrl('paypal', status, msg) });
+      res.end();
+      return;
+    }
     const u = new URL(`${appUrl()}/finance`);
     u.searchParams.set('paypal', status);
     if (msg) u.searchParams.set('msg', msg.slice(0, 200));
@@ -35,9 +44,14 @@ export default async function handler(req, res) {
     // query value would let anyone attach their own PayPal merchant to a
     // victim's workspace (redirecting that victim's payouts), so the
     // attacker-controllable param is ignored entirely.
-    const user = await requireUser(req, res);
-    if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    let workspaceId;
+    if (appState) {
+      workspaceId = appState.workspaceId;
+    } else {
+      const user = await requireUser(req, res);
+      if (!user) return;
+      workspaceId = await ensureActiveWorkspace(user, req, res);
+    }
     if (!workspaceId) return;
 
     let sellerStatus = null;

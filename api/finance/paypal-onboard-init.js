@@ -12,7 +12,8 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { buildOnboardingUrl } from '../_lib/payments/paypal.js';
 import { appUrl } from '../_lib/tokens.js';
-import { methodNotAllowed } from '../_lib/json.js';
+import { methodNotAllowed, ok, badRequest } from '../_lib/json.js';
+import { wantsJson, fromApp, signReturnState } from '../_lib/connectReturn.js';
 
 function back(res, msg) {
   const u = new URL(`${appUrl()}/finance`);
@@ -26,7 +27,9 @@ export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   if (!requireSameOrigin(req, res)) return;
   try {
-    if (!req.headers.cookie || !/(?:^|;\s*)ivy_session=/.test(req.headers.cookie)) {
+    const asJson = wantsJson(req);
+    if (!asJson && !req.headers.authorization
+        && (!req.headers.cookie || !/(?:^|;\s*)ivy_session=/.test(req.headers.cookie))) {
       const dest = encodeURIComponent('/finance');
       res.writeHead(302, { Location: `/signin?next=${dest}` });
       res.end();
@@ -38,18 +41,24 @@ export default async function handler(req, res) {
     if (!workspaceId) return;
 
     if (!process.env.PAYPAL_CLIENT_ID || !process.env.PAYPAL_CLIENT_SECRET || !process.env.PAYPAL_PARTNER_ID) {
+      if (asJson) return badRequest(res, 'PayPal is not set up on this deployment yet.');
       return back(res, 'PayPal is not configured on this deploy yet - admin needs to set PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, and PAYPAL_PARTNER_ID.');
     }
 
-    const returnUrl = `${appUrl()}/api/finance/paypal-onboard-callback?wid=${encodeURIComponent(workspaceId)}`;
+    const stateParam = fromApp(req)
+      ? `&state=${encodeURIComponent(signReturnState({ workspaceId, userId: user.id, kind: 'paypal_return' }))}`
+      : '';
+    const returnUrl = `${appUrl()}/api/finance/paypal-onboard-callback?wid=${encodeURIComponent(workspaceId)}${stateParam}`;
     const url = await buildOnboardingUrl({
       workspaceId, returnUrl, trackingId: workspaceId,
     });
-    if (!url) return back(res, 'PayPal did not return an onboarding URL');
+    if (!url) return asJson ? badRequest(res, 'PayPal did not return an onboarding URL') : back(res, 'PayPal did not return an onboarding URL');
+    if (asJson) return ok(res, { url });
     res.writeHead(302, { Location: url });
     res.end();
   } catch (err) {
     console.error('[paypal-onboard-init] failed:', err);
+    if (wantsJson(req)) return badRequest(res, err.message || 'Could not start PayPal connect');
     return back(res, err.message || 'Could not start PayPal connect');
   }
 }
