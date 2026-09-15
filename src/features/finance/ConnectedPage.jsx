@@ -50,7 +50,7 @@ export default function ConnectedPage() {
             Ivy installed this brings the app to the front; elsewhere it does
             nothing, and the note below covers that. */}
         <a href="ivy://finance" className="btn btn-primary"
-          style={{ marginTop: 22, display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          style={{ marginTop: 22, display: 'inline-flex', alignItems: 'center', gap: 8, textDecoration: 'none' }}>
           Open Ivy <Icons.Arrow size={12} sw={2}/>
         </a>
         <p style={{ color: 'var(--muted-2)', marginTop: 16, fontSize: 12 }}>
