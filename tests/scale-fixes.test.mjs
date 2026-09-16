@@ -21,23 +21,23 @@ function mockRes() {
 async function run() {
   try {
     console.log('\n[1] sendEmail throttle paces consecutive calls');
-    // The throttle lives inside sendEmail; we can't easily test it without
-    // hitting Resend (and the sandbox blocks it). Instead, exercise
-    // throttle's observable effect: TWO back-to-back catches must take at
-    // least ~125ms thanks to the pacing.
-    //
-    // We dynamic-import email.js so any setEnv mocking from earlier
-    // tests doesn't affect this one. Pass an invalid RESEND_API_KEY so
-    // each call fails fast (throws) - the throttle still runs first.
+    // The throttle lives inside sendEmail. Stub fetch so no request
+    // leaves the process: the timing below must measure the throttle
+    // alone, never the network (a real call to Resend from a CI runner
+    // has taken 1.5s and failed the upper bound).
     const { sendEmail } = await import('../api/_lib/email.js');
     process.env.RESEND_API_KEY = 'test-no-real-send';
+    const realFetch = globalThis.fetch;
+    let calls = 0;
+    globalThis.fetch = async () => { calls++; return new Response(JSON.stringify({ id: `stub-${calls}` }), { status: 200, headers: { 'content-type': 'application/json' } }); };
     const t0 = Date.now();
-    // First call — bucket is fresh, no wait.
-    try { await sendEmail({ to: 'x@example.com', subject: 't', html: '<p>x</p>' }); }
-    catch { /* expected: sandbox or invalid key */ }
-    // Second call — should wait ~125ms.
-    try { await sendEmail({ to: 'x@example.com', subject: 't', html: '<p>x</p>' }); }
-    catch { /* expected */ }
+    try {
+      // First call - bucket is fresh, no wait. Second - waits ~125ms.
+      await sendEmail({ to: 'x@example.com', subject: 't', html: '<p>x</p>' });
+      await sendEmail({ to: 'x@example.com', subject: 't', html: '<p>x</p>' });
+    } catch { /* a stubbed send may still throw on env; timing is what matters */ }
+    finally { globalThis.fetch = realFetch; }
+    assert(calls >= 1, `send reached the (stubbed) provider (${calls} calls)`);
     const elapsed = Date.now() - t0;
     assert(elapsed >= 100, `two sends paced ≥100ms apart (got ${elapsed}ms)`);
     assert(elapsed < 1500, `two sends did not stall absurdly (got ${elapsed}ms)`);
