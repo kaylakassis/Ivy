@@ -1100,7 +1100,7 @@ function UsersTab() {
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
         <input value={q} onChange={(e) => setQ(e.target.value)}
           onKeyDown={(e) => { if (e.key === 'Enter') { setPage(1); reload(); } }}
-          placeholder="Search email or name…"
+          placeholder="Search email, name or @username…"
           style={{
             flex: 1, minWidth: 200, padding: '8px 12px', borderRadius: 8,
             background: 'var(--surface)', border: '1px solid var(--border-strong)',
@@ -1139,7 +1139,10 @@ function UsersTab() {
                 {data.users.map((u) => (
                   <tr key={u.id} style={{ borderTop: '1px solid var(--border)' }}>
                     <Td>{u.email}</Td>
-                    <Td>{u.name || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
+                    <Td>
+                      {u.name || <span style={{ color: 'var(--muted)' }}>-</span>}
+                      {u.username && <div style={{ fontSize: 12, color: 'var(--muted)' }}>@{u.username}</div>}
+                    </Td>
                     <Td>
                       <Pill text={u.classification}/>
                       {u.workspace?.comped && (

@@ -57,8 +57,8 @@ async function listUsers(req, res) {
   const params = [];
 
   if (q) {
-    params.push(`%${q}%`);
-    where.push(`(LOWER(u.email) LIKE $${params.length} OR LOWER(COALESCE(u.name, '')) LIKE $${params.length})`);
+    params.push(`%${q.replace(/^@/, '')}%`);
+    where.push(`(LOWER(u.email) LIKE $${params.length} OR LOWER(COALESCE(u.name, '')) LIKE $${params.length} OR COALESCE(u.username, '') LIKE $${params.length})`);
   }
   if (filter === 'sponsored' || filter === 'beta' || filter === 'affiliate' || filter === 'regular') {
     params.push(filter);
@@ -77,7 +77,7 @@ async function listUsers(req, res) {
   params.push(PAGE_SIZE, offset);
   const queryText = `
     SELECT
-      u.id, u.email, u.name, u.user_type,
+      u.id, u.email, u.name, u.username, u.user_type,
       u.created_at, u.email_verified_at, u.last_login_at,
       w.id   AS workspace_id,
       w.subscription_status,
@@ -104,6 +104,7 @@ async function listUsers(req, res) {
   const users = r.rows.map((row) => ({
     id: row.id,
     email: row.email,
+    username: row.username || null,
     name: row.name,
     userType: row.user_type,
     createdAt: row.created_at,
