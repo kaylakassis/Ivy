@@ -85,9 +85,9 @@ export function AuthProvider({ children }) {
   // re-validated server-side; passing it explicitly creates an audit
   // trail tying the bytes the user actually saw to the row we
   // record.
-  const signUp = useCallback(async (email, password, name, mode = 'owner', ref = null, username = '') => {
+  const signUp = useCallback(async (email, password, name, mode = 'owner', ref = null) => {
     const r = await api.post('/auth/signup', {
-      email, password, name, username, mode, ref,
+      email, password, name, mode, ref,
       // The AuthPage checkbox says "I agree to the Terms and Privacy
       // Policy" - one click covers both. Send both versions so the
       // server can record an immutable acceptance row per document.

@@ -1,10 +1,9 @@
 // Shared Sign In / Sign Up screen. `mode` prop toggles between them.
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState } from 'react';
 import LegalLink from '../../components/LegalLink.jsx';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
-import { api } from '../../lib/api.js';
 import AuthShell from './AuthShell.jsx';
 
 export default function AuthPage({ mode = 'signin' }) {
@@ -33,10 +32,6 @@ export default function AuthPage({ mode = 'signin' }) {
   const [email,    setEmail]    = useState(params.get('email') || '');
   const [password, setPassword] = useState('');
   const [name,     setName]     = useState('');
-  const [username, setUsername] = useState('');
-  // Live availability from /api/auth/username-available, debounced.
-  // { state: 'idle' | 'checking' | 'ok' | 'bad' | 'unknown', message }
-  const [uname, setUname] = useState({ state: 'idle', message: '' });
   const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy]   = useState(false);
@@ -52,48 +47,13 @@ export default function AuthPage({ mode = 'signin' }) {
   const isSignUp = mode === 'signup';
   const canSubmit = !busy
     && (!isSignUp
-      || (name.trim().length > 0 && (uname.state === 'ok' || uname.state === 'unknown') && password.length >= 8 && acceptedTerms));
-
-  // Check the handle as they type: format first (instant, no request),
-  // then availability once they pause for 400ms. Goes through the api
-  // client so the native app reaches the real server (a relative
-  // /api/... URL inside the iOS WebView never leaves the device).
-  //
-  // "Taken" is only ever shown when the server actually said so. If the
-  // check can't be completed (offline, rate-limited, server hiccup) the
-  // form says it couldn't check and lets the user continue; sign-up
-  // itself re-checks on the server and reports a real conflict.
-  const checkSeq = useRef(0);
-  useEffect(() => {
-    if (!isSignUp) return undefined;
-    const raw = username.trim().replace(/^@/, '');
-    if (!raw) { setUname({ state: 'idle', message: '' }); return undefined; }
-    const local = localUsernameCheck(raw);
-    if (local) { setUname({ state: 'bad', message: local }); return undefined; }
-    setUname({ state: 'checking', message: 'Checking…' });
-    const seq = ++checkSeq.current;
-    const t = setTimeout(async () => {
-      let next;
-      try {
-        const j = await api.get(`/auth/username-available?u=${encodeURIComponent(raw)}`, { timeoutMs: 8000 });
-        if (j && j.available === true) next = { state: 'ok', message: `@${j.value || raw.toLowerCase()} is available` };
-        else if (j && j.available === false && j.error) next = { state: 'bad', message: j.error };
-        else next = { state: 'unknown', message: "Couldn't check availability right now. We'll check when you sign up." };
-      } catch {
-        next = { state: 'unknown', message: "Couldn't check availability right now. We'll check when you sign up." };
-      }
-      if (seq === checkSeq.current) setUname(next);
-    }, 400);
-    return () => { clearTimeout(t); };
-  }, [username, isSignUp]);
+      || (name.trim().length > 0 && password.length >= 8 && acceptedTerms));
 
   const submit = async (e) => {
     e.preventDefault();
     setErr(null);
     if (isSignUp) {
       if (!name.trim()) { setErr('Please share your name'); return; }
-      if (uname.state === 'bad' || uname.state === 'idle') { setErr(uname.message || 'Pick a username'); return; }
-      if (uname.state === 'checking') { setErr('Still checking that username, one moment'); return; }
       if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
       if (!acceptedTerms) {
         setErr('You must accept the Terms and Privacy Policy to continue.');
@@ -108,7 +68,7 @@ export default function AuthPage({ mode = 'signin' }) {
         // go out - hold the user here with an explicit notice + a
         // continue button so they know to resend from their account,
         // instead of redirecting silently.
-        const r = await signUp(email, password, name.trim(), role, refCode, username.trim().replace(/^@/, ''));
+        const r = await signUp(email, password, name.trim(), role, refCode);
         if (r?.emailErrors) {
           setEmailWarn(role === 'client' ? '/me' : '/');
           return;
@@ -222,28 +182,14 @@ export default function AuthPage({ mode = 'signin' }) {
         </div>
 
         {isSignUp && (
-          <Field label="Full name">
+          <Field label="Your name">
             <input value={name} onChange={(e) => setName(e.target.value)}
               required minLength={1}
               autoComplete="name" style={inputS} />
           </Field>
         )}
-        {isSignUp && (
-          <Field label="Username" hint={uname.message || 'Letters, numbers, periods and underscores. 3 to 24 characters.'}
-            hintTone={uname.state === 'ok' ? 'ok' : uname.state === 'bad' ? 'bad' : 'muted'}>
-            <div style={{ position: 'relative' }}>
-              <span aria-hidden="true" style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--muted)', fontSize: 14 }}>@</span>
-              <input value={username} onChange={(e) => setUsername(e.target.value.replace(/\s+/g, ''))}
-                required minLength={3} maxLength={24} autoCapitalize="none" autoCorrect="off" spellCheck={false}
-                autoComplete="username" placeholder="yourname"
-                style={{ ...inputS, paddingLeft: 28 }} />
-            </div>
-          </Field>
-        )}
-        <Field label={isSignUp ? 'Email' : 'Email or username'}>
-          <input type={isSignUp ? 'email' : 'text'} required value={email} onChange={(e) => setEmail(e.target.value)}
-            autoComplete={isSignUp ? 'email' : 'username'} autoCapitalize="none" autoCorrect="off" spellCheck={false}
-            style={inputS} />
+        <Field label="Email">
+          <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" style={inputS} />
         </Field>
         <Field label={isSignUp ? 'Password (8+ characters)' : 'Password'}>
           <PasswordInput value={password} onChange={setPassword}
@@ -377,28 +323,13 @@ const inputS = {
   color: 'var(--fg)',
 };
 
-function Field({ label, hint, hintTone = 'muted', children }) {
-  const tone = hintTone === 'ok' ? 'var(--ok)' : hintTone === 'bad' ? 'var(--danger)' : 'var(--muted)';
+function Field({ label, children }) {
   return (
     <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontSize: 12, fontWeight: 550, color: 'var(--fg-2)' }}>{label}</span>
       {children}
-      {hint && (
-        <span role={hintTone === 'bad' ? 'alert' : undefined}
-          style={{ fontSize: 11.5, color: tone, lineHeight: 1.4 }}>{hint}</span>
-      )}
     </label>
   );
-}
-
-// Mirrors api/_lib/username.js so the form can say what is wrong before
-// asking the server. Returns a message, or null when the shape is fine.
-function localUsernameCheck(v) {
-  const value = v.toLowerCase();
-  if (value.length < 3) return 'Usernames need at least 3 characters';
-  if (value.length > 24) return 'Usernames can be at most 24 characters';
-  if (!/^[a-z0-9](?:[a-z0-9_]|\.(?!\.))*[a-z0-9]$/.test(value)) return 'Use letters, numbers, periods and underscores, starting and ending with a letter or number';
-  return null;
 }
 
 // (The old two-card RoleToggle was removed: the business-vs-client
