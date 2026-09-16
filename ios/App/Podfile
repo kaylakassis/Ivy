@@ -1,5 +1,10 @@
 require_relative '../../node_modules/@capacitor/ios/scripts/pods_helpers'
 
+# Resolve third-party pods from the CocoaPods CDN. A Mac with an old
+# cloned specs repo otherwise fails with "could not find compatible
+# versions for PurchasesHybridCommon" until it runs pod repo update.
+source 'https://cdn.cocoapods.org/'
+
 platform :ios, '16.0'
 use_frameworks!
 
