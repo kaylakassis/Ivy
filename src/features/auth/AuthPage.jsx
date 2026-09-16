@@ -1,9 +1,10 @@
 // Shared Sign In / Sign Up screen. `mode` prop toggles between them.
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import LegalLink from '../../components/LegalLink.jsx';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
+import { api } from '../../lib/api.js';
 import AuthShell from './AuthShell.jsx';
 
 export default function AuthPage({ mode = 'signin' }) {
@@ -34,7 +35,7 @@ export default function AuthPage({ mode = 'signin' }) {
   const [name,     setName]     = useState('');
   const [username, setUsername] = useState('');
   // Live availability from /api/auth/username-available, debounced.
-  // { state: 'idle' | 'checking' | 'ok' | 'bad', message }
+  // { state: 'idle' | 'checking' | 'ok' | 'bad' | 'unknown', message }
   const [uname, setUname] = useState({ state: 'idle', message: '' });
   const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
@@ -51,10 +52,18 @@ export default function AuthPage({ mode = 'signin' }) {
   const isSignUp = mode === 'signup';
   const canSubmit = !busy
     && (!isSignUp
-      || (name.trim().length > 0 && uname.state === 'ok' && password.length >= 8 && acceptedTerms));
+      || (name.trim().length > 0 && (uname.state === 'ok' || uname.state === 'unknown') && password.length >= 8 && acceptedTerms));
 
   // Check the handle as they type: format first (instant, no request),
-  // then availability once they pause for 400ms.
+  // then availability once they pause for 400ms. Goes through the api
+  // client so the native app reaches the real server (a relative
+  // /api/... URL inside the iOS WebView never leaves the device).
+  //
+  // "Taken" is only ever shown when the server actually said so. If the
+  // check can't be completed (offline, rate-limited, server hiccup) the
+  // form says it couldn't check and lets the user continue; sign-up
+  // itself re-checks on the server and reports a real conflict.
+  const checkSeq = useRef(0);
   useEffect(() => {
     if (!isSignUp) return undefined;
     const raw = username.trim().replace(/^@/, '');
@@ -62,18 +71,20 @@ export default function AuthPage({ mode = 'signin' }) {
     const local = localUsernameCheck(raw);
     if (local) { setUname({ state: 'bad', message: local }); return undefined; }
     setUname({ state: 'checking', message: 'Checking…' });
-    const ctrl = new AbortController();
+    const seq = ++checkSeq.current;
     const t = setTimeout(async () => {
+      let next;
       try {
-        const res = await fetch(`/api/auth/username-available?u=${encodeURIComponent(raw)}`, { signal: ctrl.signal });
-        const j = await res.json().catch(() => ({}));
-        if (j.available) setUname({ state: 'ok', message: `@${j.value} is available` });
-        else setUname({ state: 'bad', message: j.error || 'That username is taken' });
-      } catch (e) {
-        if (e.name !== 'AbortError') setUname({ state: 'idle', message: '' });
+        const j = await api.get(`/auth/username-available?u=${encodeURIComponent(raw)}`, { timeoutMs: 8000 });
+        if (j && j.available === true) next = { state: 'ok', message: `@${j.value || raw.toLowerCase()} is available` };
+        else if (j && j.available === false && j.error) next = { state: 'bad', message: j.error };
+        else next = { state: 'unknown', message: "Couldn't check availability right now. We'll check when you sign up." };
+      } catch {
+        next = { state: 'unknown', message: "Couldn't check availability right now. We'll check when you sign up." };
       }
+      if (seq === checkSeq.current) setUname(next);
     }, 400);
-    return () => { clearTimeout(t); ctrl.abort(); };
+    return () => { clearTimeout(t); };
   }, [username, isSignUp]);
 
   const submit = async (e) => {
@@ -81,7 +92,8 @@ export default function AuthPage({ mode = 'signin' }) {
     setErr(null);
     if (isSignUp) {
       if (!name.trim()) { setErr('Please share your name'); return; }
-      if (uname.state !== 'ok') { setErr(uname.message || 'Pick a username'); return; }
+      if (uname.state === 'bad' || uname.state === 'idle') { setErr(uname.message || 'Pick a username'); return; }
+      if (uname.state === 'checking') { setErr('Still checking that username, one moment'); return; }
       if (password.length < 8) { setErr('Password must be at least 8 characters'); return; }
       if (!acceptedTerms) {
         setErr('You must accept the Terms and Privacy Policy to continue.');
