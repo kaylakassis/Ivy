@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { Icons } from './Icons.jsx';
 import { pushSupported, permissionState, getSubscription, subscribePush } from '../lib/push.js';
+import { isNative } from '../lib/platform.js';
 
 const SNOOZE_KEY = 'ivy_notify_prompt_snooze';
 const SNOOZE_MS = 14 * 24 * 60 * 60 * 1000;
@@ -26,7 +27,9 @@ export default function NotifyPrompt() {
 
   useEffect(() => {
     let live = true;
-    if (!pushSupported() || permissionState() !== 'default' || snoozed()) return undefined;
+    // The iOS app asks with its own sheet (NativePushPrompt) right after
+    // the paywall; don't show the card there as well.
+    if (isNative() || !pushSupported() || permissionState() !== 'default' || snoozed()) return undefined;
     // Don't prompt if this device already has a subscription.
     getSubscription().then((s) => { if (live && !s) setShow(true); }).catch(() => {});
     return () => { live = false; };

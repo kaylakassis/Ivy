@@ -29,6 +29,7 @@ import { NAV, TITLES } from '../../lib/nav.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { initNativePushOnLaunch } from '../../lib/nativePush.js';
+import NativePushPrompt from '../NativePushPrompt.jsx';
 import { identifyIapUser, onIapCustomerInfoChange } from '../../lib/iap.js';
 import { UserContextProvider, useUserContext } from '../../lib/userContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
@@ -285,6 +286,9 @@ function AppShellInner() {
           (like IvyDock above) so it can never cover the "Start your trial"
           wall — the tutorial appears once the owner is past it. */}
       {!needsPaywall && <TutorialOverlay/>}
+      {/* iOS: ask to turn on notifications once the owner is through the
+          paywall and onboarding. Web asks via the dashboard card instead. */}
+      <NativePushPrompt active={!needsPaywall && subActive && !!ctx?.owns?.onboardedAt}/>
     </div>
   );
 }
