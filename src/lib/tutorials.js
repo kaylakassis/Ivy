@@ -72,8 +72,8 @@ export const TUTORIALS = {
         body: "Got 50 clients in a spreadsheet? Tap Import (top-right) and drop a CSV. Ivy de-duplicates against existing emails so you don't double-add.",
       },
       {
-        title: 'Folders keep a job together',
-        body: "Switch to Folders at the top of this tab. A folder holds everything for one client or one job - bookings, invoices, quotes and signed documents - so a year from now you open one folder and see the whole story.",
+        title: 'Any client can become a folder',
+        body: "Tap Make folder on a client's row. Their folder holds everything for them in one place - bookings, invoices, quotes and signed documents - so a year from now you open one folder and see the whole story.",
       },
     ],
   },

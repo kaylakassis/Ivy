@@ -9,7 +9,6 @@ import { useClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
-import FoldersView, { NewFolderModal, FOLDERS_NOTE } from './Folders.jsx';
 import FolderDrawer from './FolderDrawer.jsx';
 import { useFolders } from './folders.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -41,19 +40,43 @@ export default function Clients() {
   const [importOpen, setImportOpen] = useState(false);
   const { isMobile } = useViewport();
 
-  // People | Folders. Folders (stored as projects) hold a client's or a
-  // job's bookings, invoices, quotes and documents in one place.
+  // Folders (stored as projects). Any client can become a folder: their
+  // bookings, invoices, quotes and documents in one place. The list
+  // stays a contact list; the folder is a chip on the row.
   const location = useLocation();
   const navigate = useNavigate();
-  const [view, setView] = useState(() => new URLSearchParams(location.search).get('view') === 'folders' ? 'folders' : 'people');
   const folderState = useFolders();
   const [openFolderId, setOpenFolderId] = useState(null);
-  const [newFolderOpen, setNewFolderOpen] = useState(false);
-  const switchView = (v) => {
-    setView(v);
-    const params = new URLSearchParams(location.search);
-    if (v === 'folders') params.set('view', 'folders'); else params.delete('view');
-    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  const [makingFolderFor, setMakingFolderFor] = useState(null);
+  const foldersByClient = useMemo(() => {
+    const m = {};
+    for (const f of folderState.folders) {
+      if (!f.clientId) continue;
+      (m[f.clientId] ||= []).push(f);
+    }
+    return m;
+  }, [folderState.folders]);
+  const looseFolders = useMemo(() => folderState.folders.filter((f) => !f.clientId), [folderState.folders]);
+  const [looseOpen, setLooseOpen] = useState(false);
+
+  // One tap turns a client into a folder named after them and opens it.
+  const makeFolder = async (client) => {
+    if (makingFolderFor) return;
+    setMakingFolderFor(client.id);
+    try {
+      const created = await folderState.create({ name: client.name, clientId: client.id, status: 'active' });
+      if (created) { setOpenId(null); setOpenFolderId(created.id); }
+    } catch (e) {
+      console.warn('[Clients] folder create failed:', e.message);
+    } finally {
+      setMakingFolderFor(null);
+    }
+  };
+  const openClientFolder = (client) => {
+    const list = foldersByClient[client.id] || [];
+    if (list.length === 0) return makeFolder(client);
+    setOpenId(null);
+    setOpenFolderId(list[0].id);
   };
 
   // Bulk metrics keyed by clientId: sessions left, due date, monthly $,
@@ -72,13 +95,14 @@ export default function Clients() {
   // Used by Dashboard hero "Add client" and per-client quick actions.
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    if (params.get('view') === 'folders' && view !== 'folders') setView('folders');
     if (params.get('folder')) {
-      setView('folders');
       setOpenId(null);
       setOpenFolderId(params.get('folder'));
       params.delete('folder');
-      params.set('view', 'folders');
+      params.delete('view');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    } else if (params.get('view')) {
+      params.delete('view');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
     if (params.get('add') === '1') {
@@ -157,92 +181,33 @@ export default function Clients() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Clients</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            {view === 'folders'
-              ? FOLDERS_NOTE + ' A folder holds one client\'s or one job\'s bookings, invoices, quotes and documents.'
-              : 'Your book of business - actives, leads, and the ones on pause.'}
+            Your book of business - actives, leads, and the ones on pause.
+          </div>
+          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 8, fontSize: 12.5, color: 'var(--muted)' }}>
+            <Icons.Folder size={13} sw={1.8}/>
+            <span>Any client can become a folder: all of their files in one place.</span>
           </div>
         </div>
-        {view === 'folders' ? (
-          <button className="btn btn-primary" onClick={() => setNewFolderOpen(true)}>
-            <Icons.Plus size={13} sw={2}/> New folder
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
+            <Icons.Doc size={13}/> Import CSV
           </button>
-        ) : (
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
-              <Icons.Doc size={13}/> Import CSV
-            </button>
-            <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
-              <Icons.Plus size={13} sw={2}/> Add client
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* People | Folders */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
-        <div role="tablist" aria-label="Clients view" style={{
-          display: 'inline-flex', padding: 3, borderRadius: 12, gap: 2,
-          background: 'var(--surface-2)', border: '1px solid var(--border)',
-        }}>
-          {[['people', 'People', 'Users', clients.length], ['folders', 'Folders', 'Folder', folderState.folders.length]].map(([id, label, icon, n]) => {
-            const Icon = Icons[icon];
-            const on = view === id;
-            return (
-              <button key={id} role="tab" aria-selected={on} onClick={() => switchView(id)} style={{
-                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 9, border: 0,
-                fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                background: on ? 'var(--surface)' : 'transparent',
-                color: on ? 'var(--fg)' : 'var(--muted)',
-                boxShadow: on ? 'var(--shadow-sm)' : 'none',
-              }}>
-                <Icon size={14} sw={1.9}/> {label}
-                <span style={{
-                  fontSize: 10.5, padding: '1px 6px', borderRadius: 99, fontWeight: 600,
-                  background: on ? 'var(--surface-2)' : 'var(--surface)', color: 'var(--muted)',
-                }}>{n}</span>
-              </button>
-            );
-          })}
+          <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
+            <Icons.Plus size={13} sw={2}/> Add client
+          </button>
         </div>
-        {view === 'people' && (
-          <button onClick={() => switchView('folders')} style={{
-            display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, background: 'transparent',
-            color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer', padding: 0,
-          }}>
-            <Icons.Folder size={13} sw={1.8}/> {FOLDERS_NOTE} <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Open folders</span>
-          </button>
-        )}
       </div>
 
-      {view === 'folders' && (
-        <>
-          <FoldersView
-            folders={folderState.folders} loading={folderState.loading} error={folderState.error}
-            clients={clients} query={query}
-            onOpen={(id) => setOpenFolderId(id)}
-            onNew={() => setNewFolderOpen(true)}/>
-          {openFolder && (
-            <FolderDrawer
-              folder={openFolder}
-              clients={clients}
-              onClose={() => setOpenFolderId(null)}
-              onUpdate={(patch) => folderState.update(openFolder.id, patch)}
-              onDelete={async () => { await folderState.remove(openFolder.id); setOpenFolderId(null); }}
-            />
-          )}
-          {newFolderOpen && (
-            <NewFolderModal clients={clients}
-              onClose={() => setNewFolderOpen(false)}
-              onCreate={async (payload) => {
-                const created = await folderState.create(payload);
-                setNewFolderOpen(false);
-                if (created) setOpenFolderId(created.id);
-              }}/>
-          )}
-        </>
+      {openFolder && (
+        <FolderDrawer
+          folder={openFolder}
+          clients={clients}
+          onClose={() => setOpenFolderId(null)}
+          onUpdate={(patch) => folderState.update(openFolder.id, patch)}
+          onDelete={async () => { await folderState.remove(openFolder.id); setOpenFolderId(null); }}
+        />
       )}
 
-      {view === 'people' && (<>
 
       {/* Analytics */}
       <div className="grid-auto">
@@ -306,12 +271,13 @@ export default function Clients() {
       <div className="card" style={{ overflow: 'hidden' }}>
         {!isMobile && (
           <div style={{
-            display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 130px 40px',
+            display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 118px 110px 40px',
             padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
             fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
             background: 'var(--surface-2)', gap: 8,
           }}>
             <div>Client</div><div>Stage</div><div>Health</div><div>Last seen</div>
+            <div>Folder</div>
             <div style={{ textAlign: 'right' }}>Lifetime</div><div/>
           </div>
         )}
@@ -331,12 +297,16 @@ export default function Clients() {
           isMobile ? (
             <ClientCardMobile key={c.id} client={c} first={i === 0}
               metrics={metricsById[c.id]}
+              folders={foldersByClient[c.id]} folderBusy={makingFolderFor === c.id}
+              onFolder={() => openClientFolder(c)}
               onOpen={() => setOpenId(c.id)}
               onStage={(st) => setStage(c.id, st)}
               onDelete={() => remove(c.id)}/>
           ) : (
             <ClientRow key={c.id} client={c} first={i === 0}
               metrics={metricsById[c.id]}
+              folders={foldersByClient[c.id]} folderBusy={makingFolderFor === c.id}
+              onFolder={() => openClientFolder(c)}
               onOpen={() => setOpenId(c.id)}
               onStage={(st) => setStage(c.id, st)}
               onDelete={() => remove(c.id)}/>
@@ -364,7 +334,29 @@ export default function Clients() {
         )}
       </div>
 
-      </>)}
+      {/* Folders not tied to any client (made from Ivy or before a client
+          existed). Tucked away; most owners never have one. */}
+      {looseFolders.length > 0 && (
+        <div className="card" style={{ padding: '10px 16px' }}>
+          <button onClick={() => setLooseOpen((o) => !o)} style={{
+            display: 'flex', alignItems: 'center', gap: 8, width: '100%', border: 0, background: 'transparent',
+            color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer', padding: 0, textAlign: 'left',
+          }}>
+            <Icons.Folder size={13} sw={1.8}/>
+            {looseFolders.length} folder{looseFolders.length === 1 ? '' : 's'} not tied to a client
+            <span style={{ marginLeft: 'auto', color: 'var(--accent)', fontWeight: 600 }}>{looseOpen ? 'Hide' : 'Show'}</span>
+          </button>
+          {looseOpen && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginTop: 10 }}>
+              {looseFolders.map((f) => (
+                <button key={f.id} onClick={() => setOpenFolderId(f.id)} className="btn btn-outline" style={{ fontSize: 12.5, padding: '5px 11px' }}>
+                  <Icons.Folder size={12} sw={1.8}/> {f.name}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {openClient && (
         <ClientDrawer
@@ -373,7 +365,9 @@ export default function Clients() {
           onClose={() => setOpenId(null)}
           onUpdate={(patch) => update(openClient.id, patch)}
           onDelete={async () => { await remove(openClient.id); setOpenId(null); }}
-          onOpenFolder={(id) => { setOpenId(null); switchView('folders'); folderState.refresh(); setOpenFolderId(id); }}
+          onOpenFolder={(id) => { setOpenId(null); folderState.refresh(); setOpenFolderId(id); }}
+          onMakeFolder={() => makeFolder(openClient)}
+          clientFolders={foldersByClient[openClient.id] || []}
         />
       )}
       {addOpen && <AddClientModal onClose={() => setAddOpen(false)} onAdd={onAdd}/>}
@@ -387,13 +381,13 @@ export default function Clients() {
   );
 }
 
-function ClientRow({ client, first, metrics, onOpen, onStage, onDelete }) {
+function ClientRow({ client, first, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
 
   return (
     <div style={{
-      display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 130px 40px',
+      display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 118px 110px 40px',
       padding: '14px 20px', alignItems: 'center', gap: 8,
       borderTop: first ? 'none' : '1px solid var(--border)',
       cursor: 'pointer', transition: 'background .1s',
@@ -421,6 +415,9 @@ function ClientRow({ client, first, metrics, onOpen, onStage, onDelete }) {
       <div><StageChip stage={client.stage}/></div>
       <ClientMetricsChips metrics={metrics}/>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>{lastSeen || '-'}</div>
+      <div onClick={(e) => e.stopPropagation()}>
+        <FolderChip folders={folders} busy={folderBusy} onClick={onFolder}/>
+      </div>
       <div style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }} className="mono-num">
         {client.lifetimeValue > 0 ? '$' + client.lifetimeValue.toLocaleString() : '-'}
       </div>
@@ -518,7 +515,7 @@ function MetricChip({ label, tone, title }) {
 // Mobile variant - same data, stacked vertically. Two visible lines
 // (avatar+name+email, stage chip + last seen + lifetime) so the phone
 // shows enough to triage clients without horizontal scroll.
-function ClientCardMobile({ client, first, metrics, onOpen, onStage, onDelete }) {
+function ClientCardMobile({ client, first, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
   return (
@@ -556,6 +553,9 @@ function ClientCardMobile({ client, first, metrics, onOpen, onStage, onDelete })
         }}>
           <StageChip stage={client.stage}/>
           {lastSeen && <span>· Last seen {lastSeen}</span>}
+        </div>
+        <div style={{ marginTop: 6 }} onClick={(e) => e.stopPropagation()}>
+          <FolderChip folders={folders} busy={folderBusy} onClick={onFolder}/>
         </div>
         {metrics && (
           <div style={{ marginTop: 6 }}>
@@ -700,6 +700,37 @@ function MenuItem({ children, onClick, icon, danger }) {
       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
     >
       {icon}{children}
+    </button>
+  );
+}
+
+// The folder on a contact. Green chip with a file count when the client
+// has one (tap to open); a quiet "Make folder" when they don't (tap to
+// create it, named after them, and open it).
+function FolderChip({ folders, busy, onClick }) {
+  const list = folders || [];
+  if (list.length === 0) {
+    return (
+      <button type="button" onClick={onClick} disabled={busy} title="Turn this client into a folder: all of their files in one place" style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 99,
+        fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+        background: 'transparent', color: 'var(--muted)', border: '1px dashed var(--border-strong)',
+        opacity: busy ? 0.6 : 1,
+      }}>
+        <Icons.Plus size={11} sw={2}/> {busy ? 'Making…' : 'Make folder'}
+      </button>
+    );
+  }
+  const n = list.reduce((s, f) => { const c = f.counts || {}; return s + (c.bookings || 0) + (c.invoices || 0) + (c.quotes || 0) + (c.documents || 0); }, 0);
+  return (
+    <button type="button" onClick={onClick} title="Open this client's folder" style={{
+      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '3px 9px', borderRadius: 99,
+      fontSize: 11.5, fontWeight: 600, cursor: 'pointer',
+      background: 'var(--accent-soft)', color: 'var(--accent)', border: '1px solid transparent',
+    }}>
+      <Icons.Folder size={12} sw={1.9}/>
+      {n === 0 ? 'Empty folder' : `${n} file${n === 1 ? '' : 's'}`}
+      {list.length > 1 && <span style={{ opacity: 0.75 }}>· {list.length} folders</span>}
     </button>
   );
 }

@@ -67,7 +67,7 @@ export function visibleNavFor({ isSuperAdmin = false, businessType = 'both', hid
 
 export const TITLES = {
   dashboard: { title: 'Dashboard',     subtitle: 'Home' },
-  clients:   { title: 'Clients',       subtitle: 'Your people and their folders' },
+  clients:   { title: 'Clients',       subtitle: 'Your people' },
   programs:  { title: 'Programs',      subtitle: 'Courses, plans and paid communities' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },
   finance:   { title: 'Finance',       subtitle: 'Money in, money out' },

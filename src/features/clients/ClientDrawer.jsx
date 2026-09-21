@@ -9,7 +9,7 @@ import { upload } from '@vercel/blob/client';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
 
-export default function ClientDrawer({ client, onClose, onUpdate, onDelete, analyticsWindowDays, onOpenFolder }) {
+export default function ClientDrawer({ client, onClose, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder }) {
   const initials = (client.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
   const [confirmDel, setConfirmDel] = useState(false);
   const [busyDel, setBusyDel] = useState(false);
@@ -202,7 +202,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
               a "+ New project" shortcut. Full management lives at the
               /projects tab; this section gives the client-centric view
               for owners who think client-first. */}
-          <ClientFoldersBlock client={client} onOpenFolder={onOpenFolder}/>
+          <ClientFoldersBlock client={client} onOpenFolder={onOpenFolder} onMakeFolder={onMakeFolder}/>
 
           {/* Per-client analytics - fetched fresh from
               /api/clients/analytics so show rate / cadence / signed-doc
@@ -1316,7 +1316,7 @@ function ClientAnalyticsBlock({ client, windowDays }) {
 // Every folder (project row) bound to this client, plus inline create.
 // The full folder editor is the Folders view of the Clients tab;
 // tapping a row hands the id back up so the page can open it there.
-function ClientFoldersBlock({ client, onOpenFolder }) {
+function ClientFoldersBlock({ client, onOpenFolder, onMakeFolder }) {
   const [projects, setProjects] = useState(null);
   const [adding, setAdding]     = useState(false);
   const [name, setName]         = useState('');
@@ -1379,9 +1379,21 @@ function ClientFoldersBlock({ client, onOpenFolder }) {
         <div style={{ fontSize: 11.5, color: 'var(--muted)', padding: '4px 2px' }}>Loading…</div>
       ) : projects.length === 0 ? (
         !adding && (
-          <div style={{ fontSize: 11.5, color: 'var(--muted)', padding: '4px 2px' }}>
-            No folders yet. A folder keeps this client's bookings, invoices, quotes and documents together.
-          </div>
+          <button onClick={() => onMakeFolder?.()} style={{
+            display: 'flex', alignItems: 'center', gap: 10, width: '100%', textAlign: 'left',
+            padding: '10px 12px', borderRadius: 10, cursor: 'pointer', color: 'inherit',
+            background: 'var(--surface-2)', border: '1px dashed var(--border-strong)',
+          }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: 9, flexShrink: 0,
+              background: 'var(--accent-soft)', color: 'var(--accent)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}><Icons.Folder size={16} sw={1.8}/></div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 13, fontWeight: 600 }}>Turn {client.name.split(' ')[0]} into a folder</div>
+              <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>All of their files in one place: bookings, invoices, quotes and documents.</div>
+            </div>
+          </button>
         )
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
