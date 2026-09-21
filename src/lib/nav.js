@@ -21,7 +21,6 @@ export const NAV = [
   { id: 'clients',   to: '/clients',    label: 'Clients',        icon: 'Users',    section: 'Run' },
   { id: 'calendar',  to: '/calendar',   label: 'Calendar',       icon: 'Calendar', section: 'Run', productOnlyHidden: true },
   { id: 'comms',     to: '/messages',   label: 'Messages',       icon: 'Chat',     section: 'Run' },
-  { id: 'projects',  to: '/projects',   label: 'Projects',       icon: 'Doc',      section: 'Run' },
   // Money.
   { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar',   section: 'Money' },
   // Grow.
@@ -68,8 +67,7 @@ export function visibleNavFor({ isSuperAdmin = false, businessType = 'both', hid
 
 export const TITLES = {
   dashboard: { title: 'Dashboard',     subtitle: 'Home' },
-  clients:   { title: 'Clients',       subtitle: 'Your people' },
-  projects:  { title: 'Projects',      subtitle: 'Engagements' },
+  clients:   { title: 'Clients',       subtitle: 'Your people and their folders' },
   programs:  { title: 'Programs',      subtitle: 'Courses, plans and paid communities' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },
   finance:   { title: 'Finance',       subtitle: 'Money in, money out' },

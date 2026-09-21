@@ -9,7 +9,7 @@ import { upload } from '@vercel/blob/client';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
 
-export default function ClientDrawer({ client, onClose, onUpdate, onDelete, analyticsWindowDays }) {
+export default function ClientDrawer({ client, onClose, onUpdate, onDelete, analyticsWindowDays, onOpenFolder }) {
   const initials = (client.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
   const [confirmDel, setConfirmDel] = useState(false);
   const [busyDel, setBusyDel] = useState(false);
@@ -202,7 +202,7 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
               a "+ New project" shortcut. Full management lives at the
               /projects tab; this section gives the client-centric view
               for owners who think client-first. */}
-          <ClientProjectsBlock client={client}/>
+          <ClientFoldersBlock client={client} onOpenFolder={onOpenFolder}/>
 
           {/* Per-client analytics - fetched fresh from
               /api/clients/analytics so show rate / cadence / signed-doc
@@ -1312,13 +1312,11 @@ function ClientAnalyticsBlock({ client, windowDays }) {
   );
 }
 
-// ─── Projects tied to this client ──────────────────────────────────
-// Lightweight summary that lists every project bound to this client_id
-// and a button to create a new one inline. Full project editor lives
-// at /projects - clicking a row jumps there with the row pre-opened
-// via the same ?id= deep-link pattern the rest of the app uses.
-function ClientProjectsBlock({ client }) {
-  const navigate = useNavigate();
+// ─── Folders for this client ─────────────────────────────────────────
+// Every folder (project row) bound to this client, plus inline create.
+// The full folder editor is the Folders view of the Clients tab;
+// tapping a row hands the id back up so the page can open it there.
+function ClientFoldersBlock({ client, onOpenFolder }) {
   const [projects, setProjects] = useState(null);
   const [adding, setAdding]     = useState(false);
   const [name, setName]         = useState('');
@@ -1346,7 +1344,7 @@ function ClientProjectsBlock({ client }) {
   return (
     <div style={{ marginTop: 18 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}>
-        <Section label="Projects"/>
+        <Section label="Folders"/>
         {!adding && (
           <button onClick={() => setAdding(true)} className="btn btn-ghost"
             style={{ padding: '4px 8px', fontSize: 11.5, color: 'var(--muted)' }}>
@@ -1358,7 +1356,7 @@ function ClientProjectsBlock({ client }) {
       {adding && (
         <div style={{ display: 'flex', gap: 6, marginBottom: 8 }}>
           <input value={name} onChange={(e) => setName(e.target.value)}
-            placeholder="Project name (e.g. Smith wedding)"
+            placeholder="Folder name (e.g. Smith wedding)"
             autoFocus disabled={busy}
             onKeyDown={(e) => { if (e.key === 'Enter') createInline(); if (e.key === 'Escape') { setAdding(false); setName(''); } }}
             style={{
@@ -1382,7 +1380,7 @@ function ClientProjectsBlock({ client }) {
       ) : projects.length === 0 ? (
         !adding && (
           <div style={{ fontSize: 11.5, color: 'var(--muted)', padding: '4px 2px' }}>
-            No projects yet for this client.
+            No folders yet. A folder keeps this client's bookings, invoices, quotes and documents together.
           </div>
         )
       ) : (
@@ -1397,7 +1395,7 @@ function ClientProjectsBlock({ client }) {
               : [];
             return (
               <button key={p.id}
-                onClick={() => navigate(`/projects?id=${encodeURIComponent(p.id)}`)}
+                onClick={() => onOpenFolder?.(p.id)}
                 style={{
                   display: 'flex', alignItems: 'center', gap: 8,
                   padding: '8px 10px', borderRadius: 8,

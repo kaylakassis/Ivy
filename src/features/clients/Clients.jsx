@@ -9,6 +9,9 @@ import { useClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
+import FoldersView, { NewFolderModal, FOLDERS_NOTE } from './Folders.jsx';
+import FolderDrawer from './FolderDrawer.jsx';
+import { useFolders } from './folders.js';
 import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
 
@@ -38,6 +41,21 @@ export default function Clients() {
   const [importOpen, setImportOpen] = useState(false);
   const { isMobile } = useViewport();
 
+  // People | Folders. Folders (stored as projects) hold a client's or a
+  // job's bookings, invoices, quotes and documents in one place.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [view, setView] = useState(() => new URLSearchParams(location.search).get('view') === 'folders' ? 'folders' : 'people');
+  const folderState = useFolders();
+  const [openFolderId, setOpenFolderId] = useState(null);
+  const [newFolderOpen, setNewFolderOpen] = useState(false);
+  const switchView = (v) => {
+    setView(v);
+    const params = new URLSearchParams(location.search);
+    if (v === 'folders') params.set('view', 'folders'); else params.delete('view');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  };
+
   // Bulk metrics keyed by clientId: sessions left, due date, monthly $,
   // 30-day revenue. One round-trip on mount + on `clients` length change
   // (so newly-added clients pick up zero-state metrics immediately).
@@ -52,10 +70,17 @@ export default function Clients() {
 
   // Deep-link support so other pages can route here with a modal opened.
   // Used by Dashboard hero "Add client" and per-client quick actions.
-  const location = useLocation();
-  const navigate = useNavigate();
   useEffect(() => {
     const params = new URLSearchParams(location.search);
+    if (params.get('view') === 'folders' && view !== 'folders') setView('folders');
+    if (params.get('folder')) {
+      setView('folders');
+      setOpenId(null);
+      setOpenFolderId(params.get('folder'));
+      params.delete('folder');
+      params.set('view', 'folders');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
     if (params.get('add') === '1') {
       setAddOpen(true);
       params.delete('add');
@@ -122,6 +147,7 @@ export default function Clients() {
   };
 
   const openClient = clients.find((c) => c.id === openId) || null;
+  const openFolder = folderState.folders.find((f) => f.id === openFolderId) || null;
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -131,18 +157,92 @@ export default function Clients() {
         <div style={{ flex: 1, minWidth: 240 }}>
           <h2 className="page-title" style={{ margin: 0, fontSize: 32 }}>Clients</h2>
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>
-            Your book of business - actives, leads, and the ones on pause.
+            {view === 'folders'
+              ? FOLDERS_NOTE + ' A folder holds one client\'s or one job\'s bookings, invoices, quotes and documents.'
+              : 'Your book of business - actives, leads, and the ones on pause.'}
           </div>
         </div>
-        <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
-            <Icons.Doc size={13}/> Import CSV
+        {view === 'folders' ? (
+          <button className="btn btn-primary" onClick={() => setNewFolderOpen(true)}>
+            <Icons.Plus size={13} sw={2}/> New folder
           </button>
-          <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
-            <Icons.Plus size={13} sw={2}/> Add client
-          </button>
-        </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
+              <Icons.Doc size={13}/> Import CSV
+            </button>
+            <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
+              <Icons.Plus size={13} sw={2}/> Add client
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* People | Folders */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap' }}>
+        <div role="tablist" aria-label="Clients view" style={{
+          display: 'inline-flex', padding: 3, borderRadius: 12, gap: 2,
+          background: 'var(--surface-2)', border: '1px solid var(--border)',
+        }}>
+          {[['people', 'People', 'Users', clients.length], ['folders', 'Folders', 'Folder', folderState.folders.length]].map(([id, label, icon, n]) => {
+            const Icon = Icons[icon];
+            const on = view === id;
+            return (
+              <button key={id} role="tab" aria-selected={on} onClick={() => switchView(id)} style={{
+                display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 9, border: 0,
+                fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                background: on ? 'var(--surface)' : 'transparent',
+                color: on ? 'var(--fg)' : 'var(--muted)',
+                boxShadow: on ? 'var(--shadow-sm)' : 'none',
+              }}>
+                <Icon size={14} sw={1.9}/> {label}
+                <span style={{
+                  fontSize: 10.5, padding: '1px 6px', borderRadius: 99, fontWeight: 600,
+                  background: on ? 'var(--surface-2)' : 'var(--surface)', color: 'var(--muted)',
+                }}>{n}</span>
+              </button>
+            );
+          })}
+        </div>
+        {view === 'people' && (
+          <button onClick={() => switchView('folders')} style={{
+            display: 'inline-flex', alignItems: 'center', gap: 6, border: 0, background: 'transparent',
+            color: 'var(--muted)', fontSize: 12.5, cursor: 'pointer', padding: 0,
+          }}>
+            <Icons.Folder size={13} sw={1.8}/> {FOLDERS_NOTE} <span style={{ color: 'var(--accent)', fontWeight: 600 }}>Open folders</span>
+          </button>
+        )}
+      </div>
+
+      {view === 'folders' && (
+        <>
+          <FoldersView
+            folders={folderState.folders} loading={folderState.loading} error={folderState.error}
+            clients={clients} query={query}
+            onOpen={(id) => setOpenFolderId(id)}
+            onNew={() => setNewFolderOpen(true)}/>
+          {openFolder && (
+            <FolderDrawer
+              folder={openFolder}
+              clients={clients}
+              onClose={() => setOpenFolderId(null)}
+              onUpdate={(patch) => folderState.update(openFolder.id, patch)}
+              onDelete={async () => { await folderState.remove(openFolder.id); setOpenFolderId(null); }}
+            />
+          )}
+          {newFolderOpen && (
+            <NewFolderModal clients={clients}
+              onClose={() => setNewFolderOpen(false)}
+              onCreate={async (payload) => {
+                const created = await folderState.create(payload);
+                setNewFolderOpen(false);
+                if (created) setOpenFolderId(created.id);
+              }}/>
+          )}
+        </>
+      )}
+
+      {view === 'people' && (<>
 
       {/* Analytics */}
       <div className="grid-auto">
@@ -264,6 +364,8 @@ export default function Clients() {
         )}
       </div>
 
+      </>)}
+
       {openClient && (
         <ClientDrawer
           client={openClient}
@@ -271,6 +373,7 @@ export default function Clients() {
           onClose={() => setOpenId(null)}
           onUpdate={(patch) => update(openClient.id, patch)}
           onDelete={async () => { await remove(openClient.id); setOpenId(null); }}
+          onOpenFolder={(id) => { setOpenId(null); switchView('folders'); folderState.refresh(); setOpenFolderId(id); }}
         />
       )}
       {addOpen && <AddClientModal onClose={() => setAddOpen(false)} onAdd={onAdd}/>}

@@ -51,3 +51,16 @@ export async function fetchOwnedProject({ id, workspaceId }) {
   `;
   return r.rows[0] || null;
 }
+
+// Invoices + quotes don't store `total` as a column - it's computed
+// from items + tax_rate + discount on read. Mirrors the math in
+// api/_lib/finance.js so folder rows match the editor and the PDF.
+export function invoiceTotal(row) {
+  const items = Array.isArray(row.items) ? row.items : [];
+  const subtotal = items.reduce(
+    (s, it) => s + Number(it.quantity || 0) * Number(it.rate || 0), 0,
+  );
+  const taxable = Math.max(0, subtotal - Number(row.discount || 0));
+  const tax = taxable * (Number(row.tax_rate || 0) / 100);
+  return Math.round((taxable + tax) * 100) / 100;
+}

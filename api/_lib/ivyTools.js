@@ -212,7 +212,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'list_projects',
-    description: 'List projects/engagements, optionally filtered by status or client.',
+    description: "List the owner's client folders (shown as Folders under the Clients tab; stored as projects). A folder groups one client's or one job's bookings, invoices, quotes and documents. Optionally filter by status or client.",
     input_schema: {
       type: 'object',
       properties: {
@@ -339,7 +339,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'create_project',
-    description: "Create a named engagement (project) that groups bookings/invoices/quotes/documents under one umbrella. Use for project-based work like 'Smith wedding'.",
+    description: "Create a client folder (shown under Clients > Folders; stored as a project). A folder keeps one client's or one job's bookings, invoices, quotes and documents together, e.g. 'Smith wedding'. Pass client_id when the folder belongs to a client.",
     input_schema: {
       type: 'object',
       properties: {

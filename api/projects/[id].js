@@ -7,23 +7,9 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedProject, serializeProject, VALID_STATUS } from '../_lib/projects.js';
+import { fetchOwnedProject, invoiceTotal, serializeProject, VALID_STATUS } from '../_lib/projects.js';
 import { isIncluded } from '../_lib/quotes.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
-
-// Invoices + quotes don't store `total` as a column - it's computed
-// from items + tax_rate + discount on read. Mirrors the math in
-// api/_lib/finance.js so the drawer values match what the editor and
-// PDF show.
-function invoiceTotal(row) {
-  const items = Array.isArray(row.items) ? row.items : [];
-  const subtotal = items.reduce(
-    (s, it) => s + Number(it.quantity || 0) * Number(it.rate || 0), 0,
-  );
-  const taxable = Math.max(0, subtotal - Number(row.discount || 0));
-  const tax = taxable * (Number(row.tax_rate || 0) / 100);
-  return Math.round((taxable + tax) * 100) / 100;
-}
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;

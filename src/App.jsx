@@ -27,7 +27,6 @@ import { isPlatformHost } from './lib/publicUrl.js';
 // ── Lazy: business app pages ──
 const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
 const Clients     = lazy(() => import('./features/clients/Clients.jsx'));
-const Projects    = lazy(() => import('./features/projects/Projects.jsx'));
 const ProgramsPage = lazy(() => import('./features/programs/ProgramsPage.jsx'));
 const PublicProgram = lazy(() => import('./features/programs/PublicProgram.jsx'));
 const ClientPrograms = lazy(() => import('./features/client/ClientPrograms.jsx'));
@@ -201,6 +200,12 @@ function NativeOnly({ children }) {
   return isNative() ? children : <Navigate to="/" replace/>;
 }
 
+// /projects?id=X → /clients?view=folders&folder=X
+function ProjectsRedirect() {
+  const id = new URLSearchParams(window.location.search).get('id');
+  return <Navigate to={`/clients?view=folders${id ? `&folder=${encodeURIComponent(id)}` : ''}`} replace/>;
+}
+
 export default function App() {
   // Custom-domain mode: when the app is loaded on a business owner's
   // connected custom domain (not a platform host), the ONLY thing that
@@ -296,7 +301,8 @@ export default function App() {
         <Route element={<RequireAuth><RoleRouter><AppShell /></RoleRouter></RequireAuth>}>
           <Route path="/dashboard"  element={<Dashboard />} />
           <Route path="/clients"    element={<Clients />} />
-          <Route path="/projects"   element={<Projects />} />
+          {/* Projects became Folders inside Clients. Old links keep working. */}
+          <Route path="/projects"   element={<ProjectsRedirect />} />
           <Route path="/programs"   element={<ProgramsPage />} />
           <Route path="/calendar"   element={<Calendar />} />
           <Route path="/finance"    element={<Finance />} />
