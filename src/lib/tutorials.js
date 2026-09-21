@@ -137,67 +137,24 @@ export const TUTORIALS = {
     ],
   },
 
-  goals: {
-    title: 'Goals',
-    intro: "Set the targets that matter and watch progress without spreadsheets. Revenue, bookings, new clients - pick a metric, set a target, see how today's pace stacks up.",
+  marketing: {
+    title: 'Marketing',
+    intro: 'Everything that brings clients back, in one tab: Campaigns (newsletters and announcements), Workflows (follow-ups that run on their own) and Rewards (a loyalty program for your clients).',
     steps: [
       {
-        title: 'Add your first goal',
-        body: 'Pick a metric (Monthly revenue, New clients this month, Bookings this week). Set a target. Done.',
+        title: 'Campaigns',
+        body: 'Write once, send to everyone or just a tag. Preview the recipient count, send yourself a test, then send. Every email carries an unsubscribe link automatically.',
       },
       {
-        title: 'Pace tells the truth',
-        body: "Each goal shows your actual vs. expected pace today. If you should be at 60% by mid-month and you're at 35%, the bar shows red. Course-correct early.",
+        title: 'Workflows',
+        body: "A trigger plus a few actions: a thank-you when someone signs up, a check-in when a client goes quiet for 60 days, a birthday note. Set it once and it runs while you work.",
       },
       {
-        title: 'Celebrate wins',
-        body: "Hit a goal? You'll get a confetti moment on the dashboard plus a Slack-style celebration in your messages. Nice for momentum.",
+        title: 'Rewards',
+        body: 'Points, punch cards or referral credits for your clients. Turn it on when you are ready; nothing shows to clients until you launch it.',
       },
     ],
   },
-
-  workflows: {
-    title: 'Workflows',
-    intro: "Automate the follow-ups you keep meaning to set up. Pick a trigger, stack up the actions, and the platform runs them while you focus on the work itself.",
-    steps: [
-      {
-        title: 'Pick a trigger',
-        body: "Four triggers cover most of the real-world cases: new lead from your contact form, any new client, a client who's gone quiet, or a booking that just wrapped. The first two fire instantly; the last two run on a daily check.",
-      },
-      {
-        title: 'Stack the actions',
-        body: "Send an email, send an SMS (if the client opted in), create a task in your /goals tab, or send a document for signing. Run them in any sequence - each action is independent, so a failed SMS won't block the email.",
-      },
-      {
-        title: 'Use tokens',
-        body: "Drop {{firstName}}, {{clientName}}, {{businessName}}, or {{ownerName}} into the email/SMS body or task title. They're filled in at send time so every message reads custom-written.",
-      },
-      {
-        title: 'Watch it run',
-        body: "Each workflow card shows when it last fired and whether the actions succeeded. The toggle on each card turns the whole workflow off without losing the config.",
-      },
-    ],
-  },
-
-  rewards: {
-    title: 'Rewards',
-    intro: 'Loyalty and referrals without the spreadsheet. You set the rules; Ivy watches your real bookings, invoices, and referrals and flags who earned what.',
-    steps: [
-      {
-        title: 'Set rules that fit your business',
-        body: '"Free service after 10 visits." "$25 credit after $300 spent." "Refer a friend, get 20% off." Create visit, spend, referral, or custom rules with your own threshold and reward text.',
-      },
-      {
-        title: 'Ivy spots who earned it',
-        body: 'Progress comes from real data: completed bookings, paid invoices, and who referred whom (set "Referred by" on a client\'s profile). The moment someone crosses a threshold they appear under "ready to issue" - confirming takes one tap.',
-      },
-      {
-        title: 'Clients hear about it right away',
-        body: 'Confirming sends the client a portal message (plus push and email) with what they earned and when it expires. The Redemptions tab tracks issued, used, and expired rewards, and you can log in-person redemptions by hand.',
-      },
-    ],
-  },
-
   comms: {
     title: 'Messages',
     intro: "Every conversation with every client in one inbox. Replaces the 'where did I last text Sarah from?' moment.",

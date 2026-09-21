@@ -33,13 +33,9 @@ const ClientPrograms = lazy(() => import('./features/client/ClientPrograms.jsx')
 const ClientProgram = lazy(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientProgram })));
 const Calendar    = lazy(() => import('./features/calendar/Calendar.jsx'));
 const Finance     = lazy(() => import('./features/finance/Finance.jsx'));
-const Goals       = lazy(() => import('./features/goals/Goals.jsx'));
-const Workflows   = lazy(() => import('./features/workflows/Workflows.jsx'));
-const Rewards     = lazy(() => import('./features/rewards/Rewards.jsx'));
-const Referrals   = lazy(() => import('./features/referrals/Referrals.jsx'));
+const Marketing   = lazy(() => import('./features/grow/Marketing.jsx'));
 const Reviews     = lazy(() => import('./features/reviews/Reviews.jsx'));
 const Messages    = lazy(() => import('./features/messages/Messages.jsx'));
-const Campaigns   = lazy(() => import('./features/campaigns/Campaigns.jsx'));
 const Documents   = lazy(() => import('./features/documents/Documents.jsx'));
 const Website     = lazy(() => import('./features/website/Website.jsx'));
 const IvyPro      = lazy(() => import('./features/ivy/IvyPro.jsx'));
@@ -200,6 +196,13 @@ function NativeOnly({ children }) {
   return isNative() ? children : <Navigate to="/" replace/>;
 }
 
+// /campaigns, /workflows, /rewards → /marketing?tab=… (other params kept)
+function MarketingRedirect({ tab }) {
+  const p = new URLSearchParams(window.location.search);
+  p.set('tab', tab);
+  return <Navigate to={`/marketing?${p.toString()}`} replace/>;
+}
+
 // /projects?id=X → /clients?view=folders&folder=X
 function ProjectsRedirect() {
   const id = new URLSearchParams(window.location.search).get('id');
@@ -306,13 +309,14 @@ export default function App() {
           <Route path="/programs"   element={<ProgramsPage />} />
           <Route path="/calendar"   element={<Calendar />} />
           <Route path="/finance"    element={<Finance />} />
-          <Route path="/goals"      element={<Goals />} />
-          <Route path="/workflows"  element={<Workflows />} />
-          <Route path="/rewards"    element={<Rewards />} />
-          <Route path="/referrals"  element={<Referrals />} />
+          <Route path="/goals"      element={<Navigate to="/dashboard#goals" replace/>} />
+          <Route path="/marketing"  element={<Marketing />} />
+          <Route path="/workflows"  element={<MarketingRedirect tab="workflows"/>} />
+          <Route path="/rewards"    element={<MarketingRedirect tab="rewards"/>} />
+          <Route path="/referrals"  element={<Navigate to="/account#referrals" replace/>} />
           <Route path="/reviews"    element={<Reviews />} />
           <Route path="/messages"   element={<Messages />} />
-          <Route path="/campaigns"  element={<Campaigns />} />
+          <Route path="/campaigns"  element={<MarketingRedirect tab="campaigns"/>} />
           <Route path="/documents"  element={<Documents />} />
           <Route path="/website"    element={<Website />} />
           <Route path="/ivy"        element={<IvyPro />} />

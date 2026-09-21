@@ -28,7 +28,7 @@ const STATUS = {
   rewarded:   { label: 'Reward earned', bg: 'rgba(34,197,94,0.14)', fg: 'rgb(21,128,61)' },
 };
 
-export default function Referrals() {
+export default function Referrals({ embedded = false }) {
   const [data, setData]   = useState(undefined); // undefined=loading · null=ineligible · {…}
   const [draft, setDraft] = useState('');
   const [busy, setBusy]   = useState(false);
@@ -75,11 +75,11 @@ export default function Referrals() {
   };
 
   if (data === undefined) {
-    return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading referrals…</div>;
+    return <div style={{ padding: embedded ? 12 : 48, color: 'var(--muted)', fontSize: 13 }}>Loading referrals…</div>;
   }
   if (data === null) {
     return (
-      <div style={{ padding: 48 }}>
+      <div style={{ padding: embedded ? 0 : 48 }}>
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Gift" title="Referrals unlock with your trial"
             hint="Start your Ivy trial or subscribe and you can invite friends — you'll both get a free week." />
@@ -89,7 +89,7 @@ export default function Referrals() {
   }
   if (data.error) {
     return (
-      <div style={{ padding: 48 }}>
+      <div style={{ padding: embedded ? 0 : 48 }}>
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Gift" title="Couldn't load referrals" hint={data.message || 'Try refreshing.'} />
         </div>
@@ -102,7 +102,7 @@ export default function Referrals() {
   const list = data.referrals || [];
 
   return (
-    <div style={{ padding: '24px 24px 48px', maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
+    <div style={embedded ? { display: 'flex', flexDirection: 'column', gap: 18 } : { padding: '24px 24px 48px', maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
 
       {/* Hero */}
       <div className="card" style={{ padding: 24 }}>

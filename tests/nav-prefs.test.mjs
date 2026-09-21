@@ -38,8 +38,8 @@ async function run() {
     console.log('\n[0] unit: visibleNavFor');
     const base = visibleNavFor({ isSuperAdmin: false });
     assert(!base.some((n) => n.id === 'admin'), 'admin hidden for non-super-admin');
-    const withHidden = visibleNavFor({ isSuperAdmin: false, hiddenNav: ['workflows', 'reviews'] });
-    assert(!withHidden.some((n) => n.id === 'workflows' || n.id === 'reviews'), 'listed ids are hidden');
+    const withHidden = visibleNavFor({ isSuperAdmin: false, hiddenNav: ['marketing', 'reviews'] });
+    assert(!withHidden.some((n) => n.id === 'marketing' || n.id === 'reviews'), 'listed ids are hidden');
     assert(base.length - withHidden.length === 2, 'exactly the 2 hidden ids removed');
     const tryHideCore = visibleNavFor({ isSuperAdmin: false, hiddenNav: ['dashboard', 'ivy'] });
     assert(tryHideCore.some((n) => n.id === 'dashboard') && tryHideCore.some((n) => n.id === 'ivy'),

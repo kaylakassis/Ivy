@@ -25,15 +25,11 @@ export const NAV = [
   { id: 'finance',   to: '/finance',    label: 'Finance',        icon: 'Dollar',   section: 'Money' },
   // Grow.
   { id: 'programs',  to: '/programs',   label: 'Programs',       icon: 'Gift',     section: 'Grow', accent: true },
-  { id: 'campaigns', to: '/campaigns',  label: 'Campaigns',      icon: 'Mail',     section: 'Grow' },
+  { id: 'marketing', to: '/marketing',  label: 'Marketing',      icon: 'Mail',     section: 'Grow' },
   { id: 'reviews',   to: '/reviews',    label: 'Reviews',        icon: 'Heart',    section: 'Grow' },
-  { id: 'rewards',   to: '/rewards',    label: 'Rewards',        icon: 'Gift',     section: 'Grow' },
-  { id: 'referrals', to: '/referrals',  label: 'Referrals',      icon: 'Users',    section: 'Grow' },
   { id: 'website',   to: '/website',    label: 'Website',        icon: 'Globe',    section: 'Grow' },
-  { id: 'workflows', to: '/workflows',  label: 'Workflows',      icon: 'Spark',    section: 'Grow' },
   // Tools.
   { id: 'docs',      to: '/documents',  label: 'Documents',      icon: 'Doc',      section: 'Tools' },
-  { id: 'goals',     to: '/goals',      label: 'Goals & Tasks',  icon: 'Check',    section: 'Tools' },
   { id: 'admin',     to: '/admin',      label: 'Admin',          icon: 'Settings', superAdminOnly: true },
 ];
 
@@ -66,18 +62,14 @@ export function visibleNavFor({ isSuperAdmin = false, businessType = 'both', hid
 }
 
 export const TITLES = {
-  dashboard: { title: 'Dashboard',     subtitle: 'Home' },
+  dashboard: { title: 'Dashboard',     subtitle: 'Home, goals and tasks' },
   clients:   { title: 'Clients',       subtitle: 'Your people' },
   programs:  { title: 'Programs',      subtitle: 'Courses, plans and paid communities' },
   calendar:  { title: 'Calendar',      subtitle: 'This week' },
   finance:   { title: 'Finance',       subtitle: 'Money in, money out' },
-  goals:     { title: 'Goals & Tasks', subtitle: 'Stay on track' },
-  workflows: { title: 'Workflows',     subtitle: 'Automations that run while you sleep' },
-  rewards:   { title: 'Rewards',       subtitle: 'Loyalty & referrals' },
-  referrals: { title: 'Referrals',     subtitle: 'Refer a friend, you both get a free week' },
+  marketing: { title: 'Marketing',     subtitle: 'Campaigns, automations and rewards' },
   reviews:   { title: 'Reviews',       subtitle: 'Publish & respond to client reviews' },
   comms:     { title: 'Messages',      subtitle: 'Inbox' },
-  campaigns: { title: 'Campaigns',     subtitle: 'Newsletters & announcements' },
   docs:      { title: 'Documents',     subtitle: 'Waivers, agreements, signatures' },
   website:   { title: 'Website',       subtitle: 'Public presence' },
   ivy:       { title: 'Ivy',       subtitle: 'Your AI copilot' },

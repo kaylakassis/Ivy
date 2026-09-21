@@ -12,6 +12,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
+import Referrals from '../referrals/Referrals.jsx';
 import { api } from '../../lib/api.js';
 import { hideableNav } from '../../lib/nav.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
@@ -23,12 +24,18 @@ import {
 
 export default function AccountPage() {
   const { user, refresh } = useAuth();
+  const { ctx } = useUserContext();
   const nav = useNavigate();
   const [busyExport, setBusyExport] = useState(false);
   const [exportErr, setExportErr]   = useState(null);
   const [busyEmail, setBusyEmail]   = useState(false);
   const [emailedNote, setEmailedNote] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  useEffect(() => {
+    if (window.location.hash !== '#referrals') return;
+    const t = setTimeout(() => document.getElementById('referrals')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+    return () => clearTimeout(t);
+  }, []);
 
   const downloadExport = async () => {
     setBusyExport(true);
@@ -95,7 +102,13 @@ export default function AccountPage() {
 
       <SubscriptionCard/>
 
-      <ReferralCard/>
+      {/* Referrals (was its own tab): refer a friend, you both get a free week. */}
+      {ctx?.isOwner && (
+        <div id="referrals" style={{ scrollMarginTop: 80 }}>
+          <div className="metric-label" style={{ marginBottom: 12 }}>Refer a friend</div>
+          <Referrals embedded/>
+        </div>
+      )}
 
       <NotificationsCard/>
 
@@ -434,106 +447,6 @@ function SendTestEmailRow() {
       )}
       {err && (
         <div style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</div>
-      )}
-    </div>
-  );
-}
-
-// Referral panel - "refer one, get one." Owners set a custom code,
-// share their link, and earn a free week for every referred user who
-// becomes paying. Renders for owners only.
-function ReferralCard() {
-  const { ctx } = useUserContext();
-  const [data, setData]   = useState(null);
-  const [draft, setDraft] = useState('');
-  const [busy, setBusy]   = useState(false);
-  const [err, setErr]     = useState(null);
-  const [copied, setCopied] = useState(false);
-
-  useEffect(() => {
-    let live = true;
-    api.get('/referrals')
-      .then((r) => { if (live) { setData(r); setDraft(r.code || ''); } })
-      .catch(() => { if (live) setData({ code: null, stats: {}, rewardCents: 899 }); });
-    return () => { live = false; };
-  }, []);
-
-  // Owner-only program.
-  if (!ctx?.isOwner) return null;
-
-  const save = async () => {
-    setBusy(true); setErr(null);
-    try {
-      const r = await api.put('/referrals', { code: draft });
-      setData(r);
-      setDraft(r.code);
-    } catch (e) {
-      setErr(e.message || 'Could not save code');
-    } finally { setBusy(false); }
-  };
-
-  const copyLink = async () => {
-    if (!data?.link) return;
-    try {
-      await navigator.clipboard.writeText(data.link);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch { /* clipboard blocked - ignore */ }
-  };
-
-  const weeks = data?.stats?.rewarded || 0;
-  const inputStyle = {
-    padding: '10px 12px', borderRadius: 10,
-    border: '1px solid var(--border-strong)',
-    background: 'var(--surface)', outline: 'none',
-    fontSize: 14, color: 'var(--fg)',
-  };
-
-  return (
-    <div className="card" style={{ padding: 22 }}>
-      <div className="metric-label" style={{ marginBottom: 8 }}>Refer a friend, you both get a free week</div>
-      <p style={{ margin: '0 0 16px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        Share your code with another business owner. When they subscribe, you
-        both get a free week - credited straight to your next invoice. One free
-        week for every business you refer, and it stacks.
-      </p>
-
-      {/* Stats */}
-      <div style={{ display: 'flex', gap: 22, flexWrap: 'wrap', marginBottom: 18 }}>
-        <Stat label="Referred"  value={data?.stats?.referred ?? 0}/>
-        <Stat label="Subscribed" value={data?.stats?.converted ?? 0}/>
-        <Stat label="Free weeks earned" value={weeks}/>
-      </div>
-
-      <label style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginBottom: 6 }}>
-        Your referral code
-      </label>
-      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 10 }}>
-        <input
-          value={draft}
-          onChange={(e) => setDraft(e.target.value.toUpperCase())}
-          placeholder="e.g. SARAH-HAIR"
-          maxLength={40}
-          style={{ ...inputStyle, flex: 1, minWidth: 160, textTransform: 'uppercase' }}/>
-        <button className="btn btn-primary" onClick={save}
-          disabled={busy || !draft.trim() || draft.trim() === (data?.code || '')}
-          style={{ padding: '9px 16px', fontSize: 13 }}>
-          {busy ? 'Saving…' : (data?.code ? 'Update' : 'Set code')}
-        </button>
-      </div>
-      {err && <div style={{ fontSize: 12, color: 'var(--danger)', marginBottom: 10 }}>{err}</div>}
-
-      {data?.link && (
-        <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <code style={{
-            flex: 1, minWidth: 200, padding: '9px 12px', borderRadius: 8,
-            background: 'var(--surface-2)', border: '1px solid var(--border)',
-            fontSize: 12.5, color: 'var(--fg-2)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-          }}>{data.link}</code>
-          <button className="btn btn-outline" onClick={copyLink} style={{ padding: '9px 14px', fontSize: 13 }}>
-            {copied ? 'Copied' : 'Copy link'}
-          </button>
-        </div>
       )}
     </div>
   );
@@ -1393,7 +1306,7 @@ function BrandingCard() {
       .then((r) => {
         if (!live) return;
         setData(r.branding);
-        setName(r.branding.businessName || '');
+        setName((r.branding || {}).businessName || '');
         setAccent(r.branding.accentColor || '#2E3168');
         setSignature(r.branding.emailSignature || '');
       })

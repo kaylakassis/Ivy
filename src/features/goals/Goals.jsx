@@ -14,6 +14,43 @@ const GOAL_TYPES = [
   { id: 'custom',   label: 'Custom (manual)', unit: '',      hint: 'You update progress manually.' },
 ];
 
+// Embeddable version: the stats row and the two panes, no page header.
+// The dashboard renders this under a "Goals & tasks" label.
+export function GoalsAndTasks() {
+  const {
+    tasks, goals, loading, error,
+    createTask, updateTask, removeTask, toggleTask,
+    createGoal, updateGoal, removeGoal,
+  } = useGoals();
+  if (loading) return <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13 }}>Loading goals & tasks…</div>;
+  if (error) {
+    return (
+      <div className="card" style={{ padding: 32 }}>
+        <EmptyNote icon="Check" title="Couldn't load goals & tasks" hint={error.message || 'Try refreshing.'}/>
+      </div>
+    );
+  }
+  const openTasks = tasks.filter((t) => !t.done);
+  const overdueCount = openTasks.filter((t) => t.dueDate && t.dueDate < new Date().toISOString().slice(0, 10)).length;
+  const completedThisWeek = tasks.filter((t) => {
+    if (!t.completedAt) return false;
+    return (Date.now() - new Date(t.completedAt).getTime()) / 86400e3 < 7;
+  }).length;
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+      <div className="grid-auto-sm">
+        <Stat label="Open tasks"          value={openTasks.length}  sub={`${tasks.length - openTasks.length} done`}/>
+        <Stat label="Overdue"             value={overdueCount}      sub="Tasks past due" tone={overdueCount > 0 ? 'bad' : 'ok'}/>
+        <Stat label="Completed this week" value={completedThisWeek} sub="Last 7 days"/>
+      </div>
+      <div className="split-2">
+        <TasksPane tasks={tasks} onCreate={createTask} onToggle={toggleTask} onUpdate={updateTask} onRemove={removeTask}/>
+        <GoalsPane goals={goals} onCreate={createGoal} onUpdate={updateGoal} onRemove={removeGoal}/>
+      </div>
+    </div>
+  );
+}
+
 export default function Goals() {
   const {
     tasks, goals, loading, error,

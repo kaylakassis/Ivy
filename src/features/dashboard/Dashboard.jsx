@@ -3,6 +3,7 @@ import { readCache, writeCache } from '../../lib/deviceCache.js';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import { GoalsAndTasks } from '../goals/Goals.jsx';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
@@ -406,43 +407,6 @@ function TodayWithIvyCard({ items }) {
   );
 }
 
-// Goal momentum on the home surface. The highest-intent retention object
-// (revenue / clients / sessions goals with live progress) used to live only on
-// /goals; a compact "you're 80% there" strip on the dashboard keeps the target
-// in front of the owner every day. Hidden when they haven't set any goals.
-function GoalsMomentum({ goals, currency }) {
-  if (!Array.isArray(goals) || goals.length === 0) return null;
-  const fmt = (type, n) => (type === 'revenue'
-    ? new Intl.NumberFormat('en-US', { style: 'currency', currency, maximumFractionDigits: 0 }).format(Number(n || 0))
-    : Number(n || 0).toLocaleString());
-  return (
-    <div className="card" style={{ padding: 20 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
-        <div className="metric-label">Your goals</div>
-        <Link to="/goals" style={{ fontSize: 12.5, color: 'var(--muted)', textDecoration: 'none' }}>All goals →</Link>
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {goals.map((g) => (
-          <Link key={g.id} to="/goals" style={{ textDecoration: 'none', color: 'inherit' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, marginBottom: 5 }}>
-              <span style={{ fontSize: 13, fontWeight: 550, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.title}</span>
-              <span style={{ fontSize: 12.5, fontWeight: 600, color: g.pct >= 100 ? 'var(--ok, var(--accent))' : 'var(--accent)', flexShrink: 0 }}>
-                {g.pct >= 100 ? 'Reached 🎉' : `${g.pct}%`}
-              </span>
-            </div>
-            <div style={{ height: 7, borderRadius: 999, background: 'var(--surface-2)', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: `${g.pct}%`, borderRadius: 999, background: 'var(--accent)' }}/>
-            </div>
-            <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
-              {fmt(g.type, g.current)} / {fmt(g.type, g.target)}
-            </div>
-          </Link>
-        ))}
-      </div>
-    </div>
-  );
-}
-
 export default function Dashboard() {
   // Native: paint yesterday's numbers instantly from the device cache and
   // refresh underneath - the fetch below replaces them within a second.
@@ -464,6 +428,13 @@ export default function Dashboard() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  // /dashboard#goals (the old Goals & Tasks tab) scrolls to the section
+  // once the page has rendered.
+  useEffect(() => {
+    if (loading || window.location.hash !== '#goals') return;
+    const t = setTimeout(() => document.getElementById('goals')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 150);
+    return () => clearTimeout(t);
+  }, [loading]);
   // Keep the dashboard LIVE: refresh every 30s while the tab is visible (and on
   // re-focus). A solo owner watching revenue tick up or a new booking land
   // without a manual refresh is a core "the app feels alive" moment.
@@ -485,7 +456,6 @@ export default function Dashboard() {
   const currency = data?.currency || 'USD';
   const today    = data?.today || [];
   const activity = data?.activity || [];
-  const tasks    = data?.tasks || [];
   const rve      = data?.revenueVsExpenses;
   // "Empty" workspace: no real clients or bookings yet → offer sample data.
   const empty = !!data && (data.clients || 0) === 0 && (data.booked || 0) === 0;
@@ -550,7 +520,6 @@ export default function Dashboard() {
               value={data?.metrics?.[m.k]} currency={currency} loading={loading}/>
           ))}
         </div>
-        <GoalsMomentum goals={data?.goals} currency={currency}/>
         <div className="split-2">
           <div className="card" style={{ padding: 24 }}>
             <div className="metric-label" style={{ marginBottom: 14 }}>Revenue vs expenses · this month</div>
@@ -584,7 +553,7 @@ export default function Dashboard() {
             )}
           </div>
         </div>
-        <div className="split-2">
+        <div>
           <div className="card" style={{ padding: 20 }}>
             <div className="metric-label" style={{ marginBottom: 10 }}>Activity</div>
             {activity.length === 0 ? (
@@ -602,29 +571,12 @@ export default function Dashboard() {
               </div>
             )}
           </div>
-          <div className="card" style={{ padding: 20 }}>
-            <div className="metric-label" style={{ marginBottom: 10 }}>Your list</div>
-            {tasks.length === 0 ? (
-              <EmptyNote icon="Check" title="No tasks" hint="Add one, or ask Ivy to draft your week." />
-            ) : (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {tasks.map((t) => (
-                  <Link key={t.id} to="/goals" style={{
-                    display: 'flex', alignItems: 'center', gap: 10, padding: '8px 10px',
-                    borderRadius: 8, border: '1px solid var(--border)', textDecoration: 'none', color: 'inherit',
-                  }}>
-                    <span style={{
-                      width: 16, height: 16, borderRadius: 99, flexShrink: 0,
-                      border: '1px solid var(--border-strong)',
-                      background: t.progress === 100 ? 'var(--accent)' : 'transparent',
-                    }}/>
-                    <span style={{ flex: 1, minWidth: 0, fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{t.title}</span>
-                    {t.progress === 100 && <span style={{ fontSize: 10.5, color: 'var(--accent)' }}>ready</span>}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
+        </div>
+
+        {/* Goals & tasks - the whole thing, editable, right here. */}
+        <div id="goals" style={{ scrollMarginTop: 80 }}>
+          <div className="metric-label" style={{ marginBottom: 12 }}>Goals & tasks</div>
+          <GoalsAndTasks/>
         </div>
       </div>
       <SuccessToast text={streakToast} onDone={() => setStreakToast(null)}/>

@@ -96,7 +96,7 @@ export default function WorkflowSuggestionCard({ suggestion, onChanged }) {
           <button type="button" className="btn btn-ghost" onClick={dismiss} disabled={!!busy} style={{ fontSize: 13 }}>
             {busy === 'dismiss' ? '…' : 'Not now'}
           </button>
-          <Link to="/workflows" style={{ marginLeft: 'auto', fontSize: 12.5, color: 'var(--muted)', textDecoration: 'none' }}>
+          <Link to="/marketing?tab=workflows" style={{ marginLeft: 'auto', fontSize: 12.5, color: 'var(--muted)', textDecoration: 'none' }}>
             Edit in Workflows →
           </Link>
         </div>
