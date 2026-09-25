@@ -640,7 +640,7 @@ export default function SiteHome() {
       <section className="alt">
         <div className="container">
           <div className="founder">
-            <p className="quote">"I built Ivy because I ran my business the duct-tape way - five apps, five bills, and invoices I sent at 11pm. <span className="hl">Software for businesses of one shouldn't feel like a second job.</span> I answer the support inbox personally, and every reply lands with me."</p>
+            <p className="quote">"I built Ivy because I ran my business the duct-tape way - five apps, five bills, and invoices I sent at 11pm. <span className="hl">Software for businesses of one shouldn't feel like a second job.</span>"</p>
             <div className="who">
               <div className="av">K</div>
               <div><b>Kayla</b><span>Founder, Ivy · joinivy.ai</span></div>
