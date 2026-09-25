@@ -18,6 +18,7 @@
 //   notifications          > 60 days  - the bell feed only renders the
 //                                       recent 50; older rows are dead
 //                                       weight (grows unbounded otherwise).
+//   ivy_failures           > 30 days  - failed-reply log for the readiness page
 //   ivy_usage              > 90 days  - per-workspace/day token counters;
 //                                       ~3 months is plenty for admin
 //                                       charts + the global cap roll-up.
@@ -65,6 +66,9 @@ async function handler(req, res) {
 
     results.rateLimits = await prune('rate_limits',
       `attempted_at < NOW() - INTERVAL '7 days'`);
+    // Failed Ivy replies: the readiness page only reads the last 24h.
+    results.ivyFailures = await prune('ivy_failures',
+      `created_at < NOW() - INTERVAL '30 days'`);
 
     // In-app bell feed. The reader (api/me/notification-feed.js) only ever
     // shows the recent 50; anything 60+ days old is unreachable weight and the

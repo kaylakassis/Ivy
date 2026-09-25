@@ -85,8 +85,39 @@ export function userFacingReason(err) {
   if (status === 401 || status === 403 || status === 404) return "the AI service isn't available right now";
   if (status === 429 || status === 529 || /overloaded/i.test(msg)) return 'the AI service is over capacity for a moment';
   if (!status && /timed? ?out|abort|ECONN|ENOTFOUND|fetch failed/i.test(msg)) return 'the AI service took too long to answer';
+  if (status === 400) return 'the AI service rejected the request';
   if (status >= 500) return 'the AI service had a hiccup';
   return 'the AI service had a hiccup';
+}
+
+// What actually went wrong, for the operator: status + the provider's own
+// message when there is one, else the JS error. Redaction happens in
+// reportError / the DB write; this just gathers the facts.
+export function failureFacts(err) {
+  const status = Number(err?.status) || null;
+  const apiMessage = err?.error?.error?.message || null;
+  return {
+    status,
+    name: err?.name || (err ? err.constructor?.name : null) || null,
+    message: String(apiMessage || err?.message || err || '').slice(0, 500),
+    apiType: err?.error?.error?.type || null,
+  };
+}
+
+// Best-effort: one row per failed live reply so the readiness page can show
+// "12 Ivy failures in the last 24h: 400 invalid_request_error: …". Never
+// throws - a logging failure must not change what the owner sees.
+async function recordFailure(workspaceId, err) {
+  try {
+    const f = failureFacts(err);
+    await sql`INSERT INTO ivy_failures (workspace_id, status, error_name, message)
+              VALUES (${workspaceId || null}, ${f.status}, ${f.name}, ${redactText(f.message)})`;
+  } catch { /* ignore */ }
+}
+function redactText(t) {
+  return String(t || '')
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[email]')
+    .replace(/sk-ant-[A-Za-z0-9_-]+/g, '[key]');
 }
 
 const IVY_MAX_TOKENS = 1024;
@@ -535,16 +566,21 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
       ...(pendingActions && pendingActions.length ? { pendingActions } : {}),
     };
   } catch (err) {
+    const facts = failureFacts(err);
     // eslint-disable-next-line no-console
-    console.error('[ivy] Anthropic call failed, falling back to mock:', err?.message || err);
-    // Loud, not silent: the owner sees WHY in the chat itself (a canned
-    // answer that looked like a real one is how "Ivy seems broken" reports
-    // start), the mode chip shows the same reason, and Sentry gets the
-    // raw error so it is visible without digging through function logs.
-    reportError(err, { workspaceId, extra: { where: 'ivy.generateReply', model } });
+    console.error('[ivy] live reply failed:', facts.status, facts.name, facts.apiType, facts.message);
+    // Loud, not silent: the owner sees that Ivy could not answer (never a
+    // canned answer dressed up as a real one), the mode chip shows the same
+    // reason, Sentry gets the raw error, and ivy_failures keeps a row the
+    // readiness page can show.
+    reportError(err, { workspaceId, extra: { where: 'ivy.generateReply', model, ...facts } });
+    await recordFailure(workspaceId, err);
     const reason = userFacingReason(err);
+    const advice = /over capacity|too long|hiccup|rejected/.test(reason)
+      ? 'Give it a moment and send that again; nothing you told me was lost.'
+      : 'Please try again a little later.';
     return {
-      text: sanitizeIvyReply(`I couldn't generate a full answer just now: ${reason}. Here's a quick take from your numbers in the meantime:\n\n${mockReply(text, ctx, attachment)}`),
+      text: sanitizeIvyReply(`I couldn't put together an answer just now: ${reason}. ${advice}`),
       mode: 'mock',
       error: reason,
     };
@@ -918,8 +954,16 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
 
     const toolResults = [];
     for (const tu of toolUses) {
-      // eslint-disable-next-line no-await-in-loop
-      const result = await executeIvyTool(tu.name, tu.input || {}, { workspaceId });
+      let result;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        result = await executeIvyTool(tu.name, tu.input || {}, { workspaceId });
+      } catch (toolErr) {
+        // The dispatcher guards handler errors, but anything thrown around
+        // it (confirmation summary, arg shaping) must not take the whole
+        // reply down - hand the model the error and let it recover.
+        result = { error: `Tool ${tu.name} failed: ${toolErr?.message || toolErr}` };
+      }
       if (result && result.needs_confirmation) {
         pendingActions.push({ action: tu.name, summary: result.summary });
       }
@@ -1117,13 +1161,21 @@ function fmtCtx(ctx) {
 function buildMessages(text, ctx, history, attachment) {
   // Take the last N turns (one turn ≈ 2 messages: me + ivy). Never start with
   // an assistant message - drop a leading 'ivy' if it slipped through.
-  const trimmed = (history || []).slice(-IVY_HISTORY_TURNS * 2);
+  // Drop turns with no text (the API rejects empty content) and merge
+  // consecutive same-role turns (a reply that failed to persist would
+  // otherwise leave two user turns back to back).
+  const trimmed = (history || [])
+    .filter((m) => m && typeof m.text === 'string' && m.text.trim())
+    .slice(-IVY_HISTORY_TURNS * 2);
   while (trimmed.length > 0 && trimmed[0].role !== 'me') trimmed.shift();
 
-  const out = trimmed.map((m) => ({
-    role: m.role === 'me' ? 'user' : 'assistant',
-    content: m.text,
-  }));
+  const out = [];
+  for (const m of trimmed) {
+    const role = m.role === 'me' ? 'user' : 'assistant';
+    const last = out[out.length - 1];
+    if (last && last.role === role) last.content += `\n\n${m.text}`;
+    else out.push({ role, content: m.text });
+  }
 
   // The latest user turn carries the live snapshot so Ivy reasons over current
   // numbers rather than whatever was in context when the chat started. When

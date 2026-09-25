@@ -82,7 +82,7 @@ for (const e of errs) {
   const r = userFacingReason(e);
   assert(!VENDOR.test(r) && /AI service/.test(r), `${e.status}: "${r}"`);
 }
-const fallbackLine = ivySrc.match(/I couldn't generate a full answer just now: \$\{reason\}/);
+const fallbackLine = ivySrc.match(/I couldn't put together an answer just now: \$\{reason\}/);
 assert(!!fallbackLine, 'fallback reply uses the neutral wording');
 const attachLine = ivySrc.match(/Full analysis needs Ivy's AI service/);
 assert(!!attachLine, 'attachment fallback uses the neutral wording');

@@ -264,6 +264,20 @@ export default async function handler(req, res) {
     }
 
     // ── Ivy assistant - a real one-token call, not an env probe ──
+    // Recent failed live replies (what the owner saw as "couldn't put
+    // together an answer"), with the real reason for each.
+    try {
+      const f = await sql`SELECT status, error_name, message, created_at, workspace_id
+                            FROM ivy_failures WHERE created_at > NOW() - INTERVAL '24 hours'
+                           ORDER BY created_at DESC LIMIT 200`;
+      const n = f.rows.length;
+      const sample = f.rows.slice(0, 5).map((r) =>
+        `${new Date(r.created_at).toISOString().slice(11, 16)}Z ${r.status || '-'} ${r.error_name || ''}: ${String(r.message || '').slice(0, 140)}`);
+      checks.push(check('ai_failures', 'Ivy failed replies (24h)', n === 0 ? 'ok' : n < 5 ? 'warn' : 'fail',
+        n === 0 ? 'none' : `${n} failed repl${n === 1 ? 'y' : 'ies'} · latest: ${sample.join(' | ')}`));
+    } catch (e) {
+      checks.push(check('ai_failures', 'Ivy failed replies (24h)', 'warn', `could not read: ${e.message}`));
+    }
     const ai = await probeProvider();
     checks.push(check('ai_model', 'Ivy assistant (AI model)', ai.ok ? 'ok' : 'fail',
       ai.ok

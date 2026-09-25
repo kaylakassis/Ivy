@@ -2098,6 +2098,20 @@ CREATE TABLE IF NOT EXISTS ivy_usage (
   PRIMARY KEY (workspace_id, day, model)
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_usage_workspace ON ivy_usage(workspace_id, day DESC);
+
+-- Every time Ivy's live reply fails and the owner gets the fallback text,
+-- one row: what failed (status + provider message, redacted). Read by the
+-- operator readiness page so a "the AI service had a hiccup" report can be
+-- traced without digging through function logs. Pruned by db-prune.
+CREATE TABLE IF NOT EXISTS ivy_failures (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID REFERENCES workspaces(id) ON DELETE CASCADE,
+  status INT,
+  error_name TEXT,
+  message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_failures_created ON ivy_failures(created_at DESC);
 -- Platform-wide daily usage roll-up (Ivy global spend ceiling) sums today's
 -- rows across every workspace; leading with the day column lets that SUM
 -- index-seek instead of scanning the whole table.
