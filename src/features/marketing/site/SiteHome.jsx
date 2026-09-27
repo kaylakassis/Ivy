@@ -4,6 +4,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
 import { STACK_TOTAL } from '../../../lib/pricing.js';
+import ProductVideo, { playProductVideo } from './ProductVideo.jsx';
 
 const JSON_LD = {
   '@context': 'https://schema.org',
@@ -142,6 +143,8 @@ const PAGE_CSS = `
 .site-root .hero-sub{font-size:18px;color:var(--muted);max-width:520px;margin-bottom:32px}
 .site-root .hero-sub strong{color:var(--text);font-weight:600}
 .site-root .hero-ctas{display:flex;gap:14px;align-items:center;flex-wrap:wrap;margin-bottom:16px}
+.site-root .hero-tour{font-size:14px;color:var(--muted);text-decoration:none;padding:6px 2px}
+.site-root .hero-tour:hover{color:var(--text)}
 /* CHAT DEMO */
 .site-root .chat{background:var(--panel);border:1px solid var(--border2);border-radius:16px;overflow:hidden;box-shadow:0 30px 80px rgba(0,0,0,.5)}
 .site-root .chat-head{display:flex;align-items:center;gap:10px;padding:14px 18px;border-bottom:1px solid var(--border);background:var(--panel2)}
@@ -392,7 +395,8 @@ export default function SiteHome() {
             <p className="hero-sub">Meet Ivy. She knows your clients, your numbers, and your calendar - and she actually <strong>does your busywork</strong>: invoicing, booking, follow-ups, contracts, and more. One workspace, <strong>one plan</strong>.</p>
             <div className="hero-ctas">
               <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
-              <a href="/tour" className="btn btn-ghost">Take the tour</a>
+              <a href="#video" className="btn btn-ghost" onClick={playProductVideo}>▶&nbsp; Watch the video · 0:30</a>
+              <a href="/tour" className="hero-tour">or take the tour →</a>
             </div>
             <p className="trust">$0 today · Cancel anytime · Your money goes straight to your Stripe - we never touch it</p>
             <p className="verticals">Built for <b>massage therapists</b>, <b>coaches</b>, <b>stylists</b>, <b>photographers</b>, <b>personal trainers</b>, <b>contractors</b>, <b>tutors</b> - and every other business of one.</p>
@@ -428,6 +432,8 @@ export default function SiteHome() {
           <div className="stat"><div className="num" data-start="0" data-end="14" data-suffix=" days" data-final="14 days">14 days</div><div className="lbl">free trial, $0 today</div></div>
         </div>
       </div>
+
+      <ProductVideo/>
 
       <section style={{ padding: '56px 0 0' }}>
         <div className="container">

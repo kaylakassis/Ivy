@@ -60,6 +60,9 @@ self.addEventListener('fetch', (event) => {
 
   // Never cache API / dynamic data - always go to the network.
   if (sameOrigin && url.pathname.startsWith('/api/')) return;
+  // Video streams with range requests; the Cache API can't hold partial
+  // responses and the file is large. Straight to the network.
+  if (sameOrigin && url.pathname.startsWith('/video/')) return;
 
   // App navigations: network-first, falling back to the cached shell and
   // then the offline page. Keeps the SPA fresh online while still opening
