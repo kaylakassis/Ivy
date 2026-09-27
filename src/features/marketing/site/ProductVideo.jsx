@@ -17,7 +17,7 @@ export function playProductVideo(e) {
 }
 
 const CSS = `
-.site-root .pv{padding:72px 0 8px}
+.site-root .pv{padding:72px 0 24px}
 .site-root .pv-head{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:22px}
 .site-root .pv-head h2{margin:0}
 .site-root .pv-head p{margin:6px 0 0;color:var(--muted);max-width:52ch}
@@ -28,7 +28,6 @@ const CSS = `
 .site-root .pv-cta:hover span,.site-root .pv-cta:focus-visible span{transform:scale(1.03);background:rgba(15,35,30,.95)}
 .site-root .pv-cta i{display:inline-flex;width:30px;height:30px;border-radius:50%;background:#4CBA7F;color:#06261A;align-items:center;justify-content:center;font-style:normal;font-size:12px}
 .site-root .pv-cta:focus-visible{outline:2px solid #4CBA7F;outline-offset:-4px}
-.site-root .pv-foot{display:flex;gap:18px;flex-wrap:wrap;margin-top:14px;font-size:13px;color:var(--muted)}
 @media(max-width:560px){.site-root .pv{padding:48px 0 0}.site-root .pv-frame{border-radius:12px}}
 `;
 
@@ -82,8 +81,8 @@ export default function ProductVideo() {
         <div className="pv-head">
           <div>
             <span className="eyebrow">See it in 30 seconds</span>
-            <h2>From seven apps to one.</h2>
-            <p>Watch Ivy take a one-line request and turn it into a working automation, with nothing going out until you approve it.</p>
+            <h2>Everything you need, all in one place.</h2>
+            <p>Watch Ivy turn your admin into a sentence and a tap.</p>
           </div>
         </div>
         <div className="pv-frame">
@@ -106,10 +105,6 @@ export default function ProductVideo() {
               <span><i>▶</i> Watch with sound · 0:30</span>
             </button>
           )}
-        </div>
-        <div className="pv-foot">
-          <span>No signup needed to watch.</span>
-          <span>Everything shown is in the product today.</span>
         </div>
       </div>
     </section>
