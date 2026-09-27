@@ -82,7 +82,7 @@ export default function ProductVideo() {
           <div>
             <span className="eyebrow">See it in 30 seconds</span>
             <h2>Everything you need, all in one place.</h2>
-            <p>Watch Ivy turn your admin into a sentence and a tap.</p>
+            <p>Watch Ivy do the admin you've been doing at 11pm.</p>
           </div>
         </div>
         <div className="pv-frame">
