@@ -178,7 +178,7 @@ export default function SitePricing() {
               <div className="calc-cell"><div className="k">No-shows prevented</div><div className="v">{noShows}/mo</div><div className="d">card on file + auto reminders</div></div>
             </div>
             <div className="calc-total"><span className="k">Total monthly upside</span><span className="v">{totalLabel}</span></div>
-            <p className="fine">Ivy is $8.99/week, and you start with a 14-day free trial ($0 today). The math is deliberately conservative: a $75/hr billable rate, Ivy automating 60% of your admin time, an 8% no-show rate that reminders + card-on-file recover, and about ${MONTHLY_STACK_SAVINGS}/mo average tool savings - many solos save even more. Your real numbers are usually higher.</p>
+            <p className="fine">Ivy is $8.99/week, and you start with a 14-day free trial ($0 today). <b>These figures are an example, not a guarantee.</b> The calculator assumes a $75/hr billable rate, Ivy handling about 60% of your admin time, an 8% no-show rate that reminders and card-on-file recover, and about ${MONTHLY_STACK_SAVINGS}/mo in replaced tool subscriptions. Your results depend on your business, your rates and how you use Ivy, and may be lower or higher.</p>
           </div>
         </div>
       </section>
