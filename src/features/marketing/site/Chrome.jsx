@@ -133,7 +133,7 @@ export function StickyCta() {
 // Scoped inside .site-root so the app's global.css and these styles can't
 // fight each other.
 export const BASE_CSS = `
-.site-root{--bg:#0E100F;--panel:#0F231E;--panel2:#163229;--border:#1E3D33;--border2:#2A5446;--text:#ECF0F1;--muted:#C5CECC;--dim:#9BB0A9;--lime:#4CBA7F;--ink:#012B24;--tint:#143C30;--deep:#012B24;--head:'Neue Haas Grotesk Display','Neue Haas Grotesk Text','Helvetica Neue',Inter,Helvetica,Arial,system-ui,sans-serif;font-family:'Neue Haas Grotesk Text','Helvetica Neue',Inter,Helvetica,Arial,system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:hidden;min-height:100vh}
+.site-root{--bg:#0E100F;--panel:#0F231E;--panel2:#163229;--border:#1E3D33;--border2:#2A5446;--text:#ECF0F1;--muted:#C5CECC;--dim:#9BB0A9;--lime:#4CBA7F;--ink:#012B24;--tint:#143C30;--deep:#012B24;--head:'Neue Haas Grotesk Display','Neue Haas Grotesk Text','Helvetica Neue',Inter,Helvetica,Arial,system-ui,sans-serif;font-family:'Neue Haas Grotesk Text','Helvetica Neue',Inter,Helvetica,Arial,system-ui,sans-serif;background:var(--bg);color:var(--text);line-height:1.6;-webkit-font-smoothing:antialiased;overflow-x:clip;min-height:100vh}
 .site-root *{margin:0;padding:0;box-sizing:border-box}
 .site-root a{color:inherit;text-decoration:none}
 .site-root .container{max-width:1120px;margin:0 auto;padding:0 24px}

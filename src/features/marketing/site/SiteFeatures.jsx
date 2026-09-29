@@ -166,7 +166,7 @@ export default function SiteFeatures() {
               <li><b>SEO built in</b> with traffic analytics; site forms turn visitors into leads automatically</li>
               <li><b>Documents + e-signature:</b> waivers, intakes, and agreements from rich text or your own PDFs</li>
               <li><b>Email campaigns</b> to all clients or tagged segments, with one-click unsubscribe compliance</li>
-              <li><b>Works as a phone app:</b> install to your home screen in two taps, push notifications included</li>
+              <li><b>iPhone app:</b> Face ID lock and push notifications, same account as the web</li>
             </ul>
           </div>
           <div className="visual">
@@ -184,7 +184,7 @@ export default function SiteFeatures() {
           <h2>Yes, that's included too.</h2>
           <div className="mini-grid">
             <div className="mini"><div className="icon">⚡</div><h4>Workflows + automated reminders</h4><p>Trigger-based automations: new lead, quiet client, completed booking - send emails, SMS, tasks, or documents.</p></div>
-            <div className="mini"><div className="icon">📁</div><h4>Projects</h4><p>Group related bookings, invoices, quotes, and documents under one umbrella - like "Smith wedding."</p></div>
+            <div className="mini"><div className="icon">📁</div><h4>Folders</h4><p>Any client can become a folder: their bookings, invoices, estimates, and documents in one place.</p></div>
             <div className="mini"><div className="icon">⏱️</div><h4>Time tracking</h4><p>Billable timers per client that convert straight into invoice line items.</p></div>
             <div className="mini"><div className="icon">🎯</div><h4>Goals</h4><p>Revenue, booking, and client goals that track themselves against your real numbers.</p></div>
             <div className="mini"><div className="icon">🧾</div><h4>Expenses</h4><p>Log deductible expenses that roll straight into your quarterly tax export.</p></div>
