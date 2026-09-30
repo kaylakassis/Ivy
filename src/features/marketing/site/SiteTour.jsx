@@ -145,20 +145,21 @@ const PAGE_CSS = `
 
 /* layout: rail + stops */
 .site-root .tour-body{position:relative;z-index:1}
-.site-root .tour-grid{display:grid;grid-template-columns:220px 1fr;gap:48px;align-items:start}
-.site-root .rail{position:sticky;top:96px;display:flex;flex-direction:column;gap:2px;padding-top:24px}
-.site-root .rail .act{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:14px 0 6px;padding-left:12px}
+.site-root .tour-grid{display:grid;grid-template-columns:212px 1fr;gap:44px;align-items:start}
+.site-root .rail{position:-webkit-sticky;position:sticky;top:84px;max-height:calc(100vh - 100px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:1px;padding:16px 0 8px;scrollbar-width:thin}
+.site-root .rail .act{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:10px 0 4px;padding-left:12px}
 .site-root .rail .act:first-child{margin-top:0}
-.site-root .rail a{display:flex;align-items:center;gap:10px;font-size:13.5px;color:var(--muted);text-decoration:none;padding:7px 12px;border-radius:9px;border-left:2px solid transparent;transition:.2s}
+.site-root .rail a{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:9px;border-left:2px solid transparent;transition:.2s}
 .site-root .rail a b{font-family:var(--head);font-weight:600;font-size:11px;color:var(--dim);width:18px}
 .site-root .rail a:hover{color:var(--text);background:rgba(255,255,255,.03)}
 .site-root .rail a.on{color:var(--text);background:var(--tint);border-left-color:var(--lime)}
 .site-root .rail a.on b{color:var(--lime)}
-.site-root .rail .done{margin-top:18px;padding:12px;border-top:1px solid var(--border);font-size:12px;color:var(--dim)}
+.site-root .rail .done{margin-top:12px;padding:10px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--dim)}
 .site-root .rail .done b{color:var(--lime)}
 
 /* mobile progress bar */
-.site-root .mbar{display:none;position:sticky;top:calc(64px + env(safe-area-inset-top,0px));z-index:40;background:rgba(10,16,14,.86);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:10px 16px}
+.site-root .mbar{display:none;position:-webkit-sticky;position:sticky;top:calc(64px + env(safe-area-inset-top,0px));z-index:40;background:rgba(10,16,14,.92);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:10px 16px;transition:opacity .25s}
+.site-root .mbar.off{opacity:0;pointer-events:none}
 .site-root .mbar .row{display:flex;justify-content:space-between;font-size:12px;color:var(--muted)}
 .site-root .mbar .row b{color:var(--text);font-weight:600}
 .site-root .mbar .track{height:3px;background:var(--border);border-radius:99px;margin-top:8px;overflow:hidden}
@@ -286,13 +287,13 @@ const PAGE_CSS = `
 .site-root .t-final h2 .pulseglow{color:var(--lime);text-shadow:0 0 40px rgba(76,186,127,.35);animation:pulseg 2.6s ease-in-out infinite}
 @keyframes pulseg{50%{text-shadow:0 0 90px rgba(76,186,127,.7)}}
 .site-root .t-final p{font-size:17px;color:var(--muted);max-width:560px;margin:0 auto 30px}
-.site-root .all{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:8px;text-align:left;margin:34px auto 38px;max-width:1040px}
-.site-root .all .grp{background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.site-root .all{columns:4 220px;column-gap:8px;text-align:left;margin:34px auto 38px;max-width:1040px}
+.site-root .all .grp{break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
 .site-root .all .grp b{display:block;font-family:var(--head);font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text)}
 .site-root .all .grp span{display:block;font-size:11.5px;color:var(--muted);line-height:1.45}
 .site-root .t-final .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 
-@media(max-width:980px){
+@media(max-width:1080px){
   .site-root .tour-grid{grid-template-columns:1fr;gap:0}
   .site-root .rail{display:none}
   .site-root .mbar{display:block}
@@ -524,6 +525,9 @@ export default function SiteTour() {
     ogType: 'website',
   });
   const [active, setActive] = useState(0);
+  // 'before' (hero on screen), 'in' (a stop), 'after' (finale): the phone
+  // progress bar only shows during the stops.
+  const [phase, setPhase] = useState('before');
 
   useEffect(() => {
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -545,11 +549,21 @@ export default function SiteTour() {
         for (const e of entries) {
           if (!e.isIntersecting) continue;
           const idx = stops.indexOf(e.target);
-          if (idx >= 0) setActive(idx);
+          if (idx >= 0) { setActive(idx); setPhase('in'); }
         }
       }, { rootMargin: '-40% 0px -50% 0px' });
       stops.forEach((s) => act.observe(s));
       cleanups.push(() => act.disconnect());
+      // Hero and finale: hide the phone progress bar outside the stops.
+      const edges = new IntersectionObserver((entries) => {
+        for (const e of entries) {
+          if (!e.isIntersecting) continue;
+          if (e.target.id === 'top') setPhase('before');
+          else { setPhase('after'); setActive(STOPS.length - 1); }
+        }
+      }, { rootMargin: '-40% 0px -40% 0px' });
+      ['top', 'finale'].forEach((id) => { const el = document.getElementById(id); if (el) edges.observe(el); });
+      cleanups.push(() => edges.disconnect());
     }
     return () => cleanups.forEach((fn) => fn());
   }, []);
@@ -620,7 +634,7 @@ export default function SiteTour() {
       </section>
 
       {/* mobile progress */}
-      <div className="mbar" aria-hidden="true">
+      <div className={`mbar${phase === 'in' ? '' : ' off'}`} aria-hidden="true">
         <div className="row"><span>Stop <b>{active + 1}</b> of {STOPS.length}</span><b>{current.area}</b></div>
         <div className="track"><div className="fill" style={{ width: `${((active + 1) / STOPS.length) * 100}%` }}></div></div>
       </div>
@@ -669,7 +683,7 @@ export default function SiteTour() {
       </div>
 
       {/* FINALE */}
-      <section className="t-final">
+      <section className="t-final" id="finale">
         <div className="container" style={{ position: 'relative' }}>
           <h2 className="reveal">That’s the whole thing.<br /><span className="pulseglow">One plan. One login.</span></h2>
           <p className="reveal" style={{ '--d': '.1s' }}>{chipCount} things across {STOPS.length} areas, all included for $8.99 a week after a 14-day free trial. Nothing locked behind a tier.</p>
