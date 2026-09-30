@@ -115,13 +115,26 @@ const STOPS = [
   },
 ];
 
+// Kinetic lines between acts (shown before acts 2, 3 and 4).
+const STRIPS = [
+  { solid: <>While you worked, <span className="hl">Ivy booked.</span></>, ghost: 'no phone tag · no back-and-forth · no empty slots' },
+  { solid: <>Paid on time, <span className="hl">without asking twice.</span></>, ghost: 'invoices · packages · memberships · taxes' },
+  { solid: <>You approve. <span className="hl">Ivy does.</span></>, ghost: 'drafts · reminders · follow-ups · automations' },
+];
+const ACT_GLOW = {
+  run:  ['rgba(76,186,127,.16)', 'rgba(34,211,238,.05)'],
+  paid: ['rgba(251,191,36,.10)', 'rgba(76,186,127,.08)'],
+  look: ['rgba(34,211,238,.08)', 'rgba(76,186,127,.10)'],
+  ivy:  ['rgba(76,186,127,.18)', 'rgba(120,200,255,.06)'],
+};
+
 // ─── Styles ────────────────────────────────────────────────────────────
 const PAGE_CSS = `
 .site-root #bgCanvas{position:fixed;inset:0;z-index:0;pointer-events:none;opacity:.5}
 .site-root .aurora{position:absolute;inset:0;overflow:hidden;pointer-events:none;z-index:0}
 .site-root .aurora i{position:absolute;border-radius:50%;filter:blur(90px);opacity:.5}
-.site-root .aurora .a1{width:520px;height:520px;background:rgba(76,186,127,.14);top:-10%;left:-8%}
-.site-root .aurora .a2{width:640px;height:640px;background:rgba(34,211,238,.06);bottom:-20%;right:-10%}
+.site-root .aurora .a1{width:520px;height:520px;background:var(--glow,rgba(76,186,127,.14));top:-10%;left:-8%}
+.site-root .aurora .a2{width:640px;height:640px;background:var(--glow2,rgba(34,211,238,.06));bottom:-20%;right:-10%}
 .site-root .gridlines{position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.35;background-image:linear-gradient(rgba(243,243,238,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(243,243,238,.025) 1px,transparent 1px);background-size:56px 56px;mask-image:radial-gradient(ellipse 70% 60% at 50% 50%,#000 30%,transparent 75%)}
 .site-root .reveal{opacity:0;transform:translateY(22px);transition:opacity .6s ease var(--d,0s),transform .6s ease var(--d,0s)}
 .site-root .reveal.in{opacity:1;transform:none}
@@ -143,20 +156,39 @@ const PAGE_CSS = `
 .site-root .t-open .hint{position:absolute;bottom:28px;left:50%;transform:translateX(-50%);font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);animation:bob 2s infinite}
 @keyframes bob{50%{transform:translateX(-50%) translateY(6px)}}
 
-/* layout: rail + stops */
+/* ===== SCENES: one full screen each, mock is the star ===== */
 .site-root .tour-body{position:relative;z-index:1}
-.site-root .tour-grid{display:grid;grid-template-columns:212px 1fr;gap:44px;align-items:start}
-.site-root .rail{position:-webkit-sticky;position:sticky;top:84px;max-height:calc(100vh - 100px);overflow-y:auto;overscroll-behavior:contain;display:flex;flex-direction:column;gap:1px;padding:16px 0 8px;scrollbar-width:thin}
-.site-root .rail .act{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin:10px 0 4px;padding-left:12px}
-.site-root .rail .act:first-child{margin-top:0}
-.site-root .rail a{display:flex;align-items:center;gap:10px;font-size:13px;color:var(--muted);text-decoration:none;padding:6px 12px;border-radius:9px;border-left:2px solid transparent;transition:.2s}
-.site-root .rail a b{font-family:var(--head);font-weight:600;font-size:11px;color:var(--dim);width:18px}
-.site-root .rail a:hover{color:var(--text);background:rgba(255,255,255,.03)}
-.site-root .rail a.on{color:var(--text);background:var(--tint);border-left-color:var(--lime)}
-.site-root .rail a.on b{color:var(--lime)}
-.site-root .rail .done{margin-top:12px;padding:10px 12px;border-top:1px solid var(--border);font-size:12px;color:var(--dim)}
-.site-root .rail .done b{color:var(--lime)}
-
+.site-root .scene{position:relative;min-height:100vh;min-height:100svh;display:flex;flex-direction:column;justify-content:center;padding:96px 0 40px;overflow:hidden;scroll-margin-top:0}
+.site-root .scene .inner{display:grid;grid-template-columns:.8fr 1.2fr;gap:56px;align-items:center;position:relative;z-index:2}
+.site-root .scene.flip .inner{grid-template-columns:1.2fr .8fr}
+.site-root .scene.flip .s-copy{order:2}
+.site-root .bignum{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);font-family:var(--head);font-weight:700;font-size:clamp(160px,28vw,420px);letter-spacing:-.05em;color:transparent;-webkit-text-stroke:1px rgba(243,243,238,.06);white-space:nowrap;pointer-events:none;z-index:0;user-select:none}
+.site-root .s-kicker{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--lime);margin-bottom:18px}
+.site-root .s-kicker .n{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--tint);border:1px solid rgba(76,186,127,.35);font-family:var(--head);font-size:12px;letter-spacing:0}
+.site-root .s-copy h2{font-size:clamp(38px,5.2vw,72px);letter-spacing:-.035em;line-height:1.02;margin-bottom:18px;text-wrap:balance}
+.site-root .s-copy h2 .hl{color:var(--lime)}
+.site-root .s-copy p{font-size:clamp(16px,1.4vw,19px);color:var(--muted);max-width:440px;margin:0}
+/* ticker: every capability in the area glides by under the scene */
+.site-root .ticker{position:relative;z-index:2;margin-top:44px}
+.site-root .ticker .lab{font-size:10.5px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--dim);margin:0 auto 10px;max-width:1120px;padding:0 24px}
+.site-root .ticker .win{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent);mask-image:linear-gradient(90deg,transparent,#000 8%,#000 92%,transparent)}
+.site-root .ticker .track{display:flex;gap:8px;width:max-content;padding:0 24px;animation:tick var(--dur,40s) linear infinite}
+.site-root .ticker:hover .track{animation-play-state:paused}
+.site-root .ticker .track span{font-size:13px;color:var(--text);background:rgba(255,255,255,.035);border:1px solid var(--border2);padding:8px 14px;border-radius:999px;white-space:nowrap}
+.site-root .ticker .track span::before{content:'✓';color:var(--lime);font-weight:700;margin-right:7px}
+@keyframes tick{to{transform:translateX(-50%)}}
+/* act strips: kinetic lines between acts */
+.site-root .strip{position:relative;padding:120px 24px;text-align:center;overflow:hidden}
+.site-root .strip .line{font-family:var(--head);font-weight:700;letter-spacing:-.035em;white-space:nowrap;max-width:100%}
+.site-root .strip .line.solid{font-size:clamp(30px,5.5vw,84px);color:var(--text)}
+.site-root .strip .line.ghost{font-size:clamp(14px,2.4vw,30px);font-weight:600;margin-top:22px;color:transparent;-webkit-text-stroke:1px rgba(76,186,127,.45)}
+.site-root .strip .line .hl{color:var(--lime)}
+/* progress dots (desktop) */
+.site-root .dots{position:fixed;right:22px;top:50%;transform:translateY(-50%);z-index:60;display:flex;flex-direction:column;gap:10px}
+.site-root .dot{position:relative;width:9px;height:9px;border-radius:50%;background:var(--border2);cursor:pointer;transition:.25s;border:none;padding:0}
+.site-root .dot.on{background:var(--lime);transform:scale(1.35)}
+.site-root .dot::after{content:attr(data-label);position:absolute;right:18px;top:50%;transform:translateY(-50%);font-size:11.5px;color:var(--text);background:rgba(10,16,14,.92);border:1px solid var(--border2);padding:4px 9px;border-radius:7px;white-space:nowrap;opacity:0;pointer-events:none;transition:.2s}
+.site-root .dot:hover::after{opacity:1}
 /* mobile progress bar */
 .site-root .mbar{display:none;position:-webkit-sticky;position:sticky;top:calc(64px + env(safe-area-inset-top,0px));z-index:40;background:rgba(10,16,14,.92);-webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);border-bottom:1px solid var(--border);padding:10px 16px;transition:opacity .25s}
 .site-root .mbar.off{opacity:0;pointer-events:none}
@@ -164,23 +196,6 @@ const PAGE_CSS = `
 .site-root .mbar .row b{color:var(--text);font-weight:600}
 .site-root .mbar .track{height:3px;background:var(--border);border-radius:99px;margin-top:8px;overflow:hidden}
 .site-root .mbar .fill{height:100%;background:var(--lime);width:0;transition:width .35s ease}
-
-/* a stop */
-.site-root .stop{position:relative;padding:72px 0;border-bottom:1px solid var(--border);scroll-margin-top:90px}
-.site-root .stop:last-of-type{border-bottom:0}
-.site-root .stop .inner{display:grid;grid-template-columns:.9fr 1.1fr;grid-template-areas:"copy mock" "chips mock";gap:18px 44px;align-items:center}
-.site-root .stop.flip .inner{grid-template-columns:1.1fr .9fr;grid-template-areas:"mock copy" "mock chips"}
-.site-root .stop .s-copy{grid-area:copy;align-self:end}
-.site-root .stop .mock{grid-area:mock}
-.site-root .stop .chipsbox{grid-area:chips;align-self:start}
-.site-root .s-kicker{display:inline-flex;align-items:center;gap:10px;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--lime);margin-bottom:14px}
-.site-root .s-kicker .n{display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:var(--tint);border:1px solid rgba(76,186,127,.35);font-family:var(--head);font-size:12px;letter-spacing:0}
-.site-root .s-copy h2{font-size:clamp(28px,3.6vw,46px);letter-spacing:-.025em;line-height:1.1;margin-bottom:12px}
-.site-root .s-copy p{font-size:16px;color:var(--muted);max-width:440px;margin-bottom:0}
-.site-root .chips{display:flex;flex-wrap:wrap;gap:6px;max-width:520px}
-.site-root .chips span{font-size:12px;color:var(--text);background:rgba(255,255,255,.035);border:1px solid var(--border2);padding:5px 10px;border-radius:999px;line-height:1.3}
-.site-root .chips span::before{content:'✓';color:var(--lime);font-weight:700;margin-right:6px}
-.site-root .chips-label{font-size:10.5px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);margin-bottom:8px}
 
 /* device frame + mock primitives */
 .site-root .frame{background:var(--panel);border:1px solid var(--border2);border-radius:18px;overflow:hidden;box-shadow:0 40px 100px rgba(0,0,0,.55)}
@@ -207,10 +222,8 @@ const PAGE_CSS = `
 .site-root .bar{height:6px;background:var(--border);border-radius:99px;overflow:hidden;margin-top:8px}
 .site-root .bar i{display:block;height:100%;width:0;background:var(--lime);border-radius:99px;transition:width 1.4s cubic-bezier(.2,.7,.2,1) .5s}
 .site-root .in .bar i{width:var(--w,60%)}
-/* staged elements: appear one after another once the frame is in */
 .site-root .st{opacity:0;transform:translateY(8px);transition:opacity .45s ease var(--d,0s),transform .45s ease var(--d,0s)}
 .site-root .in .st{opacity:1;transform:none}
-/* status flip: three states stacked, shown in sequence */
 .site-root .flip3{position:relative;height:24px;min-width:86px}
 .site-root .flip3 span{position:absolute;right:0;top:0;opacity:0;transition:opacity .3s}
 .site-root .in .flip3 span:nth-child(1){animation:f3a 5s ease forwards}
@@ -223,7 +236,6 @@ const PAGE_CSS = `
 .site-root .inv-status.draft{background:var(--panel2);color:var(--muted);border:1px solid var(--border2)}
 .site-root .inv-status.sent{background:rgba(251,191,36,.1);color:#fcd34d;border:1px solid rgba(251,191,36,.3)}
 .site-root .inv-status.paid{background:var(--lime);color:var(--ink);border:1px solid var(--lime)}
-/* booking */
 .site-root .mk-svc{display:flex;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px 15px;margin-bottom:8px;font-size:13px}
 .site-root .mk-svc b{font-weight:600}
 .site-root .mk-svc .pr{color:var(--lime);font-weight:600}
@@ -232,7 +244,6 @@ const PAGE_CSS = `
 .site-root .in .mk-time.sel{background:var(--lime);color:var(--ink);font-weight:700;border-color:var(--lime);transition-delay:1.2s}
 .site-root .mk-confirm{background:var(--tint);border:1px solid rgba(76,186,127,.35);border-radius:10px;padding:12px 15px;font-size:12.5px;color:var(--text)}
 .site-root .mk-confirm b{color:var(--lime)}
-/* chat */
 .site-root .mk-msg{max-width:88%;padding:10px 14px;border-radius:12px;font-size:12.5px;line-height:1.5;margin-bottom:9px}
 .site-root .mk-msg.u{margin-left:auto;background:var(--tint);border:1px solid rgba(76,186,127,.3);border-bottom-right-radius:4px}
 .site-root .mk-msg.i{background:var(--panel2);border:1px solid var(--border);border-bottom-left-radius:4px;color:var(--muted)}
@@ -243,13 +254,11 @@ const PAGE_CSS = `
 .site-root .voice i b{width:3px;background:var(--lime);border-radius:2px;height:40%;animation:vbar 1.1s ease-in-out infinite}
 .site-root .voice i b:nth-child(2){height:90%;animation-delay:.15s}.site-root .voice i b:nth-child(3){height:60%;animation-delay:.3s}.site-root .voice i b:nth-child(4){height:100%;animation-delay:.45s}.site-root .voice i b:nth-child(5){height:50%;animation-delay:.6s}
 @keyframes vbar{50%{transform:scaleY(.4)}}
-/* signature */
 .site-root .sig{background:var(--bg);border:1px dashed var(--border2);border-radius:10px;padding:10px 14px;margin:10px 0}
 .site-root .sig svg{display:block;width:100%;height:56px}
 .site-root .sig path{fill:none;stroke:var(--lime);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round;stroke-dasharray:420;stroke-dashoffset:420}
 .site-root .in .sig path{animation:draw 1.6s ease-out .6s forwards}
 @keyframes draw{to{stroke-dashoffset:0}}
-/* website */
 .site-root .web-hero{background:linear-gradient(160deg,var(--tint),var(--bg));border-radius:10px;padding:28px 22px;text-align:center;margin-bottom:10px;border:1px solid var(--border)}
 .site-root .web-hero h4{font-family:var(--head);font-size:20px;font-weight:600;margin-bottom:6px}
 .site-root .web-hero p{font-size:12px;color:var(--muted);margin-bottom:12px}
@@ -257,7 +266,6 @@ const PAGE_CSS = `
 .site-root .web-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .site-root .web-card{background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:12px;font-size:11.5px;color:var(--muted)}
 .site-root .web-card b{display:block;color:var(--text);font-size:12.5px;margin-bottom:3px}
-/* workflow */
 .site-root .wf{display:flex;flex-direction:column;gap:6px}
 .site-root .wf .step{display:flex;align-items:center;gap:10px;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px 12px;font-size:12.5px;transition:border-color .3s,box-shadow .3s}
 .site-root .wf .step i{width:22px;height:22px;border-radius:7px;background:var(--panel2);display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:11px;color:var(--lime);flex-shrink:0}
@@ -265,7 +273,6 @@ const PAGE_CSS = `
 .site-root .in .wf .step{animation:wflit 4.5s ease forwards}
 .site-root .in .wf .step:nth-child(2){animation-delay:.9s}.site-root .in .wf .step:nth-child(3){animation-delay:1.8s}.site-root .in .wf .step:nth-child(4){animation-delay:2.7s}
 @keyframes wflit{0%{border-color:var(--border)}12%,100%{border-color:rgba(76,186,127,.5);box-shadow:0 0 0 3px rgba(76,186,127,.08)}}
-/* phone */
 .site-root .phone{width:min(260px,80%);margin:0 auto;background:#050807;border:1px solid var(--border2);border-radius:34px;padding:12px;box-shadow:0 40px 100px rgba(0,0,0,.6)}
 .site-root .phone .scr{background:var(--panel);border-radius:24px;overflow:hidden;min-height:420px;position:relative;padding:44px 12px 16px}
 .site-root .phone .notch{position:absolute;top:10px;left:50%;transform:translateX(-50%);width:90px;height:22px;background:#050807;border-radius:99px}
@@ -276,32 +283,39 @@ const PAGE_CSS = `
 .site-root .phone .faceid i{width:36px;height:36px;border:2px solid var(--lime);border-radius:10px;display:inline-flex;align-items:center;justify-content:center;font-style:normal;font-size:14px}
 .site-root .phone .tabs{position:absolute;left:0;right:0;bottom:0;display:flex;justify-content:space-around;padding:10px 6px 12px;border-top:1px solid var(--border);font-size:9.5px;color:var(--dim)}
 .site-root .phone .tabs b{color:var(--lime);font-weight:600}
-/* stars */
 .site-root .stars{letter-spacing:2px;color:var(--border2)}
 .site-root .stars b{color:#fcd34d;font-weight:400}
 
-/* finale checklist */
-.site-root .t-final{position:relative;padding:110px 0 100px;text-align:center}
-.site-root .t-final::before{content:'';position:absolute;top:40%;left:50%;transform:translate(-50%,-50%);width:900px;height:600px;background:radial-gradient(ellipse,rgba(76,186,127,.12) 0%,transparent 60%);pointer-events:none}
-.site-root .t-final h2{font-size:clamp(34px,5.2vw,68px);letter-spacing:-.03em;line-height:1.08;margin-bottom:16px}
+/* finale */
+.site-root .t-final{position:relative;padding:120px 0 100px;text-align:center}
+.site-root .t-final::before{content:'';position:absolute;top:35%;left:50%;transform:translate(-50%,-50%);width:900px;height:600px;background:radial-gradient(ellipse,rgba(76,186,127,.12) 0%,transparent 60%);pointer-events:none}
+.site-root .t-final h2{font-size:clamp(36px,5.6vw,76px);letter-spacing:-.035em;line-height:1.05;margin-bottom:16px}
 .site-root .t-final h2 .pulseglow{color:var(--lime);text-shadow:0 0 40px rgba(76,186,127,.35);animation:pulseg 2.6s ease-in-out infinite}
 @keyframes pulseg{50%{text-shadow:0 0 90px rgba(76,186,127,.7)}}
-.site-root .t-final p{font-size:17px;color:var(--muted);max-width:560px;margin:0 auto 30px}
-.site-root .all{columns:4 220px;column-gap:8px;text-align:left;margin:34px auto 38px;max-width:1040px}
+.site-root .t-final p{font-size:18px;color:var(--muted);max-width:560px;margin:0 auto 30px}
+.site-root .t-final .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.site-root .all-toggle{background:transparent;border:1px solid var(--border2);color:var(--muted);font:inherit;font-size:13.5px;padding:10px 18px;border-radius:999px;cursor:pointer;margin:0 auto 26px;display:inline-flex;align-items:center;gap:8px}
+.site-root .all-toggle:hover{color:var(--text)}
+.site-root .all{columns:4 220px;column-gap:8px;text-align:left;margin:0 auto 38px;max-width:1040px}
 .site-root .all .grp{break-inside:avoid;-webkit-column-break-inside:avoid;margin-bottom:8px;background:rgba(255,255,255,.03);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
 .site-root .all .grp b{display:block;font-family:var(--head);font-size:13px;font-weight:600;margin-bottom:6px;color:var(--text)}
 .site-root .all .grp span{display:block;font-size:11.5px;color:var(--muted);line-height:1.45}
-.site-root .t-final .cta-row{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
 
-@media(max-width:1080px){
-  .site-root .tour-grid{grid-template-columns:1fr;gap:0}
-  .site-root .rail{display:none}
+@media(max-width:980px){
+  .site-root .scene{min-height:0;padding:64px 0 24px}
+  .site-root .scene .inner,.site-root .scene.flip .inner{grid-template-columns:1fr;gap:28px}
+  .site-root .scene.flip .s-copy{order:0}
+  .site-root .bignum{font-size:38vw;top:22%}
+  .site-root .ticker{margin-top:28px}
+  .site-root .strip{padding:80px 20px}
+  .site-root .dots{display:none}
   .site-root .mbar{display:block}
-  .site-root .stop{padding:56px 0}
-  .site-root .stop .inner,.site-root .stop.flip .inner{grid-template-columns:1fr;grid-template-areas:"copy" "mock" "chips";gap:22px}
 }
 @media(max-width:640px){
   .site-root .t-open{min-height:80svh}
+  .site-root .strip .line{white-space:normal}
+  .site-root .strip .line.solid{font-size:clamp(28px,8.5vw,40px)}
+  .site-root .strip .line.ghost{font-size:clamp(14px,4vw,18px)}
   .site-root .frame-body{padding:14px}
   .site-root .mk-stats{gap:7px}
   .site-root .mk-stat{padding:10px}
@@ -322,6 +336,8 @@ const PAGE_CSS = `
   .site-root .phone .notif{transition:none;transform:none;opacity:1}
   .site-root .voice i b{animation:none}
   .site-root .mk-time.sel{transition:none}
+  .site-root .ticker .track{animation:none;flex-wrap:wrap;width:auto}
+  .site-root .ticker .win{mask-image:none;-webkit-mask-image:none}
 }
 `;
 
@@ -528,6 +544,7 @@ export default function SiteTour() {
   // 'before' (hero on screen), 'in' (a stop), 'after' (finale): the phone
   // progress bar only shows during the stops.
   const [phase, setPhase] = useState('before');
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -542,7 +559,7 @@ export default function SiteTour() {
       reveals.forEach((el) => io.observe(el));
       cleanups.push(() => io.disconnect());
     }
-    // Which stop is nearest the middle of the screen (rail + mobile bar).
+    // Which stop is nearest the middle of the screen (dots + mobile bar).
     if (typeof IntersectionObserver !== 'undefined') {
       const stops = STOPS.map((s) => document.getElementById('stop-' + s.id)).filter(Boolean);
       const act = new IntersectionObserver((entries) => {
@@ -621,7 +638,7 @@ export default function SiteTour() {
         <div className="gridlines"></div>
         <div className="container" style={{ position: 'relative', zIndex: 2 }}>
           <h1>Everything Ivy does, <span className="shimmer">in 13 stops.</span></h1>
-          <p className="sub">Every feature, one screen each. By the bottom you’ll know exactly what Ivy is capable of. No signup, no sales call.</p>
+          <p className="sub">A day with Ivy, start to finish. Every feature makes an appearance. No signup, no sales call.</p>
           <div className="meta"><span>13 stops</span><span>About 3 minutes</span><span>{chipCount} things Ivy does</span></div>
           <div className="acts">
             {ACTS.map((a) => {
@@ -640,46 +657,45 @@ export default function SiteTour() {
       </div>
 
       <div className="tour-body">
-        <div className="container tour-grid">
-          {/* desktop rail */}
-          <nav className="rail" aria-label="Tour stops">
-            {ACTS.map((a) => (
-              <div key={a.id}>
-                <div className="act">{a.label}</div>
-                {STOPS.map((s, i) => s.act === a.id && (
-                  <a key={s.id} href={'#stop-' + s.id} className={i === active ? 'on' : ''} onClick={(e) => go(e, 'stop-' + s.id)}>
-                    <b>{String(i + 1).padStart(2, '0')}</b>{s.area}
-                  </a>
-                ))}
-              </div>
-            ))}
-            <div className="done"><b>{active + 1}</b> of {STOPS.length} · {Math.round(((active + 1) / STOPS.length) * 100)}% seen</div>
-          </nav>
-
-          {/* stops */}
-          <div>
-            {STOPS.map((s, i) => {
-              const Mock = MOCKS[s.mock];
-              return (
-                <section key={s.id} className={`stop${i % 2 ? ' flip' : ''}`} id={'stop-' + s.id}>
-                  <div className="aurora"><i className="a1"></i><i className="a2"></i></div>
-                  <div className="inner" style={{ position: 'relative', zIndex: 1 }}>
-                    <div className="s-copy reveal">
-                      <div className="s-kicker"><span className="n">{i + 1}</span>{ACTS.find((a) => a.id === s.act).label} · {s.area}</div>
-                      <h2>{s.title}</h2>
-                      <p>{s.blurb}</p>
-                    </div>
-                    <div className="mock"><Mock/></div>
-                    <div className="chipsbox reveal" style={{ '--d': '.15s' }}>
-                      <div className="chips-label">Everything in {s.area}</div>
-                      <div className="chips">{s.chips.map((c) => <span key={c}>{c}</span>)}</div>
+        {STOPS.map((s, i) => {
+          const Mock = MOCKS[s.mock];
+          const actIdx = ACTS.findIndex((a) => a.id === s.act);
+          const firstOfAct = STOPS.findIndex((x) => x.act === s.act) === i;
+          const strip = firstOfAct && actIdx > 0 ? STRIPS[actIdx - 1] : null;
+          const glow = ACT_GLOW[s.act];
+          return (
+            <div key={s.id}>
+              {strip && (
+                <section className="strip">
+                  <div className="gridlines"></div>
+                  <div className="line solid reveal">{strip.solid}</div>
+                  <div className="line ghost reveal" style={{ '--d': '.15s' }}>{strip.ghost}</div>
+                </section>
+              )}
+              <section className={`scene${i % 2 ? ' flip' : ''}`} id={'stop-' + s.id} style={{ '--glow': glow[0], '--glow2': glow[1] }}>
+                <div className="aurora"><i className="a1"></i><i className="a2"></i></div>
+                <div className="gridlines"></div>
+                <span className="bignum" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
+                <div className="container inner">
+                  <div className="s-copy reveal">
+                    <div className="s-kicker"><span className="n">{i + 1}</span>{ACTS[actIdx].label} · {s.area}</div>
+                    <h2>{s.title}</h2>
+                    <p>{s.blurb}</p>
+                  </div>
+                  <Mock/>
+                </div>
+                <div className="ticker reveal" style={{ '--d': '.25s' }} aria-label={`Everything in ${s.area}`}>
+                  <div className="lab">Everything in {s.area} · {s.chips.length}</div>
+                  <div className="win">
+                    <div className="track" style={{ '--dur': `${Math.max(28, s.chips.length * 3.6)}s` }}>
+                      {[...s.chips, ...s.chips].map((c, k) => <span key={k}>{c}</span>)}
                     </div>
                   </div>
-                </section>
-              );
-            })}
-          </div>
-        </div>
+                </div>
+              </section>
+            </div>
+          );
+        })}
       </div>
 
       {/* FINALE */}
@@ -687,18 +703,33 @@ export default function SiteTour() {
         <div className="container" style={{ position: 'relative' }}>
           <h2 className="reveal">That’s the whole thing.<br /><span className="pulseglow">One plan. One login.</span></h2>
           <p className="reveal" style={{ '--d': '.1s' }}>{chipCount} things across {STOPS.length} areas, all included for $8.99 a week after a 14-day free trial. Nothing locked behind a tier.</p>
-          <div className="all reveal" style={{ '--d': '.15s' }}>
-            {STOPS.map((s) => (
-              <div key={s.id} className="grp"><b>{s.area}</b><span>{s.chips.join(' · ')}</span></div>
-            ))}
-          </div>
           <div className="cta-row reveal" style={{ '--d': '.2s' }}>
             <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
             <a href="/#video" className="btn" style={{ border: '1px solid var(--border2)', color: 'var(--text)' }}>Watch the 30-second video</a>
           </div>
           <p className="trust reveal" style={{ marginTop: '16px', '--d': '.3s' }}>$0 today · Cancel anytime · Everything included</p>
+          <div className="reveal" style={{ marginTop: 34, '--d': '.35s' }}>
+            <button type="button" className="all-toggle" onClick={() => setShowAll((v) => !v)} aria-expanded={showAll}>
+              {showAll ? 'Hide the full list' : `See all ${chipCount} as a list`} <span aria-hidden="true">{showAll ? '↑' : '↓'}</span>
+            </button>
+            {showAll && (
+              <div className="all">
+                {STOPS.map((s) => (
+                  <div key={s.id} className="grp"><b>{s.area}</b><span>{s.chips.join(' · ')}</span></div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
       </section>
+
+      {/* progress dots (desktop) */}
+      <div className="dots" aria-label="Tour progress">
+        {STOPS.map((s, i) => (
+          <button key={s.id} type="button" className={`dot${i === active ? ' on' : ''}`} data-label={`${i + 1} · ${s.area}`}
+            aria-label={`Go to stop ${i + 1}: ${s.area}`} onClick={(e) => go(e, 'stop-' + s.id)}/>
+        ))}
+      </div>
 
       <SiteFooter />
     </div>
