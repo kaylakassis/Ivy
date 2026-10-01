@@ -258,12 +258,6 @@ function ProviderRow({
           )}
         </div>
         <div style={{ fontSize: 12, color: 'var(--muted)', lineHeight: 1.5 }}>{description}</div>
-        {!comingSoon && connected && provider?.merchantId && (
-          <div style={{ fontSize: 11, color: 'var(--muted)', marginTop: 6 }}>
-            {provider.label || label}
-            {provider.environment ? ` · ${provider.environment}` : ''}
-          </div>
-        )}
       </div>
 
       <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>

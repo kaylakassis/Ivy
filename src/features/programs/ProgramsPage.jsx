@@ -3,7 +3,7 @@
 // password while it is being finished; without it, owners see the
 // coming-soon page.
 import React, { useEffect, useState } from 'react';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';

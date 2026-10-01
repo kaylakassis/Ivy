@@ -17,7 +17,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import VisibilityPicker from '../../components/VisibilityPicker.jsx';
 import { api } from '../../lib/api.js';
 import { WEEKDAYS_SHORT, minToHM, hmToMin } from './utils.js';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 
 const DEFAULT_REMINDERS = [10080, 2880, 1440, 120];
 

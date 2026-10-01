@@ -10,7 +10,7 @@ import { fmtTime, fmtTimestampHeader, computeTimestampPoints } from './utils.js'
 import NewThreadModal from './NewThreadModal.jsx';
 import { useViewport } from '../../lib/viewport.js';
 import { useDictation, useVoiceMemo } from '../../lib/speech.js';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { AudioPlayer, RecordingBar, uploadVoiceMemo } from '../../components/AudioMessage.jsx';
 import GroupChats from './GroupChats.jsx';
 

@@ -5,7 +5,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
 

@@ -18,7 +18,7 @@
 //      pairs, client-portal share toggles) straightforward to layer on.
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import { Icons } from '../../components/Icons.jsx';
 

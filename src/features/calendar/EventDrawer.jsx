@@ -1,6 +1,6 @@
 // Event drawer - for both blocks (editable) and bookings (view + cancel options).
 import React, { useRef, useState } from 'react';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
 import { minToHM, hmToMin, parseISO, RECURRENCE_OPTIONS, isOccurrencePast } from './utils.js';
 import { api } from '../../lib/api.js';

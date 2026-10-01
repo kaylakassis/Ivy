@@ -1331,7 +1331,7 @@ function BrandingCard() {
     if (file.size > 10 * 1024 * 1024) { setErr(new Error('Logo must be under 10 MB')); return; }
     setUploading(true); setErr(null);
     try {
-      const { upload } = await import('@vercel/blob/client');
+      const { uploadFile: upload } = await import('../../lib/blobUpload.js');
       const result = await upload(file.name, file, {
         access: 'public',
         handleUploadUrl: '/api/account/branding-logo-token',

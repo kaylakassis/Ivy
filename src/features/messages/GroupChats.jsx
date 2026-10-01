@@ -6,7 +6,7 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useViewport } from '../../lib/viewport.js';
 import { fmtTime } from './utils.js';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { useVoiceMemo } from '../../lib/speech.js';
 import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,

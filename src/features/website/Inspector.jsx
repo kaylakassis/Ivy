@@ -1,6 +1,6 @@
 // Right-panel inspector - edits the currently selected section.
 import React, { useState } from 'react';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { Icons } from '../../components/Icons.jsx';
 import { SECTION_TYPES, ANIMATIONS } from './sections.js';
 

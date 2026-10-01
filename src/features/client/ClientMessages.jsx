@@ -15,7 +15,7 @@ import { useClientPortal } from './clientContext.jsx';
 import ClientGroups from './ClientGroups.jsx';
 import ClientDms from './ClientDms.jsx';
 import { useVoiceMemo } from '../../lib/speech.js';
-import { upload } from '@vercel/blob/client';
+import { uploadFile as upload } from '../../lib/blobUpload.js';
 import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
 } from '../../components/AudioMessage.jsx';

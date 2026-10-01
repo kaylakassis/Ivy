@@ -87,7 +87,7 @@ export function useDocuments() {
     if (file.type !== 'application/pdf') throw new Error('Please choose a PDF');
     if (file.size > 25 * 1024 * 1024) throw new Error('PDF must be under 25 MB');
 
-    const { upload } = await import('@vercel/blob/client');
+    const { uploadFile: upload } = await import('../../lib/blobUpload.js');
     const result = await upload(file.name, file, {
       access: 'public',
       handleUploadUrl: '/api/documents/upload-token',
