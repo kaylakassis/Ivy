@@ -24,6 +24,7 @@ import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 import PendingActionCard from './PendingActionCard.jsx';
+import DictationButton from '../../components/DictationButton.jsx';
 
 const HIDE_PREFIXES = [
   // Don't render in places where the bubble would be noise / out of
@@ -251,6 +252,7 @@ function IvyMark({ size = 22 }) {
 function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
   const { messages, thinking, send, mode, modeError, context, briefing, activeId, approvePending, dismissPending } = ivy;
   const [draft, setDraft] = useState('');
+  const [listening, setListening] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
 
@@ -410,7 +412,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKeyDown}
             rows={1}
-            placeholder={thinking ? 'Ivy is thinking…' : 'Ask Ivy anything…'}
+            placeholder={thinking ? 'Ivy is thinking…' : listening ? 'Listening…' : 'Ask Ivy anything…'}
             disabled={thinking}
             style={{
               flex: 1, resize: 'none', minHeight: 22, maxHeight: 120,
@@ -419,6 +421,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
               fontFamily: 'inherit',
             }}
           />
+          <DictationButton value={draft} onChange={setDraft} onListening={setListening} disabled={thinking}/>
           <button
             type="button"
             onClick={() => submit()}

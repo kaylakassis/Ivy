@@ -11,6 +11,7 @@ import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 import PendingActionCard from './PendingActionCard.jsx';
+import DictationButton from '../../components/DictationButton.jsx';
 
 export default function IvyPro() {
   const [tweaks] = useTweaks();
@@ -24,6 +25,7 @@ export default function IvyPro() {
   } = useIvy();
 
   const [draft, setDraft] = useState('');
+  const [listening, setListening] = useState(false);
   // Mobile: 'chat' | 'history' | 'data' tab. Default to chat.
   const [mobileTab, setMobileTab] = useState('chat');
 
@@ -202,13 +204,14 @@ export default function IvyPro() {
               <textarea value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
-                placeholder={isMobile ? 'Ask Ivy anything…' : 'Ask Ivy about revenue, retention, pricing, content…'}
+                placeholder={listening ? 'Listening… tap the mic again when you are done' : isMobile ? 'Ask Ivy anything…' : 'Ask Ivy about revenue, retention, pricing, content…'}
                 rows={1}
                 style={{
                   flex: 1, border: 0, outline: 0, resize: 'none',
                   background: 'transparent', fontFamily: 'inherit', fontSize: 14,
                   lineHeight: 1.5, color: 'var(--fg)', maxHeight: 140, padding: '6px 8px',
                 }}/>
+              <DictationButton value={draft} onChange={setDraft} onListening={setListening} disabled={thinking}/>
               <button className="btn btn-primary" onClick={() => submit()}
                 disabled={!draft.trim() || thinking}
                 style={{ padding: '8px 12px' }}>

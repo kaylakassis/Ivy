@@ -119,6 +119,27 @@ export default async function handler(req, res) {
       }
       const smsConsentAt = body.smsConsent && phone ? new Date().toISOString() : null;
 
+      // One person, one record. A second add with the same email (or the
+      // same phone when there is no email) points the owner at the
+      // existing client instead of creating a lookalike that splits
+      // their history across two rows.
+      const dupe = await sql`
+        SELECT id, name FROM clients
+        WHERE workspace_id = ${workspaceId}
+          AND (
+            (${email}::text IS NOT NULL AND lower(email) = ${email})
+            OR (${email}::text IS NULL AND ${phone}::text IS NOT NULL AND phone = ${phone})
+          )
+        LIMIT 1`;
+      if (dupe.rows.length) {
+        const d = dupe.rows[0];
+        res.setHeader('Content-Type', 'application/json');
+        return res.status(409).json({
+          error: `${d.name} is already in your clients with that ${email ? 'email' : 'phone number'}. Open their record instead of adding them again.`,
+          existingId: d.id,
+        });
+      }
+
       const tags = source ? [source] : [];
       const { rows } = await sql`
         INSERT INTO clients (
