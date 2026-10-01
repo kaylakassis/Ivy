@@ -18,7 +18,7 @@
 // rotates both the secret + backup codes. Useful for "I think someone
 // saw my codes" recovery without going through a password reset.
 import { sql } from '../../_lib/db.js';
-import { requireUser } from '../../_lib/auth.js';
+import { requireUser, invalidateUserCache } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { encrypt } from '../../_lib/secrets.js';
 import {
@@ -68,6 +68,8 @@ export default async function handler(req, res) {
       action: 'totp.enroll.initiated',
       meta: { backup_code_count: backupCodes.length },
     });
+
+    invalidateUserCache(user.id); // /auth/me shows the new 2FA state at once
 
     return ok(res, {
       // Display label for the authenticator app - shows up under

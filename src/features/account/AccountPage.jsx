@@ -13,6 +13,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
 import Referrals from '../referrals/Referrals.jsx';
+import TwoFactor from './TwoFactor.jsx';
 import { api } from '../../lib/api.js';
 import { hideableNav } from '../../lib/nav.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
@@ -1525,6 +1526,7 @@ function SecurityCard() {
           Reset password
         </button>
       </div>
+      <TwoFactor/>
       {info?.available && (
         <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
           <div style={{ flex: 1, minWidth: 0 }}>

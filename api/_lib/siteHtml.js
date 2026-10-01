@@ -549,13 +549,12 @@ function renderExitIntent(cfg) {
   return `
     <div id="ivy-exit-intent" style="display:none;position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,0.55);align-items:center;justify-content:center;padding:24px;font-family:var(--site-font-body)">
       <div style="max-width:480px;background:var(--site-bg);color:var(--site-fg);padding:32px;border-radius:var(--site-radius);border:1px solid var(--site-border);position:relative">
-        <button onclick="document.getElementById('ivy-exit-intent').style.display='none'" style="position:absolute;top:10px;right:14px;background:transparent;border:0;font-size:20px;color:var(--site-muted);cursor:pointer">×</button>
+        <button style="position:absolute;top:10px;right:14px;background:transparent;border:0;font-size:20px;color:var(--site-muted);cursor:pointer">×</button>
         <h3 style="margin:0;font-family:var(--site-font-display);font-size:24px">${esc(cfg.headline)}</h3>
         ${cfg.sub ? `<p style="margin:10px 0 0;color:var(--site-fg-2);line-height:1.55">${esc(cfg.sub)}</p>` : ''}
         ${cfg.cta ? `<p style="margin:20px 0 0"><a href="${attr(link(cfg.ctaLink || '#'))}" style="display:inline-block;padding:12px 22px;background:var(--site-accent);color:var(--site-accent-ink);border-radius:var(--site-radius);text-decoration:none;font-weight:600">${esc(cfg.cta)} →</a></p>` : ''}
       </div>
     </div>
-    <script>(function(){try{var el=document.getElementById('ivy-exit-intent');if(!el)return;if(sessionStorage.getItem('ivy-exit-shown'))return;document.addEventListener('mouseleave',function(e){if(e.clientY<10){el.style.display='flex';sessionStorage.setItem('ivy-exit-shown','1')}})}catch(_){}})();</script>
   `;
 }
 
@@ -643,10 +642,11 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host, ord
   LINK_CTX = { anchors: sectionAnchors(visible), pages: Array.isArray(nav) ? nav : [], linkBase: `/site/${handle}`, sections: visible, bookingHref: `/book/${handle}` };
   const navHtml = renderNav({ handle, nav, currentSlug, businessName: site.businessName });
   const sectionsHtml = visible.map((s) => renderSection(s, handle)).join('\n');
-  // Pageview ping - fires once on initial paint. Crawlers don't run JS
-  // so we naturally exclude them; the UA classifier on the API side
-  // also tags bots so any that DO run JS get bucketed away.
-  const pvScript = `<script>(function(){try{navigator.sendBeacon&&navigator.sendBeacon('/site/${esc(handle)}/pv',new Blob([JSON.stringify({slug:${JSON.stringify(currentSlug || '')},referrer:document.referrer.slice(0,300)})],{type:'application/json'}))||fetch('/site/${esc(handle)}/pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slug:${JSON.stringify(currentSlug || '')},referrer:document.referrer.slice(0,300)}),keepalive:true})}catch(e){}})();</script>`;
+  // No inline scripts here: the site's CSP (vercel.json script-src) has no
+  // 'unsafe-inline', so they would never run. The React PublicSite takes
+  // over this markup on mount and owns the pageview beacon, the sticky CTA
+  // and the exit-intent popup. Crawlers get the static HTML only.
+  const pvScript = '';
   // Exit-intent popup + sticky CTA injected once at the root level so
   // they survive page transitions inside the SPA.
   const popupHtml   = renderExitIntent(site.exitIntentPopup);

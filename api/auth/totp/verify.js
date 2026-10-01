@@ -14,7 +14,7 @@
 // Rate-limited: 5 attempts per minute per user to slow down a
 // brute-force attempt against the 6-digit space (~1M codes).
 import { sql } from '../../_lib/db.js';
-import { requireUser } from '../../_lib/auth.js';
+import { requireUser, invalidateUserCache } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
@@ -94,6 +94,8 @@ export default async function handler(req, res) {
       action: wasEnrolled ? 'totp.verify.success' : 'totp.enroll.completed',
       meta: {},
     });
+
+    invalidateUserCache(user.id); // /auth/me shows the new 2FA state at once
 
     return ok(res, {
       ok: true,

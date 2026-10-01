@@ -208,7 +208,7 @@ export async function requireUser(req, res) {
   const row = await hotCacheGetOrSet(`user:${session.sub}`, USER_ROW_TTL_MS, async () => {
     const { rows } = await sql`
       SELECT id, email, name, created_at, email_verified_at,
-             walkthrough_completed_at, user_type,
+             walkthrough_completed_at, user_type, totp_enrolled_at,
              terms_accepted_at, terms_version,
              privacy_version, privacy_accepted_at,
              password_changed_at, deleted_at, last_active_at, ui_prefs

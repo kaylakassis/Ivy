@@ -9,7 +9,7 @@
 // Re-enabling later goes through /enroll + /verify like the first
 // time. No state is preserved across a disable.
 import { sql } from '../../_lib/db.js';
-import { requireUser, verifyPassword } from '../../_lib/auth.js';
+import { requireUser, verifyPassword, invalidateUserCache } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
@@ -68,6 +68,8 @@ export default async function handler(req, res) {
     });
     // "2FA turned off" security alert. Fire-and-forget.
     notifyTwoFactorChanged({ userId: user.id, enabled: false, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
+
+    invalidateUserCache(user.id); // /auth/me shows the new 2FA state at once
 
     return ok(res, { ok: true, enrolled: false });
   } catch (err) {
