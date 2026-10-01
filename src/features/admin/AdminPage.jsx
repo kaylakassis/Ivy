@@ -35,7 +35,12 @@ const TABS = [
 
 export default function AdminPage() {
   const { user } = useAuth();
-  const [tab, setTab] = useState('overview');
+  // /admin?tab=<id> (push-test and bug-report notifications) opens that
+  // tab directly; anything unknown falls back to the overview.
+  const [tab, setTab] = useState(() => {
+    const want = new URLSearchParams(window.location.search).get('tab');
+    return TABS.some((t) => t.id === want) ? want : 'overview';
+  });
   // Total unread support messages across all threads - drives the
   // red badge on the Support tab so the operator can see "someone's
   // waiting for me" at a glance without clicking through. Polled

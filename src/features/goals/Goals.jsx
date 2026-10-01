@@ -1,5 +1,6 @@
 // Goals & Tasks: header, stats, two columns (Tasks | Goals).
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import SuccessToast from '../../components/SuccessToast.jsx';
@@ -22,6 +23,19 @@ export function GoalsAndTasks() {
     createTask, updateTask, removeTask, toggleTask,
     createGoal, updateGoal, removeGoal,
   } = useGoals();
+  // ?task=<id> (CommandPalette search hit via /goals?task=) scrolls to
+  // and highlights that task row. Read once, then strip the param so a
+  // refresh doesn't keep re-highlighting.
+  const location = useLocation();
+  const navigate = useNavigate();
+  const [highlightId] = useState(() => new URLSearchParams(location.search).get('task'));
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('task')) return;
+    params.delete('task');
+    navigate({ pathname: location.pathname, search: params.toString(), hash: location.hash }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   if (loading) return <div style={{ padding: 24, color: 'var(--muted)', fontSize: 13 }}>Loading goals & tasks…</div>;
   if (error) {
     return (
@@ -44,7 +58,7 @@ export function GoalsAndTasks() {
         <Stat label="Completed this week" value={completedThisWeek} sub="Last 7 days"/>
       </div>
       <div className="split-2">
-        <TasksPane tasks={tasks} onCreate={createTask} onToggle={toggleTask} onUpdate={updateTask} onRemove={removeTask}/>
+        <TasksPane tasks={tasks} highlightId={highlightId} onCreate={createTask} onToggle={toggleTask} onUpdate={updateTask} onRemove={removeTask}/>
         <GoalsPane goals={goals} onCreate={createGoal} onUpdate={updateGoal} onRemove={removeGoal}/>
       </div>
     </div>
@@ -106,8 +120,12 @@ export default function Goals() {
 }
 
 // ---------- TASKS ----------
-function TasksPane({ tasks, onCreate, onToggle, onUpdate, onRemove }) {
-  const [tab, setTab] = useState('open');
+function TasksPane({ tasks, highlightId = null, onCreate, onToggle, onUpdate, onRemove }) {
+  // A deep-linked task that is already done lives on the Done tab.
+  const [tab, setTab] = useState(() => {
+    const hit = highlightId && tasks.find((t) => t.id === highlightId);
+    return hit && hit.done ? 'done' : 'open';
+  });
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState('');
   const [draftDue, setDraftDue] = useState('');
@@ -180,7 +198,7 @@ function TasksPane({ tasks, onCreate, onToggle, onUpdate, onRemove }) {
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {rows.map((t) => (
-            <TaskRow key={t.id} task={t} onToggle={onToggle} onUpdate={onUpdate} onRemove={onRemove}/>
+            <TaskRow key={t.id} task={t} highlight={t.id === highlightId} onToggle={onToggle} onUpdate={onUpdate} onRemove={onRemove}/>
           ))}
         </div>
       )}
@@ -188,11 +206,20 @@ function TasksPane({ tasks, onCreate, onToggle, onUpdate, onRemove }) {
   );
 }
 
-function TaskRow({ task, onToggle, onUpdate, onRemove }) {
+function TaskRow({ task, highlight = false, onToggle, onUpdate, onRemove }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState(task.title);
+  const rowRef = useRef(null);
+  // Deep-link highlight: scroll the row into view and glow briefly.
+  const [glow, setGlow] = useState(highlight);
 
   useEffect(() => { setDraft(task.title); }, [task.id, task.title]);
+  useEffect(() => {
+    if (!highlight) return undefined;
+    const t1 = setTimeout(() => rowRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }), 200);
+    const t2 = setTimeout(() => setGlow(false), 4500);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
+  }, [highlight]);
 
   const save = async () => {
     const v = draft.trim();
@@ -208,7 +235,7 @@ function TaskRow({ task, onToggle, onUpdate, onRemove }) {
   const readyToTick = isSmart && !task.done && progress >= 100;
 
   return (
-    <div className={readyToTick ? 'glow-ready' : ''} style={{
+    <div ref={rowRef} id={`task-${task.id}`} className={readyToTick || glow ? 'glow-ready' : ''} style={{
       display: 'flex', flexDirection: 'column', gap: 6,
       padding: '8px 10px', borderRadius: 10,
       background: task.done ? 'transparent' : 'var(--surface-2)',

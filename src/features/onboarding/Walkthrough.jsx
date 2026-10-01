@@ -42,7 +42,7 @@ const STEPS = [
   {
     id: 'calendar',
     title: 'Calendar',
-    body: "Define your services, set weekly availability, and share your booking link. Public bookings auto-create clients, send confirmations, and trigger SMS reminders.",
+    body: "Set your weekly availability and share your booking link. Public bookings auto-create clients, send confirmations, and trigger SMS reminders. Your services live under Finance, in the Services section.",
     route: '/calendar',
     selector: '[data-tour="nav-calendar"]',
     placement: 'right',
@@ -96,11 +96,11 @@ const STEPS = [
     placement: 'right',
   },
   {
-    id: 'rewards',
-    title: 'Rewards & referrals',
-    body: "Loyalty points, referral codes, and birthday perks - stand up programs that bring repeat clients back and give them a reason to bring friends.",
-    route: '/rewards',
-    selector: '[data-tour="nav-rewards"]',
+    id: 'marketing',
+    title: 'Marketing - campaigns, workflows, rewards',
+    body: "Email campaigns, automated follow-ups, review requests, and a rewards program that brings repeat clients back. Referrals live on your Account page.",
+    route: '/marketing?tab=rewards',
+    selector: '[data-tour="nav-marketing"]',
     placement: 'right',
   },
   {
@@ -161,8 +161,13 @@ export default function Walkthrough({ onClose }) {
 
     const run = async () => {
       // Step 1: navigate to the target route if we're not already there.
-      if (step.route && location.pathname !== step.route) {
-        navigate(step.route);
+      // Routes may carry a query (e.g. /marketing?tab=rewards): compare
+      // the path, and the query when there is one.
+      if (step.route) {
+        const [routePath, routeQuery = ''] = step.route.split('?');
+        const samePath = location.pathname === routePath;
+        const sameQuery = !routeQuery || location.search === `?${routeQuery}`;
+        if (!samePath || !sameQuery) navigate(step.route);
       }
 
       // Step 2: poll for the element. Cap at FIND_TIMEOUT_MS so a renamed

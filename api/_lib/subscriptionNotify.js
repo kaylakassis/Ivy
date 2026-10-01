@@ -329,7 +329,7 @@ export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, bus
       <p>Great news — someone you referred just subscribed to <strong>${PLAN_NAME}</strong>. You've earned <strong>${wk}</strong>, credited to your account so your next invoice is waived.</p>
       <p>Keep sharing your link and keep earning — you both get a free week every time.</p>`,
     ctaText: 'See my referrals →',
-    ctaUrl: `${appUrl()}/referrals`,
+    ctaUrl: `${appUrl()}/account#referrals`,
     footer: `— The Ivy Team`,
   });
   return { subject: `You earned ${wk} — thanks for the referral`, html, preheader };
@@ -355,7 +355,7 @@ export async function notifyReferralReward({ workspaceId, variant, weeks = 1 }) 
         body: variant === 'referred'
           ? 'Welcome gift credited to your account.'
           : 'Someone you referred subscribed. Credit applied to your next invoice.',
-        url: variant === 'referred' ? '/' : '/referrals',
+        url: variant === 'referred' ? '/' : '/account#referrals',
         tag: `referral-reward-${variant}-${workspaceId}`,
       },
     });

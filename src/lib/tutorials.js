@@ -84,8 +84,8 @@ export const TUTORIALS = {
     steps: [
       {
         title: 'Set your services first',
-        body: 'Tap Services (top action menu). Each service is a name + duration + price. You can require a deposit, a full payment, or nothing at booking - your call. Photos here show on your booking page.',
-        cta: { label: 'Open Services', to: '/calendar' },
+        body: 'Services live under Finance → Services. Each service is a name + duration + price. You can require a deposit, a full payment, or nothing at booking - your call. Photos there show on your booking page.',
+        cta: { label: 'Open Services', to: '/finance?section=services' },
       },
       {
         title: 'Set your weekly hours',

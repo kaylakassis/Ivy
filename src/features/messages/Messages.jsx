@@ -15,7 +15,12 @@ import { AudioPlayer, RecordingBar, uploadVoiceMemo } from '../../components/Aud
 import GroupChats from './GroupChats.jsx';
 
 export default function Messages() {
-  const [tab, setTab] = useState('direct'); // 'direct' | 'groups'
+  // ?group=<id> (group-chat push notifications, api/_lib/groupChat.js)
+  // lands on the Groups tab with that group open. Read once at mount;
+  // GroupChats strips the param after consuming it.
+  const location = useLocation();
+  const [initialGroup] = useState(() => new URLSearchParams(location.search).get('group'));
+  const [tab, setTab] = useState(initialGroup ? 'groups' : 'direct'); // 'direct' | 'groups'
   return (
     <div style={{ display: 'flex', flexDirection: 'column', flex: 1, minHeight: 0 }}>
       <div style={{
@@ -25,7 +30,7 @@ export default function Messages() {
         <TabButton active={tab === 'direct'} onClick={() => setTab('direct')}>Direct</TabButton>
         <TabButton active={tab === 'groups'} onClick={() => setTab('groups')}>Groups</TabButton>
       </div>
-      {tab === 'direct' ? <DirectMessages/> : <GroupChats/>}
+      {tab === 'direct' ? <DirectMessages/> : <GroupChats initialId={initialGroup}/>}
     </div>
   );
 }

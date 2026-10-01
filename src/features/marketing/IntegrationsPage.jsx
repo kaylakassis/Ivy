@@ -19,7 +19,7 @@ const LIVE = [
   { name: 'Form webhooks',    icon: 'Globe',    sub: 'Route your website form submissions to Zapier or any URL you choose.' },
   { name: 'Embeddable widget', icon: 'Doc',     sub: 'One-line script to embed booking on any external site.' },
   { name: 'Custom domain',    icon: 'Globe',    sub: 'Point your domain at Ivy; DNS verification built-in.' },
-  { name: 'CSV import',       icon: 'FileIcon', sub: 'Bring clients, bookings, invoices from any other tool.' },
+  { name: 'CSV import',       icon: 'FileIcon', sub: 'Bring your client list over from any other tool; duplicates are matched by email.' },
   { name: 'Email (Resend)',   icon: 'Mail',     sub: 'Transactional + reminder email sent from your branded domain when configured.' },
   { name: 'SMS (Twilio)',     icon: 'Phone',    sub: 'Booking reminders + automated SMS steps in your workflows.' },
 ];

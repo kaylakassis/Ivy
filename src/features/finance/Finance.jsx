@@ -136,10 +136,17 @@ export default function Finance() {
     }
     // ?section=<id> - used by the Calendar → /finance redirect for the
     // legacy ?service= deep link and any future tab-switch links.
+    // ?service=<id> is left in place for the Services section to consume.
     const sectionParam = params.get('section');
-    if (sectionParam) {
-      setSection(sectionParam);
+    // ?filter=<status> - invoice status filter (weekly recap "Chase them"
+    // link uses ?filter=overdue). Only known statuses are honored.
+    const filterParam = params.get('filter');
+    const filterOk = filterParam && ['all', 'draft', 'sent', 'overdue', 'paid', 'voided'].includes(filterParam);
+    if (filterOk) { setTab(filterParam); setSection('invoices'); }
+    if (sectionParam) setSection(sectionParam);
+    if (sectionParam || filterParam) {
       params.delete('section');
+      params.delete('filter');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps

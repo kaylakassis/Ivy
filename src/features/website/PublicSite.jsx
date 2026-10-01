@@ -2,6 +2,7 @@
 // /site/:handle/:slug (sub-pages) - reads from
 // /api/website/public/:handle?slug=<slug>.
 import React, { useEffect, useState } from 'react';
+import { Icons } from '../../components/Icons.jsx';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 // These modules only load when a customer site is rendered or edited, so
 // requesting the builder font palette here keeps it off every other page.
@@ -168,6 +169,50 @@ export default function PublicSite({ byHost = false }) {
       {/* Parity with the SSR renderer (siteHtml.js) for the CSR fallback. */}
       <StickyCta cfg={site.stickyCta} />
       <ExitIntent cfg={site.exitIntentPopup} />
+      <OrderNotice search={location.search} />
+    </div>
+  );
+}
+
+// Stripe Checkout for the product store returns to the site with
+// ?order=success or ?order=cancel (api/site/[handle]/checkout.js). Show a
+// dismissible banner; dismissing also strips the param so a refresh
+// doesn't bring it back. Mirrors renderOrderNotice in siteHtml.js.
+function OrderNotice({ search }) {
+  const [order, setOrder] = useState(() => {
+    const v = new URLSearchParams(search).get('order');
+    return v === 'success' || v === 'cancel' ? v : null;
+  });
+  if (!order) return null;
+  const dismiss = () => {
+    setOrder(null);
+    try {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('order');
+      const qs = params.toString();
+      window.history.replaceState({}, '', window.location.pathname + (qs ? `?${qs}` : ''));
+    } catch { /* ignore */ }
+  };
+  const ok = order === 'success';
+  return (
+    <div role="status" style={{
+      position: 'fixed', left: 16, right: 16, bottom: 16, zIndex: 9500,
+      maxWidth: 560, margin: '0 auto', display: 'flex', alignItems: 'flex-start', gap: 10,
+      padding: '12px 14px', borderRadius: 'var(--site-radius, 10px)',
+      background: 'var(--site-bg)', color: 'var(--site-fg)',
+      border: `1px solid ${ok ? 'var(--site-accent)' : 'var(--site-border)'}`,
+      boxShadow: '0 12px 32px -12px rgba(0,0,0,0.35)', fontSize: 14, lineHeight: 1.5,
+      fontFamily: 'var(--site-font-body)',
+    }}>
+      <span style={{ flex: 1, minWidth: 0 }}>
+        {ok
+          ? <><strong>Thanks for your order.</strong> Your payment went through and a receipt is on its way to your email.</>
+          : <><strong>Checkout cancelled.</strong> Nothing was charged. Your cart is still here whenever you're ready.</>}
+      </span>
+      <button type="button" onClick={dismiss} aria-label="Dismiss"
+        style={{ background: 'transparent', border: 0, cursor: 'pointer', color: 'var(--site-muted)', padding: 2, display: 'flex' }}>
+        <Icons.X size={14}/>
+      </button>
     </div>
   );
 }

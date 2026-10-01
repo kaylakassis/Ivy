@@ -42,11 +42,17 @@ function reminderLabel(min) {
   return `${Math.round(min / 1440)}d before`;
 }
 
-export default function ServicesDrawer({ initial, onSave, onClose, inline = false }) {
+// `openId`: a saved service id to open in the editor straight away
+// (deep link from search: /finance?section=services&service=<id>).
+export default function ServicesDrawer({ initial, onSave, onClose, inline = false, openId = null }) {
   const [items, setItems] = useState(() => initial.length > 0
     ? initial.map((s) => ({ ...s, _key: s.id || Math.random().toString(36).slice(2) }))
     : []);
-  const [editId, setEditId] = useState(null);
+  const [editId, setEditId] = useState(() => {
+    if (!openId) return null;
+    const hit = initial.find((s) => String(s.id) === String(openId));
+    return hit ? hit.id : null;
+  });
   const [previewing, setPreviewing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);

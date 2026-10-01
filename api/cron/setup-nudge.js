@@ -49,7 +49,7 @@ function firstMissing(r) {
   if (!r.email_verified_at) return { id: 'email', label: 'confirm your email address', href: '/account' };
   if (!(r.biz_name && String(r.biz_name).trim())) return { id: 'biz', label: 'name your business', href: '/calendar' };
   if (!(r.slug && String(r.slug).trim())) return { id: 'slug', label: 'pick your booking link', href: '/calendar' };
-  if (!Number(r.svc_count)) return { id: 'service', label: 'add your first service', href: '/calendar' };
+  if (!Number(r.svc_count)) return { id: 'service', label: 'add your first service', href: '/finance?section=services' };
   if (!hasAvailability) return { id: 'availability', label: 'set your weekly availability', href: '/calendar' };
   return null;
 }

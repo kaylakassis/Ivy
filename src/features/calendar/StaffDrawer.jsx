@@ -69,7 +69,6 @@ export default function StaffDrawer({ onClose, onChanged }) {
     setDraft({
       name: s.name, email: s.email || '', phone: s.phone || '',
       role: s.role || '', color: s.color || COLORS[0],
-      hourlyRate: s.hourlyRate ?? '', commissionRate: s.commissionRate ?? '',
       active: s.active,
     });
   };
@@ -127,8 +126,7 @@ export default function StaffDrawer({ onClose, onChanged }) {
               <div style={{ flex: 1, minWidth: 0 }}>
                 <div style={{ fontSize: 14, fontWeight: 550 }}>{s.name}</div>
                 <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
-                  {[s.role, s.email, s.hourlyRate != null ? `$${s.hourlyRate}/hr` : null]
-                    .filter(Boolean).join(' · ')}
+                  {[s.role, s.email].filter(Boolean).join(' · ')}
                 </div>
               </div>
               <button onClick={() => toggleActive(s)} className="btn btn-ghost"
@@ -168,20 +166,6 @@ function StaffForm({ draft, setDraft, onSave, onCancel, busy, err }) {
         <Field label="Phone">
           <input type="tel" value={draft.phone || ''} onChange={(e) => setDraft({ ...draft, phone: e.target.value })}
             style={inputSty} placeholder="+1 555-555-5555"/>
-        </Field>
-      </Row>
-      <Row>
-        <Field label="Hourly rate ($)">
-          <input type="number" min={0} step="0.01"
-            value={draft.hourlyRate ?? ''}
-            onChange={(e) => setDraft({ ...draft, hourlyRate: e.target.value === '' ? null : Number(e.target.value) })}
-            style={inputSty}/>
-        </Field>
-        <Field label="Commission (%)" hint="If staff keeps a % of services they perform">
-          <input type="number" min={0} max={100} step="0.1"
-            value={draft.commissionRate ?? ''}
-            onChange={(e) => setDraft({ ...draft, commissionRate: e.target.value === '' ? null : Number(e.target.value) })}
-            style={inputSty}/>
         </Field>
       </Row>
       <Field label="Color (calendar marker)">

@@ -18,6 +18,8 @@ export default function PublicProgram() {
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [busy, setBusy] = useState(false); const [formErr, setFormErr] = useState(null);
   useEffect(() => { api.get(`/programs/public/${id}`).then(setData).catch((e) => setErr(e.message)); }, [id]);
   const purchased = params.get('purchased') === '1';
+  // Stripe cancel_url lands back here with ?cancelled=1 (api/programs/checkout.js).
+  const [cancelled, setCancelled] = useState(() => params.get('cancelled') === '1');
   const buy = async (e) => {
     e.preventDefault(); setBusy(true); setFormErr(null);
     try { const r = await api.post('/programs/checkout', { programId: id, name, email }); window.location.assign(r.url); }
@@ -47,7 +49,15 @@ export default function PublicProgram() {
           <Link to={`/signin?next=${encodeURIComponent('/me/programs')}`} className="btn btn-outline">Sign in</Link>
         </div>
       </div>
-    ) : (
+    ) : (<>
+      {cancelled && (
+        <div className="card" style={{ padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10, fontSize: 13.5, color: 'var(--fg-2)' }}>
+          <span style={{ flex: 1 }}>Checkout cancelled. Nothing was charged. You can try again whenever you're ready.</span>
+          <button type="button" onClick={() => setCancelled(false)} aria-label="Dismiss" className="btn btn-ghost" style={{ padding: 2, color: 'var(--muted)' }}>
+            <Icons.X size={13}/>
+          </button>
+        </div>
+      )}
       <form onSubmit={buy} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 12 }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <span style={{ fontSize: 30, fontWeight: 600, letterSpacing: '-.02em' }}>{free ? 'Free' : fmtPrice(program.priceCents, currency)}</span>
@@ -63,7 +73,7 @@ export default function PublicProgram() {
           <div style={{ fontSize: 12, color: 'var(--muted)', textAlign: 'center' }}>Secure checkout by Stripe. Paid directly to {business.name}.{program.billing !== 'one_time' ? ' Cancel any time.' : ''}</div>
         </>)}
       </form>
-    )}
+    </>)}
     {outline.length > 0 && (
       <div className="card" style={{ padding: 4 }}>
         <div style={{ padding: '12px 16px 6px', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>What's inside · {outline.length} item{outline.length === 1 ? '' : 's'}</div>
