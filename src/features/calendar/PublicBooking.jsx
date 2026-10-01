@@ -62,7 +62,9 @@ export default function PublicBooking({ embedded = false }) {
   // Same pattern for the OTHER checkout returns that land back on this
   // page. Without these, someone who just paid $50-$500 got the plain
   // booking form with zero acknowledgment.
-  const [paymentNotice, setPaymentNotice] = useState(null); // 'giftcard' | 'package' | 'membership' | null
+  const [paymentNotice, setPaymentNotice] = useState(null); // 'giftcard' | 'package' | 'membership' | 'cancelled' | null
+  // Failed PayPal capture (api/finance/paypal-return.js: ?payment=error&msg=).
+  const [paymentError, setPaymentError] = useState(null);
   // Deposit was required but no checkout could be minted (provider not
   // connected / mint failed server-side). The confirmed screen must say
   // the deposit is still owed instead of a clean "You're booked."
@@ -85,6 +87,13 @@ export default function PublicBooking({ embedded = false }) {
     if (params.get('giftcard') === 'ok')          { setPaymentNotice('giftcard');   params.delete('giftcard');   dirty = true; }
     if (params.get('package') === 'purchased')    { setPaymentNotice('package');    params.delete('package');    dirty = true; }
     if (params.get('membership') === 'joined')    { setPaymentNotice('membership'); params.delete('membership'); dirty = true; }
+    // Stripe cancel_url for gift cards / packages sold on this page.
+    if (params.get('giftcard') === 'cancel')      { setPaymentNotice('cancelled');  params.delete('giftcard');   dirty = true; }
+    if (params.get('package') === 'cancel')       { setPaymentNotice('cancelled');  params.delete('package');    dirty = true; }
+    if (params.get('payment') === 'error') {
+      setPaymentError((params.get('msg') || 'Payment could not be completed.').slice(0, 160));
+      params.delete('payment'); params.delete('msg'); dirty = true;
+    }
     if (!dirty) return;
     // Strip the params so a refresh doesn't re-trigger the notice.
     const qs = params.toString();
@@ -338,19 +347,36 @@ export default function PublicBooking({ embedded = false }) {
       {/* Post-payment acknowledgment for the page's other purchases
           (gift card / package / membership) - the buyer just handed over
           real money and must see it registered. */}
+      {paymentError && step === 'pick' && (
+        <div style={{
+          display: 'flex', alignItems: 'flex-start', gap: 10,
+          padding: '11px 14px', borderRadius: 10, marginBottom: 14,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          fontSize: 13, color: 'var(--danger)', lineHeight: 1.5,
+        }}>
+          <span style={{ flex: 1, minWidth: 0 }}>
+            Payment didn't go through: {paymentError} You haven't been charged - try again or pick another way to pay.
+          </span>
+          <button type="button" onClick={() => setPaymentError(null)}
+            aria-label="Dismiss" className="btn btn-ghost" style={{ padding: 2, color: 'var(--muted)' }}>
+            <Icons.X size={13}/>
+          </button>
+        </div>
+      )}
       {paymentNotice && step === 'pick' && (
         <div style={{
           display: 'flex', alignItems: 'flex-start', gap: 10,
           padding: '11px 14px', borderRadius: 10, marginBottom: 14,
-          background: 'color-mix(in srgb, var(--ok) 10%, var(--surface))',
-          border: '1px solid color-mix(in srgb, var(--ok) 40%, var(--border))',
+          background: paymentNotice === 'cancelled' ? 'var(--surface-2)' : 'color-mix(in srgb, var(--ok) 10%, var(--surface))',
+          border: '1px solid ' + (paymentNotice === 'cancelled' ? 'var(--border)' : 'color-mix(in srgb, var(--ok) 40%, var(--border))'),
           fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.5,
         }}>
-          <Icons.Check size={15} stroke="var(--ok)"/>
+          {paymentNotice !== 'cancelled' && <Icons.Check size={15} stroke="var(--ok)"/>}
           <span style={{ flex: 1, minWidth: 0 }}>
             {paymentNotice === 'giftcard' && <>Payment received - the gift card is on its way to the recipient's inbox (check spam if it doesn't arrive in a few minutes).</>}
             {paymentNotice === 'package' && <>Payment received - your package credits are ready. Book below, or sign in to your client portal to use them.</>}
             {paymentNotice === 'membership' && <>You're in! Your membership is active - a confirmation email is on its way.</>}
+            {paymentNotice === 'cancelled' && <>Checkout cancelled - nothing was charged. You can try again whenever you're ready.</>}
           </span>
           <button type="button" onClick={() => setPaymentNotice(null)}
             aria-label="Dismiss" className="btn btn-ghost" style={{ padding: 2, color: 'var(--muted)' }}>

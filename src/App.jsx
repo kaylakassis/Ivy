@@ -203,10 +203,18 @@ function MarketingRedirect({ tab }) {
   return <Navigate to={`/marketing?${p.toString()}`} replace/>;
 }
 
-// /projects?id=X → /clients?view=folders&folder=X
+// /goals?task=X → /dashboard?task=X#goals (the Goals & Tasks block lives on
+// the dashboard; CommandPalette task hits carry ?task= so keep the query).
+function GoalsRedirect() {
+  const q = window.location.search || '';
+  return <Navigate to={`/dashboard${q}#goals`} replace/>;
+}
+
+// /projects?id=X → /clients?folder=X (Clients opens that folder; there is
+// no separate folders view, so no `view` param to carry).
 function ProjectsRedirect() {
   const id = new URLSearchParams(window.location.search).get('id');
-  return <Navigate to={`/clients?view=folders${id ? `&folder=${encodeURIComponent(id)}` : ''}`} replace/>;
+  return <Navigate to={`/clients${id ? `?folder=${encodeURIComponent(id)}` : ''}`} replace/>;
 }
 
 export default function App() {
@@ -309,7 +317,7 @@ export default function App() {
           <Route path="/programs"   element={<ProgramsPage />} />
           <Route path="/calendar"   element={<Calendar />} />
           <Route path="/finance"    element={<Finance />} />
-          <Route path="/goals"      element={<Navigate to="/dashboard#goals" replace/>} />
+          <Route path="/goals"      element={<GoalsRedirect />} />
           <Route path="/marketing"  element={<Marketing />} />
           <Route path="/workflows"  element={<MarketingRedirect tab="workflows"/>} />
           <Route path="/rewards"    element={<MarketingRedirect tab="rewards"/>} />

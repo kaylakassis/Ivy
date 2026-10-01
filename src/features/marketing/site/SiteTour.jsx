@@ -93,13 +93,6 @@ const STOPS = [
     mock: 'marketing',
   },
   {
-    id: 'programs', act: 'look', area: 'Programs',
-    title: 'Sell what you know.',
-    blurb: 'Courses, coaching plans and paid communities, with lessons, PDFs and videos, sold one-time or on a subscription.',
-    chips: ['Courses & coaching plans', 'Paid communities with a members feed', 'Written lessons & PDFs', 'Video lessons', 'One-time or recurring price', 'Access windows', 'Bought and watched from the client portal'],
-    mock: 'programs',
-  },
-  {
     id: 'ivy', act: 'ivy', area: 'Ivy, the assistant',
     title: 'An assistant that actually does things.',
     blurb: 'Ask in plain English. Ivy reads your real numbers, does the work, and waits for your approval on anything that reaches a client.',
@@ -110,7 +103,7 @@ const STOPS = [
     id: 'phone', act: 'ivy', area: 'iPhone app & client portal',
     title: 'In your pocket, and in theirs.',
     blurb: 'The iPhone app with Face ID and push, and a free portal where your clients book, pay, sign and message you.',
-    chips: ['iPhone app', 'Face ID lock', 'Push notifications', 'Same account everywhere', 'Client portal, free forever', 'Clients book & reschedule', 'Clients pay invoices', 'Clients sign documents', 'Clients message you & join groups', 'Clients watch their programs'],
+    chips: ['iPhone app', 'Face ID lock', 'Push notifications', 'Same account everywhere', 'Client portal, free forever', 'Clients book & reschedule', 'Clients pay invoices', 'Clients sign documents', 'Clients message you & join groups'],
     mock: 'phone',
   },
 ];
@@ -536,7 +529,7 @@ export default function SiteTour() {
   useSiteFonts();
   usePageMeta({
     title: 'Take the Tour - Every Ivy Feature in 13 Stops | Ivy',
-    description: 'Scroll through everything Ivy does: dashboard, clients and folders, booking, messages, invoices, point of sale, expenses and taxes, e-signature, website, marketing, programs, the Ivy assistant, and the iPhone app. One plan, $8.99/week.',
+    description: 'Scroll through everything Ivy does: dashboard, clients and folders, booking, messages, invoices, point of sale, expenses and taxes, e-signature, website, marketing, the Ivy assistant, and the iPhone app. One plan, $8.99/week.',
     canonical: 'https://joinivy.ai/tour',
     ogType: 'website',
   });

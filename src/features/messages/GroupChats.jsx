@@ -1,6 +1,7 @@
 // Owner-side cohort group chat UI. Sibling of Messages.jsx - they
 // share a tab toggle in MessagesPage but each owns its own layout.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
@@ -12,14 +13,26 @@ import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
 } from '../../components/AudioMessage.jsx';
 
-export default function GroupChats() {
+export default function GroupChats({ initialId = null }) {
   const [groups, setGroups]         = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [error, setError]           = useState(null);
-  const [selectedId, setSelectedId] = useState(null);
+  const [selectedId, setSelectedId] = useState(initialId);
   const [newOpen, setNewOpen]       = useState(false);
   const [addOpen, setAddOpen]       = useState(false);
   const { isMobile } = useViewport();
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  // Strip ?group=<id> once consumed so a refresh doesn't fight the user
+  // picking a different group (same pattern as ?threadId in Messages).
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    if (!params.has('group')) return;
+    params.delete('group');
+    navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const refresh = useCallback(async () => {
     try {

@@ -25,6 +25,8 @@ export default async function handler(req, res) {
     await warmupDbOnce();
     await ensureSchemaApplied();
     const { handle } = req.query;
+    // Stripe Checkout returns here with ?order=success|cancel.
+    const order = typeof req.query.order === 'string' ? req.query.order : null;
     const result = await loadPublicSite({ handle, slug: '' });
     if (result.kind !== 'ok') return notFound(res, handle);
     // Honor owner-configured 301 redirects before rendering.
@@ -39,6 +41,7 @@ export default async function handler(req, res) {
       handle: result.site.handle,
       currentSlug: '',
       host,
+      order,
     });
 
     res.statusCode = 200;

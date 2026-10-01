@@ -135,7 +135,7 @@ export default function Calendar() {
       // of stranding the user on Calendar with no way to reach it.
       params.delete('service');
       const carry = params.toString();
-      navigate(`/finance?section=services${carry ? '&' + carry : ''}`, { replace: true });
+      navigate(`/finance?section=services&service=${encodeURIComponent(serviceId)}${carry ? '&' + carry : ''}`, { replace: true });
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [location.search, cal?.bookings]);

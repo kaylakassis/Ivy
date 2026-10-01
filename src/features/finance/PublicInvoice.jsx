@@ -16,6 +16,11 @@ export default function PublicInvoice() {
   const [tweaks]  = useTweaks();
   const paidFlag      = params.get('paid') === '1';
   const cancelledFlag = params.get('cancelled') === '1';
+  // PayPal return (api/finance/paypal-return.js) reports a failed capture
+  // as ?payment=error&msg=<reason>.
+  const paymentErrorMsg = params.get('payment') === 'error'
+    ? (params.get('msg') || 'Payment could not be completed.').slice(0, 160)
+    : null;
   const [inv, setInv]         = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
@@ -288,6 +293,14 @@ export default function PublicInvoice() {
                 background: 'var(--surface-2)', color: 'var(--muted)', fontSize: 12,
               }}>
                 Payment was cancelled - try again whenever you're ready.
+              </div>
+            )}
+            {paymentErrorMsg && (
+              <div style={{
+                marginBottom: 12, padding: '6px 10px', borderRadius: 6,
+                background: 'rgba(155,44,44,0.08)', color: 'var(--danger)', fontSize: 12,
+              }}>
+                Payment didn't go through: {paymentErrorMsg} You haven't been charged - try again or pay another way.
               </div>
             )}
             {payErr && (

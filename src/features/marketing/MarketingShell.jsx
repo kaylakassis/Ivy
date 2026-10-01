@@ -47,9 +47,12 @@ export function MarketingMobileMenu({ extra = [] }) {
     return () => document.removeEventListener('keydown', onKey);
   }, [open]);
 
+  // Blog is a static page (public/blog.html, rewritten at /blog in
+  // vercel.json), not a React Router route, so it must be a plain <a> or
+  // it lands on the in-app 404.
   const routeLinks = [
     { label: 'Pricing', to: '/pricing' },
-    { label: 'Blog',    to: '/blog' },
+    { label: 'Blog',    href: '/blog' },
     { label: 'About',   to: '/about' },
   ];
 
@@ -95,9 +98,11 @@ export function MarketingMobileMenu({ extra = [] }) {
               <a key={it.href} href={it.href} onClick={() => setOpen(false)}
                 style={menuItem}>{it.label}</a>
             ))}
-            {routeLinks.map((it) => (
-              <Link key={it.to} to={it.to} onClick={() => setOpen(false)}
-                style={menuItem}>{it.label}</Link>
+            {routeLinks.map((it) => (it.href
+              ? <a key={it.href} href={it.href} onClick={() => setOpen(false)}
+                  style={menuItem}>{it.label}</a>
+              : <Link key={it.to} to={it.to} onClick={() => setOpen(false)}
+                  style={menuItem}>{it.label}</Link>
             ))}
 
             <div style={{ height: 1, background: 'var(--border)', margin: '8px 0' }}/>
@@ -198,8 +203,9 @@ export function SimpleNav() {
         <div style={{ flex: 1 }}/>
         <Link to="/pricing" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Pricing</Link>
-        <Link to="/blog" className="btn btn-ghost marketing-nav-secondary"
-          style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Blog</Link>
+        {/* Static page, not a SPA route: plain anchor. */}
+        <a href="/blog" className="btn btn-ghost marketing-nav-secondary"
+          style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>Blog</a>
         <Link to="/about" className="btn btn-ghost marketing-nav-secondary"
           style={{ padding: '8px 12px', fontSize: 13, color: 'var(--fg-2)' }}>About</Link>
         <Link to="/signin" className="btn btn-ghost marketing-nav-secondary"
@@ -245,7 +251,7 @@ export function SimpleFooter() {
         <div style={{ flex: 1 }}/>
         <div style={{ display: 'flex', gap: 18, fontSize: 12.5, color: 'var(--muted)', flexWrap: 'wrap' }}>
           <Link to="/pricing" style={{ color: 'inherit', textDecoration: 'none' }}>Pricing</Link>
-          <Link to="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Blog</Link>
+          <a href="/blog" style={{ color: 'inherit', textDecoration: 'none' }}>Blog</a>
           <Link to="/security" style={{ color: 'inherit', textDecoration: 'none' }}>Security</Link>
           <Link to="/integrations" style={{ color: 'inherit', textDecoration: 'none' }}>Integrations</Link>
           <Link to="/mobile" style={{ color: 'inherit', textDecoration: 'none' }}>Mobile</Link>

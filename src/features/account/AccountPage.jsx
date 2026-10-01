@@ -31,9 +31,18 @@ export default function AccountPage() {
   const [busyEmail, setBusyEmail]   = useState(false);
   const [emailedNote, setEmailedNote] = useState(null);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Deep links: /account#referrals, /account?tab=billing (dunning, trial
+  // and win-back emails and pushes; winback=1 just lands on billing too)
+  // and /account?tab=security (sign-in alerts). Scroll the card into view
+  // once the page has painted.
   useEffect(() => {
-    if (window.location.hash !== '#referrals') return;
-    const t = setTimeout(() => document.getElementById('referrals')?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
+    const tab = new URLSearchParams(window.location.search).get('tab');
+    const target = window.location.hash === '#referrals' ? 'referrals'
+      : tab === 'billing' ? 'billing'
+      : tab === 'security' ? 'security'
+      : null;
+    if (!target) return;
+    const t = setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
     return () => clearTimeout(t);
   }, []);
 
@@ -153,7 +162,7 @@ export default function AccountPage() {
         </div>
       </div>
 
-      {isNative() && <FaceIdCard/>}
+      <SecurityCard/>
 
       {/* Danger zone */}
       <div className="card" style={{ padding: 22, borderColor: 'var(--danger)' }}>
@@ -585,7 +594,7 @@ function SubscriptionCard() {
   : 'var(--muted)';
 
   return (
-    <div className="card" style={{ padding: 22 }}>
+    <div id="billing" className="card" style={{ padding: 22, scrollMarginTop: 80 }}>
       <div className="metric-label" style={{ marginBottom: 8 }}>Subscription</div>
 
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 12 }}>
@@ -1480,12 +1489,19 @@ const fieldStyle = {
 // the device reports biometry is available. Turning it ON asks for one
 // successful scan first so a phone that cannot do it never ends up
 // locked; turning it OFF is immediate.
-function FaceIdCard() {
+// Security card: password reset for everyone, plus the biometric app
+// lock on the native app. Sign-in alert emails link here (?tab=security).
+function SecurityCard() {
+  const nav = useNavigate();
   const [info, setInfo] = useState(null);
   const [on, setOn] = useState(isLockEnabled());
   const [busy, setBusy] = useState(false);
-  useEffect(() => { let live = true; biometryInfo().then((i) => { if (live) setInfo(i); }); return () => { live = false; }; }, []);
-  if (!info?.available) return null;
+  useEffect(() => {
+    if (!isNative()) return undefined;
+    let live = true;
+    biometryInfo().then((i) => { if (live) setInfo(i); });
+    return () => { live = false; };
+  }, []);
   const toggle = async () => {
     if (busy) return;
     if (on) { setLockEnabled(false); setOn(false); return; }
@@ -1495,20 +1511,34 @@ function FaceIdCard() {
     finally { setBusy(false); }
   };
   return (
-    <div className="card" style={{ padding: 22 }}>
+    <div id="security" className="card" style={{ padding: 22, scrollMarginTop: 80 }}>
       <div className="metric-label" style={{ marginBottom: 8 }}>Security</div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600 }}>Unlock with {info.label}</div>
+          <div style={{ fontWeight: 600 }}>Password</div>
           <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>
-            Ask for {info.label} when Ivy opens, and again after a minute in the background.
+            If a sign-in alert wasn't you, reset your password right away. We email you a reset link.
           </div>
         </div>
-        <button type="button" role="switch" aria-checked={on} onClick={toggle} disabled={busy}
-          className={'btn ' + (on ? 'btn-primary' : 'btn-outline')} style={{ minWidth: 64, justifyContent: 'center' }}>
-          {busy ? '…' : on ? 'On' : 'Off'}
+        <button type="button" className="btn btn-outline" onClick={() => nav('/forgot-password')}
+          style={{ whiteSpace: 'nowrap' }}>
+          Reset password
         </button>
       </div>
+      {info?.available && (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontWeight: 600 }}>Unlock with {info.label}</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 3 }}>
+              Ask for {info.label} when Ivy opens, and again after a minute in the background.
+            </div>
+          </div>
+          <button type="button" role="switch" aria-checked={on} onClick={toggle} disabled={busy}
+            className={'btn ' + (on ? 'btn-primary' : 'btn-outline')} style={{ minWidth: 64, justifyContent: 'center' }}>
+            {busy ? '…' : on ? 'On' : 'Off'}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

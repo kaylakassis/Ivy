@@ -559,12 +559,30 @@ function renderExitIntent(cfg) {
   `;
 }
 
+// Stripe Checkout return banner for the product store (?order=success|
+// cancel, see api/site/[handle]/checkout.js). Rendered server-side from
+// the request query so it needs no inline script: the app CSP in
+// vercel.json has no 'unsafe-inline' for script-src, so a JS reader of
+// location.search would be blocked. "Dismiss" is a plain link to the
+// same page without the param. PublicSite.jsx renders the same notice
+// once React mounts.
+function renderOrderNotice(order, handle) {
+  if (order !== 'success' && order !== 'cancel') return '';
+  const ok = order === 'success';
+  const msg = ok
+    ? '<strong>Thanks for your order.</strong> Your payment went through and a receipt is on its way to your email.'
+    : '<strong>Checkout cancelled.</strong> Nothing was charged. Your cart is still here whenever you\'re ready.';
+  return `<div role="status" style="position:fixed;left:16px;right:16px;bottom:16px;z-index:9500;max-width:560px;margin:0 auto;display:flex;align-items:flex-start;gap:10px;padding:12px 14px;border-radius:var(--site-radius,10px);background:var(--site-bg);color:var(--site-fg);border:1px solid ${ok ? 'var(--site-accent)' : 'var(--site-border)'};box-shadow:0 12px 32px -12px rgba(0,0,0,0.35);font-size:14px;line-height:1.5;font-family:var(--site-font-body)"><span style="flex:1;min-width:0">${msg}</span><a href="/site/${esc(handle)}" aria-label="Dismiss" style="color:var(--site-muted);text-decoration:none;font-size:18px;line-height:1">&times;</a></div>`;
+}
+
 // ----- Main entry -------------------------------------------------
 
 // Render the full HTML page for a public site.
-// Inputs: { site, page, nav, handle, currentSlug, host }
+// Inputs: { site, page, nav, handle, currentSlug, host, order }
+//   order: optional ?order= query value ('success' | 'cancel') from a
+//   Stripe Checkout return; anything else renders no banner.
 // Returns: HTML string ready to be sent with content-type: text/html.
-export function renderSiteHtml({ site, page, nav, handle, currentSlug, host }) {
+export function renderSiteHtml({ site, page, nav, handle, currentSlug, host, order = null }) {
   const tpl = TEMPLATES[site.template] || TEMPLATES.clean;
   const vars = { ...tpl.vars };
   if (site.fontPair && FONT_PAIRS[site.fontPair]) {
@@ -633,7 +651,8 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host }) {
   // they survive page transitions inside the SPA.
   const popupHtml   = renderExitIntent(site.exitIntentPopup);
   const stickyHtml  = renderStickyCta(site.stickyCta);
-  const bodyContent = `<div class="ivy-root">${navHtml}${sectionsHtml}${stickyHtml}${popupHtml}</div>${pvScript}`;
+  const orderHtml   = renderOrderNotice(order, handle);
+  const bodyContent = `<div class="ivy-root">${navHtml}${sectionsHtml}${stickyHtml}${popupHtml}${orderHtml}</div>${pvScript}`;
 
   // Splice into the SPA shell.
   let shell = loadShell();
