@@ -507,7 +507,7 @@ async function isPaidWorkspace(workspaceId) {
   } catch { return false; }
 }
 
-export async function generateReply(text, ctx, history = [], workspaceId = null, attachment = null) {
+export async function generateReply(text, ctx, history = [], workspaceId = null, attachment = null, userId = null) {
   const client = anthropic();
   if (!client) {
     return { text: sanitizeIvyReply(mockReply(text, ctx, attachment)), mode: 'mock', error: 'no-api-key' };
@@ -554,7 +554,7 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   }
 
   try {
-    const { reply, aggregateUsage, pendingActions } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId);
+    const { reply, aggregateUsage, pendingActions } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId);
     // Record SUM of all turns toward the daily cap - tool loops can
     // burn many turns per user message.
     if (workspaceId && aggregateUsage) {
@@ -638,7 +638,7 @@ async function recordUsage(workspaceId, response) {
   `;
 }
 
-const IVY_SYSTEM = `You are Ivy, an AI assistant inside Ivy - a small-business OS used by solo entrepreneurs, coaches, consultants, freelancers, and service providers. The owner you're talking to runs a small business and is asking you for advice.
+const IVY_SYSTEM = `You are Ivy, an AI assistant inside Ivy - a business platform used by solo entrepreneurs, coaches, consultants, freelancers, and service providers. The owner you're talking to runs a small business and is asking you for advice.
 
 # Hard security boundaries (non-negotiable, applied before everything else)
 
@@ -737,6 +737,24 @@ create DRAFTS or internal records; nothing leaves the building):
   update_settings (name + slug + timezone) -> create_service -> set_availability
   -> complete_onboarding, confirming the booking-page-changing steps as you go.
 
+WEBSITE - you can build, edit and publish the owner's public website yourself.
+  Never say you can't edit the site; you can. Flow:
+  1. get_website - see whether a site exists, its pages, every section's id
+     and headline, the template packs and the section types you can add.
+  2. No site yet, or they want a fresh start: create_website with the template
+     pack that fits their business and their business name (confirmation-
+     gated because it replaces the draft). Pick the pack yourself from what
+     you know about them; don't make them choose from a list unless they ask.
+  3. Tailor it: edit_website_section (update headline/sub/cta/body text,
+     switch a layout variant, add/remove/move/hide sections), edit_website_page
+     (add/rename/remove pages), update_website (name, look, fonts, SEO).
+     Write the copy for them in their voice from what you know about the
+     business; don't ask for every line. These edits save to the DRAFT only.
+  4. Tell them to proof it in Website → Editor (or the preview), make any
+     tweaks they ask for, then publish_website (confirmation-gated) when they
+     say it's good. Report the live URL.
+  Do all of this in one conversation when asked to "make my website".
+
 OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   send_message_to_client, send_invoice, send_quote, send_document,
   send_campaign, send_review_request, refund_invoice, reschedule_booking,
@@ -746,7 +764,8 @@ OUTBOUND / IRREVERSIBLE OPERATIONS - these are CONFIRMATION-GATED:
   set_availability (weekly hours - pass a preset 'weekdays'/'everyday'/'weekends'
   or explicit windows; it REPLACES the whole schedule),
   update_booking_rules (slot spacing, buffer, min-notice, how-far-ahead,
-  back-to-back), and block_calendar_time. You CAN do all of these for the owner
+  back-to-back), block_calendar_time, and for the website create_website
+  (replaces the draft) and publish_website (goes public). You CAN do all of these for the owner
   now - describe the change, get a yes, then call with "confirm": true.
 - Calling them WITHOUT "confirm": true does nothing - the server returns
   needs_confirmation. That is expected. First describe the exact action in
@@ -863,7 +882,7 @@ DOCUMENTS / E-SIGN (sidebar → "Documents")
 - Templates you reuse: Documents → "Templates" tab.
 
 WEBSITE (sidebar → "Website")
-- Build / edit your public site: Website → "Editor".
+- Build / edit your public site: ask me and I'll build it (get_website → create_website → edits → publish_website), or Website → "Editor" to proof and tweak by hand.
 - Custom domain: Website → "Settings" → enter your domain, follow DNS steps.
 
 IVY (sidebar → "Ivy")
@@ -894,7 +913,7 @@ ACCOUNT (avatar → "Account settings", bottom-left of sidebar)
 // existed in its scope, and every real chat threw "model is not defined"
 // before reaching Claude - silently, as a canned reply. The api/ lint block
 // (no-undef) now fails the build on that class of mistake.
-async function claudeReply(client, model, text, ctx, history, attachment, workspaceId) {
+async function claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId = null) {
   const messages = buildMessages(text, ctx, history, attachment);
 
   let response = null;
@@ -957,7 +976,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       let result;
       try {
         // eslint-disable-next-line no-await-in-loop
-        result = await executeIvyTool(tu.name, tu.input || {}, { workspaceId });
+        result = await executeIvyTool(tu.name, tu.input || {}, { workspaceId, userId });
       } catch (toolErr) {
         // The dispatcher guards handler errors, but anything thrown around
         // it (confirmation summary, arg shaping) must not take the whole

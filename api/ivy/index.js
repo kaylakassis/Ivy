@@ -136,7 +136,7 @@ export default async function handler(req, res) {
       `;
 
       const ctx = await workspaceContext(workspaceId);
-      const reply = await generateReply(text, ctx, history, workspaceId, attachment);
+      const reply = await generateReply(text, ctx, history, workspaceId, attachment, user.id);
       const replyText = reply.text;
 
       const ivyMsg = await sql`

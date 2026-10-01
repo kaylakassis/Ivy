@@ -18,6 +18,7 @@ import { workspaceTimeZone, VALID_HANDLE, invalidateCalendarSettings } from './c
 import { invalidateOwnerWorkspace } from './clientPortal.js';
 import { validateAvailability, availabilityFromPreset, validateBookingRules, validateBusinessBasics, AVAILABILITY_PRESETS } from './settingsValidation.js';
 import { sendEmail, emailShell } from './email.js';
+import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteAction } from './ivyWebsiteTools.js';
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
 import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
@@ -26,6 +27,7 @@ import crypto from 'node:crypto';
 // ── Tool schema (passed to Anthropic on every call) ──────────────────
 
 export const IVY_TOOLS = [
+  ...WEBSITE_TOOLS,
   {
     name: 'list_quiet_clients',
     description: "Lists clients who haven't been messaged or seen in a while. Use when the user asks who they should follow up with, who's gone quiet, or to draft a check-in.",
@@ -784,6 +786,7 @@ export const IVY_TOOLS = [
 // surfaces them to Claude as a `tool_result` with `is_error: true` so
 // Claude can decide whether to retry or explain.
 export const HANDLERS = {
+  ...WEBSITE_HANDLERS,
   // Reads - existing
   list_quiet_clients,
   list_overdue_invoices,
@@ -858,6 +861,8 @@ export const HANDLERS = {
 // guardrail against prompt-injection hidden in client data, uploaded files,
 // or earlier tool results silently triggering a send / cancel / void.
 export const SENSITIVE_TOOLS = new Set([
+  // Website: a template build replaces the draft; publishing goes public.
+  ...WEBSITE_SENSITIVE,
   'send_message_to_client',
   'send_invoice',
   'cancel_booking',
@@ -894,6 +899,8 @@ function workflowHasOutboundActions(name, a) {
 // confirmation card (e.g. how many clients a campaign will email). Scoped
 // to the workspace via ctx; never trusts caller-supplied workspace ids.
 async function describeSensitiveAction(name, a, ctx = {}) {
+  const web = describeWebsiteAction(name, a || {});
+  if (web) return web;
   switch (name) {
     case 'send_message_to_client':
       return `Send a portal message to client ${a.client_id || '(unknown)'}: "${String(a.text || '').slice(0, 160)}"`;

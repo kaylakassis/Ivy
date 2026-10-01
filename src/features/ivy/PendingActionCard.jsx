@@ -32,7 +32,7 @@ export default function PendingActionCard({ actions, onApprove, onDismiss, busy 
       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
         <button type="button" className="btn btn-primary" disabled={busy}
           onClick={onApprove} style={{ padding: '7px 14px', fontSize: 12.5, gap: 6 }}>
-          <Icons.Check size={13} sw={2.2}/> Approve &amp; send
+          <Icons.Check size={13} sw={2.2}/> Approve
         </button>
         <button type="button" className="btn btn-outline" disabled={busy}
           onClick={onDismiss} style={{ padding: '7px 14px', fontSize: 12.5 }}>
