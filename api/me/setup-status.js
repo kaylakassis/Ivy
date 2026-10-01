@@ -7,7 +7,7 @@
 //              these are open.
 //   RECOMMENDED - gets the workspace fully ready for business: Stripe
 //              for card payments, a website for marketing, a real
-//              client to actually use the system, a tagline. Counted
+//              client to actually use the system, a sent invoice. Counted
 //              separately so the checklist can show real progress
 //              after required is done without nagging.
 //
@@ -59,13 +59,14 @@ export default async function handler(req, res) {
       console.error('[setup-status] sub-query failed:', e.message);
       return fallback;
     } };
-    const [cs, sv, fs, ws2, cl, bk] = await Promise.all([
-      safe(sql`SELECT biz_name, slug, availability, tagline FROM calendar_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
+    const [cs, sv, fs, ws2, cl, bk, inv] = await Promise.all([
+      safe(sql`SELECT biz_name, slug, availability FROM calendar_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
       safe(sql`SELECT COUNT(*)::int AS n FROM services WHERE workspace_id = ${workspaceId}`, { rows: [{ n: 0 }] }),
       safe(sql`SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status FROM finance_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
       safe(sql`SELECT launched, published_at FROM websites WHERE workspace_id = ${workspaceId}`, { rows: [] }),
       safe(sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${workspaceId}`, { rows: [{ n: 0 }] }),
       safe(sql`SELECT COUNT(*)::int AS n FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL`, { rows: [{ n: 0 }] }),
+      safe(sql`SELECT COUNT(*)::int AS n FROM invoices WHERE workspace_id = ${workspaceId} AND status <> 'draft'`, { rows: [{ n: 0 }] }),
     ]);
     const settings = cs.rows[0] || {};
     const serviceCount = sv.rows[0]?.n || 0;
@@ -78,6 +79,7 @@ export default async function handler(req, res) {
     const websiteLive = !!websiteRow?.launched && !!websiteRow?.published_at;
     const clientCount = cl.rows[0]?.n || 0;
     const bookingCount = bk.rows[0]?.n || 0;
+    const invoiceCount = inv.rows[0]?.n || 0;
     const availability = settings.availability || {};
     const hasAvailabilityWindow = Object.values(availability).some(
       (v) => Array.isArray(v) && v.length > 0,
@@ -163,12 +165,12 @@ export default async function handler(req, res) {
         why: 'Add one yourself or share your booking link. Once a real booking lands, you\'re in business.',
       },
       {
-        id: 'tagline',
-        label: 'Write a tagline',
-        done: !!(settings.tagline && settings.tagline.trim()),
+        id: 'firstInvoice',
+        label: 'Send your first invoice',
+        done: invoiceCount > 0,
         required: false,
-        href: '/calendar',
-        why: 'One short line above your services on the booking page - what you do, who for.',
+        href: '/finance?section=invoices',
+        why: 'Build one in Finance and send it; Ivy can draft it for you. The first one you get paid on is the whole point.',
       },
     ];
 
