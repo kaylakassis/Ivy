@@ -24,6 +24,8 @@ import { notifyOwnerSafe } from '../../_lib/push.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
+import { fireClientCreatedWorkflows } from '../../_lib/workflows.js';
+import { notifyLeadInstantReply } from '../../_lib/leadNotify.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -62,14 +64,17 @@ export default async function handler(req, res) {
     // We don't link to user_id here - that happens at signup if the
     // prospect later claims a portal account using the same email.
     let clientId = null;
+    let isNewLead = false;
+    let clientStage = null;
     const existing = await sql`
-      SELECT id, name, email FROM clients
+      SELECT id, name, email, stage FROM clients
        WHERE workspace_id = ${workspaceId}
          AND lower(email) = ${email}
        LIMIT 1
     `;
     if (existing.rows.length > 0) {
       clientId = existing.rows[0].id;
+      clientStage = existing.rows[0].stage;
       // Backfill the name if we had nothing on file (saves the owner
       // a tap later). Defense-in-depth: re-include workspace_id on
       // the UPDATE so the public-contact flow can never write to a
@@ -87,15 +92,24 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       clientId = ins.rows[0].id;
-      // Deliberately DO NOT fire lead_created / client_created workflows
-      // from the public-contact path. This is a prospect asking a
-      // question, not a confirmed onboarding - letting an auto-responder
-      // (e.g. the "Instant lead reply" template) speak for the owner
-      // robs them of the chance to answer personally, which is the
-      // entire point of an inbound question. The owner still gets the
-      // notification email + push below and can reply from Messages.
-      // Workflows still fire from the real client-creation paths
-      // (booking confirmation, owner-side add, CSV import).
+      isNewLead = true;
+      clientStage = 'lead';
+      // A new lead in the CRM: fire the owner's lead_created /
+      // client_created workflows exactly as a manual add would. Only on a
+      // fresh INSERT - a prospect who already booked (and so already
+      // fired these when the booking created their row) and then asks a
+      // question here is matched above and does NOT fire again.
+      await fireClientCreatedWorkflows({ workspaceId, client: ins.rows[0], source: 'public-contact' });
+    }
+
+    // "Instant reply to new leads" (ShareDrawer toggle): the same
+    // acknowledgement the website contact form sends, so a prospect who
+    // messages through the booking page or the embed widget isn't left
+    // waiting either. Prospects only - an active/paused client messaging
+    // their coach gets a human reply, not an auto-responder. Best-effort;
+    // notifyLeadInstantReply never throws.
+    if (isNewLead || clientStage === 'lead') {
+      await notifyLeadInstantReply({ workspaceId, toEmail: email, leadName: name });
     }
 
     // Find or create the thread for (workspace, client). The two-way

@@ -1,5 +1,10 @@
 // Shared serializers + helpers for documents.
+import crypto from 'node:crypto';
 import { sql } from './db.js';
+import { generateRawToken, appUrl } from './tokens.js';
+import { sendEmailToClient, emailShell } from './email.js';
+import { fetchBranding } from './branding.js';
+import { notifyClientSafe } from './push.js';
 
 export const VALID_KINDS  = new Set(['written', 'pdf']);
 export const VALID_STATUS = new Set(['draft', 'sent', 'completed', 'voided', 'declined']);
@@ -151,4 +156,170 @@ export function cleanFields(input) {
     });
   }
   return out;
+}
+
+function escapeHtml(s) {
+  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// Send a document for signing. The ONE implementation behind both
+// POST /api/documents/send (the Documents UI) and the workflow action
+// "Send a document for signing", so an automated send is exactly what
+// the owner would get by clicking Send:
+//   • wipes prior signer rows, inserts one per recipient in order
+//   • mints the FIRST signer's token only (sequential signing - the
+//     /api/sign/[token] handler mints the next one on completion)
+//   • flips the document to 'sent', blanks stale field values, logs
+//     the activity entry, mirrors the first signer onto recipient_*
+//   • emails the first signer, drops a system message in their chat
+//     thread, pushes to their portal
+//
+// `recipients` are already resolved: [{ clientId|null, name, email,
+// isOwner? }]. Callers validate them (workspace ownership, email
+// present). `doc` is the owned documents row (fetchOwnedDoc / RETURNING *).
+// Returns { row, signers, link, emailWarning } - the email failing does
+// NOT throw: the document is already sent + the token minted, so the
+// recovery is the Resend button, and the caller surfaces the warning.
+export async function sendDocumentForSigning({ workspaceId, doc, recipients, branding }) {
+  if (!workspaceId || !doc?.id) throw new Error('Document is required');
+  if (!Array.isArray(recipients) || recipients.length === 0) throw new Error('At least one recipient is required');
+  const id = doc.id;
+
+  // Defense-in-depth: scope by workspace via subquery so a regression in
+  // the caller's ownership check can't wipe someone else's signers.
+  await sql`
+    DELETE FROM document_signers
+     WHERE document_id = ${id}
+       AND document_id IN (
+         SELECT id FROM documents WHERE id = ${id} AND workspace_id = ${workspaceId}
+       )
+  `;
+
+  const firstRaw  = generateRawToken(32);
+  const firstHash = crypto.createHash('sha256').update(firstRaw).digest('hex');
+
+  for (let i = 0; i < recipients.length; i++) {
+    const r = recipients[i];
+    const isFirst = i === 0;
+    // eslint-disable-next-line no-await-in-loop
+    await sql`
+      INSERT INTO document_signers (
+        document_id, order_index, client_id, is_owner, name, email,
+        sign_token_hash, status
+      ) VALUES (
+        ${id}, ${i}, ${r.clientId || null}, ${!!r.isOwner}, ${r.name}, ${r.email},
+        ${isFirst ? firstHash : null},
+        ${isFirst ? 'awaiting' : 'pending'}
+      )
+    `;
+  }
+
+  const newActivity = [
+    ...(doc.activity || []),
+    {
+      ts: new Date().toISOString(),
+      kind: 'sent',
+      text: `Sent to ${recipients.length} signer${recipients.length === 1 ? '' : 's'}: ${recipients.map((r) => r.name).join(', ')}`,
+    },
+  ];
+
+  // Keep the legacy recipient_* fields in sync with the FIRST signer so
+  // older code paths still display a reasonable "to whom" label. Blank
+  // stale field values from a prior signing round (re-send after
+  // void/decline) but keep the field metadata.
+  const cleanedFields = (doc.fields || []).map((f) => ({ ...f, value: '' }));
+  const first = recipients[0];
+  const updated = await sql`
+    UPDATE documents SET
+      recipient_client_id = ${first.clientId || null},
+      recipient_name      = ${first.name},
+      recipient_email     = ${first.email},
+      status              = 'sent',
+      sign_token_hash     = ${firstHash},
+      sent_at             = NOW(),
+      activity            = ${JSON.stringify(newActivity)}::jsonb,
+      fields              = ${JSON.stringify(cleanedFields)}::jsonb,
+      completion_hash     = NULL,
+      decline_reason      = NULL,
+      declined_at         = NULL,
+      final_pdf_url       = NULL,
+      final_pdf_blob_pathname = NULL,
+      updated_at          = NOW()
+    WHERE id = ${id} AND workspace_id = ${workspaceId}
+    RETURNING *
+  `;
+
+  // Email + thread message for the first signer only. Subsequent signers
+  // get their email when their turn comes up.
+  const link = `${appUrl()}/sign/${encodeURIComponent(firstRaw)}`;
+  const positionLine = recipients.length > 1
+    ? `<p style="font-size:13px;color:#85827B;">You're signer 1 of ${recipients.length}. The next signer will receive their link after you finish.</p>`
+    : '';
+  const brand = branding || await fetchBranding(workspaceId).catch(() => ({}));
+  let emailWarning = null;
+  try {
+    await sendEmailToClient({
+      clientId: first.clientId || null,
+      type: 'documents',
+      to: first.email,
+      subject: `Action needed: sign "${doc.name}"`,
+      replyTo: brand.replyTo,
+      html: emailShell({
+        heading: 'A document needs your signature',
+        body: `<p>Hi ${escapeHtml(first.name)},</p>
+               <p>You've been sent a document to review and sign: <b>${escapeHtml(doc.name)}</b>.</p>
+               <p>Click the button to open and sign it.</p>
+               ${positionLine}`,
+        ctaText: 'Open and sign',
+        ctaUrl: link,
+        footer: `If you weren't expecting this, you can safely ignore this email.`,
+        branding: brand,
+      }),
+    });
+  } catch (mailErr) {
+    // eslint-disable-next-line no-console
+    console.error('[documents/send] email failed:', mailErr.message);
+    emailWarning = `We saved the document but couldn't email ${first.name || first.email} - try Resend in a moment.`;
+  }
+
+  if (first.clientId) try {
+    const threadRow = await sql`
+      INSERT INTO message_threads (workspace_id, client_id)
+      VALUES (${workspaceId}, ${first.clientId})
+      ON CONFLICT (workspace_id, client_id) DO UPDATE SET workspace_id = EXCLUDED.workspace_id
+      RETURNING id
+    `;
+    const threadId = threadRow.rows[0].id;
+    const meta = { docId: doc.id, docName: doc.name };
+    await sql`
+      INSERT INTO messages (thread_id, sender, text, kind, meta)
+      VALUES (${threadId}, 'system', ${`Document sent: ${doc.name}`}, 'doc-sent', ${JSON.stringify(meta)}::jsonb)
+    `;
+    const preview = `Document sent: ${doc.name}`;
+    await sql`
+      UPDATE message_threads SET
+        last_message_at      = NOW(),
+        last_message_preview = ${preview},
+        unread_client        = unread_client + 1
+      WHERE id = ${threadId}
+    `;
+  } catch (msgErr) {
+    // eslint-disable-next-line no-console
+    console.error('[documents/send] thread message failed:', msgErr.message);
+  }
+
+  if (first.clientId) notifyClientSafe({
+    clientId: first.clientId,
+    type: 'documents',
+    payload: {
+      title: 'Document needs your signature',
+      body: doc.name,
+      url: `/me/documents`,
+      tag: `doc-${doc.id}`,
+      requireInteraction: true,
+    },
+  });
+
+  const signers = await fetchSigners(id);
+  return { row: updated.rows[0], signers, link, emailWarning };
 }

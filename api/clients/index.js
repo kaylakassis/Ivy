@@ -11,7 +11,7 @@ import { serializeClient, VALID_STAGES } from '../_lib/clients.js';
 import { normalizePhone } from '../_lib/sms.js';
 import { sendClientInvite } from '../_lib/clientNotify.js';
 import { celebrateFirstClient } from '../_lib/milestones.js';
-import { triggerWorkflow } from '../_lib/workflows.js';
+import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -143,21 +143,7 @@ export default async function handler(req, res) {
       // Awaited so action results land before we respond - keeps the
       // "Just-now triggered" run visible in the workflow runs list when
       // the owner refreshes.
-      try {
-        await triggerWorkflow({
-          workspaceId, triggerType: 'client_created',
-          client: rows[0], context: { source: 'manual-create' },
-        });
-        if (rows[0].stage === 'lead') {
-          await triggerWorkflow({
-            workspaceId, triggerType: 'lead_created',
-            client: rows[0], context: { source: 'manual-create' },
-          });
-        }
-      } catch (wfErr) {
-        // eslint-disable-next-line no-console
-        console.error('[clients/create] workflow trigger failed:', wfErr.message);
-      }
+      await fireClientCreatedWorkflows({ workspaceId, client: rows[0], source: 'manual-create' });
       return created(res, { client: serializeClient(rows[0]) });
     }
 

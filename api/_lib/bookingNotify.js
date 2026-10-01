@@ -46,6 +46,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         b.client_phone,
         c.sms_consent_at,
         s.name AS service_name, s.location_type, s.location_label,
+        s.prep_instructions,
         cs.biz_name,
         cs.slug,
         cs.timezone,
@@ -113,6 +114,9 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         endMin: ctx.end_min,
         timezone: ctx.timezone || null,
         notes: ctx.notes,
+        // The service's "Prep instructions" (what to do or bring) - the
+        // service editor promises these go out with the confirmation.
+        prepInstructions: ctx.prep_instructions || null,
         videoRoomUrl: ctx.location_type === 'virtual' && ctx.location_label
           ? ctx.location_label
           : ctx.video_room_url,
@@ -214,7 +218,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, bookingId, dateISO, startMin, endMin, timezone }) {
+async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, bookingId, dateISO, startMin, endMin, timezone, prepInstructions }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
   // bookers go to /signup with the email pre-filled - hitting /me
@@ -252,6 +256,7 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
         <a href="${escapeHtml(videoRoomUrl)}" style="color:#2E3168;word-break:break-all;">${escapeHtml(videoRoomUrl)}</a>
         <br/><span style="font-size:12px;color:#85827B;">Save this - open it at the start of your session.</span>
       </p>` : ''}
+      ${renderPrepInstructions(prepInstructions)}
       <p>Need to reschedule or message ${escapeHtml(businessName)}? ${hasPortal
         ? 'You can view this booking and chat with them through your Ivy portal.'
         : 'Create a free Ivy portal account to see this booking, future visits, invoices, and messages from them in one place.'}</p>`,
@@ -323,6 +328,19 @@ async function sendOwnerNotify({ ownerId, to, ownerName, clientName, clientEmail
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+
+// "Before your appointment" block for the service's prep_instructions.
+// Owners write these as a short list, one item per line, so line breaks
+// are preserved. Empty/whitespace → nothing rendered. Shared with the
+// reminder cron so the confirmation and the reminder say the same thing.
+export function renderPrepInstructions(text) {
+  const t = (text || '').toString().trim();
+  if (!t) return '';
+  return `<div style="margin:18px 0;padding:12px 14px;background:#F6F5F1;border:1px solid #E8E4DC;border-radius:10px;font-size:14px;line-height:1.55;">
+        <strong>Before your appointment</strong><br/>
+        <span style="white-space:pre-line;">${escapeHtml(t)}</span>
+      </div>`;
 }
 
 // ─────────────────────────────────────────────────────────────────────

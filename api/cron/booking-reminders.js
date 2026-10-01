@@ -20,6 +20,7 @@ import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { notifyClientSafe } from '../_lib/push.js';
+import { renderPrepInstructions } from '../_lib/bookingNotify.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
@@ -78,7 +79,7 @@ export async function fetchDueBookings(cursor, shardFilter = '') {
       c.sms_consent_at,
       b.date, b.start_min, b.end_min, b.notes,
       b.reminders_sent, b.sms_sent,
-      s.name AS service_name,
+      s.name AS service_name, s.prep_instructions,
       COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
       cs.biz_name, cs.timezone
     FROM bookings b
@@ -187,7 +188,7 @@ async function handler(req, res) {
           // the next tick retries.
           const claim = await sql`
             UPDATE bookings
-            SET reminders_sent = reminders_sent || jsonb_build_object(${key}, NOW()::text)
+            SET reminders_sent = reminders_sent || jsonb_build_object(${key}::text, NOW()::text)
             WHERE id = ${r.id} AND NOT (reminders_sent ? ${key})
             RETURNING id
           `;
@@ -205,6 +206,7 @@ async function handler(req, res) {
               endMin: r.end_min,
               reminderMinutes: minsNum,
               notes: r.notes,
+              prepInstructions: r.prep_instructions,
               branding,
             });
             // Push reminder to the client too (no-op if they haven't
@@ -242,7 +244,7 @@ async function handler(req, res) {
           // below if the send is skipped/fails so a later tick can retry.
           const claim = await sql`
             UPDATE bookings
-            SET sms_sent = sms_sent || jsonb_build_object(${key}, NOW()::text)
+            SET sms_sent = sms_sent || jsonb_build_object(${key}::text, NOW()::text)
             WHERE id = ${r.id} AND NOT (sms_sent ? ${key})
             RETURNING id
           `;
@@ -318,7 +320,7 @@ function describeWindow(mins) {
   return `in ${mins} minute${mins === 1 ? '' : 's'}`;
 }
 
-async function sendReminder({ to, clientId, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes, branding }) {
+async function sendReminder({ to, clientId, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes, prepInstructions, branding }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const when = describeWindow(reminderMinutes);
   const html = emailShell({
@@ -333,6 +335,7 @@ async function sendReminder({ to, clientId, clientName, serviceName, businessNam
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(fmtTime(startMin))} – ${escapeHtml(fmtTime(endMin))}</td></tr>
         ${notes ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;vertical-align:top;">Note</td><td style="padding:6px 0;">${escapeHtml(notes)}</td></tr>` : ''}
       </table>
+      ${renderPrepInstructions(prepInstructions)}
       <p>Need to reschedule or message ${escapeHtml(businessName)}? Open your portal -
       you can chat with them directly.</p>`,
     ctaText: 'Open my portal',

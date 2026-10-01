@@ -15,11 +15,18 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { VALID_STAGES, serializeClient } from '../_lib/clients.js';
 import { sendClientInvite } from '../_lib/clientNotify.js';
+import { fireClientCreatedWorkflows, hasClientCreatedWorkflows } from '../_lib/workflows.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 const MAX_ROWS = 2000;
 const NAME_MAX = 120;
 const NOTES_MAX = 4000;
+// client_created / lead_created workflows fire per imported row up to
+// this many new clients. Past it the import is a book migration, not
+// "new leads arriving" - auto-emailing 2,000 historical contacts from a
+// welcome workflow would be a disaster - so we skip and say so in the
+// response (summary.workflowsSkipped).
+const WORKFLOW_FIRE_MAX = 200;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -50,6 +57,7 @@ export default async function handler(req, res) {
     let invalid = 0;
     const errors = [];
     const inserted = [];
+    const createdRows = [];
 
     // Validate + dedupe in memory (no per-row DB round trips), collecting the
     // survivors. The actual inserts happen in batches below.
@@ -110,6 +118,7 @@ export default async function handler(req, res) {
         created += result.rows.length;
         for (const cr of result.rows) {
           if (inserted.length < 50) inserted.push(serializeClient(cr));
+          if (createdRows.length <= WORKFLOW_FIRE_MAX) createdRows.push(cr);
           // Invite emails on bulk import are EXPLICIT OPT-IN
           // (body.sendInvites === true). The old always-on behavior
           // cold-emailed an owner's entire imported book "«Business»
@@ -127,8 +136,28 @@ export default async function handler(req, res) {
       }
     }
 
+    // Workflows: one pre-check so a workspace with no client_created /
+    // lead_created automations pays nothing; otherwise fire per new row
+    // (sequential - the runtime dedupes per client per day). Skipped
+    // wholesale above WORKFLOW_FIRE_MAX.
+    let workflowsSkipped = false;
+    let workflowsFired = 0;
+    if (createdRows.length > WORKFLOW_FIRE_MAX) {
+      workflowsSkipped = true;
+    } else if (createdRows.length > 0 && await hasClientCreatedWorkflows(workspaceId).catch(() => false)) {
+      for (const cr of createdRows) {
+        // eslint-disable-next-line no-await-in-loop
+        const out = await fireClientCreatedWorkflows({ workspaceId, client: cr, source: 'csv-import' });
+        workflowsFired += out.fired;
+      }
+    }
+
     return ok(res, {
-      summary: { created, skipped, invalid, total: body.rows.length },
+      summary: {
+        created, skipped, invalid, total: body.rows.length,
+        workflowsFired,
+        ...(workflowsSkipped ? { workflowsSkipped: true, workflowsSkippedReason: `Automations don't run for imports of more than ${WORKFLOW_FIRE_MAX} new clients` } : {}),
+      },
       errors: errors.slice(0, 50), // cap so the response stays small
       inserted, // first 50 fully serialized, for optimistic UI
     });

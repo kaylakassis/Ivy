@@ -279,6 +279,20 @@ export function mintVideoRoomUrl() {
   return `https://meet.jit.si/ivy-${token}`;
 }
 
+// The meeting link a new booking should carry for `svc` (a services row
+// with location_type + location_label). Virtual services: the owner's own
+// link (location_label - "set your own below to override" in the service
+// editor) WINS; only when they haven't set one do we mint a per-booking
+// Jitsi room. Non-virtual services get null. Both the public booking page
+// and owner-side booking creation use this so the success screen, the
+// client portal, the owner's event drawer and the confirmation email all
+// show the same link.
+export function videoRoomUrlForService(svc) {
+  if (!svc || (svc.location_type || 'in_person') !== 'virtual') return null;
+  const own = (svc.location_label || '').toString().trim();
+  return own || mintVideoRoomUrl();
+}
+
 export const VALID_RECURRENCE = new Set([null, 'weekly', 'biweekly', 'monthly']);
 
 // Intersect two lists of {start, end} windows. Empty/missing inputs yield [].

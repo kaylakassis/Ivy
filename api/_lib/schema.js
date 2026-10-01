@@ -2287,10 +2287,11 @@ ALTER TABLE workflow_runs ADD CONSTRAINT workflow_runs_status_check
 -- rows where resume_at <= NOW() and resumes the workflow from
 -- next_action_index.
 --
--- client_snapshot stores name/email/phone/sms_consent_at because the
--- live clients row may have changed between schedule and resume
--- (renamed, opted-out of SMS, etc.) - we resume against the snapshot
--- so the message reads consistently with what the owner approved.
+-- client_snapshot stores name/email/phone/sms_consent_at/tags as they
+-- were when the run paused. Resume re-reads the LIVE clients row (so
+-- tag conditions see tags added during the wait and a deleted client
+-- ends the run); the snapshot is only the fallback when the run never
+-- had a client row.
 CREATE TABLE IF NOT EXISTS workflow_pending_runs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   workflow_id UUID NOT NULL REFERENCES workflows(id) ON DELETE CASCADE,

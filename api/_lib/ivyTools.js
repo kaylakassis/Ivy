@@ -22,6 +22,7 @@ import { WEBSITE_TOOLS, WEBSITE_HANDLERS, WEBSITE_SENSITIVE, describeWebsiteActi
 import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
 import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
+import { fireClientCreatedWorkflows } from './workflows.js';
 import crypto from 'node:crypto';
 
 // ── Tool schema (passed to Anthropic on every call) ──────────────────
@@ -1314,9 +1315,17 @@ async function add_client({ workspaceId, args }) {
   const ins = await sql`
     INSERT INTO clients (workspace_id, name, email, phone, stage, source)
     VALUES (${workspaceId}, ${name}, ${email}, ${phone}, ${stage}, 'Ivy')
-    RETURNING id, name, email
+    RETURNING *
   `;
-  return { ok: true, client: ins.rows[0] };
+  const row = ins.rows[0];
+  // Same automations a manual add fires (client_created; lead_created
+  // for leads). Awaited so the run exists by the time Ivy reports back.
+  const wf = await fireClientCreatedWorkflows({ workspaceId, client: row, source: 'ivy-add-client' });
+  return {
+    ok: true,
+    client: { id: row.id, name: row.name, email: row.email },
+    ...(wf.fired > 0 ? { workflows_fired: wf.fired } : {}),
+  };
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

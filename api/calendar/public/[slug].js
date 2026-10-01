@@ -11,7 +11,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import {
   serializeSettings, serializeService, serializeBlock, serializeBooking,
-  hasConflict, losesBookingRace, withinAvailability, depositFor, mintVideoRoomUrl,
+  hasConflict, losesBookingRace, withinAvailability, depositFor, videoRoomUrlForService,
   slotEpochMs,
 } from '../../_lib/calendar.js';
 import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
@@ -23,6 +23,7 @@ import { attachIntakeForms } from '../../_lib/intake.js';
 import { getProvider } from '../../_lib/payments/index.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { sendClientInvite } from '../../_lib/clientNotify.js';
+import { fireClientCreatedWorkflows } from '../../_lib/workflows.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -311,7 +312,7 @@ async function createBooking(req, res) {
     // be receiving bookings for); 'private' is bookable by direct link.
     const svcRows = await sql`
       SELECT id, duration_minutes, capacity, price, deposit_type, deposit_amount,
-             location_type, travel_buffer_minutes,
+             location_type, location_label, travel_buffer_minutes,
              custom_fields, add_ons, visibility, availability
         FROM services
        WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
@@ -526,19 +527,25 @@ async function createBooking(req, res) {
                 ${clientPhone}, ${smsConsent ? new Date().toISOString() : null},
                 ${locationAddress},
                 'lead', 'Booking', NOW())
-        RETURNING id
+        RETURNING *
       `;
       clientId = newClient.rows[0].id;
       // First-time booker - email a "claim your account" invite alongside
       // the booking confirmation that notifyNewBooking sends.
       sendClientInvite({ workspaceId, clientId })
         .catch((e) => console.error('[booking] sendClientInvite failed:', e?.message));
+      // A first booking is how most leads enter the CRM - fire the
+      // owner's client_created / lead_created workflows for them, same as
+      // a manual add. Fire-and-forget like the other side effects below;
+      // the helper never throws. Only on a fresh INSERT, so a returning
+      // client (matched above) doesn't re-trigger.
+      fireClientCreatedWorkflows({ workspaceId, client: newClient.rows[0], source: 'public-booking' });
     }
 
-    // Mint a video room when the service is virtual. Per-booking
-    // unique URL so a leaked link can't be reused for a future
-    // session with a different client.
-    const videoRoomUrl = locationType === 'virtual' ? mintVideoRoomUrl() : null;
+    // Meeting link for a virtual service: the owner's own link if they set
+    // one, else a per-booking Jitsi room (unique so a leaked link can't be
+    // reused for a future session with a different client).
+    const videoRoomUrl = videoRoomUrlForService(svc);
 
     const insert = await sql`
       INSERT INTO bookings (

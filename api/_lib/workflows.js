@@ -24,6 +24,7 @@ import { fetchBranding } from './branding.js';
 import { sendClientSms } from './sms.js';
 import { createDraftInvoice } from './finance.js';
 import { appUrl } from './tokens.js';
+import { sendDocumentForSigning } from './documents.js';
 
 const VALID_TRIGGERS = new Set(['lead_created', 'client_created', 'client_inactive', 'booking_completed']);
 const VALID_ACTIONS  = new Set([
@@ -159,6 +160,47 @@ export async function triggerWorkflow({ workspaceId, triggerType, client, contex
     if (out.status !== 'skipped') fired++;
   }
   return { fired };
+}
+
+// Every path that INSERTs a clients row calls this once with the new row
+// (manual add, public booking, booking-page / embed contact form, website
+// form, CSV import, Ivy's add_client, owner-side booking). Fires
+// client_created always and lead_created when the row's stage is 'lead'
+// - the same rule api/clients/index.js has always used. Never throws:
+// a workflow failure must not fail the request that created the client.
+// Callers only invoke this on a fresh INSERT (never when an existing
+// client was matched by email), so a prospect who books and then uses
+// the contact form fires once, not twice.
+export async function fireClientCreatedWorkflows({ workspaceId, client, source }) {
+  if (!workspaceId || !client?.id) return { fired: 0 };
+  let fired = 0;
+  try {
+    const context = { source };
+    const a = await triggerWorkflow({ workspaceId, triggerType: 'client_created', client, context });
+    fired += a.fired;
+    if (client.stage === 'lead') {
+      const b = await triggerWorkflow({ workspaceId, triggerType: 'lead_created', client, context });
+      fired += b.fired;
+    }
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[workflows] client-created trigger failed (${source}):`, err.message);
+  }
+  return { fired };
+}
+
+// Cheap pre-check for bulk paths (CSV import): one query tells the caller
+// whether firing per-row is worth it at all.
+export async function hasClientCreatedWorkflows(workspaceId) {
+  if (!workspaceId) return false;
+  const { rows } = await sql`
+    SELECT 1 FROM workflows
+     WHERE workspace_id = ${workspaceId}
+       AND enabled = TRUE
+       AND trigger_type IN ('client_created', 'lead_created')
+     LIMIT 1
+  `;
+  return rows.length > 0;
 }
 
 // Executes one workflow for one client. Handles dedupe + per-action
@@ -412,9 +454,11 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
     const tmplId = cfg.templateId;
     if (!tmplId) throw new Error('No document template selected');
     // Pull the template, clone its content into a new document for this
-    // client, set status='draft'. Owner approves + sends from /documents
-    // (we don't auto-fire the send email - that's another action the
-    // owner can add explicitly with send_email after this).
+    // client, then SEND it for signing the same way the Documents UI does
+    // (shared sendDocumentForSigning: signer row + token + email + thread
+    // message). A client with no email on file gets the draft only - the
+    // owner can add an address and send from /documents - and the run
+    // records why it stopped short.
     //
     // documents columns: name, kind, content_html, file_url, fields,
     // recipient_*. We copy whichever content shape the template uses
@@ -447,9 +491,29 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
         ${client?.name || null},
         FALSE
       )
-      RETURNING id
+      RETURNING *
     `;
-    return { documentId: ins.rows[0].id };
+    const doc = ins.rows[0];
+    const email = (client?.email || '').toString().trim().toLowerCase();
+    if (!client?.id || !email) {
+      // eslint-disable-next-line no-console
+      console.warn(`[workflow ${workflow.id}] send_document: client has no email - left "${doc.name}" as a draft`);
+      return { documentId: doc.id, documentStatus: 'draft', skipped: 'no-email' };
+    }
+    const sent = await sendDocumentForSigning({
+      workspaceId: workflow.workspace_id,
+      doc,
+      recipients: [{ clientId: client.id, name: client.name || email, email }],
+      branding,
+    });
+    // NB: not `status` - runWorkflow spreads this over its own
+    // status:'ok' for the action_results entry.
+    return {
+      documentId: doc.id,
+      documentStatus: 'sent',
+      to: email,
+      ...(sent.emailWarning ? { emailWarning: sent.emailWarning } : {}),
+    };
   }
 
   if (action.type === 'create_invoice') {
@@ -487,8 +551,13 @@ async function executeAction({ action, workflow, client, tokens, branding }) {
 // invocation. Real-world workspaces won't hit that.
 // Resume any waiting workflows whose resume_at has passed. Called by
 // the workflows cron alongside evaluateScheduledWorkflows. Each pending
-// row resumes execution from next_action_index against the captured
-// client_snapshot (not the live client row - see schema comment).
+// row resumes execution from next_action_index against the LIVE client
+// row (re-read at resume time, scoped to the pending row's workspace),
+// so `if_has_tag` / `if_lacks_tag` see tags the owner added during the
+// wait and emails go to the client's current address. The snapshot is
+// only the fallback for a run that never had a client row. A client
+// deleted during the wait ends the run: the pending row is dropped and
+// nothing is sent.
 // `shardFilter` (on w.workspace_id) is REQUIRED to be consistent with
 // evaluateScheduledWorkflows' shard when the cron fans out — otherwise
 // two shards would both fetch the same pending run, both runWorkflow it
@@ -523,7 +592,27 @@ export async function resumeWaitingWorkflows({ limit = 200, shardFilter = '', pr
       actions:        row.actions,
       enabled:        row.enabled,
     };
-    const client = row.client_snapshot || {};
+    const snapshot = row.client_snapshot || {};
+    let client = snapshot;
+    // p.client_id is ON DELETE SET NULL, so a client deleted mid-wait
+    // shows up as a null client_id with an id still in the snapshot.
+    const clientId = row.client_id || snapshot.id || null;
+    if (clientId) {
+      // eslint-disable-next-line no-await-in-loop
+      const live = await sql`
+        SELECT * FROM clients
+         WHERE id = ${clientId} AND workspace_id = ${row.workspace_id}
+         LIMIT 1
+      `.catch(() => ({ rows: [] }));
+      if (live.rows.length === 0) {
+        // eslint-disable-next-line no-console
+        console.warn(`[resumeWaitingWorkflows] pending=${row.pending_id} client ${clientId} no longer exists - dropping run`);
+        // eslint-disable-next-line no-await-in-loop
+        await sql`DELETE FROM workflow_pending_runs WHERE id = ${row.pending_id}`.catch(() => {});
+        continue;
+      }
+      client = live.rows[0];
+    }
     try {
       // eslint-disable-next-line no-await-in-loop
       await runWorkflow({
@@ -655,33 +744,60 @@ async function evaluateScheduledForWorkflow(wf, remaining) {
   }
 
   if (wf.trigger_type === 'booking_completed') {
-    // Bookings with an occurrence COMPLETED exactly N days ago. We key on
-    // the completion_log entry for the target date - NOT b.date - so a
-    // recurring series fires per completed occurrence. The old
-    // `b.date = target AND completion_log ? b.date` form only ever matched
-    // the series' first occurrence, so weekly clients never got their
-    // "after each session" follow-up. completion_log keys are validated
-    // YYYY-MM-DD on write, so ::text/::date casts are safe. Dedup is per
-    // (booking, occurrence) in runWorkflow.
+    // Bookings with an occurrence COMPLETED at least N days ago that this
+    // workflow hasn't fired for yet. We key on completion_log entries -
+    // NOT b.date - so a recurring series fires per completed occurrence.
+    //
+    // The old form matched only completion_log ? (CURRENT_DATE - N): one
+    // missed cron day, or an owner marking Tuesday's session complete on
+    // Thursday, and the follow-up never went. Now every occurrence whose
+    // target day (occurrence + N) has passed is a candidate, bounded by:
+    //   • NOT EXISTS a run for this (workflow, booking, occurrence) - the
+    //     same key runWorkflow dedupes on, so each occurrence fires once;
+    //   • a catch-up window: the target day fell within the last
+    //     CATCHUP_DAYS, OR the completion itself was logged within that
+    //     window (the late "mark complete" case, by completedAt);
+    //   • the target day is on/after the workflow was created, so a new
+    //     "2 days after" workflow doesn't thank last month's sessions.
+    // completion_log keys are validated YYYY-MM-DD on write; the regex
+    // guards the ::date cast against anything older. completedAt is only
+    // cast when it looks like an ISO timestamp (CASE short-circuits).
+    const CATCHUP_DAYS = 7;
     const { rows: bookings } = await sql`
       SELECT b.*, c.id AS c_id, c.name AS c_name, c.email AS c_email,
              c.phone AS c_phone, c.sms_consent_at AS c_sms_consent_at,
-             (CURRENT_DATE - (${days}::int || ' days')::interval)::date::text AS occurrence_date
+             c.tags AS c_tags,
+             occ.key AS occurrence_date
         FROM bookings b
+        JOIN LATERAL jsonb_each(COALESCE(b.completion_log, '{}'::jsonb)) AS occ(key, val) ON TRUE
         LEFT JOIN clients c ON c.id = b.client_id
        WHERE b.workspace_id = ${wf.workspace_id}
          AND b.cancelled_at IS NULL
          AND b.no_show_at IS NULL
-         AND jsonb_exists(
-               b.completion_log,
-               (CURRENT_DATE - (${days}::int || ' days')::interval)::date::text
-             )
+         AND occ.key ~ '^\\d{4}-\\d{2}-\\d{2}$'
+         AND (occ.key::date + ${days}::int) <= CURRENT_DATE
+         AND (occ.key::date + ${days}::int) >= ${wf.created_at}::timestamptz::date
+         AND (
+           (occ.key::date + ${days}::int) >= CURRENT_DATE - ${CATCHUP_DAYS}::int
+           OR CASE WHEN (occ.val->>'completedAt') ~ '^\\d{4}-\\d{2}-\\d{2}T'
+                   THEN (occ.val->>'completedAt')::timestamptz >= NOW() - (${CATCHUP_DAYS}::int || ' days')::interval
+                   ELSE FALSE END
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM workflow_runs wr
+            WHERE wr.workflow_id = ${wf.id}
+              AND wr.context->>'bookingId' = b.id::text
+              AND (wr.context->>'occurrenceDate' = occ.key
+                   OR wr.context->>'occurrenceDate' IS NULL)
+         )
+       ORDER BY occ.key ASC
        LIMIT ${Math.max(1, Math.min(100, remaining))}
     `;
     return runWithConcurrency(bookings, 10, async (b) => {
       const client = {
         id: b.c_id, name: b.c_name, email: b.c_email,
         phone: b.c_phone, sms_consent_at: b.c_sms_consent_at,
+        tags: Array.isArray(b.c_tags) ? b.c_tags : [],
       };
       const out = await runWorkflow({
         workflow: wf, client,

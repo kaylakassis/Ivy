@@ -25,6 +25,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { notifyLeadInstantReply, extractLeadContact } from '../_lib/leadNotify.js';
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
+import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 
 // SSRF guard for owner-configured form-webhook delivery. This endpoint is
 // PUBLIC (any visitor triggers it), so a delivery URL pointing at the cloud
@@ -159,6 +160,12 @@ export default async function handler(req, res) {
     if (formId !== 'newsletter' && site.workspace_id) {
       const { email: leadEmail, name: leadName } = extractLeadContact(payload);
       if (leadEmail) {
+        // Put the prospect in the owner's CRM as a lead (find-or-create by
+        // email within the workspace, like the booking-page contact form)
+        // and fire lead_created / client_created workflows for a NEW row
+        // only - a returning visitor doesn't re-trigger. Best-effort: a
+        // CRM hiccup must never fail a delivered form.
+        await recordWebsiteLead({ workspaceId: site.workspace_id, email: leadEmail, name: leadName, handle: site.handle });
         await notifyLeadInstantReply({ workspaceId: site.workspace_id, toEmail: leadEmail, leadName });
       }
     }
@@ -166,6 +173,29 @@ export default async function handler(req, res) {
     return ok(res, { received: true, delivered });
   } catch (err) {
     return serverError(res, err);
+  }
+}
+
+async function recordWebsiteLead({ workspaceId, email, name, handle }) {
+  try {
+    const existing = await sql`
+      SELECT id FROM clients
+       WHERE workspace_id = ${workspaceId} AND lower(email) = ${email}
+       LIMIT 1
+    `;
+    if (existing.rows.length > 0) return;
+    // clients.name is NOT NULL - fall back to the address's local part
+    // when the form didn't collect a name.
+    const clientName = (name || '').trim() || email.split('@')[0];
+    const ins = await sql`
+      INSERT INTO clients (workspace_id, name, email, stage, source)
+      VALUES (${workspaceId}, ${clientName}, ${email}, 'lead', 'Website form')
+      RETURNING *
+    `;
+    await fireClientCreatedWorkflows({ workspaceId, client: ins.rows[0], source: 'website-form' });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(`[form-submission] lead record failed (${handle}):`, err.message);
   }
 }
 

@@ -10,7 +10,9 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
   hasConflict, losesBookingRace, withinAvailability, serializeBooking, VALID_RECURRENCE,
+  videoRoomUrlForService,
 } from '../_lib/calendar.js';
+import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 import { notifyNewBooking } from '../_lib/bookingNotify.js';
 import { notifyPackageExhausted } from '../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../_lib/googleSync.js';
@@ -60,11 +62,20 @@ export default async function handler(req, res) {
     // conflict check (group services let multiple bookings share a slot).
     let serviceCapacity = 1;
     let serviceAvailability = null;
+    // Virtual services get a meeting link exactly like the public flow:
+    // the owner's own link if set, else a per-booking Jitsi room. Owner-
+    // created bookings used to get neither, so the client's confirmation
+    // email, the portal and the event drawer had nothing to join.
+    let videoRoomUrl = null;
     if (serviceId) {
-      const r = await sql`SELECT id, capacity, availability FROM services WHERE id = ${serviceId} AND workspace_id = ${workspaceId}`;
+      const r = await sql`
+        SELECT id, capacity, availability, location_type, location_label
+          FROM services WHERE id = ${serviceId} AND workspace_id = ${workspaceId}
+      `;
       if (r.rows.length === 0) return badRequest(res, 'Unknown service');
       serviceCapacity = Math.max(1, Number(r.rows[0].capacity) || 1);
       serviceAvailability = r.rows[0].availability || null;
+      videoRoomUrl = videoRoomUrlForService(r.rows[0]);
     }
     // Validate client if provided.
     let resolvedClientId = clientId;
@@ -90,9 +101,12 @@ export default async function handler(req, res) {
         const newClient = await sql`
           INSERT INTO clients (workspace_id, name, email, phone, stage, source)
           VALUES (${workspaceId}, ${clientName}, ${clientEmail || null}, ${clientPhone}, 'active', 'Direct booking')
-          RETURNING id
+          RETURNING *
         `;
         resolvedClientId = newClient.rows[0].id;
+        // New client record → client_created workflows, like every other
+        // creation path. Fire-and-forget; the helper never throws.
+        fireClientCreatedWorkflows({ workspaceId, client: newClient.rows[0], source: 'owner-booking' });
       }
     }
 
@@ -172,12 +186,12 @@ export default async function handler(req, res) {
       INSERT INTO bookings (
         workspace_id, service_id, client_id, client_name, client_email,
         date, start_min, end_min, notes, recurrence_rule, recurrence_until,
-        client_package_id, staff_id
+        client_package_id, staff_id, video_room_url
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${resolvedClientId}, ${clientName}, ${clientEmail || null},
         ${date}, ${start}, ${end}, ${notes}, ${recurrenceRule}, ${recurrenceUntil},
-        ${clientPackageId}, ${staffId}
+        ${clientPackageId}, ${staffId}, ${videoRoomUrl}
       )
       RETURNING *
     `;
