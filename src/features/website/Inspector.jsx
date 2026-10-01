@@ -572,7 +572,7 @@ const EDITORS = {
       <Row label="Subheadline"><TextArea rows={3} value={data.sub} onChange={(e) => update({ sub: e.target.value })} /></Row>
       <Row label="Button text"><TextInput value={data.cta} onChange={(e) => update({ cta: e.target.value })} /></Row>
       <Row label="Button link (optional)">
-        <TextInput value={data.ctaLink} placeholder="#book or https://…" onChange={(e) => update({ ctaLink: e.target.value })} />
+        <TextInput value={data.ctaLink} placeholder="#contact, #gallery, #portfolio (a page) or https://…" onChange={(e) => update({ ctaLink: e.target.value })} />
       </Row>
       <Row label="Alignment">
         <div style={{ display: 'flex', gap: 4, padding: 3, background: 'var(--surface-2)', border: '1px solid var(--border)', borderRadius: 8 }}>

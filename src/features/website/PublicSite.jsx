@@ -7,7 +7,8 @@ import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 // requesting the builder font palette here keeps it off every other page.
 ensureBuilderFonts();
 import { Link, useParams, useLocation } from 'react-router-dom';
-import SectionRenderer from './SectionRenderer.jsx';
+import SectionRenderer, { SiteLinkContext } from './SectionRenderer.jsx';
+import { sectionAnchors } from '../../lib/siteLinks.js';
 import { TEMPLATES } from './templates.js';
 import { FONT_PAIRS } from './sections.js';
 import { api } from '../../lib/api.js';
@@ -158,9 +159,11 @@ export default function PublicSite({ byHost = false }) {
           businessName={site.businessName}/>
       )}
 
-      {visible.map((section) => (
-        <SectionRenderer key={section.id} section={section} handle={site.handle} />
-      ))}
+      <SiteLinkContext.Provider value={{ anchors: sectionAnchors(visible), pages: nav, linkBase, sections: visible, bookingHref: `/book/${site.handle || handle}` }}>
+        {visible.map((section) => (
+          <SectionRenderer key={section.id} section={section} handle={site.handle} />
+        ))}
+      </SiteLinkContext.Provider>
 
       {/* Parity with the SSR renderer (siteHtml.js) for the CSR fallback. */}
       <StickyCta cfg={site.stickyCta} />

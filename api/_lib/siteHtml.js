@@ -27,6 +27,12 @@ import path from 'node:path';
 // pull into a Vercel function bundle.
 import { TEMPLATES } from '../../src/features/website/templates.js';
 import { FONT_PAIRS } from '../../src/features/website/sections.js';
+import { sectionAnchors, resolveSiteLink } from '../../src/lib/siteLinks.js';
+
+// Per-render link context (anchors on this page, the site's pages, the
+// link base). Rendering is synchronous, so a module-level slot is safe.
+let LINK_CTX = { anchors: {}, pages: [], linkBase: '', sections: [] };
+function link(href) { return resolveSiteLink(href, LINK_CTX); }
 
 // ----- Shell loading ------------------------------------------------
 
@@ -79,7 +85,7 @@ function styleVal(s) {
 function renderHero(s) {
   const d = s.data || {};
   const cta = d.cta
-    ? `<p class="ivy-cta"><a href="${attr(d.ctaLink || '#book')}">${esc(d.cta)} →</a></p>`
+    ? `<p class="ivy-cta"><a href="${attr(link(d.ctaLink || '#book'))}">${esc(d.cta)} →</a></p>`
     : '';
   const img = d.imgUrl
     ? `<img src="${attr(d.imgUrl)}" alt="${attr(d.headline || '')}" loading="lazy"/>`
@@ -197,7 +203,7 @@ function renderCtaBanner(s) {
   return `<section class="ivy-cta-banner">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
-    ${d.cta ? `<p><a href="${attr(d.ctaLink || '#')}">${esc(d.cta)} →</a></p>` : ''}
+    ${d.cta ? `<p><a href="${attr(link(d.ctaLink || '#'))}">${esc(d.cta)} →</a></p>` : ''}
   </section>`;
 }
 
@@ -224,7 +230,7 @@ function renderPricing(s) {
       ${t.price ? `<p class="ivy-price">${esc(t.price)}</p>` : ''}
       ${t.description ? `<p>${esc(t.description)}</p>` : ''}
       <ul>${(t.features || []).map((f) => `<li>${esc(f)}</li>`).join('')}</ul>
-      ${t.ctaText ? `<p><a href="${attr(t.ctaLink || '#')}">${esc(t.ctaText)} →</a></p>` : ''}
+      ${t.ctaText ? `<p><a href="${attr(link(t.ctaLink || '#'))}">${esc(t.ctaText)} →</a></p>` : ''}
     </li>`).join('');
   return `<section class="ivy-pricing">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
@@ -312,7 +318,7 @@ function renderCountdown(s) {
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
     <p>${end ? `Ends ${esc(end)}` : ''}</p>
-    ${d.cta ? `<p><a href="${attr(d.ctaLink || '#')}">${esc(d.cta)} →</a></p>` : ''}
+    ${d.cta ? `<p><a href="${attr(link(d.ctaLink || '#'))}">${esc(d.cta)} →</a></p>` : ''}
   </section>`;
 }
 
@@ -437,14 +443,17 @@ function renderSection(section, handle) {
   const hideMobile  = !!style.hideOnMobile;
   const hideDesktop = !!style.hideOnDesktop;
   const grad        = style.headlineGradient ? styleVal(style.headlineGradient) : '';
-  if (!hideMobile && !hideDesktop && !grad) return inner;
   const sid = section.id;
+  const anchor = LINK_CTX.anchors[sid] || '';
+  if (!hideMobile && !hideDesktop && !grad) {
+    return anchor ? `<div id="${esc(anchor)}" class="ivy-anchor" data-section-id="${esc(sid)}">${inner}</div>` : inner;
+  }
   const css = [
     hideMobile  ? `@media (max-width: 720px)  { [data-section-id="${sid}"] { display: none !important; } }` : '',
     hideDesktop ? `@media (min-width: 721px)  { [data-section-id="${sid}"] { display: none !important; } }` : '',
     grad ? `[data-section-id="${sid}"] h1, [data-section-id="${sid}"] h2 { background: ${grad}; -webkit-background-clip: text; background-clip: text; color: transparent; }` : '',
   ].filter(Boolean).join(' ');
-  return `<style>${css}</style><div data-section-id="${esc(sid)}">${inner}</div>`;
+  return `<style>${css}</style><div${anchor ? ` id="${esc(anchor)}" class="ivy-anchor"` : ''} data-section-id="${esc(sid)}">${inner}</div>`;
 }
 
 // ----- Inline styles for the static (pre-hydration) markup --------
@@ -457,6 +466,8 @@ function renderBaseCss(vars) {
     .map(([k, v]) => `${k}:${styleVal(v)}`)
     .join(';');
   return `
+    html { scroll-behavior: smooth; }
+    .ivy-anchor { scroll-margin-top: 72px; }
     .ivy-root { ${cssVars}; background: var(--site-bg); color: var(--site-fg); font-family: var(--site-font-body, system-ui, sans-serif); min-height: 100vh; }
     .ivy-root section, .ivy-root footer { padding: 64px 32px; max-width: 1200px; margin: 0 auto; }
     .ivy-root h1, .ivy-root h2, .ivy-root h3 { font-family: var(--site-font-display, serif); letter-spacing: -0.02em; }
@@ -541,7 +552,7 @@ function renderExitIntent(cfg) {
         <button onclick="document.getElementById('ivy-exit-intent').style.display='none'" style="position:absolute;top:10px;right:14px;background:transparent;border:0;font-size:20px;color:var(--site-muted);cursor:pointer">×</button>
         <h3 style="margin:0;font-family:var(--site-font-display);font-size:24px">${esc(cfg.headline)}</h3>
         ${cfg.sub ? `<p style="margin:10px 0 0;color:var(--site-fg-2);line-height:1.55">${esc(cfg.sub)}</p>` : ''}
-        ${cfg.cta ? `<p style="margin:20px 0 0"><a href="${attr(cfg.ctaLink || '#')}" style="display:inline-block;padding:12px 22px;background:var(--site-accent);color:var(--site-accent-ink);border-radius:var(--site-radius);text-decoration:none;font-weight:600">${esc(cfg.cta)} →</a></p>` : ''}
+        ${cfg.cta ? `<p style="margin:20px 0 0"><a href="${attr(link(cfg.ctaLink || '#'))}" style="display:inline-block;padding:12px 22px;background:var(--site-accent);color:var(--site-accent-ink);border-radius:var(--site-radius);text-decoration:none;font-weight:600">${esc(cfg.cta)} →</a></p>` : ''}
       </div>
     </div>
     <script>(function(){try{var el=document.getElementById('ivy-exit-intent');if(!el)return;if(sessionStorage.getItem('ivy-exit-shown'))return;document.addEventListener('mouseleave',function(e){if(e.clientY<10){el.style.display='flex';sessionStorage.setItem('ivy-exit-shown','1')}})}catch(_){}})();</script>
@@ -611,6 +622,7 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host }) {
     }),
   ].filter(Boolean).join('\n');
 
+  LINK_CTX = { anchors: sectionAnchors(visible), pages: Array.isArray(nav) ? nav : [], linkBase: `/site/${handle}`, sections: visible, bookingHref: `/book/${handle}` };
   const navHtml = renderNav({ handle, nav, currentSlug, businessName: site.businessName });
   const sectionsHtml = visible.map((s) => renderSection(s, handle)).join('\n');
   // Pageview ping - fires once on initial paint. Crawlers don't run JS

@@ -9,7 +9,8 @@
 //
 // The wrapper here applies the style overrides as a thin shell around
 // whatever the per-section renderer outputs - keeps the renderers focused.
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { resolveSiteLink } from '../../lib/siteLinks.js';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 // These modules only load when a customer site is rendered or edited, so
 // requesting the builder font palette here keeps it off every other page.
@@ -17,7 +18,18 @@ ensureBuilderFonts();
 import { Icons } from '../../components/Icons.jsx';
 import { PADDING_DENSITIES } from './sections.js';
 
+// Link context for the public site: section anchors on this page, the
+// site's pages and the link base. The editor renders without a provider,
+// so links there are left as typed (they're disabled while editing).
+export const SiteLinkContext = createContext({ anchors: {}, pages: [], linkBase: '', sections: [] });
+function useLink() {
+  const ctx = useContext(SiteLinkContext);
+  return (href) => resolveSiteLink(href, ctx);
+}
+
 export default function SectionRenderer({ section, handle, editable = false, onUpdate = null }) {
+  const linkCtx = useContext(SiteLinkContext);
+  const anchor = (linkCtx.anchors || {})[section.id] || undefined;
   const Comp = RENDERERS[section.type] || Fallback;
   const style = section.style || {};
   const wrapperStyle = {};
@@ -45,8 +57,8 @@ export default function SectionRenderer({ section, handle, editable = false, onU
       ? `[data-section-id="${section.id}"] section { background-attachment: fixed !important; }`
       : '',
   ].filter(Boolean).join(' ') : '';
-  const inner = hasOverride
-    ? <div data-section-id={section.id} style={wrapperStyle}>{scopedCss && <style>{scopedCss}</style>}{rendered}</div>
+  const inner = (hasOverride || anchor)
+    ? <div id={anchor} data-section-id={section.id} style={{ ...wrapperStyle, ...(anchor ? { scrollMarginTop: 72 } : {}) }}>{scopedCss && <style>{scopedCss}</style>}{rendered}</div>
     : rendered;
   // Animation key can be a plain string ('fade') OR an object
   // ({ type, delayMs, durationMs }) for fine-grained control.
@@ -178,9 +190,10 @@ const container = {
 // ---------- Hero ----------
 function Hero({ data, variant, editable, onUpdate }) {
   const v = variant || 'center';
+  const link = useLink();
   const commit = (key) => (val) => onUpdate && onUpdate({ data: { [key]: val } });
   const ctaBtn = (data.cta || editable) && (
-    <a href={editable ? undefined : (data.ctaLink || '#book')}
+    <a href={editable ? undefined : link(data.ctaLink || '#book')}
        style={ctaStyle}
        onClick={editable ? (e) => e.preventDefault() : undefined}>
       <EditableText as="span" value={data.cta || ''} editable={editable} onCommit={commit('cta')}/>
@@ -734,6 +747,7 @@ function Stats({ data, editable, onUpdate }) {
 
 // ---------- CTA banner ----------
 function CtaBanner({ data, editable, onUpdate }) {
+  const link = useLink();
   const commit = (key) => (val) => onUpdate && onUpdate({ data: { [key]: val } });
   return (
     <section style={{
@@ -754,7 +768,7 @@ function CtaBanner({ data, editable, onUpdate }) {
         )}
         {(data.cta || editable) && (
           <div style={{ marginTop: 32 }}>
-            <a href={editable ? undefined : (data.ctaLink || '#book')}
+            <a href={editable ? undefined : link(data.ctaLink || '#book')}
               onClick={editable ? (e) => e.preventDefault() : undefined}
               style={{
                 display: 'inline-flex', alignItems: 'center', gap: 8,
@@ -809,6 +823,7 @@ function Team({ data }) {
 
 // ---------- Pricing ----------
 function Pricing({ data }) {
+  const link = useLink();
   const tiers = data.tiers || [];
   return (
     <section style={{ background: 'var(--site-bg)', color: 'var(--site-fg)' }}>
@@ -851,7 +866,7 @@ function Pricing({ data }) {
                 </ul>
               )}
               {t.ctaText && (
-                <a href={t.ctaLink || '#book'} style={{
+                <a href={link(t.ctaLink || '#book')} style={{
                   display: 'block', textAlign: 'center',
                   padding: '12px 18px', borderRadius: 'var(--site-radius)',
                   background: t.featured ? 'var(--site-accent-ink)' : 'var(--site-accent)',
@@ -1195,6 +1210,7 @@ function CodeSnippet({ data }) {
 
 // ---------- Countdown ----------
 function Countdown({ data }) {
+  const link = useLink();
   const target = useMemo(() => new Date(data.endDate || Date.now()).getTime(), [data.endDate]);
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -1229,7 +1245,7 @@ function Countdown({ data }) {
         </div>
         {data.cta && (
           <div style={{ marginTop: 32 }}>
-            <a href={data.ctaLink || '#'} style={ctaStyle}>
+            <a href={link(data.ctaLink || '#')} style={ctaStyle}>
               {data.cta} <span style={{ fontSize: 18, lineHeight: 1 }}>→</span>
             </a>
           </div>
