@@ -203,6 +203,20 @@ async function run() {
     assert(r.body?.reports?.length === 1 && r.body.reports[0].id === clientReportId && r.body.reports[0].businessName === 'Maple Massage',
       'client sees only their own report, with the business name');
 
+    console.log('\n[7b] reports stay private from the person reported');
+    r = await call(ownerReports, { method: 'GET', cookie: ownerCookie });
+    assert(!(r.body?.reports || []).some((x) => x.id === clientReportId), "owner never sees the client's report about the business");
+    r = await call(clientReports, { method: 'GET', cookie: aliceCookie });
+    assert(!(r.body?.reports || []).some((x) => x.id === ownerReportId), "client never sees the owner's report about them");
+    r = await call(ownerThread, { method: 'GET', cookie: ownerCookie, query: { id: threadId } });
+    assert(r.statusCode === 200 && !/report/i.test(JSON.stringify(r.body)), 'owner thread view carries no report information');
+    r = await call(ownerThreads, { method: 'GET', cookie: ownerCookie });
+    assert(!/report/i.test(JSON.stringify(r.body)), 'owner thread list carries no report information');
+    r = await call(clientThread, { method: 'GET', cookie: aliceCookie, query: { id: threadId } });
+    assert(r.statusCode === 200 && !/report/i.test(JSON.stringify(r.body)), 'client thread view carries no report information');
+    r = await call(clientThreads, { method: 'GET', cookie: aliceCookie });
+    assert(!/report/i.test(JSON.stringify(r.body)), 'client thread list carries no report information');
+
     console.log('\n[8] admin queue + resolve');
     r = await call(adminReports, { method: 'GET', cookie: ownerCookie, query: {} });
     assert(r.statusCode === 403, 'non-admin cannot read the queue');

@@ -25,7 +25,7 @@ export default async function handler(req, res) {
         SELECT r.*, c.name AS client_name
           FROM abuse_reports r
           LEFT JOIN clients c ON c.id = r.client_id
-         WHERE r.workspace_id = ${workspaceId} AND r.reporter_role = 'owner'
+         WHERE r.workspace_id = ${workspaceId} AND r.reporter_role = 'owner' AND r.reporter_user_id = ${user.id}
          ORDER BY r.created_at DESC
          LIMIT 200
       `;
