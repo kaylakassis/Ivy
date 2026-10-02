@@ -341,7 +341,15 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
           borderBottom: '1px solid var(--border)',
           fontSize: 11, color: 'var(--muted)',
         }}>
-          {modeError ? `Ivy is offline - ${modeError}` : 'Demo mode - replies are placeholders.'}
+          {modeError === 'monthly-allowance'
+            ? "This month's 100 Ivy messages are used up. A fresh 100 arrive on the 1st."
+            : modeError === 'daily-request-cap' || modeError === 'daily-token-cap'
+              ? "Today's Ivy limit is used up. Full answers return tomorrow."
+              : modeError === 'no-api-key'
+                ? 'Ivy is not set up on this deployment yet.'
+                : modeError
+                  ? `Ivy could not answer fully just now: ${modeError}.`
+                  : 'Demo mode - replies are placeholders.'}
         </div>
       )}
 

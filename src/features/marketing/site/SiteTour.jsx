@@ -97,7 +97,7 @@ const STOPS = [
     id: 'ivy', act: 'ivy', area: 'Ivy, the assistant',
     title: 'An assistant that actually does things.',
     blurb: 'Ask in plain English. Ivy reads your real numbers, does the work, and waits for your approval on anything that reaches a client.',
-    chips: ['Answers from live data: who hasn’t paid, who’s quiet, what’s booked', 'Sends messages, invoices, estimates & documents', 'Books, reschedules & cancels sessions', 'Adds clients, expenses, tasks & goals', 'Builds automations from one sentence', 'Every outbound action needs your OK', 'Remembers what you tell her', 'Morning briefing of your day', 'Spots habits worth automating', 'Reads files you drop in'],
+    chips: ['100 messages a month included', 'Answers from live data: who hasn’t paid, who’s quiet, what’s booked', 'Sends messages, invoices, estimates & documents', 'Books, reschedules & cancels sessions', 'Adds clients, expenses, tasks & goals', 'Builds automations from one sentence', 'Every outbound action needs your OK', 'Remembers what you tell her', 'Morning briefing of your day', 'Spots habits worth automating', 'Reads files you drop in'],
     mock: 'ivy',
   },
   {

@@ -633,7 +633,7 @@ export default function SiteHome() {
             <p className="annual">Or save with annual - <b>$374.99/yr</b> (save about 20%).</p>
             <ul>
               <li>Unlimited clients + pipeline</li>
-              <li>Ivy AI assistant (chat + actions, personalized to you)</li>
+              <li>Ivy AI assistant: 100 messages a month, chat + actions</li>
               <li>Stripe payments, settled in your own account</li>
               <li>Free client portal - forever</li>
             </ul>

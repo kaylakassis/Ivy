@@ -8,7 +8,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { isNative } from '../../lib/platform.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { useUserContext } from '../../lib/userContext.jsx';
@@ -613,6 +613,10 @@ function SubscriptionCard() {
           </span>
         )}
       </div>
+
+      <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+        Includes 100 Ivy assistant messages a month, reset on the 1st. The meter on the <Link to="/ivy" style={{ color: 'var(--accent)' }}>Ivy page</Link> shows where you stand.
+      </p>
 
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
         {sub.status === 'active'

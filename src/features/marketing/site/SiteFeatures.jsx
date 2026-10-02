@@ -75,6 +75,7 @@ export default function SiteFeatures() {
               <li><b>Delegate anything:</b> draft invoices and quotes, book sessions, create tasks, log expenses</li>
               <li><b>Automate in plain English:</b> describe a rule, Ivy builds the workflow</li>
               <li><b>Approval-gated sends:</b> messages, invoices, contracts, and campaigns preview before they go out</li>
+              <li><b>100 messages a month included</b> - one message can draft, send, book or build; a meter shows where you stand</li>
             </ul>
           </div>
           <div className="visual">

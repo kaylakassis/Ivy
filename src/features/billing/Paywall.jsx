@@ -39,6 +39,7 @@ const MONTHLY_SAVINGS = MONTHLY_STACK_SAVINGS;
 // The benefit list - each row is a real capability gated behind the wall.
 const PERKS = [
   'Unlimited clients, bookings & invoices',
+  'Ivy AI assistant: 100 messages a month',
   'Take card payments through your own Stripe',
   'Documents + legally-binding e-signatures',
   'Client messaging, all in one inbox',

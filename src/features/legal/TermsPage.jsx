@@ -64,6 +64,10 @@ export default function TermsPage() {
         be inaccurate, incomplete, biased, outdated, or misleading,
         even when it sounds confident.</P>
       <UL>
+        <li>Each workspace includes 100 Ivy assistant messages per calendar
+          month, counted per message you send. Unused messages do not roll
+          over. We may change the allowance; if we lower it we will say so
+          in the app first.</li>
         <li><strong>Ivy is not a financial advisor, attorney, accountant,
           tax preparer, or any other licensed professional.</strong></li>
         <li>Suggestions Ivy makes about pricing, retention, marketing,

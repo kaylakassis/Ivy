@@ -14,6 +14,7 @@ const JSON_LD = {
     { '@type': 'Question', name: 'How much does Ivy cost?', acceptedAnswer: { '@type': 'Answer', text: 'Ivy costs $8.99/week once you subscribe, or $374.99/year with annual billing (about 20% off). Everyone starts with a 14-day free trial - $0 today, the whole product unlocked.' } },
     { '@type': 'Question', name: 'Does Ivy take a cut of my payments?', acceptedAnswer: { '@type': 'Answer', text: "Never. Payments go directly from your client to your own Stripe account - Ivy never touches your money. You only pay Stripe's standard processing rate, and nothing to Ivy beyond the subscription." } },
     { '@type': 'Question', name: 'Does Ivy charge per-client or per-seat fees?', acceptedAnswer: { '@type': 'Answer', text: 'No. Unlimited clients, unlimited bookings, unlimited invoices - one flat subscription. No per-seat math.' } },
+    { '@type': 'Question', name: 'Is there a limit on the Ivy AI assistant?', acceptedAnswer: { '@type': 'Answer', text: 'Every subscription includes 100 Ivy assistant messages a month, which resets on the 1st. One message can do a lot: Ivy can draft, send, book, build your website and more in a single request. Everything else in Ivy is unlimited.' } },
     { '@type': 'Question', name: 'Can I cancel Ivy anytime?', acceptedAnswer: { '@type': 'Answer', text: 'Yes. No contracts, no notice period - cancel from your account page in two clicks. Your data stays exportable.' } },
     { '@type': 'Question', name: 'Does Ivy have a free trial?', acceptedAnswer: { '@type': 'Answer', text: 'Yes - 14 days, the whole product, $0 today. Ivy reminds you before the trial ends, and if you cancel before day 14 you never pay a cent.' } },
     { '@type': 'Question', name: "What if I'm switching to Ivy from another tool?", acceptedAnswer: { '@type': 'Answer', text: 'Bring your client list over via CSV import in minutes. Your invoices export in QuickBooks- and Xero-compatible formats, so nothing about your books breaks.' } },
@@ -143,6 +144,7 @@ export default function SitePricing() {
             <SignupCta className="btn" waitlistLabel="Join the waitlist →">Start your 14-day free trial →</SignupCta>
             <ul>
               <li>Unlimited clients + pipeline</li>
+              <li>Ivy AI assistant: 100 messages a month</li>
               <li>Online booking + calendar sync</li>
               <li>Branded invoices + recurring billing</li>
               <li>Card on file + auto-charges</li>
@@ -225,6 +227,10 @@ export default function SitePricing() {
             <details>
               <summary>Per-client or per-seat fees?</summary>
               <div className="a">No. Unlimited clients, unlimited bookings, unlimited invoices - one flat subscription. No per-seat math.</div>
+            </details>
+            <details>
+              <summary>Is there a limit on the Ivy AI assistant?</summary>
+              <div className="a">Every subscription includes 100 Ivy messages a month, reset on the 1st. One message can do a lot: Ivy can draft, send, book, or build your website in a single request, and a meter on the Ivy page shows where you stand. Everything else in Ivy is unlimited.</div>
             </details>
             <details>
               <summary>Can I cancel anytime?</summary>

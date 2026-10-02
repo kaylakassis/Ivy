@@ -246,15 +246,18 @@ function ModeChip({ mode, modeError }) {
   const live = mode === 'live';
   // Says what is happening without naming the technology behind Ivy.
   const noKey = modeError === 'no-api-key';
-  const capped = /cap/.test(modeError || '');
-  const shortReason = live ? 'online' : noKey ? 'not set up' : capped ? 'daily limit reached' : 'temporary issue';
+  const monthly = modeError === 'monthly-allowance';
+  const capped = !monthly && /cap/.test(modeError || '');
+  const shortReason = live ? 'online' : noKey ? 'not set up' : monthly ? 'monthly allowance used' : capped ? 'daily limit reached' : 'temporary issue';
   const tooltip = live
     ? 'Ivy is online and answering with your live business data.'
     : noKey
       ? "Ivy's AI service isn't set up on this deployment yet."
-      : capped
-        ? "Today's Ivy limit is used up; full answers return tomorrow."
-        : `Ivy couldn't answer fully just now: ${modeError || 'temporary issue'}.`;
+      : monthly
+        ? "This month's 100 Ivy messages are used up. A fresh 100 arrive on the 1st."
+        : capped
+          ? "Today's Ivy limit is used up; full answers return tomorrow."
+          : `Ivy couldn't answer fully just now: ${modeError || 'temporary issue'}.`;
   return (
     <div title={tooltip} style={{
       marginTop: 10, padding: '5px 9px', borderRadius: 8, fontSize: 11,
