@@ -446,6 +446,15 @@ export default function Paywall({ ctx, onRefresh }) {
                         ? `Free for ${TRIAL_DAYS} days, then $${IVY_PRICE} every week. Cancel anytime.`
                         : `$${IVY_PRICE}/week · one plan, no per-seat fees. Cancel anytime.`)}
                 </div>
+                {/* App Store rule 3.1.2: the subscription screen itself must
+                    show the length, price, auto-renewal and links to the
+                    Terms of Use and Privacy Policy. */}
+                <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+                  Auto-renews {plan === 'annual' ? 'every year' : 'every week'} until cancelled. Cancel any time in
+                  {isNative() && isIos() ? ' your Apple ID subscriptions' : ' Account'}. By subscribing you agree to the{' '}
+                  <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Terms of Use</a> and{' '}
+                  <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Privacy Policy</a>.
+                </div>
               </div>
 
               {/* Abandoned-cart win-back: when checkout was cancelled AND
