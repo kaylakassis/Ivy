@@ -1,6 +1,7 @@
 // About page, ported pixel-faithfully from the static about.html prototype.
 import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { SignupCta } from './Chrome.jsx';
 
 const PAGE_CSS = `
 .site-root{scroll-behavior:smooth}
@@ -98,7 +99,7 @@ export default function SiteAbout() {
         <div className="container">
           <h2 style={{ fontSize: 'clamp(28px,3.4vw,38px)' }}>Try it.</h2>
           <p className="section-sub" style={{ margin: '0 auto 30px' }}>14 days free, $0 today, just a few minutes to set up. Bring one client in. See if it feels different.</p>
-          <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+          <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
           <a href="/pricing" className="btn btn-ghost" style={{ marginLeft: 10 }}>See pricing</a>
           <p className="trust" style={{ marginTop: 14 }}>$0 today · Cancel anytime</p>
         </div>

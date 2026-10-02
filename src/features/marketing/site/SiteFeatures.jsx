@@ -4,6 +4,7 @@
 // prototype's stylesheet, scoped under .site-root.
 import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { SignupCta } from './Chrome.jsx';
 
 const PAGE_CSS = `
 .site-root h1{font-size:clamp(36px,4.6vw,54px);letter-spacing:-.025em;line-height:1.1;margin-bottom:18px}
@@ -197,7 +198,7 @@ export default function SiteFeatures() {
         <div className="container">
           <h2>See it all in one trial.</h2>
           <p className="section-sub" style={{ margin: '0 auto 30px' }}>Every feature unlocked from day one. 14 days free, $0 today.</p>
-          <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+          <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
           <p className="trust" style={{ marginTop: '14px' }}>$0 today · Cancel anytime</p>
         </div>
       </section>

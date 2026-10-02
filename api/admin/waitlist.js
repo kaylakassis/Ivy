@@ -10,10 +10,11 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
 import { recordAudit } from '../_lib/audit.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { sheetConfigured } from '../_lib/waitlistSheet.js';
 
 const PAGE_SIZE = 50;
 const CSV_PAGE = 5000;
-const STATUSES = new Set(['pending', 'notified', 'converted']);
+const STATUSES = new Set(['pending', 'invited', 'notified', 'converted']);
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -37,13 +38,13 @@ export default async function handler(req, res) {
     // Build the WHERE dynamically. `$1`-style params to keep it injection-safe.
     const where = [];
     const params = [];
-    if (q) { params.push(`%${q}%`); where.push(`(LOWER(email) LIKE $${params.length} OR LOWER(COALESCE(name,'')) LIKE $${params.length})`); }
+    if (q) { params.push(`%${q}%`); where.push(`(LOWER(email) LIKE $${params.length} OR LOWER(COALESCE(name,'')) LIKE $${params.length} OR LOWER(COALESCE(first_name,'')) LIKE $${params.length} OR LOWER(COALESCE(last_name,'')) LIKE $${params.length} OR COALESCE(phone,'') LIKE $${params.length})`); }
     if (statusFilter) { params.push(statusFilter); where.push(`status = $${params.length}`); }
     const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
     const listParams = [...params, PAGE_SIZE, offset];
     const { rows } = await sql.query(
-      `SELECT id, email, name, source, status, created_at, notified_at, converted_at
+      `SELECT id, email, name, first_name, last_name, phone, contact_consent, invited_at, source, status, created_at, notified_at, converted_at
          FROM waitlist_signups
          ${whereSql}
         ORDER BY created_at DESC
@@ -57,6 +58,11 @@ export default async function handler(req, res) {
         id: r.id,
         email: r.email,
         name: r.name,
+        firstName: r.first_name,
+        lastName: r.last_name,
+        phone: r.phone,
+        consent: r.contact_consent,
+        invitedAt: r.invited_at,
         source: r.source,
         status: r.status,
         createdAt: r.created_at,
@@ -66,6 +72,7 @@ export default async function handler(req, res) {
       page,
       pageSize: PAGE_SIZE,
       total: totalRes.rows[0]?.n || 0,
+      sheetConfigured: sheetConfigured(),
     });
   } catch (err) {
     return serverError(res, err);
@@ -77,11 +84,11 @@ async function writeCsv(res, { q, statusFilter }) {
   res.setHeader('Content-Type', 'text/csv; charset=utf-8');
   res.setHeader('Content-Disposition', `attachment; filename="ivy-waitlist-${stamp}.csv"`);
   res.status(200);
-  res.write(['email', 'name', 'source', 'status', 'created_at', 'notified_at', 'converted_at'].join(',') + '\n');
+  res.write(['first_name', 'last_name', 'email', 'phone', 'contact_consent', 'source', 'status', 'created_at', 'invited_at', 'notified_at', 'converted_at'].join(',') + '\n');
 
   const where = [];
   const params = [];
-  if (q) { params.push(`%${q}%`); where.push(`(LOWER(email) LIKE $${params.length} OR LOWER(COALESCE(name,'')) LIKE $${params.length})`); }
+  if (q) { params.push(`%${q}%`); where.push(`(LOWER(email) LIKE $${params.length} OR LOWER(COALESCE(name,'')) LIKE $${params.length} OR LOWER(COALESCE(first_name,'')) LIKE $${params.length} OR LOWER(COALESCE(last_name,'')) LIKE $${params.length} OR COALESCE(phone,'') LIKE $${params.length})`); }
   if (statusFilter) { params.push(statusFilter); where.push(`status = $${params.length}`); }
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
 
@@ -91,7 +98,7 @@ async function writeCsv(res, { q, statusFilter }) {
     const pageParams = [...params, CSV_PAGE, offset];
     // eslint-disable-next-line no-await-in-loop
     const { rows } = await sql.query(
-      `SELECT email, name, source, status, created_at, notified_at, converted_at
+      `SELECT email, name, first_name, last_name, phone, contact_consent, invited_at, source, status, created_at, notified_at, converted_at
          FROM waitlist_signups
          ${whereSql}
         ORDER BY created_at DESC
@@ -100,7 +107,7 @@ async function writeCsv(res, { q, statusFilter }) {
     );
     if (rows.length === 0) break;
     const lines = rows.map((r) => [
-      r.email, r.name, r.source, r.status, iso(r.created_at), iso(r.notified_at), iso(r.converted_at),
+      r.first_name, r.last_name, r.email, r.phone, r.contact_consent == null ? '' : (r.contact_consent ? 'yes' : 'no'), r.source, r.status, iso(r.created_at), iso(r.invited_at), iso(r.notified_at), iso(r.converted_at),
     ].map(csvCell).join(','));
     res.write(lines.join('\n') + '\n');
     if (rows.length < CSV_PAGE) break;

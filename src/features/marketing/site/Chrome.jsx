@@ -7,6 +7,7 @@
 // <style> tag so the pages stay pixel-faithful to the prototype.
 import React, { useEffect, useState } from 'react';
 import AppStoreBadge from './AppStoreBadge.jsx';
+import { useLaunchMode } from '../../../lib/launchMode.js';
 
 // Nav items: internal SPA routes. Blog is a static page (public/blog.html,
 // served at /blog via Vercel cleanUrls) so it's a plain full-page link, as are
@@ -76,7 +77,7 @@ export function SiteNav({ active }) {
           <div className="nav-cta">
             <AppStoreBadge height={30} className="nav-badge"/>
             <a href="/signin" className="login">Sign in</a>
-            <a href="/signup" className="btn btn-primary btn-sm">Get started</a>
+            <SignupCta className="btn btn-primary btn-sm">Get started</SignupCta>
             <button className="menu-btn" aria-label="Menu" onClick={() => setOpen((v) => !v)}>☰</button>
           </div>
         </div>
@@ -102,7 +103,7 @@ export function SiteFooter() {
         <div className="foot-cols">
           <div className="foot-col"><h5>Product</h5><a href="/features">Features</a><a href="/pricing">Pricing</a><a href="/compare">Compare</a><a href="/blog">Blog</a><a href="/security">Security</a><a href="/integrations">Integrations</a><a href="/mobile">Mobile</a></div>
           <div className="foot-col"><h5>Company</h5><a href="/about">About</a><a href="/support">Support</a><a href="/privacy">Privacy</a><a href="/terms">Terms</a><a href="/do-not-sell">Do Not Sell My Info</a></div>
-          <div className="foot-col"><h5>Account</h5><a href="/signin">Sign in</a><a href="/signup">Get started</a><a href="/me">Client portal</a></div>
+          <div className="foot-col"><h5>Account</h5><a href="/signin">Sign in</a><SignupCta>Get started</SignupCta><a href="/me">Client portal</a></div>
         </div>
       </div>
       <div className="container foot-bottom">
@@ -122,7 +123,7 @@ export function StickyCta() {
   }, []);
   return (
     <div className={`sticky-cta${show ? ' show' : ''}`}>
-      <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+      <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
       <div className="note">$0 today · Cancel anytime</div>
     </div>
   );
@@ -191,4 +192,13 @@ export function useSiteFonts() {
     l.href = 'https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap';
     document.head.appendChild(l);
   }, []);
+}
+
+// Every "sign up" button on the marketing site. In waitlist mode it reads
+// "Join the waitlist" and goes to /waitlist; otherwise it is the normal
+// /signup link with the label the caller gave it.
+export function SignupCta({ className, children, waitlistLabel = 'Join the waitlist' }) {
+  const mode = useLaunchMode();
+  const wait = mode === 'waitlist';
+  return <a href={wait ? '/waitlist' : '/signup'} className={className}>{wait ? waitlistLabel : children}</a>;
 }

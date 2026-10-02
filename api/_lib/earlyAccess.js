@@ -16,6 +16,51 @@ const COOKIE_NAME = 'ea_pass';
 // link clicked from email) but not on cross-site POSTs.
 const COOKIE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days
 
+// Personal invite (waitlist mode): the operator invites one person from
+// Admin → Waitlist; they get a link carrying a signed token. Opening it sets
+// this cookie, which counts as a bypass for exactly that signup.
+const INVITE_COOKIE = 'ea_invite';
+const INVITE_MAX_AGE = 60 * 60 * 24 * 30; // 30 days, same as the token
+
+function inviteSecret() { return process.env.JWT_SECRET || ''; }
+function inviteSig(payload) {
+  return crypto.createHmac('sha256', inviteSecret()).update('invite:' + payload).digest('base64url');
+}
+// Token: base64url(JSON{id,email,exp}).signature
+export function makeInviteToken(id, email, days = 30) {
+  const payload = Buffer.from(JSON.stringify({ id, email: String(email).toLowerCase(), exp: Date.now() + days * 86400_000 })).toString('base64url');
+  return `${payload}.${inviteSig(payload)}`;
+}
+export function verifyInviteToken(token) {
+  if (typeof token !== 'string' || token.length > 600) return null;
+  const dot = token.lastIndexOf('.');
+  if (dot < 1) return null;
+  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
+  const expected = inviteSig(payload);
+  if (sig.length !== expected.length) return null;
+  try { if (!crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null; } catch { return null; }
+  try {
+    const data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8'));
+    if (!data || !data.id || !data.email || !(Number(data.exp) > Date.now())) return null;
+    return { id: String(data.id), email: String(data.email) };
+  } catch { return null; }
+}
+export function setInviteCookie(res, token) {
+  res.setHeader('Set-Cookie',
+    `${INVITE_COOKIE}=${encodeURIComponent(token)}; Path=/; Max-Age=${INVITE_MAX_AGE}; HttpOnly; SameSite=Lax; Secure`,
+  );
+}
+// Valid invite cookie whose waitlist row still exists (deleting the row in
+// Admin revokes the invite).
+export async function hasInviteCookie(req) {
+  const data = verifyInviteToken(parseCookie(req, INVITE_COOKIE));
+  if (!data) return false;
+  try {
+    const { rows } = await sql`SELECT 1 FROM waitlist_signups WHERE id = ${data.id} AND LOWER(email) = ${data.email} LIMIT 1`;
+    return rows.length > 0;
+  } catch { return false; }
+}
+
 // One-shot loader. The settings row is created by the schema migration,
 // so this should always return a row in normal operation; we tolerate
 // missing for the pre-migration first request.
@@ -74,6 +119,7 @@ export async function setLaunchMode(mode) {
 // the password still needs to act as a bypass. Returns true only when a
 // password is configured AND the request carries a cookie matching it.
 export async function hasBypassCookie(req) {
+  if (await hasInviteCookie(req)) return true;
   const settings = await getGateSettings();
   if (!settings.passwordHash) return false; // no bypass password set -> nobody bypasses
   const cookieVal = parseCookie(req, COOKIE_NAME);

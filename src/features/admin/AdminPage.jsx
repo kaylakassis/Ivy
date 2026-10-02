@@ -2633,6 +2633,24 @@ function WaitlistTab() {
   const [err, setErr] = useState(null);
   const [announceBusy, setAnnounceBusy] = useState(false);
   const [announceMsg, setAnnounceMsg] = useState(null);
+  const [inviteBusy, setInviteBusy] = useState(null);   // row id being invited
+  const [inviteLinks, setInviteLinks] = useState({});    // id → link, after inviting
+
+  const invite = async (row) => {
+    if (inviteBusy) return;
+    setInviteBusy(row.id); setErr(null);
+    try {
+      const r = await api.post('/admin/waitlist-invite', { id: row.id });
+      setInviteLinks((m) => ({ ...m, [row.id]: r.link }));
+      setAnnounceMsg(r.emailed ? `Invite emailed to ${row.email}. The link is also below if you want to text it.` : `Email failed, but here is the link to send ${row.email} yourself.`);
+      load();
+    } catch (e) {
+      setErr(e.message || 'Invite failed');
+    } finally {
+      setInviteBusy(null);
+    }
+  };
+  const copy = async (text) => { try { await navigator.clipboard.writeText(text); setAnnounceMsg('Link copied.'); } catch { /* shown inline anyway */ } };
 
   const load = async () => {
     setErr(null);
@@ -2682,6 +2700,13 @@ function WaitlistTab() {
           </button>
         </div>
         {announceMsg && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>✓ {announceMsg}</div>}
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+          Turn the waitlist on or off in the <b>Launch</b> tab. While it is on, nobody can sign up unless you
+          press <b>Invite</b> on their row (they get a personal link that works for 30 days) or they have the beta code.
+          {data && (data.sheetConfigured
+            ? ' Every new signup is also added to your Google Sheet.'
+            : ' Google Sheet mirror is not set up yet: add WAITLIST_SHEET_WEBHOOK_URL in Vercel (see docs/waitlist-sheet.md).')}
+        </div>
 
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
           <form onSubmit={(e) => { e.preventDefault(); setPage(1); load(); }} style={{ flex: '1 1 220px', display: 'flex', gap: 6 }}>
@@ -2691,6 +2716,7 @@ function WaitlistTab() {
           <select className="input" value={status} onChange={(e) => { setStatus(e.target.value); setPage(1); }} style={{ padding: '8px 11px', fontSize: 13 }}>
             <option value="">All statuses</option>
             <option value="pending">Pending</option>
+            <option value="invited">Invited</option>
             <option value="notified">Notified</option>
             <option value="converted">Converted</option>
           </select>
@@ -2708,17 +2734,22 @@ function WaitlistTab() {
           <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
             <thead>
               <tr style={{ textAlign: 'left', color: 'var(--muted)', fontSize: 11.5, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                <th style={{ padding: '10px 14px' }}>Email</th>
                 <th style={{ padding: '10px 14px' }}>Name</th>
+                <th style={{ padding: '10px 14px' }}>Email</th>
+                <th style={{ padding: '10px 14px' }}>Phone</th>
+                <th style={{ padding: '10px 14px' }}>OK to contact</th>
                 <th style={{ padding: '10px 14px' }}>Status</th>
                 <th style={{ padding: '10px 14px' }}>Joined</th>
+                <th style={{ padding: '10px 14px' }}></th>
               </tr>
             </thead>
             <tbody>
               {data.items.map((r) => (
                 <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
+                  <td style={{ padding: '10px 14px' }}>{[r.firstName, r.lastName].filter(Boolean).join(' ') || r.name || '—'}</td>
                   <td style={{ padding: '10px 14px' }}>{r.email}</td>
-                  <td style={{ padding: '10px 14px', color: 'var(--muted)' }}>{r.name || '—'}</td>
+                  <td style={{ padding: '10px 14px', color: 'var(--muted)' }}>{r.phone || '—'}</td>
+                  <td style={{ padding: '10px 14px', color: r.consent ? 'var(--ok)' : 'var(--muted)' }}>{r.consent == null ? '—' : r.consent ? 'Yes' : 'No'}</td>
                   <td style={{ padding: '10px 14px' }}>
                     <span style={{
                       fontSize: 11.5, padding: '2px 8px', borderRadius: 999,
@@ -2726,6 +2757,17 @@ function WaitlistTab() {
                     }}>{r.status}</span>
                   </td>
                   <td style={{ padding: '10px 14px', color: 'var(--muted)' }}>{new Date(r.createdAt).toLocaleDateString()}</td>
+                  <td style={{ padding: '10px 14px', whiteSpace: 'nowrap' }}>
+                    {r.status === 'converted' ? (
+                      <span style={{ color: 'var(--muted)' }}>Signed up</span>
+                    ) : inviteLinks[r.id] ? (
+                      <button className="btn btn-outline" onClick={() => copy(inviteLinks[r.id])} style={{ fontSize: 12 }}>Copy link</button>
+                    ) : (
+                      <button className="btn btn-primary" disabled={inviteBusy === r.id} onClick={() => invite(r)} style={{ fontSize: 12 }}>
+                        {inviteBusy === r.id ? 'Sending…' : r.invitedAt ? 'Invite again' : 'Invite'}
+                      </button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>

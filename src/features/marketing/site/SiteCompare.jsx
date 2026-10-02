@@ -2,6 +2,7 @@
 // pixel-faithfully from the ivy-site-handoff prototype (compare.html).
 import React from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
+import { SignupCta } from './Chrome.jsx';
 
 const PAGE_CSS = `
 .site-root h1{font-size:clamp(34px,4.4vw,52px);letter-spacing:-.025em;line-height:1.12;margin-bottom:18px}
@@ -186,7 +187,7 @@ export default function SiteCompare() {
             <div className="why"><h3>An assistant, not another inbox</h3><p>Ivy is the only option here with an AI that takes real actions on your data - draft, book, remind, follow up - with your approval on anything client-facing.</p></div>
           </div>
           <div style={{ marginTop: 48 }}>
-            <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+            <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
             <p className="trust" style={{ marginTop: 14 }}>$0 today · Cancel anytime · Import your clients via CSV in minutes</p>
           </div>
         </div>

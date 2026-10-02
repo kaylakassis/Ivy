@@ -5,6 +5,7 @@
 import React, { useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome';
 import { MONTHLY_STACK_SAVINGS } from '../../../lib/pricing.js';
+import { SignupCta } from './Chrome.jsx';
 
 const JSON_LD = {
   '@context': 'https://schema.org',
@@ -139,7 +140,7 @@ export default function SitePricing() {
             <div className="amount">14 days free</div>
             <p className="terms">then $8.99 / week once you subscribe. No per-seat math, no add-ons.</p>
             <p className="annual">Or save with annual - <b>$374.99/yr</b> (save about 20%).</p>
-            <a href="/signup" className="btn">Start your 14-day free trial →</a>
+            <SignupCta className="btn" waitlistLabel="Join the waitlist →">Start your 14-day free trial →</SignupCta>
             <ul>
               <li>Unlimited clients + pipeline</li>
               <li>Online booking + calendar sync</li>
@@ -249,7 +250,7 @@ export default function SitePricing() {
         <div className="container">
           <h2>Try it.</h2>
           <p className="section-sub" style={{ margin: '0 auto 30px' }}>14 days free, $0 today, just a few minutes to set up. Bring one client in. See if it feels different.</p>
-          <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+          <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
           <p className="trust" style={{ marginTop: 14 }}>$0 today · Cancel anytime</p>
         </div>
       </section>

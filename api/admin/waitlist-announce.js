@@ -72,6 +72,7 @@ export default async function handler(req, res) {
     const { rows: recipients } = await sql`
       SELECT id, email, name FROM waitlist_signups
       WHERE notified_at IS NULL
+        AND contact_consent IS DISTINCT FROM false
       ORDER BY created_at ASC
       LIMIT ${MAX_ANNOUNCE}
     `;

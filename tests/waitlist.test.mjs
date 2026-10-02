@@ -54,20 +54,20 @@ async function run() {
   assert(r.statusCode === 400, 'rejects an invalid email (400)');
 
   r = makeRes();
-  await joinHandler(req({ body: { email: wlEmail.toUpperCase(), name: 'WL Tester' } }), r);
+  await joinHandler(req({ body: { email: wlEmail.toUpperCase(), name: 'WL Tester', consent: true } }), r);
   assert(r.statusCode === 200, 'accepts a valid email (200)');
   let cnt = (await sql`SELECT COUNT(*)::int n FROM waitlist_signups WHERE LOWER(email) = ${wlEmail}`).rows[0].n;
   assert(cnt === 1, 'one row stored, email lower-cased');
 
   r = makeRes();
-  await joinHandler(req({ body: { email: wlEmail } }), r);
+  await joinHandler(req({ body: { email: wlEmail, name: 'WL Tester', consent: true } }), r);
   assert(r.statusCode === 200, 're-submit is a no-op success (200)');
   cnt = (await sql`SELECT COUNT(*)::int n FROM waitlist_signups WHERE LOWER(email) = ${wlEmail}`).rows[0].n;
   assert(cnt === 1, 'still exactly one row after re-submit (idempotent)');
 
   r = makeRes();
   const before = (await sql`SELECT COUNT(*)::int n FROM waitlist_signups`).rows[0].n;
-  await joinHandler(req({ body: { email: `bot-${stamp}@example.com`, hp: 'i-am-a-bot' } }), r);
+  await joinHandler(req({ body: { email: `bot-${stamp}@example.com`, name: 'Bot Bot', consent: true, hp: 'i-am-a-bot' } }), r);
   const after = (await sql`SELECT COUNT(*)::int n FROM waitlist_signups`).rows[0].n;
   assert(r.statusCode === 200 && after === before, 'honeypot submit silently accepted, nothing stored');
 

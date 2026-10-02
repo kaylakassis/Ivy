@@ -22,9 +22,13 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 
-export default function WaitlistPage() {
+export default function WaitlistPage({ inviteError }) {
   const [tweaks] = useTweaks();
   const [email, setEmail] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
+  const [consent, setConsent] = useState(false);
   const [hp, setHp] = useState(''); // honeypot - real users never fill this
   const [busy, setBusy] = useState(false);
   const [joined, setJoined] = useState(false);
@@ -41,10 +45,16 @@ export default function WaitlistPage() {
   const join = async (e) => {
     e.preventDefault();
     setErr(null);
+    if (!firstName.trim() || !lastName.trim()) { setErr('Enter your first and last name'); return; }
     if (!email.trim()) { setErr('Enter your email'); return; }
+    if (!phone.trim()) { setErr('Enter your phone number'); return; }
+    if (!consent) { setErr('Tick the box so we can let you know when Ivy is live'); return; }
     setBusy(true);
     try {
-      await api.post('/waitlist/join', { email: email.trim(), hp, source: 'waitlist-landing' });
+      await api.post('/waitlist/join', {
+        firstName: firstName.trim(), lastName: lastName.trim(), email: email.trim(), phone: phone.trim(),
+        consent: true, hp, source: 'waitlist-landing',
+      });
       setJoined(true);
     } catch (e2) {
       setErr(e2.message || 'Something went wrong - try again');
@@ -124,31 +134,43 @@ export default function WaitlistPage() {
                 padding: '16px 18px', borderRadius: 'var(--radius, 12px)', fontSize: 15, fontWeight: 500,
               }}>
                 <Icons.Check size={18} sw={2}/>
-                You're on the list — we'll email you the moment we launch 🎉
+                You're on the list. We'll reach out the moment Ivy is live.
               </div>
             ) : (
-              <form onSubmit={join} style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+              <form onSubmit={join} style={{ display: 'grid', gap: 10, gridTemplateColumns: '1fr 1fr' }}>
                 {/* Honeypot - visually hidden, off the tab order. */}
                 <input
                   type="text" name="hp" value={hp} onChange={(e) => setHp(e.target.value)}
                   tabIndex={-1} autoComplete="off" aria-hidden="true"
                   style={{ position: 'absolute', left: '-9999px', width: 1, height: 1, opacity: 0 }}
                 />
-                <input
-                  type="email" value={email} onChange={(e) => setEmail(e.target.value)}
-                  placeholder="Enter your email" autoComplete="email" autoFocus
-                  className="input"
-                  style={{ flex: '1 1 240px', padding: '13px 15px', fontSize: 15 }}
-                />
+                <input type="text" value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                  placeholder="First name" autoComplete="given-name" autoFocus required className="input"
+                  style={{ padding: '13px 15px', fontSize: 15 }}/>
+                <input type="text" value={lastName} onChange={(e) => setLastName(e.target.value)}
+                  placeholder="Last name" autoComplete="family-name" required className="input"
+                  style={{ padding: '13px 15px', fontSize: 15 }}/>
+                <input type="email" value={email} onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Email" autoComplete="email" required className="input"
+                  style={{ padding: '13px 15px', fontSize: 15, gridColumn: '1 / -1' }}/>
+                <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)}
+                  placeholder="Phone number" autoComplete="tel" required className="input"
+                  style={{ padding: '13px 15px', fontSize: 15, gridColumn: '1 / -1' }}/>
+                <label style={{ gridColumn: '1 / -1', display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13.5, color: 'var(--muted)', lineHeight: 1.45, cursor: 'pointer' }}>
+                  <input type="checkbox" checked={consent} onChange={(e) => setConsent(e.target.checked)} required
+                    style={{ marginTop: 3, width: 16, height: 16, accentColor: 'var(--accent)' }}/>
+                  <span>Yes, email or text me when Ivy is live. No spam, and you can opt out any time.</span>
+                </label>
                 <button
                   type="submit" className="btn btn-primary" disabled={busy}
-                  style={{ padding: '13px 22px', fontSize: 15, whiteSpace: 'nowrap' }}
+                  style={{ padding: '13px 22px', fontSize: 15, whiteSpace: 'nowrap', gridColumn: '1 / -1', justifyContent: 'center' }}
                 >
-                  {busy ? 'Joining…' : 'Join waitlist'}
+                  {busy ? 'Joining…' : 'Join the waitlist'}
                 </button>
               </form>
             )}
             {err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{err}</div>}
+            {inviteError && !err && <div style={{ color: 'var(--danger)', fontSize: 13, marginTop: 10 }}>{inviteError}</div>}
 
             {/* Beta access bypass. Always shown on the waitlist screen so the
                 affordance is never missing; if no password is configured yet

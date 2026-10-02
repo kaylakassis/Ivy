@@ -19,11 +19,27 @@ export default function EarlyAccessGate({ children, mode }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState(null);
 
+  const [inviteErr, setInviteErr] = useState(null);
   useEffect(() => {
     let live = true;
-    api.get('/early-access/status')
+    const load = () => api.get('/early-access/status')
       .then((r) => { if (live) setStatus(r); })
       .catch(() => { if (live) setStatus({ enabled: false, unlocked: true, launchMode: 'open', bypassed: true }); });
+    // A personal invite link (/signup?invite=…) is redeemed first: the
+    // server sets the invite cookie, then the normal status check sees
+    // `bypassed: true`. The token is removed from the address bar either way.
+    const params = new URLSearchParams(window.location.search);
+    const invite = params.get('invite');
+    if (invite) {
+      params.delete('invite');
+      const clean = `${window.location.pathname}${params.toString() ? '?' + params.toString() : ''}${window.location.hash}`;
+      window.history.replaceState(null, '', clean);
+      api.post('/early-access/invite', { token: invite })
+        .catch((e) => { if (live) setInviteErr(e.message || 'This invite link is not valid.'); })
+        .finally(load);
+    } else {
+      load();
+    }
     return () => { live = false; };
   }, []);
 
@@ -40,7 +56,7 @@ export default function EarlyAccessGate({ children, mode }) {
   // of your own app behind the waitlist. The waitlist only holds back new
   // sign-ups (and signup.js blocks account creation server-side anyway).
   if (mode !== 'signin' && status.launchMode === 'waitlist' && !status.bypassed) {
-    return <WaitlistPage hasBetaPassword={!!status.hasBetaPassword} />;
+    return <WaitlistPage hasBetaPassword={!!status.hasBetaPassword} inviteError={inviteErr} />;
   }
 
   if (!status.enabled || status.unlocked) return children;

@@ -2169,6 +2169,17 @@ CREATE TABLE IF NOT EXISTS waitlist_signups (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS idx_waitlist_signups_email ON waitlist_signups(LOWER(email));
 CREATE INDEX IF NOT EXISTS idx_waitlist_signups_status_time ON waitlist_signups(status, created_at DESC);
+-- Pre-launch waitlist v2: who they are, how to reach them, whether they
+-- said yes to being contacted, and whether the operator invited them in.
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS first_name TEXT;
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS last_name TEXT;
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS phone TEXT;
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS contact_consent BOOLEAN;
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ;
+ALTER TABLE waitlist_signups DROP CONSTRAINT IF EXISTS waitlist_signups_status_check;
+ALTER TABLE waitlist_signups ADD CONSTRAINT waitlist_signups_status_check
+  CHECK (status IN ('pending','invited','notified','converted'));
 
 -- Stamped when an owner signs up with an email that's on the waitlist.
 -- billing/checkout.js reads this to pre-apply the shared 20%/12mo coupon.

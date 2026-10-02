@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from 'react';
 import { SiteNav, SiteFooter, StickyCta, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
 import { STACK_TOTAL } from '../../../lib/pricing.js';
 import ProductVideo, { playProductVideo } from './ProductVideo.jsx';
+import { SignupCta } from './Chrome.jsx';
 
 const JSON_LD = {
   '@context': 'https://schema.org',
@@ -394,7 +395,7 @@ export default function SiteHome() {
             <h1>The business platform with an AI that <em className="lime" style={{ fontStyle: 'normal' }}>does</em> the work.</h1>
             <p className="hero-sub">Meet Ivy. She knows your clients, your numbers, and your calendar - and she actually <strong>does your busywork</strong>: invoicing, booking, follow-ups, contracts, and more. One workspace, <strong>one plan</strong>.</p>
             <div className="hero-ctas">
-              <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+              <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
               <a href="#video" className="btn btn-ghost" onClick={playProductVideo}>▶&nbsp; Watch the video · 0:30</a>
               <a href="/tour" className="hero-tour">or take the tour →</a>
             </div>
@@ -636,7 +637,7 @@ export default function SiteHome() {
               <li>Stripe payments, settled in your own account</li>
               <li>Free client portal - forever</li>
             </ul>
-            <a href="/signup" className="btn">Start your 14-day free trial →</a>
+            <SignupCta className="btn" waitlistLabel="Join the waitlist →">Start your 14-day free trial →</SignupCta>
             <p className="fine">$0 today · Cancel anytime</p>
           </div>
           <p style={{ marginTop: '22px', fontSize: '14px' }}><a href="/pricing" className="lime">See full pricing + ROI calculator →</a></p>
@@ -660,7 +661,7 @@ export default function SiteHome() {
           <span className="eyebrow">Try it</span>
           <h2>Bring one client in.<br />See if it feels <span className="lime">different</span>.</h2>
           <p className="section-sub" style={{ margin: '0 auto 34px' }}>14 days free, $0 today, just a few minutes to set up - at joinivy.ai.</p>
-          <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+          <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
           <p className="trust" style={{ marginTop: '14px' }}>$0 today · Cancel anytime</p>
         </div>
       </section>

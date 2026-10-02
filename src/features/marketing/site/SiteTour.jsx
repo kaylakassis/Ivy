@@ -12,6 +12,7 @@
 // motion everything is simply visible.
 import { useEffect, useState } from 'react';
 import { SiteNav, SiteFooter, usePageMeta, useSiteFonts, BASE_CSS } from './Chrome.jsx';
+import { SignupCta } from './Chrome.jsx';
 
 // ─── The tour ──────────────────────────────────────────────────────────
 const ACTS = [
@@ -697,7 +698,7 @@ export default function SiteTour() {
           <h2 className="reveal">That’s the whole thing.<br /><span className="pulseglow">One plan. One login.</span></h2>
           <p className="reveal" style={{ '--d': '.1s' }}>{chipCount} things across {STOPS.length} areas, all included for $8.99 a week after a 14-day free trial. Nothing locked behind a tier.</p>
           <div className="cta-row reveal" style={{ '--d': '.2s' }}>
-            <a href="/signup" className="btn btn-primary">Start your 14-day free trial</a>
+            <SignupCta className="btn btn-primary">Start your 14-day free trial</SignupCta>
             <a href="/#video" className="btn" style={{ border: '1px solid var(--border2)', color: 'var(--text)' }}>Watch the 30-second video</a>
           </div>
           <p className="trust reveal" style={{ marginTop: '16px', '--d': '.3s' }}>$0 today · Cancel anytime · Everything included</p>
