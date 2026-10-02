@@ -65,7 +65,7 @@ export default async function handler(req, res) {
       // Fallback must match getDailyUsage's real shape - the usage meter
       // reads usage.outputTokens.toLocaleString() and would TypeError on
       // the old { used, limit } placeholder.
-      const usage = await safe(getDailyUsage(workspaceId), { requests: 0, outputTokens: 0, requestCap: 0, outputTokenCap: 0 });
+      const usage = await safe(getDailyUsage(workspaceId), { requests: 0, outputTokens: 0, requestCap: 0, outputTokenCap: 0, monthMessages: 0, monthAllowance: 0, monthResetsAt: null });
       return ok(res, {
         sessions: sessions.rows.map((r) => serializeSession(r)),
         context,

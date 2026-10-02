@@ -250,7 +250,7 @@ function IvyMark({ size = 22 }) {
 // ── Panel ──────────────────────────────────────────────────────────
 
 function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
-  const { messages, thinking, send, mode, modeError, context, briefing, activeId, approvePending, dismissPending } = ivy;
+  const { messages, thinking, send, mode, modeError, context, briefing, activeId, approvePending, dismissPending, usage } = ivy;
   const [draft, setDraft] = useState('');
   const [listening, setListening] = useState(false);
   const scrollRef = useRef(null);
@@ -440,6 +440,11 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
             <Icons.Arrow size={16}/>
           </button>
         </div>
+        {mode === 'live' && usage && usage.monthAllowance > 0 && (
+          <div style={{ marginTop: 6, fontSize: 10.5, color: usage.monthMessages >= usage.monthAllowance ? 'var(--danger)' : 'var(--muted)', textAlign: 'right' }}>
+            {usage.monthMessages}/{usage.monthAllowance} messages this month
+          </div>
+        )}
       </div>
     </div>
   );

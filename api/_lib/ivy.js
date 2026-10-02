@@ -121,7 +121,12 @@ function redactText(t) {
 }
 
 const IVY_MAX_TOKENS = 1024;
-const IVY_HISTORY_TURNS = 10;
+// Six turns (12 messages) is enough context for a conversation and keeps
+// the uncached part of every request small. Each turn is also trimmed to
+// IVY_HISTORY_CHARS so one long reply (a site draft, a report) does not ride
+// along for the next twelve messages.
+const IVY_HISTORY_TURNS = 6;
+const IVY_HISTORY_CHARS = 1500;
 // Cap on tool-use loop iterations per user message. Real conversations
 // rarely need more than 3–4 tool calls; 8 is generous slack for "list
 // quiet clients → search clients → send a message to each" patterns.
@@ -131,8 +136,19 @@ const TOOL_LOOP_CAP = 8;
 // with a "limit reached" message so a runaway loop or overly chatty workspace
 // can't drive real money out of our pocket. Tool loops can multiply API
 // calls per user message - bumped accordingly. Tune as plan tiers land.
-const DAILY_REQUEST_CAP = 200;
+const DAILY_REQUEST_CAP = 40;
 const DAILY_OUTPUT_TOKEN_CAP = 100_000;
+
+// Per-workspace MONTHLY allowance of Ivy messages. This is the number that
+// sets the floor on margin: at roughly $0.03-0.06 a message, 100 a month
+// keeps every plan comfortably profitable even if a workspace uses all of
+// them. Shown as a meter in the Ivy page; resets on the 1st (UTC).
+// Env-tunable so the allowance can move without a deploy.
+const MONTHLY_MESSAGE_ALLOWANCE = Math.max(0, Number(process.env.IVY_MONTHLY_MESSAGES ?? 100));
+function monthResetsAt() {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString();
+}
 
 // PLATFORM-WIDE daily ceiling — a cost/abuse backstop ON TOP of the per-
 // workspace caps. The per-workspace cap can't stop a botnet that scripts many
@@ -535,6 +551,14 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   // silently mocking) so they understand why the answers regressed.
   if (workspaceId) {
     const usage = await getDailyUsage(workspaceId);
+    if (usage.monthAllowance > 0 && usage.monthMessages >= usage.monthAllowance) {
+      return {
+        text: sanitizeIvyReply(allowanceUsedMessage(usage)),
+        mode: 'mock',
+        error: 'monthly-allowance',
+        usage,
+      };
+    }
     if (usage.requests >= DAILY_REQUEST_CAP) {
       return {
         text: sanitizeIvyReply(capExceededMessage('requests', usage)),
@@ -587,6 +611,11 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   }
 }
 
+function allowanceUsedMessage(usage) {
+  const resets = new Date(usage.monthResetsAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', timeZone: 'UTC' });
+  return `You've used all ${usage.monthAllowance} Ivy messages for this month. A fresh ${usage.monthAllowance} arrive on ${resets}. Until then your dashboard and the panel on the right still show your live numbers, and everything else in Ivy works as usual.`;
+}
+
 function capExceededMessage(kind, usage) {
   const reason = kind === 'requests'
     ? `you've hit today's chat limit (${DAILY_REQUEST_CAP} messages)`
@@ -594,8 +623,30 @@ function capExceededMessage(kind, usage) {
   return `Just a heads up - ${reason}. Ivy will be back to full power tomorrow. In the meantime here's a quick take based on your numbers:\n\n${kind === 'requests' ? 'Pace yourself for the rest of the day; come back fresh tomorrow with the most important question on your mind.' : 'Your snapshot is in the right rail - pick the biggest red flag and act on it before tomorrow.'}`;
 }
 
-export async function getDailyUsage(workspaceId) {
+// Messages sent this calendar month (UTC). request_count is incremented once
+// per owner message (recordUsage runs once per reply with the summed turns),
+// so this is a count of messages, not of provider calls.
+export async function getMonthlyUsage(workspaceId) {
   const { rows } = await sql`
+    SELECT COALESCE(SUM(request_count), 0)::int AS messages
+      FROM ivy_usage
+     WHERE workspace_id = ${workspaceId}
+       AND day >= date_trunc('month', CURRENT_DATE)::date
+  `;
+  return {
+    messages: Number(rows[0]?.messages || 0),
+    allowance: MONTHLY_MESSAGE_ALLOWANCE,
+    resetsAt: monthResetsAt(),
+  };
+}
+export async function monthlyAllowanceStatus(workspaceId) {
+  const m = await getMonthlyUsage(workspaceId);
+  return { ...m, capped: m.allowance > 0 && m.messages >= m.allowance };
+}
+
+export async function getDailyUsage(workspaceId) {
+  const [{ rows }, month] = await Promise.all([
+    sql`
     SELECT
       COALESCE(SUM(request_count), 0)::int   AS requests,
       COALESCE(SUM(input_tokens), 0)::bigint  AS input_tokens,
@@ -603,7 +654,9 @@ export async function getDailyUsage(workspaceId) {
     FROM ivy_usage
     WHERE workspace_id = ${workspaceId}
       AND day = CURRENT_DATE
-  `;
+  `,
+    getMonthlyUsage(workspaceId),
+  ]);
   const r = rows[0] || {};
   return {
     requests: Number(r.requests || 0),
@@ -611,6 +664,9 @@ export async function getDailyUsage(workspaceId) {
     outputTokens: Number(r.output_tokens || 0),
     requestCap: DAILY_REQUEST_CAP,
     outputTokenCap: DAILY_OUTPUT_TOKEN_CAP,
+    monthMessages: month.messages,
+    monthAllowance: month.allowance,
+    monthResetsAt: month.resetsAt,
   };
 }
 
@@ -958,7 +1014,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
         },
       ],
       tools: IVY_TOOLS,
-      messages,
+      messages: withPrefixCache(messages),
     }, { timeout: remaining });
     const u = response.usage || {};
     totalIn          += Number(u.input_tokens || 0);
@@ -1016,7 +1072,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       system: [{ type: 'text', text: IVY_SYSTEM, cache_control: { type: 'ephemeral' } }],
       tools: IVY_TOOLS,
       tool_choice: { type: 'none' },
-      messages,
+      messages: withPrefixCache(messages),
     }, { timeout: HARD_DEADLINE_MS - (Date.now() - startedAt) });
     const u = final.usage || {};
     totalIn          += Number(u.input_tokens || 0);
@@ -1184,6 +1240,28 @@ function fmtCtx(ctx) {
   return lines.join('\n');
 }
 
+// Second cache breakpoint: everything up to the message before the newest
+// one. The system prompt + tools already cache (breakpoint 1); this makes the
+// conversation so far cache too, so a long chat and every extra round of a
+// tool loop pay full price only for what is new. Returns a shallow copy; the
+// working message list is left untouched. Prefixes under the provider's
+// minimum cacheable size simply don't cache, which costs nothing extra.
+function withPrefixCache(messages) {
+  if (!Array.isArray(messages) || messages.length < 2) return messages;
+  const out = messages.slice();
+  const i = out.length - 2;
+  const m = out[i];
+  const mark = { type: 'ephemeral' };
+  if (typeof m.content === 'string') {
+    out[i] = { ...m, content: [{ type: 'text', text: m.content, cache_control: mark }] };
+  } else if (Array.isArray(m.content) && m.content.length) {
+    const blocks = m.content.slice();
+    blocks[blocks.length - 1] = { ...blocks[blocks.length - 1], cache_control: mark };
+    out[i] = { ...m, content: blocks };
+  }
+  return out;
+}
+
 function buildMessages(text, ctx, history, attachment) {
   // Take the last N turns (one turn ≈ 2 messages: me + ivy). Never start with
   // an assistant message - drop a leading 'ivy' if it slipped through.
@@ -1192,7 +1270,8 @@ function buildMessages(text, ctx, history, attachment) {
   // otherwise leave two user turns back to back).
   const trimmed = (history || [])
     .filter((m) => m && typeof m.text === 'string' && m.text.trim())
-    .slice(-IVY_HISTORY_TURNS * 2);
+    .slice(-IVY_HISTORY_TURNS * 2)
+    .map((m) => (m.text.length > IVY_HISTORY_CHARS ? { ...m, text: m.text.slice(0, IVY_HISTORY_CHARS) + ' …' } : m));
   while (trimmed.length > 0 && trimmed[0].role !== 'me') trimmed.shift();
 
   const out = [];
