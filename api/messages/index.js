@@ -9,6 +9,7 @@ import { readBody } from '../_lib/body.js';
 import { serializeThread } from '../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
+import { blockMapForWorkspace } from '../_lib/moderation.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -43,8 +44,18 @@ export default async function handler(req, res) {
         `;
         const hasMore = rows.length > limit;
         const page = hasMore ? rows.slice(0, limit) : rows;
+        // Blocked threads stay in the list; the flags let the UI explain
+        // who switched messaging off (owner side: blockedByMe).
+        const blocks = await blockMapForWorkspace(workspaceId).catch(() => new Map());
         return ok(res, {
-          threads: page.map(serializeThread),
+          threads: page.map((r) => {
+            const b = blocks.get(r.client_id);
+            return {
+              ...serializeThread(r),
+              blocked: !!(b && (b.ownerBlocked || b.clientBlocked)),
+              blockedByMe: !!(b && b.ownerBlocked),
+            };
+          }),
           hasMore,
           nextOffset: hasMore ? offset + limit : null,
         });

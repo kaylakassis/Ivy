@@ -13,6 +13,7 @@ import { useDictation, useVoiceMemo } from '../../lib/speech.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { AudioPlayer, RecordingBar, uploadVoiceMemo } from '../../components/AudioMessage.jsx';
 import GroupChats from './GroupChats.jsx';
+import { MoreMenu, ReportModal, BlockedNotice, ownerModeration } from '../../components/Moderation.jsx';
 
 export default function Messages() {
   // ?group=<id> (group-chat push notifications, api/_lib/groupChat.js)
@@ -152,6 +153,7 @@ function DirectMessages() {
           threadId={selectedId}
           onMarkRead={(id) => updateThread(id, { unreadBiz: 0 })}
           onSetMode={setMode}
+          onPatchThread={updateThread}
           onBack={isMobile ? () => setSelectedId(null) : null}
         />
       )}
@@ -218,13 +220,19 @@ function ThreadRow({ thread, active, onClick }) {
   );
 }
 
-function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
-  const { thread, messages, loading, error, send } = useThread(threadId);
+function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBack }) {
+  const { thread, messages, loading, error, send, refresh } = useThread(threadId);
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [voiceErr, setVoiceErr] = useState(null);
   const [smsMode, setSmsMode] = useState(false);
   const [smsNote, setSmsNote] = useState(null);
+  // Report + block (App Review: every place people can write to each
+  // other needs both). `reportTarget` is null for a contact-level
+  // report or a message id when filed from a single bubble.
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
+  const [blockBusy, setBlockBusy] = useState(false);
   const smsAvailable = !!(thread?.smsConsent && thread?.clientPhone);
   const scrollRef = useRef(null);
   const dictation = useDictation();
@@ -337,6 +345,36 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
 
   const cancelVoiceMemo = () => { memo.cancel(); setVoiceErr(null); };
 
+  const openReport = (messageId = null) => { setReportTarget(messageId); setReportOpen(true); };
+  const submitReport = async (reason, details) => {
+    await ownerModeration.report({
+      clientId: thread.clientId,
+      targetType: reportTarget ? 'message' : 'client',
+      targetId: reportTarget || undefined,
+      reason, details,
+    });
+  };
+  const syncBlockFlags = async () => {
+    const r = await refresh();
+    if (r?.thread) onPatchThread?.(thread.id, { blocked: !!r.thread.blocked, blockedByMe: !!r.thread.blockedByMe });
+  };
+  const blockClient = async () => {
+    const okay = window.confirm(
+      `Block ${thread.clientName}? They won't be able to message you and you won't be able to message them. You can unblock any time in Account → Blocked.`,
+    );
+    if (!okay) return;
+    setBlockBusy(true);
+    try { await ownerModeration.block(thread.clientId); await syncBlockFlags(); }
+    catch (e) { setSmsNote(e?.message || 'Could not block this contact.'); }
+    finally { setBlockBusy(false); }
+  };
+  const unblockClient = async () => {
+    setBlockBusy(true);
+    try { await ownerModeration.unblock(thread.clientId); await syncBlockFlags(); }
+    catch (e) { setSmsNote(e?.message || 'Could not unblock this contact.'); }
+    finally { setBlockBusy(false); }
+  };
+
   const tsPoints = computeTimestampPoints(messages);
 
   return (
@@ -388,6 +426,12 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
             );
           })}
         </div>
+        <MoreMenu label="Conversation options" items={[
+          { label: `Report ${thread.clientName || 'this contact'}`, onClick: () => openReport(null) },
+          thread.blockedByMe
+            ? { label: 'Unblock', onClick: unblockClient }
+            : { label: `Block ${thread.clientName || 'this contact'}`, onClick: blockClient, danger: true },
+        ]}/>
       </div>
 
       {/* Messages */}
@@ -411,12 +455,27 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
                 {fmtTimestampHeader(m.createdAt)}
               </div>
             )}
-            <Bubble message={m}/>
+            <Bubble message={m} onReport={m.sender === 'client' ? () => openReport(m.id) : null}/>
           </React.Fragment>
         ))}
       </div>
 
-      {/* Composer */}
+      {reportOpen && (
+        <ReportModal
+          title={reportTarget ? 'Report this message' : `Report ${thread.clientName || 'this contact'}`}
+          onSubmit={submitReport}
+          onClose={() => setReportOpen(false)}/>
+      )}
+
+      {/* Composer (or the blocked notice in its place) */}
+      {thread.blocked ? (
+        thread.blockedByMe ? (
+          <BlockedNotice text={`You blocked ${thread.clientName || 'this contact'}.`}
+            actionLabel="Unblock" onAction={unblockClient} busy={blockBusy}/>
+        ) : (
+          <BlockedNotice text="This contact has blocked messages."/>
+        )
+      ) : (
       <form onSubmit={submit} style={{
         padding: '14px 20px', borderTop: '1px solid var(--border)',
         background: 'var(--surface)',
@@ -514,14 +573,21 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onBack }) {
           </div>
         )}
       </form>
+      )}
     </div>
   );
 }
 
-function Bubble({ message }) {
+function Bubble({ message, onReport }) {
   const mine = message.sender === 'biz';
   const isSystem = message.sender === 'system';
   const audioAtt = (message.attachments || []).find((a) => (a.type || '').startsWith('audio/'));
+  // Per-message "Report" shows on hover (desktop) or after a long press
+  // (touch) so the bubble stays clean the rest of the time.
+  const [showReport, setShowReport] = useState(false);
+  const pressTimer = useRef(null);
+  const startPress = () => { if (onReport) pressTimer.current = setTimeout(() => setShowReport(true), 450); };
+  const endPress = () => { if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; } };
 
   if (isSystem) {
     return (
@@ -532,30 +598,46 @@ function Bubble({ message }) {
   }
 
   return (
-    <div style={{
-      alignSelf: mine ? 'flex-end' : 'flex-start',
-      maxWidth: '78%',
-      padding: '9px 13px', borderRadius: 18,
-      background: mine ? 'var(--accent)' : 'var(--surface)',
-      color: mine ? 'var(--accent-ink)' : 'var(--fg)',
-      border: mine ? 'none' : '1px solid var(--border)',
-      fontSize: 14, lineHeight: 1.45,
-      wordBreak: 'break-word', whiteSpace: 'pre-wrap',
-    }}>
-      {audioAtt && <AudioPlayer url={audioAtt.url} mine={mine} durationMs={audioAtt.durationMs}/>}
-      {message.text && (
-        <div style={{
-          marginTop: audioAtt ? 6 : 0,
-          fontSize: audioAtt ? 13 : 14,
-          opacity: audioAtt ? 0.92 : 1,
-        }}>
-          {message.text}
-        </div>
-      )}
-      {message.meta?.channel === 'sms' && (
-        <div style={{ marginTop: 4, fontSize: 10, opacity: 0.7, display: 'flex', alignItems: 'center', gap: 3 }}>
-          <Icons.Phone size={9}/> SMS
-        </div>
+    <div
+      onMouseEnter={() => onReport && setShowReport(true)}
+      onMouseLeave={() => setShowReport(false)}
+      onTouchStart={startPress} onTouchEnd={endPress} onTouchMove={endPress}
+      style={{
+        alignSelf: mine ? 'flex-end' : 'flex-start',
+        maxWidth: '78%', display: 'flex', alignItems: 'flex-end', gap: 6,
+      }}>
+      <div style={{
+        padding: '9px 13px', borderRadius: 18, minWidth: 0,
+        background: mine ? 'var(--accent)' : 'var(--surface)',
+        color: mine ? 'var(--accent-ink)' : 'var(--fg)',
+        border: mine ? 'none' : '1px solid var(--border)',
+        fontSize: 14, lineHeight: 1.45,
+        wordBreak: 'break-word', whiteSpace: 'pre-wrap',
+      }}>
+        {audioAtt && <AudioPlayer url={audioAtt.url} mine={mine} durationMs={audioAtt.durationMs}/>}
+        {message.text && (
+          <div style={{
+            marginTop: audioAtt ? 6 : 0,
+            fontSize: audioAtt ? 13 : 14,
+            opacity: audioAtt ? 0.92 : 1,
+          }}>
+            {message.text}
+          </div>
+        )}
+        {message.meta?.channel === 'sms' && (
+          <div style={{ marginTop: 4, fontSize: 10, opacity: 0.7, display: 'flex', alignItems: 'center', gap: 3 }}>
+            <Icons.Phone size={9}/> SMS
+          </div>
+        )}
+      </div>
+      {onReport && showReport && (
+        <button type="button" onClick={onReport} title="Report this message"
+          style={{
+            flexShrink: 0, fontSize: 11, color: 'var(--muted)', background: 'transparent',
+            border: 0, cursor: 'pointer', padding: '2px 4px',
+          }}>
+          Report
+        </button>
       )}
     </div>
   );

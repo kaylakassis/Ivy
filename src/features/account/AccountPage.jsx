@@ -15,6 +15,7 @@ import { useUserContext } from '../../lib/userContext.jsx';
 import Referrals from '../referrals/Referrals.jsx';
 import TwoFactor from './TwoFactor.jsx';
 import { api } from '../../lib/api.js';
+import { BlockedCard, ReportsCard, ownerModeration } from '../../components/Moderation.jsx';
 import { hideableNav } from '../../lib/nav.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
@@ -34,13 +35,16 @@ export default function AccountPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   // Deep links: /account#referrals, /account?tab=billing (dunning, trial
   // and win-back emails and pushes; winback=1 just lands on billing too)
-  // and /account?tab=security (sign-in alerts). Scroll the card into view
-  // once the page has painted.
+  // /account?tab=security (sign-in alerts), and /account?tab=blocked or
+  // ?tab=reports (messaging moderation). Scroll the card into view once
+  // the page has painted.
   useEffect(() => {
     const tab = new URLSearchParams(window.location.search).get('tab');
     const target = window.location.hash === '#referrals' ? 'referrals'
       : tab === 'billing' ? 'billing'
       : tab === 'security' ? 'security'
+      : tab === 'blocked' ? 'blocked'
+      : tab === 'reports' ? 'reports'
       : null;
     if (!target) return;
     const t = setTimeout(() => document.getElementById(target)?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 250);
@@ -164,6 +168,14 @@ export default function AccountPage() {
       </div>
 
       <SecurityCard/>
+
+      {/* Messaging moderation: who you've blocked, what you've reported. */}
+      <BlockedCard id="blocked"
+        hint="Blocked clients cannot message you and you cannot message them. You can unblock any time."
+        load={ownerModeration.loadBlocks}
+        labelOf={(b) => b.clientName || b.clientEmail || 'Client'}
+        unblock={(b) => ownerModeration.unblock(b.clientId)}/>
+      <ReportsCard id="reports" load={ownerModeration.loadReports} subjectOf={(r) => r.clientName}/>
 
       {/* Danger zone */}
       <div className="card" style={{ padding: 22, borderColor: 'var(--danger)' }}>
