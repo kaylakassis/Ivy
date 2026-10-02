@@ -14,6 +14,7 @@ import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { serializeThread } from '../../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../../_lib/json.js';
+import { blockMapForClients } from '../../_lib/moderation.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -35,13 +36,20 @@ export default async function handler(req, res) {
          ORDER BY t.last_message_at DESC NULLS LAST, t.created_at DESC`,
         [myIds],
       );
+      // Blocked threads stay listed; the flags let the UI explain who
+      // switched messaging off (client side: blockedByMe).
+      const blocks = await blockMapForClients(myIds).catch(() => new Map());
       const threads = rows.map((r) => {
         const m = byClient.get(r.client_id);
+        const b = blocks.get(r.client_id);
         return {
           ...serializeThread(r),
+          workspaceId: r.workspace_id,
           businessName: m?.businessName || 'Business',
           // From the client's perspective, the unread count that matters
           // is unread_client (messages they haven't seen from the biz).
+          blocked: !!(b && (b.ownerBlocked || b.clientBlocked)),
+          blockedByMe: !!(b && b.clientBlocked),
         };
       });
       return ok(res, { threads });

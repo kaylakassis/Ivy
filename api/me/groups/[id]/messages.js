@@ -10,6 +10,7 @@ import {
   cleanAttachments, insertGroupMessage,
 } from '../../../_lib/groupChat.js';
 import { methodNotAllowed, notFound, serverError } from '../../../_lib/json.js';
+import { isBlocked, BLOCKED_MESSAGE } from '../../../_lib/moderation.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -40,6 +41,11 @@ export default async function handler(req, res) {
 
     const workspaceId = row.workspace_id;
     const myClientId = row.client_id;
+    // A client blocked by (or who blocked) this business cannot post in
+    // the business's group chats either.
+    if (await isBlocked(workspaceId, myClientId)) {
+      return res.status(403).json({ error: BLOCKED_MESSAGE, code: 'blocked' });
+    }
     const threadName = row.name;
 
     const idemp = await withIdempotency(req, user.id, async () => {

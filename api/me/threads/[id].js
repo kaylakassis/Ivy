@@ -16,6 +16,7 @@ import { sendEmailToUser, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { withIdempotency } from '../../_lib/idempotency.js';
+import { blockState, BLOCKED_MESSAGE } from '../../_lib/moderation.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -82,13 +83,27 @@ export default async function handler(req, res) {
         );
         thread.unread_client = 0;
       }
+      // Block flags so the composer can explain why sending is off.
+      const bs = await blockState(thread.workspace_id, thread.client_id);
       return ok(res, {
-        thread: { ...serializeThread(thread), businessName: membership?.businessName },
+        thread: {
+          ...serializeThread(thread),
+          workspaceId: thread.workspace_id,
+          businessName: membership?.businessName,
+          blocked: bs.blocked,
+          blockedByMe: bs.clientBlocked,
+        },
         messages: msgs.rows.map(serializeMessage),
       });
     }
 
     if (req.method === 'POST') {
+      // A block in either direction switches messaging off both ways.
+      // Checked before the read-only mode so the client sees the right reason.
+      const bs = await blockState(thread.workspace_id, thread.client_id);
+      if (bs.blocked) {
+        return res.status(403).json({ error: BLOCKED_MESSAGE, code: 'blocked' });
+      }
       // Block writes when the business has set the thread to broadcast-only.
       if (thread.mode === 'one-way') {
         return badRequest(res, 'This conversation is read-only');

@@ -16,6 +16,7 @@ import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { sendClientSms } from '../_lib/sms.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { appUrl } from '../_lib/tokens.js';
+import { blockState, BLOCKED_MESSAGE } from '../_lib/moderation.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -58,13 +59,20 @@ export default async function handler(req, res) {
         await sql`UPDATE message_threads SET unread_biz = 0 WHERE id = ${id} AND workspace_id = ${workspaceId}`;
         thread.unread_biz = 0;
       }
+      // Block flags so the composer can explain why sending is off.
+      const bs = await blockState(workspaceId, thread.client_id);
       return ok(res, {
-        thread: serializeThread(thread),
+        thread: { ...serializeThread(thread), blocked: bs.blocked, blockedByMe: bs.ownerBlocked },
         messages: msgs.rows.map(serializeMessage),
       });
     }
 
     if (req.method === 'POST') {
+      // A block in either direction switches messaging off both ways.
+      const bs = await blockState(workspaceId, thread.client_id);
+      if (bs.blocked) {
+        return res.status(403).json({ error: BLOCKED_MESSAGE, code: 'blocked' });
+      }
       // Bracket the entire send in idempotency. Mobile messaging is the
       // most retry-prone path: phone clients on flaky LTE re-send the
       // same message when the spinner hangs, creating duplicate rows +

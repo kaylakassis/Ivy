@@ -9,6 +9,7 @@
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { BlockedCard, ReportsCard, clientModeration } from '../../components/Moderation.jsx';
 
 export default function ClientProfile() {
   const [profile, setProfile] = useState(null);
@@ -162,6 +163,16 @@ export default function ClientProfile() {
           )}
         </div>
       </form>
+
+      {/* Messaging moderation: businesses you've blocked, what you've reported. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
+        <BlockedCard id="blocked"
+          hint="Blocked businesses cannot message you and you cannot message them. You can unblock any time."
+          load={clientModeration.loadBlocks}
+          labelOf={(b) => b.businessName || 'Business'}
+          unblock={(b) => clientModeration.unblock(b.workspaceId)}/>
+        <ReportsCard id="reports" load={clientModeration.loadReports} subjectOf={(r) => r.businessName}/>
+      </div>
     </div>
   );
 }

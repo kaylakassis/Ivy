@@ -19,6 +19,7 @@ import { uploadFile as upload } from '../../lib/blobUpload.js';
 import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
 } from '../../components/AudioMessage.jsx';
+import { MoreMenu, ReportModal, BlockedNotice, clientModeration } from '../../components/Moderation.jsx';
 
 export default function ClientMessagesPage() {
   // Deep links pick the right tab: accepting a group invite lands on
@@ -310,8 +311,15 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
   const [input, setInput]       = useState('');
   const [sending, setSending]   = useState(false);
   const [voiceErr, setVoiceErr] = useState(null);
+  // Report + block this business (App Review). `reportTarget` is a
+  // message id when filed from one bubble, null for the business itself.
+  const [reportOpen, setReportOpen] = useState(false);
+  const [reportTarget, setReportTarget] = useState(null);
+  const [blockBusy, setBlockBusy] = useState(false);
+  const [blockErr, setBlockErr] = useState(null);
   const scrollRef = useRef(null);
   const memo = useVoiceMemo();
+  const { data: ctx } = useClientPortal();
 
   useEffect(() => {
     if (!threadId) return;
@@ -328,6 +336,42 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
       .finally(() => live && setLoading(false));
     return () => { live = false; };
   }, [threadId]);
+
+  // The thread payload carries workspaceId; fall back to the membership
+  // list for anything cached from before that field existed.
+  const workspaceId = thread?.workspaceId
+    || (ctx?.memberships || []).find((m) => m.clientId === thread?.clientId)?.workspaceId
+    || null;
+  const refreshThread = async () => {
+    const r = await api.get('/me/threads/' + threadId);
+    setThread(r.thread);
+    onUpdated?.();
+  };
+  const openReport = (messageId = null) => { setReportTarget(messageId); setReportOpen(true); };
+  const submitReport = async (reason, details) => {
+    await clientModeration.report({
+      workspaceId,
+      targetType: reportTarget ? 'message' : 'business',
+      targetId: reportTarget || undefined,
+      reason, details,
+    });
+  };
+  const blockBusiness = async () => {
+    const okay = window.confirm(
+      `Block ${thread?.businessName || 'this business'}? They won't be able to message you and you won't be able to message them. You can unblock any time from your profile.`,
+    );
+    if (!okay) return;
+    setBlockBusy(true); setBlockErr(null);
+    try { await clientModeration.block(workspaceId); await refreshThread(); }
+    catch (e) { setBlockErr(e?.message || 'Could not block this business.'); }
+    finally { setBlockBusy(false); }
+  };
+  const unblockBusiness = async () => {
+    setBlockBusy(true); setBlockErr(null);
+    try { await clientModeration.unblock(workspaceId); await refreshThread(); }
+    catch (e) { setBlockErr(e?.message || 'Could not unblock this business.'); }
+    finally { setBlockBusy(false); }
+  };
 
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -420,6 +464,12 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
             {thread.mode === 'one-way' ? 'Announcements only - replies disabled' : 'Direct chat'}
           </div>
         </div>
+        <MoreMenu label="Conversation options" items={[
+          { label: 'Report this business', onClick: () => openReport(null) },
+          thread.blockedByMe
+            ? { label: 'Unblock', onClick: unblockBusiness }
+            : { label: 'Block this business', onClick: blockBusiness, danger: true },
+        ]}/>
       </div>
 
       <div ref={scrollRef} className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '20px 32px',
@@ -428,9 +478,27 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
           <div style={{ textAlign: 'center', color: 'var(--muted)', fontSize: 13, padding: 40 }}>
             No messages yet. Say hello to {thread.businessName}.
           </div>
-        ) : messages.map((m) => <Bubble key={m.id} msg={m}/>)}
+        ) : messages.map((m) => <Bubble key={m.id} msg={m} onReport={m.sender === 'biz' ? () => openReport(m.id) : null}/>)}
       </div>
 
+      {reportOpen && (
+        <ReportModal
+          title={reportTarget ? 'Report this message' : `Report ${thread.businessName || 'this business'}`}
+          onSubmit={submitReport}
+          onClose={() => setReportOpen(false)}/>
+      )}
+
+      {blockErr && (
+        <div style={{ padding: '8px 20px', fontSize: 12, color: 'var(--danger)', background: 'var(--surface)' }}>{blockErr}</div>
+      )}
+      {thread.blocked ? (
+        thread.blockedByMe ? (
+          <BlockedNotice text={`You blocked ${thread.businessName || 'this business'}.`}
+            actionLabel="Unblock" onAction={unblockBusiness} busy={blockBusy}/>
+        ) : (
+          <BlockedNotice text="This business has blocked messages."/>
+        )
+      ) : (
       <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)',
         background: 'var(--surface)' }}>
         {thread.mode === 'one-way' ? (
@@ -475,14 +543,20 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
           </form>
         )}
       </div>
+      )}
     </div>
   );
 }
 
-function Bubble({ msg }) {
+function Bubble({ msg, onReport }) {
   // From the client's perspective: their own messages are 'mine' (right-side,
   // accent), the biz's messages are 'theirs' (left-side, neutral).
   const mine = msg.sender === 'client';
+  // Per-message "Report" on hover (desktop) or long press (touch).
+  const [showReport, setShowReport] = useState(false);
+  const pressTimer = useRef(null);
+  const startPress = () => { if (onReport) pressTimer.current = setTimeout(() => setShowReport(true), 450); };
+  const endPress = () => { if (pressTimer.current) { clearTimeout(pressTimer.current); pressTimer.current = null; } };
   if (msg.sender === 'system') {
     return (
       <div style={{ alignSelf: 'center', fontSize: 11.5, color: 'var(--muted)', padding: '4px 12px' }}>
@@ -493,9 +567,13 @@ function Bubble({ msg }) {
   const audioAtt = (msg.attachments || []).find(isAudioAttachment);
   const nonAudio = (msg.attachments || []).filter((a) => !isAudioAttachment(a));
   return (
+    <div
+      onMouseEnter={() => onReport && setShowReport(true)}
+      onMouseLeave={() => setShowReport(false)}
+      onTouchStart={startPress} onTouchEnd={endPress} onTouchMove={endPress}
+      style={{ alignSelf: mine ? 'flex-end' : 'flex-start', maxWidth: '72%', display: 'flex', alignItems: 'flex-end', gap: 6 }}>
     <div style={{
-      alignSelf: mine ? 'flex-end' : 'flex-start',
-      maxWidth: '72%', padding: '9px 13px', borderRadius: 18,
+      padding: '9px 13px', borderRadius: 18, minWidth: 0,
       background: mine ? 'var(--accent)' : 'var(--surface)',
       color: mine ? 'var(--accent-ink)' : 'var(--fg)',
       border: mine ? 'none' : '1px solid var(--border)',
@@ -534,6 +612,13 @@ function Bubble({ msg }) {
             )
           ))}
         </div>
+      )}
+    </div>
+      {onReport && showReport && (
+        <button type="button" onClick={onReport} title="Report this message"
+          style={{ flexShrink: 0, fontSize: 11, color: 'var(--muted)', background: 'transparent', border: 0, cursor: 'pointer', padding: '2px 4px' }}>
+          Report
+        </button>
       )}
     </div>
   );

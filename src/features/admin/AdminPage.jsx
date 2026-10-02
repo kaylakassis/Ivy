@@ -26,6 +26,7 @@ const TABS = [
   { id: 'support',    label: 'Support',    icon: 'Chat' },
   { id: 'bugs',       label: 'Bug reports', icon: 'Spark' },
   { id: 'appeals',    label: 'Review appeals', icon: 'Star' },
+  { id: 'reports',    label: 'Reports',    icon: 'EyeOff' },
   { id: 'blast',      label: 'Email blast', icon: 'Spark' },
   { id: 'waitlist',   label: 'Waitlist',   icon: 'Mail' },
   { id: 'audit',      label: 'Audit log',  icon: 'Clock' },
@@ -47,19 +48,22 @@ export default function AdminPage() {
   // every 30s so a fresh message lights up without manual refresh.
   const [supportUnread, setSupportUnread] = useState(0);
   const [bugsOpen, setBugsOpen]           = useState(0);
+  const [reportsOpen, setReportsOpen]     = useState(0);
   useEffect(() => {
     if (!user?.isSuperAdmin) return undefined;
     let live = true;
     const load = async () => {
       try {
-        const [s, b] = await Promise.all([
+        const [s, b, a] = await Promise.all([
           api.get('/admin/support').catch(() => ({ threads: [] })),
           api.get('/admin/bug-reports?status=open').catch(() => ({ openCount: 0 })),
+          api.get('/admin/reports?status=open').catch(() => ({ openCount: 0 })),
         ]);
         if (!live) return;
         const total = (s.threads || []).reduce((sum, t) => sum + (t.unreadAdmin || 0), 0);
         setSupportUnread(total);
         setBugsOpen(b.openCount || 0);
+        setReportsOpen(a.openCount || 0);
       } catch { /* ignore - badges degrade to zero, not a blocker */ }
     };
     load();
@@ -97,6 +101,7 @@ export default function AdminPage() {
           const badge =
               t.id === 'support' && supportUnread > 0 ? supportUnread
             : t.id === 'bugs'    && bugsOpen       > 0 ? bugsOpen
+            : t.id === 'reports' && reportsOpen    > 0 ? reportsOpen
             : 0;
           return (
             <button key={t.id} onClick={() => setTab(t.id)}
@@ -104,7 +109,7 @@ export default function AdminPage() {
               style={{ padding: '7px 14px', fontSize: 13, whiteSpace: 'nowrap', position: 'relative' }}>
               <Icon size={13} sw={1.7}/> {t.label}
               {badge > 0 && (
-                <span aria-label={`${badge} unread support message${badge === 1 ? '' : 's'}`}
+                <span aria-label={`${badge} open item${badge === 1 ? '' : 's'}`}
                   style={{
                     marginLeft: 6, padding: '0 6px', borderRadius: 99,
                     background: active ? 'var(--accent-ink)' : 'var(--danger, #B23A48)',
@@ -127,6 +132,7 @@ export default function AdminPage() {
       {tab === 'support'    && <SupportTab/>}
       {tab === 'bugs'       && <BugsTab/>}
       {tab === 'appeals'    && <AppealsTab/>}
+      {tab === 'reports'    && <ReportsTab onChanged={(n) => setReportsOpen(n)}/>}
       {tab === 'blast'      && <BlastTab/>}
       {tab === 'waitlist'   && <WaitlistTab/>}
       {tab === 'audit'      && <AuditTab/>}
@@ -352,6 +358,155 @@ function AppealsTab() {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+// ---------- Abuse reports tab ----------
+// The operator's review queue for report + block (App Review). Owners
+// file from Messages → ⋯ → Report, clients from the portal's Messages.
+// Every new report also emails SUPER_ADMIN_EMAIL; this tab is where it
+// gets marked reviewed or dismissed, with an optional note.
+const REPORT_TARGET_LABELS = {
+  client: 'Contact', business: 'Business', message: 'Message',
+  group_message: 'Group message', review: 'Review',
+};
+
+function ReportsTab({ onChanged }) {
+  const [status, setStatus] = useState('open');
+  const [data, setData] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busyId, setBusyId] = useState(null);
+  const [expanded, setExpanded] = useState({});
+
+  const load = async () => {
+    setErr(null);
+    try {
+      const r = await api.get(`/admin/reports?status=${encodeURIComponent(status)}`);
+      setData(r);
+      onChanged?.(r.openCount || 0);
+    } catch (e) { setErr(e.message || 'Load failed'); }
+  };
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status]);
+
+  const resolve = async (id, next) => {
+    if (busyId) return;
+    const note = window.prompt(next === 'reviewed'
+      ? 'Optional note (what you did about it):'
+      : 'Optional note (why this is dismissed):', '');
+    if (note === null) return;
+    setBusyId(id); setErr(null);
+    try {
+      await api.patch('/admin/reports', { id, status: next, resolutionNote: note.trim() || undefined });
+      await load();
+    } catch (e) { setErr(e.message || 'Update failed'); }
+    finally { setBusyId(null); }
+  };
+
+  const reports = data?.reports || [];
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+          <h3 style={{ margin: 0, fontSize: 16, fontWeight: 600, flex: 1 }}>
+            Reports {data ? `· ${data.openCount || 0} open` : ''}
+          </h3>
+          <select className="input" value={status} onChange={(e) => setStatus(e.target.value)} style={{ padding: '8px 11px', fontSize: 13 }}>
+            <option value="open">Open</option>
+            <option value="reviewed">Reviewed</option>
+            <option value="dismissed">Dismissed</option>
+            <option value="all">All</option>
+          </select>
+        </div>
+        <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+          Business owners and their clients can report each other and block each other from their Messages pages.
+          Every report lands here and is emailed to the operator address. Review each one within 24 hours:
+          mark it <b>Reviewed</b> once you have acted on it, or <b>Dismiss</b> it if nothing needs doing.
+        </div>
+      </div>
+
+      {err && <ErrCard msg={err}/>}
+
+      <div className="card" style={{ padding: 0, overflow: 'hidden' }}>
+        {!data ? (
+          <div style={{ padding: 18, fontSize: 13, color: 'var(--muted)' }}>Loading…</div>
+        ) : reports.length === 0 ? (
+          <EmptyNote icon="EyeOff" title={status === 'open' ? 'No open reports' : 'Nothing here'}
+            hint={status === 'open' ? 'When someone reports a contact, a business or a message, it shows up here.' : ''}/>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+              <thead>
+                <tr style={{ textAlign: 'left' }}>
+                  <Th>Date</Th><Th>Reported by</Th><Th>Business</Th><Th>Client</Th>
+                  <Th>Target</Th><Th>Reason</Th><Th>Details</Th><Th>Status</Th><Th></Th>
+                </tr>
+              </thead>
+              <tbody>
+                {reports.map((r) => {
+                  const long = (r.details || '').length > 120;
+                  const open = !!expanded[r.id];
+                  return (
+                    <tr key={r.id} style={{ borderTop: '1px solid var(--border)' }}>
+                      <Td><span style={{ whiteSpace: 'nowrap', color: 'var(--muted)' }}>{new Date(r.createdAt).toLocaleDateString()}</span></Td>
+                      <Td>
+                        <div style={{ fontWeight: 600, textTransform: 'capitalize' }}>{r.reporterRole}</div>
+                        {r.reporterEmail && <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{r.reporterEmail}</div>}
+                      </Td>
+                      <Td>{r.businessName}</Td>
+                      <Td>
+                        {r.clientName || <span style={{ color: 'var(--muted)' }}>None</span>}
+                        {r.clientEmail && <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{r.clientEmail}</div>}
+                      </Td>
+                      <Td>
+                        {REPORT_TARGET_LABELS[r.targetType] || r.targetType}
+                        {r.targetId && <div style={{ fontSize: 10.5, color: 'var(--muted)', fontFamily: 'monospace' }}>{r.targetId.slice(0, 8)}</div>}
+                      </Td>
+                      <Td><span style={{ fontWeight: 600 }}>{r.reasonLabel || r.reason}</span></Td>
+                      <Td>
+                        <div style={{ maxWidth: 320, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--fg-2)' }}>
+                          {r.details ? (open || !long ? r.details : r.details.slice(0, 120) + '…') : <span style={{ color: 'var(--muted)' }}>No details</span>}
+                          {long && (
+                            <button type="button" className="btn btn-ghost" style={{ padding: '0 4px', fontSize: 12, marginLeft: 4 }}
+                              onClick={() => setExpanded((m) => ({ ...m, [r.id]: !open }))}>
+                              {open ? 'Less' : 'More'}
+                            </button>
+                          )}
+                        </div>
+                        {r.resolutionNote && (
+                          <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>Note: {r.resolutionNote}</div>
+                        )}
+                      </Td>
+                      <Td>
+                        <span style={{ fontSize: 11.5, padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>
+                          {r.status}
+                        </span>
+                        {r.resolvedByEmail && <div style={{ fontSize: 10.5, color: 'var(--muted)', marginTop: 3 }}>{r.resolvedByEmail}</div>}
+                      </Td>
+                      <Td>
+                        {r.status === 'open' ? (
+                          <div style={{ display: 'flex', gap: 6, whiteSpace: 'nowrap' }}>
+                            <button className="btn btn-primary" disabled={busyId === r.id} onClick={() => resolve(r.id, 'reviewed')} style={{ fontSize: 12 }}>Mark reviewed</button>
+                            <button className="btn btn-ghost" disabled={busyId === r.id} onClick={() => resolve(r.id, 'dismissed')} style={{ fontSize: 12 }}>Dismiss</button>
+                          </div>
+                        ) : (
+                          <span style={{ color: 'var(--muted)', fontSize: 12 }}>
+                            {r.resolvedAt ? new Date(r.resolvedAt).toLocaleDateString() : ''}
+                          </span>
+                        )}
+                      </Td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }

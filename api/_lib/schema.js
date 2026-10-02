@@ -3202,4 +3202,44 @@ CREATE INDEX IF NOT EXISTS idx_program_posts_program ON program_posts(program_id
 ALTER TABLE programs ADD COLUMN IF NOT EXISTS access_days INT CHECK (access_days IS NULL OR access_days > 0);
 ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_program_enrollments_expiry ON program_enrollments(expires_at) WHERE status = 'active' AND expires_at IS NOT NULL;
+
+-- ─── Owner↔client messaging moderation (App Review: report + block) ──
+-- contact_blocks: either side can switch messaging off with the other.
+--   owner_blocks_client     the business blocked this client
+--   client_blocks_business  the client blocked this business
+-- A block in EITHER direction stops sends both ways (api/_lib/moderation.js).
+CREATE TABLE IF NOT EXISTS contact_blocks (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  direction TEXT NOT NULL CHECK (direction IN ('owner_blocks_client', 'client_blocks_business')),
+  created_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  reason TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_contact_blocks_pair
+  ON contact_blocks(workspace_id, client_id, direction);
+CREATE INDEX IF NOT EXISTS idx_contact_blocks_client ON contact_blocks(client_id);
+
+-- abuse_reports: anything a person flags for the operator to review
+-- (Admin → Reports). client_id is NULL when a client reports a business;
+-- the reporter is then identified by reporter_user_id + workspace_id.
+CREATE TABLE IF NOT EXISTS abuse_reports (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  reporter_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  reporter_role TEXT NOT NULL CHECK (reporter_role IN ('owner', 'client')),
+  target_type TEXT NOT NULL CHECK (target_type IN ('client', 'business', 'message', 'group_message', 'review')),
+  target_id UUID,
+  reason TEXT NOT NULL,
+  details TEXT,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'reviewed', 'dismissed')),
+  resolution_note TEXT,
+  resolved_by_user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+  resolved_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_abuse_reports_status ON abuse_reports(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_abuse_reports_workspace ON abuse_reports(workspace_id);
 `;
