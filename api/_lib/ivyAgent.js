@@ -102,6 +102,15 @@ export async function detectSuggestions(workspaceId) {
 export async function storeSuggestions(workspaceId, suggestions) {
   let created = 0;
   for (const s of suggestions) {
+    // One card per signal. A day-keyed signal that is still true tomorrow
+    // gets a fresh row (so it can be re-shown after a dismissal), but the
+    // older pending row for the same kind is retired first, so the owner
+    // never sees the same card three times.
+    // eslint-disable-next-line no-await-in-loop
+    await sql`
+      UPDATE ivy_suggestions SET status = 'done', acted_at = NOW()
+       WHERE workspace_id = ${workspaceId} AND kind = ${s.kind}
+         AND status = 'pending' AND dedupe_key <> ${s.dedupe_key}`;
     // eslint-disable-next-line no-await-in-loop
     const r = await sql`
       INSERT INTO ivy_suggestions (workspace_id, kind, dedupe_key, icon, title, detail, prompt)
@@ -119,12 +128,33 @@ export async function runIvyAgentForWorkspace(workspaceId) {
   return { created: await storeSuggestions(workspaceId, suggestions) };
 }
 
-// The owner's current pending suggestions (newest first).
-export async function listPendingSuggestions(workspaceId, { limit = 10 } = {}) {
+// Retire pending suggestions whose signal has gone away since they were
+// raised: the owner replied to the lead, the invoice got paid, the week
+// filled up. Called before listing, so a card never lingers after the
+// owner has already handled it. A fresh review keeps its card for three
+// days even once it leaves the "new" window, so a weekend doesn't hide it.
+export async function reconcileSuggestions(workspaceId) {
+  let active;
+  try { active = new Set((await detectSuggestions(workspaceId)).map((s) => s.kind)); }
+  catch { return; } // a detector hiccup must never blank the dashboard
+  await sql`
+    UPDATE ivy_suggestions SET status = 'done', acted_at = NOW()
+     WHERE workspace_id = ${workspaceId} AND status = 'pending'
+       AND NOT (kind = ANY(${[...active]}::text[]))
+       AND NOT (kind = 'new_review' AND created_at > NOW() - INTERVAL '3 days')`;
+}
+
+// The owner's current pending suggestions (newest first), one per signal.
+export async function listPendingSuggestions(workspaceId, { limit = 10, reconcile = true } = {}) {
+  if (reconcile) await reconcileSuggestions(workspaceId);
   const { rows } = await sql`
     SELECT id, kind, icon, title, detail, prompt, created_at
-      FROM ivy_suggestions
-     WHERE workspace_id = ${workspaceId} AND status = 'pending'
+      FROM (
+        SELECT DISTINCT ON (kind) id, kind, icon, title, detail, prompt, created_at
+          FROM ivy_suggestions
+         WHERE workspace_id = ${workspaceId} AND status = 'pending'
+         ORDER BY kind, created_at DESC
+      ) latest
      ORDER BY created_at DESC LIMIT ${limit}`;
   return rows;
 }

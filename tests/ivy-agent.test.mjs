@@ -60,6 +60,25 @@ async function run() {
     assert(crossResolve === false, 'cannot resolve another workspace\'s suggestion');
     assert((await listPendingSuggestions(wsA)).length === 3, 'wsA still 3 (cross-resolve had no effect)');
 
+    console.log('\n[3b] one card per signal, and cards retire once the owner has handled them');
+    // Yesterday's still-pending lead card (a day-keyed signal that was true two days running).
+    await sql`INSERT INTO ivy_suggestions (workspace_id, kind, dedupe_key, title, prompt, created_at)
+              VALUES (${wsA}, 'unreplied_leads', 'leads:2000-01-01', 'stale', 'x', NOW() - INTERVAL '1 day')`;
+    let leadCards = (await listPendingSuggestions(wsA)).filter((x) => x.kind === 'unreplied_leads');
+    assert(leadCards.length === 1 && leadCards[0].title !== 'stale', 'list shows a single, newest lead card even with a stale duplicate pending');
+    await runIvyAgentForWorkspace(wsA);
+    const stale = (await sql`SELECT status FROM ivy_suggestions WHERE workspace_id = ${wsA} AND dedupe_key = 'leads:2000-01-01'`).rows[0];
+    assert(stale?.status === 'done', 'the agent retires the older pending card of the same kind');
+    // The owner replies to the lead: the card goes away on the next dashboard load.
+    const lead = (await sql`SELECT id FROM clients WHERE workspace_id = ${wsA} AND name = 'Old Lead'`).rows[0];
+    const th = await sql`INSERT INTO message_threads (workspace_id, client_id) VALUES (${wsA}, ${lead.id}) RETURNING id`;
+    await sql`INSERT INTO messages (thread_id, sender, text) VALUES (${th.rows[0].id}, 'biz', 'Hi! Thanks for reaching out.')`;
+    leadCards = (await listPendingSuggestions(wsA)).filter((x) => x.kind === 'unreplied_leads');
+    assert(leadCards.length === 0, 'lead card disappears once the owner has replied');
+    const retired = (await sql`SELECT status FROM ivy_suggestions WHERE workspace_id = ${wsA} AND kind = 'unreplied_leads' ORDER BY created_at DESC LIMIT 1`).rows[0];
+    assert(retired?.status === 'done', 'it is marked done, not left pending');
+    assert((await listPendingSuggestions(wsA)).some((x) => x.kind === 'new_review'), 'the review card is untouched');
+
     console.log('\n[4] an empty workspace produces nothing and leaks nothing');
     const rB = await runIvyAgentForWorkspace(wsB);
     assert(rB.created === 0, 'empty workspace creates 0 suggestions');
