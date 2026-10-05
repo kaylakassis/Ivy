@@ -842,7 +842,9 @@ html.native .mobile-nav.native .mobile-nav-item {
 }
 html.native .mobile-nav.native .mobile-nav-item.active { color: var(--accent); background: none; }
 html.native .mobile-nav.native .mobile-nav-item:active { transform: none; opacity: .7; }
-html.native body.has-mobile-nav .app-root > div { padding-bottom: calc(72px + env(safe-area-inset-bottom, 0px)); }
+/* Same measured height the web rule uses; the 72px + inset is only the
+   fallback before MobileBottomNav has published --mobile-nav-h. */
+html.native body.has-mobile-nav .app-root > div { padding-bottom: var(--mobile-nav-h, calc(72px + env(safe-area-inset-bottom, 0px))); }
 
 
 /* Touch feedback replaces hover. */
