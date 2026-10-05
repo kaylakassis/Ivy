@@ -111,10 +111,11 @@ function DirectMessages() {
       gridTemplateColumns: isMobile ? '1fr' : '320px 1fr',
       flex: 1, minHeight: 0,
       borderTop: '1px solid var(--border)',
-      // Clear the fixed bottom nav (~64px + safe area) - without this
-      // the composer rendered UNDERNEATH it and Send was untappable on
-      // phones (the app's most-used surface).
-      paddingBottom: isMobile ? 'calc(env(safe-area-inset-bottom, 0px) + 72px)' : 0,
+      // The app frame already clears the fixed bottom nav (global.css
+      // pads .app-frame by --mobile-nav-h, and the native shell by 72px +
+      // safe area). Padding again here left a dead band under the
+      // composer on phones, so it looked like it was floating.
+      paddingBottom: 0,
     }}>
       {/* Thread list */}
       {showList && <div style={{
@@ -397,12 +398,14 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
           fontSize: 13, fontWeight: 600,
         }}>{(thread.clientName || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase()}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>{thread.clientName}</div>
-          <div style={{ fontSize: 12, color: 'var(--muted)' }}>{thread.clientEmail}</div>
+          <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{thread.clientName}</div>
+          <div style={{ fontSize: 12, color: 'var(--muted)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{thread.clientEmail}</div>
         </div>
-        {/* Per-thread mode */}
-        <div style={{
-          display: 'flex', gap: 2, padding: 3,
+        {/* Per-thread mode. On phones the segmented control pushed the
+            "⋯" menu off the right edge, so there the switch lives inside
+            the menu instead (see items below). */}
+        {!onBack && <div style={{
+          display: 'flex', gap: 2, padding: 3, flexShrink: 0,
           background: 'var(--surface-2)', border: '1px solid var(--border)',
           borderRadius: 8,
         }}>
@@ -425,8 +428,11 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
               </button>
             );
           })}
-        </div>
+        </div>}
         <MoreMenu label="Conversation options" items={[
+          ...(onBack ? [thread.mode === 'one-way'
+            ? { label: 'Switch to two-way (they can reply)', onClick: () => onSetMode(thread.id, 'two-way') }
+            : { label: 'Switch to broadcast (no replies)', onClick: () => onSetMode(thread.id, 'one-way') }] : []),
           { label: `Report ${thread.clientName || 'this contact'}`, onClick: () => openReport(null) },
           thread.blockedByMe
             ? { label: 'Unblock', onClick: unblockClient }

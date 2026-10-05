@@ -459,7 +459,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
           fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17,
         }}>{(thread.businessName || '?').trim()[0]?.toUpperCase() || '?'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14 }}>{thread.businessName}</div>
+          <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{thread.businessName}</div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             {thread.mode === 'one-way' ? 'Announcements only - replies disabled' : 'Direct chat'}
           </div>
