@@ -54,7 +54,7 @@ So the sweep works like this:
 
 The sweep runs:
 
-- when a referred owner converts (both sides are rewarded),
+- when a referred owner converts (the referrer is rewarded),
 - on every RevenueCat `RENEWAL` for the workspace,
 - when the owner opens Account → Referrals (GET `/api/referrals`).
 

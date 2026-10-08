@@ -116,7 +116,7 @@ export default function AccountPage() {
 
       <SubscriptionCard/>
 
-      {/* Referrals (was its own tab): refer a friend, you both get a free week. */}
+      {/* Referrals (was its own tab): refer a friend, get a free week. */}
       {ctx?.isOwner && (
         <div id="referrals" style={{ scrollMarginTop: 80 }}>
           <div className="metric-label" style={{ marginBottom: 12 }}>Refer a friend</div>

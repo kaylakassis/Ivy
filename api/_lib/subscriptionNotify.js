@@ -337,7 +337,7 @@ export function renderReferralReward({ variant, weeks = 1, delivery = 'stripe', 
     preheader,
     body: `<p>Hi ${fn},</p>
       <p>Great news: someone you referred just subscribed to <strong>${PLAN_NAME}</strong>. You've earned <strong>${wk}</strong>: ${landed}.</p>
-      <p>Keep sharing your link and keep earning — you both get a free week every time.</p>`,
+      <p>Keep sharing your link and keep earning: a free week every time a friend subscribes and pays for their first week.</p>`,
     ctaText: 'See my referrals →',
     ctaUrl: `${appUrl()}/account#referrals`,
     footer: `— The Ivy Team`,

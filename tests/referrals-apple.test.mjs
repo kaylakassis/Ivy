@@ -211,7 +211,7 @@ async function run() {
     assert(failed.ok === false && failed.status === 400 && /4000030/.test(failed.error), 'Apple error surfaces status + errorCode, no throw');
     appleShouldFail = false;
 
-    console.log('\n[3] RevenueCat trial conversion rewards both sides on Apple');
+    console.log('\n[3] RevenueCat trial conversion rewards the referrer on Apple');
     const refA = await mkUser('refA');
     const wsA = await mkWorkspace(refA);
     await makeApplePaying(wsA, 'apple_txn_refA');
@@ -230,15 +230,15 @@ async function run() {
     assert(convRes.statusCode === 200, 'trial-conversion RENEWAL → 200');
     refRow = (await sql`SELECT converted_at, rewarded_at, referred_rewarded_at FROM referrals WHERE referred_user_id = ${feeA}`).rows[0];
     assert(refRow.converted_at !== null, 'referral converted on the first real charge');
-    assert(refRow.rewarded_at !== null && refRow.referred_rewarded_at !== null, 'both sides earned');
-    assert(appleCalls.length === 2, 'two Apple extensions (referrer + referred)');
+    assert(refRow.rewarded_at !== null && refRow.referred_rewarded_at === null, 'the referrer earned; the referred owner did not');
+    assert(appleCalls.length === 1, 'one Apple extension, for the referrer');
     const txns = appleCalls.map((c) => c.url.split('/').pop()).sort();
-    assert(txns.join(',') === 'apple_txn_feeA,apple_txn_refA', 'each extension targets that owner\'s original transaction id');
+    assert(txns.join(',') === 'apple_txn_refA', 'the extension targets the referrer\'s original transaction id');
     assert(appleCalls.every((c) => c.body.extendByDays === 7), 'each extension is 7 days');
     const ledA = await ledgerFor(wsA);
     const ledFeeA = await ledgerFor(wsFeeA);
     assert(ledA.length === 1 && ledA[0].side === 'referrer' && ledA[0].method === 'apple_extension' && ledA[0].applied_at, 'referrer ledger row applied via apple_extension');
-    assert(ledFeeA.length === 1 && ledFeeA[0].side === 'referred' && ledFeeA[0].method === 'apple_extension' && ledFeeA[0].applied_at, 'referred ledger row applied via apple_extension');
+    assert(ledFeeA.length === 0, 'no ledger row for the referred owner');
     const extRows = await sql`SELECT days FROM apple_renewal_extensions WHERE workspace_id = ${wsA}`;
     assert(extRows.rows.length === 1 && extRows.rows[0].days === 7, 'extension recorded in apple_renewal_extensions');
     assert(stripeCalls.length === 0, 'no Stripe credit for Apple owners');
@@ -341,7 +341,7 @@ async function run() {
     await appleTrialThenConvert(wsFeeD, 'apple_txn_feeD');
     assert(stripeCalls.length === 1 && stripeCalls[0].url.includes('cus_refD'), 'Stripe referrer credited on their customer balance');
     assert((stripeCalls[0].body || '').includes(`amount=-${REWARD_CENTS}`), 'credit is one week\'s price');
-    assert(appleCalls.length === 1 && appleCalls[0].url.endsWith('/apple_txn_feeD'), 'Apple referee gets the extension');
+    assert(appleCalls.length === 0, 'the Apple referred owner gets no extension');
     const ledD = await ledgerFor(wsD);
     assert(ledD.length === 1 && ledD[0].method === 'stripe_credit' && ledD[0].applied_at, 'referrer ledger row: stripe_credit, applied');
     const sumD = await getRewardSummary(refD);
@@ -353,7 +353,7 @@ async function run() {
     await recordReferralSignup({ referredUserId: feeD2, rawCode: 'apple-ref-b' });
     appleCalls = []; stripeCalls = [];
     await markReferralConverted(feeD2);
-    assert(stripeCalls.length === 1 && stripeCalls[0].url.includes('cus_feeD2'), 'Stripe referee welcome week is a balance credit');
+    assert(!stripeCalls.some((c) => c.url.includes('cus_feeD2')), 'the Stripe referred owner gets no credit');
     assert(appleCalls.length === 1 && appleCalls[0].url.endsWith('/apple_txn_refB'), 'Apple referrer gets a 7-day extension for it');
 
     console.log('\n[8] referrer not yet subscribed stays pending, paid on first Apple RENEWAL');
@@ -370,7 +370,7 @@ async function run() {
     let rowE = (await sql`SELECT rewarded_at FROM referrals WHERE referred_user_id = ${feeE}`).rows[0];
     assert(rowE.rewarded_at === null, 'referrer reward pending (no platform yet)');
     assert((await ledgerFor(wsE)).length === 0, 'no ledger row for the pending referrer');
-    assert(appleCalls.length === 0 && stripeCalls.length === 1, 'only the referee\'s welcome credit went out');
+    assert(appleCalls.length === 0 && stripeCalls.length === 0, 'nothing goes out yet: the referrer is pending and the referred owner earns nothing');
     // Referrer starts an Apple trial: still pending.
     await postRc(rcEvent('INITIAL_PURCHASE', wsE, { period_type: 'TRIAL', original_transaction_id: 'apple_txn_refE' }));
     rowE = (await sql`SELECT rewarded_at FROM referrals WHERE referred_user_id = ${feeE}`).rows[0];
@@ -394,7 +394,7 @@ async function run() {
     await postRc(rcEvent('RENEWAL', wsFeeF, { period_type: 'NORMAL', original_transaction_id: 'apple_txn_feeF' }));
     const rowF = (await sql`SELECT converted_at FROM referrals WHERE referred_user_id = ${feeF}`).rows[0];
     assert(rowF.converted_at !== null, 'converted on a NORMAL renewal with no flag');
-    assert(stripeCalls.length === 1 && appleCalls.length === 1, 'both sides rewarded');
+    assert(stripeCalls.length === 1 && appleCalls.length === 0, 'the Stripe referrer is credited; the Apple referred owner gets nothing');
     // A no-trial purchase converts too.
     const feeG = await mkUser('feeG');
     const wsFeeG = await mkWorkspace(feeG);
@@ -402,7 +402,7 @@ async function run() {
     stripeCalls = []; appleCalls = [];
     await postRc(rcEvent('INITIAL_PURCHASE', wsFeeG, { period_type: 'NORMAL', original_transaction_id: 'apple_txn_feeG' }));
     const rowG = (await sql`SELECT converted_at FROM referrals WHERE referred_user_id = ${feeG}`).rows[0];
-    assert(rowG.converted_at !== null && appleCalls.length === 1, 'INITIAL_PURCHASE with period NORMAL converts and rewards');
+    assert(rowG.converted_at !== null && stripeCalls.length === 1 && appleCalls.length === 0, 'INITIAL_PURCHASE with period NORMAL converts and rewards the referrer');
 
     console.log('\n[10] attachReferralCode guard rails');
     const refH = await mkUser('refH');
@@ -450,7 +450,7 @@ async function run() {
     const ledI = await ledgerFor(wsI);
     const ledFeeI = await ledgerFor(wsFeeI);
     assert(ledI.length === 1 && !ledI[0].applied_at && ledI[0].note === 'apple-not-configured', 'referrer week banked with note');
-    assert(ledFeeI.length === 1 && !ledFeeI[0].applied_at && ledFeeI[0].note === 'apple-not-configured', 'referred week banked with note');
+    assert(ledFeeI.length === 0, 'no ledger row for the referred owner');
     const statusI = (await sql`SELECT subscription_status, converted_at FROM workspaces WHERE id = ${wsFeeI}`).rows[0];
     assert(statusI.subscription_status === 'active' && statusI.converted_at, 'subscription state still flipped');
     // Apple rejecting the call also leaves the row banked with the reason.

@@ -56,7 +56,7 @@ export default function InviteFriendCard() {
         </div>
         <div>
           <div style={{ fontSize: 14.5, fontWeight: 600 }}>Invite a friend</div>
-          <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>You both get a free week when they subscribe.</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)' }}>You get a free week once they subscribe and pay for their first week.</div>
         </div>
       </div>
 

@@ -1,4 +1,4 @@
-// Referral portal — the full "refer a friend, you both get a free week"
+// Referral portal — the full "refer a friend, get a free week"
 // surface. Expands the small Account referral card into a dedicated page:
 // shareable link + custom code, how-it-works, earnings summary, and a
 // per-referral history table. Backed by GET /api/referrals (see
@@ -86,7 +86,7 @@ export default function Referrals({ embedded = false }) {
     try {
       await navigator.share({
         title: 'Ivy',
-        text: 'Run your whole business in one place. Use my link — we both get a free week.',
+        text: 'Run your whole business in one place. Use my link to start your free trial.',
         url: data.link,
       });
     } catch { /* dismissed */ }
@@ -100,7 +100,7 @@ export default function Referrals({ embedded = false }) {
       <div style={{ padding: embedded ? 0 : 48 }}>
         <div className="card" style={{ padding: 40 }}>
           <EmptyNote icon="Gift" title="Referrals unlock with your trial"
-            hint="Start your Ivy trial or subscribe and you can invite friends — you'll both get a free week." />
+            hint="Start your Ivy trial or subscribe and you can invite friends. You get a free week for each one who subscribes." />
         </div>
       </div>
     );
@@ -125,8 +125,8 @@ export default function Referrals({ embedded = false }) {
     ? '7 days added to your Apple subscription'
     : 'credited to your next invoice';
   const heroLine = isApple
-    ? `When someone subscribes with your link, you both get 7 days added to your subscriptions. It stacks.`
-    : `When someone subscribes with your link, ${money(data.rewardCents)} comes off both your next invoices. It stacks.`;
+    ? `When someone subscribes with your link and pays for their first week, 7 days are added to your subscription. It stacks.`
+    : `When someone subscribes with your link and pays for their first week, ${money(data.rewardCents)} comes off your next invoice. It stacks.`;
 
   return (
     <div style={embedded ? { display: 'flex', flexDirection: 'column', gap: 18 } : { padding: '24px 24px 48px', maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -142,7 +142,7 @@ export default function Referrals({ embedded = false }) {
             <Icons.Gift size={20} sw={1.8} />
           </div>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.2 }}>Refer a friend — you both get a free week</div>
+            <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.2 }}>Refer a friend, get a free week</div>
             <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>
               {heroLine}
             </div>
@@ -202,7 +202,7 @@ export default function Referrals({ embedded = false }) {
             <>
               <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 4 }}>Were you referred? Enter a code</div>
               <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 10 }}>
-                If a friend sent you to Ivy, add their code here and you both get a free week once you subscribe.
+                If a friend sent you to Ivy, add their code here so they get their free week once you subscribe.
               </div>
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
                 <input
@@ -256,7 +256,7 @@ export default function Referrals({ embedded = false }) {
               <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 13, color: 'var(--fg-2)' }}>
                 <span style={{ color: 'var(--muted)', fontSize: 12, minWidth: 92 }}>{fmtDate(r.earnedAt)}</span>
                 <span>
-                  {r.side === 'referred' ? 'Welcome week' : 'Referral week'}:{' '}
+                  Referral week:{' '}
                   {r.method === 'stripe_credit'
                     ? 'credited to your next invoice'
                     : r.method === 'apple_extension'
@@ -275,7 +275,7 @@ export default function Referrals({ embedded = false }) {
         <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
           <li>Share your link or code with another business owner.</li>
           <li>They start their free trial and subscribe.</li>
-          <li><strong>You both get a free week</strong>, automatically {howDelivered}. Refer more, earn more.</li>
+          <li>Once they pay for their first week, <strong>you get a free week</strong>, automatically {howDelivered}. Refer more, earn more.</li>
         </ol>
       </div>
 

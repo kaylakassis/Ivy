@@ -1,4 +1,4 @@
-// Self-serve referral program ("refer a friend, you both get a free week").
+// Self-serve referral program ("refer a friend, get a free week").
 //
 // Every business owner can set a referral code in Settings. A new user
 // who signs up with ?ref=<code> is attributed to that owner. When the
@@ -188,10 +188,8 @@ export async function markReferralConverted(referredUserId) {
   await grantPendingReferralCredits(referrerUserId).catch((e) => {
     console.warn('[referrals] grant on conversion failed:', e.message);
   });
-  // Reward the referred user their own free week (welcome gift).
-  await grantReferredUserReward(referredUserId).catch((e) => {
-    console.warn('[referrals] referred reward on conversion failed:', e.message);
-  });
+  // The referred owner gets nothing extra: the reward is for the person
+  // whose code was used, once their friend has paid for a first week.
   return { converted: true };
 }
 
@@ -310,66 +308,6 @@ async function rollbackClaim({ referralId, ledgerId, side }) {
     console.error(`[referrals] CRITICAL: ${side}-side rollback failed for referral ${referralId} - reward marked granted but nothing delivered:`, rbErr.message);
     return false;
   }
-}
-
-// Grant the REFERRED user their own free week at conversion. They just
-// made their first payment, so they're on a platform by definition.
-// Claim-first on referred_rewarded_at so two concurrent webhook deliveries
-// can't double-credit, with the same rollback-on-Stripe-failure discipline
-// as the referrer grant. Apple recipients get a ledger row and go through
-// the Apple sweep (which banks the week if Apple cannot take it yet).
-export async function grantReferredUserReward(referredUserId) {
-  if (!referredUserId) return { granted: 0 };
-  const wr = await sql`
-    SELECT r.id AS referral_id, w.id AS workspace_id, w.subscription_status, w.subscription_source,
-           w.converted_at, w.stripe_customer_id, w.revenuecat_user_id, w.apple_original_transaction_id
-    FROM referrals r
-    JOIN workspaces w ON w.owner_id = r.referred_user_id
-    WHERE r.referred_user_id = ${referredUserId}
-      AND r.converted_at IS NOT NULL AND r.referred_rewarded_at IS NULL
-    LIMIT 1
-  `;
-  const row = wr.rows[0];
-  if (!row) return { granted: 0, reason: 'not-eligible' };
-  const ws = { ...row, id: row.workspace_id };
-  const platform = billingPlatform(ws);
-  if (!platform) return { granted: 0, reason: 'not-eligible' };
-  if (platform === 'stripe' && !platformStripeSecret()) return { granted: 0, reason: 'no-stripe' };
-
-  // Claim the row first so concurrent deliveries can't double-credit.
-  const claim = await sql`
-    UPDATE referrals SET referred_rewarded_at = NOW(), referred_reward_cents = ${REWARD_CENTS}
-    WHERE id = ${row.referral_id} AND referred_rewarded_at IS NULL
-    RETURNING id
-  `;
-  if (claim.rows.length === 0) return { granted: 0 }; // lost the race
-  let ledgerId = null;
-  try {
-    const led = await sql`
-      INSERT INTO referral_reward_ledger (workspace_id, user_id, referral_id, side, weeks)
-      VALUES (${ws.id}, ${referredUserId}, ${row.referral_id}, 'referred', 1)
-      ON CONFLICT (referral_id, side) DO UPDATE SET weeks = referral_reward_ledger.weeks
-      RETURNING id
-    `;
-    ledgerId = led.rows[0]?.id || null;
-    if (platform === 'stripe') {
-      await applyStripeWeek({ ws, ledgerId, description: 'Ivy referral welcome gift - one free week' });
-    }
-  } catch (err) {
-    await rollbackClaim({ referralId: row.referral_id, ledgerId, side: 'referred' });
-    console.error('[referrals] referred credit apply failed:', err.message);
-    return { granted: 0 };
-  }
-
-  let delivery = 'stripe';
-  if (platform === 'apple') {
-    const swept = await applyBankedAppleWeeks(ws.id);
-    delivery = swept.appliedWeeks > 0 ? 'apple' : 'banked';
-  }
-  // Best-effort welcome-gift notification.
-  notifyReferralReward({ workspaceId: ws.id, variant: 'referred', weeks: 1, delivery })
-    .catch((e) => console.warn('[referrals] referred notify failed:', e.message));
-  return { granted: 1, platform };
 }
 
 // ── Apple delivery ─────────────────────────────────────────────────

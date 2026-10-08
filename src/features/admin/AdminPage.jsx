@@ -1292,7 +1292,7 @@ function UsersTab() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ background: 'var(--surface-2)' }}>
                 <tr style={{ textAlign: 'left' }}>
-                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Joined</Th><Th>Last login</Th><Th>Verified</Th><Th></Th>
+                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Joined</Th><Th>Last active</Th><Th>Verified</Th><Th></Th>
                 </tr>
               </thead>
               <tbody>
@@ -1313,7 +1313,7 @@ function UsersTab() {
                       )}
                     </Td>
                     <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</Td>
-                    <Td><span style={{ color: u.lastLoginAt ? 'inherit' : 'var(--muted)' }} title={u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'Never signed in'}>{lastLoginLabel(u.lastLoginAt)}</span></Td>
+                    <Td><span style={{ color: (u.lastActiveAt || u.lastLoginAt) ? 'inherit' : 'var(--muted)' }} title={(u.lastActiveAt || u.lastLoginAt) ? `Last active ${new Date(u.lastActiveAt || u.lastLoginAt).toLocaleString()}` : 'No activity recorded'}>{lastLoginLabel(u.lastActiveAt || u.lastLoginAt)}</span></Td>
                     <Td>{u.emailVerifiedAt ? '✓' : <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
                       <button onClick={() => setActive(u)} className="btn btn-ghost"
@@ -1582,7 +1582,8 @@ function UserDetailModal({ user, onClose, onChanged }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 12, fontSize: 13 }}>
         <Row k="Name" v={user.name || '-'}/>
         <Row k="Joined" v={user.createdAt ? new Date(user.createdAt).toLocaleString() : '-'}/>
-        <Row k="Last login" v={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Never'}/>
+        <Row k="Last active" v={(user.lastActiveAt || user.lastLoginAt) ? new Date(user.lastActiveAt || user.lastLoginAt).toLocaleString() : 'No activity recorded'}/>
+        <Row k="Last password sign-in" v={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not since this was tracked'}/>
         <Row k="Email verified" v={user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString() : 'No'}/>
         <Row k="Classification" v={<Pill text={user.classification}/>}/>
         {user.workspace && (
@@ -1857,7 +1858,7 @@ function AffiliatesTab() {
   );
 }
 
-// ---------- Referrals tab (self-serve "refer a friend, you both get a free week") ----------
+// ---------- Referrals tab (self-serve "refer a friend, get a free week") ----------
 
 function RefStat({ label, value }) {
   return (
@@ -2362,9 +2363,10 @@ const fieldSty = {
   color: 'var(--fg)', fontSize: 13, outline: 'none',
 };
 
-// Compact relative label for "last login" - "Never" when the user has
-// signed in before this column existed (or never), else "Today"/"3d ago"/
-// a date for anything older than a week.
+// Compact relative label for "last active": the most recent of any
+// authenticated request (stamped by requireUser, at most every 10 minutes)
+// and the last password sign-in. "Never" only when neither was ever
+// recorded, which means the account has not been used since tracking began.
 function lastLoginLabel(iso) {
   if (!iso) return 'Never';
   const then = new Date(iso).getTime();
