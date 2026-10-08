@@ -32,6 +32,9 @@ export default function AuthPage({ mode = 'signin' }) {
   const [email,    setEmail]    = useState(params.get('email') || '');
   const [password, setPassword] = useState('');
   const [name,     setName]     = useState('');
+  // Typed referral code for owners who did not arrive through a ?ref=
+  // link (the iPhone app has no link to tap). Hidden when ?ref= is present.
+  const [refInput, setRefInput] = useState('');
   const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy]   = useState(false);
@@ -68,7 +71,8 @@ export default function AuthPage({ mode = 'signin' }) {
         // go out - hold the user here with an explicit notice + a
         // continue button so they know to resend from their account,
         // instead of redirecting silently.
-        const r = await signUp(email, password, name.trim(), role, refCode);
+        const typedRef = refInput.trim() ? refInput.trim().toUpperCase() : null;
+        const r = await signUp(email, password, name.trim(), role, refCode || (role === 'owner' ? typedRef : null));
         if (r?.emailErrors) {
           setEmailWarn(role === 'client' ? '/me' : '/');
           return;
@@ -186,6 +190,14 @@ export default function AuthPage({ mode = 'signin' }) {
             <input value={name} onChange={(e) => setName(e.target.value)}
               required minLength={1}
               autoComplete="name" style={inputS} />
+          </Field>
+        )}
+        {isSignUp && role === 'owner' && !refCode && (
+          <Field label="Referral code (optional)">
+            <input value={refInput} onChange={(e) => setRefInput(e.target.value.toUpperCase())}
+              placeholder="A friend's code, if you have one"
+              maxLength={40} autoComplete="off" autoCapitalize="characters"
+              spellCheck={false} style={{ ...inputS, textTransform: 'uppercase' }} />
           </Field>
         )}
         <Field label="Email">

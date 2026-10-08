@@ -551,6 +551,50 @@ CREATE INDEX IF NOT EXISTS idx_referrals_referred_pending
   ON referrals(referred_user_id)
   WHERE converted_at IS NOT NULL AND referred_rewarded_at IS NULL;
 
+-- referral_reward_ledger: one row per EARNED free week, per side. The
+-- referrals.rewarded_at / referred_rewarded_at stamps mean "earned"; this
+-- ledger's applied_at means "delivered". Delivery depends on how the
+-- recipient pays:
+--   stripe_credit    - a Stripe customer-balance credit (next invoice waived)
+--   apple_extension  - an App Store renewal-date extension (+7 days/week).
+-- Apple allows two extensions per subscription per 365 days, so Apple
+-- weeks can sit here unapplied ("banked") until the window reopens, then
+-- go out together in one extension. See api/_lib/referrals.js.
+CREATE TABLE IF NOT EXISTS referral_reward_ledger (
+  id                   UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id         UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id              UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  referral_id          UUID NOT NULL REFERENCES referrals(id) ON DELETE CASCADE,
+  side                 TEXT NOT NULL CHECK (side IN ('referrer', 'referred')),
+  weeks                INTEGER NOT NULL DEFAULT 1,
+  method               TEXT CHECK (method IN ('stripe_credit', 'apple_extension')),
+  applied_at           TIMESTAMPTZ,
+  claimed_at           TIMESTAMPTZ,
+  apple_request_id     TEXT,
+  apple_effective_date TIMESTAMPTZ,
+  note                 TEXT,
+  created_at           TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  UNIQUE (referral_id, side)
+);
+CREATE INDEX IF NOT EXISTS idx_referral_reward_ledger_ws ON referral_reward_ledger(workspace_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_referral_reward_ledger_banked
+  ON referral_reward_ledger(workspace_id) WHERE applied_at IS NULL;
+
+-- apple_renewal_extensions: every App Store renewal extension we have
+-- requested successfully, so the two-per-365-days rule can be checked
+-- before calling Apple (who would refuse the third one anyway).
+CREATE TABLE IF NOT EXISTS apple_renewal_extensions (
+  id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id            UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  original_transaction_id TEXT NOT NULL,
+  days                    INTEGER NOT NULL,
+  request_id              TEXT NOT NULL,
+  effective_date          TIMESTAMPTZ,
+  created_at              TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_apple_renewal_extensions_txn
+  ON apple_renewal_extensions(original_transaction_id, created_at DESC);
+
 -- admin replies inline. Polling-based - realtime can come later. Mirrors
 -- the message_threads / messages pattern but a separate table so support
 -- traffic doesn't pollute the per-business chat table.

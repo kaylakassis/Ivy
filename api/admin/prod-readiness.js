@@ -19,6 +19,7 @@ import { sql } from '../_lib/db.js';
 import { requireSuperAdmin } from '../_lib/admin.js';
 import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
 import { probeProvider } from '../_lib/ivy.js';
+import { appleConfigMissing, appleEnvironment, mintToken } from '../_lib/appStoreServer.js';
 
 const REQUIRED_LEN = 32;
 const DEFAULT_PLACEHOLDERS = new Set([
@@ -253,6 +254,26 @@ export default async function handler(req, res) {
     const google = !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET);
     checks.push(check('google', 'Google Calendar OAuth', google ? 'ok' : 'warn',
       google ? 'Configured' : 'Optional - busy-sync feature degrades to manual entry without it.'));
+
+    // ── App Store Server API (WARN - Apple referral rewards bank) ──
+    // Used to add free weeks to iPhone subscriptions (referral rewards).
+    // Mint a token locally to prove the key parses and signs; no call to
+    // Apple is made here.
+    const appleMissing = appleConfigMissing();
+    if (appleMissing.length) {
+      checks.push(check('apple_server_api', 'App Store Server API', 'warn',
+        `Missing ${appleMissing.join(', ')}. Referral free weeks for iPhone subscribers stay banked until this is set (see docs/referrals-apple.md).`));
+    } else {
+      try {
+        const token = mintToken();
+        const kid = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8')).kid;
+        checks.push(check('apple_server_api', 'App Store Server API', 'ok',
+          `Token minted with key ${kid} (${appleEnvironment()} environment, bundle ${process.env.APP_STORE_BUNDLE_ID || process.env.APNS_BUNDLE_ID || 'ai.joinivy.app'}).`));
+      } catch (e) {
+        checks.push(check('apple_server_api', 'App Store Server API', 'fail',
+          `Vars are set but a token could not be minted: ${e.message}. Check that APP_STORE_PRIVATE_KEY is the full .p8 contents.`));
+      }
+    }
 
     // ── Process flags ───────────────────────────────────────────────
     const nodeEnv = process.env.NODE_ENV || 'development';

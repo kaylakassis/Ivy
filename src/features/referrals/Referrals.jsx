@@ -34,6 +34,11 @@ export default function Referrals({ embedded = false }) {
   const [busy, setBusy]   = useState(false);
   const [err, setErr]     = useState(null);
   const [copied, setCopied] = useState('');
+  // "Were you referred?" box: attach a friend's code after signup.
+  const [attachDraft, setAttachDraft] = useState('');
+  const [attachBusy, setAttachBusy] = useState(false);
+  const [attachErr, setAttachErr] = useState(null);
+  const [attachedCode, setAttachedCode] = useState(null);
 
   useEffect(() => {
     let live = true;
@@ -52,6 +57,19 @@ export default function Referrals({ embedded = false }) {
     } catch (e) {
       setErr(e.message || 'Could not save code');
     } finally { setBusy(false); }
+  };
+
+  const attach = async () => {
+    const code = attachDraft.trim();
+    if (!code) return;
+    setAttachBusy(true); setAttachErr(null);
+    try {
+      const r = await api.post('/referrals/attach', { code });
+      setAttachedCode(r.code || code.toUpperCase());
+      setData((prev) => (prev ? { ...prev, canAttachCode: false } : prev));
+    } catch (e) {
+      setAttachErr(e.message || 'That code could not be added.');
+    } finally { setAttachBusy(false); }
   };
 
   const copy = async (text, which) => {
@@ -100,6 +118,15 @@ export default function Referrals({ embedded = false }) {
   const stats = data.stats || {};
   const weeks = data.weeksEarned ?? stats.rewarded ?? 0;
   const list = data.referrals || [];
+  const rewards = data.rewards || [];
+  const isApple = data.platform === 'apple';
+  const bankedWeeks = data.bankedWeeks || 0;
+  const howDelivered = isApple
+    ? '7 days added to your Apple subscription'
+    : 'credited to your next invoice';
+  const heroLine = isApple
+    ? `When someone subscribes with your link, you both get 7 days added to your subscriptions. It stacks.`
+    : `When someone subscribes with your link, ${money(data.rewardCents)} comes off both your next invoices. It stacks.`;
 
   return (
     <div style={embedded ? { display: 'flex', flexDirection: 'column', gap: 18 } : { padding: '24px 24px 48px', maxWidth: 860, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>
@@ -117,7 +144,7 @@ export default function Referrals({ embedded = false }) {
           <div>
             <div style={{ fontSize: 18, fontWeight: 700, lineHeight: 1.2 }}>Refer a friend — you both get a free week</div>
             <div style={{ fontSize: 13, color: 'var(--fg-2)' }}>
-              When someone subscribes with your link, {money(data.rewardCents)} comes off both your next invoices. It stacks.
+              {heroLine}
             </div>
           </div>
         </div>
@@ -164,6 +191,43 @@ export default function Referrals({ embedded = false }) {
         )}
       </div>
 
+      {/* Were you referred? (only while a code can still be attached) */}
+      {(data.canAttachCode || attachedCode) && (
+        <div className="card" style={{ padding: 20 }}>
+          {attachedCode ? (
+            <div style={{ fontSize: 13.5, color: 'var(--fg-2)' }}>
+              Code <strong>{attachedCode}</strong> is on your account. When you subscribe, you and your friend each get a free week.
+            </div>
+          ) : (
+            <>
+              <div style={{ fontSize: 14.5, fontWeight: 600, marginBottom: 4 }}>Were you referred? Enter a code</div>
+              <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 10 }}>
+                If a friend sent you to Ivy, add their code here and you both get a free week once you subscribe.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                <input
+                  value={attachDraft}
+                  onChange={(e) => setAttachDraft(e.target.value.toUpperCase())}
+                  placeholder="Friend's code"
+                  maxLength={40}
+                  autoCapitalize="characters" spellCheck={false}
+                  style={{
+                    flex: 1, minWidth: 160, padding: '10px 12px', borderRadius: 10,
+                    border: '1px solid var(--border-strong)', background: 'var(--surface)',
+                    outline: 'none', fontSize: 14, color: 'var(--fg)', textTransform: 'uppercase',
+                  }} />
+                <button className="btn btn-outline" onClick={attach}
+                  disabled={attachBusy || !attachDraft.trim()}
+                  style={{ padding: '9px 16px', fontSize: 13 }}>
+                  {attachBusy ? 'Adding…' : 'Add code'}
+                </button>
+              </div>
+              {attachErr && <div style={{ fontSize: 12, color: 'var(--danger)', marginTop: 8 }}>{attachErr}</div>}
+            </>
+          )}
+        </div>
+      )}
+
       {/* Earnings summary */}
       <div className="card" style={{ padding: 22 }}>
         <div className="metric-label" style={{ marginBottom: 14 }}>Your earnings</div>
@@ -171,8 +235,38 @@ export default function Referrals({ embedded = false }) {
           <Stat label="Friends referred" value={stats.referred ?? 0} />
           <Stat label="Subscribed"       value={stats.converted ?? 0} />
           <Stat label="Free weeks earned" value={weeks} />
-          <Stat label="Credit earned"     value={money(stats.rewarded_cents)} />
+          {isApple
+            ? <Stat label="Days added" value={(data.appliedWeeks || 0) * 7} />
+            : <Stat label="Credit earned" value={money(stats.rewarded_cents)} />}
         </div>
+        {isApple && bankedWeeks > 0 && (
+          <div style={{
+            marginTop: 14, padding: '10px 12px', borderRadius: 10, fontSize: 13, lineHeight: 1.5,
+            background: 'var(--surface-2)', border: '1px solid var(--border)', color: 'var(--fg-2)',
+          }}>
+            {bankedWeeks === 1 ? '1 more week earned.' : `${bankedWeeks} more weeks earned.`}{' '}
+            {data.nextEligibleAt
+              ? `Apple allows two renewal extensions a year, so ${bankedWeeks === 1 ? 'it' : 'they'} will be added ${bankedWeeks === 1 ? '' : 'together '}on ${fmtDate(data.nextEligibleAt)}.`
+              : `${bankedWeeks === 1 ? 'It' : 'They'} will be added to your Apple subscription shortly.`}
+          </div>
+        )}
+        {rewards.length > 0 && (
+          <div style={{ marginTop: 16, display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {rewards.map((r) => (
+              <div key={r.id} style={{ display: 'flex', gap: 10, alignItems: 'baseline', fontSize: 13, color: 'var(--fg-2)' }}>
+                <span style={{ color: 'var(--muted)', fontSize: 12, minWidth: 92 }}>{fmtDate(r.earnedAt)}</span>
+                <span>
+                  {r.side === 'referred' ? 'Welcome week' : 'Referral week'}:{' '}
+                  {r.method === 'stripe_credit'
+                    ? 'credited to your next invoice'
+                    : r.method === 'apple_extension'
+                      ? `added ${r.weeks * 7} days to your Apple subscription`
+                      : (isApple ? 'waiting for the next Apple extension' : 'pending')}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* How it works */}
@@ -181,7 +275,7 @@ export default function Referrals({ embedded = false }) {
         <ol style={{ margin: 0, paddingLeft: 20, display: 'flex', flexDirection: 'column', gap: 8, fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.5 }}>
           <li>Share your link or code with another business owner.</li>
           <li>They start their free trial and subscribe.</li>
-          <li><strong>You both get a free week</strong> — automatically credited to your next invoice. Refer more, earn more.</li>
+          <li><strong>You both get a free week</strong>, automatically {howDelivered}. Refer more, earn more.</li>
         </ol>
       </div>
 

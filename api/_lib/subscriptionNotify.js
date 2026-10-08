@@ -300,10 +300,20 @@ export async function notifySubscriptionStarted({ workspaceId, periodEnd, amount
 // variant: 'referrer' (their referral subscribed) or 'referred' (welcome
 // gift for signing up through a friend). Both get one free week as a Stripe
 // balance credit; this just tells them.
-export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, businessName }) {
+// `delivery` says how the week lands, so the copy matches reality:
+//   'stripe' (default) - credited to the next invoice
+//   'apple'            - days added to the App Store subscription
+//   'banked'           - earned on Apple, waiting for the next extension slot
+export function renderReferralReward({ variant, weeks = 1, delivery = 'stripe', firstName: fnRaw, businessName }) {
   const fn = escapeHtml(fnRaw || 'there');
   const biz = escapeHtml(businessName || 'your business');
   const wk = weeks === 1 ? 'a free week' : `${weeks} free weeks`;
+  const days = weeks * 7;
+  const landed = delivery === 'apple'
+    ? `we've added <strong>${days} days</strong> to your Apple subscription, nothing to do`
+    : delivery === 'banked'
+      ? `it will be added to your Apple subscription as <strong>${days} extra days</strong>. Apple allows two renewal extensions a year, so it may wait for the next slot; you can see the date under Account → Referrals`
+      : `it comes straight off your next invoice, nothing to do`;
 
   if (variant === 'referred') {
     const preheader = `Your first week is on us — welcome to ${PLAN_NAME}.`;
@@ -311,7 +321,7 @@ export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, bus
       heading: `Welcome — your first week's on us`,
       preheader,
       body: `<p>Hi ${fn},</p>
-        <p>Thanks for joining <strong>${PLAN_NAME}</strong> through a friend's invite. As a welcome gift, we've credited you <strong>${wk}</strong> — it comes straight off your next invoice, nothing to do.</p>
+        <p>Thanks for joining <strong>${PLAN_NAME}</strong> through a friend's invite. As a welcome gift, you've earned <strong>${wk}</strong>: ${landed}.</p>
         <p>Now go make running <strong>${biz}</strong> feel easy. Ask Ivy anything to get started.</p>`,
       ctaText: 'Open my dashboard →',
       ctaUrl: dashboardUrl(),
@@ -326,7 +336,7 @@ export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, bus
     heading: `You earned ${wk} 🎉`,
     preheader,
     body: `<p>Hi ${fn},</p>
-      <p>Great news — someone you referred just subscribed to <strong>${PLAN_NAME}</strong>. You've earned <strong>${wk}</strong>, credited to your account so your next invoice is waived.</p>
+      <p>Great news: someone you referred just subscribed to <strong>${PLAN_NAME}</strong>. You've earned <strong>${wk}</strong>: ${landed}.</p>
       <p>Keep sharing your link and keep earning — you both get a free week every time.</p>`,
     ctaText: 'See my referrals →',
     ctaUrl: `${appUrl()}/account#referrals`,
@@ -335,14 +345,21 @@ export function renderReferralReward({ variant, weeks = 1, firstName: fnRaw, bus
   return { subject: `You earned ${wk} — thanks for the referral`, html, preheader };
 }
 
-export async function notifyReferralReward({ workspaceId, variant, weeks = 1 }) {
+export async function notifyReferralReward({ workspaceId, variant, weeks = 1, delivery = 'stripe' }) {
   try {
     const o = await loadOwner(workspaceId);
     if (!o?.email) return;
     const rendered = renderReferralReward({
-      variant, weeks,
+      variant, weeks, delivery,
       firstName: firstName(o.name), businessName: o.biz_name,
     });
+    const pushBody = delivery === 'apple'
+      ? `${weeks * 7} days added to your Apple subscription.`
+      : delivery === 'banked'
+        ? 'It will be added to your Apple subscription at the next renewal extension.'
+        : (variant === 'referred'
+          ? 'Welcome gift credited to your account.'
+          : 'Someone you referred subscribed. Credit applied to your next invoice.');
     await sendEmailToUser({
       userId: o.owner_id, type: 'billing',
       to: o.email, subject: rendered.subject, html: rendered.html,
@@ -352,9 +369,7 @@ export async function notifyReferralReward({ workspaceId, variant, weeks = 1 }) 
       workspaceId, type: 'payments',
       payload: {
         title: variant === 'referred' ? '🎉 Your first week is on us' : `🎉 You earned ${wk}`,
-        body: variant === 'referred'
-          ? 'Welcome gift credited to your account.'
-          : 'Someone you referred subscribed. Credit applied to your next invoice.',
+        body: pushBody,
         url: variant === 'referred' ? '/' : '/account#referrals',
         tag: `referral-reward-${variant}-${workspaceId}`,
       },

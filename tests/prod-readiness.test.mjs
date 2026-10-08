@@ -2,6 +2,7 @@
 // correctly classifies missing-config as blockers / warnings.
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/prod-readiness.test.mjs
+import crypto from 'node:crypto';
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 
 // Auth via x-admin-secret - set BEFORE the module loads.
@@ -53,7 +54,7 @@ async function run() {
       'jwt_secret', 'admin_secret', 'cron_secret', 'secrets_key', 'app_url',
       'database', 'stripe_key', 'stripe_webhook', 'stripe_price', 'funnel',
       'email', 'email_from',
-      'push', 'blob', 'ivy', 'sentry', 'node_env',
+      'push', 'blob', 'ivy', 'sentry', 'node_env', 'apple_server_api',
     ]) {
       assert(keys.has(required), `${required} check present`);
     }
@@ -90,6 +91,30 @@ async function run() {
     const nodeEnv = r.body.checks.find((c) => c.key === 'node_env');
     assert(nodeEnv && nodeEnv.level !== 'ok',
       `non-prod NODE_ENV is non-ok (got '${nodeEnv?.level}')`);
+
+    console.log('\n[7a] apple_server_api: warn when unset, ok once a token mints, fail on a bad key');
+    for (const k of ['APP_STORE_ISSUER_ID', 'APP_STORE_KEY_ID', 'APP_STORE_PRIVATE_KEY']) delete process.env[k];
+    const rA = mkRes();
+    await handler(adminReq(), rA);
+    const appleUnset = rA.body.checks.find((c) => c.key === 'apple_server_api');
+    assert(appleUnset?.level === 'warn' && /APP_STORE_ISSUER_ID/.test(appleUnset.detail || ''),
+      `unset → warn naming the missing vars (got '${appleUnset?.level}')`);
+    const { privateKey } = crypto.generateKeyPairSync('ec', { namedCurve: 'prime256v1' });
+    process.env.APP_STORE_ISSUER_ID = 'issuer-test';
+    process.env.APP_STORE_KEY_ID = 'KEYID12345';
+    process.env.APP_STORE_PRIVATE_KEY = privateKey.export({ type: 'pkcs8', format: 'pem' });
+    const rB = mkRes();
+    await handler(adminReq(), rB);
+    const appleOk = rB.body.checks.find((c) => c.key === 'apple_server_api');
+    assert(appleOk?.level === 'ok' && /KEYID12345/.test(appleOk.detail || ''),
+      `configured → ok, detail names the key id (got '${appleOk?.level}': ${appleOk?.detail})`);
+    assert(!/PRIVATE KEY/.test(JSON.stringify(rB.body)), 'the private key never appears in the report');
+    process.env.APP_STORE_PRIVATE_KEY = 'not a key';
+    const rC = mkRes();
+    await handler(adminReq(), rC);
+    const appleBad = rC.body.checks.find((c) => c.key === 'apple_server_api');
+    assert(appleBad?.level === 'fail', `unparseable key → fail (got '${appleBad?.level}')`);
+    for (const k of ['APP_STORE_ISSUER_ID', 'APP_STORE_KEY_ID', 'APP_STORE_PRIVATE_KEY']) delete process.env[k];
 
     console.log('\n[8] blockers count reflects real failures');
     assert(r.body.blockers > 0, 'test env has at least one blocker (cron_secret)');

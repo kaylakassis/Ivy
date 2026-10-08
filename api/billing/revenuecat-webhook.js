@@ -45,6 +45,9 @@ import {
 } from '../_lib/subscriptionNotify.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import {
+  markReferralConverted, grantPendingReferralCredits, applyBankedAppleWeeks,
+} from '../_lib/referrals.js';
 import crypto from 'node:crypto';
 
 export const config = { api: { bodyParser: false } };
@@ -84,6 +87,27 @@ function statusForEvent(eventType, expirationMs, nowMs) {
     default:
       return null;
   }
+}
+
+// Does this event represent the subscriber's FIRST real charge? RevenueCat
+// marks the renewal that ends a free trial with is_trial_conversion: true,
+// and a purchase with no trial arrives as INITIAL_PURCHASE with period_type
+// NORMAL. As a safety net, a NORMAL renewal for an owner whose referral has
+// not converted yet also counts when their trial started earlier, so a
+// missing flag cannot lose the reward. markReferralConverted itself no-ops
+// once converted_at is set, so over-calling is harmless.
+async function isReferralConversion(event, prev) {
+  if (event.type === 'INITIAL_PURCHASE') return true;
+  if (event.type !== 'RENEWAL') return false;
+  if (event.is_trial_conversion === true) return true;
+  const { rows } = await sql`
+    SELECT 1 FROM referrals
+     WHERE referred_user_id = ${prev.owner_id} AND converted_at IS NULL
+     LIMIT 1
+  `;
+  if (rows.length === 0) return false;
+  const trialStart = prev.trial_started_at ? new Date(prev.trial_started_at).getTime() : null;
+  return trialStart == null || trialStart < Date.now();
 }
 
 export default async function handler(req, res) {
@@ -137,7 +161,7 @@ export default async function handler(req, res) {
     // a first-time conversion (stamp converted_at) and whether to fire
     // the started-email side effect.
     const { rows: existingRows } = await sql`
-      SELECT id, owner_id, subscription_status, converted_at
+      SELECT id, owner_id, subscription_status, converted_at, trial_started_at
       FROM workspaces
       WHERE id = ${workspaceId}
     `;
@@ -209,8 +233,32 @@ export default async function handler(req, res) {
     } catch (notifyErr) {
       // Don't fail the webhook over a side-effect; RC would retry the
       // whole event and we'd re-flip status (idempotent) AND re-email.
-      // eslint-disable-next-line no-console
       console.warn('[revenuecat-webhook] notify failed:', notifyErr?.message);
+    }
+
+    // Referral program, mirroring the Stripe webhook. The owner just paid
+    // through Apple, so:
+    //   1. If THEY were referred and this is their first real charge
+    //      (trial converted, or a no-trial purchase), mark the referral
+    //      converted: that rewards their referrer and gives them their
+    //      own welcome week.
+    //   2. Sweep THEIR OWN pending rewards (referrals that converted while
+    //      they were still on trial) and any banked Apple weeks, since a
+    //      renewal is exactly when an extension slot may have reopened.
+    // All of it is best-effort: a referral hiccup must never fail the
+    // webhook, or RevenueCat would retry and we would re-run the status flip.
+    if (nextStatus === 'active' && !isTrialPeriod
+        && (event.type === 'INITIAL_PURCHASE' || event.type === 'RENEWAL')) {
+      try {
+        const convert = await isReferralConversion(event, prev);
+        if (convert) await markReferralConverted(prev.owner_id);
+        if (event.type === 'RENEWAL' || convert) {
+          await grantPendingReferralCredits(prev.owner_id);
+          await applyBankedAppleWeeks(workspaceId);
+        }
+      } catch (refErr) {
+        console.warn('[revenuecat-webhook] referral side effect failed:', refErr?.message);
+      }
     }
 
     // Bust the ownsWorkspace hot-cache so the iOS app's next /api/me

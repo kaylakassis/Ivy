@@ -1,17 +1,24 @@
 // /api/referrals
-//   GET  → the signed-in owner's referral code (if set) + program stats.
+//   GET  → the signed-in owner's referral code (if set), program stats,
+//          and how each earned week was (or will be) delivered.
 //   PUT  → set / change the owner's referral code.  body: { code }
+//   (POST /api/referrals/attach, in attach.js, adds a friend's code after
+//   signup for owners who did not arrive through a ?ref= link.)
 //
 // Self-serve "refer a friend, you both get a free week": every paying
 // owner can share their code; each referred user who becomes paying earns
-// BOTH the referrer and themselves one free week (credited to each one's
-// Stripe customer balance). See api/_lib/referrals.js for the mechanics.
+// BOTH the referrer and themselves one free week. Stripe owners get it as
+// a credit on their next invoice; Apple (iPhone) owners get 7 days added
+// to their App Store subscription. See api/_lib/referrals.js.
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { appUrl } from '../_lib/tokens.js';
-import { getCode, setCode, getReferralStats, listReferrals, REWARD_CENTS } from '../_lib/referrals.js';
+import {
+  getCode, setCode, getReferralStats, listReferrals, getRewardSummary,
+  canAttachReferralCode, applyBankedAppleWeeks, REWARD_CENTS,
+} from '../_lib/referrals.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -35,10 +42,15 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'GET') {
-      const [code, stats, referrals] = await Promise.all([
+      // Opening the page is a natural moment to deliver banked Apple
+      // weeks whose extension slot has reopened. Cheap no-op otherwise.
+      await applyBankedAppleWeeks(workspaceId);
+      const [code, stats, referrals, rewards, attach] = await Promise.all([
         getCode(user.id),
         getReferralStats(user.id),
         listReferrals(user.id),
+        getRewardSummary(user.id),
+        canAttachReferralCode(user.id),
       ]);
       return ok(res, {
         code,
@@ -47,6 +59,13 @@ export default async function handler(req, res) {
         stats,
         referrals,
         weeksEarned: stats.rewarded || 0,
+        platform: rewards.platform,
+        earnedWeeks: rewards.earnedWeeks,
+        appliedWeeks: rewards.appliedWeeks,
+        bankedWeeks: rewards.bankedWeeks,
+        nextEligibleAt: rewards.nextEligibleAt,
+        rewards: rewards.rewards,
+        canAttachCode: attach.ok === true,
         terms: { bothSides: true, rewardWeeks: 1 },
       });
     }
