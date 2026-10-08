@@ -29,6 +29,23 @@
 //   - at most two extensions per subscription in any 365-day window
 //   - the subscription must be active (not expired or refunded)
 import crypto from 'node:crypto';
+
+// The .p8 arrives through an env-var form, which mangles it in predictable
+// ways: literal "\n" escapes, wrapping quotes, Windows line endings, or
+// every line glued together with spaces (or nothing). Rebuild a clean PEM
+// from the base64 body so any of those pastes parse.
+export function normalizePem(raw) {
+  let v = String(raw || '').replace(/\\n/g, '\n').replace(/\r/g, '').trim();
+  if (!v) return '';
+  if ((v.startsWith('"') && v.endsWith('"')) || (v.startsWith("'") && v.endsWith("'"))) v = v.slice(1, -1).trim();
+  const m = v.match(/-----BEGIN ([A-Z ]+?)-----([\s\S]*?)-----END \1-----/);
+  if (!m) return v;
+  const label = m[1];
+  const body = m[2].replace(/[^A-Za-z0-9+/=]/g, '');
+  if (!body) return v;
+  const lines = body.match(/.{1,64}/g) || [];
+  return `-----BEGIN ${label}-----\n${lines.join('\n')}\n-----END ${label}-----\n`;
+}
 import { fetchWithTimeout } from './fetchTimeout.js';
 
 const HOSTS = {
@@ -48,7 +65,7 @@ function readEnv() {
   return {
     issuerId:   String(process.env.APP_STORE_ISSUER_ID || '').trim(),
     keyId:      String(process.env.APP_STORE_KEY_ID || '').trim(),
-    privateKey: String(process.env.APP_STORE_PRIVATE_KEY || '').replace(/\\n/g, '\n').trim(),
+    privateKey: normalizePem(process.env.APP_STORE_PRIVATE_KEY),
     bundleId:   String(process.env.APP_STORE_BUNDLE_ID || process.env.APNS_BUNDLE_ID || 'ai.joinivy.app').trim(),
     host:       env === 'sandbox' ? HOSTS.sandbox : HOSTS.production,
     env:        env === 'sandbox' ? 'sandbox' : 'production',
