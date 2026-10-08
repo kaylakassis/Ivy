@@ -41,7 +41,7 @@ async function run() {
     await signupHandler(req({ body: { email: EMAIL, password: 'a-sufficiently-long-password', name: 'LL', acceptedTermsVersion: CURRENT_TERMS_VERSION, acceptedPrivacyVersion: CURRENT_PRIVACY_VERSION } }), r);
     assert(r.statusCode === 200 || r.statusCode === 201, 'signup ok');
     let row = (await sql`SELECT last_login_at FROM users WHERE email = ${EMAIL}`).rows[0];
-    assert(row && row.last_login_at === null, 'last_login_at is NULL right after signup');
+    assert(row && !!row.last_login_at, 'signing up counts as a sign-in (last_login_at stamped)');
 
     console.log('\n[2] a successful login stamps last_login_at');
     r = makeRes();

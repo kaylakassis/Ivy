@@ -79,6 +79,7 @@ async function listUsers(req, res) {
     SELECT
       u.id, u.email, u.name, u.user_type,
       u.created_at, u.email_verified_at, u.last_login_at,
+      GREATEST(u.last_active_at, u.last_login_at) AS last_active_at,
       w.id   AS workspace_id,
       w.subscription_status,
       w.trial_ends_at,
@@ -109,6 +110,7 @@ async function listUsers(req, res) {
     createdAt: row.created_at,
     emailVerifiedAt: row.email_verified_at,
     lastLoginAt: row.last_login_at,
+    lastActiveAt: row.last_active_at,
     workspace: row.workspace_id ? {
       id: row.workspace_id,
       status: row.subscription_status,

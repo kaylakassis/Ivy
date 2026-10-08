@@ -141,12 +141,14 @@ export default async function handler(req, res) {
       INSERT INTO users (
         email, password_hash, name,
         terms_version, terms_accepted_at,
-        privacy_version, privacy_accepted_at
+        privacy_version, privacy_accepted_at,
+        last_login_at, last_active_at
       )
       VALUES (
         ${emailKey}, ${password_hash}, ${cleanName},
         ${CURRENT_TERMS_VERSION}, NOW(),
-        ${CURRENT_PRIVACY_VERSION}, NOW()
+        ${CURRENT_PRIVACY_VERSION}, NOW(),
+        NOW(), NOW()
       )
       RETURNING id, email, name, created_at, email_verified_at
     `;
