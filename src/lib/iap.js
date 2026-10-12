@@ -276,6 +276,26 @@ export async function restoreIapPurchases() {
   }
 }
 
+// Apple offer codes (App Store Connect → subscription → Offer Codes).
+// Opens Apple's own redemption sheet; the redeemed offer lands on the
+// customer's Apple subscription and RevenueCat picks it up from Apple's
+// server notifications. Resolves once the sheet is dismissed; `hasPro`
+// reflects the entitlement a couple of seconds later, so callers should
+// also refresh the workspace from the server.
+export async function redeemIapOfferCode() {
+  if (!iapAvailable()) return { ok: false, error: 'Promo codes can only be redeemed in the iPhone app.' };
+  try {
+    const { Purchases: P } = await purchases();
+    await P.presentCodeRedemptionSheet();
+    await new Promise((r) => setTimeout(r, 2500));
+    try { await P.syncPurchases(); } catch { /* best effort */ }
+    const { customerInfo } = await P.getCustomerInfo();
+    return { ok: true, hasPro: hasProEntitlement(customerInfo) };
+  } catch (err) {
+    return { ok: false, error: messageFor(err) };
+  }
+}
+
 // Push any local StoreKit transactions up to RevenueCat. Useful when a
 // purchase completed but our webhook never saw it.
 export async function syncIapPurchases() {

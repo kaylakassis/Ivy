@@ -6,7 +6,8 @@
 //
 // Future tabs (billing, team, notifications) will mount alongside.
 import React, { useEffect, useRef, useState } from 'react';
-import { isNative } from '../../lib/platform.js';
+import { isNative, isIos } from '../../lib/platform.js';
+import { redeemIapOfferCode, identifyIapUser } from '../../lib/iap.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -560,6 +561,22 @@ function SubscriptionCard() {
   // Triggered when the owner clicks Subscribe/Resubscribe - opens the
   // disclosure modal instead of jumping straight to Stripe. The actual
   // redirect happens in confirmSubscribe below after they accept.
+  // Apple offer code on iOS: Apple's sheet redeems it, we refresh after.
+  const redeemCode = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await identifyIapUser(ctx?.owns?.id);
+      const r = await redeemIapOfferCode();
+      if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); return; }
+      await new Promise((res) => setTimeout(res, 1500));
+      await refresh();
+    } catch (e) {
+      setErr(e.message || 'Could not redeem the code');
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const subscribeNow = () => {
     setErr(null);
     setConfirmingSubscribe(true);
@@ -654,6 +671,11 @@ function SubscriptionCard() {
             {busy ? 'Opening…' : 'Manage subscription'} <Icons.Arrow size={12} sw={2}/>
           </button>
         ) : null}
+        {isNative() && isIos() && (
+          <button className="btn btn-outline" onClick={redeemCode} disabled={busy}>
+            {busy ? 'Opening…' : 'Redeem a promo code'}
+          </button>
+        )}
         {!sub.isActive && (
           <button className="btn btn-primary" onClick={subscribeNow} disabled={busy}>
             {busy ? 'Redirecting…' : (sub.status === 'cancelled' ? 'Resubscribe' : 'Subscribe')} <Icons.Arrow size={12} sw={2}/>

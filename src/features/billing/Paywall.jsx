@@ -27,7 +27,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos, isNative } from '../../lib/platform.js';
 import { useAuth } from '../../lib/auth.jsx';
-import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser } from '../../lib/iap.js';
+import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode } from '../../lib/iap.js';
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS, MONTHLY_STACK_SAVINGS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
@@ -228,6 +228,24 @@ export default function Paywall({ ctx, onRefresh }) {
       if (!r.hasPro) setErr('No active subscription found on this Apple ID.');
     } catch (e) {
       setErr(e?.message || 'Restore failed');
+      setBusy(null);
+    }
+  };
+
+  // Apple offer code (a free month, a discount) handed out by Ivy. Apple's
+  // own sheet does the redeeming; we just refresh afterwards.
+  const redeemCode = async () => {
+    setBusy('redeem'); setErr(null);
+    try {
+      await identifyIapUser(ctx?.owns?.id);
+      const r = await redeemIapOfferCode();
+      if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); setBusy(null); return; }
+      await new Promise((res) => setTimeout(res, 1500));
+      await onRefresh?.();
+      setBusy(null);
+      if (!r.hasPro) setErr('If you redeemed a code, give it a few seconds and tap Restore purchases.');
+    } catch (e) {
+      setErr(e?.message || 'Could not redeem the code');
       setBusy(null);
     }
   };
@@ -454,6 +472,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   {isNative() && isIos() ? ' your Apple ID subscriptions' : ' Account'}. By subscribing you agree to the{' '}
                   <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Terms of Use</a> and{' '}
                   <a href="/privacy" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Privacy Policy</a>.
+                  {!(isNative() && isIos()) && ' Have a promo code? You can enter it on the checkout page.'}
                 </div>
               </div>
 
@@ -568,6 +587,12 @@ export default function Paywall({ ctx, onRefresh }) {
                       className="btn btn-ghost"
                       style={{ padding: '5px 9px', color: 'var(--muted)' }}>
                       {busy === 'restore' ? 'Restoring…' : 'Restore purchases'}
+                    </button>
+                    <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
+                    <button onClick={redeemCode} disabled={busy != null}
+                      className="btn btn-ghost"
+                      style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                      {busy === 'redeem' ? 'Opening…' : 'Have a promo code?'}
                     </button>
                     <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
                   </>
