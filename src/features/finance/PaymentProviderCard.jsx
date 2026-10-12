@@ -159,8 +159,7 @@ export default function PaymentProviderCard() {
           onError={setErr}
           busy={busy}
         />
-        {FLAGS.squarePaypal && (
-          <>
+        {FLAGS.square && (
             <ProviderRow
               id="square" label="Square"
               description="Cards + Cash App Pay (US) on Square's hosted checkout."
@@ -174,6 +173,8 @@ export default function PaymentProviderCard() {
           onError={setErr}
               busy={busy}
             />
+        )}
+        {FLAGS.paypal && (
             <ProviderRow
               id="paypal" label="PayPal"
               description="PayPal balance, cards, and Venmo (US) on PayPal's hosted checkout."
@@ -187,16 +188,15 @@ export default function PaymentProviderCard() {
           onError={setErr}
               busy={busy}
             />
-          </>
         )}
       </div>
 
-      {FLAGS.squarePaypal && (
+      {(FLAGS.square || FLAGS.paypal) && (
         <div style={{
           marginTop: 14, padding: '8px 12px', borderRadius: 8,
           background: 'var(--surface-2)', fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55,
         }}>
-          <strong style={{ color: 'var(--fg-2)' }}>Good to know:</strong> all three providers accept
+          <strong style={{ color: 'var(--fg-2)' }}>Good to know:</strong> every connected provider accepts
           payments + refunds - even refunds you issue directly from the
           Square or PayPal dashboard show up in Ivy automatically.
           Saved-card auto-charges (no-show / late-cancel fees) and

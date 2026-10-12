@@ -248,9 +248,12 @@ export default async function handler(req, res) {
     const square = !!(process.env.SQUARE_APPLICATION_ID && process.env.SQUARE_APPLICATION_SECRET);
     checks.push(check('square', 'Square', square ? 'ok' : 'warn',
       square ? 'Configured' : 'Optional - workspaces can\'t pick Square checkout without it.'));
-    const paypal = !!(process.env.PAYPAL_CLIENT_ID && process.env.PAYPAL_CLIENT_SECRET);
-    checks.push(check('paypal', 'PayPal', paypal ? 'ok' : 'warn',
-      paypal ? 'Configured' : "Optional - workspaces can't pick PayPal checkout without it."));
+    const ppMissing = ['PAYPAL_CLIENT_ID', 'PAYPAL_CLIENT_SECRET', 'PAYPAL_PARTNER_ID', 'PAYPAL_WEBHOOK_ID'].filter((k) => !process.env[k]);
+    const ppEnv = (process.env.PAYPAL_ENVIRONMENT || 'sandbox').toLowerCase();
+    checks.push(check('paypal', 'PayPal', ppMissing.length === 0 ? (ppEnv === 'live' ? 'ok' : 'warn') : 'warn',
+      ppMissing.length === 0
+        ? (ppEnv === 'live' ? 'Configured (live). Owners can connect PayPal and clients can pay with PayPal, Venmo, Pay Later and cards.' : `Configured but PAYPAL_ENVIRONMENT is "${ppEnv}": real clients cannot pay until it is "live".`)
+        : `Optional. Missing ${ppMissing.join(', ')}; owners cannot connect PayPal until these are set (see docs/paypal-setup.md).`));
     const google = !!(process.env.GOOGLE_OAUTH_CLIENT_ID && process.env.GOOGLE_OAUTH_CLIENT_SECRET);
     checks.push(check('google', 'Google Calendar OAuth', google ? 'ok' : 'warn',
       google ? 'Configured' : 'Optional - busy-sync feature degrades to manual entry without it.'));

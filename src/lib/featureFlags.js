@@ -23,5 +23,9 @@ export const FLAGS = {
   // Stripe is the only payment provider we surface for now. The
   // backend code remains intact; flipping this back to true re-exposes
   // them everywhere.
+  // Extra client-payment processors on the Finance page. Each has its own
+  // switch; the old combined SQUARE_PAYPAL switch still turns both on.
   squarePaypal: envFlag('SQUARE_PAYPAL', false),
+  paypal: envFlag('PAYPAL', false) || envFlag('SQUARE_PAYPAL', false),
+  square: envFlag('SQUARE', false) || envFlag('SQUARE_PAYPAL', false),
 };
