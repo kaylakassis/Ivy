@@ -983,7 +983,8 @@ ACCOUNT (avatar → "Account settings", bottom-left of sidebar)
 // sent once to the fallback model. 400s and auth errors are not retried:
 // they would fail the same way again. Returns the response plus which
 // model answered, so usage is recorded against the right one.
-const IVY_FALLBACK_MODEL = process.env.IVY_FALLBACK_MODEL || 'claude-opus-5-5';
+// Read per call so an env pin (and the tests) take effect without a restart.
+const fallbackModel = () => process.env.IVY_FALLBACK_MODEL || 'claude-opus-5-5';
 function isTransientProviderError(err) {
   const status = Number(err?.status) || 0;
   if (status === 429 || status === 529 || (status >= 500 && status < 600)) return true;
@@ -994,7 +995,8 @@ function isTransientProviderError(err) {
 }
 async function callModel(client, params, { deadlineAt, label = 'reply' }) {
   const models = [params.model];
-  if (IVY_FALLBACK_MODEL && IVY_FALLBACK_MODEL !== params.model) models.push(IVY_FALLBACK_MODEL);
+  const fb = fallbackModel();
+  if (fb && fb !== params.model) models.push(fb);
   let lastErr = null;
   for (let m = 0; m < models.length; m++) {
     const model = models[m];
