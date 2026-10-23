@@ -136,7 +136,7 @@ const TOOL_LOOP_CAP = 8;
 // with a "limit reached" message so a runaway loop or overly chatty workspace
 // can't drive real money out of our pocket. Tool loops can multiply API
 // calls per user message - bumped accordingly. Tune as plan tiers land.
-const DAILY_REQUEST_CAP = 40;
+const DAILY_REQUEST_CAP = 80;
 const DAILY_OUTPUT_TOKEN_CAP = 100_000;
 
 // Per-workspace MONTHLY allowance of Ivy messages. This is the number that
@@ -144,7 +144,7 @@ const DAILY_OUTPUT_TOKEN_CAP = 100_000;
 // keeps every plan comfortably profitable even if a workspace uses all of
 // them. Shown as a meter in the Ivy page; resets on the 1st (UTC).
 // Env-tunable so the allowance can move without a deploy.
-const MONTHLY_MESSAGE_ALLOWANCE = Math.max(0, Number(process.env.IVY_MONTHLY_MESSAGES ?? 100));
+const MONTHLY_MESSAGE_ALLOWANCE = Math.max(0, Number(process.env.IVY_MONTHLY_MESSAGES ?? 600));
 function monthResetsAt() {
   const d = new Date();
   return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1)).toISOString();
@@ -578,11 +578,11 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   }
 
   try {
-    const { reply, aggregateUsage, pendingActions } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId);
+    const { reply, aggregateUsage, pendingActions, modelUsed } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId);
     // Record SUM of all turns toward the daily cap - tool loops can
     // burn many turns per user message.
     if (workspaceId && aggregateUsage) {
-      await recordUsage(workspaceId, { usage: aggregateUsage }).catch(() => {});
+      await recordUsage(workspaceId, { usage: aggregateUsage, model: modelUsed }).catch(() => {});
     }
     return {
       text: sanitizeIvyReply(reply),
@@ -680,7 +680,7 @@ async function recordUsage(workspaceId, response) {
       cache_read_tokens, cache_creation_tokens, request_count
     )
     VALUES (
-      ${workspaceId}, CURRENT_DATE, ${currentModel},
+      ${workspaceId}, CURRENT_DATE, ${response.model || currentModel},
       ${u.input_tokens || 0}, ${u.output_tokens || 0},
       ${u.cache_read_input_tokens || 0}, ${u.cache_creation_input_tokens || 0}, 1
     )
@@ -976,6 +976,52 @@ ACCOUNT (avatar → "Account settings", bottom-left of sidebar)
 // existed in its scope, and every real chat threw "model is not defined"
 // before reaching Claude - silently, as a canned reply. The api/ lint block
 // (no-undef) now fails the build on that class of mistake.
+// One provider call that does not give up at the first wobble. Transient
+// failures (429 / 5xx / 529 overloaded / connection resets / per-call
+// timeouts) are retried with a short backoff while the overall deadline
+// still has room; if the primary model keeps failing, the same request is
+// sent once to the fallback model. 400s and auth errors are not retried:
+// they would fail the same way again. Returns the response plus which
+// model answered, so usage is recorded against the right one.
+const IVY_FALLBACK_MODEL = process.env.IVY_FALLBACK_MODEL || 'claude-sonnet-5-5';
+function isTransientProviderError(err) {
+  const status = Number(err?.status) || 0;
+  if (status === 429 || status === 529 || (status >= 500 && status < 600)) return true;
+  if (status) return false;
+  const msg = String(err?.message || err?.name || '');
+  return /timed? ?out|abort|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|socket|network|overloaded|connection/i.test(msg)
+    || /APIConnection/i.test(String(err?.name || err?.constructor?.name || ''));
+}
+async function callModel(client, params, { deadlineAt, label = 'reply' }) {
+  const models = [params.model];
+  if (IVY_FALLBACK_MODEL && IVY_FALLBACK_MODEL !== params.model) models.push(IVY_FALLBACK_MODEL);
+  let lastErr = null;
+  for (let m = 0; m < models.length; m++) {
+    const model = models[m];
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const remaining = deadlineAt - Date.now();
+      if (remaining < 4000) break;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const response = await client.messages.create({ ...params, model }, { timeout: Math.min(30_000, remaining) });
+        if (m > 0 || attempt > 0) {
+          // eslint-disable-next-line no-console
+          console.warn(`[ivy] ${label}: recovered on ${model} after ${attempt} retr${attempt === 1 ? 'y' : 'ies'}${m > 0 ? ' (fallback model)' : ''}`);
+        }
+        return { response, model };
+      } catch (err) {
+        lastErr = err;
+        if (!isTransientProviderError(err)) throw err;
+        const wait = 600 * (attempt + 1);
+        if (deadlineAt - Date.now() < wait + 4000) break;
+        // eslint-disable-next-line no-await-in-loop
+        await new Promise((r) => setTimeout(r, wait));
+      }
+    }
+  }
+  throw lastErr || new Error('Ivy could not reach the AI service');
+}
+
 async function claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId = null) {
   const messages = buildMessages(text, ctx, history, attachment);
 
@@ -1002,7 +1048,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
     const remaining = HARD_DEADLINE_MS - (Date.now() - startedAt);
     if (remaining < 4000) break; // not enough budget for another round-trip
     // eslint-disable-next-line no-await-in-loop
-    response = await client.messages.create({
+    ({ response, model } = await callModel(client, {
       model,
       max_tokens: IVY_MAX_TOKENS,
       output_config: { effort: 'low' },
@@ -1015,7 +1061,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       ],
       tools: IVY_TOOLS,
       messages: withPrefixCache(messages),
-    }, { timeout: remaining });
+    }, { deadlineAt: startedAt + HARD_DEADLINE_MS, label: `turn ${i + 1}` }));
     const u = response.usage || {};
     totalIn          += Number(u.input_tokens || 0);
     totalOut         += Number(u.output_tokens || 0);
@@ -1065,7 +1111,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
   // what it did.
   if (response && response.stop_reason === 'tool_use'
       && (HARD_DEADLINE_MS - (Date.now() - startedAt)) >= 4000) {
-    const final = await client.messages.create({
+    const { response: final } = await callModel(client, {
       model,
       max_tokens: IVY_MAX_TOKENS,
       output_config: { effort: 'low' },
@@ -1073,7 +1119,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       tools: IVY_TOOLS,
       tool_choice: { type: 'none' },
       messages: withPrefixCache(messages),
-    }, { timeout: HARD_DEADLINE_MS - (Date.now() - startedAt) });
+    }, { deadlineAt: startedAt + HARD_DEADLINE_MS, label: 'final' });
     const u = final.usage || {};
     totalIn          += Number(u.input_tokens || 0);
     totalOut         += Number(u.output_tokens || 0);
@@ -1092,6 +1138,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
     reply,
     response,
     pendingActions,
+    modelUsed: model,
     aggregateUsage: {
       input_tokens: totalIn,
       output_tokens: totalOut,

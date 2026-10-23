@@ -254,7 +254,7 @@ function ModeChip({ mode, modeError }) {
     : noKey
       ? "Ivy's AI service isn't set up on this deployment yet."
       : monthly
-        ? "This month's 100 Ivy messages are used up. A fresh 100 arrive on the 1st."
+        ? "This month's 600 Ivy messages are used up. A fresh 600 arrive on the 1st."
         : capped
           ? "Today's Ivy limit is used up; full answers return tomorrow."
           : `Ivy couldn't answer fully just now: ${modeError || 'temporary issue'}.`;

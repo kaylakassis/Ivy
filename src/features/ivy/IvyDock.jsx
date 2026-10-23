@@ -342,7 +342,7 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
           fontSize: 11, color: 'var(--muted)',
         }}>
           {modeError === 'monthly-allowance'
-            ? "This month's 100 Ivy messages are used up. A fresh 100 arrive on the 1st."
+            ? "This month's 600 Ivy messages are used up. A fresh 600 arrive on the 1st."
             : modeError === 'daily-request-cap' || modeError === 'daily-token-cap'
               ? "Today's Ivy limit is used up. Full answers return tomorrow."
               : modeError === 'no-api-key'

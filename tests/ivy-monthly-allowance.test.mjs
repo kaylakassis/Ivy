@@ -1,7 +1,6 @@
-// Monthly Ivy allowance: 100 messages per workspace per calendar month.
+// Monthly Ivy allowance: 600 messages per workspace per calendar month.
 // Run: node --import ./tests/bootstrap.mjs ./tests/ivy-monthly-allowance.test.mjs
 process.env.ANTHROPIC_API_KEY ||= 'sk-ant-test-not-a-real-key';
-process.env.IVY_MONTHLY_MESSAGES = '100';
 
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
@@ -32,27 +31,27 @@ async function run() {
 
   console.log('\n[1] fresh workspace');
   let u = await getDailyUsage(a);
-  assert(u.monthMessages === 0 && u.monthAllowance === 100, `0/100 to start (${u.monthMessages}/${u.monthAllowance})`);
+  assert(u.monthMessages === 0 && u.monthAllowance === 600, `0/600 to start (${u.monthMessages}/${u.monthAllowance})`);
   assert(/^\d{4}-\d{2}-01T00:00:00/.test(u.monthResetsAt), `resets on the 1st (${u.monthResetsAt})`);
   const nextMonth = new Date(Date.UTC(new Date().getUTCFullYear(), new Date().getUTCMonth() + 1, 1)).toISOString();
   assert(u.monthResetsAt === nextMonth, 'reset date is the first of next month, UTC');
 
   console.log('\n[2] usage across the month adds up; last month does not count');
   await seed(a, 60, { lastMonth: true });
-  await seed(a, 30, { dayOffset: 0 });
-  await seed(a, 69, { dayOffset: 1 });
+  await seed(a, 300, { dayOffset: 0 });
+  await seed(a, 299, { dayOffset: 1 });
   let st = await monthlyAllowanceStatus(a);
-  assert(st.messages === 99 && st.capped === false, `99 this month, not capped (${st.messages})`);
+  assert(st.messages === 599 && st.capped === false, `599 this month, not capped (${st.messages})`);
 
-  console.log('\n[3] the 100th message is the last one; the 101st is refused before any provider call');
+  console.log('\n[3] the 600th message is the last one; the 601st is refused before any provider call');
   await seed(a, 1, { dayOffset: 2 });
   st = await monthlyAllowanceStatus(a);
-  assert(st.messages === 100 && st.capped === true, 'capped at 100');
+  assert(st.messages === 600 && st.capped === true, 'capped at 600');
   const r = await generateReply('hi', {}, [], a);
   assert(r.mode === 'mock' && r.error === 'monthly-allowance', `reply is the allowance notice, not a provider call (${r.error})`);
-  assert(/all 100 Ivy messages/.test(r.text) && /fresh 100/.test(r.text), 'notice says how many and that they come back');
+  assert(/all 600 Ivy messages/.test(r.text) && /fresh 600/.test(r.text), 'notice says how many and that they come back');
   assert(!/claude|anthropic/i.test(r.text), 'notice never names the provider');
-  assert(r.usage && r.usage.monthMessages === 100, 'usage returned with the notice for the meter');
+  assert(r.usage && r.usage.monthMessages === 600, 'usage returned with the notice for the meter');
 
   console.log('\n[4] another workspace is unaffected');
   st = await monthlyAllowanceStatus(b);

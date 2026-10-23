@@ -16,6 +16,7 @@
 // app boots fine without it (e.g. Twilio missing → SMS off; everything
 // else still works).
 import { sql } from '../_lib/db.js';
+import { MODEL_PRICES } from '../_lib/ivyPricing.js';
 import { requireSuperAdmin } from '../_lib/admin.js';
 import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
 import { probeProvider } from '../_lib/ivy.js';
@@ -301,6 +302,32 @@ export default async function handler(req, res) {
         n === 0 ? 'none' : `${n} failed repl${n === 1 ? 'y' : 'ies'} · latest: ${sample.join(' | ')}`));
     } catch (e) {
       checks.push(check('ai_failures', 'Ivy failed replies (24h)', 'warn', `could not read: ${e.message}`));
+    }
+    // What Ivy actually costs, from the tokens we recorded (30 days), priced
+    // per model so the operator can see cost per message and per workspace.
+    try {
+      const PRICE = MODEL_PRICES;
+      const u = await sql`
+        SELECT model, SUM(input_tokens)::bigint AS inp, SUM(output_tokens)::bigint AS outp,
+               SUM(cache_read_tokens)::bigint AS cr, SUM(cache_creation_tokens)::bigint AS cw,
+               SUM(request_count)::bigint AS msgs, COUNT(DISTINCT workspace_id)::int AS ws
+          FROM ivy_usage WHERE day > CURRENT_DATE - 30 GROUP BY model`;
+      let cost = 0, msgs = 0, unknown = [];
+      const wsSet = new Set();
+      for (const r of u.rows) {
+        const key = Object.keys(PRICE).find((k) => String(r.model || '').startsWith(k));
+        msgs += Number(r.msgs);
+        if (!key) { unknown.push(r.model); continue; }
+        const [pi, po, pcr, pcw] = PRICE[key];
+        cost += (Number(r.inp) * pi + Number(r.outp) * po + Number(r.cr) * pcr + Number(r.cw) * pcw) / 1e6;
+      }
+      const wsCount = Number((await sql`SELECT COUNT(DISTINCT workspace_id)::int AS n FROM ivy_usage WHERE day > CURRENT_DATE - 30`).rows[0]?.n || 0);
+      const perMsg = msgs ? cost / msgs : 0;
+      checks.push(check('ai_cost', 'Ivy cost (30 days)', 'ok',
+        msgs === 0 ? 'No Ivy messages in the last 30 days.'
+          : `$${cost.toFixed(2)} for ${msgs} messages across ${wsCount} workspace${wsCount === 1 ? '' : 's'} = $${perMsg.toFixed(4)} per message, $${(wsCount ? cost / wsCount : 0).toFixed(2)} per workspace.${unknown.length ? ` Unpriced model(s): ${unknown.join(', ')}.` : ''}`));
+    } catch (e) {
+      checks.push(check('ai_cost', 'Ivy cost (30 days)', 'warn', `could not compute: ${e.message}`));
     }
     const ai = await probeProvider();
     checks.push(check('ai_model', 'Ivy assistant (AI model)', ai.ok ? 'ok' : 'fail',

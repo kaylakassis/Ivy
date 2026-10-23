@@ -644,7 +644,7 @@ function SubscriptionCard() {
       </div>
 
       <p style={{ margin: '0 0 10px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
-        Includes 100 Ivy assistant messages a month, reset on the 1st. The meter on the <Link to="/ivy" style={{ color: 'var(--accent)' }}>Ivy page</Link> shows where you stand.
+        Includes 600 Ivy assistant messages a month, reset on the 1st. The meter on the <Link to="/ivy" style={{ color: 'var(--accent)' }}>Ivy page</Link> shows where you stand.
       </p>
 
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
