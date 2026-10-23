@@ -2,6 +2,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import Loader from '../../components/motion/Loader.jsx';
+import { stagger } from '../../components/motion/stagger.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelBlock } from '../../components/Skeleton.jsx';
 import { useCalendar } from './state.js';
@@ -185,6 +187,7 @@ export default function Calendar() {
       <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
         <SkelPageHeader/>
         <SkelBlock height={420}/>
+        <Loader/>
       </div>
     );
   }
@@ -251,7 +254,7 @@ export default function Calendar() {
         const on = view === v.id;
         return (
           <button key={v.id} onClick={() => switchView(v.id)}
-            style={{
+            className="seg-btn" style={{
               padding: isMobile ? '6px 14px' : '5px 12px', borderRadius: 6,
               fontSize: 12, fontWeight: 550, cursor: 'pointer',
               background: on ? 'var(--surface)' : 'transparent',
@@ -450,7 +453,7 @@ export default function Calendar() {
             No upcoming bookings yet. Share your link and watch them fill in.
           </div>
         ) : (
-          <div className="card" style={{ overflow: 'hidden' }}>
+          <div className="card stagger" style={{ overflow: 'hidden' }}>
             {upcoming.map((b, i) => {
               const svc = (cal?.services || []).find((s) => s.id === b.serviceId);
               const d = parseISO(b.date);
@@ -458,6 +461,7 @@ export default function Calendar() {
                 <div key={b.id} style={{
                   padding: '14px 18px', display: 'flex', alignItems: 'center', gap: 16,
                   borderTop: i > 0 ? '1px solid var(--border)' : 'none',
+                  ...stagger(i),
                 }}>
                   <div style={{
                     width: 44, height: 48, borderRadius: 8,

@@ -4,12 +4,16 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { api } from '../../lib/api.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { processImageForUpload } from '../../lib/imagePipeline.js';
 import ClientGallery from './ClientGallery.jsx';
 
-export default function ClientDrawer({ client, onClose, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder }) {
+export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, onDelete, analyticsWindowDays, onOpenFolder, onMakeFolder }) {
+  // Slide out (140ms) before the parent unmounts us; every close path in
+  // this component goes through `onClose`.
+  const { closing, close: onClose } = useAnimatedClose(onCloseNow);
   const initials = (client.name || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
   const [confirmDel, setConfirmDel] = useState(false);
   const [busyDel, setBusyDel] = useState(false);
@@ -77,11 +81,11 @@ export default function ClientDrawer({ client, onClose, onUpdate, onDelete, anal
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={onClose} className={`motion-backdrop${closing ? ' is-closing' : ''}`} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 110,
       display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
     }}>
-      <div onClick={(e) => e.stopPropagation()} className="scroll" style={{
+      <div onClick={(e) => e.stopPropagation()} className="scroll motion-drawer" style={{
         width: '100%', maxWidth: 560, background: 'var(--surface)',
         borderLeft: '1px solid var(--border)',
         display: 'flex', flexDirection: 'column',

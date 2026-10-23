@@ -9,6 +9,7 @@ import { Icons } from './Icons.jsx';
 import { isNative } from '../lib/platform.js';
 import { permissionState, getSubscription, subscribePush } from '../lib/push.js';
 import { useTutorial } from '../lib/tutorialState.jsx';
+import { useExitAnimation } from './motion/useExitAnimation.js';
 
 // Same key the web card uses, so the two never ask back to back.
 const SNOOZE_KEY = 'ivy_notify_prompt_snooze';
@@ -45,7 +46,9 @@ export default function NativePushPrompt({ active }) {
     return () => { live = false; clearTimeout(t); };
   }, [active, tutorialOpen]);
 
-  if (!show) return null;
+  // Keep the sheet mounted for its 140ms slide-down after `show` flips off.
+  const exit = useExitAnimation(show);
+  if (!exit.mounted) return null;
 
   const notNow = () => { snooze(SNOOZE_NOT_NOW_MS); setShow(false); };
   const turnOn = async () => {
@@ -56,12 +59,13 @@ export default function NativePushPrompt({ active }) {
   };
 
   return (
-    <div role="dialog" aria-modal="true" aria-labelledby="push-prompt-title" style={{
+    <div role="dialog" aria-modal="true" aria-labelledby="push-prompt-title"
+      className={`motion-backdrop${exit.closing ? ' is-closing' : ''}`} style={{
       position: 'fixed', inset: 0, zIndex: 900,
       background: 'rgba(0,0,0,0.45)',
       display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
     }}>
-      <div style={{
+      <div className="motion-sheet" style={{
         width: '100%', maxWidth: 520,
         background: 'var(--surface)', color: 'var(--fg)',
         borderRadius: '20px 20px 0 0',

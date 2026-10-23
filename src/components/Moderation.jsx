@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Icons } from './Icons.jsx';
 import { api } from '../lib/api.js';
 import { useEscapeKey } from '../lib/useEscapeKey.js';
+import { useAnimatedClose } from './motion/useExitAnimation.js';
 
 export const REPORT_REASONS = [
   { id: 'harassment',    label: 'Harassment' },
@@ -69,7 +70,9 @@ export function MoreMenu({ items, label = 'More options' }) {
 
 // Report dialog: reason + optional details → onSubmit(reason, details).
 // Shows a thank-you once the report is filed.
-export function ReportModal({ title, onSubmit, onClose }) {
+export function ReportModal({ title, onSubmit, onClose: onCloseNow }) {
+  // Fade out (140ms) before the parent unmounts us.
+  const { closing, close: onClose } = useAnimatedClose(onCloseNow);
   useEscapeKey(onClose);
   const [reason, setReason] = useState('harassment');
   const [details, setDetails] = useState('');
@@ -92,11 +95,11 @@ export function ReportModal({ title, onSubmit, onClose }) {
   };
 
   return (
-    <div onClick={onClose} role="dialog" aria-modal="true" style={{
+    <div onClick={onClose} role="dialog" aria-modal="true" className={`motion-backdrop${closing ? ' is-closing' : ''}`} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 130,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
-      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card" style={{
+      <form onClick={(e) => e.stopPropagation()} onSubmit={submit} className="card motion-modal" style={{
         padding: 0, width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', overflow: 'hidden',
       }}>
         <div style={{ padding: '16px 20px', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', gap: 10 }}>

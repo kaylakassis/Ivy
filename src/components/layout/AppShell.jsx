@@ -34,6 +34,8 @@ import { identifyIapUser, onIapCustomerInfoChange } from '../../lib/iap.js';
 import { UserContextProvider, useUserContext } from '../../lib/userContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { isNative } from '../../lib/platform.js';
+import PageTransition from '../motion/PageTransition.jsx';
+import { useExitAnimation } from '../motion/useExitAnimation.js';
 
 export default function AppShell() {
   return (
@@ -180,6 +182,9 @@ function AppShellInner() {
 
   // Close the drawer on route change so nav-tap-to-page just works.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+  // Keep the drawer mounted for its 140ms exit so it slides out instead
+  // of vanishing (useExitAnimation flags it with .is-closing meanwhile).
+  const drawerExit = useExitAnimation(viewport.isMobile && !native && drawerOpen);
 
   return (
     <div className={`app-root dir-${tweaks.direction}`}>
@@ -227,20 +232,22 @@ function AppShellInner() {
                 isn't stuck on the snag screen forever). Sidebar, topbar
                 and viewport switcher remain interactive so they can
                 pick a different tab without losing their session. */}
-            <ErrorBoundary
-              key={location.pathname}
-              fallback={({ resetError, error }) => (
-                <RouteCrashInline error={error} resetError={resetError}/>
-              )}>
-              <Outlet />
-            </ErrorBoundary>
+            <PageTransition pathname={location.pathname} mobile={viewport.isMobile}>
+              <ErrorBoundary
+                key={location.pathname}
+                fallback={({ resetError, error }) => (
+                  <RouteCrashInline error={error} resetError={resetError}/>
+                )}>
+                <Outlet />
+              </ErrorBoundary>
+            </PageTransition>
           </div>
         </main>
       </div>
 
       {viewport.isMobile && <MobileBottomNav />}
-      {viewport.isMobile && !native && drawerOpen && (
-        <MobileDrawer direction={tweaks.direction} onClose={() => setDrawerOpen(false)} />
+      {drawerExit.mounted && (
+        <MobileDrawer direction={tweaks.direction} closing={drawerExit.closing} onClose={() => setDrawerOpen(false)} />
       )}
 
       {needsPaywall && <Paywall ctx={ctx} onRefresh={refresh}/>}

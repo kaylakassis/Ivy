@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 import { api } from '../../lib/api.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 
@@ -92,6 +93,7 @@ export default function ClientInvoices() {
   if (loading) return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <SkelRowList rows={4}/>
+      <Loader set="client"/>
     </div>
   );
   if (error) return (

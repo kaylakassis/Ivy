@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
+import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { FOLDER_STATUS } from './folders.js';
 
 const TABS = [
@@ -17,7 +18,9 @@ const TABS = [
   ['documents', 'Documents'],
 ];
 
-export default function FolderDrawer({ folder, clients, onClose, onUpdate, onDelete }) {
+export default function FolderDrawer({ folder, clients, onClose: onCloseNow, onUpdate, onDelete }) {
+  // Slide out (140ms) before the parent unmounts us.
+  const { closing, close: onClose } = useAnimatedClose(onCloseNow);
   const [linked, setLinked]   = useState(null);
   const [tab, setTab]         = useState('bookings');
   const [picking, setPicking] = useState(false);
@@ -74,8 +77,9 @@ export default function FolderDrawer({ folder, clients, onClose, onUpdate, onDel
 
   return (
     <div onMouseDown={(e) => { if (e.target === e.currentTarget) onClose(); }}
+      className={`motion-backdrop${closing ? ' is-closing' : ''}`}
       style={{ position: 'fixed', inset: 0, zIndex: 200, background: 'rgba(10,12,8,0.45)', display: 'flex', justifyContent: 'flex-end' }}>
-      <div style={{
+      <div className="motion-drawer" style={{
         width: 'min(720px, 100vw)', height: '100vh', background: 'var(--surface)',
         display: 'flex', flexDirection: 'column', borderLeft: '1px solid var(--border-strong)',
       }}>

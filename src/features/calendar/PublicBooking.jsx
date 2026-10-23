@@ -8,6 +8,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
@@ -213,7 +214,7 @@ export default function PublicBooking({ embedded = false }) {
   if (loading) {
     return (
       <PageWrap tweaks={tweaks}>
-        <div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>
+        <Loader set="client"/>
       </PageWrap>
     );
   }

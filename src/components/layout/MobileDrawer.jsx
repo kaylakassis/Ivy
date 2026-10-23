@@ -13,7 +13,9 @@ function initialsOf(user) {
   return (parts[0]?.[0] || '?').toUpperCase() + (parts[1]?.[0] || '').toUpperCase();
 }
 
-export default function MobileDrawer({ onClose }) {
+// `closing` is set by AppShell (useExitAnimation) for the 140ms slide-out;
+// the wrapper only carries the class, it has no box of its own.
+export default function MobileDrawer({ onClose, closing = false }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   const location = useLocation();
@@ -49,8 +51,8 @@ export default function MobileDrawer({ onClose }) {
 
   return (
     <>
-      <div className="mobile-drawer-backdrop" onClick={onClose}/>
-      <aside className="mobile-drawer">
+      <div className={`mobile-drawer-backdrop${closing ? ' is-closing' : ''}`} onClick={onClose}/>
+      <aside className={`mobile-drawer${closing ? ' is-closing' : ''}`}>
         <div style={{ padding: '18px 16px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <div style={{
             width: 32, height: 32, borderRadius: 8,

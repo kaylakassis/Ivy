@@ -11,6 +11,8 @@ import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 import PendingActionCard from './PendingActionCard.jsx';
+import Loader from '../../components/motion/Loader.jsx';
+import { stagger } from '../../components/motion/stagger.jsx';
 import DictationButton from '../../components/DictationButton.jsx';
 
 export default function IvyPro() {
@@ -86,7 +88,7 @@ export default function IvyPro() {
   };
 
   if (loading) {
-    return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading Ivy…</div>;
+    return <div style={{ padding: 48 }}><Loader/></div>;
   }
 
   // On mobile we stack as tabs; on tablet drop the right rail (data context)
@@ -177,9 +179,9 @@ export default function IvyPro() {
           {!activeId && messages.length === 0 ? (
             <WelcomePanel onPrompt={submit} direction={direction} briefing={briefing} compact={isMobile}/>
           ) : (
-            <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
-              {messages.map((m) => (
-                <div key={m.id}>
+            <div className="stagger-chat" style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 14 }}>
+              {messages.map((m, i) => (
+                <div key={m.id} style={stagger(i)}>
                   <ChatBubble msg={m}/>
                   {m.pendingActions && m.pendingActions.length > 0 && (
                     <PendingActionCard actions={m.pendingActions} busy={thinking}
@@ -592,17 +594,22 @@ function ThinkingBubble() {
       }}>
         <Icons.Spark size={13} sw={2}/>
       </div>
-      <div style={{
-        padding: '11px 15px', borderRadius: 14,
-        background: 'var(--surface)', border: '1px solid var(--border)',
-        display: 'flex', gap: 5, alignItems: 'center',
-      }}>
-        {[0, 1, 2].map((i) => (
-          <span key={i} style={{
-            width: 6, height: 6, borderRadius: 99, background: 'var(--muted)',
-            animation: `ivyPulse 1.2s ease-in-out ${i * 0.15}s infinite`,
-          }}/>
-        ))}
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
+        <div style={{
+          padding: '11px 15px', borderRadius: 14,
+          background: 'var(--surface)', border: '1px solid var(--border)',
+          display: 'flex', gap: 5, alignItems: 'center',
+        }}>
+          {/* Breathing dots (1.2s scale pulse, .breathe-dot in global.css). */}
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="breathe-dot" style={{
+              width: 6, height: 6, borderRadius: 99, background: 'var(--muted)',
+              animationDelay: `${i * 150}ms`,
+            }}/>
+          ))}
+        </div>
+        {/* Slow reply (>1.2s): a playful line keeps the owner company. */}
+        <Loader compact delay={1200} style={{ paddingLeft: 4 }}/>
       </div>
       <style>{`@keyframes ivyPulse { 0%,60%,100% { opacity: 0.3; transform: scale(0.9); } 30% { opacity: 1; transform: scale(1.1); } }`}</style>
     </div>

@@ -6,6 +6,7 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelPageHeader, SkelStatGrid, SkelRowList } from '../../components/Skeleton.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 import { useClientPortal } from './clientContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { api } from '../../lib/api.js';
@@ -19,6 +20,7 @@ export default function ClientHome() {
         <SkelPageHeader/>
         <SkelStatGrid count={4}/>
         <SkelRowList rows={3} withAvatar/>
+        <Loader set="client"/>
       </div>
     );
   }

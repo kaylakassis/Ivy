@@ -2,6 +2,8 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import Loader from '../../components/motion/Loader.jsx';
+import { stagger } from '../../components/motion/stagger.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
 import { api } from '../../lib/api.js';
@@ -73,6 +75,7 @@ export default function Documents() {
   if (loading) return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <SkelRowList rows={5}/>
+      <Loader/>
     </div>
   );
   if (error) {
@@ -133,7 +136,7 @@ export default function Documents() {
 
       {/* Table (desktop) / stacked cards (mobile) */}
       <div className={isMobile ? 'card' : 'card table-scroll'} style={{ overflow: isMobile ? 'visible' : 'auto' }}>
-        <div>
+        <div className="stagger">
           {!isMobile && (
             <div style={{
               display: 'grid', gridTemplateColumns: '2fr 110px 140px 160px 140px',
@@ -161,7 +164,7 @@ export default function Documents() {
               )}
             </div>
           ) : rows.map((d, i) => (
-            <DocRow key={d.id} doc={d} first={i === 0} isMobile={isMobile} onOpen={() => setOpenId(d.id)}/>
+            <DocRow key={d.id} doc={d} first={i === 0} index={i} isMobile={isMobile} onOpen={() => setOpenId(d.id)}/>
           ))}
         </div>
       </div>
@@ -213,7 +216,7 @@ export default function Documents() {
   );
 }
 
-function DocRow({ doc, first, onOpen, isMobile }) {
+function DocRow({ doc, first, onOpen, isMobile, index }) {
   const meta = STATUS_META[doc.status] || STATUS_META.draft;
   const statusPill = (
     <span style={{
@@ -230,7 +233,7 @@ function DocRow({ doc, first, onOpen, isMobile }) {
       <div onClick={onOpen} style={{
         padding: '14px 16px', cursor: 'pointer', minHeight: 44,
         borderTop: first ? 'none' : '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', gap: 8,
+        display: 'flex', flexDirection: 'column', gap: 8, ...stagger(index),
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span style={{
@@ -256,7 +259,7 @@ function DocRow({ doc, first, onOpen, isMobile }) {
       display: 'grid', gridTemplateColumns: '2fr 110px 140px 160px 140px',
       padding: '14px 20px', alignItems: 'center', cursor: 'pointer',
       borderTop: first ? 'none' : '1px solid var(--border)',
-      transition: 'background .1s',
+      transition: 'background .1s', ...stagger(index),
     }}
       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}

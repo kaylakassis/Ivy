@@ -2,6 +2,9 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { readCache, writeCache } from '../../lib/deviceCache.js';
 import { Link, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import CountUp from '../../components/motion/CountUp.jsx';
+import Loader from '../../components/motion/Loader.jsx';
+import { stagger } from '../../components/motion/stagger.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { GoalsAndTasks } from '../goals/Goals.jsx';
 import { api } from '../../lib/api.js';
@@ -49,26 +52,29 @@ function fmtTime(min) {
   return `${h12}:${String(m).padStart(2, '0')} ${ampm}`;
 }
 
-function MetricCard({ label, value, kind, currency, loading, to }) {
-  let display = '-';
-  if (!loading && value != null) {
-    if (kind === 'money') display = fmtMoney(value, currency);
-    else if (kind === 'hours') display = `${value}h`;
-    else display = String(value);
-  }
+function MetricCard({ label, value, kind, currency, loading, to, index }) {
+  const ready = !loading && value != null;
+  // Counts up from 0 the first time the number lands (400ms, ease-out),
+  // then later refreshes update in place.
+  const format = (n) => {
+    if (n == null) return '-';
+    if (kind === 'money') return fmtMoney(n, currency);
+    if (kind === 'hours') return `${n}h`;
+    return String(n);
+  };
   // The whole card links to the relevant section. (The old top-right
   // three-dots was a dead affordance - tapping it did nothing - so it's
   // replaced by a real, tappable arrow that takes you to the detail page.)
   return (
     <Link to={to || '/dashboard'} className="card"
-      style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 128, textDecoration: 'none', color: 'inherit' }}>
+      style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 14, minHeight: 128, textDecoration: 'none', color: 'inherit', ...stagger(index) }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <span className="metric-label">{label}</span>
         <Icons.Arrow size={14} stroke="var(--muted)" sw={1.8} />
       </div>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-        <span className="metric-value" style={{ fontSize: 38, color: (!loading && value != null) ? 'var(--fg)' : 'var(--muted-2)' }}>
-          {display}
+        <span className="metric-value" style={{ fontSize: 38, color: ready ? 'var(--fg)' : 'var(--muted-2)' }}>
+          <CountUp value={ready ? value : null} format={format}/>
         </span>
       </div>
       <div style={{ height: 32, borderTop: '1px dashed var(--border)' }} />
@@ -514,12 +520,15 @@ export default function Dashboard() {
         <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
         <InviteFriendCard/>
-        <div className="grid-auto">
-          {metricsFor(businessType).map((m) => (
-            <MetricCard key={m.k} label={m.label} kind={m.kind} to={m.to}
+        <div className="grid-auto stagger">
+          {metricsFor(businessType).map((m, i) => (
+            <MetricCard key={m.k} label={m.label} kind={m.kind} to={m.to} index={i}
               value={data?.metrics?.[m.k]} currency={currency} loading={loading}/>
           ))}
         </div>
+        {/* First load with nothing cached: the tiles show "-" until the
+            numbers land, so keep the owner company meanwhile. */}
+        {loading && !data && <Loader/>}
         <div className="split-2">
           <div className="card" style={{ padding: 24 }}>
             <div className="metric-label" style={{ marginBottom: 14 }}>Revenue vs expenses · this month</div>

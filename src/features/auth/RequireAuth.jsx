@@ -5,6 +5,7 @@ import { useAuth } from '../../lib/auth.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { isNative } from '../../lib/platform.js';
 import LaunchFrame from '../../components/LaunchFrame.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 
 export default function RequireAuth({ children }) {
   const { user, loading } = useAuth();
@@ -22,12 +23,15 @@ export default function RequireAuth({ children }) {
       if (hint) return children;
       return <LaunchFrame/>;
     }
+    // Branded loader + a playful line after 600ms (most session checks are
+    // faster, so nothing flashes). The portal gets the client set of lines.
+    const client = location.pathname === '/me' || location.pathname.startsWith('/me/');
     return (
       <div className={`app-root dir-${tweaks.direction}`} style={{
         minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
         color: 'var(--muted)', fontSize: 13,
       }}>
-        Loading…
+        <Loader set={client ? 'client' : 'owner'} delay={600}/>
       </div>
     );
   }
