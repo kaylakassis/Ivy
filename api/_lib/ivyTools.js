@@ -1202,7 +1202,7 @@ async function send_message_to_client({ workspaceId, args }) {
 
 async function mark_invoice_paid({ workspaceId, args }) {
   const id = args.invoice_id ? String(args.invoice_id) : null;
-  const method = args.method && /^(cash|check|transfer|card|other)$/.test(String(args.method))
+  const method = args.method && /^(cash|check|transfer|card|zelle|venmo|cashapp|other)$/.test(String(args.method))
     ? String(args.method) : 'other';
   if (!id) throw new Error('invoice_id is required');
 

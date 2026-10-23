@@ -2,7 +2,67 @@
 import { sql } from './db.js';
 
 export const VALID_STATUS = new Set(['draft', 'sent', 'paid', 'overdue', 'voided', 'refunded']);
-export const VALID_PAID_METHOD = new Set(['card', 'ach', 'cash', 'check', 'transfer', 'other']);
+export const VALID_PAID_METHOD = new Set(['card', 'ach', 'cash', 'check', 'transfer', 'zelle', 'venmo', 'cashapp', 'other']);
+
+// Human labels for paid_method values. Receipts, activity rows and the
+// owner's "says paid" banner all read from here so "cashapp" never leaks
+// into copy a client sees.
+export const PAID_METHOD_LABELS = {
+  card: 'card', ach: 'ACH', cash: 'cash', check: 'check', transfer: 'bank transfer',
+  zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', paypal: 'PayPal', other: 'other',
+};
+export function paidMethodLabel(method) {
+  return PAID_METHOD_LABELS[method] || (method ? String(method) : 'other');
+}
+
+// Ways to get paid that no processor handles at checkout. The owner lists
+// them under Finance > Other ways to get paid; the public invoice page
+// shows the enabled ones. 'other' covers anything we did not think of.
+export const MANUAL_METHOD_TYPES = new Set(['zelle', 'venmo', 'cashapp', 'cash', 'check', 'other']);
+export const MANUAL_METHOD_LABELS = {
+  zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', cash: 'Cash', check: 'Check', other: 'Other',
+};
+export const MANUAL_METHODS_MAX = 6;
+const HANDLE_MAX = 120;
+const NOTE_MAX = 300;
+// These need something to send to; cash and check do not.
+const HANDLE_REQUIRED = new Set(['zelle', 'venmo', 'cashapp']);
+
+// Validates + normalizes the owner's manual-methods list. Returns the
+// cleaned array or throws an Error with a message safe to show the owner.
+export function normalizeManualMethods(input) {
+  if (!Array.isArray(input)) throw new Error('methods must be a list');
+  if (input.length > MANUAL_METHODS_MAX) throw new Error(`You can list up to ${MANUAL_METHODS_MAX} ways to get paid`);
+  const out = [];
+  const seen = new Set();
+  for (const raw of input) {
+    const m = raw && typeof raw === 'object' ? raw : {};
+    const type = String(m.type || '').toLowerCase().trim();
+    if (!MANUAL_METHOD_TYPES.has(type)) throw new Error(`Unknown payment method "${type || '?'}"`);
+    if (seen.has(type) && type !== 'other') throw new Error(`${MANUAL_METHOD_LABELS[type]} is listed twice`);
+    seen.add(type);
+    const handle = String(m.handle ?? '').trim();
+    const note   = String(m.note ?? '').trim();
+    if (handle.length > HANDLE_MAX) throw new Error(`${MANUAL_METHOD_LABELS[type]} handle must be ${HANDLE_MAX} characters or fewer`);
+    if (note.length > NOTE_MAX) throw new Error(`${MANUAL_METHOD_LABELS[type]} note must be ${NOTE_MAX} characters or fewer`);
+    const enabled = m.enabled === true || m.enabled === 'true';
+    if (enabled && HANDLE_REQUIRED.has(type) && !handle) {
+      throw new Error(`Add where clients should send ${MANUAL_METHOD_LABELS[type]} payments, or turn it off`);
+    }
+    out.push({ type, handle, note, enabled });
+  }
+  return out;
+}
+
+// Enabled manual methods for a workspace, shaped for the public invoice
+// page: [{ type, handle, note }]. Empty when none are set up.
+export async function fetchEnabledManualMethods(workspaceId) {
+  const r = await sql`SELECT manual_methods FROM finance_settings WHERE workspace_id = ${workspaceId}`;
+  const list = Array.isArray(r.rows[0]?.manual_methods) ? r.rows[0].manual_methods : [];
+  return list
+    .filter((m) => m && m.enabled && MANUAL_METHOD_TYPES.has(m.type))
+    .map((m) => ({ type: m.type, handle: String(m.handle || ''), note: String(m.note || '') }));
+}
 
 // Generalized finance_settings fetcher used by the multi-provider
 // payments layer. Returns a normalized object (or null when no row
@@ -42,6 +102,8 @@ export async function fetchFinanceSettings(workspaceId) {
     paypalConnectedAt:            row.paypal_connected_at || null,
     paypalPaymentsEnabled:        !!row.paypal_payments_enabled,
     paypalEnvironment:            row.paypal_environment || null,
+    // Manual (off-platform) ways to get paid.
+    manualMethods:                Array.isArray(row.manual_methods) ? row.manual_methods : [],
   };
 }
 
@@ -88,6 +150,11 @@ export function serializeInvoice(row) {
     paidAmount:     row.paid_amount == null ? null : Number(row.paid_amount),
     refundedAt:   row.refunded_at,
     stripePaymentIntent: row.stripe_payment_intent || null,
+    // "Client says they paid" - cleared by clear-claim, left in place on
+    // confirm so the history of how it was settled survives.
+    paymentClaimedAt:     row.payment_claimed_at || null,
+    paymentClaimedMethod: row.payment_claimed_method || null,
+    paymentClaimedNote:   row.payment_claimed_note || null,
     activity:     row.activity || [],
     subtotal:     totals.subtotal,
     tax:          totals.tax,
@@ -102,10 +169,14 @@ export function serializeInvoicePublic(row, workspaceMeta = {}) {
   if (!row) return null;
   const inv = serializeInvoice(row);
   delete inv.id; // public viewer references by token, not raw id
+  delete inv.paymentClaimedNote; // the client's own note - no need to echo it
+  const unpaid = row.status === 'sent' || row.status === 'overdue';
   return {
     ...inv,
     business: workspaceMeta.business || null,
     paymentEnabled: !!workspaceMeta.paymentEnabled,
+    // Other ways to pay - only while there is something left to pay.
+    manualMethods: unpaid && Array.isArray(workspaceMeta.manualMethods) ? workspaceMeta.manualMethods : [],
   };
 }
 

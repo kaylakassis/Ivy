@@ -162,7 +162,7 @@ export default function PaymentProviderCard() {
         {FLAGS.square && (
             <ProviderRow
               id="square" label="Square"
-              description="Cards + Cash App Pay (US) on Square's hosted checkout."
+              description="Cards and Cash App Pay on Square's hosted checkout."
               provider={providers.square}
               platformReady={platform.squareReady}
               active={data?.active === 'square'}
@@ -177,7 +177,7 @@ export default function PaymentProviderCard() {
         {FLAGS.paypal && (
             <ProviderRow
               id="paypal" label="PayPal"
-              description="PayPal balance, cards, and Venmo (US) on PayPal's hosted checkout."
+              description="PayPal balance, cards, Pay Later and Venmo on PayPal's hosted checkout."
               provider={providers.paypal}
               platformReady={platform.paypalReady}
               active={data?.active === 'paypal'}
@@ -189,6 +189,11 @@ export default function PaymentProviderCard() {
               busy={busy}
             />
         )}
+      </div>
+
+      <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55 }}>
+        Apple Pay, Google Pay and Cash App Pay come through Stripe or Square when they are enabled
+        in that dashboard. Zelle is never a checkout method anywhere; list it under Other ways to get paid instead.
       </div>
 
       {(FLAGS.square || FLAGS.paypal) && (

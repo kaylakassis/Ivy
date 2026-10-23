@@ -108,9 +108,17 @@ export function useInvoices() {
     return r;
   }, [refreshSummary]);
 
+  // Owner says the money the client claimed to send never arrived.
+  // Clears the "says paid" banner; an optional message goes to the client.
+  const clearClaim = useCallback(async (id, message) => {
+    const r = await api.post('/invoices/clear-claim', { id, ...(message ? { message } : {}) });
+    setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
+    return r.invoice;
+  }, []);
+
   return {
     invoices, summary, loading, error,
-    create, update, remove, send, resend, markPaid, void: voidInvoice, refund,
+    create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim,
     hasMore, loadMore, loadingMore,
   };
 }

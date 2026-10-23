@@ -11,6 +11,7 @@ import { fetchBranding } from './branding.js';
 import { celebrateFirstPayment, celebrateRevenueMonthMilestone } from './milestones.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
+import { paidMethodLabel } from './finance.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -47,7 +48,7 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
       branding,
       body: `<p>Hi ${escapeHtml((inv.client_name || '').split(/\s+/)[0] || 'there')},</p>
         <p>Thanks - we received your payment of <strong>${fmtMoney(amount)}</strong> for invoice
-        <strong>${escapeHtml(inv.number)}</strong>${method && method !== 'other' ? ` (paid by ${escapeHtml(method)})` : ''}.</p>
+        <strong>${escapeHtml(inv.number)}</strong>${method && method !== 'other' ? ` (paid by ${escapeHtml(paidMethodLabel(method))})` : ''}.</p>
         <p>This email is your receipt.</p>`,
       footer: `Need anything? Reply to this email to reach ${escapeHtml(business)}.`,
     });

@@ -1598,6 +1598,14 @@ ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_connected_at TIMEST
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_payments_enabled BOOLEAN;
 ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS paypal_environment TEXT;
 
+-- Ways to get paid that no processor handles at checkout (Zelle, Venmo,
+-- Cash App, cash, check). The owner lists how to reach them; the public
+-- invoice page shows the enabled ones and lets the client say "I've sent
+-- it". Nothing moves money through Ivy. Array of
+--   { type: 'zelle'|'venmo'|'cashapp'|'cash'|'check'|'other',
+--     handle: string, note: string, enabled: bool }
+ALTER TABLE finance_settings ADD COLUMN IF NOT EXISTS manual_methods JSONB NOT NULL DEFAULT '[]'::jsonb;
+
 -- Invoices. Line items live in JSONB to keep editing transactional and simple
 -- (each item: { id, description, quantity, rate }).
 CREATE TABLE IF NOT EXISTS invoices (
@@ -1665,6 +1673,15 @@ CREATE INDEX IF NOT EXISTS idx_invoices_stripe_session ON invoices(stripe_sessio
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refunded_amount NUMERIC(12,2) NOT NULL DEFAULT 0;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS refunded_at TIMESTAMPTZ;
+-- "Client says they paid" - set by the public invoice page when the
+-- client taps "I've sent it" for a manual method (Zelle, Venmo, ...).
+-- The owner confirms (mark-paid) or clears it (clear-claim). The
+-- notified_at stamp throttles owner notifications to one per 24h per
+-- invoice however many times the client taps.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_method TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_note TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claim_notified_at TIMESTAMPTZ;
 ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_status_check;
 ALTER TABLE invoices ADD CONSTRAINT invoices_status_check
   CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'voided', 'refunded'));
