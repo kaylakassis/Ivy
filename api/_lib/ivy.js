@@ -983,7 +983,7 @@ ACCOUNT (avatar → "Account settings", bottom-left of sidebar)
 // sent once to the fallback model. 400s and auth errors are not retried:
 // they would fail the same way again. Returns the response plus which
 // model answered, so usage is recorded against the right one.
-const IVY_FALLBACK_MODEL = process.env.IVY_FALLBACK_MODEL || 'claude-sonnet-5-5';
+const IVY_FALLBACK_MODEL = process.env.IVY_FALLBACK_MODEL || 'claude-opus-5-5';
 function isTransientProviderError(err) {
   const status = Number(err?.status) || 0;
   if (status === 429 || status === 529 || (status >= 500 && status < 600)) return true;

@@ -3,20 +3,24 @@
 // Order of precedence:
 //   1. IVY_MODEL env var, when set: an explicit pin (e.g. to hold a version
 //      while testing). Nothing else runs.
-//   2. The newest Opus-family model the account can see, from the Models
+//   2. The newest Sonnet-family model the account can see, from the Models
 //      API (GET /v1/models, sorted by created_at). Cached in memory for six
 //      hours per serverless instance, so the lookup costs nothing per chat.
 //   3. IVY_DEFAULT_MODEL, if the lookup fails or there is no client.
 //
-// Opus is the tier Ivy is tuned for; the Fable/Mythos tier is deliberately
-// excluded (different API behaviour and pricing) - opt in with IVY_MODEL.
-export const IVY_DEFAULT_MODEL = 'claude-opus-5';
+// Sonnet is the tier Ivy runs on (owner decision, Oct 2026: the quality is
+// close to Opus for an assistant that reads live data and runs tools, at
+// well under half the cost, which is what makes 600 messages a month per
+// workspace sustainable). Opus stays as the fallback model in ivy.js. The
+// Fable/Mythos tier is deliberately excluded (different API behaviour and
+// pricing) - opt in with IVY_MODEL.
+export const IVY_DEFAULT_MODEL = 'claude-sonnet-5-5';
 
 const TTL_MS = 6 * 60 * 60 * 1000;
 let cached = null; // { id, at }
 let inflight = null;
 
-const OPUS = /^claude-opus-\d/;
+const TIER = /^claude-sonnet-\d/;
 
 export async function resolveIvyModel(client) {
   const pinned = (process.env.IVY_MODEL || '').trim();
@@ -28,7 +32,7 @@ export async function resolveIvyModel(client) {
     try {
       let best = null;
       for await (const m of client.models.list({ limit: 100 })) {
-        if (!OPUS.test(m.id)) continue;
+        if (!TIER.test(m.id)) continue;
         if (!best || new Date(m.created_at) > new Date(best.created_at)) best = m;
       }
       const id = best?.id || IVY_DEFAULT_MODEL;
