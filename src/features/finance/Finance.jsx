@@ -370,13 +370,13 @@ function InvoicesSection({
         <div>
           {!isMobile && (
             <div style={{
-              display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
+              display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 104px 40px',
               padding: '12px 20px', fontSize: 10.5, letterSpacing: '0.08em', textTransform: 'uppercase',
               fontWeight: 600, color: 'var(--muted)', borderBottom: '1px solid var(--border)',
               background: 'var(--surface-2)',
             }}>
               <div>Number</div><div>Client</div><div>Status</div><div>Issued</div><div>Due</div>
-              <div style={{ textAlign: 'right' }}>Total</div><div/>
+              <div style={{ textAlign: 'right' }}>Total</div><div/><div/>
             </div>
           )}
           {rows.length === 0 ? (
@@ -390,7 +390,7 @@ function InvoicesSection({
               />
             </div>
           ) : rows.map((i, idx) => (
-            <InvoiceRow key={i.id} invoice={i} first={idx === 0} isMobile={isMobile} onOpen={() => setOpenId(i.id)}/>
+            <InvoiceRow key={i.id} invoice={i} first={idx === 0} isMobile={isMobile} onOpen={() => setOpenId(i.id)} onMarkPaid={(method) => markPaid(i.id, method)}/>
           ))}
 
           {/* Load more - only when the server reports a page past
@@ -437,7 +437,59 @@ function InvoicesSection({
   );
 }
 
-function InvoiceRow({ invoice, first, onOpen, isMobile }) {
+// Quick "Mark paid" from the list: a small method picker so an owner who
+// just saw the Venmo / Zelle / cash land can close the invoice without
+// opening it. Clicks stop at the button so the row does not open too.
+const QUICK_METHODS = [
+  ['zelle', 'Zelle'], ['venmo', 'Venmo'], ['cashapp', 'Cash App'], ['cash', 'Cash'],
+  ['check', 'Check'], ['card', 'Card'], ['transfer', 'Bank transfer'], ['other', 'Other'],
+];
+function MarkPaidMenu({ invoice, onMarkPaid, compact }) {
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const ref = React.useRef(null);
+  React.useEffect(() => {
+    if (!open) return undefined;
+    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', close);
+    return () => document.removeEventListener('mousedown', close);
+  }, [open]);
+  const claimed = invoice.paymentClaimedMethod;
+  const options = claimed
+    ? [[claimed, `Confirm ${(QUICK_METHODS.find(([k]) => k === claimed) || [claimed, claimed])[1]}`], ...QUICK_METHODS.filter(([k]) => k !== claimed)]
+    : QUICK_METHODS;
+  const pick = async (method) => {
+    setBusy(true);
+    try { await onMarkPaid(method); setOpen(false); }
+    finally { setBusy(false); }
+  };
+  return (
+    <div ref={ref} style={{ position: 'relative', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
+      <button type="button" className="btn btn-outline" disabled={busy}
+        onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open}
+        style={{ padding: compact ? '5px 10px' : '6px 11px', fontSize: 12, whiteSpace: 'nowrap' }}>
+        {busy ? 'Saving…' : 'Mark paid'}
+      </button>
+      {open && (
+        <div role="menu" className="card" style={{
+          position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 60, minWidth: 170, padding: 6,
+          boxShadow: 'var(--shadow-md, 0 8px 24px rgba(0,0,0,0.18))',
+        }}>
+          <div style={{ fontSize: 10.5, color: 'var(--muted)', padding: '4px 8px 6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Paid by</div>
+          {options.map(([k, label]) => (
+            <button key={k} type="button" role="menuitem" className="btn btn-ghost" onClick={() => pick(k)}
+              style={{ display: 'block', width: '100%', textAlign: 'left', padding: '7px 10px', fontSize: 13, fontWeight: k === claimed ? 600 : 500 }}>
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function InvoiceRow({ invoice, first, onOpen, isMobile, onMarkPaid }) {
+  const canMarkPaid = !!onMarkPaid && (invoice.status === 'sent' || invoice.status === 'overdue');
   const meta = STATUS_META[invoice.status] || STATUS_META.draft;
   // The client tapped "I've sent it" on a manual method and the owner has
   // not confirmed yet. Only meaningful while the invoice is still unpaid.
@@ -487,13 +539,18 @@ function InvoiceRow({ invoice, first, onOpen, isMobile }) {
             {fmtMoney(invoice.total, invoice.currency)}
           </span>
         </div>
+        {canMarkPaid && (
+          <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 2 }}>
+            <MarkPaidMenu invoice={invoice} onMarkPaid={onMarkPaid} compact/>
+          </div>
+        )}
       </div>
     );
   }
 
   return (
     <div onClick={onOpen} style={{
-      display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
+      display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 104px 40px',
       padding: '14px 20px', alignItems: 'center', cursor: 'pointer',
       borderTop: first ? 'none' : '1px solid var(--border)',
       transition: 'background .1s',
@@ -519,6 +576,9 @@ function InvoiceRow({ invoice, first, onOpen, isMobile }) {
       </div>
       <div className="mono-num" style={{ textAlign: 'right', fontSize: 14, fontWeight: 600 }}>
         {fmtMoney(invoice.total, invoice.currency)}
+      </div>
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+        {canMarkPaid && <MarkPaidMenu invoice={invoice} onMarkPaid={onMarkPaid}/>}
       </div>
       <div style={{ textAlign: 'right' }}>
         <Icons.Arrow size={13} stroke="var(--muted)"/>
