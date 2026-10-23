@@ -6,8 +6,9 @@
 // Everything else loads on demand inside <Suspense>; the fallback is a
 // minimal centered spinner so navigation never feels stuck.
 import React, { Suspense, lazy } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { isNative } from './lib/platform.js';
+import Loader from './components/motion/Loader.jsx';
 import AppShell from './components/layout/AppShell.jsx';
 import ViewToggle from './components/ViewToggle.jsx';
 import PWAPrompts from './components/PWAPrompts.jsx';
@@ -93,9 +94,27 @@ const WaitlistPage    = lazy(() => import('./features/auth/WaitlistPage.jsx'));
 // Centered, low-key spinner. Avoids blank-flash but doesn't fight the
 // destination page's own loader for visual real estate. Lives inside
 // the route so it only renders during chunk fetches.
-function RouteFallback() {
+//
+// Inside the business app it shows the branded Loader with a playful line
+// about Ivy getting ready (after a 300ms grace so quick loads never flash).
+// Client-facing pages (portal, booking, invoices...) get the client set of
+// lines; the marketing site and auth pages keep the quiet spinner.
+const OWNER_PREFIXES = ['/dashboard', '/clients', '/calendar', '/finance', '/messages', '/ivy',
+  '/programs', '/marketing', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding'];
+const CLIENT_PREFIXES = ['/me', '/book/', '/invoice/', '/quote/', '/sign/', '/review/', '/site/', '/embed/'];
+function RouteFallback({ client = false }) {
+  const { pathname } = useLocation();
+  const hit = (list) => list.some((p) => pathname === p || pathname.startsWith(p.endsWith('/') ? p : p + '/'));
+  const set = client || hit(CLIENT_PREFIXES) ? 'client' : hit(OWNER_PREFIXES) ? 'owner' : null;
+  if (set) {
+    return (
+      <div className="page-frame page-enter" style={{ minHeight: '60vh', justifyContent: 'center' }}>
+        <Loader set={set}/>
+      </div>
+    );
+  }
   return (
-    <div style={{
+    <div className="page-enter" style={{
       minHeight: '60vh', display: 'flex', alignItems: 'center', justifyContent: 'center',
       color: 'var(--muted)', fontSize: 13,
     }}>
@@ -228,7 +247,7 @@ export default function App() {
     && !isPlatformHost(window.location.host);
   if (onCustomDomain) {
     return (
-      <Suspense fallback={<RouteFallback/>}>
+      <Suspense fallback={<RouteFallback client/>}>
         <ErrorBoundary fallback={({ resetError, error }) => <RouteCrash resetError={resetError} error={error}/>}>
           <Routes>
             <Route path="/book/:slug" element={<PublicBooking />} />

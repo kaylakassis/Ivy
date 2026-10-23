@@ -4,6 +4,8 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import Loader from '../../components/motion/Loader.jsx';
+import { stagger, useFreshKeys, GrowIn } from '../../components/motion/stagger.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useThreads, useThread } from './state.js';
 import { fmtTime, fmtTimestampHeader, computeTimestampPoints } from './utils.js';
@@ -88,7 +90,7 @@ function DirectMessages() {
   };
 
   if (loading) {
-    return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading messages…</div>;
+    return <div style={{ padding: 48 }}><Loader/></div>;
   }
   if (error) {
     return (
@@ -130,7 +132,7 @@ function DirectMessages() {
             <Icons.Plus size={15} sw={2}/>
           </button>
         </div>
-        <div className="scroll" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+        <div className="scroll stagger" style={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
           {threads.length === 0 ? (
             <div style={{ padding: 32, color: 'var(--muted)', fontSize: 13, textAlign: 'center' }}>
               No conversations yet.<br/>
@@ -138,10 +140,10 @@ function DirectMessages() {
                 <Icons.Plus size={13} sw={2}/> Start one
               </button>
             </div>
-          ) : threads.map((t) => {
+          ) : threads.map((t, i) => {
             const active = selectedId === t.id;
             return (
-              <ThreadRow key={t.id} thread={t} active={active}
+              <ThreadRow key={t.id} thread={t} active={active} index={i}
                 onClick={() => setSelectedId(t.id)}/>
             );
           })}
@@ -170,7 +172,7 @@ function DirectMessages() {
   );
 }
 
-function ThreadRow({ thread, active, onClick }) {
+function ThreadRow({ thread, active, onClick, index }) {
   const initials = (thread.clientName || '?').split(' ').map((n) => n[0]).slice(0, 2).join('').toUpperCase();
   return (
     <div onClick={onClick} style={{
@@ -178,6 +180,8 @@ function ThreadRow({ thread, active, onClick }) {
       background: active ? 'var(--surface-2)' : 'transparent',
       borderLeft: `3px solid ${active ? 'var(--accent)' : 'transparent'}`,
       borderBottom: '1px solid var(--border)',
+      transition: 'background-color 150ms var(--ease-out), border-color 150ms var(--ease-out)',
+      ...stagger(index),
     }}>
       <div style={{
         width: 40, height: 40, borderRadius: 12, flexShrink: 0,
@@ -223,6 +227,9 @@ function ThreadRow({ thread, active, onClick }) {
 
 function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBack }) {
   const { thread, messages, loading, error, send, refresh } = useThread(threadId);
+  // Bubbles that arrive after the thread first rendered (just sent, or a
+  // reply that polling brought in) grow in; the baseline resets per thread.
+  const freshMsgIds = useFreshKeys((messages || []).map((m) => m.id), { ready: !loading && !!thread, resetKey: threadId });
   const [input, setInput] = useState('');
   const [sending, setSending] = useState(false);
   const [voiceErr, setVoiceErr] = useState(null);
@@ -261,7 +268,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
   }
 
   if (loading) {
-    return <div style={{ padding: 48, color: 'var(--muted)', fontSize: 13 }}>Loading conversation…</div>;
+    return <div style={{ padding: 48 }}><Loader/></div>;
   }
   if (error || !thread) {
     return (
@@ -416,7 +423,7 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
             const on = thread.mode === m.id;
             return (
               <button key={m.id} onClick={() => onSetMode(thread.id, m.id)}
-                style={{
+                className="seg-btn" style={{
                   padding: '4px 10px', borderRadius: 6,
                   fontSize: 11.5, fontWeight: 550, cursor: 'pointer',
                   background: on ? 'var(--surface)' : 'transparent',
@@ -461,7 +468,9 @@ function ConversationPane({ threadId, onMarkRead, onSetMode, onPatchThread, onBa
                 {fmtTimestampHeader(m.createdAt)}
               </div>
             )}
-            <Bubble message={m} onReport={m.sender === 'client' ? () => openReport(m.id) : null}/>
+            <GrowIn fresh={freshMsgIds.has(m.id)}>
+              <Bubble message={m} onReport={m.sender === 'client' ? () => openReport(m.id) : null}/>
+            </GrowIn>
           </React.Fragment>
         ))}
       </div>

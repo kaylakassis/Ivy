@@ -7,6 +7,7 @@
 import React, { lazy, Suspense } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 
 const Campaigns = lazy(() => import('../campaigns/Campaigns.jsx'));
 const Workflows = lazy(() => import('../workflows/Workflows.jsx'));
@@ -38,7 +39,7 @@ export default function Marketing() {
             const Icon = Icons[t.icon] || Icons.Spark;
             const on = tab === t.id;
             return (
-              <button key={t.id} role="tab" aria-selected={on} onClick={() => pick(t.id)} title={t.hint} style={{
+              <button key={t.id} role="tab" aria-selected={on} onClick={() => pick(t.id)} title={t.hint} className="seg-btn" style={{
                 display: 'inline-flex', alignItems: 'center', gap: 7, padding: '7px 14px', borderRadius: 8, border: 0,
                 fontSize: 13, fontWeight: 600, cursor: 'pointer',
                 background: on ? 'var(--surface)' : 'transparent',
@@ -51,9 +52,13 @@ export default function Marketing() {
           })}
         </div>
       </div>
-      <Suspense fallback={<div className="page-pad" style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>}>
-        <Body key={tab}/>
-      </Suspense>
+      {/* ?tab= changes don't remount the page (see PageTransition); the
+          panel itself crossfades (120ms) by being keyed on the tab id. */}
+      <div key={tab} className="panel-enter">
+        <Suspense fallback={<div className="page-pad"><Loader/></div>}>
+          <Body/>
+        </Suspense>
+      </div>
     </div>
   );
 }

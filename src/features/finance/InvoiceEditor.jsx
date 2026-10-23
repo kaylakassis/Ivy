@@ -4,6 +4,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import CollectInPersonModal from './CollectInPersonModal.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
+import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
+import { useSuccessFlash } from '../../components/motion/useSuccessFlash.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { fireConfetti, haptic } from '../../lib/celebrate.js';
 
@@ -15,7 +17,11 @@ const METHOD_LABELS = {
 };
 const methodLabel = (m) => METHOD_LABELS[m] || m || 'another method';
 
-export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund, onClearClaim }) {
+export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund, onClearClaim }) {
+  // Slide out (140ms) before the parent unmounts us.
+  const { closing, close: onClose } = useAnimatedClose(onCloseNow);
+  // "Save draft" pulses green once when the save lands.
+  const [saveFlash, flashSaved] = useSuccessFlash();
   const [collectOpen, setCollectOpen] = useState(false);
   // "Client says they paid" - set from the public invoice page for Zelle /
   // Venmo / Cash App / cash / check. Owner confirms or clears it here.
@@ -80,16 +86,17 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
         items, taxRate: Number(taxRate), discount: Number(discount),
         issueDate, dueDate: dueDate || null, notes,
       });
+      flashSaved();
     } catch (e) { setErr(e.message || 'Save failed'); }
     finally { setBusy(false); }
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={onClose} className={`motion-backdrop${closing ? ' is-closing' : ''}`} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 110,
       display: 'flex', alignItems: 'stretch', justifyContent: 'flex-end',
     }}>
-      <div onClick={(e) => e.stopPropagation()} className="scroll" style={{
+      <div onClick={(e) => e.stopPropagation()} className="scroll motion-drawer" style={{
         width: '100%', maxWidth: 720, background: 'var(--surface)',
         borderLeft: '1px solid var(--border)',
         display: 'flex', flexDirection: 'column',
@@ -447,7 +454,7 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
               {err && <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</span>}
               {!isLocked && (
                 <>
-                  <button className="btn btn-outline" onClick={save} disabled={busy}>
+                  <button className={`btn btn-outline ${saveFlash}`} onClick={save} disabled={busy}>
                     {busy ? 'Saving…' : 'Save draft'}
                   </button>
                   {invoice.status !== 'paid' && (

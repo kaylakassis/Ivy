@@ -9,6 +9,9 @@ import { useInvoices } from './state.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { useViewport } from '../../lib/viewport.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
+import CountUp from '../../components/motion/CountUp.jsx';
+import Loader from '../../components/motion/Loader.jsx';
+import { stagger } from '../../components/motion/stagger.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
 import ManualMethodsCard from './ManualMethodsCard.jsx';
@@ -159,6 +162,7 @@ export default function Finance() {
         <SkelPageHeader/>
         <SkelStatGrid count={4}/>
         <SkelRowList rows={6}/>
+        <Loader/>
       </div>
     );
   }
@@ -258,7 +262,7 @@ export default function Finance() {
           { id: 'expenses',    label: 'Expenses' },
         ].map(({ id, label }) => (
           <button key={id} onClick={() => setSection(id)}
-            data-section={id} style={{
+            data-section={id} className="seg-btn" style={{
             padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
             background: section === id ? 'var(--surface)' : 'transparent',
             color: section === id ? 'var(--fg)' : 'var(--muted)',
@@ -268,6 +272,11 @@ export default function Finance() {
         ))}
       </div>
 
+      {/* Section switches crossfade the panel (120ms) instead of remounting
+          the page: the wrapper is keyed on the section id. display:contents
+          would have no box to animate, so it's a real flex column that
+          keeps the page's 20px gap between the panel's children. */}
+      <div key={section} className="panel-enter" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
       {section === 'expenses' ? (
         <Expenses/>
       ) : section === 'pos' ? (
@@ -299,6 +308,7 @@ export default function Finance() {
           hasMore={hasMore} loadMore={loadMore} loadingMore={loadingMore}
         />
       )}
+      </div>
     </div>
   );
 }
@@ -316,21 +326,21 @@ function InvoicesSection({
       <PaymentProviderCard/>
       <ManualMethodsCard/>
 
-      {/* Summary cards */}
-      <div className="grid-auto">
-        <SummaryCard label="Outstanding" value={fmtMoney(summary?.totalOutstanding)}
+      {/* Summary cards: rise in with a 25ms stagger; numbers count up once. */}
+      <div className="grid-auto stagger">
+        <SummaryCard label="Outstanding" value={summary?.totalOutstanding} index={0}
           sub={`${counts.sent + counts.overdue} unpaid`}
           icon={<Icons.Clock size={16} sw={1.8}/>}
           tone={summary?.totalOverdue > 0 ? 'warn' : 'neutral'}/>
-        <SummaryCard label="Overdue" value={fmtMoney(summary?.totalOverdue)}
+        <SummaryCard label="Overdue" value={summary?.totalOverdue} index={1}
           sub={`${counts.overdue} past due`}
           icon={<Icons.Bell size={16} sw={1.8}/>}
           tone={summary?.totalOverdue > 0 ? 'bad' : 'ok'}/>
-        <SummaryCard label="Paid this month" value={fmtMoney(summary?.monthPaid)}
+        <SummaryCard label="Paid this month" value={summary?.monthPaid} index={2}
           sub={`${fmtMoney(summary?.yearPaid)} this year`}
           icon={<Icons.Trending size={16} sw={1.8}/>}
           tone="ok"/>
-        <SummaryCard label="Paid (lifetime)" value={fmtMoney(summary?.totalPaid)}
+        <SummaryCard label="Paid (lifetime)" value={summary?.totalPaid} index={3}
           sub={`${counts.paid} paid invoice${counts.paid === 1 ? '' : 's'}`}
           icon={<Icons.Dollar size={16} sw={1.8}/>}
           tone="accent"/>
@@ -367,7 +377,7 @@ function InvoicesSection({
       {/* table-scroll forces a 760px minimum on phones (for real tables);
           the stacked cards don't want it - it made the page scroll sideways. */}
       <div className={isMobile ? 'card' : 'card table-scroll'} style={{ overflow: isMobile ? 'visible' : 'auto' }}>
-        <div>
+        <div className="stagger">
           {!isMobile && (
             <div style={{
               display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
@@ -390,7 +400,7 @@ function InvoicesSection({
               />
             </div>
           ) : rows.map((i, idx) => (
-            <InvoiceRow key={i.id} invoice={i} first={idx === 0} isMobile={isMobile} onOpen={() => setOpenId(i.id)}/>
+            <InvoiceRow key={i.id} invoice={i} first={idx === 0} index={idx} isMobile={isMobile} onOpen={() => setOpenId(i.id)}/>
           ))}
 
           {/* Load more - only when the server reports a page past
@@ -437,7 +447,7 @@ function InvoicesSection({
   );
 }
 
-function InvoiceRow({ invoice, first, onOpen, isMobile }) {
+function InvoiceRow({ invoice, first, onOpen, isMobile, index }) {
   const meta = STATUS_META[invoice.status] || STATUS_META.draft;
   // The client tapped "I've sent it" on a manual method and the owner has
   // not confirmed yet. Only meaningful while the invoice is still unpaid.
@@ -470,7 +480,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile }) {
       <div onClick={onOpen} style={{
         padding: '14px 16px', cursor: 'pointer', minHeight: 44,
         borderTop: first ? 'none' : '1px solid var(--border)',
-        display: 'flex', flexDirection: 'column', gap: 6,
+        display: 'flex', flexDirection: 'column', gap: 6, ...stagger(index),
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="mono-num" style={{ fontSize: 13, fontWeight: 600 }}>{invoice.number}</span>
@@ -496,7 +506,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile }) {
       display: 'grid', gridTemplateColumns: '110px 2fr 110px 130px 130px 130px 40px',
       padding: '14px 20px', alignItems: 'center', cursor: 'pointer',
       borderTop: first ? 'none' : '1px solid var(--border)',
-      transition: 'background .1s',
+      transition: 'background .1s', ...stagger(index),
     }}
       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -527,13 +537,13 @@ function InvoiceRow({ invoice, first, onOpen, isMobile }) {
   );
 }
 
-function SummaryCard({ label, value, sub, icon, tone = 'neutral' }) {
+function SummaryCard({ label, value, sub, icon, tone = 'neutral', index }) {
   const colors = {
     ok: 'var(--ok)', warn: 'var(--warn)', bad: 'var(--danger)',
     accent: 'var(--accent)', neutral: 'var(--muted)',
   };
   return (
-    <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 8 }}>
+    <div className="card" style={{ padding: 18, display: 'flex', flexDirection: 'column', gap: 8, ...stagger(index) }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
         <div style={{
           width: 28, height: 28, borderRadius: 8, background: 'var(--surface-2)',
@@ -544,7 +554,7 @@ function SummaryCard({ label, value, sub, icon, tone = 'neutral' }) {
           lineHeight: 1.3, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
         }}>{label}</div>
       </div>
-      <div className="metric-value" style={{ fontSize: 28 }}>{value}</div>
+      <div className="metric-value" style={{ fontSize: 28 }}><CountUp value={value} format={(n) => fmtMoney(n)}/></div>
       <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>{sub}</div>
     </div>
   );

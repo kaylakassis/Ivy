@@ -24,6 +24,9 @@ import { useIvy } from './state.jsx';
 import { greetingLine, hasBriefing } from './briefing.js';
 import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 import PendingActionCard from './PendingActionCard.jsx';
+import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
+import { stagger } from '../../components/motion/stagger.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 import DictationButton from '../../components/DictationButton.jsx';
 
 const HIDE_PREFIXES = [
@@ -38,6 +41,9 @@ export default function IvyDock() {
   const location = useLocation();
   const navigate = useNavigate();
   const [open, setOpen] = useState(false);
+  // Keep the panel mounted for its 140ms exit (scale-down on desktop,
+  // slide-down on the phone) after `open` flips off.
+  const panelExit = useExitAnimation(open);
   const ivy = useIvy();
   const {
     activeId, messages, context, thinking, error,
@@ -100,9 +106,10 @@ export default function IvyDock() {
           isMobile={isMobile}
         />
       )}
-      {open && (
+      {panelExit.mounted && (
         <Panel
           isMobile={isMobile}
+          closing={panelExit.closing}
           onClose={() => setOpen(false)}
           onExpand={() => { setOpen(false); navigate('/ivy'); }}
           onNewChat={() => { newChat(); }}
@@ -249,7 +256,7 @@ function IvyMark({ size = 22 }) {
 
 // ── Panel ──────────────────────────────────────────────────────────
 
-function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
+function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, suggestions }) {
   const { messages, thinking, send, mode, modeError, context, briefing, activeId, approvePending, dismissPending, usage } = ivy;
   const [draft, setDraft] = useState('');
   const [listening, setListening] = useState(false);
@@ -296,13 +303,15 @@ function Panel({ isMobile, onClose, onExpand, onNewChat, ivy, suggestions }) {
     boxShadow: isMobile ? 'none' : '0 24px 60px rgba(0,0,0,.18), 0 4px 14px rgba(0,0,0,.06)',
     display: 'flex', flexDirection: 'column',
     overflow: 'hidden',
-    animation: isMobile ? 'ivy-dock-slide-up .22s ease' : 'ivy-dock-pop-in .18s ease',
   };
+  // Phone: a bottom sheet (slides up, slides down). Desktop: a modal pop
+  // (scale .96 → 1 with fade). Both close in 140ms via .is-closing.
+  const motionCls = `${isMobile ? 'motion-sheet' : 'motion-modal'}${closing ? ' is-closing' : ''}`;
 
   const showSuggestions = messages.length === 0 && !thinking;
 
   return (
-    <div role="dialog" aria-label="Ivy assistant" style={surface}>
+    <div role="dialog" aria-label="Ivy assistant" className={motionCls} style={surface}>
       {/* Header */}
       <div style={{
         flex: '0 0 auto',
@@ -593,10 +602,12 @@ function SuggestionCard({ suggestion, onPick }) {
 // ── Messages ───────────────────────────────────────────────────────
 
 function MessageList({ messages, thinking, onApprove, onDismiss }) {
+  // .stagger-chat: each bubble fades and rises on mount; a batch (opening a
+  // session) staggers 40ms per bubble for the first ten.
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {messages.map((m) => (
-        <div key={m.id}>
+    <div className="stagger-chat" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      {messages.map((m, i) => (
+        <div key={m.id} style={stagger(i)}>
           <Bubble role={m.role} text={m.text}/>
           {m.pendingActions && m.pendingActions.length > 0 && (
             <PendingActionCard actions={m.pendingActions} busy={thinking}
@@ -632,9 +643,12 @@ function Bubble({ role, text }) {
   );
 }
 
+// Ivy is thinking: three dots breathe (1.2s scale pulse); when a reply is
+// taking a while (>1.2s) the compact loader adds a playful line beneath.
+// Compact because the chat already shows her avatar.
 function ThinkingBubble() {
   return (
-    <div style={{ display: 'flex', justifyContent: 'flex-start' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 6 }}>
       <div style={{
         padding: '10px 14px', borderRadius: '14px 14px 14px 4px',
         background: 'var(--surface)', border: '1px solid var(--border)',
@@ -642,16 +656,17 @@ function ThinkingBubble() {
       }}>
         <Dot delay={0}/><Dot delay={150}/><Dot delay={300}/>
       </div>
+      <Loader compact delay={1200} style={{ paddingLeft: 4 }}/>
     </div>
   );
 }
 
 function Dot({ delay }) {
   return (
-    <span aria-hidden="true" style={{
+    <span aria-hidden="true" className="breathe-dot" style={{
       width: 6, height: 6, borderRadius: 999,
       background: 'var(--muted)',
-      animation: `ivy-dock-dot 1s ${delay}ms infinite ease-in-out`,
+      animationDelay: `${delay}ms`,
     }}/>
   );
 }

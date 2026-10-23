@@ -8,10 +8,14 @@
 import React, { useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
+import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 
 const SOURCES = ['Referral', 'Instagram', 'Website', 'Email', 'Walk-in', 'Other'];
 
-export default function AddClientModal({ onClose, onAdd }) {
+export default function AddClientModal({ onClose: onCloseNow, onAdd }) {
+  // Every close path (backdrop, X, Cancel, Esc) fades the modal out for
+  // 140ms before the parent unmounts it.
+  const { closing, close: onClose } = useAnimatedClose(onCloseNow);
   useEscapeKey(onClose);
   const [name, setName]     = useState('');
   const [email, setEmail]   = useState('');
@@ -55,12 +59,12 @@ export default function AddClientModal({ onClose, onAdd }) {
   };
 
   return (
-    <div onClick={onClose} style={{
+    <div onClick={onClose} className={`motion-backdrop${closing ? ' is-closing' : ''}`} style={{
       position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 120,
       display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
     }}>
       <form onClick={(e) => e.stopPropagation()} onSubmit={submit}
-        className="card" style={{ padding: 28, width: '100%', maxWidth: 460 }}>
+        className="card motion-modal" style={{ padding: 28, width: '100%', maxWidth: 460 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <div style={{
             width: 34, height: 34, borderRadius: 10,

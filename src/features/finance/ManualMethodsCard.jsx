@@ -8,6 +8,7 @@
 // is required when a Zelle / Venmo / Cash App row is on).
 import React, { useEffect, useState, useCallback } from 'react';
 import { Icons } from '../../components/Icons.jsx';
+import { useSuccessFlash } from '../../components/motion/useSuccessFlash.js';
 import { api } from '../../lib/api.js';
 
 const ROWS = [
@@ -25,6 +26,7 @@ function emptyRow(type) {
 export default function ManualMethodsCard() {
   const [rows, setRows]     = useState(null);
   const [saved, setSaved]   = useState(null); // JSON snapshot of last saved state
+  const [btnFlash, flashBtn] = useSuccessFlash(); // Save pulses green once
   const [busy, setBusy]     = useState(false);
   const [err, setErr]       = useState(null);
   const [flash, setFlash]   = useState(false);
@@ -57,6 +59,7 @@ export default function ManualMethodsCard() {
       setRows(next);
       setSaved(JSON.stringify(next));
       setFlash(true);
+      flashBtn();
       setTimeout(() => setFlash(false), 1800);
     } catch (e) {
       setErr(e.message || 'Could not save');
@@ -148,7 +151,7 @@ export default function ManualMethodsCard() {
           Zelle is never a checkout method anywhere. Listing it here is how clients find it.
         </div>
         {flash && <span style={{ fontSize: 12, color: 'var(--ok)' }}>Saved</span>}
-        <button className="btn btn-primary" onClick={save} disabled={busy || !dirty}
+        <button className={`btn btn-primary ${btnFlash}`} onClick={save} disabled={busy || !dirty}
           style={{ fontSize: 12, padding: '6px 14px' }}>
           {busy ? 'Saving…' : 'Save'}
         </button>

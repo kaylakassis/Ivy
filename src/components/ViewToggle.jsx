@@ -119,7 +119,7 @@ function ToggleButton({ active, onClick, icon, label, sub }) {
       background: active ? 'var(--fg)' : 'transparent',
       color: active ? 'var(--page)' : 'var(--fg-2)',
       fontWeight: 600, fontSize: 13, cursor: 'pointer',
-      transition: 'background 0.15s ease',
+      transition: 'background-color 150ms var(--ease-out), color 150ms var(--ease-out)',
     }}>
       {Icon && <Icon size={13} sw={active ? 2 : 1.7}/>}
       {label}

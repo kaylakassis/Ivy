@@ -10,6 +10,8 @@ import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
 import FolderDrawer from './FolderDrawer.jsx';
+import Loader from '../../components/motion/Loader.jsx';
+import { stagger, useFreshKeys, GrowIn } from '../../components/motion/stagger.jsx';
 import { useFolders } from './folders.js';
 import { useViewport } from '../../lib/viewport.js';
 import { api } from '../../lib/api.js';
@@ -172,6 +174,9 @@ export default function Clients() {
 
   const openClient = clients.find((c) => c.id === openId) || null;
   const openFolder = folderState.folders.find((f) => f.id === openFolderId) || null;
+  // Rows that appeared after the first load (a client just created) grow in
+  // live; the ones that were there on load get the list stagger instead.
+  const freshIds = useFreshKeys(clients.map((c) => c.id), { ready: !loading });
 
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -268,7 +273,7 @@ export default function Clients() {
       {/* Table - desktop/tablet keeps the 6-column grid; mobile collapses
           to a stacked card list since six fixed-width columns can't fit
           a phone viewport without horizontal scroll. */}
-      <div className="card" style={{ overflow: 'hidden' }}>
+      <div className="card stagger" style={{ overflow: 'hidden' }}>
         {!isMobile && (
           <div style={{
             display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 118px 110px 40px',
@@ -282,7 +287,7 @@ export default function Clients() {
           </div>
         )}
         {loading ? (
-          <div style={{ padding: 16 }}><SkelRowList rows={8} withAvatar/></div>
+          <div style={{ padding: 16 }}><SkelRowList rows={8} withAvatar/><Loader/></div>
         ) : rows.length === 0 ? (
           <div style={{ padding: 48 }}>
             <EmptyNote
@@ -294,8 +299,8 @@ export default function Clients() {
             />
           </div>
         ) : rows.map((c, i) => (
-          isMobile ? (
-            <ClientCardMobile key={c.id} client={c} first={i === 0}
+          <GrowIn key={c.id} fresh={freshIds.has(c.id)}>{isMobile ? (
+            <ClientCardMobile client={c} first={i === 0} index={i}
               metrics={metricsById[c.id]}
               folders={foldersByClient[c.id]} folderBusy={makingFolderFor === c.id}
               onFolder={() => openClientFolder(c)}
@@ -303,14 +308,14 @@ export default function Clients() {
               onStage={(st) => setStage(c.id, st)}
               onDelete={() => remove(c.id)}/>
           ) : (
-            <ClientRow key={c.id} client={c} first={i === 0}
+            <ClientRow client={c} first={i === 0} index={i}
               metrics={metricsById[c.id]}
               folders={foldersByClient[c.id]} folderBusy={makingFolderFor === c.id}
               onFolder={() => openClientFolder(c)}
               onOpen={() => setOpenId(c.id)}
               onStage={(st) => setStage(c.id, st)}
               onDelete={() => remove(c.id)}/>
-          )
+          )}</GrowIn>
         ))}
 
         {/* Load more - only renders when the server reports a page
@@ -381,7 +386,7 @@ export default function Clients() {
   );
 }
 
-function ClientRow({ client, first, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
+function ClientRow({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
 
@@ -390,7 +395,7 @@ function ClientRow({ client, first, metrics, folders, folderBusy, onFolder, onOp
       display: 'grid', gridTemplateColumns: '1.6fr 100px 1fr 120px 118px 110px 40px',
       padding: '14px 20px', alignItems: 'center', gap: 8,
       borderTop: first ? 'none' : '1px solid var(--border)',
-      cursor: 'pointer', transition: 'background .1s',
+      cursor: 'pointer', transition: 'background .1s', ...stagger(index),
     }}
       onMouseEnter={(e) => (e.currentTarget.style.background = 'var(--surface-2)')}
       onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
@@ -515,7 +520,7 @@ function MetricChip({ label, tone, title }) {
 // Mobile variant - same data, stacked vertically. Two visible lines
 // (avatar+name+email, stage chip + last seen + lifetime) so the phone
 // shows enough to triage clients without horizontal scroll.
-function ClientCardMobile({ client, first, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
+function ClientCardMobile({ client, first, index, metrics, folders, folderBusy, onFolder, onOpen, onStage, onDelete }) {
   const initials = (client?.name || '').split(' ').map((n) => n[0]).filter(Boolean).slice(0, 2).join('').toUpperCase() || '?';
   const lastSeen = timeAgo(client.lastSeenAt);
   return (
@@ -525,7 +530,7 @@ function ClientCardMobile({ client, first, metrics, folders, folderBusy, onFolde
         padding: '14px 16px',
         borderTop: first ? 'none' : '1px solid var(--border)',
         cursor: 'pointer',
-        display: 'flex', alignItems: 'center', gap: 12,
+        display: 'flex', alignItems: 'center', gap: 12, ...stagger(index),
       }}
     >
       <div style={{

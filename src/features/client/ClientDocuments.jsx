@@ -5,6 +5,7 @@ import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { SkelRowList } from '../../components/Skeleton.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 import { api } from '../../lib/api.js';
 
 const STATUS_META = {
@@ -52,6 +53,7 @@ export default function ClientDocuments() {
   if (loading) return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 18 }}>
       <SkelRowList rows={4}/>
+      <Loader set="client"/>
     </div>
   );
   if (error) return (

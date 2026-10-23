@@ -3,9 +3,13 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useEscapeKey } from '../../lib/useEscapeKey.js';
+import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 
-export default function Drawer({ title, subtitle, onClose, children, width = 460, inline = false }) {
-  useEscapeKey(onClose || (() => {}), !inline);
+export default function Drawer({ title, subtitle, onClose: onCloseNow, children, width = 460, inline = false }) {
+  // Overlay mode slides out (140ms) before the parent unmounts us. The
+  // hook is unconditional (rules of hooks); inline mode never calls it.
+  const { closing, close: onClose } = useAnimatedClose(onCloseNow || (() => {}));
+  useEscapeKey(onClose, !inline);
   // Inline mode: same content, rendered as a normal in-flow block (no
   // portal, no overlay, no close button). Used when the drawer's
   // content is hosted inside a page section instead of as an overlay
@@ -35,10 +39,10 @@ export default function Drawer({ title, subtitle, onClose, children, width = 460
   // report. Portaling guarantees viewport-relative fixed positioning.
   return createPortal((
     <>
-      <div onClick={onClose} style={{
+      <div onClick={onClose} className={`motion-backdrop${closing ? ' is-closing' : ''}`} style={{
         position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.35)', zIndex: 95,
       }}/>
-      <div style={{
+      <div className={`motion-drawer${closing ? ' is-closing' : ''}`} style={{
         position: 'fixed', right: 0, top: 0, bottom: 0,
         // Cap width to viewport on phones so the drawer never extends
         // past the screen edge. On desktop (>460px wide) it stays

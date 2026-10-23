@@ -175,15 +175,13 @@ function Switch({ checked, disabled, onChange }) {
         background: checked ? 'var(--accent)' : 'var(--border-strong)',
         border: 0, padding: 2,
         cursor: disabled ? 'wait' : 'pointer',
-        transition: 'background 0.15s ease',
         opacity: disabled ? 0.6 : 1,
       }}>
-      <span style={{
+      <span className="switch-thumb" style={{
         display: 'block',
         width: 18, height: 18, borderRadius: 999,
         background: '#fff',
         transform: checked ? 'translateX(14px)' : 'translateX(0)',
-        transition: 'transform 0.15s ease',
         boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
       }}/>
     </button>

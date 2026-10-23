@@ -1013,6 +1013,24 @@ function NotificationPrefs() {
   );
 }
 
+// Brief "Saved" that fades in (shared enter animation) each time a field
+// autosave lands, then clears itself after 1.8s.
+function SavedHint({ tick }) {
+  const [show, setShow] = useState(false);
+  useEffect(() => {
+    if (!tick) return undefined;
+    setShow(true);
+    const t = setTimeout(() => setShow(false), 1800);
+    return () => clearTimeout(t);
+  }, [tick]);
+  if (!show) return null;
+  return (
+    <div key={tick} className="page-enter" style={{ fontSize: 11.5, color: 'var(--ok)', marginTop: 6, fontWeight: 600 }}>
+      Saved
+    </div>
+  );
+}
+
 // Tiny iOS-style toggle. Inline-styled because we already have a few
 // in the app and another generic component is not worth it.
 function Switch({ checked, disabled, onChange }) {
@@ -1025,15 +1043,13 @@ function Switch({ checked, disabled, onChange }) {
         background: checked ? 'var(--accent)' : 'var(--border-strong)',
         border: 0, padding: 2,
         cursor: disabled ? 'wait' : 'pointer',
-        transition: 'background 0.15s ease',
         opacity: disabled ? 0.6 : 1,
       }}>
-      <span style={{
+      <span className="switch-thumb" style={{
         display: 'block',
         width: 18, height: 18, borderRadius: 999,
         background: '#fff',
         transform: checked ? 'translateX(14px)' : 'translateX(0)',
-        transition: 'transform 0.15s ease',
         boxShadow: '0 1px 2px rgba(0,0,0,0.15)',
       }}/>
     </button>
@@ -1341,6 +1357,7 @@ function BrandingCard() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState(null);
   const [savingField, setSavingField] = useState(null);
+  const [savedTick, setSavedTick] = useState(0); // bumps when a field save lands → brief "Saved"
   const [uploading, setUploading] = useState(false);
 
   // Local edit buffers so we can save on blur instead of every keystroke.
@@ -1368,6 +1385,7 @@ function BrandingCard() {
     try {
       const r = await api.patch('/account/branding', patch);
       setData(r.branding);
+      setSavedTick(Date.now());
     } catch (e) { setErr(e); }
     finally { setSavingField(null); }
   };
@@ -1503,8 +1521,10 @@ function BrandingCard() {
         </div>
       </div>
 
-      {savingField && (
+      {savingField ? (
         <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 6 }}>Saving…</div>
+      ) : (
+        <SavedHint tick={savedTick}/>
       )}
       {err && (
         <div style={{

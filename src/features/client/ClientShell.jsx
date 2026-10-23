@@ -14,6 +14,7 @@ import { useViewport } from '../../lib/viewport.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useClientPortal, ClientPortalProvider } from './clientContext.jsx';
 import { ViewSwitch } from '../../components/ViewToggle.jsx';
+import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
 
 // Sections mirror the business sidebar's RUN / MONEY / GROW grouping so
 // toggling between views feels like the same product, not two apps.
@@ -43,6 +44,8 @@ function ClientShellInner() {
   const { data, loading } = useClientPortal();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
+  // Keep the drawer mounted for its 140ms slide-out (.is-closing).
+  const drawerExit = useExitAnimation(viewport.isMobile && drawerOpen);
 
   useEffect(() => {
     document.body.classList.remove('dir-calm', 'dir-bold');
@@ -77,15 +80,18 @@ function ClientShellInner() {
         }}>
           <VerifyEmailBanner/>
           <ClientTopbar isMobile={viewport.isMobile} onMenuClick={() => setDrawerOpen(true)} data={data}/>
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
+          {/* Keyed on the path so each portal page fades in while rising
+              (.page-enter in global.css). Enter-only: no exit animation, so
+              pages that fetch on mount never double-render. */}
+          <div key={location.pathname} className="page-frame page-enter">
             <Outlet/>
           </div>
         </main>
       </div>
 
       {viewport.isMobile && <ClientMobileNav/>}
-      {viewport.isMobile && drawerOpen && (
-        <ClientMobileDrawer direction={tweaks.direction} data={data}
+      {drawerExit.mounted && (
+        <ClientMobileDrawer direction={tweaks.direction} data={data} closing={drawerExit.closing}
           onClose={() => setDrawerOpen(false)}/>
       )}
       <TermsAcceptModal/>
@@ -335,7 +341,7 @@ function ClientMobileNav() {
   );
 }
 
-function ClientMobileDrawer({ direction, data, onClose }) {
+function ClientMobileDrawer({ direction, data, onClose, closing = false }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   useEffect(() => {
@@ -351,8 +357,8 @@ function ClientMobileDrawer({ direction, data, onClose }) {
 
   return (
     <>
-      <div className="mobile-drawer-backdrop" onClick={onClose}/>
-      <aside className="mobile-drawer">
+      <div className={`mobile-drawer-backdrop${closing ? ' is-closing' : ''}`} onClick={onClose}/>
+      <aside className={`mobile-drawer${closing ? ' is-closing' : ''}`}>
         <div style={{ padding: '18px 16px 12px', display: 'flex', alignItems: 'center', gap: 10 }}>
           <BrandMark direction={direction} compact={false}/>
           <button onClick={onClose} aria-label="Close menu"

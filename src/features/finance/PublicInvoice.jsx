@@ -7,6 +7,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
+import Loader from '../../components/motion/Loader.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
@@ -149,7 +150,7 @@ export default function PublicInvoice() {
   };
 
   if (loading) {
-    return <PageWrap tweaks={tweaks}><div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div></PageWrap>;
+    return <PageWrap tweaks={tweaks}><Loader set="client"/></PageWrap>;
   }
   // Post-payment success - render even if the (now-paid) invoice link no
   // longer loads. We confirmed the payment server-side above.
