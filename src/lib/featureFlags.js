@@ -25,7 +25,11 @@ export const FLAGS = {
   // them everywhere.
   // Extra client-payment processors on the Finance page. Each has its own
   // switch; the old combined SQUARE_PAYPAL switch still turns both on.
-  squarePaypal: envFlag('SQUARE_PAYPAL', false),
-  paypal: envFlag('PAYPAL', false) || envFlag('SQUARE_PAYPAL', false),
-  square: envFlag('SQUARE', false) || envFlag('SQUARE_PAYPAL', false),
+  // On by default: the Finance page shows PayPal and Square next to Stripe.
+  // Until the platform credentials are set, each card explains that it is
+  // not available yet instead of offering Connect. Set the flag to false to
+  // hide one entirely.
+  squarePaypal: envFlag('SQUARE_PAYPAL', true),
+  paypal: envFlag('PAYPAL', true),
+  square: envFlag('SQUARE', true),
 };
