@@ -1,15 +1,16 @@
 // /api/invoice-view/:token  (public, no auth)
 //   GET   → public invoice payload (only if status='sent' or 'overdue')
-//   POST  → optional "I've paid" confirmation. Doesn't actually settle the
-//           invoice; the live pay flow is /api/invoice-pay/[token] (Stripe/
-//           Square/PayPal). This POST records a soft "client says paid"
-//           the owner sees, so they can reconcile.
+//   POST  → "I've paid" claim. Doesn't settle the invoice; the live pay
+//           flow is /api/invoice-pay/[token] (Stripe/Square/PayPal). This
+//           records "client says paid" + notifies the owner, the same way
+//           /api/invoice-pay/claim does for Zelle / Venmo / Cash App.
 //
 // Token is sha256-hashed before lookup.
 import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
-import { serializeInvoicePublic } from '../_lib/finance.js';
+import { serializeInvoicePublic, fetchEnabledManualMethods } from '../_lib/finance.js';
+import { recordPaymentClaim } from '../_lib/paymentClaims.js';
 import { reconcileStripeInvoice } from '../_lib/invoicePayments.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -116,11 +117,12 @@ async function getInvoice(req, res) {
       await sql`UPDATE invoices SET activity = ${JSON.stringify(next)}::jsonb WHERE id = ${inv.id}`;
     }
 
-    const [business, paymentEnabled] = await Promise.all([
+    const [business, paymentEnabled, manualMethods] = await Promise.all([
       loadBusinessMeta(inv.workspace_id),
       isPaymentReady(inv.workspace_id),
+      fetchEnabledManualMethods(inv.workspace_id),
     ]);
-    return ok(res, { invoice: serializeInvoicePublic(inv, { business, paymentEnabled }) });
+    return ok(res, { invoice: serializeInvoicePublic(inv, { business, paymentEnabled, manualMethods }) });
   } catch (err) {
     return serverError(res, err);
   }
@@ -139,20 +141,11 @@ async function submitMarkPaid(req, res) {
     if (!inv) return notFound(res, 'This invoice link is invalid or has expired.');
 
     const body = await readBody(req);
-    const note = body.note ? String(body.note).slice(0, 280) : '';
-
-    const newActivity = [
-      ...(inv.activity || []),
-      {
-        ts: new Date().toISOString(),
-        kind: 'client-marked-paid',
-        text: `${inv.client_name || 'Recipient'} marked this invoice as paid${note ? ` - "${note}"` : ''}`,
-      },
-    ];
-    await sql`
-      UPDATE invoices SET activity = ${JSON.stringify(newActivity)}::jsonb WHERE id = ${inv.id}
-    `;
-    return ok(res, { ok: true });
+    // Legacy soft "I've paid" - same path as /api/invoice-pay/claim so the
+    // owner is notified and sees the banner either way.
+    const result = await recordPaymentClaim({ inv, method: body.method || 'other', note: body.note });
+    if (!result) return notFound(res, 'This invoice was already paid - thank you!');
+    return ok(res, { ok: true, claimedAt: result.claimedAt, method: result.method });
   } catch (err) {
     return serverError(res, err);
   }

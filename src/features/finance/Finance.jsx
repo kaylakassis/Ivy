@@ -11,6 +11,7 @@ import { useViewport } from '../../lib/viewport.js';
 import InvoiceEditor from './InvoiceEditor.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
+import ManualMethodsCard from './ManualMethodsCard.jsx';
 import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
@@ -34,7 +35,7 @@ const STATUS_META = {
 export default function Finance() {
   const {
     invoices, summary, loading, error,
-    create, update, remove, send, resend, markPaid, void: voidInvoice, refund,
+    create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim,
     hasMore, loadMore, loadingMore,
   } = useInvoices();
 
@@ -294,7 +295,7 @@ export default function Finance() {
           openInv={openInv} sendingInv={sendingInv}
           setOpenId={setOpenId} setSending={setSending}
           update={update} remove={remove} send={send} resend={resend}
-          markPaid={markPaid} voidInvoice={voidInvoice} refund={refund}
+          markPaid={markPaid} voidInvoice={voidInvoice} refund={refund} clearClaim={clearClaim}
           hasMore={hasMore} loadMore={loadMore} loadingMore={loadingMore}
         />
       )}
@@ -304,7 +305,7 @@ export default function Finance() {
 
 function InvoicesSection({
   invoices, summary, counts, rows, tab, setTab, openInv, sendingInv,
-  setOpenId, setSending, update, remove, send, resend, markPaid, voidInvoice, refund,
+  setOpenId, setSending, update, remove, send, resend, markPaid, voidInvoice, refund, clearClaim,
   hasMore, loadMore, loadingMore,
 }) {
   // On phones the 7-column invoice grid forces sideways scrolling to see
@@ -313,6 +314,7 @@ function InvoicesSection({
   return (
     <>
       <PaymentProviderCard/>
+      <ManualMethodsCard/>
 
       {/* Summary cards */}
       <div className="grid-auto">
@@ -421,6 +423,7 @@ function InvoicesSection({
           onMarkPaid={(method) => markPaid(openInv.id, method)}
           onVoid={() => voidInvoice(openInv.id)}
           onRefund={(args) => refund(openInv.id, args)}
+          onClearClaim={(message) => clearClaim(openInv.id, message)}
         />
       )}
       {sendingInv && (
@@ -436,13 +439,27 @@ function InvoicesSection({
 
 function InvoiceRow({ invoice, first, onOpen, isMobile }) {
   const meta = STATUS_META[invoice.status] || STATUS_META.draft;
+  // The client tapped "I've sent it" on a manual method and the owner has
+  // not confirmed yet. Only meaningful while the invoice is still unpaid.
+  const saysPaid = !!invoice.paymentClaimedAt && (invoice.status === 'sent' || invoice.status === 'overdue');
+  const saysPaidPill = saysPaid ? (
+    <span title="The client says they paid. Open to confirm." style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
+      fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
+      background: 'var(--accent-soft)', border: '1px solid var(--accent)', color: 'var(--fg)',
+      whiteSpace: 'nowrap',
+    }}>Says paid</span>
+  ) : null;
   const statusPill = (
-    <span style={{
-      display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 99,
-      fontSize: 11, fontWeight: 600,
-      background: 'var(--surface-2)', border: '1px solid var(--border)', color: meta.color,
-    }}>
-      <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
+    <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+      <span style={{
+        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 99,
+        fontSize: 11, fontWeight: 600,
+        background: 'var(--surface-2)', border: '1px solid var(--border)', color: meta.color,
+      }}>
+        <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
+      </span>
+      {saysPaidPill}
     </span>
   );
 
@@ -493,13 +510,7 @@ function InvoiceRow({ invoice, first, onOpen, isMobile }) {
           {invoice.clientEmail || (invoice.items?.[0]?.description || '-')}
         </div>
       </div>
-      <span style={{
-        display: 'inline-flex', alignItems: 'center', gap: 5, padding: '2px 10px', borderRadius: 99,
-        fontSize: 11, fontWeight: 600,
-        background: 'var(--surface-2)', border: '1px solid var(--border)', color: meta.color,
-      }}>
-        <span style={{ width: 5, height: 5, borderRadius: 99, background: meta.color }}/>{meta.label}
-      </span>
+      <div>{statusPill}</div>
       <div style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
         {invoice.issueDate ? new Date(invoice.issueDate).toLocaleDateString() : '-'}
       </div>

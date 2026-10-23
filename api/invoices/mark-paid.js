@@ -8,7 +8,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
-  fetchOwnedInvoice, serializeInvoice, computeTotals, VALID_PAID_METHOD,
+  fetchOwnedInvoice, serializeInvoice, computeTotals, VALID_PAID_METHOD, paidMethodLabel,
 } from '../_lib/finance.js';
 import { notifyInvoicePaid } from '../_lib/invoiceNotify.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -38,7 +38,7 @@ export default async function handler(req, res) {
     const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
     const newActivity = [
       ...(inv.activity || []),
-      { ts: new Date().toISOString(), kind: 'paid', text: `Paid by ${method} · ${fmtMoney(totals.total)}` },
+      { ts: new Date().toISOString(), kind: 'paid', text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(totals.total)}` },
     ];
 
     // Race-safe flip: two concurrent owner clicks ("did the second click

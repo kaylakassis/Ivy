@@ -1,14 +1,40 @@
 // /invoice/:token - public invoice view (no login required).
 // Shows the invoice with line items + total. When the issuing workspace has
-// Stripe wired up (paymentEnabled flag from the API), shows a "Pay with card"
-// button that creates a Checkout Session and redirects. Otherwise falls back
-// to the soft "I've paid" confirmation flow.
+// a processor wired up (paymentEnabled flag from the API), shows a "Pay with
+// card" button that creates a checkout session and redirects. Below that,
+// "Other ways to pay" lists the owner's Zelle / Venmo / Cash App / cash /
+// check details with an "I've sent it" tap that tells the owner to confirm.
 import React, { useEffect, useState } from 'react';
 import { useParams, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
+
+const MANUAL_LABELS = { zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', cash: 'Cash', check: 'Check', other: 'Other' };
+const manualLabel = (t) => MANUAL_LABELS[t] || 'Other';
+
+// App deep links for the two methods that have one. Venmo opens the app
+// with the recipient, amount and note filled in; Cash App uses its web
+// pay link (which hands off to the app on a phone). Zelle has no public
+// link scheme, so it is copy-only.
+function deepLinkFor(method, amount, invoiceNumber) {
+  const handle = String(method.handle || '').trim();
+  if (!handle) return null;
+  const amt = Number(amount || 0).toFixed(2);
+  if (method.type === 'venmo') {
+    const user = handle.replace(/^@/, '');
+    return {
+      href: `venmo://paycharge?txn=pay&recipients=${encodeURIComponent(user)}&amount=${amt}&note=${encodeURIComponent(`Invoice ${invoiceNumber}`)}`,
+      label: 'Open Venmo',
+    };
+  }
+  if (method.type === 'cashapp') {
+    const tag = handle.replace(/^\$/, '');
+    return { href: `https://cash.app/$${encodeURIComponent(tag)}/${amt}`, label: 'Open Cash App' };
+  }
+  return null;
+}
 
 export default function PublicInvoice() {
   const { token } = useParams();
@@ -24,9 +50,15 @@ export default function PublicInvoice() {
   const [inv, setInv]         = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
-  const [submitted, setSubmitted] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
+  // "I've sent it" state. `claimed` holds the method the client told the
+  // owner about (from this visit or an earlier one); `submitting` is the
+  // method currently posting. `changing` re-opens the per-row buttons so
+  // a client who paid a different way can say so.
+  const [claimed, setClaimed]       = useState(null);
+  const [submitting, setSubmitting] = useState(null);
+  const [changing, setChanging]     = useState(false);
   const [markPaidErr, setMarkPaidErr] = useState(null);
+  const [copied, setCopied]       = useState(null);
   const [paying, setPaying]       = useState(false);
   const [payErr, setPayErr]       = useState(null);
 
@@ -51,7 +83,10 @@ export default function PublicInvoice() {
           throw Object.assign(new Error(j.error || `HTTP ${res.status}`), { status: res.status });
         }
         const r = await res.json();
-        if (live) setInv(r.invoice);
+        if (live) {
+          setInv(r.invoice);
+          if (r.invoice?.paymentClaimedAt) setClaimed({ method: r.invoice.paymentClaimedMethod || 'other' });
+        }
       } catch (e) {
         // After a successful payment the invoice is marked paid and its link
         // is consumed, so invoice-view 404s - that's expected; the paid
@@ -64,24 +99,35 @@ export default function PublicInvoice() {
     return () => { live = false; };
   }, [token, paidFlag]);
 
-  const markPaid = async () => {
-    setSubmitting(true);
+  // Tell the owner "I've sent it" by this method. Idempotent on the
+  // server; a second tap just updates the method.
+  const claim = async (method = 'other') => {
+    setSubmitting(method);
     setMarkPaidErr(null);
     try {
-      const res = await fetch('/api/invoice-view/' + encodeURIComponent(token), {
+      const res = await fetch('/api/invoice-pay/claim', {
         method: 'POST',
         credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ token, method }),
       });
-      // Don't claim success on a failed request — the seller never got
+      // Don't claim success on a failed request. The owner never got
       // notified, so telling the payer "thanks" would be a lie.
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      setSubmitted(true);
+      setClaimed({ method });
+      setChanging(false);
     } catch {
-      setMarkPaidErr('Could not notify the sender — please try again.');
+      setMarkPaidErr('Could not notify the sender. Please try again.');
     }
-    finally { setSubmitting(false); }
+    finally { setSubmitting(null); }
+  };
+
+  const copyHandle = async (type, text) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(type);
+      setTimeout(() => setCopied((c) => (c === type ? null : c)), 1600);
+    } catch { /* clipboard blocked - the handle is still on screen */ }
   };
 
   const payWithCard = async () => {
@@ -138,6 +184,30 @@ export default function PublicInvoice() {
   // Currency-aware formatter scoped to this invoice. Falls back to
   // USD on legacy rows that predate the invoices.currency column.
   const fmtMoney = makeFmt(inv.currency);
+  const remaining = Math.max(0, inv.total - (Number(inv.paidAmount) || 0));
+  const manualMethods = Array.isArray(inv.manualMethods) ? inv.manualMethods : [];
+  const businessName = inv.business?.name || 'The business';
+  const showClaimThanks = !!claimed && !changing;
+
+  const thanksBlock = (
+    <div>
+      <div style={{
+        width: 44, height: 44, borderRadius: 99, background: 'var(--ok)', color: '#fff',
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+      }}><Icons.Check size={22} sw={2.4}/></div>
+      <div style={{ fontSize: 14, fontWeight: 600 }}>Thanks. {businessName} will confirm and you'll get a receipt.</div>
+      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+        You told them you paid{claimed?.method && claimed.method !== 'other' ? ` by ${manualLabel(claimed.method)}` : ''}.{' '}
+        <button onClick={() => setChanging(true)}
+          style={{
+            background: 'transparent', border: 0, padding: 0,
+            color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 12,
+          }}>
+          Paid a different way?
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <PageWrap tweaks={tweaks}>
@@ -270,21 +340,12 @@ export default function PublicInvoice() {
               {inv.business?.name || 'The sender'} will get a confirmation as soon as the payment processor confirms the charge.
             </div>
           </div>
-        ) : submitted ? (
-          <div>
-            <div style={{
-              width: 44, height: 44, borderRadius: 99, background: 'var(--ok)', color: '#fff',
-              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
-            }}><Icons.Check size={22} sw={2.4}/></div>
-            <div style={{ fontSize: 14, fontWeight: 600 }}>Thanks - we'll let {inv.business?.name || 'them'} know.</div>
-            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
-              They'll reconcile and mark this invoice paid on their side.
-            </div>
-          </div>
+        ) : showClaimThanks ? (
+          thanksBlock
         ) : inv.paymentEnabled ? (
           <>
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginBottom: 12, lineHeight: 1.55 }}>
-              Pay <strong>{fmtMoney(Math.max(0, inv.total - (Number(inv.paidAmount) || 0)))}</strong> by card.
+              Pay <strong>{fmtMoney(remaining)}</strong> by card.
               You'll be taken to a secure checkout - your card details never touch our servers.
             </div>
             {cancelledFlag && (
@@ -311,27 +372,34 @@ export default function PublicInvoice() {
             )}
             <button className="btn btn-primary" onClick={payWithCard} disabled={paying}
               style={{ padding: '12px 22px', minWidth: 220, justifyContent: 'center' }}>
-              {paying ? 'Redirecting…' : `Pay ${fmtMoney(Math.max(0, inv.total - (Number(inv.paidAmount) || 0)))} with card`}
+              {paying ? 'Redirecting…' : `Pay ${fmtMoney(remaining)} with card`}
               {!paying && <Icons.Arrow size={14} sw={2.2}/>}
             </button>
-            <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>
-              Already paid by another method?{' '}
-              <button onClick={markPaid} disabled={submitting}
-                style={{
-                  background: 'transparent', border: 0, padding: 0,
-                  color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11,
-                }}>
-                {submitting ? 'Sending…' : 'Let them know'}
-              </button>
-            </div>
+            {manualMethods.length === 0 && (
+              <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>
+                Already paid by another method?{' '}
+                <button onClick={() => claim('other')} disabled={!!submitting}
+                  style={{
+                    background: 'transparent', border: 0, padding: 0,
+                    color: 'var(--accent)', textDecoration: 'underline', cursor: 'pointer', fontSize: 11,
+                  }}>
+                  {submitting ? 'Sending…' : 'Let them know'}
+                </button>
+              </div>
+            )}
           </>
+        ) : manualMethods.length > 0 ? (
+          <div style={{ fontSize: 13.5, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+            Card payment isn't set up on this invoice. Pay <strong>{fmtMoney(remaining)}</strong> one
+            of the ways below, then tap <strong>I've sent it</strong> so {businessName} knows to look for it.
+          </div>
         ) : (
           <>
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginBottom: 12, lineHeight: 1.55 }}>
               Online payment isn't enabled on this invoice yet.<br/>
               When you've paid (cash, transfer, etc.), let the sender know with one tap.
             </div>
-            <button className="btn btn-primary" onClick={markPaid} disabled={submitting}
+            <button className="btn btn-primary" onClick={() => claim('other')} disabled={!!submitting}
               style={{ padding: '12px 22px', minWidth: 200, justifyContent: 'center' }}>
               {submitting ? 'Sending…' : "I've paid this invoice"}
               {!submitting && <Icons.Check size={14} sw={2.2}/>}
@@ -342,6 +410,80 @@ export default function PublicInvoice() {
           <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--danger)' }}>{markPaidErr}</div>
         )}
       </div>
+
+      {/* Other ways to pay - the owner's Zelle / Venmo / Cash App / cash /
+          check details. Nothing here is processed by Ivy; the client pays
+          in that app and taps "I've sent it" so the owner can confirm. */}
+      {!paidFlag && manualMethods.length > 0 && (
+        <div className="card print-hide" style={{ padding: 24, marginTop: 16 }}>
+          <div className="metric-label" style={{ marginBottom: 4 }}>Other ways to pay</div>
+          <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5, marginBottom: 14 }}>
+            {showClaimThanks
+              ? `You've told ${businessName} you paid. They'll confirm on their side.`
+              : `Send ${fmtMoney(remaining)} to ${businessName} with any of these, then tap I've sent it.`}
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {manualMethods.map((m) => {
+              const link = deepLinkFor(m, remaining, inv.number);
+              const isSent = claimed?.method === m.type;
+              return (
+                <div key={m.type} style={{
+                  padding: '12px 14px', borderRadius: 12,
+                  border: '1px solid ' + (isSent ? 'var(--ok)' : 'var(--border)'),
+                  background: 'var(--surface-2)',
+                  display: 'flex', flexDirection: 'column', gap: 8,
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                    <div style={{ flex: 1, minWidth: 160 }}>
+                      <div style={{ fontSize: 13.5, fontWeight: 600 }}>{manualLabel(m.type)}</div>
+                      {m.handle && (
+                        <div className="mono-num" style={{ fontSize: 13, color: 'var(--fg-2)', wordBreak: 'break-all', marginTop: 2 }}>
+                          {m.handle}
+                        </div>
+                      )}
+                      {m.note && (
+                        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2, lineHeight: 1.45 }}>{m.note}</div>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      {m.handle && (
+                        <button type="button" className="btn btn-outline"
+                          onClick={() => copyHandle(m.type, m.handle)}
+                          style={{ fontSize: 12, padding: '6px 10px', gap: 6 }}>
+                          <Icons.Copy size={12}/> {copied === m.type ? 'Copied' : 'Copy'}
+                        </button>
+                      )}
+                      {link && (
+                        <a className="btn btn-outline" href={link.href} target="_blank" rel="noopener noreferrer"
+                          style={{ fontSize: 12, padding: '6px 10px', textDecoration: 'none' }}>
+                          {link.label}
+                        </a>
+                      )}
+                      {isSent && showClaimThanks ? (
+                        <span style={{
+                          alignSelf: 'center', fontSize: 12, fontWeight: 600, color: 'var(--ok)',
+                          display: 'inline-flex', alignItems: 'center', gap: 4,
+                        }}><Icons.Check size={12} sw={2.4}/> Sent</span>
+                      ) : !showClaimThanks && (
+                        <button type="button" className="btn btn-primary"
+                          onClick={() => claim(m.type)} disabled={!!submitting}
+                          style={{ fontSize: 12, padding: '6px 12px' }}>
+                          {submitting === m.type ? 'Sending…' : "I've sent it"}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+          {showClaimThanks && (
+            <div style={{ marginTop: 12, fontSize: 12, color: 'var(--muted)' }}>
+              Thanks. {businessName} will confirm and you'll get a receipt.
+            </div>
+          )}
+        </div>
+      )}
     </PageWrap>
   );
 }

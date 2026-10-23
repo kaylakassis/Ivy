@@ -7,8 +7,24 @@ import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { fireConfetti, haptic } from '../../lib/celebrate.js';
 
-export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund }) {
+// Labels for paid_method / payment_claimed_method values. Mirrors
+// PAID_METHOD_LABELS in api/_lib/finance.js.
+const METHOD_LABELS = {
+  card: 'card', ach: 'ACH', cash: 'cash', check: 'check', transfer: 'bank transfer',
+  zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', paypal: 'PayPal', other: 'another method',
+};
+const methodLabel = (m) => METHOD_LABELS[m] || m || 'another method';
+
+export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onResend, onMarkPaid, onVoid, onDelete, onRefund, onClearClaim }) {
   const [collectOpen, setCollectOpen] = useState(false);
+  // "Client says they paid" - set from the public invoice page for Zelle /
+  // Venmo / Cash App / cash / check. Owner confirms or clears it here.
+  const claim = invoice.paymentClaimedAt && (invoice.status === 'sent' || invoice.status === 'overdue')
+    ? { at: invoice.paymentClaimedAt, method: invoice.paymentClaimedMethod || 'other', note: invoice.paymentClaimedNote }
+    : null;
+  const [claimBusy, setClaimBusy] = useState(null); // 'confirm' | 'clear' | null
+  const [notReceivedOpen, setNotReceivedOpen] = useState(false);
+  const [notReceivedMsg, setNotReceivedMsg] = useState('');
   // Esc → close the editor, but only when no inner sub-modal owns the
   // keypress (CollectInPersonModal has its own Esc handler).
   useEscapeKey(onClose, !collectOpen);
@@ -95,6 +111,66 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
         </div>
 
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: 24, display: 'flex', flexDirection: 'column', gap: 18 }}>
+          {claim && (
+            <div style={{
+              padding: '12px 14px', borderRadius: 10,
+              background: 'var(--accent-soft)', border: '1px solid var(--accent)',
+              fontSize: 12.5, color: 'var(--fg)', display: 'flex', flexDirection: 'column', gap: 10,
+            }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 200, lineHeight: 1.5 }}>
+                  <strong>{invoice.clientName || 'The client'} says they paid by {methodLabel(claim.method)}</strong>
+                  {' '}on {new Date(claim.at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}.
+                  {claim.note && <div style={{ color: 'var(--muted)', marginTop: 2 }}>Their note: "{claim.note}"</div>}
+                  <div style={{ color: 'var(--muted)', marginTop: 2 }}>
+                    Check your {methodLabel(claim.method)} account first. Confirming marks the invoice paid and sends the receipt.
+                  </div>
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button className="btn btn-primary" disabled={!!claimBusy}
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                    onClick={async () => {
+                      setClaimBusy('confirm'); setErr(null);
+                      try { await onMarkPaid(claim.method); fireConfetti(); haptic(); }
+                      catch (e) { setErr(e.message || 'Could not confirm'); }
+                      finally { setClaimBusy(null); }
+                    }}>
+                    {claimBusy === 'confirm' ? 'Confirming…' : 'Confirm payment'}
+                  </button>
+                  <button className="btn btn-outline" disabled={!!claimBusy}
+                    style={{ fontSize: 12, padding: '6px 12px' }}
+                    onClick={() => setNotReceivedOpen((v) => !v)}>
+                    Not received
+                  </button>
+                </div>
+              </div>
+              {notReceivedOpen && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  <input value={notReceivedMsg} onChange={(e) => setNotReceivedMsg(e.target.value)}
+                    placeholder={`Optional message to ${invoice.clientName || 'the client'}, for example: I don't see the ${methodLabel(claim.method)} payment yet. Could you double-check?`}
+                    maxLength={1000}
+                    style={inputS}/>
+                  <div style={{ display: 'flex', gap: 6, justifyContent: 'flex-end' }}>
+                    <button className="btn btn-ghost" disabled={!!claimBusy}
+                      style={{ fontSize: 12 }}
+                      onClick={() => { setNotReceivedOpen(false); setNotReceivedMsg(''); }}>Cancel</button>
+                    <button className="btn btn-outline" disabled={!!claimBusy}
+                      style={{ fontSize: 12 }}
+                      onClick={async () => {
+                        setClaimBusy('clear'); setErr(null);
+                        try {
+                          await onClearClaim?.(notReceivedMsg.trim() || null);
+                          setNotReceivedOpen(false); setNotReceivedMsg('');
+                        } catch (e) { setErr(e.message || 'Could not update'); }
+                        finally { setClaimBusy(null); }
+                      }}>
+                      {claimBusy === 'clear' ? 'Updating…' : (notReceivedMsg.trim() ? 'Clear and message client' : 'Clear')}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {isLocked && (
             <div style={{
               padding: '10px 14px', borderRadius: 10,
@@ -293,6 +369,9 @@ export default function InvoiceEditor({ invoice, onClose, onSave, onSend, onRese
                 <option value="ach">ACH / Bank transfer</option>
                 <option value="cash">Cash</option>
                 <option value="check">Check</option>
+                <option value="zelle">Zelle</option>
+                <option value="venmo">Venmo</option>
+                <option value="cashapp">Cash App</option>
                 <option value="other">Other</option>
               </select>
               <button className="btn btn-ghost" onClick={() => setConfirm(null)} disabled={busy}>Cancel</button>
