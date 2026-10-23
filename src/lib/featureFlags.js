@@ -29,7 +29,10 @@ export const FLAGS = {
   // Until the platform credentials are set, each card explains that it is
   // not available yet instead of offering Connect. Set the flag to false to
   // hide one entirely.
-  squarePaypal: envFlag('SQUARE_PAYPAL', true),
-  paypal: envFlag('PAYPAL', true),
-  square: envFlag('SQUARE', true),
+  // Off until the platform credentials exist (PayPal partner approval,
+  // Square app): a card that can only say "not configured" is clutter.
+  // Flip VITE_FLAG_PAYPAL / VITE_FLAG_SQUARE to true when they are ready.
+  squarePaypal: envFlag('SQUARE_PAYPAL', false),
+  paypal: envFlag('PAYPAL', false),
+  square: envFlag('SQUARE', false),
 };
