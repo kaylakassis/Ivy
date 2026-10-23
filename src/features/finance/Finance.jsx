@@ -1,5 +1,6 @@
 // Finance dashboard + invoices list. Multi-processor settings live in
 // PaymentProviderCard near the top of the page.
+import { createPortal } from 'react-dom';
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -447,13 +448,29 @@ const QUICK_METHODS = [
 function MarkPaidMenu({ invoice, onMarkPaid, compact }) {
   const [open, setOpen] = React.useState(false);
   const [busy, setBusy] = React.useState(false);
+  const [pos, setPos] = React.useState(null); // fixed-position so the table's scroll box cannot clip it
   const ref = React.useRef(null);
+  const btnRef = React.useRef(null);
+  const menuRef = React.useRef(null);
   React.useEffect(() => {
     if (!open) return undefined;
-    const close = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    const close = (e) => {
+      const inBtn = ref.current && ref.current.contains(e.target);
+      const inMenu = menuRef.current && menuRef.current.contains(e.target);
+      if (!inBtn && !inMenu) setOpen(false);
+    };
     document.addEventListener('mousedown', close);
     return () => document.removeEventListener('mousedown', close);
   }, [open]);
+  const toggle = () => {
+    if (!open && btnRef.current) {
+      const r = btnRef.current.getBoundingClientRect();
+      const menuH = 330;
+      const up = r.bottom + menuH > window.innerHeight;
+      setPos({ left: Math.max(8, r.right - 180), top: up ? undefined : r.bottom + 6, bottom: up ? window.innerHeight - r.top + 6 : undefined });
+    }
+    setOpen((v) => !v);
+  };
   const claimed = invoice.paymentClaimedMethod;
   const options = claimed
     ? [[claimed, `Confirm ${(QUICK_METHODS.find(([k]) => k === claimed) || [claimed, claimed])[1]}`], ...QUICK_METHODS.filter(([k]) => k !== claimed)]
@@ -465,14 +482,14 @@ function MarkPaidMenu({ invoice, onMarkPaid, compact }) {
   };
   return (
     <div ref={ref} style={{ position: 'relative', flexShrink: 0 }} onClick={(e) => e.stopPropagation()}>
-      <button type="button" className="btn btn-outline" disabled={busy}
-        onClick={() => setOpen((v) => !v)} aria-haspopup="menu" aria-expanded={open}
+      <button ref={btnRef} type="button" className="btn btn-outline" disabled={busy}
+        onClick={toggle} aria-haspopup="menu" aria-expanded={open}
         style={{ padding: compact ? '5px 10px' : '6px 11px', fontSize: 12, whiteSpace: 'nowrap' }}>
         {busy ? 'Saving…' : 'Mark paid'}
       </button>
-      {open && (
-        <div role="menu" className="card" style={{
-          position: 'absolute', right: 0, top: 'calc(100% + 6px)', zIndex: 60, minWidth: 170, padding: 6,
+      {open && createPortal(
+        <div role="menu" className="card" ref={menuRef} onMouseDown={(e) => e.stopPropagation()} style={{
+          position: 'fixed', left: pos?.left, top: pos?.top, bottom: pos?.bottom, zIndex: 200, width: 180, padding: 6,
           boxShadow: 'var(--shadow-md, 0 8px 24px rgba(0,0,0,0.18))',
         }}>
           <div style={{ fontSize: 10.5, color: 'var(--muted)', padding: '4px 8px 6px', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Paid by</div>
@@ -482,7 +499,8 @@ function MarkPaidMenu({ invoice, onMarkPaid, compact }) {
               {label}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
