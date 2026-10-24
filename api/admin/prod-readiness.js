@@ -17,6 +17,7 @@
 // else still works).
 import { sql } from '../_lib/db.js';
 import { MODEL_PRICES } from '../_lib/ivyPricing.js';
+import { buildProviderJwt } from '../_lib/apns.js';
 import { requireSuperAdmin } from '../_lib/admin.js';
 import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
 import { probeProvider } from '../_lib/ivy.js';
@@ -328,6 +329,27 @@ export default async function handler(req, res) {
           : `$${cost.toFixed(2)} for ${msgs} messages across ${wsCount} workspace${wsCount === 1 ? '' : 's'} = $${perMsg.toFixed(4)} per message, $${(wsCount ? cost / wsCount : 0).toFixed(2)} per workspace.${unknown.length ? ` Unpriced model(s): ${unknown.join(', ')}.` : ''}`));
     } catch (e) {
       checks.push(check('ai_cost', 'Ivy cost (30 days)', 'warn', `could not compute: ${e.message}`));
+    }
+    // iPhone push: config + a provider token we can mint + whether any phone
+    // has actually registered. TestFlight and App Store builds use Apple's
+    // PRODUCTION push environment; "sandbox" is only for Xcode debug runs.
+    try {
+      const apnsMissing = ['APNS_KEY_ID', 'APNS_TEAM_ID', 'APNS_PRIVATE_KEY', 'APNS_BUNDLE_ID'].filter((k) => !process.env[k]);
+      const apnsEnv = (process.env.APNS_ENV || 'production') === 'sandbox' ? 'sandbox' : 'production';
+      const tok = await sql`SELECT COUNT(*)::int AS n, COUNT(*) FILTER (WHERE COALESCE(last_used_at, created_at) > NOW() - INTERVAL '7 days')::int AS recent FROM push_device_tokens WHERE platform = 'ios'`;
+      const n = tok.rows[0]?.n || 0, recent = tok.rows[0]?.recent || 0;
+      if (apnsMissing.length) {
+        checks.push(check('apns', 'iPhone push (APNs)', 'fail', `Missing ${apnsMissing.join(', ')}. Phones register tokens (${n} on file) but nothing can be sent.`));
+      } else {
+        let minted = true, mintErr = '';
+        try { buildProviderJwt(); } catch (e) { minted = false; mintErr = e.message; }
+        const envNote = apnsEnv === 'sandbox' ? ' APNS_ENV is "sandbox": pushes to TestFlight and App Store installs will be rejected (BadDeviceToken); set it to "production".' : '';
+        checks.push(check('apns', 'iPhone push (APNs)', !minted ? 'fail' : (apnsEnv === 'sandbox' || n === 0) ? 'warn' : 'ok',
+          !minted ? `Vars are set but the key could not sign a token: ${mintErr}`
+            : `Configured (${apnsEnv}), key ${process.env.APNS_KEY_ID}, bundle ${process.env.APNS_BUNDLE_ID}. ${n} iPhone${n === 1 ? '' : 's'} registered, ${recent} active in the last 7 days.${n === 0 ? ' No phone has registered yet: open the app, allow notifications when asked.' : ''}${envNote}`));
+      }
+    } catch (e) {
+      checks.push(check('apns', 'iPhone push (APNs)', 'warn', `could not check: ${e.message}`));
     }
     const ai = await probeProvider();
     checks.push(check('ai_model', 'Ivy assistant (AI model)', ai.ok ? 'ok' : 'fail',
