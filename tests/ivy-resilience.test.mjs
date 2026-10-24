@@ -72,6 +72,16 @@ async function run() {
   assert(r.mode === 'mock' && /hiccup/.test(r.error || ''), `all attempts failed → hiccup (${r.error})`);
   assert(calls.length === 6, 'three attempts per model');
 
+  console.log('\n[6] with no fallback configured (the default), three attempts on the one model, then an honest message');
+  process.env.IVY_FALLBACK_MODEL = '';
+  script = [500, 500, 500]; calls.length = 0;
+  r = await generateReply('sonnet only', ctx, [], wsId);
+  assert(r.mode === 'mock' && /hiccup/.test(r.error || ''), `no fallback → hiccup after retries (${r.error})`);
+  assert(calls.length === 3 && calls.every((c) => c.model === 'claude-opus-5-5'), 'exactly three attempts, all on the primary');
+  script = [529]; calls.length = 0;
+  r = await generateReply('and recover', ctx, [], wsId);
+  assert(r.mode === 'live' && calls.length === 2, 'retries still recover a transient failure without a fallback');
+
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }

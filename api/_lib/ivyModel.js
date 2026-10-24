@@ -11,7 +11,8 @@
 // Sonnet is the tier Ivy runs on (owner decision, Oct 2026: the quality is
 // close to Opus for an assistant that reads live data and runs tools, at
 // well under half the cost, which is what makes 600 messages a month per
-// workspace sustainable). Opus stays as the fallback model in ivy.js. The
+// workspace sustainable). There is no fallback model unless IVY_FALLBACK_MODEL
+// names one; retries cover transient failures. The
 // Fable/Mythos tier is deliberately excluded (different API behaviour and
 // pricing) - opt in with IVY_MODEL.
 export const IVY_DEFAULT_MODEL = 'claude-sonnet-5-5';

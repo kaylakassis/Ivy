@@ -983,8 +983,9 @@ ACCOUNT (avatar → "Account settings", bottom-left of sidebar)
 // sent once to the fallback model. 400s and auth errors are not retried:
 // they would fail the same way again. Returns the response plus which
 // model answered, so usage is recorded against the right one.
-// Read per call so an env pin (and the tests) take effect without a restart.
-const fallbackModel = () => process.env.IVY_FALLBACK_MODEL || 'claude-opus-5-5';
+// No fallback model by default (owner decision: Sonnet only). Retries still
+// cover transient failures. IVY_FALLBACK_MODEL can name one; read per call.
+const fallbackModel = () => (process.env.IVY_FALLBACK_MODEL || '').trim();
 function isTransientProviderError(err) {
   const status = Number(err?.status) || 0;
   if (status === 429 || status === 529 || (status >= 500 && status < 600)) return true;
