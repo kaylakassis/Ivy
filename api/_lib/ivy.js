@@ -1059,7 +1059,10 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
         {
           type: 'text',
           text: IVY_SYSTEM,
-          cache_control: { type: 'ephemeral' },
+          // 1-hour cache for the shared prefix (system prompt + tools): it is
+          // identical for every workspace, so one warm copy serves everyone,
+          // and an hour survives the quiet gaps a 5-minute cache does not.
+          cache_control: { type: 'ephemeral', ttl: '1h' },
         },
       ],
       tools: IVY_TOOLS,
@@ -1118,7 +1121,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       model,
       max_tokens: IVY_MAX_TOKENS,
       output_config: { effort: 'low' },
-      system: [{ type: 'text', text: IVY_SYSTEM, cache_control: { type: 'ephemeral' } }],
+      system: [{ type: 'text', text: IVY_SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
       tools: IVY_TOOLS,
       tool_choice: { type: 'none' },
       messages: withPrefixCache(messages),
