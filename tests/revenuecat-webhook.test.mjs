@@ -141,6 +141,24 @@ async function run() {
     await rcHandler(rcReq(mkEvent('SUBSCRIBER_ALIAS', wid)), aliasRes);
     assert(aliasRes.statusCode === 200 && aliasRes.body?.ignored === 'SUBSCRIBER_ALIAS', 'ignored event type → 200 ignored');
 
+    console.log('\n[9] an Apple downgrade never knocks out a workspace that pays through Stripe');
+    const w9 = await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_source, stripe_customer_id, subscription_period_end)
+                          VALUES (${ownerId}, 'active', 'stripe', 'cus_web_9', NOW() + INTERVAL '20 days') RETURNING id`;
+    const wid9 = w9.rows[0].id;
+    let r9 = mkRes();
+    await rcHandler(rcReq(mkEvent('EXPIRATION', wid9, { expiration_at_ms: Date.now() - 1000 })), r9);
+    let s9 = await statusOf(wid9);
+    assert(r9.statusCode === 200 && r9.body?.ignored === 'EXPIRATION', 'EXPIRATION is accepted but ignored (no retry storm)');
+    assert(s9.subscription_status === 'active' && s9.subscription_source === 'stripe', 'Stripe-billed workspace stays active on Stripe');
+    r9 = mkRes();
+    await rcHandler(rcReq(mkEvent('BILLING_ISSUE', wid9)), r9);
+    s9 = await statusOf(wid9);
+    assert(s9.subscription_status === 'active' && !s9.subscription_past_due_since, 'Apple BILLING_ISSUE does not start dunning for a Stripe payer');
+    r9 = mkRes();
+    await rcHandler(rcReq(mkEvent('INITIAL_PURCHASE', wid9, { period_type: 'NORMAL', expiration_at_ms: Date.now() + 7 * 86400000 })), r9);
+    s9 = await statusOf(wid9);
+    assert(s9.subscription_status === 'active' && s9.subscription_source === 'apple', 'an Apple purchase still applies (access granted, source moves to apple)');
+
     console.log('\n[8] readSession / isNativeClient - native Bearer auth path');
     const token = signSession(ownerId);
     const bearerSession = readSession({ headers: { authorization: `Bearer ${token}` } });

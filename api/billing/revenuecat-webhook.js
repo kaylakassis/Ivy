@@ -161,7 +161,8 @@ export default async function handler(req, res) {
     // a first-time conversion (stamp converted_at) and whether to fire
     // the started-email side effect.
     const { rows: existingRows } = await sql`
-      SELECT id, owner_id, subscription_status, converted_at, trial_started_at
+      SELECT id, owner_id, subscription_status, converted_at, trial_started_at,
+             subscription_source, stripe_customer_id, subscription_period_end
       FROM workspaces
       WHERE id = ${workspaceId}
     `;
@@ -169,6 +170,18 @@ export default async function handler(req, res) {
       return ok(res, { received: true, noop: 'no workspace' });
     }
     const prev = existingRows[0];
+
+    // A workspace that pays through Stripe on the web must never be knocked
+    // out by Apple. Someone can start an Apple trial, let it lapse, then
+    // subscribe on the web; the Apple EXPIRATION that arrives later would
+    // otherwise flip their paid workspace to expired on both web and phone.
+    // Apple events that GRANT access still apply (the owner chose to pay
+    // through Apple as well); only downgrades are ignored.
+    const stripeBilled = prev.subscription_source === 'stripe' && !!prev.stripe_customer_id
+      && ['active', 'trialing', 'past_due'].includes(prev.subscription_status);
+    if (stripeBilled && nextStatus !== 'active') {
+      return ok(res, { received: true, ignored: event.type, reason: 'stripe-billed' });
+    }
 
     const periodEnd = expirationMs ? new Date(expirationMs) : null;
     const productId = event.product_id || null;
