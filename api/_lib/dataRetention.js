@@ -17,8 +17,11 @@
 //   • Resubscribing (or a comp from Admin) at any point before the date
 //     cancels the deletion: the stamps are cleared and nothing happens.
 //
-// Trials that never paid are NOT covered here: they keep the existing
-// win-back flow, and the owner can delete the account themselves.
+// Trials that never paid get a longer clock: 4 weeks after the trial
+// ended (never less than 7 days from when the clock is first set, so a
+// backlog of old trials still gets a real notice). The win-back offer
+// cron keeps running inside that window; the notice email and the 2-day
+// reminder both point at picking a plan.
 import { sql } from './db.js';
 import { isWorkspaceActive, invalidateOwnerWorkspace } from './clientPortal.js';
 import { evictWorkspaceGateCache } from './workspaceGate.js';
@@ -26,6 +29,8 @@ import { recordAudit } from './audit.js';
 import { notifyDataDeletionScheduled, notifyDataDeletionReminder, notifyDataDeleted } from './subscriptionNotify.js';
 
 export const RETENTION_DAYS = 7;
+export const TRIAL_RETENTION_DAYS = 28;
+export const MIN_NOTICE_DAYS = 7;
 export const REMINDER_DAYS_BEFORE = 2;
 
 // SQL mirror of isWorkspaceActive(). Keep the two in step.
@@ -62,13 +67,36 @@ export async function scheduleDeletions() {
        AND ${INACTIVE_SQL}
     RETURNING w.id, w.data_deletion_at, w.subscription_period_end, w.subscription_source`,
     [RETENTION_DAYS]);
+  // 1b. A trial that ended without ever paying: 4 weeks after the trial end.
+  const trials = await sql.query(`
+    UPDATE workspaces w
+       SET data_deletion_at = GREATEST(w.trial_ends_at + ($1::int || ' days')::interval,
+                                       NOW() + ($2::int || ' days')::interval),
+           data_deletion_notice_sent_at = NULL,
+           data_deletion_reminder_sent_at = NULL
+      FROM users u
+     WHERE u.id = w.owner_id AND u.deleted_at IS NULL
+       AND w.converted_at IS NULL
+       AND w.subscription_status = 'trialing'
+       AND w.trial_ends_at IS NOT NULL AND w.trial_ends_at < NOW()
+       AND w.data_deletion_at IS NULL
+       AND w.data_purged_at IS NULL
+       AND ${INACTIVE_SQL}
+    RETURNING w.id, w.data_deletion_at, w.trial_ends_at`,
+    [TRIAL_RETENTION_DAYS, MIN_NOTICE_DAYS]);
   for (const r of rows) {
     // eslint-disable-next-line no-await-in-loop
     await sql`UPDATE workspaces SET data_deletion_notice_sent_at = NOW() WHERE id = ${r.id}`;
     // eslint-disable-next-line no-await-in-loop
     await notifyDataDeletionScheduled({ workspaceId: r.id, deleteAt: r.data_deletion_at, endedAt: r.subscription_period_end, source: r.subscription_source });
   }
-  return rows.length;
+  for (const r of trials.rows) {
+    // eslint-disable-next-line no-await-in-loop
+    await sql`UPDATE workspaces SET data_deletion_notice_sent_at = NOW() WHERE id = ${r.id}`;
+    // eslint-disable-next-line no-await-in-loop
+    await notifyDataDeletionScheduled({ workspaceId: r.id, deleteAt: r.data_deletion_at, endedAt: r.trial_ends_at, trial: true });
+  }
+  return rows.length + trials.rows.length;
 }
 
 // 2. Resubscribed (or comped) before the date: call it off.
@@ -91,10 +119,10 @@ export async function sendReminders() {
        AND w.data_deletion_at <= NOW() + ($1::int || ' days')::interval
        AND w.data_deletion_at > NOW()
        AND ${INACTIVE_SQL}
-    RETURNING w.id, w.data_deletion_at`, [REMINDER_DAYS_BEFORE]);
+    RETURNING w.id, w.data_deletion_at, (w.converted_at IS NULL) AS trial`, [REMINDER_DAYS_BEFORE]);
   for (const r of rows) {
     // eslint-disable-next-line no-await-in-loop
-    await notifyDataDeletionReminder({ workspaceId: r.id, deleteAt: r.data_deletion_at });
+    await notifyDataDeletionReminder({ workspaceId: r.id, deleteAt: r.data_deletion_at, trial: r.trial });
   }
   return rows.length;
 }

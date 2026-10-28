@@ -63,7 +63,7 @@ async function applyOptOut(payload) {
          SET notification_prefs = COALESCE(notification_prefs, '{}'::jsonb) || ${JSON.stringify(patch)}::jsonb
        WHERE id = ${id}
     `;
-    return { ok: true, label: 'emails of this kind' };
+    return { ok: true, label: (type === 'all' || !type) ? 'emails from Ivy, apart from account and security notices' : 'emails of this kind' };
   }
 
   if (scope === 'client') {
@@ -90,6 +90,16 @@ async function applyOptOut(payload) {
          AND LOWER(email) = LOWER(${id})
     `;
     return { ok: true, label: 'these emails' };
+  }
+
+  if (scope === 'waitlist') {
+    // id is the email address. Skipped by every waitlist send from now on.
+    await sql`
+      UPDATE waitlist_signups
+         SET unsubscribed_at = NOW()
+       WHERE LOWER(email) = LOWER(${id})
+    `;
+    return { ok: true, label: 'waitlist emails' };
   }
 
   if (scope === 'newsletter') {

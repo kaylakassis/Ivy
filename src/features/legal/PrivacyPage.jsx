@@ -98,7 +98,9 @@ export default function PrivacyPage() {
         documents, messages, website, automations and assistant history). We tell
         you by email when the 7 days start and again 2 days before deletion;
         resubscribing before then cancels it. Your login, billing records and any
-        moderation reports are kept. When you
+        moderation reports are kept. If you try Ivy and never subscribe, we keep
+        the workspace for 4 weeks after the trial ends, with the same notices, then
+        permanently delete it. When you
         delete your account, we delete your account and everything in it within
         30 days. Server logs roll
         off automatically after 30 days. Backups may persist for up to 30

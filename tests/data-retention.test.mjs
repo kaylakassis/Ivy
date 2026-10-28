@@ -2,7 +2,7 @@
 // Run: node --import ./tests/bootstrap.mjs ./tests/data-retention.test.mjs
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
-import { runDataRetention, scheduleDeletions, sendReminders, clearRescued, purgeDue, RETAINED_TABLES } from '../api/_lib/dataRetention.js';
+import { runDataRetention, scheduleDeletions, sendReminders, clearRescued, purgeDue, RETAINED_TABLES, TRIAL_RETENTION_DAYS } from '../api/_lib/dataRetention.js';
 import { userContext } from '../api/_lib/clientPortal.js';
 import { renderDataDeletionScheduled, renderDataDeletionReminder, renderDataDeleted, renderPlanEnding, renderSubscriptionCancelled } from '../api/_lib/subscriptionNotify.js';
 
@@ -40,7 +40,16 @@ async function main() {
   assert(!!L.data_deletion_at && Math.abs(new Date(L.data_deletion_at) - d(7)) < 60_000, '7 days from now for the cancelled workspace');
   assert(!!L.data_deletion_notice_sent_at, 'notice stamped');
   assert(!!(await row(suspended.id)).data_deletion_at, 'suspended (dunning exhausted) workspace scheduled too');
-  assert(!(await row(trialOnly.id)).data_deletion_at, 'expired trial that never paid: not scheduled (win-back flow instead)');
+  const T = await row(trialOnly.id);
+  assert(!!T.data_deletion_at && Math.abs(new Date(T.data_deletion_at) - d(TRIAL_RETENTION_DAYS - 3)) < 60_000, `expired unpaid trial: deletion 4 weeks after trial end (${T.data_deletion_at})`);
+  const tnotif = (await sql`SELECT title, body FROM notifications WHERE workspace_id = ${trialOnly.id} ORDER BY created_at DESC LIMIT 1`).rows[0];
+  assert(!!tnotif && /trial has ended/i.test(tnotif.title) && /pick a plan/.test(tnotif.body), `trial notice: ${tnotif?.title}`);
+  const oldTrial = await ws('oldtrial', { subscription_status: 'trialing', trial_ends_at: d(-60), trial_started_at: d(-74) });
+  const liveTrial = await ws('livetrial', { subscription_status: 'trialing', trial_ends_at: d(5), trial_started_at: d(-9) });
+  await scheduleDeletions();
+  const OT = await row(oldTrial.id);
+  assert(!!OT.data_deletion_at && Math.abs(new Date(OT.data_deletion_at) - d(7)) < 60_000, 'trial that ended long ago still gets a 7-day notice window');
+  assert(!(await row(liveTrial.id)).data_deletion_at, 'live trial: not scheduled');
   assert(!(await row(activePaid.id)).data_deletion_at, 'active paid: not scheduled');
   assert(!(await row(comped.id)).data_deletion_at, 'comped: not scheduled');
   assert(!(await row(pastDue.id)).data_deletion_at, 'past_due (in grace): not scheduled');
@@ -123,6 +132,10 @@ async function main() {
   assert(/Download my data/.test(e1.html) && /Email me a copy/.test(e1.html), 'scheduled email names both export paths');
   const e2 = renderDataDeletionReminder({ deleteAt: d(2), firstName: 'Kay', businessName: 'Glow' });
   assert(/2 days left/.test(e2.subject), 'reminder subject');
+  const t1 = renderDataDeletionScheduled({ deleteAt: d(28), endedAt: d(0), firstName: 'Kay', businessName: 'Glow', trial: true });
+  assert(/4 weeks/.test(t1.html) && /Pick a plan/.test(t1.html) && /permanently deleted/.test(t1.html) && !/resubscribe/i.test(t1.html), 'trial notice: 4 weeks, pick a plan, permanent');
+  const t2 = renderDataDeletionReminder({ deleteAt: d(2), firstName: 'Kay', businessName: 'Glow', trial: true });
+  assert(/pick a plan/.test(t2.html) && /Pick a plan/.test(t2.html), 'trial reminder points at picking a plan');
   const e3 = renderDataDeleted({ firstName: 'Kay' });
   assert(/permanently deleted/.test(e3.html) && /login still works/.test(e3.html), 'deleted email');
   const pe = renderPlanEnding({ endsAt: d(2), firstName: 'Kay', businessName: 'Glow', source: 'stripe' });

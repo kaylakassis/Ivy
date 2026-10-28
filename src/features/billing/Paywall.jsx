@@ -379,8 +379,8 @@ export default function Paywall({ ctx, onRefresh }) {
               background: 'var(--danger-soft, rgba(220,60,60,.10))', border: '1px solid var(--danger, #c0392b)',
               color: 'var(--fg)', fontSize: 12.5, lineHeight: 1.5,
             }}>
-              <strong>Your access has ended. Your data is permanently deleted on {fmtLongDate(sub.dataDeletionAt)}.</strong>{' '}
-              Download it before then, or resubscribe to keep everything exactly as it is.
+              <strong>{trialExpired ? 'Your trial has ended.' : 'Your access has ended.'} Your data is permanently deleted on {fmtLongDate(sub.dataDeletionAt)}.</strong>{' '}
+              Download it before then, or {trialExpired ? 'pick a plan' : 'resubscribe'} to keep everything exactly as it is.
               <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
                 {!isNative() && (
                   <a href="/api/account/export" download className="btn btn-ghost" style={{ padding: '5px 10px', fontSize: 12.5, textDecoration: 'none' }}>

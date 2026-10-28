@@ -106,7 +106,7 @@ async function handler(req, res) {
         }).catch((e) => console.error('[winback] notify email failed:', e?.message));
         notifyOwnerSafe({
           workspaceId: c.workspace_id,
-          type: 'billing',
+          type: 'engagement',
           payload: {
             title: `${offer.percentOff}% off - your Ivy comeback offer`,
             body: `Code ${offer.promoCode} · expires ${new Date(offer.expiresAt).toISOString().slice(0, 10)}`,

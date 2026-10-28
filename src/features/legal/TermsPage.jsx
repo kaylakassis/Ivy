@@ -179,8 +179,10 @@ export default function TermsPage() {
         retain access until the end of the then-current billing period.
         After that your booking page, website and client portal are
         archived, and your workspace data is permanently deleted 7 days
-        later unless you resubscribe. We notify you by email before this
-        happens, and you can export your data at any time until then.</P>
+        later unless you resubscribe. A trial that ends without a
+        subscription is kept for 4 weeks, then deleted. We notify you by
+        email before this happens, and you can export your data at any
+        time until then.</P>
       <P>We may change prices with at least 30 days' notice via email.
         Price changes take effect at your next renewal. Stripe
         processing fees are charged separately by Stripe and are not

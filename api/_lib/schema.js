@@ -2248,6 +2248,7 @@ ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS contact_consent BOOLEAN;
 ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;
 ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ;
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMPTZ;
 ALTER TABLE waitlist_signups DROP CONSTRAINT IF EXISTS waitlist_signups_status_check;
 ALTER TABLE waitlist_signups ADD CONSTRAINT waitlist_signups_status_check
   CHECK (status IN ('pending','invited','notified','converted'));
