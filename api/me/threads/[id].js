@@ -17,6 +17,7 @@ import { fetchBranding } from '../../_lib/branding.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { withIdempotency } from '../../_lib/idempotency.js';
 import { blockState, BLOCKED_MESSAGE } from '../../_lib/moderation.js';
+import { archivedForbidden } from '../../_lib/businessAccess.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -90,6 +91,7 @@ export default async function handler(req, res) {
           ...serializeThread(thread),
           workspaceId: thread.workspace_id,
           businessName: membership?.businessName,
+          archived: !!membership?.archived,
           blocked: bs.blocked,
           blockedByMe: bs.clientBlocked,
         },
@@ -98,6 +100,9 @@ export default async function handler(req, res) {
     }
 
     if (req.method === 'POST') {
+      // The business's subscription has lapsed: history stays readable
+      // above, but nothing new can be sent to it.
+      if (membership?.archived) return archivedForbidden(res);
       // A block in either direction switches messaging off both ways.
       // Checked before the read-only mode so the client sees the right reason.
       const bs = await blockState(thread.workspace_id, thread.client_id);

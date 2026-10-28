@@ -340,6 +340,14 @@ export default function Paywall({ ctx, onRefresh }) {
               documents, messaging - in one place.
             </p>
           )}
+          {/* Lapsed owners (ended trial, cancelled, suspended): say plainly
+              what clients see right now, and that it is a state, not a loss. */}
+          {!syncing && !canTrial && (
+            <p style={{ margin: '10px auto 0', maxWidth: 340, color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.5 }}>
+              While your subscription is paused, your booking page, website and client
+              portal are archived. They come back the moment you resubscribe.
+            </p>
+          )}
         </div>
 
         {/* ─── BODY (scrolls if the viewport is short) ──────────────── */}

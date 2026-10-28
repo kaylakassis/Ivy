@@ -43,6 +43,7 @@ export async function myClientIds(user) {
     const { rows } = await sql`
       SELECT c.id, c.workspace_id, c.name, c.email,
              w.name AS workspace_name,
+             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
              cs.biz_name
       FROM clients c
       JOIN workspaces w ON w.id = c.workspace_id
@@ -57,6 +58,11 @@ export async function myClientIds(user) {
       clientName:   r.name,
       clientEmail:  r.email,
       businessName: r.biz_name || r.workspace_name || 'Business',
+      // The business's subscription has lapsed: the portal shows it as
+      // "No longer on Ivy" and switches off booking + messaging for it.
+      // Documents, invoices and history stay readable. Same predicate as
+      // the owner paywall, so resubscribing flips this back on its own.
+      archived: !isWorkspaceActive(r),
     }));
   } catch (err) {
     // eslint-disable-next-line no-console

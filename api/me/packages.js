@@ -40,6 +40,7 @@ export default async function handler(req, res) {
       return {
         ...serializeClientPackage(r),
         businessName: m?.businessName || 'Business',
+        archived: !!m?.archived,
         // Slug lets the client portal link straight to the public booking
         // page for that business when redeeming credits.
         bookingSlug: r.workspace_slug || null,

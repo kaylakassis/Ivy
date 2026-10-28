@@ -15,6 +15,7 @@ import { useTweaks } from '../../lib/tweaks.js';
 import { useEmbedResize } from '../../lib/embedResize.js';
 import { tzDisplay } from '../../lib/timezones.js';
 import { haptic } from '../../lib/celebrate.js';
+import ArchivedBusinessCard, { isArchivedError } from '../../components/ArchivedBusiness.jsx';
 import {
   addDays, fmtDateISO, minToHM, parseISO, slotsForDate, startOfToday, WEEKDAYS_SHORT,
 } from './utils.js';
@@ -28,6 +29,9 @@ export default function PublicBooking({ embedded = false }) {
   const [cal, setCal] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Owner's subscription lapsed: the API returns { archived, businessName }
+  // instead of a calendar, and any POST answers 403 business_archived.
+  const [archived, setArchived] = useState(null);
 
   const [serviceId, setServiceId] = useState(null);
   // Anchor the day strip on TODAY (never a past day). Past days are
@@ -120,6 +124,11 @@ export default function PublicBooking({ embedded = false }) {
     api.get('/calendar/public/' + encodeURIComponent(slug))
       .then((r) => {
         if (!live) return;
+        if (r.archived) {
+          setArchived({ businessName: r.businessName });
+          document.title = (r.businessName || slug) + ' · Ivy';
+          return;
+        }
         setCal(r.calendar);
         setServiceId(r.calendar.services[0]?.id || null);
         document.title = (r.calendar.settings.bizName || slug) + ' · Book';
@@ -219,6 +228,14 @@ export default function PublicBooking({ embedded = false }) {
     );
   }
 
+  if (archived) {
+    return (
+      <PageWrap tweaks={tweaks} embedded={embedded}>
+        <ArchivedBusinessCard businessName={archived.businessName} compact={embedded}/>
+      </PageWrap>
+    );
+  }
+
   if (loadErr || !cal) {
     const status = loadErr?.status;
     const title  = status === 404
@@ -311,6 +328,8 @@ export default function PublicBooking({ embedded = false }) {
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
       haptic(); // a little "done!" tap on the client's phone
     } catch (e) {
+      // The business was archived between page load and submit.
+      if (isArchivedError(e)) { setArchived({ businessName: cal?.settings?.bizName }); return; }
       setBookErr(e.message || 'Could not confirm - try another slot.');
     } finally {
       setBusy(false);

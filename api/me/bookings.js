@@ -91,6 +91,9 @@ export default async function handler(req, res) {
         locationAddress: r.location_address || null,
         tipAmount: Number(r.tip_amount || 0),
         businessName: m?.businessName || 'Business',
+        // Business no longer on Ivy: the portal hides reschedule/rebook
+        // for this row (cancelling an existing booking still works).
+        archived: !!m?.archived,
         // Slug + workspaceId let the client-side reschedule modal fetch
         // the public availability + slot grid without duplicating
         // server-side scoping logic. Don't echo workspaceId externally

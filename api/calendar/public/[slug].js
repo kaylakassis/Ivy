@@ -24,6 +24,7 @@ import { getProvider } from '../../_lib/payments/index.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { sendClientInvite } from '../../_lib/clientNotify.js';
 import { fireClientCreatedWorkflows } from '../../_lib/workflows.js';
+import { loadWorkspaceAccess, archivedPayload, archivedForbidden } from '../../_lib/businessAccess.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -72,6 +73,11 @@ async function getCalendar(req, res) {
     `;
     if (settings.rows.length === 0) return notFound(res, 'No booking page for that handle');
     const s = settings.rows[0];
+
+    // Subscription lapsed: the page is archived. 200 with the archived
+    // marker and nothing else - no services, slots or bookings leak.
+    const access = await loadWorkspaceAccess(s.workspace_id);
+    if (!access.active) return ok(res, archivedPayload(access));
 
     // Pull the workspace's business_type + website handle so the
     // public booking page can render a "Visit our shop" CTA when the
@@ -264,6 +270,9 @@ async function createBooking(req, res) {
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];
+    // Archived business: no new bookings or waitlist joins.
+    const access = await loadWorkspaceAccess(workspaceId);
+    if (!access.active) return archivedForbidden(res);
     const minNoticeHours = Math.max(0, Number(settingsRows.rows[0].min_notice_hours ?? 24));
     const slotFitService = !!settingsRows.rows[0].slot_fit_service;
     const bufferMinutes = Math.max(0, Number(settingsRows.rows[0].buffer_minutes || 0));

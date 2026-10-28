@@ -1302,6 +1302,7 @@ function UsersTab() {
                     <Td>{u.name || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
                       <Pill text={u.classification}/>
+                      {u.workspace && u.workspace.active === false && <ArchivedPill/>}
                       {u.workspace?.comped && (
                         <span style={{
                           marginLeft: 6, fontSize: 10, fontWeight: 700,
@@ -1588,7 +1589,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
         <Row k="Classification" v={<Pill text={user.classification}/>}/>
         {user.workspace && (
           <>
-            <Row k="Subscription" v={user.workspace.status}/>
+            <Row k="Subscription" v={<>{user.workspace.status}{user.workspace.active === false && <ArchivedPill/>}</>}/>
             {user.workspace.trialEndsAt && (
               <Row k="Trial ends" v={new Date(user.workspace.trialEndsAt).toLocaleString()}/>
             )}
@@ -2392,6 +2393,19 @@ function Row({ k, v }) {
     </div>
   );
 }
+// Inactive owner (ended trial, cancelled, suspended, lapsed period): the
+// public booking page, website and client portal are archived for them.
+function ArchivedPill() {
+  return (
+    <span title="Subscription inactive: booking page, website and client portal are archived until they resubscribe." style={{
+      marginLeft: 6, fontSize: 10, fontWeight: 700,
+      letterSpacing: '0.06em', textTransform: 'uppercase',
+      padding: '2px 8px', borderRadius: 99,
+      background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)',
+    }}>Archived</span>
+  );
+}
+
 function Pill({ text }) {
   const tone = (() => {
     if (text === 'Sponsored') return 'var(--accent)';

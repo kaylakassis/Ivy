@@ -9,6 +9,7 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useEmbedResize } from '../../lib/embedResize.js';
+import ArchivedBusinessCard from '../../components/ArchivedBusiness.jsx';
 
 export default function EmbedContact() {
   const { slug } = useParams();
@@ -20,6 +21,9 @@ export default function EmbedContact() {
   const [busy, setBusy]       = useState(false);
   const [err, setErr]         = useState(null);
   const [done, setDone]       = useState(false);
+  // 403 business_archived: the owner's subscription lapsed, so the form
+  // gives way to the compact "no longer on Ivy" card.
+  const [archived, setArchived] = useState(false);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -42,6 +46,7 @@ export default function EmbedContact() {
       });
       if (!r.ok) {
         const j = await r.json().catch(() => ({}));
+        if (r.status === 403 && j.code === 'business_archived') { setArchived(true); return; }
         throw new Error(j.error || 'Something went wrong. Please try again.');
       }
       setDone(true);
@@ -58,7 +63,9 @@ export default function EmbedContact() {
       fontFamily: 'var(--font-sans), system-ui, sans-serif',
       color: 'var(--fg, #2A2924)',
     }}>
-      {done ? (
+      {archived ? (
+        <ArchivedBusinessCard compact/>
+      ) : done ? (
         <div style={{
           padding: 24, borderRadius: 12,
           background: 'var(--surface, #fff)', border: '1px solid var(--border, #E6E1D7)',
