@@ -172,7 +172,7 @@ export default function ClientBookings() {
           {rows.map((b, i) => (
             <BookingRow key={b.id} booking={b} first={i === 0}
               cancellable={tab === 'upcoming' && !b.cancelledAt}
-              reschedulable={tab === 'upcoming' && !b.cancelledAt && !!b.bizSlug && !!b.serviceId && !b.recurrenceRule}
+              reschedulable={tab === 'upcoming' && !b.cancelledAt && !!b.bizSlug && !!b.serviceId && !b.recurrenceRule && !b.archived}
               reviewable={tab === 'past' && pendingReviewIds.has(b.id)}
               onCancel={() => { setCancelErr(null); setConfirming(b); }}
               onReschedule={() => setRescheduling(b)}

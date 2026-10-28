@@ -9,27 +9,38 @@ import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { Icons } from '../../components/Icons.jsx';
 import { fmtPrice, billingLabel, TYPE_META } from './ProgramContent.jsx';
+import ArchivedBusinessCard, { isArchivedError } from '../../components/ArchivedBusiness.jsx';
 
 export default function PublicProgram() {
   const { id } = useParams();
   const [params] = useSearchParams();
   const [tweaks] = useTweaks();
   const [data, setData] = useState(null); const [err, setErr] = useState(null);
+  // Coach's subscription lapsed: the API answers { archived, businessName }.
+  const [archived, setArchived] = useState(null);
   const [name, setName] = useState(''); const [email, setEmail] = useState(''); const [busy, setBusy] = useState(false); const [formErr, setFormErr] = useState(null);
-  useEffect(() => { api.get(`/programs/public/${id}`).then(setData).catch((e) => setErr(e.message)); }, [id]);
+  useEffect(() => {
+    api.get(`/programs/public/${id}`)
+      .then((r) => { if (r.archived) setArchived({ businessName: r.businessName }); else setData(r); })
+      .catch((e) => setErr(e.message));
+  }, [id]);
   const purchased = params.get('purchased') === '1';
   // Stripe cancel_url lands back here with ?cancelled=1 (api/programs/checkout.js).
   const [cancelled, setCancelled] = useState(() => params.get('cancelled') === '1');
   const buy = async (e) => {
     e.preventDefault(); setBusy(true); setFormErr(null);
     try { const r = await api.post('/programs/checkout', { programId: id, name, email }); window.location.assign(r.url); }
-    catch (ex) { setFormErr(ex.message); setBusy(false); }
+    catch (ex) {
+      if (isArchivedError(ex)) { setArchived({ businessName: data?.business?.name }); return; }
+      setFormErr(ex.message); setBusy(false);
+    }
   };
   const shell = (children) => (
     <div className={`app-root dir-${tweaks.direction}`} style={{ minHeight: '100vh', padding: '24px 16px 48px' }}>
       <div style={{ maxWidth: 720, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 18 }}>{children}</div>
     </div>
   );
+  if (archived) return shell(<ArchivedBusinessCard businessName={archived.businessName}/>);
   if (err) return shell(<div className="card" style={{ padding: 24, textAlign: 'center' }}><div style={{ fontSize: 18, fontWeight: 600 }}>This program isn't available.</div><div style={{ color: 'var(--muted)', fontSize: 13.5, marginTop: 6 }}>{err}</div></div>);
   if (!data) return shell(<div style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>);
   const { program, outline, business, currency } = data;

@@ -13,6 +13,7 @@ import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
+import { loadWorkspaceAccess, archivedForbidden } from '../../_lib/businessAccess.js';
 
 function fetchTimeout(url, opts, ms) {
   const c = new AbortController();
@@ -56,6 +57,7 @@ export default async function handler(req, res) {
     `;
     if (w.rows.length === 0) return notFound(res, 'No shop at that handle');
     const workspaceId = w.rows[0].workspace_id;
+    if (!(await loadWorkspaceAccess(workspaceId)).active) return archivedForbidden(res);
 
     // Validate every productId belongs to this workspace + is active +
     // (if tracked) in stock for the requested qty.

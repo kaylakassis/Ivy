@@ -23,6 +23,7 @@ import { sendEmail, emailShell } from '../_lib/email.js';
 import { createToken, KIND_RESET, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { isWorkspaceActive } from '../_lib/clientPortal.js';
 
 const PAGE_SIZE = 50;
 // Internally we surface 'business-trial' / 'business-active' as creation
@@ -117,6 +118,9 @@ async function listUsers(req, res) {
       trialEndsAt: row.trial_ends_at,
       periodEndsAt: row.subscription_period_end,
       comped: !!(row.comp_until && new Date(row.comp_until) > new Date()),
+      // Same predicate as the paywall + the client-facing archive, so
+      // the operator sees "Archived" exactly when clients do.
+      active: isWorkspaceActive(row),
     } : null,
     isClient: !!row.is_client,
     affiliateCode: row.affiliate_code,

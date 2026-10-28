@@ -6,8 +6,10 @@
 //      real content (>=1 public service or active products).
 //   2. Public booking page 404s once the owner is deleted.
 //   3. Website shop endpoints 404 once the owner is deleted.
-//   4. A lapsed (cancelled) workspace drops out of Discover but its
-//      direct booking link still works - only deletion kills links.
+//   4. A lapsed (cancelled) workspace drops out of Discover and its
+//      direct booking link answers with the archived marker (200,
+//      { archived: true }) rather than a live calendar - only deletion
+//      turns the link into a 404.
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/deleted-owner-visibility.test.mjs
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
@@ -102,7 +104,7 @@ async function run() {
   assert(r.statusCode === 200, `living booking page still 200 (got ${r.statusCode})`);
   r = mockRes();
   await publicSlugHandler(req({ query: { slug: lapsed.slug } }), r);
-  assert(r.statusCode === 200, 'lapsed-but-not-deleted direct link still works (deliberate)');
+  assert(r.statusCode === 200 && r.body?.archived === true && !r.body.calendar, 'lapsed-but-not-deleted direct link answers archived (200, no calendar), not 404');
 
   console.log('\n[4] deleted owner → shop endpoints dark');
   r = mockRes();

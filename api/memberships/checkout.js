@@ -15,6 +15,7 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { findOrCreateCustomer, createMembershipCheckoutSession } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -39,6 +40,7 @@ export default async function handler(req, res) {
     const cs = await sql`SELECT workspace_id FROM calendar_settings WHERE slug = ${slug}`;
     if (cs.rows.length === 0) return notFound(res, 'No business with that handle');
     const workspaceId = cs.rows[0].workspace_id;
+    if (!(await loadWorkspaceAccess(workspaceId)).active) return archivedForbidden(res);
 
     // Fetch + verify the membership belongs to this workspace AND
     // has a Stripe price provisioned. The public flow can't fall

@@ -24,7 +24,10 @@ function hostVariants(host) {
 
 // Result shape:
 //   { kind: 'not_found' }
-//   | { kind: 'ok', site, page, nav, raw }
+//   | { kind: 'ok', workspaceId, site, page, nav, raw }
+//
+// `workspaceId` lets callers run the subscription gate
+// (api/_lib/businessAccess.js) and serve the archived page instead.
 //
 // `raw` is the original row, so the SSR layer can pull seo_*/favicon_url
 // without re-fetching.
@@ -34,7 +37,7 @@ export async function loadPublicSite({ handle, slug, host }) {
   let rows;
   if (handle && typeof handle === 'string') {
     ({ rows } = await sql`
-      SELECT handle, business_name, template,
+      SELECT w2.workspace_id, handle, business_name, template,
              COALESCE(published_sections, sections) AS sections,
              COALESCE(published_pages, pages)       AS pages,
              custom_css, font_pair, published_at, visibility, custom_domain,
@@ -54,7 +57,7 @@ export async function loadPublicSite({ handle, slug, host }) {
     const variants = hostVariants(host);
     if (variants.length === 0) return { kind: 'not_found' };
     ({ rows } = await sql`
-      SELECT handle, business_name, template,
+      SELECT w2.workspace_id, handle, business_name, template,
              COALESCE(published_sections, sections) AS sections,
              COALESCE(published_pages, pages)       AS pages,
              custom_css, font_pair, published_at, visibility, custom_domain,
@@ -103,6 +106,7 @@ export async function loadPublicSite({ handle, slug, host }) {
   return {
     kind: 'ok',
     raw: r,
+    workspaceId: r.workspace_id,
     site: {
       handle:       r.handle,
       businessName: r.business_name,
