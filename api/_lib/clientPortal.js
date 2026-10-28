@@ -138,7 +138,7 @@ async function ownsWorkspaceFromDb(userId) {
     const { rows } = await sql`
       SELECT w.id, w.onboarded_at, w.business_type,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
-             w.subscription_source, w.cancel_at_period_end,
+             w.subscription_source, w.cancel_at_period_end, w.data_deletion_at,
              w.stripe_customer_id,
              cs.biz_name, cs.slug
       FROM workspaces w
@@ -257,6 +257,9 @@ function deriveSubscription(row) {
     // owner has already turned auto-renew off (access runs to periodEndsAt).
     source: row.subscription_source || null,
     cancelAtPeriodEnd: !!row.cancel_at_period_end,
+    // Set once a paid subscription has lapsed: the date the workspace's
+    // data is permanently deleted unless the owner resubscribes first.
+    dataDeletionAt: (!isActive && row.data_deletion_at) ? row.data_deletion_at : null,
     // Complimentary access (Admin → Comps). The paywall never shows for
     // comped workspaces; the Account page can label the plan accordingly.
     comped: !!(row.comp_until && new Date(row.comp_until).getTime() > now),

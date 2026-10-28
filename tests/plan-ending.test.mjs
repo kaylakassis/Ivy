@@ -59,7 +59,7 @@ async function main() {
   console.log('\n[5] copy');
   const e = renderPlanEnding({ endsAt: new Date(Date.now() + 2 * 864e5), firstName: 'Kay', businessName: 'Glow Studio', source: 'stripe' });
   assert(/plan ends on/.test(e.subject), `subject names the date (${e.subject})`);
-  assert(/booking page and website/.test(e.html) && /client portal/.test(e.html) && /Nothing is deleted/.test(e.html), 'email says what is archived and that nothing is deleted');
+  assert(/booking page and website/.test(e.html) && /client portal/.test(e.html) && /7 days/.test(e.html) && /permanently deleted/.test(e.html), 'email says what is archived and that data is deleted 7 days later');
   assert(/Keep my plan/.test(e.html), 'Stripe CTA keeps the plan');
   const a = renderPlanEnding({ endsAt: new Date(), firstName: 'Kay', businessName: 'Glow', source: 'apple' });
   assert(/App Store/.test(a.html) && /apps\.apple\.com\/account\/subscriptions/.test(a.html), 'Apple-billed CTA goes to the App Store');

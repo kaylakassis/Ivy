@@ -91,9 +91,16 @@ export default function PrivacyPage() {
         with each of our sub-processors.</P>
 
       <H2>How long we keep it</H2>
-      <P>We keep workspace data for as long as your account is active. When you
-        delete your account, we delete your workspace and all associated data
-        (clients, invoices, messages, etc.) within 30 days. Server logs roll
+      <P>We keep workspace data for as long as your subscription is active. If your
+        paid subscription ends (you cancel and the paid period runs out, or payment
+        fails and is not fixed), we keep your workspace data for 7 days so you can
+        download it, then permanently delete it (clients, bookings, invoices,
+        documents, messages, website, automations and assistant history). We tell
+        you by email when the 7 days start and again 2 days before deletion;
+        resubscribing before then cancels it. Your login, billing records and any
+        moderation reports are kept. When you
+        delete your account, we delete your account and everything in it within
+        30 days. Server logs roll
         off automatically after 30 days. Backups may persist for up to 30
         additional days before being overwritten.</P>
 

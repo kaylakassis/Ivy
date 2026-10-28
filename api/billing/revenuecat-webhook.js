@@ -217,6 +217,7 @@ export default async function handler(req, res) {
                WHEN ${['UNCANCELLATION', 'RENEWAL', 'INITIAL_PURCHASE', 'PRODUCT_CHANGE'].includes(event.type)} THEN NULL
                ELSE plan_ending_reminder_sent_at
              END,
+             data_deletion_at = CASE WHEN ${nextStatus} IN ('active', 'trialing') THEN NULL ELSE data_deletion_at END,
              subscription_past_due_since = CASE
                WHEN ${nextStatus} = 'past_due' AND subscription_past_due_since IS NULL
                  THEN NOW()

@@ -1303,6 +1303,8 @@ function UsersTab() {
                     <Td>
                       <Pill text={u.classification}/>
                       {u.workspace && u.workspace.active === false && <ArchivedPill/>}
+                      {u.workspace?.dataDeletionAt && <DeletionPill at={u.workspace.dataDeletionAt}/>}
+                      {u.workspace?.dataPurgedAt && !u.workspace?.dataDeletionAt && u.workspace.active === false && <DeletionPill purged/>}
                       {u.workspace?.comped && (
                         <span style={{
                           marginLeft: 6, fontSize: 10, fontWeight: 700,
@@ -1590,6 +1592,12 @@ function UserDetailModal({ user, onClose, onChanged }) {
         {user.workspace && (
           <>
             <Row k="Subscription" v={<>{user.workspace.status}{user.workspace.active === false && <ArchivedPill/>}</>}/>
+            {user.workspace.dataDeletionAt && (
+              <Row k="Data deletion" v={`Scheduled for ${new Date(user.workspace.dataDeletionAt).toLocaleString()} (7 days after access ended; cancelled automatically if they resubscribe)`}/>
+            )}
+            {user.workspace.dataPurgedAt && (
+              <Row k="Data deleted" v={new Date(user.workspace.dataPurgedAt).toLocaleString()}/>
+            )}
             {user.workspace.trialEndsAt && (
               <Row k="Trial ends" v={new Date(user.workspace.trialEndsAt).toLocaleString()}/>
             )}
@@ -2395,6 +2403,16 @@ function Row({ k, v }) {
 }
 // Inactive owner (ended trial, cancelled, suspended, lapsed period): the
 // public booking page, website and client portal are archived for them.
+function DeletionPill({ at, purged }) {
+  const label = purged ? 'Data deleted' : `Deletes ${new Date(at).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}`;
+  return (
+    <span title={purged ? 'Workspace data was permanently deleted 7 days after the subscription ended' : 'Workspace data is permanently deleted on this date unless they resubscribe'} style={{
+      marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+      padding: '2px 8px', borderRadius: 99, background: 'var(--danger-soft, rgba(220,60,60,.12))', color: 'var(--danger, #c0392b)',
+    }}>{label}</span>
+  );
+}
+
 function ArchivedPill() {
   return (
     <span title="Subscription inactive: booking page, website and client portal are archived until they resubscribe." style={{

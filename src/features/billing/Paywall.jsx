@@ -46,6 +46,10 @@ const PERKS = [
   'Your own booking site + custom domain',
 ];
 
+function fmtLongDate(d) {
+  try { return new Date(d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); } catch { return String(d); }
+}
+
 export default function Paywall({ ctx, onRefresh }) {
   const { signOut } = useAuth();
   const sub = ctx?.subscription || null;
@@ -276,6 +280,23 @@ export default function Paywall({ ctx, onRefresh }) {
     window.location.href = isNative() ? '/welcome' : '/signin';
   };
 
+  // "Email me a copy": POST /api/account/export mails the full JSON export.
+  // Works on the iPhone app too, where a file download does not.
+  const [exportNote, setExportNote] = useState(null);
+  const emailExport = async () => {
+    setBusy('export'); setExportNote(null);
+    try {
+      const res = await fetch('/api/account/export', { method: 'POST', credentials: 'include' });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setExportNote(j.attached ? 'Sent. Check your inbox for a .json file with everything in it.' : 'Your export is large, so we emailed you a download link instead.');
+    } catch (e) {
+      setExportNote(e.message || 'Could not send the export. Please try again.');
+    } finally {
+      setBusy(null);
+    }
+  };
+
   // Distinguish trial-expired from never-trialed so the copy matches.
   // A 'trialing' status that isn't active means the trial window has
   // lapsed. (daysRemaining is null - not 0 - for an expired trial, so
@@ -342,11 +363,36 @@ export default function Paywall({ ctx, onRefresh }) {
           )}
           {/* Lapsed owners (ended trial, cancelled, suspended): say plainly
               what clients see right now, and that it is a state, not a loss. */}
-          {!syncing && !canTrial && (
+          {!syncing && !canTrial && !sub?.dataDeletionAt && (
             <p style={{ margin: '10px auto 0', maxWidth: 340, color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.5 }}>
               While your subscription is paused, your booking page, website and client
-              portal are archived. They come back the moment you resubscribe.
+              portal are archived. Resubscribe and everything is exactly as you left it.
             </p>
+          )}
+          {/* Paid subscription lapsed: the 7-day retention clock is running.
+              Say the date plainly and put the two ways to get the data right here,
+              because this screen is all a lapsed owner can reach. */}
+          {!syncing && sub?.dataDeletionAt && (
+            <div role="alert" style={{
+              margin: '12px auto 0', maxWidth: 360, textAlign: 'left',
+              padding: '10px 12px', borderRadius: 10,
+              background: 'var(--danger-soft, rgba(220,60,60,.10))', border: '1px solid var(--danger, #c0392b)',
+              color: 'var(--fg)', fontSize: 12.5, lineHeight: 1.5,
+            }}>
+              <strong>Your access has ended. Your data is permanently deleted on {fmtLongDate(sub.dataDeletionAt)}.</strong>{' '}
+              Download it before then, or resubscribe to keep everything exactly as it is.
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                {!isNative() && (
+                  <a href="/api/account/export" download className="btn btn-ghost" style={{ padding: '5px 10px', fontSize: 12.5, textDecoration: 'none' }}>
+                    Download my data
+                  </a>
+                )}
+                <button type="button" onClick={emailExport} disabled={busy != null} className="btn btn-ghost" style={{ padding: '5px 10px', fontSize: 12.5 }}>
+                  {busy === 'export' ? 'Sending…' : 'Email me a copy'}
+                </button>
+              </div>
+              {exportNote && <div style={{ marginTop: 6, color: 'var(--fg-2)' }}>{exportNote}</div>}
+            </div>
           )}
         </div>
 

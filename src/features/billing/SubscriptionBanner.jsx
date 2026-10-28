@@ -90,7 +90,7 @@ export default function SubscriptionBanner() {
         body={<>
           <strong>Your plan ends {when}.</strong>{' '}
           <span style={{ color: 'var(--fg-2)' }}>
-            After that your booking page, website and client portal are archived until you resubscribe. Nothing is deleted.
+            After that your booking page, website and client portal are archived, and your data is permanently deleted 7 days later unless you resubscribe.
           </span>
         </>}
         action={<Action busy={busy} err={err} onClick={openPortal} label={sub.source === 'apple' ? 'Manage in the App Store' : 'Keep my plan'}/>}

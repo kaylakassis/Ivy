@@ -137,6 +137,7 @@ async function onCheckoutCompleted(session, secretKey) {
       subscription_period_end = ${periodEnd},
       cancel_at_period_end    = FALSE,
       plan_ending_reminder_sent_at = NULL,
+      data_deletion_at = NULL, data_deletion_notice_sent_at = NULL, data_deletion_reminder_sent_at = NULL,
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isTrialing} THEN converted_at ELSE COALESCE(converted_at, NOW()) END
@@ -195,6 +196,7 @@ async function onSubscriptionChanged(sub, eventType) {
       subscription_period_end = ${periodEnd},
       cancel_at_period_end    = ${cancelAtEnd},
       plan_ending_reminder_sent_at = CASE WHEN ${cancelAtEnd} THEN plan_ending_reminder_sent_at ELSE NULL END,
+      data_deletion_at = CASE WHEN ${isActive || isTrialing} THEN NULL ELSE data_deletion_at END,
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
@@ -212,6 +214,7 @@ async function onSubscriptionChanged(sub, eventType) {
         subscription_period_end = ${periodEnd},
         cancel_at_period_end    = ${cancelAtEnd},
       plan_ending_reminder_sent_at = CASE WHEN ${cancelAtEnd} THEN plan_ending_reminder_sent_at ELSE NULL END,
+      data_deletion_at = CASE WHEN ${isActive || isTrialing} THEN NULL ELSE data_deletion_at END,
         trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
         trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
         converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END

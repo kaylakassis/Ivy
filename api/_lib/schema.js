@@ -102,6 +102,11 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
 -- "Cancelled, access until <date>" instead of "Renews in N days".
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS plan_ending_reminder_sent_at TIMESTAMPTZ;
+-- 7-day data retention after a paid subscription lapses (api/_lib/dataRetention.js).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_deletion_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_deletion_notice_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_deletion_reminder_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_purged_at TIMESTAMPTZ;
 -- Daily-return streak (habit loop). streak_last_day is the last calendar day
 -- (in the workspace timezone) the owner was active; streak_days is the current
 -- consecutive-day count. Maintained by touchStreak() on the daily dashboard

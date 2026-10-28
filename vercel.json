@@ -121,6 +121,10 @@
     {
       "path": "/api/cron/plan-ending",
       "schedule": "20 10 * * *"
+    },
+    {
+      "path": "/api/cron/data-retention",
+      "schedule": "40 10 * * *"
     }
   ],
   "functions": {
