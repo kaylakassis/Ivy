@@ -155,6 +155,10 @@ export function serializeInvoice(row) {
     paymentClaimedAt:     row.payment_claimed_at || null,
     paymentClaimedMethod: row.payment_claimed_method || null,
     paymentClaimedNote:   row.payment_claimed_note || null,
+    // Delayed-settlement payment (ACH Direct Debit) authorised but not yet
+    // cleared. The invoice stays unpaid; the UI shows "Payment processing".
+    paymentProcessingAt:     row.payment_processing_at || null,
+    paymentProcessingMethod: row.payment_processing_method || null,
     activity:     row.activity || [],
     subtotal:     totals.subtotal,
     tax:          totals.tax,
@@ -177,6 +181,11 @@ export function serializeInvoicePublic(row, workspaceMeta = {}) {
     paymentEnabled: !!workspaceMeta.paymentEnabled,
     // Other ways to pay - only while there is something left to pay.
     manualMethods: unpaid && Array.isArray(workspaceMeta.manualMethods) ? workspaceMeta.manualMethods : [],
+    // Saved card for repeat invoices from THIS business: display fragments
+    // only (brand/last4), never Stripe ids. canSaveCard = the client may
+    // tick "save this card" on a card checkout.
+    savedCard: workspaceMeta.savedCard || null,
+    canSaveCard: !!workspaceMeta.canSaveCard,
   };
 }
 

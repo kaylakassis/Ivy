@@ -1714,6 +1714,14 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_at TIMESTAMPTZ;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_method TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_note TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claim_notified_at TIMESTAMPTZ;
+-- Delayed-settlement payments (ACH Direct Debit etc). Stripe reports the
+-- Checkout session complete while payment_status is still 'unpaid'; the
+-- debit settles (or fails) up to 4 business days later via the
+-- checkout.session.async_payment_* events. While waiting, the invoice stays
+-- 'sent'/'overdue' and carries this stamp so the owner sees "Payment
+-- processing" instead of chasing the client. Cleared on paid or failed.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_processing_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_processing_method TEXT;
 ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_status_check;
 ALTER TABLE invoices ADD CONSTRAINT invoices_status_check
   CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'voided', 'refunded'));

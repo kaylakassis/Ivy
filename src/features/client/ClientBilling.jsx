@@ -137,7 +137,7 @@ export default function ClientBilling() {
       )}
 
       <Section title="Cards on file"
-        hint="Used by businesses to charge late-cancel/no-show fees, tips, and (when allowed) membership renewals.">
+        hint="Each card is saved with one business only. It pays that business's future invoices in one tap and covers late-cancel or no-show fees, tips, and (when allowed) membership renewals.">
         {cards && cards.length === 0 ? (
           <div className="card" style={{ padding: 32 }}>
             <EmptyNote icon="Lock"

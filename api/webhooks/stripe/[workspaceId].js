@@ -13,28 +13,15 @@ import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { applySubscriptionState } from '../../_lib/memberships.js';
-import { computeTotals } from '../../_lib/finance.js';
-import { notifyOwnerSafe } from '../../_lib/push.js';
-import { notifyInvoicePaid } from '../../_lib/invoiceNotify.js';
-import { markInvoicePaid } from '../../_lib/invoicePayments.js';
+import {
+  fulfillCheckoutSession, fulfillInvoicePaymentIntent, failInvoiceAsyncPayment,
+} from '../../_lib/checkoutFulfillment.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
-import { generateCode, hashCode, normalizeCode } from '../../_lib/giftCards.js';
-import { sendEmail, emailShell } from '../../_lib/email.js';
-import { fetchBranding } from '../../_lib/branding.js';
-import { appUrl } from '../../_lib/tokens.js';
 import { fetchWithTimeout } from '../../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
 
-function escapeHtml(s) {
-  return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-}
-
 export const config = { api: { bodyParser: false } };
-
-function fmtMoney(n) {
-  return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -150,11 +137,31 @@ export default async function handler(req, res) {
       if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
         return res.status(400).json({ error: 'workspace mismatch' });
       }
-      const result = await markInvoicePaid({
-        workspaceId, invoiceId, paymentIntent: pi.id,
-        amountCents: pi.amount_received,
-      });
+      const result = await fulfillInvoicePaymentIntent({ workspaceId, pi, creds: workspaceCreds });
       return ok(res, { received: true, applied: 'invoice-paid', result });
+    }
+
+    // Delayed methods (ACH Direct Debit) settle through this pair. Same
+    // idempotent fulfilment as a paid completion / a failure that leaves the
+    // invoice open and tells both sides.
+    if (event.type === 'checkout.session.async_payment_succeeded') {
+      const session = event.data?.object || {};
+      if (session.metadata?.workspace_id && session.metadata.workspace_id !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch' });
+      }
+      const result = await fulfillCheckoutSession({ workspaceId, session, creds: workspaceCreds, settledAsync: true });
+      return ok(res, { received: true, ...result });
+    }
+    if (event.type === 'checkout.session.async_payment_failed') {
+      const session = event.data?.object || {};
+      if (session.metadata?.workspace_id && session.metadata.workspace_id !== workspaceId) {
+        return res.status(400).json({ error: 'workspace mismatch' });
+      }
+      if (!session.metadata?.invoice_id || String(session.metadata.invoice_id).startsWith('bookdep_')) {
+        return ok(res, { received: true, ignored: 'async failure outside the invoice flow' });
+      }
+      const result = await failInvoiceAsyncPayment({ workspaceId, session });
+      return ok(res, { received: true, applied: 'invoice-payment-failed', result });
     }
 
     // Only checkout.session.completed remains as the path that
@@ -348,144 +355,26 @@ export default async function handler(req, res) {
       return ok(res, { received: true, marked: 'membership-active' });
     }
 
-    // Gift card purchase: mode='payment' + metadata.purpose='gift_card'.
-    // Mint the code on payment-succeeded, store hashed code, email the
-    // recipient with the raw code. Idempotent on the Stripe payment_intent.
-    if (session.mode === 'payment' && session.metadata?.purpose === 'gift_card' && session.payment_status === 'paid') {
-      // Defense-in-depth: reject events whose metadata.workspace_id
-      // disagrees with the URL's workspaceId.
-      if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
-        return res.status(400).json({ error: 'workspace mismatch (gift card)' });
-      }
-      // Shared, idempotent issuer (also used by the platform webhook).
-      const { issueGiftCardFromSession } = await import('../../_lib/checkoutFulfillment.js');
-      const result = await issueGiftCardFromSession({ workspaceId, session });
-      return ok(res, { received: true, ...result });
-    }
-
-    if (session.payment_status !== 'paid') {
-      return ok(res, { received: true, ignored: `payment_status=${session.payment_status}` });
-    }
-
-    // Deposit checkout flow: the public booking endpoint stashes the
-    // session_id on bookings.deposit_payment_intent as a forward
-    // pointer. Recognize that pattern by metadata.invoice_id starting
-    // with 'bookdep_' OR by looking up a booking with the session id.
-    if ((invoiceId && String(invoiceId).startsWith('bookdep_')) || !invoiceId) {
-      const { rows: bRows } = await sql`
-        SELECT id, deposit_required, deposit_paid, activity FROM bookings
-        WHERE workspace_id = ${workspaceId} AND deposit_payment_intent = ${sessionId}
-        LIMIT 1
+    // Invoice, booking deposit, package, program and gift card all go
+    // through the shared dispatcher, which fulfils ONLY when
+    // payment_status === 'paid'. An ACH Direct Debit session arrives
+    // 'unpaid' and is stamped "payment processing" until the
+    // async_payment_succeeded event above lands.
+    if (invoiceId && !String(invoiceId).startsWith('bookdep_') && session.payment_status === 'paid') {
+      // Legacy guard: the owner may have minted a newer checkout link for
+      // this invoice; a stale session's event must not mark it paid.
+      const { rows: invRows } = await sql`
+        SELECT stripe_session_id, status FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
       `;
-      if (bRows.length > 0) {
-        const booking = bRows[0];
-        const paymentIntent = typeof session.payment_intent === 'string'
-          ? session.payment_intent
-          : session.payment_intent?.id || null;
-        await sql`
-          UPDATE bookings SET
-            deposit_paid           = ${booking.deposit_required},
-            deposit_paid_at        = NOW(),
-            deposit_payment_intent = ${paymentIntent}
-          WHERE id = ${booking.id} AND workspace_id = ${workspaceId}
-        `;
-        return ok(res, { received: true, marked: 'deposit-paid', bookingId: booking.id });
+      const inv = invRows[0];
+      if (!inv) return ok(res, { received: true, ignored: 'invoice not found' });
+      if (inv.status === 'paid') return ok(res, { received: true, ignored: 'already paid' });
+      if (sessionId && inv.stripe_session_id && inv.stripe_session_id !== sessionId) {
+        return ok(res, { received: true, ignored: 'session id mismatch' });
       }
-      // Fall through if no matching booking - invoice case below.
     }
-    if (!invoiceId) return ok(res, { received: true, ignored: 'no metadata' });
-
-    // Look up + verify the invoice belongs to this workspace before mutating.
-    const { rows: invRows } = await sql`
-      SELECT * FROM invoices
-      WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}
-    `;
-    const inv = invRows[0];
-    if (!inv) return ok(res, { received: true, ignored: 'invoice not found' });
-
-    // Idempotent - webhook retries shouldn't double-mark or re-append history.
-    if (inv.status === 'paid') {
-      return ok(res, { received: true, ignored: 'already paid' });
-    }
-    if (sessionId && inv.stripe_session_id && inv.stripe_session_id !== sessionId) {
-      // The invoice was paid with a different session - likely the owner
-      // generated a new checkout link after this one. Don't mark from a
-      // stale event.
-      return ok(res, { received: true, ignored: 'session id mismatch' });
-    }
-
-    const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
-    // Record what the buyer was actually charged. With Stripe Tax off this
-    // equals totals.total to the cent; with Stripe Tax on it includes the
-    // Stripe-computed tax, matching the self-heal (markInvoicePaid) path.
-    const paidAmount = Number.isFinite(session.amount_total)
-      ? session.amount_total / 100
-      : totals.total;
-    const newActivity = [
-      ...(inv.activity || []),
-      {
-        ts: new Date().toISOString(),
-        kind: 'paid',
-        text: `Paid by card · ${fmtMoney(paidAmount)}`,
-      },
-    ];
-
-    // Capture payment_intent so the refund endpoint can target it
-    // without re-fetching the session every time.
-    const paymentIntent = typeof session.payment_intent === 'string'
-      ? session.payment_intent
-      : session.payment_intent?.id || null;
-
-    const upd = await sql`
-      UPDATE invoices SET
-        status                 = 'paid',
-        paid_at                = NOW(),
-        paid_amount            = ${paidAmount},
-        paid_method            = 'card',
-        view_token_hash        = NULL,
-        stripe_payment_intent  = ${paymentIntent},
-        activity               = ${JSON.stringify(newActivity)}::jsonb,
-        updated_at             = NOW()
-      WHERE id = ${inv.id} AND workspace_id = ${workspaceId} AND status <> 'paid'
-      RETURNING id
-    `;
-    // Lost a race with a concurrent webhook delivery (Stripe can fan a
-    // single payment into checkout.session.completed + payment_intent.
-    // succeeded for the same invoice, and each carries a different
-    // event.id so markProcessed dedup doesn't catch them). Without
-    // this guard we'd fire the owner push + client receipt email twice.
-    // Mirrors the platform-webhook handler's pattern at lines 277-279.
-    if (upd.rows.length === 0) {
-      return ok(res, { received: true, ignored: 'already paid (race)' });
-    }
-
-    // Proactive Ivy hand-off: tap the push to land in Ivy with a
-    // ready-to-go thank-you prompt. The /ivy?prompt= deep link is
-    // consumed by IvyPro on mount - see the useEffect there.
-    const clientLabel = inv.client_name || 'A client';
-    const totalLabel  = fmtMoney(paidAmount);
-    const ivyPrompt   = `Draft a short, warm thank-you message for ${clientLabel} who just paid invoice ${inv.number} (${totalLabel}). Then send it as a chat message to them.`;
-    notifyOwnerSafe({
-      workspaceId,
-      type: 'payments',
-      payload: {
-        title: 'Invoice paid 💸',
-        body: `${clientLabel} · ${inv.number} · ${totalLabel}. Tap to draft a thank-you with Ivy.`,
-        url: `/ivy?prompt=${encodeURIComponent(ivyPrompt)}`,
-        tag: `invoice-paid-${inv.id}`,
-      },
-    });
-
-    // Client receipt. Use paidAmount (what the buyer was actually
-    // charged, including Stripe-Tax add-on) - not totals.total (which
-    // is the invoice subtotal+tax_rate). For Stripe-Tax-enabled
-    // workspaces the two differ. Best-effort - the race guard above
-    // means this only fires when our UPDATE actually flipped status.
-    notifyInvoicePaid({
-      workspaceId, invoiceId: inv.id, totalAmount: paidAmount, method: 'card',
-    });
-
-    return ok(res, { received: true, marked: 'paid' });
+    const result = await fulfillCheckoutSession({ workspaceId, session, creds: workspaceCreds });
+    return ok(res, { received: true, ...result });
   } catch (err) {
     // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.

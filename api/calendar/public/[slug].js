@@ -18,6 +18,7 @@ import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail } from '../../_lib/auth.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
+import { loadBookingForInvite, calendarLinksFor } from '../../_lib/calendarLinks.js';
 import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { getProvider } from '../../_lib/payments/index.js';
@@ -685,6 +686,13 @@ async function createBooking(req, res) {
       .catch((e) => console.error('[booking] syncOnBookingCreated failed:', e?.message));
     attachIntakeForms({ workspaceId, bookingId: b.id })
       .catch((e) => console.error('[booking] attachIntakeForms failed:', e?.message));
+    // One-tap add-to-calendar for the confirmation screen: a Google deep
+    // link + a signed .ics URL (api/_lib/calendarLinks.js). Best-effort.
+    let calendar = null;
+    try {
+      const inviteRow = await loadBookingForInvite({ bookingId: b.id, workspaceId });
+      if (inviteRow) calendar = calendarLinksFor(inviteRow);
+    } catch { /* confirmation still renders without the links */ }
     return created(res, {
       booking: {
         id: b.id,
@@ -695,6 +703,7 @@ async function createBooking(req, res) {
         bookingTotal: Number(b.booking_total || 0),
         locationType,
         depositRequired,
+        calendar,
       },
       depositCheckoutUrl,
     });

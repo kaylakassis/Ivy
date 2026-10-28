@@ -1,10 +1,27 @@
-// /api/cron/review-requests - daily at 17:00 UTC.
+// /api/cron/review-requests - hourly.
 //
-// Walks bookings that completed 2–14 days ago, haven't been asked yet,
-// don't already have a review, and have a client email - for each,
-// mints a one-time signed link and emails "How was it?". Submitting
-// the review (or going past the 14-day window) nulls the token hash
-// so it can't be reused.
+// Asks a client "How was it?" 2 to 3 hours after a session they attended,
+// which is when the experience is fresh and the ask converts best. A
+// request goes out only when ALL of these hold:
+//
+//   • the occurrence is over: its end time (booking date + end_min, in the
+//     workspace timezone) is at least 2 hours in the past, never before;
+//   • the owner marked it completed / attended (completion_log has the
+//     occurrence) and it is not a no-show or a cancellation;
+//   • if the session has an invoice (bookings.collect_invoice_id), that
+//     invoice is paid;
+//   • this client has not been asked by this business in the last 30 days
+//     (any booking of theirs with review_requested_at in the window);
+//   • there is no block in either direction (contact_blocks) and the
+//     client has not opted out of 'marketing' emails;
+//   • the workspace is active (isWorkspaceActive) - archived or lapsed
+//     businesses never email their clients;
+//   • the booking has not been asked already and has no review.
+//
+// Occurrences older than 7 days drop out of the window (a late ask reads
+// as spam). Submitting the review (or going past the window) nulls the
+// token hash so the link cannot be reused. Owners moderate reviews from
+// Finance as before - nothing here changes that.
 //
 // Branding-aware: emails come from the OWNER'S brand (their logo,
 // accent color, signature), so the request feels personal instead of
@@ -16,13 +33,15 @@ import { isSuperAdminBySession } from '../_lib/admin.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { makeBrandingCache } from '../_lib/branding.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
+import { isWorkspaceActive } from '../_lib/clientPortal.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
 import { trackCron } from '../_lib/cronMetrics.js';
 
-const MIN_DAYS_AFTER = 2;
-const MAX_DAYS_AFTER = 14;
+export const MIN_HOURS_AFTER = 2;
+export const MAX_HOURS_AFTER = 7 * 24;
+export const PER_CLIENT_COOLDOWN_DAYS = 30;
 // Sized for ~100K active workspaces. sendEmail throttles at ~8/sec
 // (Resend ceiling), so 1000 sends fits well inside the 300s cron budget.
 const MAX_PER_RUN = 1000;
@@ -31,44 +50,82 @@ function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
 
-// Bookings with an occurrence that COMPLETED in the 2–14 day window -
-// keyed on completion_log entries, NOT b.date. The old
-// `b.date BETWEEN window AND completion_log ? b.date` form only matched
-// single bookings (and a recurring series' very first occurrence), so
-// recurring clients were NEVER asked. We still send at most one request
-// per booking (the model is one review per booking row), using the most
-// recent in-window completed occurrence for the email's date label.
-// completion_log keys are validated YYYY-MM-DD on write, so ::date is safe.
+// Candidate bookings with a completed occurrence whose END fell between
+// MAX_HOURS_AFTER and MIN_HOURS_AFTER ago, in the workspace's own timezone.
+// Keyed on completion_log entries (one key per occurrence, YYYY-MM-DD,
+// validated on write so ::date is safe), so recurring clients are asked
+// too. One request per booking row; the most recent in-window occurrence
+// provides the email's date label.
+//
+// Workspace activity is decided in JS (isWorkspaceActive is the single
+// source of truth shared with the paywall), so the subscription columns
+// ride along and dueReviewRequests() applies the filter.
 // Exported for testing.
-export async function selectDueReviewRequests() {
+export async function selectDueReviewRequests({ now = null } = {}) {
+  const nowTs = now ? new Date(now).toISOString() : null;
   const { rows } = await sql`
+    WITH ref AS (SELECT COALESCE(${nowTs}::timestamptz, NOW()) AS now)
     SELECT b.id, b.workspace_id, b.client_id, b.client_name, b.client_email,
            b.service_id, b.date, b.start_min,
            s.name AS service_name,
            cs.biz_name, cs.slug,
+           w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
            (SELECT MAX(k::date)
-              FROM jsonb_object_keys(b.completion_log) AS k
-             WHERE k::date BETWEEN (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
-                               AND (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MIN_DAYS_AFTER} * INTERVAL '1 day'
+              FROM jsonb_object_keys(b.completion_log) AS k, ref
+             WHERE (k::date::timestamp + make_interval(mins => b.end_min)) AT TIME ZONE COALESCE(cs.timezone, 'UTC')
+                   BETWEEN ref.now - make_interval(hours => ${MAX_HOURS_AFTER})
+                       AND ref.now - make_interval(hours => ${MIN_HOURS_AFTER})
            ) AS completed_date
       FROM bookings b
+      JOIN workspaces w ON w.id = b.workspace_id
       LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
       LEFT JOIN calendar_settings cs ON cs.workspace_id = b.workspace_id
+      LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
+      LEFT JOIN invoices ci ON ci.id = b.collect_invoice_id AND ci.workspace_id = b.workspace_id
      WHERE b.cancelled_at IS NULL
        AND b.no_show_at IS NULL
        AND b.review_requested_at IS NULL
        AND b.client_email IS NOT NULL AND b.client_email <> ''
        AND b.completion_log <> '{}'::jsonb
+       -- the session is over: at least MIN_HOURS_AFTER ago, at most MAX_HOURS_AFTER
        AND EXISTS (
-             SELECT 1 FROM jsonb_object_keys(b.completion_log) AS k
-              WHERE k::date BETWEEN (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MAX_DAYS_AFTER} * INTERVAL '1 day'
-                                AND (NOW() AT TIME ZONE COALESCE(cs.timezone, 'UTC'))::date - ${MIN_DAYS_AFTER} * INTERVAL '1 day'
+             SELECT 1 FROM jsonb_object_keys(b.completion_log) AS k, ref
+              WHERE (k::date::timestamp + make_interval(mins => b.end_min)) AT TIME ZONE COALESCE(cs.timezone, 'UTC')
+                    BETWEEN ref.now - make_interval(hours => ${MAX_HOURS_AFTER})
+                        AND ref.now - make_interval(hours => ${MIN_HOURS_AFTER})
            )
+       -- an invoice for the session must be paid first
+       AND (b.collect_invoice_id IS NULL OR ci.status = 'paid')
+       -- not asked already, no review yet
        AND NOT EXISTS (SELECT 1 FROM reviews r WHERE r.booking_id = b.id)
+       -- once per client per business per 30 days (by client row or by address)
+       AND NOT EXISTS (
+             SELECT 1 FROM bookings b2, ref
+              WHERE b2.workspace_id = b.workspace_id
+                AND b2.id <> b.id
+                AND b2.review_requested_at IS NOT NULL
+                AND b2.review_requested_at > ref.now - make_interval(days => ${PER_CLIENT_COOLDOWN_DAYS})
+                AND ((b.client_id IS NOT NULL AND b2.client_id = b.client_id)
+                     OR LOWER(b2.client_email) = LOWER(b.client_email))
+           )
+       -- blocked in either direction = no contact
+       AND NOT EXISTS (
+             SELECT 1 FROM contact_blocks cb
+              WHERE cb.workspace_id = b.workspace_id AND cb.client_id = b.client_id
+           )
+       -- client opted out of review prompts / announcements
+       AND COALESCE(c.notification_prefs->>'marketing', 'true') <> 'false'
      ORDER BY completed_date DESC
      LIMIT ${MAX_PER_RUN}
   `;
   return rows;
+}
+
+// The rows the handler acts on: candidates from an ACTIVE workspace only.
+// Exported for testing.
+export async function dueReviewRequests(opts = {}) {
+  const rows = await selectDueReviewRequests(opts);
+  return rows.filter((r) => isWorkspaceActive(r));
 }
 
 async function handler(req, res) {
@@ -81,7 +138,7 @@ async function handler(req, res) {
 
   try {
     await ensureSchemaApplied();
-    const due = { rows: await selectDueReviewRequests() };
+    const due = { rows: await dueReviewRequests() };
 
     let sent = 0;
     let failed = 0;

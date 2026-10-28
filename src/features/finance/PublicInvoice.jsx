@@ -62,6 +62,16 @@ export default function PublicInvoice() {
   const [copied, setCopied]       = useState(null);
   const [paying, setPaying]       = useState(false);
   const [payErr, setPayErr]       = useState(null);
+  // "Save this card for future invoices from <business>" on the card
+  // checkout. Only offered when the server says the business can keep a
+  // card (Stripe, with a client record to attach it to).
+  const [saveCard, setSaveCard]   = useState(false);
+  // Result of the post-checkout confirm: a card payment is 'paid'; an ACH
+  // Direct Debit completes Checkout 'unpaid' and settles later, so the
+  // success screen must say "processing", not "paid".
+  const [confirmState, setConfirmState] = useState(null); // null | 'paid' | 'processing' | 'unknown'
+  // The saved card was declined off-session; offer the normal checkout.
+  const [savedCardDeclined, setSavedCardDeclined] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -72,10 +82,12 @@ export default function PublicInvoice() {
       // that may never have been configured.
       if (paidFlag) {
         try {
-          await fetch('/api/invoice-pay/' + encodeURIComponent(token) + '?action=confirm', {
+          const cr = await fetch('/api/invoice-pay/' + encodeURIComponent(token) + '?action=confirm', {
             method: 'POST', credentials: 'omit',
           });
-        } catch { /* best-effort - the success screen still renders */ }
+          const cj = await cr.json().catch(() => ({}));
+          if (live) setConfirmState(cj.paid ? 'paid' : (cj.processing ? 'processing' : 'unknown'));
+        } catch { if (live) setConfirmState('unknown'); }
       }
       try {
         const res = await fetch('/api/invoice-view/' + encodeURIComponent(token), { credentials: 'omit' });
@@ -138,7 +150,7 @@ export default function PublicInvoice() {
         method: 'POST',
         credentials: 'omit',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({}),
+        body: JSON.stringify({ saveCard: !!(saveCard && inv?.canSaveCard) }),
       });
       const j = await r.json().catch(() => ({}));
       if (!r.ok || !j.url) throw new Error(j.error || `HTTP ${r.status}`);
@@ -149,23 +161,76 @@ export default function PublicInvoice() {
     }
   };
 
+  // One tap with the card saved for this business. Success lands on the
+  // same paid screen as a Checkout return; a bank that wants extra
+  // authentication sends us to the normal checkout instead; a decline
+  // leaves the regular "Pay with card" button as the way forward.
+  const payWithSavedCard = async () => {
+    setPaying(true); setPayErr(null);
+    try {
+      const r = await fetch('/api/invoice-pay/' + encodeURIComponent(token), {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ useSavedCard: true }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (r.status === 402 || j.code === 'saved_card_declined') {
+        setSavedCardDeclined(true);
+        setPayErr((j.error || 'Your saved card was declined.') + ' Pay with a different card below.');
+        setPaying(false);
+        return;
+      }
+      if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+      if (j.url) { window.location.href = j.url; return; }
+      if (j.paid) {
+        setConfirmState('paid');
+        window.location.replace(window.location.pathname + '?paid=1');
+        return;
+      }
+      if (j.processing) {
+        setConfirmState('processing');
+        window.location.replace(window.location.pathname + '?paid=1');
+        return;
+      }
+      throw new Error('Payment could not be completed.');
+    } catch (e) {
+      setPayErr(e.message || 'Could not charge the saved card.');
+      setPaying(false);
+    }
+  };
+
   if (loading) {
     return <PageWrap tweaks={tweaks}><Loader set="client"/></PageWrap>;
   }
   // Post-payment success - render even if the (now-paid) invoice link no
   // longer loads. We confirmed the payment server-side above.
   if (paidFlag) {
+    const processing = confirmState === 'processing' || (confirmState !== 'paid' && !!inv?.paymentProcessingAt);
     return (
       <PageWrap tweaks={tweaks}>
         <div className="card" style={{ padding: 36, textAlign: 'center' }}>
           <div style={{
-            width: 48, height: 48, borderRadius: 99, background: 'var(--ok)', color: '#fff',
+            width: 48, height: 48, borderRadius: 99,
+            background: processing ? 'var(--accent)' : 'var(--ok)',
+            color: processing ? 'var(--accent-ink)' : '#fff',
             display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14,
-          }}><Icons.Check size={24} sw={2.4}/></div>
-          <div style={{ fontSize: 16, fontWeight: 600 }}>Payment received - thank you!</div>
-          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
-            {inv?.business?.name || 'The business'} has been notified and your invoice is marked paid.
-          </div>
+          }}>{processing ? <Icons.Clock size={24} sw={2.4}/> : <Icons.Check size={24} sw={2.4}/>}</div>
+          {processing ? (
+            <>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>Bank payment started. It usually clears within 4 business days.</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
+                {inv?.business?.name || 'The business'} has been told a bank payment is on its way. The invoice is marked paid once the money lands; if your bank returns the payment, we will email you a link to try again.
+              </div>
+            </>
+          ) : (
+            <>
+              <div style={{ fontSize: 16, fontWeight: 600 }}>Payment received - thank you!</div>
+              <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
+                {inv?.business?.name || 'The business'} has been notified and your invoice is marked paid.
+              </div>
+            </>
+          )}
         </div>
       </PageWrap>
     );
@@ -189,6 +254,11 @@ export default function PublicInvoice() {
   const manualMethods = Array.isArray(inv.manualMethods) ? inv.manualMethods : [];
   const businessName = inv.business?.name || 'The business';
   const showClaimThanks = !!claimed && !changing;
+  const savedCard = inv.savedCard && inv.savedCard.last4 ? inv.savedCard : null;
+  const savedCardLabel = savedCard
+    ? `${capitalize(savedCard.brand) || 'Card'} \u2022\u2022\u2022\u2022 ${savedCard.last4}`
+    : null;
+  const bankProcessing = !!inv.paymentProcessingAt;
 
   const thanksBlock = (
     <div>
@@ -341,12 +411,35 @@ export default function PublicInvoice() {
               {inv.business?.name || 'The sender'} will get a confirmation as soon as the payment processor confirms the charge.
             </div>
           </div>
+        ) : bankProcessing ? (
+          <div>
+            <div style={{
+              width: 44, height: 44, borderRadius: 99, background: 'var(--accent)', color: 'var(--accent-ink)',
+              display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 12,
+            }}><Icons.Clock size={22} sw={2.4}/></div>
+            <div style={{ fontSize: 14, fontWeight: 600 }}>Bank payment started. It usually clears within 4 business days.</div>
+            <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 4 }}>
+              Nothing more to do. {businessName} will see this invoice as paid once the money lands.
+            </div>
+          </div>
         ) : showClaimThanks ? (
           thanksBlock
         ) : inv.paymentEnabled ? (
           <>
+            {savedCard && !savedCardDeclined && (
+              <div style={{ marginBottom: 16 }}>
+                <button className="btn btn-primary" onClick={payWithSavedCard} disabled={paying}
+                  style={{ padding: '12px 22px', minWidth: 220, justifyContent: 'center' }}>
+                  {paying ? 'Charging…' : `Pay ${fmtMoney(remaining)} with ${savedCardLabel}`}
+                  {!paying && <Icons.Check size={14} sw={2.2}/>}
+                </button>
+                <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--muted)' }}>
+                  The card you saved with {businessName}. Remove it any time from your portal under Profile.
+                </div>
+              </div>
+            )}
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginBottom: 12, lineHeight: 1.55 }}>
-              Pay <strong>{fmtMoney(remaining)}</strong> by card.
+              {savedCard && !savedCardDeclined ? 'Or pay ' : 'Pay '}<strong>{fmtMoney(remaining)}</strong> by card.
               You'll be taken to a secure checkout - your card details never touch our servers.
             </div>
             {cancelledFlag && (
@@ -371,11 +464,26 @@ export default function PublicInvoice() {
                 background: 'rgba(155,44,44,0.08)', color: 'var(--danger)', fontSize: 12,
               }}>{payErr}</div>
             )}
-            <button className="btn btn-primary" onClick={payWithCard} disabled={paying}
+            <button className={savedCard && !savedCardDeclined ? 'btn btn-outline' : 'btn btn-primary'} onClick={payWithCard} disabled={paying}
               style={{ padding: '12px 22px', minWidth: 220, justifyContent: 'center' }}>
-              {paying ? 'Redirecting…' : `Pay ${fmtMoney(remaining)} with card`}
+              {paying ? 'Redirecting…' : `Pay ${fmtMoney(remaining)} with ${savedCard && !savedCardDeclined ? 'another card' : 'card'}`}
               {!paying && <Icons.Arrow size={14} sw={2.2}/>}
             </button>
+            {inv.canSaveCard && (
+              <label style={{
+                display: 'flex', alignItems: 'flex-start', gap: 8, justifyContent: 'center',
+                marginTop: 12, fontSize: 12.5, color: 'var(--fg-2)', cursor: 'pointer', textAlign: 'left',
+              }}>
+                <input type="checkbox" checked={saveCard} onChange={(e) => setSaveCard(e.target.checked)}
+                  style={{ marginTop: 2 }}/>
+                <span>
+                  {savedCard ? 'Replace my saved card with the one I use at checkout' : `Save this card for future invoices from ${businessName}`}
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--muted)', marginTop: 2 }}>
+                    Stored securely by the payment processor. Only {businessName} can charge it, and you can remove it from your portal at any time.
+                  </span>
+                </span>
+              </label>
+            )}
             {manualMethods.length === 0 && (
               <div style={{ marginTop: 14, fontSize: 11, color: 'var(--muted)' }}>
                 Already paid by another method?{' '}
@@ -487,6 +595,11 @@ export default function PublicInvoice() {
       )}
     </PageWrap>
   );
+}
+
+function capitalize(s) {
+  if (!s) return s;
+  return String(s).charAt(0).toUpperCase() + String(s).slice(1);
 }
 
 function Row({ label, value, bold }) {

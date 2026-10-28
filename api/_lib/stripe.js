@@ -230,12 +230,18 @@ export async function createCheckoutSession({
   // account's default - we set 'exclusive' as the safe default.
   automaticTax = false,
   taxBehavior = null,
+  // Saved card for repeat invoices. customerId is a Customer on the SAME
+  // connected account (never the platform's); saveCard asks Stripe to keep
+  // the card for off-session use so later invoices from this business can
+  // be paid in one tap. Both are needed together - Stripe only attaches a
+  // reusable payment method when the session has a customer.
+  customerId = null,
+  saveCard = false,
 }) {
   const body = {
     mode: 'payment',
     success_url: successUrl,
     cancel_url: cancelUrl,
-    customer_email: customerEmail || undefined,
     'line_items[0][price_data][currency]': currency.toLowerCase(),
     'line_items[0][price_data][unit_amount]': totalCents,
     'line_items[0][price_data][product_data][name]': `Invoice ${invoice.number}`,
@@ -244,6 +250,16 @@ export async function createCheckoutSession({
     'metadata[workspace_id]': invoice.workspace_id,
     payment_intent_data: { metadata: { invoice_id: invoice.id, workspace_id: invoice.workspace_id } },
   };
+  // Stripe rejects customer + customer_email together.
+  if (customerId) body.customer = customerId;
+  else if (customerEmail) body.customer_email = customerEmail;
+  if (saveCard && customerId) {
+    body['payment_intent_data[setup_future_usage]'] = 'off_session';
+    body['metadata[save_card]'] = '1';
+    body['metadata[client_id]'] = invoice.client_id || undefined;
+    body.payment_intent_data.metadata.save_card = '1';
+    if (invoice.client_id) body.payment_intent_data.metadata.client_id = invoice.client_id;
+  }
   if (automaticTax) {
     body['automatic_tax[enabled]'] = 'true';
     // tax_behavior must be set per-line when automatic_tax is on.
@@ -522,6 +538,11 @@ export async function createSetupCheckoutSession({
     },
   });
   return { id: session.id, url: session.url };
+}
+
+export async function fetchPaymentIntent({ secretKey, stripeAccount, paymentIntentId }) {
+  if (!paymentIntentId) throw new Error('paymentIntentId is required');
+  return stripeFetch(`/payment_intents/${encodeURIComponent(paymentIntentId)}`, { secretKey, stripeAccount });
 }
 
 export async function fetchPaymentMethod({ secretKey, stripeAccount, paymentMethodId }) {

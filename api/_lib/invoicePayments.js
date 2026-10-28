@@ -4,7 +4,7 @@
 // depending on the per-workspace Stripe webhook (which most owners never
 // configure - Express/Connect owners can't). Idempotent and side-effect-safe.
 import { sql } from './db.js';
-import { computeTotals } from './finance.js';
+import { computeTotals, paidMethodLabel } from './finance.js';
 import { notifyOwnerSafe, notifyClientSafe } from './push.js';
 import { notifyInvoicePaid } from './invoiceNotify.js';
 import { loadStripeCreds } from './stripeCreds.js';
@@ -18,7 +18,7 @@ function fmtMoney(n) {
 // only when it actually transitions, fires the owner push + client receipt
 // - matching the webhook so whichever path wins first is the one that
 // notifies. Returns 'paid' | 'already-paid' | 'invoice-not-found'.
-export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method = 'card' }) {
+export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, amountCents, method = 'card', sessionId = null }) {
   const { rows } = await sql`SELECT * FROM invoices WHERE id = ${invoiceId} AND workspace_id = ${workspaceId}`;
   const inv = rows[0];
   if (!inv) return 'invoice-not-found';
@@ -44,6 +44,9 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
         paid_amount           = ${paidAmount},
         paid_method           = ${method},
         stripe_payment_intent = ${paymentIntent || null},
+        stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
+        payment_processing_at = NULL,
+        payment_processing_method = NULL,
         activity              = ${JSON.stringify(partialActivity)}::jsonb,
         updated_at            = NOW()
       WHERE id = ${invoiceId} AND workspace_id = ${workspaceId} AND status <> 'paid'
@@ -53,7 +56,7 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
 
   const newActivity = [
     ...(inv.activity || []),
-    { ts: new Date().toISOString(), kind: 'paid', text: `Paid by card · ${fmtMoney(paidAmount)}` },
+    { ts: new Date().toISOString(), kind: 'paid', text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(paidAmount)}` },
   ];
 
   const upd = await sql`
@@ -63,6 +66,9 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
       paid_amount           = ${paidAmount},
       paid_method           = ${method},
       stripe_payment_intent = ${paymentIntent || null},
+      stripe_session_id     = COALESCE(${sessionId}, stripe_session_id),
+      payment_processing_at = NULL,
+      payment_processing_method = NULL,
       view_token_hash       = NULL,
       activity              = ${JSON.stringify(newActivity)}::jsonb,
       updated_at            = NOW()
@@ -114,13 +120,18 @@ export async function reconcileStripeInvoice(inv) {
   try {
     session = await fetchCheckoutSession({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, sessionId: sid });
   } catch { return false; }
-  if (session?.payment_status !== 'paid') return false;
+  if (session?.payment_status !== 'paid') {
+    // A completed session that is still 'unpaid' is a delayed method (ACH
+    // Direct Debit): the debit was authorised but settles days later. Stamp
+    // "payment processing" so neither side treats it as paid or missing.
+    if (session?.status === 'complete' && session?.payment_status === 'unpaid') {
+      const { markInvoiceProcessing } = await import('./checkoutFulfillment.js');
+      await markInvoiceProcessing({ workspaceId: inv.workspace_id, invoiceId: inv.id, session });
+    }
+    return false;
+  }
 
-  const paymentIntent = typeof session.payment_intent === 'string'
-    ? session.payment_intent : session.payment_intent?.id || null;
-  const r = await markInvoicePaid({
-    workspaceId: inv.workspace_id, invoiceId: inv.id,
-    paymentIntent, amountCents: session.amount_total,
-  });
+  const { fulfillInvoiceCheckoutSession } = await import('./checkoutFulfillment.js');
+  const r = await fulfillInvoiceCheckoutSession({ workspaceId: inv.workspace_id, session, creds });
   return r === 'paid' || r === 'already-paid';
 }

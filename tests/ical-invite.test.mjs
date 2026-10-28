@@ -22,7 +22,7 @@ const ics = buildBookingInvite({
 
 console.log('\n[1] well-formed single VEVENT calendar');
 assert(ics.startsWith('BEGIN:VCALENDAR'), 'starts with VCALENDAR');
-assert(ics.includes('METHOD:PUBLISH'), 'has PUBLISH method');
+assert(ics.includes('METHOD:REQUEST'), 'has REQUEST method (an invitation, not a bare publish)');
 assert((ics.match(/BEGIN:VEVENT/g) || []).length === 1, 'exactly one VEVENT');
 assert(ics.trimEnd().endsWith('END:VCALENDAR'), 'ends with VCALENDAR');
 assert(/\r\n/.test(ics), 'uses CRLF line endings (RFC 5545)');
