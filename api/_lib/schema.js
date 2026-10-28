@@ -3314,4 +3314,33 @@ CREATE TABLE IF NOT EXISTS abuse_reports (
 );
 CREATE INDEX IF NOT EXISTS idx_abuse_reports_status ON abuse_reports(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_abuse_reports_workspace ON abuse_reports(workspace_id);
+
+-- ─── Operator alerting (api/cron/ops-alerts.js) ──────────────────────
+-- webhook_failures: one row per webhook delivery we could not handle
+-- (signature rejected, or the handler threw). Written best-effort from
+-- the webhook catch blocks via api/_lib/webhookFailures.js; read by the
+-- hourly ops-alerts cron. Pruned by db-prune after 30 days.
+CREATE TABLE IF NOT EXISTS webhook_failures (
+  id BIGSERIAL PRIMARY KEY,
+  source TEXT NOT NULL,
+  event_type TEXT,
+  message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_failures_created ON webhook_failures(created_at DESC);
+
+-- ops_alert_state: one row per alert condition the ops-alerts cron knows
+-- about. active flips on when the condition starts (one email), stays on
+-- while it persists (re-notified at most every 6 hours), and flips off
+-- when it clears (one "Resolved" email). The operator never gets the same
+-- condition emailed every hour.
+CREATE TABLE IF NOT EXISTS ops_alert_state (
+  key TEXT PRIMARY KEY,
+  active BOOLEAN NOT NULL DEFAULT FALSE,
+  first_seen_at TIMESTAMPTZ,
+  last_notified_at TIMESTAMPTZ,
+  last_title TEXT,
+  last_detail TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
 `;

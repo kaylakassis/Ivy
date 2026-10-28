@@ -45,6 +45,7 @@ import {
 } from '../_lib/subscriptionNotify.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
 import {
   markReferralConverted, grantPendingReferralCredits, applyBankedAppleWeeks,
 } from '../_lib/referrals.js';
@@ -113,6 +114,7 @@ async function isReferralConversion(event, prev) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   let claimedEventId = null;
+  let eventType = null;
   try {
     const secret = process.env.REVENUECAT_WEBHOOK_SECRET;
     if (!secret) {
@@ -120,6 +122,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'RevenueCat webhook not configured' });
     }
     if (!bearerOk(req.headers.authorization, secret)) {
+      await recordWebhookFailure({ source: 'revenuecat', eventType: SIGNATURE_FAILURE, message: 'Invalid webhook authorization' });
       return res.status(401).json({ error: 'Invalid webhook authorization' });
     }
 
@@ -140,6 +143,7 @@ export default async function handler(req, res) {
       return ok(res, { received: true, deduped: true });
     }
     claimedEventId = event.id;
+    eventType = event.type;
 
     // Our appUserID == workspace id. RC also surfaces it as
     // app_user_id on the event payload.
@@ -302,6 +306,7 @@ export default async function handler(req, res) {
     if (claimedEventId) {
       await releaseProcessed('revenuecat', claimedEventId).catch(() => {});
     }
+    await recordWebhookFailure({ source: 'revenuecat', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }

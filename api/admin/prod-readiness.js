@@ -22,6 +22,7 @@ import { requireSuperAdmin } from '../_lib/admin.js';
 import { ok, methodNotAllowed, serverError } from '../_lib/json.js';
 import { probeProvider } from '../_lib/ivy.js';
 import { appleConfigMissing, appleEnvironment, mintToken } from '../_lib/appStoreServer.js';
+import { OPS_ALERT_CRON, opsAlertRecipient } from '../_lib/opsAlerts.js';
 
 const REQUIRED_LEN = 32;
 const DEFAULT_PLACEHOLDERS = new Set([
@@ -38,85 +39,125 @@ function check(key, label, level, detail) {
   return { key, label, level, detail };
 }
 
+// ── Required items, reusable without an HTTP request ───────────────
+// The hourly operator check (api/cron/ops-alerts.js) runs these same
+// functions and emails the operator when any of them reports 'fail', so
+// a regression is noticed before anyone opens this page.
+
+// Core secrets + app URL.
+export function coreConfigChecks() {
+  const checks = [];
+  const jwt = process.env.JWT_SECRET || '';
+  if (isDefaultish(jwt)) {
+    checks.push(check('jwt_secret', 'JWT_SECRET', 'fail',
+      'Not set or still the placeholder. Sessions can be forged. Generate with `openssl rand -hex 32`.'));
+  } else if (jwt.length < REQUIRED_LEN) {
+    checks.push(check('jwt_secret', 'JWT_SECRET', 'fail',
+      `Only ${jwt.length} chars - must be ≥ ${REQUIRED_LEN}. Regenerate with \`openssl rand -hex 32\`.`));
+  } else {
+    checks.push(check('jwt_secret', 'JWT_SECRET', 'ok', `${jwt.length} chars`));
+  }
+
+  const admin = process.env.ADMIN_SECRET || '';
+  if (isDefaultish(admin) || admin.length < REQUIRED_LEN) {
+    checks.push(check('admin_secret', 'ADMIN_SECRET', 'fail',
+      'Not set or too short. Used by /api/admin/* and the cron-secret fallback path.'));
+  } else {
+    checks.push(check('admin_secret', 'ADMIN_SECRET', 'ok', `${admin.length} chars`));
+  }
+
+  const cron = process.env.CRON_SECRET || '';
+  if (isDefaultish(cron) || cron.length < REQUIRED_LEN) {
+    checks.push(check('cron_secret', 'CRON_SECRET', 'fail',
+      "Vercel cron jobs will be rejected with 401 every time. Reminders, dunning, recurring invoices, Stripe reconcile, Ivy nudges - none of them run."));
+  } else {
+    checks.push(check('cron_secret', 'CRON_SECRET', 'ok', `${cron.length} chars`));
+  }
+
+  const secKey = process.env.SECRETS_KEY || '';
+  if (isDefaultish(secKey) || secKey.length < REQUIRED_LEN) {
+    checks.push(check('secrets_key', 'SECRETS_KEY', 'fail',
+      'Required to encrypt at-rest provider tokens (legacy Stripe/PayPal/Google refresh tokens). Without it, /finance/* writes throw.'));
+  } else {
+    checks.push(check('secrets_key', 'SECRETS_KEY', 'ok', `${secKey.length} chars`));
+  }
+
+  // ── App URL (BLOCKER if pointed at localhost in production) ─────
+  const appUrl = process.env.APP_URL || process.env.VITE_APP_URL || '';
+  if (!appUrl) {
+    checks.push(check('app_url', 'APP_URL', 'fail',
+      'Not set. Every email link (invoice, reset, booking confirmation) will be broken.'));
+  } else if (/localhost|127\.0\.0\.1/.test(appUrl)) {
+    checks.push(check('app_url', 'APP_URL', 'fail',
+      `Still points at "${appUrl}". Email links will redirect customers to localhost.`));
+  } else if (!/^https:\/\//.test(appUrl)) {
+    checks.push(check('app_url', 'APP_URL', 'warn',
+      `Not HTTPS: "${appUrl}". Browsers will refuse to set the secure session cookie - sign-in will silently fail.`));
+  } else {
+    checks.push(check('app_url', 'APP_URL', 'ok', appUrl));
+  }
+  return checks;
+}
+
+// Database connectivity + core tables.
+export async function databaseCheck() {
+  const checks = [];
+  try {
+    const r = await sql`SELECT 1 AS ok`;
+    if (r.rows[0]?.ok === 1) {
+      // Tables exist?
+      const t = await sql`
+        SELECT COUNT(*)::int AS n FROM information_schema.tables
+         WHERE table_schema = 'public'
+           AND table_name IN ('users','workspaces','clients','invoices','bookings','group_threads')
+      `;
+      const n = t.rows[0]?.n || 0;
+      if (n < 6) {
+        checks.push(check('database', 'Database migrations', 'fail',
+          `Only ${n}/6 core tables present - run POST /api/admin/migrate with x-admin-secret.`));
+      } else {
+        checks.push(check('database', 'Database connected + migrated', 'ok'));
+      }
+    }
+  } catch (err) {
+    checks.push(check('database', 'Database', 'fail',
+      `Connection failed: ${err.message}. Confirm DATABASE_URL points at the production Neon database.`));
+  }
+  return checks[0] || check('database', 'Database', 'fail', 'The connectivity probe returned no row.');
+}
+
+// Outbound email provider.
+export function emailChecks() {
+  const checks = [];
+  if (!process.env.RESEND_API_KEY) {
+    checks.push(check('email', 'RESEND_API_KEY', 'fail',
+      "No outbound email. Password resets, verification emails, invoice emails - all silently fail."));
+  } else {
+    checks.push(check('email', 'RESEND_API_KEY', 'ok'));
+  }
+  const from = process.env.EMAIL_FROM || '';
+  if (!from) {
+    checks.push(check('email_from', 'EMAIL_FROM', 'fail',
+      'Required - Resend rejects sends without a verified From address.'));
+  } else if (/noreply@|no-reply@/i.test(from)) {
+    checks.push(check('email_from', 'EMAIL_FROM', 'warn',
+      `"${from}" - Gmail/Outlook deprioritize "noreply" senders. Spam fold likely.`));
+  } else {
+    checks.push(check('email_from', 'EMAIL_FROM', 'ok', from));
+  }
+  return checks;
+}
+
+export async function requiredChecks() {
+  return [...coreConfigChecks(), await databaseCheck(), ...emailChecks()];
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   if (!(await requireSuperAdmin(req, res))) return;
   try {
-    const checks = [];
-
-    // ── Core secrets (BLOCKERS) ─────────────────────────────────────
-    const jwt = process.env.JWT_SECRET || '';
-    if (isDefaultish(jwt)) {
-      checks.push(check('jwt_secret', 'JWT_SECRET', 'fail',
-        'Not set or still the placeholder. Sessions can be forged. Generate with `openssl rand -hex 32`.'));
-    } else if (jwt.length < REQUIRED_LEN) {
-      checks.push(check('jwt_secret', 'JWT_SECRET', 'fail',
-        `Only ${jwt.length} chars - must be ≥ ${REQUIRED_LEN}. Regenerate with \`openssl rand -hex 32\`.`));
-    } else {
-      checks.push(check('jwt_secret', 'JWT_SECRET', 'ok', `${jwt.length} chars`));
-    }
-
-    const admin = process.env.ADMIN_SECRET || '';
-    if (isDefaultish(admin) || admin.length < REQUIRED_LEN) {
-      checks.push(check('admin_secret', 'ADMIN_SECRET', 'fail',
-        'Not set or too short. Used by /api/admin/* and the cron-secret fallback path.'));
-    } else {
-      checks.push(check('admin_secret', 'ADMIN_SECRET', 'ok', `${admin.length} chars`));
-    }
-
-    const cron = process.env.CRON_SECRET || '';
-    if (isDefaultish(cron) || cron.length < REQUIRED_LEN) {
-      checks.push(check('cron_secret', 'CRON_SECRET', 'fail',
-        "Vercel cron jobs will be rejected with 401 every time. Reminders, dunning, recurring invoices, Stripe reconcile, Ivy nudges - none of them run."));
-    } else {
-      checks.push(check('cron_secret', 'CRON_SECRET', 'ok', `${cron.length} chars`));
-    }
-
-    const secKey = process.env.SECRETS_KEY || '';
-    if (isDefaultish(secKey) || secKey.length < REQUIRED_LEN) {
-      checks.push(check('secrets_key', 'SECRETS_KEY', 'fail',
-        'Required to encrypt at-rest provider tokens (legacy Stripe/PayPal/Google refresh tokens). Without it, /finance/* writes throw.'));
-    } else {
-      checks.push(check('secrets_key', 'SECRETS_KEY', 'ok', `${secKey.length} chars`));
-    }
-
-    // ── App URL (BLOCKER if pointed at localhost in production) ─────
-    const appUrl = process.env.APP_URL || process.env.VITE_APP_URL || '';
-    if (!appUrl) {
-      checks.push(check('app_url', 'APP_URL', 'fail',
-        'Not set. Every email link (invoice, reset, booking confirmation) will be broken.'));
-    } else if (/localhost|127\.0\.0\.1/.test(appUrl)) {
-      checks.push(check('app_url', 'APP_URL', 'fail',
-        `Still points at "${appUrl}". Email links will redirect customers to localhost.`));
-    } else if (!/^https:\/\//.test(appUrl)) {
-      checks.push(check('app_url', 'APP_URL', 'warn',
-        `Not HTTPS: "${appUrl}". Browsers will refuse to set the secure session cookie - sign-in will silently fail.`));
-    } else {
-      checks.push(check('app_url', 'APP_URL', 'ok', appUrl));
-    }
-
-    // ── Database connectivity + migration applied (BLOCKER) ─────────
-    try {
-      const r = await sql`SELECT 1 AS ok`;
-      if (r.rows[0]?.ok === 1) {
-        // Tables exist?
-        const t = await sql`
-          SELECT COUNT(*)::int AS n FROM information_schema.tables
-           WHERE table_schema = 'public'
-             AND table_name IN ('users','workspaces','clients','invoices','bookings','group_threads')
-        `;
-        const n = t.rows[0]?.n || 0;
-        if (n < 6) {
-          checks.push(check('database', 'Database migrations', 'fail',
-            `Only ${n}/6 core tables present - run POST /api/admin/migrate with x-admin-secret.`));
-        } else {
-          checks.push(check('database', 'Database connected + migrated', 'ok'));
-        }
-      }
-    } catch (err) {
-      checks.push(check('database', 'Database', 'fail',
-        `Connection failed: ${err.message}. Confirm DATABASE_URL points at the production Neon database.`));
-    }
+    // Core secrets, app URL (BLOCKERS) and database (BLOCKER).
+    const checks = [...coreConfigChecks(), await databaseCheck()];
 
     // ── Super-admin email (BLOCKER if you want admin UI access) ─────
     if (!process.env.SUPER_ADMIN_EMAIL) {
@@ -187,22 +228,7 @@ export default async function handler(req, res) {
     }
 
     // ── Email (BLOCKER for password reset + verification) ───────────
-    if (!process.env.RESEND_API_KEY) {
-      checks.push(check('email', 'RESEND_API_KEY', 'fail',
-        "No outbound email. Password resets, verification emails, invoice emails - all silently fail."));
-    } else {
-      checks.push(check('email', 'RESEND_API_KEY', 'ok'));
-    }
-    const from = process.env.EMAIL_FROM || '';
-    if (!from) {
-      checks.push(check('email_from', 'EMAIL_FROM', 'fail',
-        'Required - Resend rejects sends without a verified From address.'));
-    } else if (/noreply@|no-reply@/i.test(from)) {
-      checks.push(check('email_from', 'EMAIL_FROM', 'warn',
-        `"${from}" - Gmail/Outlook deprioritize "noreply" senders. Spam fold likely.`));
-    } else {
-      checks.push(check('email_from', 'EMAIL_FROM', 'ok', from));
-    }
+    checks.push(...emailChecks());
 
     // ── Push (WARN - feature degrades but app works) ────────────────
     const vapidPub  = process.env.VAPID_PUBLIC_KEY  || '';
@@ -239,6 +265,37 @@ export default async function handler(req, res) {
     } else {
       checks.push(check('sentry', 'SENTRY_DSN', 'warn',
         "No error tracking. Day-one production bugs will go unnoticed unless you tail Vercel logs manually."));
+    }
+
+    // ── Operator alerts (WARN) ──────────────────────────────────────
+    // The hourly ops-alerts cron emails the operator when Ivy replies
+    // fail, a cron goes quiet, webhooks are rejected, or a required item
+    // above regresses. Green means someone is set to receive those emails
+    // and the check has actually run recently.
+    try {
+      const recipient = opsAlertRecipient();
+      const last = (await sql`SELECT finished_at FROM cron_runs WHERE name = ${OPS_ALERT_CRON} AND finished_at IS NOT NULL ORDER BY finished_at DESC LIMIT 1`).rows[0];
+      const active = (await sql`SELECT key, last_title FROM ops_alert_state WHERE active = TRUE ORDER BY first_seen_at`).rows;
+      const ageMs = last ? Date.now() - new Date(last.finished_at).getTime() : null;
+      const recent = ageMs != null && ageMs < 3 * 3600e3;
+      const activeNote = active.length === 0
+        ? 'No conditions active.'
+        : `${active.length} condition${active.length === 1 ? '' : 's'} active: ${active.map((a) => a.last_title || a.key).join('; ')}.`;
+      if (!recipient) {
+        checks.push(check('ops_alerts', 'Operator alerts', 'warn',
+          `Nobody receives alert emails. Set OPS_ALERT_EMAIL (or SUPER_ADMIN_EMAIL) so Ivy failures, quiet crons and webhook rejections reach you by email. ${activeNote}`));
+      } else if (!last) {
+        checks.push(check('ops_alerts', 'Operator alerts', 'warn',
+          `Emails would go to ${recipient}, but the hourly ops-alerts cron has not run yet. Check CRON_SECRET and the cron list in vercel.json. ${activeNote}`));
+      } else if (!recent) {
+        checks.push(check('ops_alerts', 'Operator alerts', 'warn',
+          `Emails go to ${recipient}, but the last ops-alerts run was ${Math.round(ageMs / 3600e3)} hours ago (expected hourly). Check the Vercel cron logs. ${activeNote}`));
+      } else {
+        checks.push(check('ops_alerts', 'Operator alerts', 'ok',
+          `Emails go to ${recipient}. Last check ${Math.max(1, Math.round(ageMs / 60e3))} min ago. ${activeNote}`));
+      }
+    } catch (e) {
+      checks.push(check('ops_alerts', 'Operator alerts', 'warn', `could not check: ${e.message}`));
     }
 
     // ── Optional providers (informational) ──────────────────────────

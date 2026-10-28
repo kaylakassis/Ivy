@@ -12,6 +12,7 @@ import { verifyWebhook, parseWebhookEvent } from '../../_lib/payments/square.js'
 import { fetchFinanceSettings, computeTotals } from '../../_lib/finance.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { notifyInvoicePaid } from '../../_lib/invoiceNotify.js';
@@ -21,6 +22,7 @@ export const config = { api: { bodyParser: false } };
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   let claimedEventId = null;
+  let eventType = null;
   try {
     const { workspaceId } = req.query;
     const settings = await fetchFinanceSettings(workspaceId);
@@ -42,8 +44,10 @@ export default async function handler(req, res) {
     try {
       event = verifyWebhook({ rawBody, headers: req.headers, notificationUrl });
     } catch (e) {
+      await recordWebhookFailure({ source: 'square', eventType: SIGNATURE_FAILURE, message: e.message });
       return res.status(400).json({ error: e.message });
     }
+    eventType = event?.type || null;
 
     // Dedup BEFORE parsing/processing. Square retries for ~24h on
     // non-2xx responses; without this a handler crash mid-write
@@ -73,6 +77,7 @@ export default async function handler(req, res) {
     // Release the dedup claim so Square's retry re-processes (its natural
     // guards keep the re-run from double-applying).
     if (claimedEventId) await releaseProcessed('square', claimedEventId);
+    await recordWebhookFailure({ source: 'square', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }
