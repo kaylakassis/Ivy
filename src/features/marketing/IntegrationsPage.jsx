@@ -10,7 +10,7 @@ import MarketingShell, { SimpleNav, SimpleFooter } from './MarketingShell.jsx';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
 
 const LIVE = [
-  { name: 'Stripe',           icon: 'Dollar',   sub: 'The full toolkit: card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
+  { name: 'Stripe',           icon: 'Dollar',   sub: 'Clients pay with cards, Apple Pay, Google Pay, Link, Amazon Pay, Cash App Pay, ACH bank debit, and buy now, pay later with Klarna, Affirm and Afterpay, wherever Stripe offers them. Card on file, auto-charged deposits, no-show fees & tips. Your money, your account.' },
   { name: 'In-person checkout', icon: 'Phone',  sub: 'Ring up in-person sales from your phone: show a QR code and the client pays on theirs - Apple Pay, Google Pay, or card. Cash logging built in.' },
   { name: 'Video meetings',   icon: 'Camera',   sub: 'Virtual bookings auto-mint a private video room - or drop in your own link.' },
   { name: 'Google Calendar',  icon: 'Calendar', sub: 'Two-way sync. Bookings show up in Google; busy times block in Ivy.' },

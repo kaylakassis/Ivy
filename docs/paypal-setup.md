@@ -54,14 +54,25 @@ API, which requires a PayPal **partner** account for Ivy.
 Owners then press Connect on the PayPal card, sign in to PayPal, grant
 permissions, and are bounced back to Finance with PayPal active.
 
-## Cash App Pay, Apple Pay and Google Pay through Stripe
+## Payment methods through Stripe
 
-These are Stripe payment methods and need no code change:
+Ivy creates every client checkout without a fixed payment-method list, so
+Stripe shows whatever is enabled for the account the charge runs on. Owners
+are Stripe Connect accounts, so the switch that matters is the one for
+connected accounts:
 
-1. Stripe Dashboard → Settings → **Payment methods** → turn on Cash App Pay,
-   Apple Pay and Google Pay.
-2. Because owners use Stripe Connect accounts, also open Settings → Connect →
-   **Payment methods** and turn the same ones on for connected accounts.
+1. Stripe Dashboard → Settings → **Payment methods**: this list is the
+   platform's own account (used for Ivy subscriptions on the web).
+2. Settings → **Connect** → **Payment methods** (the configuration applied to
+   connected accounts): turn on Cards, Apple Pay, Google Pay, Link, Amazon Pay,
+   Cash App Pay, ACH Direct Debit, Klarna, Affirm and Afterpay. This is what
+   owners' clients see.
 
-Stripe shows them automatically on the checkout page when the client's
-device and country support them.
+Stripe decides eligibility per payment (country, currency, amount, device), so
+a method that is on may still not appear for a given client. The marketing
+copy says "wherever Stripe offers them" for that reason.
+
+ACH Direct Debit settles in up to 4 business days. Ivy marks the invoice
+"payment processing" when the client authorises the debit and "paid" only
+when Stripe confirms the funds; a failed debit puts the invoice back to unpaid
+and notifies the owner and the client.
