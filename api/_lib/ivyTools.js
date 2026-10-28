@@ -1022,9 +1022,50 @@ export async function executeIvyTool(name, args, ctx) {
     };
   }
   try {
-    return await fn({ ...ctx, args: a });
+    const result = await fn({ ...ctx, args: a });
+    await recordIvyAction(name, ctx?.workspaceId, result);
+    return result;
   } catch (err) {
     return { error: err?.message || String(err) };
+  }
+}
+
+// ── Action ledger ─────────────────────────────────────────────────────
+// Tools that only read or manage Ivy's own memory. Everything else in
+// HANDLERS changes the business and is recorded in ivy_actions when it
+// completes, so the weekly recap can say "Ivy drafted 3 invoices" from
+// real rows.
+const READ_ONLY_TOOLS = new Set([
+  'list_quiet_clients', 'list_overdue_invoices', 'list_upcoming_bookings', 'search_clients',
+  'list_clients', 'list_services', 'list_documents', 'list_workflows', 'list_projects',
+  'list_staff', 'list_tasks', 'search_invoices', 'search_bookings', 'get_dashboard_summary',
+  'list_expenses', 'get_pl_summary', 'list_reviews', 'list_leads',
+  'remember', 'forget', 'list_memories', 'explain_workflow_suggestion',
+  'get_website',
+]);
+const ACTION_KINDS = {
+  create_invoice: 'invoice', send_invoice: 'invoice', create_recurring_invoice: 'invoice',
+  mark_invoice_paid: 'invoice', void_invoice: 'invoice', refund_invoice: 'invoice',
+  create_quote: 'invoice', send_quote: 'invoice',
+  send_message_to_client: 'message', send_campaign: 'message', send_review_request: 'message',
+  create_campaign: 'message',
+  create_booking: 'booking', reschedule_booking: 'booking', cancel_booking: 'booking',
+  block_calendar_time: 'booking',
+  create_document_from_template: 'document', send_document: 'document',
+};
+export function ivyActionKind(tool) {
+  if (!tool || READ_ONLY_TOOLS.has(tool)) return null;
+  if (!HANDLERS[tool]) return null;
+  return ACTION_KINDS[tool] || 'other';
+}
+async function recordIvyAction(tool, workspaceId, result) {
+  const kind = ivyActionKind(tool);
+  if (!kind || !workspaceId) return;
+  if (!result || result.error || result.needs_confirmation) return;
+  try {
+    await sql`INSERT INTO ivy_actions (workspace_id, tool, kind) VALUES (${workspaceId}, ${tool}, ${kind})`;
+  } catch (err) {
+    console.warn('[ivy] action ledger write failed:', err.message);
   }
 }
 

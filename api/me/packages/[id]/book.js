@@ -210,11 +210,11 @@ export default async function handler(req, res) {
         const r = await sql`
           INSERT INTO bookings (
             workspace_id, service_id, client_id, client_name, client_email,
-            date, start_min, end_min, client_package_id
+            date, start_min, end_min, client_package_id, source
           ) VALUES (
             ${cp.workspace_id}, ${serviceId}, ${cp.client_id},
             ${cp.client_name}, ${cp.client_email},
-            ${s.date}, ${s.startMin}, ${s.endMin}, ${cpId}
+            ${s.date}, ${s.startMin}, ${s.endMin}, ${cpId}, 'client'
           )
           RETURNING *
         `;

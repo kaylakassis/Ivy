@@ -561,7 +561,7 @@ async function createBooking(req, res) {
         workspace_id, service_id, client_id, client_name, client_email, client_phone,
         date, start_min, end_min, notes, deposit_required, location_address,
         video_room_url, custom_field_values, add_on_ids, booking_total,
-        gift_card_credit_cents
+        gift_card_credit_cents, source
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
@@ -570,7 +570,8 @@ async function createBooking(req, res) {
         ${JSON.stringify(cleanedCustomValues)}::jsonb,
         ${JSON.stringify(requestedAddOnIds)}::jsonb,
         ${bookingTotal},
-        ${giftCardCreditCents}
+        ${giftCardCreditCents},
+        'client'
       )
       RETURNING *
     `;

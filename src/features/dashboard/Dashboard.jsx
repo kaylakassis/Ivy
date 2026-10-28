@@ -529,6 +529,7 @@ export default function Dashboard() {
         {/* First load with nothing cached: the tiles show "-" until the
             numbers land, so keep the owner company meanwhile. */}
         {loading && !data && <Loader/>}
+        {data?.week && <ThisWeekCard week={data.week} currency={currency}/>}
         <div className="split-2">
           <div className="card" style={{ padding: 24 }}>
             <div className="metric-label" style={{ marginBottom: 14 }}>Revenue vs expenses · this month</div>
@@ -589,6 +590,79 @@ export default function Dashboard() {
         </div>
       </div>
       <SuccessToast text={streakToast} onDone={() => setStreakToast(null)}/>
+    </div>
+  );
+}
+
+// "This week": the last 7 days in the same numbers the Monday recap email
+// carries (server computes both from one builder). Only rows above zero
+// are shown; the server sends week = null when nothing happened, so the
+// card never renders empty. The time-saved line is an estimate and names
+// its assumption right under the number.
+function fmtTimeSaved(minutes) {
+  const m = Math.round(Number(minutes || 0));
+  if (m < 90) return `about ${m} ${m === 1 ? 'minute' : 'minutes'}`;
+  const h = Math.round((m / 60) * 10) / 10;
+  return `about ${h} ${h === 1 ? 'hour' : 'hours'}`;
+}
+function ThisWeekCard({ week, currency }) {
+  const tiles = [
+    { label: 'Bookings taken',     value: week.bookingsTaken,     display: String(week.bookingsTaken),             to: '/calendar' },
+    { label: 'Sessions completed', value: week.completedBookings, display: String(week.completedBookings),         to: '/calendar' },
+    { label: 'Collected',          value: week.revenuePaid,       display: fmtMoney(week.revenuePaid, currency),   to: '/finance' },
+    { label: 'Outstanding',        value: week.outstandingTotal,  display: fmtMoney(week.outstandingTotal, currency), to: '/finance?section=invoices' },
+    { label: 'New clients',        value: week.newClients,        display: String(week.newClients),                to: '/clients' },
+  ].filter((t) => Number(t.value) > 0).slice(0, 4);
+  const rows = Array.isArray(week.ivyRows) ? week.ivyRows : [];
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 10, marginBottom: 12 }}>
+        <span className="metric-label">This week with Ivy</span>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>Last 7 days</span>
+      </div>
+      {tiles.length > 0 && (
+        <div style={{ display: 'grid', gridTemplateColumns: `repeat(${tiles.length}, minmax(0, 1fr))`, gap: 10, marginBottom: rows.length ? 14 : 0 }}>
+          {tiles.map((t) => (
+            <Link key={t.label} to={t.to} style={{
+              textDecoration: 'none', color: 'inherit', padding: '10px 12px', borderRadius: 10,
+              border: '1px solid var(--border)', display: 'flex', flexDirection: 'column', gap: 4, minWidth: 0,
+            }}>
+              <span style={{ fontSize: 10.5, letterSpacing: '0.05em', textTransform: 'uppercase', fontWeight: 600, color: 'var(--muted)' }}>{t.label}</span>
+              <span className="metric-value" style={{ fontSize: 22 }}>{t.display}</span>
+            </Link>
+          ))}
+        </div>
+      )}
+      {rows.length > 0 && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+          {rows.map((text) => (
+            <div key={text} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13 }}>
+              <Icons.Check size={13} sw={2.4} stroke="var(--ok)"/>
+              <span style={{ flex: 1, minWidth: 0 }}>{text}</span>
+            </div>
+          ))}
+        </div>
+      )}
+      {week.ivyTasks > 0 && (
+        <div style={{ marginTop: 12, paddingTop: 10, borderTop: '1px dashed var(--border)' }}>
+          <div style={{ fontSize: 13.5, fontWeight: 600 }}>Time saved: {fmtTimeSaved(week.timeSavedMinutes)}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+            Estimate: {week.minutesPerTask} minutes per task Ivy handled, across {week.ivyTasks} {week.ivyTasks === 1 ? 'task' : 'tasks'} (Ivy actions, automations and reminders).
+          </div>
+        </div>
+      )}
+      <div style={{ marginTop: 12, fontSize: 12.5, color: 'var(--muted)', display: 'flex', flexWrap: 'wrap', gap: '4px 14px' }}>
+        {week.upcomingBookings > 0 && (
+          <Link to="/calendar" style={{ color: 'var(--accent)' }}>
+            {week.upcomingBookings} {week.upcomingBookings === 1 ? 'session' : 'sessions'} booked for the next 7 days
+          </Link>
+        )}
+        {week.overdueInvoiceCount > 0 && (
+          <Link to="/finance?filter=overdue" style={{ color: 'var(--accent)' }}>
+            {week.overdueInvoiceCount} overdue {week.overdueInvoiceCount === 1 ? 'invoice' : 'invoices'} ({fmtMoney(week.overdueInvoiceTotal, currency)}) to chase
+          </Link>
+        )}
+      </div>
     </div>
   );
 }

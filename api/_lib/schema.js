@@ -3314,4 +3314,30 @@ CREATE TABLE IF NOT EXISTS abuse_reports (
 );
 CREATE INDEX IF NOT EXISTS idx_abuse_reports_status ON abuse_reports(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_abuse_reports_workspace ON abuse_reports(workspace_id);
+
+-- ─── Weekly recap inputs ──────────────────────────────────────────────
+-- bookings.source: who created the booking. 'client' is set by the public
+-- booking page and the package self-book path; owner- and Ivy-made rows
+-- leave it NULL. The weekly recap counts source = 'client' as "bookings
+-- taken through your booking page", so pre-existing rows (NULL) are never
+-- counted as client bookings.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS source TEXT;
+CREATE INDEX IF NOT EXISTS idx_bookings_workspace_source_created
+  ON bookings(workspace_id, created_at DESC) WHERE source = 'client';
+
+-- ivy_actions: one row per WRITE tool Ivy actually ran to completion
+-- (confirmed where a confirmation is required, no error returned). Read
+-- tools and memory are not recorded. The weekly recap and the dashboard
+-- "This week" card count these so "Ivy drafted 3 invoices" is backed by
+-- rows, never estimated. kind buckets the tool: invoice, message, booking,
+-- document, other.
+CREATE TABLE IF NOT EXISTS ivy_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  tool TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_actions_workspace_created
+  ON ivy_actions(workspace_id, created_at DESC);
 `;

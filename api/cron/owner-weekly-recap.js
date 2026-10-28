@@ -1,14 +1,17 @@
 // /api/cron/owner-weekly-recap - weekly digest to business owners.
 //
 // Every Monday at 08:00 UTC, sweeps every active workspace and emails the
-// owner a snapshot of the past 7 days: bookings completed, revenue
-// collected, new clients, overdue invoices, and what's on the calendar
-// for the week ahead. Honors the owner's 'reports' email preference
-// (opt-out via Account → Notifications).
+// owner "Your week with Ivy": bookings taken, sessions completed, money
+// collected and outstanding, what Ivy did (invoices, messages,
+// automations, reminders, signed documents) with a labelled time-saved
+// estimate, and the week ahead. Honors the owner's 'reports' email
+// preference (opt-out via Account → Notifications). A workspace where
+// nothing happened in the window gets no email that week.
 //
 // Eligibility:
-//   • workspace must be ACTIVE (trialing or paid). Lapsed/incomplete
-//     owners get win-back, not recaps.
+//   • workspace must be ACTIVE per isWorkspaceActive (trialing, paid,
+//     past_due in its retry window, or comped). Lapsed, suspended,
+//     cancelled, archived and purged owners get win-back, not recaps.
 //   • onboarded_at IS NOT NULL — pre-onboarding owners have nothing to
 //     summarize and shouldn't be nagged.
 //   • user_type is not 'beta'/'sponsored' (they're not customers).
@@ -21,6 +24,7 @@ import { sql } from '../_lib/db.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { reportError } from '../_lib/monitoring.js';
 import { notifyWeeklyRecap } from '../_lib/weeklyRecap.js';
+import { isWorkspaceActive } from '../_lib/clientPortal.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
@@ -59,7 +63,7 @@ async function handler(req, res) {
     const to = new Date();
     const from = new Date(Date.now() - 7 * 86400000);
 
-    let scanned = 0, sent = 0, muted = 0, batches = 0;
+    let scanned = 0, sent = 0, muted = 0, quiet = 0, inactive = 0, batches = 0;
     let emptied = false;
 
     // Deadline-driven loop: keep pulling batches until the candidate
@@ -69,18 +73,26 @@ async function handler(req, res) {
     // even on a million-row backlog (limited only by wall-clock budget).
     await withDeadline(async (deadline) => {
       while (Date.now() < deadline) {
+        // The SQL prefilter mirrors isWorkspaceActive (clientPortal.js):
+        // live trial, paid period still running, past_due in its retry
+        // window, or a complimentary grant. Lapsed, suspended, cancelled
+        // and purged workspaces never match. isWorkspaceActive is then
+        // applied to each row as the single source of truth.
         // eslint-disable-next-line no-await-in-loop
         const { rows } = await sql.query(
-          `SELECT w.id, w.owner_id
+          `SELECT w.id, w.owner_id, w.subscription_status, w.trial_ends_at,
+                  w.subscription_period_end, w.comp_until
              FROM workspaces w
              JOIN users u ON u.id = w.owner_id
             WHERE w.onboarded_at IS NOT NULL
+              AND w.data_purged_at IS NULL
               AND COALESCE(u.user_type, 'regular') NOT IN ('beta', 'sponsored')
               AND u.deleted_at IS NULL
               AND (
                 (w.subscription_status = 'trialing' AND w.trial_ends_at > NOW())
-                OR (w.subscription_status = 'active' AND (w.subscription_period_end IS NULL OR w.subscription_period_end > NOW()))
+                OR (w.subscription_status = 'active' AND w.subscription_period_end > NOW())
                 OR (w.subscription_status = 'past_due')
+                OR (w.comp_until > NOW())
               )
               AND (
                 w.weekly_recap_last_sent_at IS NULL
@@ -99,13 +111,16 @@ async function handler(req, res) {
             // Stamp-then-send: stamp first so a retried cron run can't
             // double-send. The send itself is best-effort (the stamp
             // sticks regardless), which is the right tradeoff for a
-            // weekly digest.
+            // weekly digest. Stamping also happens for a row the active
+            // check rejects below, so it cannot be re-pulled every batch.
             // eslint-disable-next-line no-await-in-loop
             await sql`UPDATE workspaces SET weekly_recap_last_sent_at = NOW() WHERE id = ${r.id}`;
+            if (!isWorkspaceActive(r)) { inactive++; continue; }
             // eslint-disable-next-line no-await-in-loop
             const result = await notifyWeeklyRecap({ workspaceId: r.id, from, to });
             if (result?.sent) sent++;
             else if (result?.reason === 'muted') muted++;
+            else if (result?.reason === 'no-activity') quiet++;
           } catch (err) {
             console.warn('[owner-weekly-recap] failed for workspace', r.id, err.message);
             reportError(err, { extra: { workspaceId: r.id } });
@@ -116,7 +131,7 @@ async function handler(req, res) {
     });
 
     const terminatedBy = terminationReason({ emptied, hitCap: false });
-    return ok(res, { ok: true, shard, shards, batches, scanned, sent, muted, terminatedBy });
+    return ok(res, { ok: true, shard, shards, batches, scanned, sent, muted, quiet, inactive, terminatedBy });
   } catch (err) {
     reportError(err, { req });
     return serverError(res, err);
