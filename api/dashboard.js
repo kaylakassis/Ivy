@@ -10,6 +10,7 @@ import { touchStreak } from './_lib/streak.js';
 import { detectWorkflowSuggestion } from './_lib/workflowSuggest.js';
 import { buildBriefing } from './_lib/ivy.js';
 import { buildWeekStats, recapHasActivity, recapIvyRows, ivyTaskCount, timeSavedMinutes, MINUTES_PER_IVY_TASK } from './_lib/weeklyRecap.js';
+import { firstWinForDashboard } from './_lib/firstWin.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 export default async function handler(req, res) {
@@ -128,9 +129,15 @@ export default async function handler(req, res) {
       }
     } catch { /* no "this week" card this load */ }
 
+    // First win: whether to show the "Your business is ready" cards (a new
+    // owner's first dashboard visit) and any one-time first-booking /
+    // first-payment moment waiting to be shown. Never throws.
+    const firstWin = await firstWinForDashboard(workspaceId);
+
     return ok(res, {
       currency,
       week,
+      firstWin,
       streak: { days: streak.days, best: streak.best, milestone: streak.milestone },
       workflowSuggestion,
       briefing,

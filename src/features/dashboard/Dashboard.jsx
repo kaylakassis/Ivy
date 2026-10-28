@@ -17,6 +17,7 @@ import InviteFriendCard from './InviteFriendCard.jsx';
 import SampleDataCard from './SampleDataCard.jsx';
 import WorkflowSuggestionCard from './WorkflowSuggestionCard.jsx';
 import IvyNoticedCard from './IvyNoticedCard.jsx';
+import { FirstWinReadyCard, FirstWinMoment } from './FirstWinCards.jsx';
 import NotifyPrompt from '../../components/NotifyPrompt.jsx';
 
 // Dashboard tiles per business type. 'both' is the default and shows
@@ -516,6 +517,11 @@ export default function Dashboard() {
         {data?.workflowSuggestion && (
           <WorkflowSuggestionCard suggestion={data.workflowSuggestion} onChanged={loadDashboard}/>
         )}
+        {/* First win: the one-time first-booking / first-payment moment, and
+            the "Your business is ready" cards on a new owner's first visit.
+            Both are server-gated so they never repeat. */}
+        <FirstWinMoment celebrations={data?.firstWin?.celebrations}/>
+        <FirstWinReadyCard show={!!data?.firstWin?.showReady} onDone={loadDashboard}/>
         <SetupChecklist/>
         <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>

@@ -14,6 +14,7 @@ import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './ema
 import { buildBookingInvite } from './ical.js';
 import { sendClientSms } from './sms.js';
 import { celebrateFirstBooking, celebrateBookingMilestones } from './milestones.js';
+import { recordFirstRealBooking } from './firstWin.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
@@ -78,7 +79,12 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
 
     // 0. Booking milestones - a one-time celebration in the owner's feed for
     //    the first booking, then again at each mid-journey tier (10, 25, ...).
-    tasks.push(celebrateFirstBooking(workspaceId));
+    //    The first-win path (api/_lib/firstWin.js) owns the first booking a
+    //    CLIENT made: it flags the dashboard moment and sends its own
+    //    notification, so the generic first-booking milestone is skipped
+    //    when it fired. Owner-added and sample bookings never count there.
+    const firstWin = await recordFirstRealBooking({ workspaceId, bookingId, source });
+    if (!firstWin) tasks.push(celebrateFirstBooking(workspaceId));
     tasks.push(celebrateBookingMilestones(workspaceId));
 
     // 1. Thread + system message - only if the booking is tied to a client

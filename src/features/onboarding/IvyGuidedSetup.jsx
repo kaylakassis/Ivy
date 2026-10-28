@@ -2,8 +2,9 @@
 // industry). Ivy asks 3 things,
 // then DOES the setup by calling the same validated endpoints the manual
 // wizard uses (PATCH /calendar, PUT /calendar/services, POST /onboarding/
-// complete), narrating each step as a completed line. Ends on BookingWin with
-// the live, shareable booking link.
+// complete), narrating each step as a completed line. Ends on the "Your
+// business is ready" cards (ReadyStep): the shareable booking link, the
+// website draft Ivy made from these answers, and the first invoice draft.
 //
 // Deliberately scripted (not the LLM tool loop): Ivy has no tool to set
 // availability or business name/slug yet, and a deterministic script gives a
@@ -12,7 +13,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { browserTimeZone } from '../../lib/timezones.js';
-import BookingWin from './BookingWin.jsx';
+import ReadyStep from './ReadyStep.jsx';
 
 const slugify = (s) => String(s || '')
   .toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40).replace(/-+$/g, '');
@@ -68,7 +69,6 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
 
   // Setup progress (narrated Ivy lines) + result
   const [steps, setSteps] = useState([]); // [{label, done}]
-  const [doneSlug, setDoneSlug] = useState('');
 
   const scrollRef = useRef(null);
   useEffect(() => { scrollRef.current?.scrollTo({ top: 9e9, behavior: 'smooth' }); }, [phase, steps]);
@@ -114,20 +114,13 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
       });
       finishLast();
 
-      // 4) Mark onboarding complete + read back the final live slug.
+      // 4) Mark onboarding complete. The ready screen reads the final live
+      //    slug back from the server itself (a taken-slug retry may have kept
+      //    the one seeded at signup).
       mark('Publishing your booking page…');
       await api.post('/onboarding/complete');
-      let finalSlug = desiredSlug;
-      try {
-        const cal = await api.get('/calendar');
-        // Response shape is { calendar: { settings: { slug } } } - the old
-        // cal?.slug read never matched, so a taken-slug retry could show
-        // a booking link that was never actually saved.
-        if (cal?.calendar?.settings?.slug) finalSlug = cal.calendar.settings.slug;
-      } catch { /* fall back to derived slug */ }
       finishLast();
 
-      setDoneSlug(finalSlug);
       setPhase('done');
     } catch (e) {
       setErr(e?.message || 'Something went wrong — you can try again or set it up manually.');
@@ -138,12 +131,7 @@ export default function IvyGuidedSetup({ user, onExit, onDone }) {
   if (phase === 'done') {
     return (
       <div style={{ padding: '4px 0' }}>
-        <BookingWin
-          slug={doneSlug}
-          bizName={bizName.trim()}
-          onContinue={onDone}
-          continueLabel="Go to my dashboard"
-        />
+        <ReadyStep onContinue={onDone} continueLabel="Go to my dashboard"/>
       </div>
     );
   }
