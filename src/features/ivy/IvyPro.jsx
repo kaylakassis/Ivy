@@ -55,6 +55,18 @@ export default function IvyPro() {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, thinking]);
 
+  // While Ivy's reply streams in, the bubble with `streaming` grows; the
+  // thinking dots step aside and the view follows the text, but only when the
+  // owner is already at the bottom (scrolling up to re-read must not fight).
+  const streamingMsg = messages.find((m) => m.streaming);
+  const streamedLength = streamingMsg ? streamingMsg.text.length : 0;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !streamedLength) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+  }, [streamedLength]);
+
   // ?prompt=… deep-link consumed by push notifications and similar
   // hand-offs. Drops the text into the composer (or auto-sends if also
   // ?send=1) so the user can review before firing it off. Strips the
@@ -189,7 +201,7 @@ export default function IvyPro() {
                   )}
                 </div>
               ))}
-              {thinking && <ThinkingBubble/>}
+              {thinking && !streamingMsg && <ThinkingBubble/>}
             </div>
           )}
         </div>
@@ -578,7 +590,12 @@ function ChatBubble({ msg }) {
         color: isMe ? 'var(--accent-ink)' : 'var(--fg)',
         border: isMe ? 'none' : '1px solid var(--border)',
         whiteSpace: isMe ? 'pre-wrap' : 'normal',
-      }}>{isMe ? msg.text : <MiniMarkdown text={msg.text}/>}</div>
+      }}>
+        {isMe ? msg.text : <MiniMarkdown text={msg.text}/>}
+        {/* Reply still arriving: a thin caret blinks at the end (.ivy-caret in
+            global.css; still under the OS reduce-motion setting). */}
+        {!isMe && msg.streaming && <span className="ivy-caret" aria-hidden="true"/>}
+      </div>
     </div>
   );
 }

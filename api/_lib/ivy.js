@@ -523,8 +523,15 @@ async function isPaidWorkspace(workspaceId) {
   } catch { return false; }
 }
 
-export async function generateReply(text, ctx, history = [], workspaceId = null, attachment = null, userId = null) {
+// `stream` (optional) is { onDelta(text), onReset() }: when given, the model's
+// text is relayed chunk by chunk as it is generated (see makeRelay). Every
+// check, retry, usage record and the returned value are exactly the same as
+// without it; only the delivery of the text changes.
+export async function generateReply(text, ctx, history = [], workspaceId = null, attachment = null, userId = null, stream = null) {
   const client = anthropic();
+  const relay = stream && typeof stream.onDelta === 'function'
+    ? makeRelay(stream.onDelta, typeof stream.onReset === 'function' ? stream.onReset : () => {})
+    : null;
   if (!client) {
     return { text: sanitizeIvyReply(mockReply(text, ctx, attachment)), mode: 'mock', error: 'no-api-key' };
   }
@@ -578,7 +585,7 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
   }
 
   try {
-    const { reply, aggregateUsage, pendingActions, modelUsed } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId);
+    const { reply, aggregateUsage, pendingActions, modelUsed } = await claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId, relay);
     // Record SUM of all turns toward the daily cap - tool loops can
     // burn many turns per user message.
     if (workspaceId && aggregateUsage) {
@@ -607,8 +614,81 @@ export async function generateReply(text, ctx, history = [], workspaceId = null,
       text: sanitizeIvyReply(`I couldn't put together an answer just now: ${reason}. ${advice}`),
       mode: 'mock',
       error: reason,
+      // The provider failed (as opposed to a notice such as the allowance).
+      // The streaming endpoint reports this as its `error` event; the plain
+      // endpoint does not read it.
+      failed: true,
+      midStream: !!(err && err.ivyMidStream),
     };
   }
+}
+
+// Relays the model's text to a streaming client while claudeReply runs its
+// turns. Only the text of the turn that becomes the reply should reach the
+// owner: a turn that goes on to call tools may start with a line like "Let
+// me check", which the plain path drops (the reply is the final turn's text
+// only). We cannot know a turn is a tool turn until its first tool_use block
+// starts, so text is relayed as it arrives and, if a tool_use block follows
+// in the same turn, one `reset` tells the client to clear what it has shown.
+//
+// Dashes are normalised on the way through so the growing text reads like
+// the final one (sanitizeIvyReply runs on the whole reply at the end). A
+// pattern can straddle two chunks, so a trailing run of whitespace and
+// dashes is held back until the next chunk settles it. The client swaps in
+// the final text when `done` arrives, so this only has to be close.
+function makeRelay(onDelta, onReset) {
+  let shown = false;      // the client is displaying text from a turn
+  let turnSent = false;   // this turn has emitted something
+  let suppressed = false; // this turn asked for a tool: nothing more from it
+  let tail = '';
+  let atStart = true;
+  const emit = (t) => {
+    if (!t) return;
+    onDelta(t);
+    shown = true;
+    turnSent = true;
+  };
+  const reset = () => {
+    if (shown) onReset();
+    shown = false;
+    turnSent = false;
+  };
+  return {
+    get sentThisTurn() { return turnSent; },
+    beginTurn() {
+      reset();
+      suppressed = false;
+      tail = '';
+      atStart = true;
+    },
+    delta(text) {
+      if (suppressed || !text) return;
+      let s = tail + text;
+      if (atStart) {
+        s = s.replace(/^\s+/, '');
+        if (!s) { tail = ''; return; }
+        atStart = false;
+      }
+      const m = /[\s—–-]+$/.exec(s);
+      tail = m ? m[0] : '';
+      emit(sanitizeDashes(m ? s.slice(0, m.index) : s));
+    },
+    toolUse() {
+      suppressed = true;
+      tail = '';
+      reset();
+    },
+    endTurn() {
+      if (!suppressed && tail) emit(sanitizeDashes(tail).replace(/\s+$/, ''));
+      tail = '';
+    },
+  };
+}
+function sanitizeDashes(t) {
+  return t
+    .replace(/\s+[—–]\s+/g, ', ')
+    .replace(/[—–]/g, '-')
+    .replace(/--+/g, '-');
 }
 
 function allowanceUsedMessage(usage) {
@@ -994,7 +1074,12 @@ function isTransientProviderError(err) {
   return /timed? ?out|abort|ECONN|ENOTFOUND|EAI_AGAIN|fetch failed|socket|network|overloaded|connection/i.test(msg)
     || /APIConnection/i.test(String(err?.name || err?.constructor?.name || ''));
 }
-async function callModel(client, params, { deadlineAt, label = 'reply' }) {
+// With a `relay` (streaming), the same request is made with the SDK's
+// streaming call and text deltas are handed to the relay as they arrive. A
+// failure before any text was relayed is retried exactly like a plain call; a
+// failure after text has gone out is not (a second attempt would say it all
+// again), and is marked so the caller can report it honestly.
+async function callModel(client, params, { deadlineAt, label = 'reply', relay = null }) {
   const models = [params.model];
   const fb = fallbackModel();
   if (fb && fb !== params.model) models.push(fb);
@@ -1005,8 +1090,12 @@ async function callModel(client, params, { deadlineAt, label = 'reply' }) {
       const remaining = deadlineAt - Date.now();
       if (remaining < 4000) break;
       try {
-        // eslint-disable-next-line no-await-in-loop
-        const response = await client.messages.create({ ...params, model }, { timeout: Math.min(30_000, remaining) });
+        const opts = { timeout: Math.min(30_000, remaining) };
+        const response = relay
+          // eslint-disable-next-line no-await-in-loop
+          ? await streamModel(client, { ...params, model }, { ...opts, relay, deadlineAt })
+          // eslint-disable-next-line no-await-in-loop
+          : await client.messages.create({ ...params, model }, opts);
         if (m > 0 || attempt > 0) {
           // eslint-disable-next-line no-console
           console.warn(`[ivy] ${label}: recovered on ${model} after ${attempt} retr${attempt === 1 ? 'y' : 'ies'}${m > 0 ? ' (fallback model)' : ''}`);
@@ -1014,7 +1103,7 @@ async function callModel(client, params, { deadlineAt, label = 'reply' }) {
         return { response, model };
       } catch (err) {
         lastErr = err;
-        if (!isTransientProviderError(err)) throw err;
+        if (err?.ivyMidStream || !isTransientProviderError(err)) throw err;
         const wait = 600 * (attempt + 1);
         if (deadlineAt - Date.now() < wait + 4000) break;
         // eslint-disable-next-line no-await-in-loop
@@ -1025,7 +1114,34 @@ async function callModel(client, params, { deadlineAt, label = 'reply' }) {
   throw lastErr || new Error('Ivy could not reach the AI service');
 }
 
-async function claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId = null) {
+// One streamed provider call. Returns the complete message (the same shape
+// messages.create returns, usage included) once the stream ends. Text deltas
+// go to the relay; a tool_use block tells the relay this turn's text is not
+// the reply. The stream is aborted at the wall-clock deadline so a stalled
+// connection cannot run the function into Vercel's limit.
+async function streamModel(client, params, { timeout, relay, deadlineAt }) {
+  relay.beginTurn();
+  const stream = client.messages.stream(params, { timeout });
+  const guard = setTimeout(() => { try { stream.abort(); } catch { /* already done */ } }, Math.max(1000, deadlineAt - Date.now()));
+  try {
+    for await (const ev of stream) {
+      if (ev.type === 'content_block_start') {
+        const t = ev.content_block?.type;
+        if (t === 'tool_use' || t === 'server_tool_use') relay.toolUse();
+      } else if (ev.type === 'content_block_delta' && ev.delta?.type === 'text_delta') {
+        relay.delta(ev.delta.text);
+      }
+    }
+    return await stream.finalMessage();
+  } catch (err) {
+    if (relay.sentThisTurn && err && typeof err === 'object') err.ivyMidStream = true;
+    throw err;
+  } finally {
+    clearTimeout(guard);
+  }
+}
+
+async function claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId = null, relay = null) {
   const messages = buildMessages(text, ctx, history, attachment);
 
   let response = null;
@@ -1067,7 +1183,8 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       ],
       tools: IVY_TOOLS,
       messages: withPrefixCache(messages),
-    }, { deadlineAt: startedAt + HARD_DEADLINE_MS, label: `turn ${i + 1}` }));
+    }, { deadlineAt: startedAt + HARD_DEADLINE_MS, label: `turn ${i + 1}`, relay }));
+    if (relay) relay.endTurn();
     const u = response.usage || {};
     totalIn          += Number(u.input_tokens || 0);
     totalOut         += Number(u.output_tokens || 0);
@@ -1125,7 +1242,8 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       tools: IVY_TOOLS,
       tool_choice: { type: 'none' },
       messages: withPrefixCache(messages),
-    }, { deadlineAt: startedAt + HARD_DEADLINE_MS, label: 'final' });
+    }, { deadlineAt: startedAt + HARD_DEADLINE_MS, label: 'final', relay });
+    if (relay) relay.endTurn();
     const u = final.usage || {};
     totalIn          += Number(u.input_tokens || 0);
     totalOut         += Number(u.output_tokens || 0);

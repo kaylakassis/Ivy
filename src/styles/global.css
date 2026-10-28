@@ -880,6 +880,14 @@ body.app-walled .view-toggle { display: none; }
 .row-new-inner { display: flex; flex-direction: column; min-height: 0; }
 /* Typing indicator dots. */
 .breathe-dot { animation: m-breathe 1.2s ease-in-out infinite; }
+/* Ivy's reply arriving word by word: a thin caret blinks after the last
+   character (features/ivy, messages with `streaming`). */
+@keyframes m-caret-blink { 0%, 100% { opacity: 1; } 50% { opacity: 0; } }
+.ivy-caret {
+  display: inline-block; width: 2px; height: 1em; margin-left: 2px;
+  vertical-align: -0.15em; border-radius: 1px; background: currentColor;
+  animation: m-caret-blink 1s steps(1, end) infinite;
+}
 /* Border glow, once, on mount. */
 .glow-once { animation: m-glow-once 600ms var(--ease-out); }
 /* Toggles and segmented controls glide. */
@@ -942,6 +950,7 @@ body.app-walled .view-toggle { display: none; }
   }
   .btn:active { transform: none; }
   .breathe-dot { animation: m-fade-in 1.2s ease-in-out infinite alternate; }
+  .ivy-caret { animation: none; opacity: .55; }
   .glow-once { animation: none; }
   .switch-thumb { transition: none; }
 }
