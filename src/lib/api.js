@@ -30,7 +30,9 @@ const RETRY_METHODS = new Set(['GET']);
 // string per bundle.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
-async function req(method, path, body, opts = {}) {
+// Headers every request carries: JSON content type when there is a body,
+// native auth on the iOS/Android shell, plus anything the caller adds.
+async function buildHeaders(body, opts = {}) {
   // Only set Content-Type when there's an actual body. Sending json content-type
   // on a bodiless DELETE/GET makes some serverless routing layers cranky.
   const headers = {};
@@ -47,7 +49,67 @@ async function req(method, path, body, opts = {}) {
   }
   // Caller-supplied headers (e.g. Idempotency-Key on mutating POSTs).
   if (opts.headers) Object.assign(headers, opts.headers);
+  return headers;
+}
 
+// networkErr.message is browser jargon ("Load failed" on WebKit, "Failed to
+// fetch" on Chromium). Say what a person can act on and keep the raw text on
+// the error for diagnostics. status 0 = the request never got an answer.
+function networkError(networkErr) {
+  const aborted = networkErr?.name === 'AbortError';
+  return Object.assign(
+    new Error(aborted
+      ? 'Request timed out - please try again.'
+      : 'Could not reach Ivy. Check your connection and try again.'),
+    { status: 0, cause: networkErr?.message || 'network error' },
+  );
+}
+
+// Turns a non-2xx Response into the Error api.* throws: the server's own
+// message when the body is our { error } shape, else the text, else the
+// status. err.message is what screens show people. Never put the HTTP status
+// in it ("401: Invalid email or password" reads like a crash). The status
+// stays on err.status for code that needs to branch on it.
+export async function httpError(res) {
+  let detail = '';
+  let parsed = null;
+  try {
+    const text = await res.text();
+    try {
+      parsed = JSON.parse(text);
+      detail = parsed.error || parsed.message || '';
+    } catch {
+      // Not JSON (could be a Vercel error page or empty body).
+      detail = text.slice(0, 280);
+    }
+  } catch { /* ignore body read errors */ }
+
+  if (!detail && res.statusText) detail = res.statusText;
+  if (!detail) detail = `HTTP ${res.status}`;
+  return Object.assign(new Error(detail), { status: res.status, details: parsed });
+}
+
+// The raw fetch behind api.*, for a caller that reads the body itself (the
+// Ivy reply stream). Same URL base, credentials, native auth and headers. A
+// network failure throws the same status-0 error api.* does; the Response is
+// returned as-is otherwise, non-2xx included (see httpError).
+export async function apiFetch(method, path, body, opts = {}) {
+  const headers = await buildHeaders(body, opts);
+  try {
+    return await fetch(`${API_BASE}/api${path}`, {
+      method,
+      headers,
+      credentials: 'include',
+      body: body ? JSON.stringify(body) : undefined,
+      signal: opts.signal,
+    });
+  } catch (networkErr) {
+    throw networkError(networkErr);
+  }
+}
+
+async function req(method, path, body, opts = {}) {
+  const headers = await buildHeaders(body, opts);
   const url = `${API_BASE}/api${path}`;
 
   const doFetch = async () => {
@@ -67,42 +129,12 @@ async function req(method, path, body, opts = {}) {
         signal: ctrl ? ctrl.signal : undefined,
       });
     } catch (networkErr) {
-      const aborted = networkErr.name === 'AbortError';
-      // networkErr.message is browser jargon ("Load failed" on WebKit,
-      // "Failed to fetch" on Chromium). Say what a person can act on and
-      // keep the raw text on the error for diagnostics.
-      throw Object.assign(
-        new Error(aborted
-          ? 'Request timed out - please try again.'
-          : 'Could not reach Ivy. Check your connection and try again.'),
-        { status: 0, cause: networkErr.message || 'network error' },
-      );
+      throw networkError(networkErr);
     } finally {
       if (timer) clearTimeout(timer);
     }
 
-    if (!res.ok) {
-      let detail = '';
-      let parsed = null;
-      try {
-        const text = await res.text();
-        try {
-          parsed = JSON.parse(text);
-          detail = parsed.error || parsed.message || '';
-        } catch {
-          // Not JSON (could be a Vercel error page or empty body).
-          detail = text.slice(0, 280);
-        }
-      } catch { /* ignore body read errors */ }
-
-      if (!detail && res.statusText) detail = res.statusText;
-      if (!detail) detail = `HTTP ${res.status}`;
-
-      // err.message is what screens show people. Never put the HTTP status
-      // in it ("401: Invalid email or password" reads like a crash). The
-      // status stays on err.status for code that needs to branch on it.
-      throw Object.assign(new Error(detail), { status: res.status, details: parsed });
-    }
+    if (!res.ok) throw await httpError(res);
     if (res.status === 204) return null;
     return res.json();
   };

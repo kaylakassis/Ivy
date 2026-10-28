@@ -2,32 +2,20 @@
 //   GET  → list sessions + workspace context (the "what Ivy sees" panel)
 //   POST → send a message. If body.sessionId is missing, a new session is
 //          created from the first message's title. Server generates the reply
-//          (mock now, real Anthropic later) and persists both turns.
+//          and persists both turns, then returns them in one JSON body.
+//          POST /api/ivy/stream is the same turn with the reply streamed;
+//          the shared pipeline lives in api/_lib/ivyTurn.js.
 
 import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import {
-  serializeSession, serializeMessage, workspaceContext, buildBriefing,
-  generateReply, fetchOwnedSession, getDailyUsage, sanitizeUserText,
-  stripInlineMarkdown, } from '../_lib/ivy.js';
+  serializeSession, workspaceContext, buildBriefing, generateReply, getDailyUsage,
+} from '../_lib/ivy.js';
+import { beginTurn, finishTurn } from '../_lib/ivyTurn.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
-import { } from '../_lib/ivyModel.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
-
-const MAX_MESSAGE_CHARS = 4000;
-// Vercel serverless caps the request body around 4.5 MB. We allow up to
-// ~3.5 MB of raw file bytes (≈4.7 MB of base64) and add a server-side
-// belt-and-braces check so a malformed client can't OOM us.
-const MAX_ATTACHMENT_BYTES = 3.5 * 1024 * 1024;
-const ALLOWED_MIME = new Set([
-  'application/pdf',
-  'image/png', 'image/jpeg', 'image/gif', 'image/webp',
-  'text/csv', 'text/plain', 'text/tab-separated-values',
-  'text/markdown',
-  'application/csv', 'application/json',
-]);
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -60,7 +48,7 @@ export default async function handler(req, res) {
       const briefing = await safe(buildBriefing(workspaceId), null);
       // Cheap env-var probe so the UI can show a "mock mode" warning even
       // before the user has sent their first message. Doesn't actually
-      // call Anthropic - that happens on POST.
+      // call the provider - that happens on POST.
       const hasKey = !!process.env.ANTHROPIC_API_KEY;
       // Fallback must match getDailyUsage's real shape - the usage meter
       // reads usage.outputTokens.toLocaleString() and would TypeError on
@@ -78,7 +66,7 @@ export default async function handler(req, res) {
 
     if (req.method === 'POST') {
       // Per-minute throttle on the expensive path (each POST can fan out
-      // to several DB reads + up to 8 Anthropic calls). The daily token cap
+      // to several DB reads + up to 8 provider calls). The daily token cap
       // inside generateReply is the budget ceiling; this stops a tight loop
       // from hammering the endpoint. Super-admins bypass (see enforce()).
       if (await enforce(req, res, [
@@ -87,116 +75,15 @@ export default async function handler(req, res) {
       ])) return;
 
       const body = await readBody(req);
-      // Sanitize before any further processing: strips NUL, control
-      // chars, zero-width chars, and bidi overrides that prompt-
-      // injection attempts use to hide instructions in plain sight.
-      const text = sanitizeUserText((body.text || '').toString()).trim();
-      // Validate + normalize attachment if present. Allow an empty text
-      // when an attachment is attached - "analyze this" is implicit.
-      const attachment = parseAttachment(body.attachment);
-      if (attachment instanceof Error) return badRequest(res, attachment.message);
-      if (!text && !attachment) return badRequest(res, 'Message is required');
-      if (text.length > MAX_MESSAGE_CHARS) return badRequest(res, 'Message too long');
+      const turn = await beginTurn(body, workspaceId);
+      if (turn.error) return badRequest(res, turn.error);
 
-      let session;
-      if (body.sessionId) {
-        session = await fetchOwnedSession({ id: body.sessionId, workspaceId });
-        if (!session) return badRequest(res, 'Unknown session');
-      } else {
-        const title = text.slice(0, 60).replace(/\s+/g, ' ');
-        const ins = await sql`
-          INSERT INTO ivy_sessions (workspace_id, title)
-          VALUES (${workspaceId}, ${title})
-          RETURNING *
-        `;
-        session = ins.rows[0];
-      }
-
-      // Fetch prior turns BEFORE inserting the new user message so the
-      // history we pass to Claude doesn't include the message we're about
-      // to respond to (we pass it as `text` separately).
-      const priorMsgs = await sql`
-        SELECT role, text FROM ivy_messages
-        WHERE session_id = ${session.id}
-        ORDER BY created_at ASC
-        LIMIT 40
-      `;
-      const history = priorMsgs.rows.map((r) => ({ role: r.role, text: r.text }));
-
-      // The persisted user message includes a one-line note about the
-      // attachment so it shows up in chat history. The actual file
-      // bytes are NOT stored - they only live in the API call.
-      const persistedText = attachment
-        ? (text ? `${text}\n\n📎 ${attachment.filename || 'file'}` : `📎 ${attachment.filename || 'file'}`)
-        : text;
-      const userMsg = await sql`
-        INSERT INTO ivy_messages (session_id, role, text)
-        VALUES (${session.id}, 'me', ${persistedText})
-        RETURNING *
-      `;
-
-      const ctx = await workspaceContext(workspaceId);
-      const reply = await generateReply(text, ctx, history, workspaceId, attachment, user.id);
-      const replyText = reply.text;
-
-      const ivyMsg = await sql`
-        INSERT INTO ivy_messages (session_id, role, text)
-        VALUES (${session.id}, 'ivy', ${replyText})
-        RETURNING *
-      `;
-
-      const preview = stripInlineMarkdown(replyText).slice(0, 120);
-      const upd = await sql`
-        UPDATE ivy_sessions
-        SET last_message_at = NOW(), last_message_preview = ${preview}, updated_at = NOW()
-        WHERE id = ${session.id}
-        RETURNING *
-      `;
-
-      const usage = await getDailyUsage(workspaceId);
-      // Surface any confirm-gated action Ivy proposed this turn on the Ivy
-      // message, so the client can render one-tap Approve/Dismiss buttons.
-      // Ephemeral to the live turn (not persisted) - reopening the session
-      // won't re-show a stale card.
-      const ivyMessage = serializeMessage(ivyMsg.rows[0]);
-      if (reply.pendingActions && reply.pendingActions.length) {
-        ivyMessage.pendingActions = reply.pendingActions;
-      }
-      return ok(res, {
-        session: serializeSession(upd.rows[0]),
-        messages: [serializeMessage(userMsg.rows[0]), ivyMessage],
-        context: ctx,
-        mode: reply.mode,
-        modeError: reply.error || null,
-        usage,
-      });
+      const reply = await generateReply(turn.text, turn.ctx, turn.history, workspaceId, turn.attachment, user.id);
+      return ok(res, await finishTurn({ ...turn, reply, workspaceId }));
     }
 
     return methodNotAllowed(res, ['GET', 'POST']);
   } catch (err) {
     return serverError(res, err);
   }
-}
-
-// Returns a normalized { filename, mediaType, base64 } on success, null
-// when no attachment is present, or an Error with a user-readable
-// message when the payload is invalid.
-function parseAttachment(raw) {
-  if (raw == null || raw === '') return null;
-  if (typeof raw !== 'object') return new Error('Attachment must be an object');
-  const filename = (raw.filename || raw.name || '').toString().slice(0, 200) || null;
-  const mediaType = (raw.mediaType || raw.type || '').toString().toLowerCase();
-  const base64 = (raw.base64 || raw.data || '').toString();
-  if (!mediaType) return new Error('Attachment missing mediaType');
-  if (!ALLOWED_MIME.has(mediaType)) {
-    return new Error(`Unsupported file type: ${mediaType}. Allowed: PDF, PNG/JPEG/GIF/WEBP image, CSV, JSON, plain text.`);
-  }
-  if (!base64) return new Error('Attachment missing data');
-  // base64-decoded byte length ≈ ceil(len * 3 / 4) − padding, close enough.
-  const approxBytes = Math.floor(base64.length * 0.75);
-  if (approxBytes > MAX_ATTACHMENT_BYTES) {
-    const mb = (MAX_ATTACHMENT_BYTES / 1024 / 1024).toFixed(1);
-    return new Error(`File is too large. Cap is ${mb} MB.`);
-  }
-  return { filename, mediaType, base64 };
 }

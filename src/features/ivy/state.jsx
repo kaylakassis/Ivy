@@ -1,6 +1,8 @@
 // Ivy store. One initial GET pulls sessions + workspace context; clicking a
-// session pulls its messages on demand. Sending posts to /api/ivy and the
-// server returns both turns at once.
+// session pulls its messages on demand. Sending posts to /api/ivy/stream and
+// Ivy's reply grows in place as the server streams it (see stream.js); the
+// final payload is the same one POST /api/ivy returns, and that plain
+// endpoint is the fallback when the stream cannot start.
 //
 // State lives in a provider mounted in AppShell so every consumer
 // (the floating IvyDock at the corner + the full-page IvyPro route)
@@ -10,6 +12,7 @@
 // view (and vice versa).
 import { createContext, useContext, useEffect, useState, useCallback, useRef } from 'react';
 import { api } from '../../lib/api.js';
+import { streamReply } from './stream.js';
 
 const EMPTY_CTX = {
   revenueThisMonth: 0, openInvoices: 0, activeClients: 0,
@@ -17,6 +20,37 @@ const EMPTY_CTX = {
 };
 
 const IvyCtx = createContext(null);
+
+// The placeholder for a reply that is still arriving. Chunks are coalesced to
+// one state update per frame (a reply can arrive as dozens of pieces a
+// second). The bubble is appended on the first chunk, so the thinking dots
+// stay until Ivy has actually said something, and carries `streaming: true`
+// so the UI can draw the caret and hold back the dots.
+function liveBubble(setMessages) {
+  const id = 'stream-' + Date.now();
+  let text = '';
+  let scheduled = false;
+  const flush = () => {
+    scheduled = false;
+    const snapshot = text;
+    setMessages((xs) => {
+      if (!snapshot) return xs.filter((m) => m.id !== id);
+      if (xs.some((m) => m.id === id)) return xs.map((m) => (m.id === id ? { ...m, text: snapshot } : m));
+      return [...xs, { id, role: 'ivy', text: snapshot, streaming: true, createdAt: new Date().toISOString() }];
+    });
+  };
+  const schedule = () => {
+    if (scheduled) return;
+    scheduled = true;
+    if (typeof requestAnimationFrame === 'function') requestAnimationFrame(flush);
+    else setTimeout(flush, 16);
+  };
+  return {
+    id,
+    append(chunk) { text += chunk; schedule(); },
+    clear() { text = ''; setMessages((xs) => xs.filter((m) => m.id !== id)); },
+  };
+}
 
 export function IvyProvider({ children }) {
   const value = useIvyState();
@@ -110,16 +144,39 @@ function useIvyState({ enabled = true } = {}) {
     setMessages((xs) => [...xs, optimistic]);
     setThinking(true);
 
+    const payload = {
+      text: t,
+      sessionId: activeId || undefined,
+      attachment: attachment || undefined,
+    };
+    // Ivy's bubble while the reply streams: appears with the first chunk and
+    // grows from there; gone once the real message replaces it.
+    const live = liveBubble(setMessages);
+
     try {
-      const r = await api.post('/ivy', {
-        text: t,
-        sessionId: activeId || undefined,
-        attachment: attachment || undefined,
-      });
+      let result;
+      try {
+        result = await streamReply(payload, { onDelta: live.append, onReset: live.clear });
+      } catch (e) {
+        live.clear();
+        // The stream never started (network, a 5xx, a runtime that cannot
+        // stream): one plain request instead. Never after text has shown or
+        // after a cut-off: the server may already hold the reply, and a
+        // resend would post the owner's message twice. 4xx are deterministic.
+        const transient = e?.status === 0 || (e?.status >= 500 && e?.status < 600);
+        if (e?.textArrived || e?.cutOff || !transient) throw e;
+        result = { event: 'done', payload: await api.post('/ivy', payload) };
+      }
+      const r = result.payload || {};
+      // `error` without the saved turn: nothing to show but the reason.
+      if (result.event === 'error' && !Array.isArray(r.messages)) {
+        throw Object.assign(new Error(r.message || "Ivy couldn't answer that one. Please try again."), { fromStream: true });
+      }
+      live.clear();
       const realMessages = r.messages || [];
       setMessages((xs) => {
         // Replace optimistic with real pair
-        const withoutOptimistic = xs.filter((m) => m.id !== optimistic.id);
+        const withoutOptimistic = xs.filter((m) => m.id !== optimistic.id && m.id !== live.id);
         const next = [...withoutOptimistic, ...realMessages];
         if (r.session) msgCacheRef.current.set(r.session.id, next);
         return next;
@@ -141,10 +198,14 @@ function useIvyState({ enabled = true } = {}) {
       // calm "try again", not a scary deployment error dumped into the chat.
       const serverOrTimeout = e?.status === 0 || (e?.status >= 500 && e?.status < 600);
       setError(serverOrTimeout
-        ? new Error('Ivy took too long to answer that one — please try again.')
+        ? new Error('Ivy took too long to answer that one. Please try again.')
         : e);
-      // Drop the optimistic bubble so the user can retry
-      setMessages((xs) => xs.filter((m) => m.id !== optimistic.id));
+      // Drop the optimistic bubble (and any partial reply) so the user can
+      // retry. The server may have saved the turn anyway, so the next open
+      // of this session reloads it instead of trusting the cache.
+      live.clear();
+      setMessages((xs) => xs.filter((m) => m.id !== optimistic.id && m.id !== live.id));
+      if (activeId) msgCacheRef.current.delete(activeId);
     } finally {
       setThinking(false);
     }
