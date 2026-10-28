@@ -162,7 +162,7 @@ export default async function handler(req, res) {
     // the started-email side effect.
     const { rows: existingRows } = await sql`
       SELECT id, owner_id, subscription_status, converted_at, trial_started_at,
-             subscription_source, stripe_customer_id, subscription_period_end
+             subscription_source, stripe_customer_id, subscription_period_end, cancel_at_period_end
       FROM workspaces
       WHERE id = ${workspaceId}
     `;
@@ -213,6 +213,10 @@ export default async function handler(req, res) {
                WHEN ${['UNCANCELLATION', 'RENEWAL', 'INITIAL_PURCHASE', 'PRODUCT_CHANGE'].includes(event.type)} THEN FALSE
                ELSE cancel_at_period_end
              END,
+             plan_ending_reminder_sent_at = CASE
+               WHEN ${['UNCANCELLATION', 'RENEWAL', 'INITIAL_PURCHASE', 'PRODUCT_CHANGE'].includes(event.type)} THEN NULL
+               ELSE plan_ending_reminder_sent_at
+             END,
              subscription_past_due_since = CASE
                WHEN ${nextStatus} = 'past_due' AND subscription_past_due_since IS NULL
                  THEN NOW()
@@ -245,8 +249,13 @@ export default async function handler(req, res) {
         await notifySubscriptionStarted({ workspaceId, periodEnd, amountCents, currency });
       } else if (event.type === 'BILLING_ISSUE') {
         await notifyPaymentFailed({ workspaceId, amountCents, currency, nextAttemptAt: null });
-      } else if (event.type === 'EXPIRATION') {
+      } else if (event.type === 'CANCELLATION' && nextStatus === 'active') {
+        // Auto-renew turned off with time left: say so now, with the date.
         await notifySubscriptionCancelled({ workspaceId, endsAt: periodEnd });
+      } else if (event.type === 'EXPIRATION' && !prev.cancel_at_period_end) {
+        // Lapsed without a prior cancellation notice (billing failure ran
+        // out, or RC never sent CANCELLATION): tell them now.
+        await notifySubscriptionCancelled({ workspaceId, endsAt: null });
       }
     } catch (notifyErr) {
       // Don't fail the webhook over a side-effect; RC would retry the

@@ -536,8 +536,8 @@ export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, business
       <p>Your Ivy subscription is cancelled. We're sorry to see you go — but a few things to make this painless:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         ${accessUntil}
-        <li>After that, <strong>${biz}</strong> moves to a free account; <strong>nothing is deleted</strong></li>
-        <li>You can reactivate anytime and pick up exactly where you left off</li>
+        <li>After that, your booking page, website and client portal for <strong>${biz}</strong> are archived: clients see a notice instead, and nothing can be booked or bought</li>
+        <li><strong>Nothing is deleted.</strong> Resubscribe any time and everything comes back exactly as it was</li>
       </ul>
       <p>If something wasn't working — Ivy, a missing feature, pricing — just reply and tell me. I read every one, and it genuinely shapes what we build next.</p>`,
     ctaText: 'Changed your mind? Reactivate →',
@@ -561,5 +561,49 @@ export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {
   } catch (err) {
     console.error('[subscriptionNotify.cancelled] failed:', err.message);
     reportError(err, { extra: { workspaceId } });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Plan ending soon (owner turned auto-renew off; access ends at periodEnd)
+// ─────────────────────────────────────────────────────────────────────
+
+export function renderPlanEnding({ endsAt, firstName: fnRaw, businessName, source }) {
+  const fn = escapeHtml(fnRaw || 'there');
+  const biz = escapeHtml(businessName || 'your business');
+  const endDate = fmtDate(endsAt);
+  const where = source === 'apple' ? 'in the App Store' : 'from your Account page';
+  const preheader = `Your plan ends on ${endDate}. After that your booking page, website and client portal are archived.`;
+  const html = emailShell({
+    heading: `Your Ivy plan ends on ${endDate}`,
+    preheader,
+    body: `<p>Hi ${fn},</p>
+      <p>A heads-up, since you turned off renewal: your Ivy plan ends on <strong>${endDate}</strong>.</p>
+      <p>After that, <strong>${biz}</strong> is archived for your clients. Your booking page and website show a notice instead of taking bookings, the client portal closes to new messages and purchases, and your dashboard is locked. Nothing is deleted, and it all comes back the moment you resubscribe.</p>
+      <p>If you meant to keep going, turn renewal back on ${where} before ${endDate} and nothing changes.</p>`,
+    ctaText: source === 'apple' ? 'Manage in the App Store →' : 'Keep my plan →',
+    ctaUrl: source === 'apple' ? 'https://apps.apple.com/account/subscriptions' : billingUrl(),
+    footer: `— The Ivy Team`,
+  });
+  return { subject: `Your Ivy plan ends on ${endDate}`, html, preheader };
+}
+
+export async function notifyPlanEnding({ workspaceId, endsAt, source }) {
+  try {
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const rendered = renderPlanEnding({ endsAt, source, firstName: firstName(o.name), businessName: o.biz_name });
+    await sendEmailToUser({ userId: o.owner_id, type: 'billing', to: o.email, subject: rendered.subject, html: rendered.html });
+    await notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: {
+        title: `Your Ivy plan ends ${fmtDate(endsAt)}`,
+        body: 'After that your booking page, website and client portal are archived. Turn renewal back on to keep them live.',
+        url: '/account?tab=billing', tag: `plan-ending-${workspaceId}`,
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[subscriptionNotify.planEnding] failed:', err.message);
   }
 }

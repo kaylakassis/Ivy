@@ -117,6 +117,10 @@
     {
       "path": "/api/cron/program-access",
       "schedule": "20 5 * * *"
+    },
+    {
+      "path": "/api/cron/plan-ending",
+      "schedule": "20 10 * * *"
     }
   ],
   "functions": {

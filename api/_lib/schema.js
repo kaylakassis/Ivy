@@ -101,6 +101,7 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
 -- but keeps access until subscription_period_end. Lets the Account page say
 -- "Cancelled, access until <date>" instead of "Renews in N days".
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS plan_ending_reminder_sent_at TIMESTAMPTZ;
 -- Daily-return streak (habit loop). streak_last_day is the last calendar day
 -- (in the workspace timezone) the owner was active; streak_days is the current
 -- consecutive-day count. Maintained by touchStreak() on the daily dashboard

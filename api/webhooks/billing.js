@@ -136,6 +136,7 @@ async function onCheckoutCompleted(session, secretKey) {
       stripe_subscription_id  = ${sub?.id || null},
       subscription_period_end = ${periodEnd},
       cancel_at_period_end    = FALSE,
+      plan_ending_reminder_sent_at = NULL,
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isTrialing} THEN converted_at ELSE COALESCE(converted_at, NOW()) END
@@ -193,6 +194,7 @@ async function onSubscriptionChanged(sub, eventType) {
       subscription_status     = ${status},
       subscription_period_end = ${periodEnd},
       cancel_at_period_end    = ${cancelAtEnd},
+      plan_ending_reminder_sent_at = CASE WHEN ${cancelAtEnd} THEN plan_ending_reminder_sent_at ELSE NULL END,
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
@@ -209,6 +211,7 @@ async function onSubscriptionChanged(sub, eventType) {
         stripe_customer_id      = ${sub.customer || null},
         subscription_period_end = ${periodEnd},
         cancel_at_period_end    = ${cancelAtEnd},
+      plan_ending_reminder_sent_at = CASE WHEN ${cancelAtEnd} THEN plan_ending_reminder_sent_at ELSE NULL END,
         trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
         trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
         converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
