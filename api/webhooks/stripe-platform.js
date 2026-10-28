@@ -30,6 +30,7 @@ import { markInvoicePaid } from '../_lib/invoicePayments.js';
 import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
 
 export const config = { api: { bodyParser: false } };
 
@@ -39,6 +40,7 @@ export default async function handler(req, res) {
   // let Stripe's retry re-process the event instead of getting silently
   // deduped on a transient error. Same pattern as stripe/[workspaceId].js.
   let claimedEventId = null;
+  let eventType = null;
   try {
     const secret = platformWebhookSecret();
     if (!secret) {
@@ -54,8 +56,10 @@ export default async function handler(req, res) {
         secret,
       });
     } catch (err) {
+      await recordWebhookFailure({ source: 'stripe-platform', eventType: SIGNATURE_FAILURE, message: err.message });
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
     }
+    eventType = event.type;
 
     // Dedup BEFORE any processing. Use a distinct 'stripe-platform'
     // provider tag so platform-level events don't collide with
@@ -513,6 +517,7 @@ export default async function handler(req, res) {
     // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.
     if (claimedEventId) await releaseProcessed('stripe-platform', claimedEventId);
+    await recordWebhookFailure({ source: 'stripe-platform', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }

@@ -11,12 +11,14 @@ import { fetchFinanceSettings } from '../../_lib/finance.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { applyPaymentToInvoice, applyRefundToInvoice } from '../../_lib/paypalApply.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
 
 export const config = { api: { bodyParser: false } };
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   let claimedEventId = null;
+  let eventType = null;
   try {
     const { workspaceId } = req.query;
     const settings = await fetchFinanceSettings(workspaceId);
@@ -30,8 +32,10 @@ export default async function handler(req, res) {
       // Confirmed signature mismatch → 400; verify-infra/config failure → 500
       // so PayPal retries instead of dropping an authentic event.
       const mismatch = /signature mismatch/i.test(e.message || '');
+      await recordWebhookFailure({ source: 'paypal', eventType: mismatch ? SIGNATURE_FAILURE : 'verification_error', message: e.message });
       return res.status(mismatch ? 400 : 500).json({ error: e.message });
     }
+    eventType = event?.event_type || null;
 
     // Dedup BEFORE processing. PayPal retries for ~25h on non-2xx
     // responses; without this a handler crash mid-write would
@@ -73,6 +77,7 @@ export default async function handler(req, res) {
     // Release the dedup claim so PayPal's retry re-processes (its natural
     // guards keep the re-run from double-applying).
     if (claimedEventId) await releaseProcessed('paypal', claimedEventId);
+    await recordWebhookFailure({ source: 'paypal', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }

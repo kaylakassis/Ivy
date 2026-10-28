@@ -25,6 +25,7 @@ import {
 } from '../_lib/subscriptionNotify.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
 
 // Stripe statuses that count as "this user is paying us". Trialing is
 // excluded - affiliates only earn attribution on real revenue.
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
   // let Stripe's retry re-process the event instead of getting silently
   // deduped on a transient error. Same pattern as stripe/[workspaceId].js.
   let claimedEventId = null;
+  let eventType = null;
   try {
     const secretKey     = platformStripeSecret();
     const webhookSecret = billingWebhookSecret();
@@ -54,8 +56,10 @@ export default async function handler(req, res) {
         secret: webhookSecret,
       });
     } catch (err) {
+      await recordWebhookFailure({ source: 'billing', eventType: SIGNATURE_FAILURE, message: err.message });
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
     }
+    eventType = event.type;
 
     // Idempotency. Stripe redelivers events on any non-2xx or timeout;
     // without this, a redelivered invoice.payment_succeeded re-sends
@@ -96,6 +100,7 @@ export default async function handler(req, res) {
     // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.
     if (claimedEventId) await releaseProcessed('billing', claimedEventId);
+    await recordWebhookFailure({ source: 'billing', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }

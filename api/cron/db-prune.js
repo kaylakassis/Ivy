@@ -19,6 +19,8 @@
 //                                       recent 50; older rows are dead
 //                                       weight (grows unbounded otherwise).
 //   ivy_failures           > 30 days  - failed-reply log for the readiness page
+//   webhook_failures       > 30 days  - rejected/failed webhook deliveries
+//                                       (ops-alerts reads the last hour)
 //   ivy_usage              > 90 days  - per-workspace/day token counters;
 //                                       ~3 months is plenty for admin
 //                                       charts + the global cap roll-up.
@@ -83,6 +85,11 @@ async function handler(req, res) {
 
     results.cronRuns = await prune('cron_runs',
       `finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '30 days'`);
+
+    // Webhook deliveries we could not handle; the ops-alerts cron only
+    // reads the last hour.
+    results.webhookFailures = await prune('webhook_failures',
+      `created_at < NOW() - INTERVAL '30 days'`);
 
     // Idempotency records expire at 24h + grace. Pruning at 48h is
     // safe - no real client retries arrive that late.

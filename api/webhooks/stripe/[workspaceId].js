@@ -24,6 +24,7 @@ import { fetchBranding } from '../../_lib/branding.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { fetchWithTimeout } from '../../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -40,6 +41,7 @@ export default async function handler(req, res) {
   // Tracks a dedup claim so a mid-handler throw can release it (below),
   // letting the provider's retry re-process instead of being deduped.
   let claimedEventId = null;
+  let eventType = null;
   try {
     const workspaceId = (req.query.workspaceId || '').toString();
     if (!/^[0-9a-fA-F-]{36}$/.test(workspaceId)) {
@@ -76,8 +78,10 @@ export default async function handler(req, res) {
         secret: webhookSecret,
       });
     } catch (err) {
+      await recordWebhookFailure({ source: 'stripe', eventType: SIGNATURE_FAILURE, message: err.message });
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
     }
+    eventType = event.type;
 
     // Dedup BEFORE any business logic. Stripe retries for ~3 days on
     // non-2xx responses (and on timeout); without this, a handler
@@ -486,6 +490,7 @@ export default async function handler(req, res) {
     // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.
     if (claimedEventId) await releaseProcessed('stripe', claimedEventId);
+    await recordWebhookFailure({ source: 'stripe', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }
