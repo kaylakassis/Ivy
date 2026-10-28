@@ -9,6 +9,7 @@ import { workspaceTimeZone } from './_lib/calendar.js';
 import { touchStreak } from './_lib/streak.js';
 import { detectWorkflowSuggestion } from './_lib/workflowSuggest.js';
 import { buildBriefing } from './_lib/ivy.js';
+import { firstWinForDashboard } from './_lib/firstWin.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 export default async function handler(req, res) {
@@ -100,8 +101,14 @@ export default async function handler(req, res) {
       if (b?.items?.length) briefing = { items: b.items };
     } catch { /* no "today" card this load */ }
 
+    // First win: whether to show the "Your business is ready" cards (a new
+    // owner's first dashboard visit) and any one-time first-booking /
+    // first-payment moment waiting to be shown. Never throws.
+    const firstWin = await firstWinForDashboard(workspaceId);
+
     return ok(res, {
       currency,
+      firstWin,
       streak: { days: streak.days, best: streak.best, milestone: streak.milestone },
       workflowSuggestion,
       briefing,

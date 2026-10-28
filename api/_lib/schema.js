@@ -126,6 +126,28 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS setup_nudge_sent_at TIMESTAMPTZ;
 -- hour-repeat or a retried run can't double-send within one beat.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_push_last_sent_at TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_push_last_sent_at   TIMESTAMPTZ;
+-- First-win flow (api/_lib/firstWin.js). After onboarding Ivy drafts the
+-- owner's booking link, website and first invoice from their real answers;
+-- first_win_prepared_at stamps that pass (idempotent), first_win_seen_at
+-- stamps the owner continuing past the "Your business is ready" cards, and
+-- first_win_invoice_id points at the draft so the ready card can reopen it.
+-- booking_link_shared_at marks the dashboard to-do done when the owner
+-- copies or shares the link (before a booking ever lands).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_win_prepared_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_win_seen_at     TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_win_invoice_id  UUID;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS booking_link_shared_at TIMESTAMPTZ;
+-- One-time celebrations for the first REAL client booking and the first real
+-- payment. *_celebrated_at is set exactly once (compare-and-set) when the
+-- event happens, *_celebration holds what the dashboard says (client first
+-- name, time, amount) and *_celebration_shown_at records that the dashboard
+-- moment was displayed, so it can never repeat. Sample data never sets them.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_booking_celebrated_at       TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_booking_celebration         JSONB;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_booking_celebration_shown_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_payment_celebrated_at       TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_payment_celebration         JSONB;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_payment_celebration_shown_at TIMESTAMPTZ;
 
 -- Business type - drives onboarding flow, sidebar (Calendar hidden
 -- for product-only), dashboard tiles (orders vs bookings), and the

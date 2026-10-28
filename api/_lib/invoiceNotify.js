@@ -9,6 +9,7 @@ import { sql } from './db.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { celebrateFirstPayment, celebrateRevenueMonthMilestone } from './milestones.js';
+import { recordFirstRealPayment } from './firstWin.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
 import { paidMethodLabel } from './finance.js';
@@ -29,7 +30,11 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
   // Payment milestones - owner-facing, independent of whether the invoice has a
   // client email (so they fire even for a walk-in receipt-less sale). First
   // payment, then each time a calendar month's revenue crosses a tier.
-  await celebrateFirstPayment(workspaceId);
+  // The first REAL payment (not sample data) is the first-win moment: it
+  // flags the dashboard celebration and sends its own notification, so the
+  // generic first-payment milestone only runs when that did not fire.
+  const firstWin = await recordFirstRealPayment({ workspaceId, invoiceId });
+  if (!firstWin) await celebrateFirstPayment(workspaceId);
   await celebrateRevenueMonthMilestone(workspaceId);
   try {
     const { rows } = await sql`

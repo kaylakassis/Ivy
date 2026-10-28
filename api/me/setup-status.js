@@ -59,14 +59,19 @@ export default async function handler(req, res) {
       console.error('[setup-status] sub-query failed:', e.message);
       return fallback;
     } };
-    const [cs, sv, fs, ws2, cl, bk, inv] = await Promise.all([
+    // Sample data (clients.source = 'demo' and everything linked to it) never
+    // completes a step: the checklist is about the owner's real business.
+    const [cs, sv, fs, ws2, cl, bk, inv, shared] = await Promise.all([
       safe(sql`SELECT biz_name, slug, availability FROM calendar_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
       safe(sql`SELECT COUNT(*)::int AS n FROM services WHERE workspace_id = ${workspaceId}`, { rows: [{ n: 0 }] }),
       safe(sql`SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status FROM finance_settings WHERE workspace_id = ${workspaceId}`, { rows: [] }),
       safe(sql`SELECT launched, published_at FROM websites WHERE workspace_id = ${workspaceId}`, { rows: [] }),
-      safe(sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${workspaceId}`, { rows: [{ n: 0 }] }),
-      safe(sql`SELECT COUNT(*)::int AS n FROM bookings WHERE workspace_id = ${workspaceId} AND cancelled_at IS NULL`, { rows: [{ n: 0 }] }),
-      safe(sql`SELECT COUNT(*)::int AS n FROM invoices WHERE workspace_id = ${workspaceId} AND status <> 'draft'`, { rows: [{ n: 0 }] }),
+      safe(sql`SELECT COUNT(*)::int AS n FROM clients WHERE workspace_id = ${workspaceId} AND (source IS DISTINCT FROM 'demo')`, { rows: [{ n: 0 }] }),
+      safe(sql`SELECT COUNT(*)::int AS n FROM bookings b LEFT JOIN clients c ON c.id = b.client_id
+                WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL AND (c.source IS DISTINCT FROM 'demo')`, { rows: [{ n: 0 }] }),
+      safe(sql`SELECT COUNT(*)::int AS n FROM invoices i LEFT JOIN clients c ON c.id = i.client_id
+                WHERE i.workspace_id = ${workspaceId} AND i.status <> 'draft' AND (c.source IS DISTINCT FROM 'demo')`, { rows: [{ n: 0 }] }),
+      safe(sql`SELECT booking_link_shared_at, first_booking_celebrated_at FROM workspaces WHERE id = ${workspaceId}`, { rows: [] }),
     ]);
     const settings = cs.rows[0] || {};
     const serviceCount = sv.rows[0]?.n || 0;
@@ -80,6 +85,10 @@ export default async function handler(req, res) {
     const clientCount = cl.rows[0]?.n || 0;
     const bookingCount = bk.rows[0]?.n || 0;
     const invoiceCount = inv.rows[0]?.n || 0;
+    // Sticky: once the link was shared or a real booking landed, the step
+    // stays done even if that booking is later cancelled.
+    const linkShared = !!shared.rows[0]?.booking_link_shared_at;
+    const firstBookingLanded = !!shared.rows[0]?.first_booking_celebrated_at;
     const availability = settings.availability || {};
     const hasAvailabilityWindow = Object.values(availability).some(
       (v) => Array.isArray(v) && v.length > 0,
@@ -158,11 +167,11 @@ export default async function handler(req, res) {
       },
       {
         id: 'firstBooking',
-        label: 'Take your first booking',
-        done: bookingCount > 0,
+        label: 'Share your booking link',
+        done: bookingCount > 0 || linkShared || firstBookingLanded,
         required: false,
         href: '/calendar',
-        why: 'Add one yourself or share your booking link. Once a real booking lands, you\'re in business.',
+        why: 'Copy it into your bio or a text. Once a client books, you\'re in business.',
       },
       {
         id: 'firstInvoice',

@@ -34,6 +34,7 @@ import { useUserContext } from '../../lib/userContext.jsx';
 import { publicOrigin } from '../../lib/publicUrl.js';
 import { CATEGORIES, SERVICE_PACKS } from '../../lib/categories.js';
 import IvyGuidedSetup from './IvyGuidedSetup.jsx';
+import ReadyStep from './ReadyStep.jsx';
 import { TRIAL_DAYS, IVY_PRICE, STACK_TOTAL, IVY_PRICE_MONTHLY_EQUIV } from '../../lib/pricing.js';
 import { computeImpact } from './impact.js';
 
@@ -68,6 +69,12 @@ function stepsFor(businessType) {
     { id: 'first_client', label: 'First client',    optional: true  },
     { id: 'website',      label: 'Website',         optional: true  },
     { id: 'impact',       label: 'Your upside',     optional: false },
+  );
+  // "Your business is ready": Ivy's drafts (booking link, website, first
+  // invoice) from the answers above, each with one action. Built around a
+  // bookable service, so a product-only business skips it.
+  if (businessType !== 'product') base.push({ id: 'ready', label: 'Ready', optional: false });
+  base.push(
     { id: 'done',         label: 'Done',            optional: false },
   );
   return base;
@@ -579,6 +586,16 @@ export default function OnboardingPage() {
     finally { setBusy(false); }
   };
 
+  // "Your business is ready" step: the drafts were made on mount; continuing
+  // records that the owner saw them so the dashboard never re-shows the cards.
+  const saveReady = async () => {
+    setBusy(true); setErr(null);
+    try {
+      await api.post('/onboarding/first-win', { action: 'seen' }).catch(() => {});
+      await goNext();
+    } finally { setBusy(false); }
+  };
+
   // ─── Render ─────────────────────────────────────────────────────────
 
   if (!stateLoaded) {
@@ -663,6 +680,7 @@ export default function OnboardingPage() {
           clientsCount={clientsCount}/>}
         {currentStep === 'website'      && <WebsiteStep websiteStatus={websiteStatus} websiteTemplate={websiteTemplate} setWebsiteTemplate={setWebsiteTemplate}/>}
         {currentStep === 'impact'       && <ImpactStep about={about} businessType={businessType}/>}
+        {currentStep === 'ready'        && <ReadyStep/>}
         {currentStep === 'done'         && <DoneStep skippedCount={skippedSteps.length}
           trialEndsAt={ctx?.subscription?.trialEndsAt || null}/>}
 
@@ -713,6 +731,7 @@ export default function OnboardingPage() {
               if (currentStep === 'first_client') return saveFirstClient();
               if (currentStep === 'website')      return saveWebsite();
               if (currentStep === 'impact')       return goNext();
+              if (currentStep === 'ready')        return saveReady();
               if (currentStep === 'tour')         return goNext();
               if (currentStep === 'done')         return finish();
             }}/>
@@ -1559,6 +1578,7 @@ function PrimaryCTA({ currentStep, onContinue, busy }) {
               : currentStep === 'done'    ? 'Finish'
               : currentStep === 'tour'    ? 'Almost there'
               : currentStep === 'impact'  ? 'Continue'
+              : currentStep === 'ready'   ? 'Continue'
               : 'Save & continue';
   return (
     <button onClick={onContinue} className="btn btn-primary" disabled={busy}>
