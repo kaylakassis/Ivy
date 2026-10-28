@@ -634,7 +634,12 @@ function SubscriptionCard() {
           color: tone, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
           textTransform: 'uppercase',
         }}>{statusLabel}</span>
-        {sub.daysRemaining != null && (sub.status === 'trialing' || sub.status === 'active') && (
+        {sub.cancelAtPeriodEnd && sub.isActive && sub.periodEndsAt && (
+          <span style={{ fontSize: 12.5, color: 'var(--warn)' }}>
+            Cancelled. Access until {new Date(sub.periodEndsAt).toLocaleDateString()}.
+          </span>
+        )}
+        {!sub.cancelAtPeriodEnd && sub.daysRemaining != null && (sub.status === 'trialing' || sub.status === 'active') && (
           <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
             {sub.daysRemaining === 0
               ? 'Renews today'
@@ -648,7 +653,9 @@ function SubscriptionCard() {
       </p>
 
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        {sub.status === 'active'
+        {sub.status === 'active' && sub.source === 'apple'
+          ? 'Your subscription is billed by Apple. Change or cancel it in the App Store; access runs to the end of the paid period.'
+        : sub.status === 'active'
           ? 'Open the Stripe billing portal to update your card, view past invoices, or cancel.'
         : sub.status === 'past_due'
           ? "Stripe couldn't charge your card. Open the billing portal to update it - your access will resume automatically once the next attempt succeeds."
@@ -668,7 +675,7 @@ function SubscriptionCard() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {sub.stripeCustomerId || sub.status === 'active' || sub.status === 'past_due' || sub.status === 'cancelled' ? (
           <button className="btn btn-outline" onClick={openPortal} disabled={busy}>
-            {busy ? 'Opening…' : 'Manage subscription'} <Icons.Arrow size={12} sw={2}/>
+            {busy ? 'Opening…' : (sub.source === 'apple' ? 'Manage in the App Store' : 'Manage subscription')} <Icons.Arrow size={12} sw={2}/>
           </button>
         ) : null}
         {isNative() && isIos() && (

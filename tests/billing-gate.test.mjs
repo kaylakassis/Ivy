@@ -117,7 +117,7 @@ async function setup() {
 
 const row = async () =>
   (await sql`SELECT subscription_status, trial_ends_at, subscription_period_end,
-      stripe_customer_id, stripe_subscription_id, converted_at
+      stripe_customer_id, stripe_subscription_id, converted_at, cancel_at_period_end
     FROM workspaces WHERE id = ${workspaceId}`).rows[0];
 
 // The full gate as a gated API request sees it. The webhook can't evict
@@ -194,6 +194,24 @@ async function run() {
     await webhookHandler(whBad, r);
     assert(r.statusCode === 400, `bad signature 400s (got ${r.statusCode})`);
     assert((await row()).subscription_status === 'active', 'state unchanged');
+
+    console.log('\n[5b] webhook: auto-renew off keeps access to period end and is remembered');
+    const { r: whCancelAtEnd } = signedWebhookReq('customer.subscription.updated', {
+      ...subTrialing, status: 'active', cancel_at_period_end: true,
+      current_period_end: nowSec + 20 * DAY, trial_end: nowSec - 1,
+    });
+    r = mockRes();
+    await webhookHandler(whCancelAtEnd, r);
+    w = await row();
+    assert(w.cancel_at_period_end === true && w.subscription_status === 'active', 'cancel_at_period_end stored, status still active');
+    assert(isWorkspaceActive(w) === true, 'access continues until the period ends');
+    const { r: whUncancel } = signedWebhookReq('customer.subscription.updated', {
+      ...subTrialing, status: 'active', cancel_at_period_end: false,
+      current_period_end: nowSec + 20 * DAY, trial_end: nowSec - 1,
+    });
+    r = mockRes();
+    await webhookHandler(whUncancel, r);
+    assert((await row()).cancel_at_period_end === false, 'turning auto-renew back on clears it');
 
     console.log('\n[6] webhook: cancellation walls the workspace');
     const { r: whDel, event: delEvent } = signedWebhookReq('customer.subscription.deleted', {

@@ -208,6 +208,11 @@ export default async function handler(req, res) {
              apple_product_id        = COALESCE(${productId}, apple_product_id),
              apple_original_transaction_id = COALESCE(${originalTxn}, apple_original_transaction_id),
              subscription_period_end = ${periodEnd},
+             cancel_at_period_end = CASE
+               WHEN ${event.type === 'CANCELLATION'} THEN TRUE
+               WHEN ${['UNCANCELLATION', 'RENEWAL', 'INITIAL_PURCHASE', 'PRODUCT_CHANGE'].includes(event.type)} THEN FALSE
+               ELSE cancel_at_period_end
+             END,
              subscription_past_due_since = CASE
                WHEN ${nextStatus} = 'past_due' AND subscription_past_due_since IS NULL
                  THEN NOW()

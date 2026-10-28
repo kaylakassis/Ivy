@@ -97,6 +97,10 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
 -- any pre-existing workspace that already has clients or services is marked
 -- onboarded so existing users don't get bumped through the wizard.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+-- Owner turned auto-renew off (Stripe cancel_at_period_end, Apple CANCELLATION)
+-- but keeps access until subscription_period_end. Lets the Account page say
+-- "Cancelled, access until <date>" instead of "Renews in N days".
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;
 -- Daily-return streak (habit loop). streak_last_day is the last calendar day
 -- (in the workspace timezone) the owner was active; streak_days is the current
 -- consecutive-day count. Maintained by touchStreak() on the daily dashboard

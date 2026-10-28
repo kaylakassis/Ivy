@@ -132,6 +132,7 @@ async function ownsWorkspaceFromDb(userId) {
     const { rows } = await sql`
       SELECT w.id, w.onboarded_at, w.business_type,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
+             w.subscription_source, w.cancel_at_period_end,
              w.stripe_customer_id,
              cs.biz_name, cs.slug
       FROM workspaces w
@@ -246,6 +247,10 @@ function deriveSubscription(row) {
     trialEndsAt: row.trial_ends_at,
     periodEndsAt: row.subscription_period_end,
     daysRemaining,
+    // Where the money comes from ('stripe' | 'apple' | null) and whether the
+    // owner has already turned auto-renew off (access runs to periodEndsAt).
+    source: row.subscription_source || null,
+    cancelAtPeriodEnd: !!row.cancel_at_period_end,
     // Complimentary access (Admin → Comps). The paywall never shows for
     // comped workspaces; the Account page can label the plan accordingly.
     comped: !!(row.comp_until && new Date(row.comp_until).getTime() > now),

@@ -23,8 +23,13 @@ export default async function handler(req, res) {
     const workspaceId = await ensureWorkspace(user.id);
 
     const { rows } = await sql`
-      SELECT stripe_customer_id FROM workspaces WHERE id = ${workspaceId}
+      SELECT stripe_customer_id, subscription_source FROM workspaces WHERE id = ${workspaceId}
     `;
+    // Apple-billed: Apple owns the subscription. Only Apple's own screen
+    // can change or cancel it, so send the owner there.
+    if (rows[0]?.subscription_source === 'apple') {
+      return ok(res, { url: 'https://apps.apple.com/account/subscriptions', provider: 'apple' });
+    }
     const customerId = rows[0]?.stripe_customer_id;
     if (!customerId) {
       return badRequest(res, 'No billing record yet - subscribe first to open the portal.');

@@ -135,6 +135,7 @@ async function onCheckoutCompleted(session, secretKey) {
       stripe_customer_id      = ${session.customer || null},
       stripe_subscription_id  = ${sub?.id || null},
       subscription_period_end = ${periodEnd},
+      cancel_at_period_end    = FALSE,
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isTrialing} THEN converted_at ELSE COALESCE(converted_at, NOW()) END
@@ -178,6 +179,9 @@ async function onSubscriptionChanged(sub, eventType) {
   // Conversion = the first time the sub is actually paying (active). For a
   // trial that's the trialing→active flip; for a no-trial sub it's immediate.
   const isActive = status === 'active';
+  // Auto-renew turned off in the billing portal: access runs to period end,
+  // then Stripe sends subscription.deleted. A fresh active sub clears it.
+  const cancelAtEnd = !!sub.cancel_at_period_end && (status === 'active' || status === 'trialing' || status === 'past_due');
 
   // Try by subscription id first. The subscription_source guard keeps a
   // lifecycle event for a leftover Stripe sub from clobbering the state
@@ -188,6 +192,7 @@ async function onSubscriptionChanged(sub, eventType) {
     UPDATE workspaces SET
       subscription_status     = ${status},
       subscription_period_end = ${periodEnd},
+      cancel_at_period_end    = ${cancelAtEnd},
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
@@ -203,6 +208,7 @@ async function onSubscriptionChanged(sub, eventType) {
         stripe_subscription_id  = ${sub.id},
         stripe_customer_id      = ${sub.customer || null},
         subscription_period_end = ${periodEnd},
+        cancel_at_period_end    = ${cancelAtEnd},
         trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
         trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
         converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END

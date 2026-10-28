@@ -159,6 +159,20 @@ async function run() {
     s9 = await statusOf(wid9);
     assert(s9.subscription_status === 'active' && s9.subscription_source === 'apple', 'an Apple purchase still applies (access granted, source moves to apple)');
 
+    console.log('\n[10] CANCELLATION remembers auto-renew is off; RENEWAL clears it');
+    const w10 = await sql`INSERT INTO workspaces (owner_id) VALUES (${ownerId}) RETURNING id`;
+    const wid10 = w10.rows[0].id;
+    let r10 = mkRes();
+    await rcHandler(rcReq(mkEvent('INITIAL_PURCHASE', wid10, { period_type: 'NORMAL', expiration_at_ms: Date.now() + 7 * 86400000 })), r10);
+    r10 = mkRes();
+    await rcHandler(rcReq(mkEvent('CANCELLATION', wid10, { expiration_at_ms: Date.now() + 5 * 86400000 })), r10);
+    let s10 = (await sql`SELECT subscription_status, cancel_at_period_end FROM workspaces WHERE id = ${wid10}`).rows[0];
+    assert(s10.subscription_status === 'active' && s10.cancel_at_period_end === true, 'still active, flagged as cancelling at period end');
+    r10 = mkRes();
+    await rcHandler(rcReq(mkEvent('RENEWAL', wid10, { period_type: 'NORMAL', expiration_at_ms: Date.now() + 14 * 86400000 })), r10);
+    s10 = (await sql`SELECT subscription_status, cancel_at_period_end FROM workspaces WHERE id = ${wid10}`).rows[0];
+    assert(s10.subscription_status === 'active' && s10.cancel_at_period_end === false, 'a renewal clears the flag');
+
     console.log('\n[8] readSession / isNativeClient - native Bearer auth path');
     const token = signSession(ownerId);
     const bearerSession = readSession({ headers: { authorization: `Bearer ${token}` } });
