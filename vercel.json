@@ -48,7 +48,7 @@
     },
     {
       "path": "/api/cron/review-requests",
-      "schedule": "0 17 * * *"
+      "schedule": "20 * * * *"
     },
     {
       "path": "/api/cron/db-prune",

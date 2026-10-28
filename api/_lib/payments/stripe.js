@@ -46,6 +46,8 @@ export async function createCheckoutSession({
   amountCents, currency = 'USD',
   description, metadata = {},
   successUrl, cancelUrl, customerEmail,
+  // Saved-card options (see api/_lib/stripe.js createCheckoutSession).
+  customerId = null, saveCard = false,
 }) {
   const fs = settings || await fetchFinanceSettings(workspaceId);
   if (!stripeIsLive(fs)) {
@@ -61,10 +63,11 @@ export async function createCheckoutSession({
     id: metadata.invoice_id || metadata.booking_id || 'adhoc',
     number: metadata.invoice_number || description || 'Charge',
     workspace_id: workspaceId,
+    client_id: metadata.client_id || null,
   };
   const session = await stripeCreateCheckout({
     secretKey, stripeAccount, invoice, currency, totalCents: amountCents,
-    successUrl, cancelUrl, customerEmail,
+    successUrl, cancelUrl, customerEmail, customerId, saveCard,
     // Pass through Stripe Tax flags from the workspace's
     // finance_settings. Off by default; owners must explicitly
     // enable + register tax jurisdictions in Stripe Dashboard.

@@ -33,7 +33,8 @@ async function run() {
 
   const anchor = await dbDate(120);   // series started 120 days ago
   const threeAgo = await dbDate(3);   // a completed occurrence 3 days ago (in 2–14 window)
-  const oneAgo = await dbDate(1);     // a completed occurrence yesterday
+  const oneAgo = await dbDate(1);     // a completed occurrence yesterday (workflow control)
+  const tomorrow = await dbDate(-1);  // an occurrence that has not happened yet (review control)
   const tenAgo = await dbDate(10);
 
   // Recurring booking: anchor date 120 days ago, with completions logged on
@@ -46,19 +47,27 @@ async function run() {
      JSON.stringify({ [threeAgo]: { completedAt: 'x' }, [tenAgo]: { completedAt: 'x' } })],
   )).rows[0].id;
 
-  // Control: a recurring booking whose only completion is OUTSIDE the window
-  // (anchor today-ish, completed 1 day ago - too recent for reviews).
+  // Workflow control: a booking whose only completion is 1 day ago (the
+  // booking_completed daysAfter:1 trigger below matches it).
   const recentBooking = (await sql.query(
     `INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min, completion_log)
      VALUES ($1,$2,'Reggie Recur',$3,$4,600,660,$5::jsonb) RETURNING id`,
     [wsId, clientId, `${tag}-c@example.com`, anchor, JSON.stringify({ [oneAgo]: { completedAt: 'x' } })],
   )).rows[0].id;
+  // Review control: a recurring booking whose only "completed" occurrence has
+  // not ended yet (tomorrow) - a review request must never go out before the
+  // session.
+  const futureBooking = (await sql.query(
+    `INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min, completion_log)
+     VALUES ($1,$2,'Reggie Recur',$3,$4,600,660,$5::jsonb) RETURNING id`,
+    [wsId, clientId, `${tag}-c@example.com`, anchor, JSON.stringify({ [tomorrow]: { completedAt: 'x' } })],
+  )).rows[0].id;
 
-  console.log('\n[reviews] recurring occurrence in the 2–14d window is selected by date, not anchor');
+  console.log('\n[reviews] recurring occurrence in the review window is selected by date, not anchor');
   const due = await selectDueReviewRequests();
   const dueRow = due.find((r) => r.id === recBooking);
   assert(!!dueRow, 'recurring booking with a completed occurrence 3d ago IS selected (anchor was 120d ago)');
-  assert(!due.some((r) => r.id === recentBooking), 'booking whose only completion is 1d ago is NOT yet due (< 2d)');
+  assert(!due.some((r) => r.id === futureBooking), 'booking whose only occurrence has not ended yet is NOT due');
   // Email date label uses the most-recent in-window occurrence (3 days ago).
   const completed = dueRow && (dueRow.completed_date instanceof Date
     ? dueRow.completed_date.toISOString().slice(0, 10) : String(dueRow.completed_date).slice(0, 10));

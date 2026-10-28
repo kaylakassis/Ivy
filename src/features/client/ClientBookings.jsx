@@ -280,6 +280,9 @@ function BookingRow({ booking, first, cancellable, reschedulable, reviewable, on
           <Icons.Globe size={12} sw={1.8}/> Join
         </a>
       )}
+      {booking.calendar && !booking.cancelledAt && (
+        <AddToCalendar links={booking.calendar}/>
+      )}
       {reviewable && (
         <button onClick={onReview} className="btn btn-outline"
           style={{ fontSize: 12, padding: '6px 12px' }}
@@ -365,6 +368,28 @@ function BookingRow({ booking, first, cancellable, reschedulable, reviewable, on
       </div>
     )}
     </div>
+  );
+}
+
+// One-tap "add to calendar": a Google Calendar deep link and a signed .ics
+// download for Apple Calendar / Outlook. Both come from the server so the
+// event lands at the right instant in the business's timezone.
+export function AddToCalendar({ links, compact = true }) {
+  if (!links?.google || !links?.ics) return null;
+  const style = compact
+    ? { fontSize: 12, padding: '6px 12px', textDecoration: 'none' }
+    : { fontSize: 13, padding: '9px 14px', textDecoration: 'none' };
+  return (
+    <span style={{ display: 'inline-flex', gap: 6, flexWrap: 'wrap' }}>
+      <a href={links.google} target="_blank" rel="noopener noreferrer"
+        className="btn btn-outline" style={style} title="Add to Google Calendar">
+        <Icons.Calendar size={12} sw={2}/> Google Calendar
+      </a>
+      <a href={links.ics} className="btn btn-outline" style={style}
+        title="Download an .ics file for Apple Calendar or Outlook">
+        <Icons.Calendar size={12} sw={2}/> Apple/Outlook (.ics)
+      </a>
+    </span>
   );
 }
 

@@ -522,7 +522,17 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
   // The client tapped "I've sent it" on a manual method and the owner has
   // not confirmed yet. Only meaningful while the invoice is still unpaid.
   const saysPaid = !!invoice.paymentClaimedAt && (invoice.status === 'sent' || invoice.status === 'overdue');
-  const saysPaidPill = saysPaid ? (
+  // A bank debit (ACH) was authorised and is settling. Shown instead of
+  // "Says paid" so the owner does not chase a payment that is on its way.
+  const processing = !!invoice.paymentProcessingAt && (invoice.status === 'sent' || invoice.status === 'overdue');
+  const saysPaidPill = processing ? (
+    <span title="A bank payment is on its way. It usually clears within 4 business days." style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
+      fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
+      background: 'var(--accent-soft)', border: '1px solid var(--accent)', color: 'var(--fg)',
+      whiteSpace: 'nowrap',
+    }}>Payment processing</span>
+  ) : saysPaid ? (
     <span title="The client says they paid. Open to confirm." style={{
       display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
       fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',

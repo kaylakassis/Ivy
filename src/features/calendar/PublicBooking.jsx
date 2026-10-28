@@ -59,6 +59,10 @@ export default function PublicBooking({ embedded = false }) {
   // Video room URL returned from the confirmed booking response. Shown
   // on the success screen for virtual services.
   const [confirmedVideoUrl, setConfirmedVideoUrl] = useState(null);
+  // Add-to-calendar links (Google deep link + signed .ics URL) returned
+  // with the confirmed booking, for the one-tap buttons on the success
+  // screen.
+  const [confirmedCalendar, setConfirmedCalendar] = useState(null);
   // After a deposit checkout redirect (?deposit=paid|cancelled) we land back
   // here on a FRESH page load with no slot/email in memory. Show a standalone
   // thank-you (paid) or a reassuring note (cancelled) instead of dumping the
@@ -325,6 +329,7 @@ export default function PublicBooking({ embedded = false }) {
         setDepositPending(Number(r.booking.depositRequired));
       }
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
+      setConfirmedCalendar(r.booking?.calendar || null);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
       haptic(); // a little "done!" tap on the client's phone
     } catch (e) {
@@ -557,6 +562,21 @@ export default function PublicBooking({ embedded = false }) {
                 booking. Online payment isn't set up yet, so {cal.settings.bizName || 'the business'} will
                 follow up with you about it directly.
               </p>
+            )}
+            {confirmedCalendar?.google && confirmedCalendar?.ics && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>Add it to your calendar</div>
+                <div style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <a href={confirmedCalendar.google} target="_blank" rel="noopener noreferrer"
+                    className="btn btn-outline" style={{ fontSize: 13, padding: '9px 14px', textDecoration: 'none' }}>
+                    <Icons.Calendar size={13} sw={2}/> Google Calendar
+                  </a>
+                  <a href={confirmedCalendar.ics} className="btn btn-outline"
+                    style={{ fontSize: 13, padding: '9px 14px', textDecoration: 'none' }}>
+                    <Icons.Calendar size={13} sw={2}/> Apple/Outlook (.ics)
+                  </a>
+                </div>
+              </div>
             )}
           </div>
           {confirmedVideoUrl && (

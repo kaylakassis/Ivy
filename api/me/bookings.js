@@ -5,6 +5,7 @@ import { requireUser } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { myClientIds, ids } from '../_lib/clientPortal.js';
 import { computeBookingPayment, slotEpochMs } from '../_lib/calendar.js';
+import { calendarLinksFor } from '../_lib/calendarLinks.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -27,11 +28,13 @@ export default async function handler(req, res) {
               b.video_room_url, b.location_address, b.tip_amount,
               b.completion_log, b.booking_total, b.deposit_paid,
               b.gift_card_credit_cents, b.recurrence_rule,
+              b.created_at, b.updated_at,
               s.name AS service_name,
+              s.location_type, s.location_label,
               s.duration_minutes, s.price, s.capacity AS service_capacity,
               s.location_type AS service_location_type,
               s.cancellation_fee_amount, s.cancellation_window_hours,
-              cs.slug AS biz_slug, cs.timezone AS biz_timezone,
+              cs.slug AS biz_slug, cs.timezone AS biz_timezone, cs.timezone, cs.biz_name,
               ci.status AS collect_invoice_status, ci.paid_amount AS collect_invoice_paid_amount
        FROM bookings b
        LEFT JOIN services s ON s.id = b.service_id AND s.workspace_id = b.workspace_id
@@ -105,6 +108,8 @@ export default async function handler(req, res) {
         completionAttachments: visible ? (completionEntry.attachments || []) : [],
         // Unified deposit + balance payment status for this appointment.
         payment: computeBookingPayment(r),
+        // One-tap add-to-calendar: Google deep link + signed .ics URL.
+        calendar: (!r.cancelled_at && dateISO >= today) ? safeCalendarLinks(r) : null,
       };
       if (r.cancelled_at) cancelled.push(item);
       else if (dateISO >= today) upcoming.push(item);
@@ -116,4 +121,8 @@ export default async function handler(req, res) {
   } catch (err) {
     return serverError(res, err);
   }
+}
+
+function safeCalendarLinks(row) {
+  try { return calendarLinksFor(row); } catch { return null; }
 }
