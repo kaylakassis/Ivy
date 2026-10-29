@@ -27,7 +27,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos, isNative } from '../../lib/platform.js';
 import { useAuth } from '../../lib/auth.jsx';
-import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode } from '../../lib/iap.js';
+import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode, iapUnavailableReason } from '../../lib/iap.js';
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS, MONTHLY_STACK_SAVINGS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
@@ -169,7 +169,7 @@ export default function Paywall({ ctx, onRefresh }) {
         // ctx.owns.id is the workspace - the value the webhook matches on.
         const identified = await identifyIapUser(ctx?.owns?.id);
         if (!identified) {
-          setErr('We could not start a purchase on this account. Please sign out and back in, then try again.');
+          setErr(iapUnavailableReason() || 'We could not start a purchase on this account. Please sign out and back in, then try again.');
           setBusy(null);
           return;
         }
@@ -236,7 +236,8 @@ export default function Paywall({ ctx, onRefresh }) {
   const restorePurchases = async () => {
     setBusy('restore'); setErr(null);
     try {
-      await identifyIapUser(ctx?.owns?.id);
+      const identified = await identifyIapUser(ctx?.owns?.id);
+      if (!identified) { setErr(iapUnavailableReason() || 'Restore failed'); setBusy(null); return; }
       const r = await restoreIapPurchases();
       if (!r.ok) { setErr(r.error || 'Restore failed'); setBusy(null); return; }
       // Give RC's webhook a moment to land, then refresh.
@@ -255,7 +256,8 @@ export default function Paywall({ ctx, onRefresh }) {
   const redeemCode = async () => {
     setBusy('redeem'); setErr(null);
     try {
-      await identifyIapUser(ctx?.owns?.id);
+      const identified = await identifyIapUser(ctx?.owns?.id);
+      if (!identified) { setErr(iapUnavailableReason() || 'Could not open the redemption screen.'); setBusy(null); return; }
       const r = await redeemIapOfferCode();
       if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); setBusy(null); return; }
       await new Promise((res) => setTimeout(res, 1500));

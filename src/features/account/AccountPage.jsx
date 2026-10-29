@@ -7,7 +7,7 @@
 // Future tabs (billing, team, notifications) will mount alongside.
 import React, { useEffect, useRef, useState } from 'react';
 import { isNative, isIos } from '../../lib/platform.js';
-import { redeemIapOfferCode, identifyIapUser } from '../../lib/iap.js';
+import { redeemIapOfferCode, identifyIapUser, iapUnavailableReason } from '../../lib/iap.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -565,7 +565,8 @@ function SubscriptionCard() {
   const redeemCode = async () => {
     setBusy(true); setErr(null);
     try {
-      await identifyIapUser(ctx?.owns?.id);
+      const identified = await identifyIapUser(ctx?.owns?.id);
+      if (!identified) { setErr(iapUnavailableReason() || 'Could not open the redemption screen.'); return; }
       const r = await redeemIapOfferCode();
       if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); return; }
       await new Promise((res) => setTimeout(res, 1500));
