@@ -304,6 +304,19 @@ export async function userContext(user) {
     isOwner:  !!workspace,
     isClient: memberships.length > 0,
     workspaceId: workspace?.id || null,
+    // The owner's workspace as one object. Several screens read
+    // ctx.owns.<field> (the iPhone purchase identity, the notifications
+    // prompt, business-type tailoring); this key was never sent before, so
+    // all of those silently fell back. Keep every field they read.
+    owns: workspace ? {
+      id: workspace.id,
+      onboardedAt: workspace.onboardedAt || null,
+      businessType: workspace.businessType || 'both',
+      bizName: workspace.bizName || null,
+      name: workspace.bizName || null,
+      slug: workspace.slug || null,
+      hasBillingRecord: !!workspace.hasBillingRecord,
+    } : null,
     onboardedAt: workspace?.onboardedAt || null,
     bizName: workspace?.bizName || null,
     bookingSlug: workspace?.slug || null,
