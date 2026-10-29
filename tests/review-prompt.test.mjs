@@ -2,6 +2,7 @@
 // answer endpoint records choices and sets the next ask.
 // Run: node --import ./tests/bootstrap.mjs ./tests/review-prompt.test.mjs
 process.env.CRON_SECRET = 'cron-review-test';
+process.env.REVIEW_PROMPT_ENABLED = 'true';
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
 import { dueForReviewPrompt, sendReviewPrompts, PUSH_PAYLOAD } from '../api/_lib/reviewPrompt.js';
@@ -73,6 +74,11 @@ async function main() {
   const stillDue = (await dueForReviewPrompt({ limit: 5000 })).some((r) => r.user_id === due);
   assert(!stillDue && again.sent >= 0, 'not asked again right away');
   assert(PUSH_PAYLOAD.url === '/?ivy_feedback=1' && /Loving Ivy/.test(PUSH_PAYLOAD.title), 'push opens the check-in card');
+
+  process.env.REVIEW_PROMPT_ENABLED = '';
+  const off = await sendReviewPrompts();
+  assert(off.sent === 0 && /REVIEW_PROMPT_ENABLED/.test(off.skipped || ''), 'switched off: sends nothing');
+  process.env.REVIEW_PROMPT_ENABLED = 'true';
 
   console.log('\n[3] answer endpoint');
   const call = async (userId, body, extra = {}) => {

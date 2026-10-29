@@ -61,7 +61,15 @@ export async function dueForReviewPrompt({ limit = 500 } = {}) {
 
 // Stamp-first so overlapping runs never double-ask; then push (category
 // 'engagement', so owners who turned those off are skipped by sendPushToUser).
+// Off until the operator sets REVIEW_PROMPT_ENABLED=true in Vercel, once an
+// App Store version with the check-in card (1.0.1+) is live. Older app
+// versions would open the push and show nothing.
+export function reviewPromptEnabled() {
+  return String(process.env.REVIEW_PROMPT_ENABLED || '').trim().toLowerCase() === 'true';
+}
+
 export async function sendReviewPrompts() {
+  if (!reviewPromptEnabled()) return { due: 0, sent: 0, skipped: 'REVIEW_PROMPT_ENABLED is not true' };
   const due = await dueForReviewPrompt();
   let sent = 0;
   for (const r of due) {
