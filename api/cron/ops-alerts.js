@@ -82,7 +82,20 @@ export async function checkCronHealth({ now = new Date() } = {}) {
     SELECT DISTINCT ON (name) name, ok, error_message, finished_at
       FROM cron_runs WHERE finished_at IS NOT NULL
      ORDER BY name, finished_at DESC`;
-  const since = (await sql`SELECT MIN(started_at) AS since FROM cron_runs`).rows[0]?.since;
+  // Record when each job was first seen with its current schedule. A new
+  // job, or one whose schedule changed, starts its clock from that moment.
+  const seenByName = new Map();
+  for (const c of schedules) {
+    const r = await sql`
+      INSERT INTO cron_schedule_seen (name, schedule, first_seen_at)
+      VALUES (${c.name}, ${c.schedule}, ${now.toISOString()})
+      ON CONFLICT (name) DO UPDATE SET
+        schedule = EXCLUDED.schedule,
+        first_seen_at = CASE WHEN cron_schedule_seen.schedule IS DISTINCT FROM EXCLUDED.schedule
+                             THEN EXCLUDED.first_seen_at ELSE cron_schedule_seen.first_seen_at END
+      RETURNING first_seen_at`;
+    seenByName.set(c.name, new Date(r.rows[0].first_seen_at).getTime());
+  }
   const byName = new Map(stats.map((s) => [s.name, s]));
   const lastByName = new Map(last.map((l) => [l.name, l]));
   const nowMs = now.getTime();
@@ -91,14 +104,13 @@ export async function checkCronHealth({ now = new Date() } = {}) {
     const s = byName.get(c.name);
     const l = lastByName.get(c.name);
     const lastOkMs = s?.last_ok_at ? new Date(s.last_ok_at).getTime() : null;
+    const seenMs = seenByName.get(c.name) ?? nowMs;
     const cadence = describeInterval(c.schedule);
     const windowH = Math.round(c.staleAfterMs / 3600e3);
     if (lastOkMs == null) {
-      // Never succeeded. Only meaningful once the platform has been
-      // recording runs for longer than this cron's window; a brand-new
-      // deployment has nothing to compare against yet.
-      const sinceMs = since ? new Date(since).getTime() : null;
-      if (sinceMs != null && nowMs - sinceMs > c.staleAfterMs) {
+      // Never succeeded. Only meaningful once this job has existed with
+      // this schedule for longer than its window.
+      if (nowMs - seenMs > c.staleAfterMs) {
         out.push({
           key: `cron:${c.name}`, severity: 'critical',
           title: `Cron overdue: ${c.name}`,
@@ -108,7 +120,10 @@ export async function checkCronHealth({ now = new Date() } = {}) {
       }
       continue;
     }
-    if (nowMs - lastOkMs > c.staleAfterMs) {
+    // Judge from the later of the last success and when the current
+    // schedule took effect (a daily job just moved to hourly gets a full
+    // hourly window before it counts as late).
+    if (nowMs - Math.max(lastOkMs, seenMs) > c.staleAfterMs) {
       out.push({
         key: `cron:${c.name}`, severity: 'critical',
         title: `Cron overdue: ${c.name}`,

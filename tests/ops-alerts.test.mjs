@@ -37,8 +37,9 @@ const run = async (headers = { authorization: `Bearer ${process.env.CRON_SECRET}
   return res;
 };
 const state = async (key) => (await sql`SELECT * FROM ops_alert_state WHERE key = ${key}`).rows[0];
-const crons = JSON.parse(fs.readFileSync('vercel.json', 'utf8')).crons
-  .map((c) => c.path.replace('/api/cron/', '')).filter((n) => n !== 'ops-alerts');
+const cronDefs = JSON.parse(fs.readFileSync('vercel.json', 'utf8')).crons
+  .map((c) => ({ name: c.path.replace('/api/cron/', ''), schedule: c.schedule })).filter((c) => c.name !== 'ops-alerts');
+const crons = cronDefs.map((c) => c.name);
 async function seedHealthyCron(name, ago = '1 minute') {
   await sql.query(
     `INSERT INTO cron_runs (name, started_at, finished_at, duration_ms, ok, metrics)
@@ -59,6 +60,12 @@ async function main() {
   await sql`DELETE FROM ivy_failures WHERE created_at > NOW() - INTERVAL '2 hours'`;
   await sql`DELETE FROM cron_runs WHERE ok = FALSE OR finished_at IS NULL`;
   for (const name of crons) await seedHealthyCron(name);
+  // Every job has existed with its current schedule for a long time, so the
+  // staleness rules below apply in full.
+  await sql`DELETE FROM cron_schedule_seen`;
+  for (const c of cronDefs) {
+    await sql`INSERT INTO cron_schedule_seen (name, schedule, first_seen_at) VALUES (${c.name}, ${c.schedule}, NOW() - INTERVAL '100 days')`;
+  }
 
   console.log('\n[0] cadence parsing');
   const H = 3600e3;
@@ -144,6 +151,34 @@ async function main() {
   r = await run();
   assert(r.body.firing === 0 && r.body.resolved === 3 && r.body.emailed === 1 && sent.length === 1, 'one Resolved email for all three');
   assert(/^\[Ivy alert\] Resolved: 3 conditions/.test(sent[0].subject), `subject: ${sent[0].subject}`);
+
+  console.log('\n[7b] a brand-new job is not overdue before its first chance to run');
+  sent.length = 0;
+  await sql`DELETE FROM cron_runs WHERE name = 'plan-ending'`;
+  await sql`UPDATE cron_schedule_seen SET first_seen_at = NOW() WHERE name = 'plan-ending'`;
+  r = await run();
+  assert(!r.body.alerts.some((a) => a.key === 'cron:plan-ending') && sent.length === 0, 'new daily job with no runs yet: no alert');
+  await sql`UPDATE cron_schedule_seen SET first_seen_at = NOW() - INTERVAL '60 hours' WHERE name = 'plan-ending'`;
+  r = await run();
+  assert(r.body.alerts.some((a) => a.key === 'cron:plan-ending') && sent.length === 1 && /never recorded a successful run/.test(sent[0].html), 'still never ran after its full window: alert');
+  await seedHealthyCron('plan-ending');
+  r = await run();
+  assert(r.body.firing === 0, 'first successful run clears it');
+  sent.length = 0;
+
+  console.log('\n[7c] a job moved from daily to hourly gets a full hourly window');
+  await sql`UPDATE cron_runs SET started_at = NOW() - INTERVAL '8 hours', finished_at = NOW() - INTERVAL '8 hours' WHERE name = 'review-requests'`;
+  await sql`UPDATE cron_schedule_seen SET schedule = '0 17 * * *', first_seen_at = NOW() - INTERVAL '100 days' WHERE name = 'review-requests'`;
+  r = await run();
+  assert(!r.body.alerts.some((a) => a.key === 'cron:review-requests'), 'just rescheduled: last daily run is not judged by the hourly rule');
+  const seen = (await sql`SELECT schedule, first_seen_at FROM cron_schedule_seen WHERE name = 'review-requests'`).rows[0];
+  assert(seen.schedule !== '0 17 * * *' && Date.now() - new Date(seen.first_seen_at).getTime() < 60_000, 'new schedule recorded with a fresh start time');
+  await sql`UPDATE cron_schedule_seen SET first_seen_at = NOW() - INTERVAL '4 hours' WHERE name = 'review-requests'`;
+  r = await run();
+  assert(r.body.alerts.some((a) => a.key === 'cron:review-requests'), 'after a full hourly window with no run: alert');
+  await seedHealthyCron('review-requests');
+  r = await run();
+  sent.length = 0;
 
   console.log('\n[8] webhook failures');
   await recordWebhookFailure({ message: new Error('bad key sk_live_abc123') });

@@ -3364,6 +3364,17 @@ CREATE INDEX IF NOT EXISTS idx_webhook_failures_created ON webhook_failures(crea
 -- while it persists (re-notified at most every 6 hours), and flips off
 -- when it clears (one "Resolved" email). The operator never gets the same
 -- condition emailed every hour.
+-- cron_schedule_seen: when the ops-alerts cron first saw each scheduled
+-- job with its CURRENT schedule. A job is only judged once it has had a
+-- full window to run since it was added or rescheduled, so a brand-new
+-- daily job (or one moved from daily to hourly) never raises a false
+-- "overdue" before its first chance to run.
+CREATE TABLE IF NOT EXISTS cron_schedule_seen (
+  name TEXT PRIMARY KEY,
+  schedule TEXT NOT NULL,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS ops_alert_state (
   key TEXT PRIMARY KEY,
   active BOOLEAN NOT NULL DEFAULT FALSE,

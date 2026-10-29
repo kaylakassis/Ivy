@@ -5,8 +5,9 @@
 import { isSuperAdminBySession } from '../_lib/admin.js';
 import { expireProgramAccess } from '../_lib/programs.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
+import { trackCron } from '../_lib/cronMetrics.js';
 
-export default async function handler(req, res) {
+async function handler(req, res) {
   const cronAuth = !!process.env.CRON_SECRET && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
   const adminAuth = !cronAuth && await isSuperAdminBySession(req).catch(() => false);
   if (!cronAuth && !adminAuth) return unauthorized(res);
@@ -15,3 +16,6 @@ export default async function handler(req, res) {
     return ok(res, { expired });
   } catch (err) { return serverError(res, err); }
 }
+
+// Recorded in cron_runs so the hourly operator check can see it ran.
+export default trackCron('program-access', handler);
