@@ -69,6 +69,8 @@ export default function Paywall({ ctx, onRefresh }) {
   const compact = useCompact();
   const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
+  // Neutral status (not an error), e.g. after Apple's code sheet closes.
+  const [note, setNote]   = useState(null);
   const [winback, setWinback] = useState(null); // {percentOff, durationMonths, promoCode, expiresAt}
   // Billing period. Weekly is the honest default; annual is the highlighted
   // LTV option (saves ~20%). Flows into the checkout call. (The internal key
@@ -100,7 +102,7 @@ export default function Paywall({ ctx, onRefresh }) {
     const sessionId  = params.get('session_id');
     if (subscribed !== '1' || !sessionId || synced.current) return;
     synced.current = true;
-    setBusy('syncing'); setErr(null);
+    setBusy('syncing'); setErr(null); setNote(null);
     (async () => {
       try {
         await api.post('/billing/sync', { sessionId });
@@ -153,7 +155,7 @@ export default function Paywall({ ctx, onRefresh }) {
   }, [cancelled]);
 
   const subscribe = async () => {
-    setBusy('subscribe'); setErr(null);
+    setBusy('subscribe'); setErr(null); setNote(null);
     // iOS in-app purchase branch. Apple requires that subscriptions sold
     // INSIDE the app go through StoreKit - we can't redirect to a Stripe
     // checkout URL from within the WebView without violating App Store
@@ -234,7 +236,7 @@ export default function Paywall({ ctx, onRefresh }) {
   // re-installs Ivy on a new device can recover their entitlements
   // without contacting support. Only shown in the iOS build.
   const restorePurchases = async () => {
-    setBusy('restore'); setErr(null);
+    setBusy('restore'); setErr(null); setNote(null);
     try {
       const identified = await identifyIapUser(ctx?.owns?.id);
       if (!identified) { setErr(iapUnavailableReason() || 'Restore failed'); setBusy(null); return; }
@@ -254,16 +256,20 @@ export default function Paywall({ ctx, onRefresh }) {
   // Apple offer code (a free month, a discount) handed out by Ivy. Apple's
   // own sheet does the redeeming; we just refresh afterwards.
   const redeemCode = async () => {
-    setBusy('redeem'); setErr(null);
+    setBusy('redeem'); setErr(null); setNote(null);
     try {
       const identified = await identifyIapUser(ctx?.owns?.id);
       if (!identified) { setErr(iapUnavailableReason() || 'Could not open the redemption screen.'); setBusy(null); return; }
       const r = await redeemIapOfferCode();
       if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); setBusy(null); return; }
+      // Apple's sheet returns as soon as it opens, before the person has
+      // typed a code, so "no subscription yet" here is normal, not an
+      // error. A successful redemption unlocks Ivy on its own (the
+      // purchase listener in AppShell refreshes the account).
       await new Promise((res) => setTimeout(res, 1500));
       await onRefresh?.();
       setBusy(null);
-      if (!r.hasPro) setErr('If you redeemed a code, give it a few seconds and tap Restore purchases.');
+      if (!r.hasPro) setNote('Once Apple confirms your code, Ivy unlocks on its own. If it has not after a minute, tap Restore purchases.');
     } catch (e) {
       setErr(e?.message || 'Could not redeem the code');
       setBusy(null);
@@ -271,7 +277,7 @@ export default function Paywall({ ctx, onRefresh }) {
   };
 
   const openBillingPortal = async () => {
-    setBusy('portal'); setErr(null);
+    setBusy('portal'); setErr(null); setNote(null);
     try {
       const r = await api.post('/billing/portal', {});
       if (!r.url) throw new Error('No portal URL returned');
@@ -285,7 +291,7 @@ export default function Paywall({ ctx, onRefresh }) {
   };
 
   const logout = async () => {
-    setBusy('logout'); setErr(null);
+    setBusy('logout'); setErr(null); setNote(null);
     // Go through the auth provider's signOut, never a bare /auth/logout:
     // it is what clears the native session token from the Keychain, the
     // on-device cache of /me and /dashboard, the remembered landing and
@@ -589,6 +595,13 @@ export default function Paywall({ ctx, onRefresh }) {
                   background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
                   color: 'var(--danger)', fontSize: 12.5,
                 }}>{err}</div>
+              )}
+              {!err && note && (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 8,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  color: 'var(--fg-2)', fontSize: 12.5,
+                }}>{note}</div>
               )}
 
             </>
