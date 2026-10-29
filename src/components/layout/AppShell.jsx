@@ -30,6 +30,7 @@ import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
 import { initNativePushOnLaunch } from '../../lib/nativePush.js';
 import NativePushPrompt from '../NativePushPrompt.jsx';
+import ReviewPrompt from '../ReviewPrompt.jsx';
 import { identifyIapUser, onIapCustomerInfoChange } from '../../lib/iap.js';
 import { UserContextProvider, useUserContext } from '../../lib/userContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
@@ -296,6 +297,7 @@ function AppShellInner() {
       {/* iOS: ask to turn on notifications once the owner is through the
           paywall and onboarding. Web asks via the dashboard card instead. */}
       <NativePushPrompt active={!needsPaywall && subActive && !!ctx?.owns?.onboardedAt}/>
+      {!needsPaywall && <ReviewPrompt/>}
     </div>
   );
 }

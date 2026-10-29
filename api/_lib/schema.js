@@ -447,6 +447,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 -- re-engagement nudge fires, cleared when the owner returns (in the stamp path)
 -- so a later dormancy episode can re-fire.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;
+-- "Loving Ivy?" check-in (api/_lib/reviewPrompt.js): when we last asked,
+-- the last answer and how many asks in a row went unanswered (backs the
+-- cadence off from weekly to monthly so it never becomes noise).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_sent_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_answer TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_answered_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_unanswered INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_last_action TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS dormant_nudge_sent_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active_at);
 -- Device fingerprints (sha256 of the user agent, capped) we've seen this
