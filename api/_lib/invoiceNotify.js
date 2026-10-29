@@ -70,6 +70,83 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
   }
 }
 
+// Refund confirmation to the client. Fires once per refund that actually
+// changed the invoice: from the shared refund core (owner's Refund button
+// and Ivy's refund_invoice tool) and from the Stripe webhook when the owner
+// refunds straight from the Stripe Dashboard. The echo of an Ivy refund is
+// ignored upstream, so the client never gets two.
+//
+// Copy is honest about who moves the money: online payments go back to
+// the original method automatically; manual ones (cash, check, Zelle,
+// Venmo, Cash App) are sent back by the business, so we say that.
+const ONLINE_REFUND_METHODS = new Set(['card', 'ach', 'paypal', 'square', 'stripe']);
+
+export function renderInvoiceRefunded({ business, firstName, number, amount, remaining, fullyRefunded, method, online, branding }) {
+  const fn = escapeHtml(firstName || 'there');
+  const biz = escapeHtml(business || 'the business');
+  const amt = fmtMoney(amount);
+  const how = online
+    ? (method === 'ach'
+      ? `<p>The money is on its way back to the bank account you paid from. Most banks show it within <strong>5 to 10 business days</strong>.</p>`
+      : `<p>The money is on its way back to your original payment method. Most banks and card issuers show it within <strong>5 to 10 business days</strong>.</p>`)
+    : `<p>You paid this invoice by ${escapeHtml(paidMethodLabel(method))}, so ${biz} will send the money back to you directly. If you have not received it in a few days, just reply to this email.</p>`;
+  const scope = fullyRefunded
+    ? `<p>Invoice <strong>${escapeHtml(number)}</strong> is now fully refunded.</p>`
+    : `<p>This is a partial refund. ${fmtMoney(remaining)} of your payment stays applied to invoice <strong>${escapeHtml(number)}</strong>.</p>`;
+  const html = emailShell({
+    heading: 'Refund issued',
+    branding,
+    body: `<p>Hi ${fn},</p>
+      <p>${biz} has refunded <strong>${amt}</strong> for invoice <strong>${escapeHtml(number)}</strong>.</p>
+      ${how}
+      ${scope}
+      <p>Keep this email as your refund receipt.</p>`,
+    footer: `Questions about this refund? Reply to this email to reach ${biz}.`,
+  });
+  return { subject: `Refund issued: invoice ${number} · ${amt}`, html };
+}
+
+export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, method = null }) {
+  try {
+    const { rows } = await sql`
+      SELECT i.id, i.number, i.client_id, i.client_name, i.client_email,
+             i.paid_amount, i.refunded_amount, i.status, i.paid_method, i.stripe_payment_intent
+      FROM invoices i
+      WHERE i.id = ${invoiceId} AND i.workspace_id = ${workspaceId}
+    `;
+    const inv = rows[0];
+    if (!inv?.client_email || !(Number(amount) > 0)) return { sent: false };
+    const branding = await fetchBranding(workspaceId);
+    const m = method || inv.paid_method || (inv.stripe_payment_intent ? 'card' : 'other');
+    const online = !!inv.stripe_payment_intent || ONLINE_REFUND_METHODS.has(m);
+    const paid = Number(inv.paid_amount || 0);
+    const refunded = Number(inv.refunded_amount || 0);
+    const rendered = renderInvoiceRefunded({
+      business: branding.businessName,
+      firstName: (inv.client_name || '').split(/\s+/)[0],
+      number: inv.number,
+      amount: Number(amount),
+      remaining: Math.max(0, paid - refunded),
+      fullyRefunded: inv.status === 'refunded' || (paid > 0 && refunded >= paid - 0.001),
+      method: m,
+      online,
+      branding,
+    });
+    const r = await sendEmailToClient({
+      clientId: inv.client_id, type: 'invoices',
+      to: inv.client_email,
+      subject: rendered.subject,
+      html: rendered.html,
+      replyTo: branding.replyTo,
+    });
+    return { sent: !!r?.sent };
+  } catch (err) {
+    console.error('[notifyInvoiceRefunded] failed:', err.message);
+    reportError(err, { extra: { invoiceId, workspaceId } });
+    return { sent: false };
+  }
+}
+
 // Friendly "payment due soon" nudge - fires a few days BEFORE due_date,
 // once per invoice. The proactive counterpart to notifyInvoiceOverdue.
 export async function notifyInvoiceDueSoon({ workspaceId, invoiceId, daysUntilDue, viewUrl }) {

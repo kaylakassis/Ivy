@@ -345,7 +345,7 @@ export default async function handler(req, res) {
         kind: 'refund',
         text: `Refunded $${(refundedTotal - already).toFixed(2)} to card (via Stripe)`,
       };
-      await sql`
+      const applied = await sql`
         UPDATE invoices SET
           status          = ${fully ? 'refunded' : 'paid'},
           refunded_amount = ${refundedTotal},
@@ -354,7 +354,12 @@ export default async function handler(req, res) {
           updated_at      = NOW()
         WHERE id = ${i.id} AND workspace_id = ${workspaceId}
           AND COALESCE(refunded_amount, 0) = ${already}
+        RETURNING id
       `;
+      if (applied.rowCount > 0) {
+        const { notifyInvoiceRefunded } = await import('../_lib/invoiceNotify.js');
+        await notifyInvoiceRefunded({ workspaceId, invoiceId: i.id, amount: Math.round((refundedTotal - already) * 100) / 100 }).catch(() => {});
+      }
       notifyOwnerSafe({
         workspaceId, type: 'payments',
         payload: {
