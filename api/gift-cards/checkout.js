@@ -81,9 +81,11 @@ export default async function handler(req, res) {
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }
     catch (e) {
-      return badRequest(res, e.code === 'no_stripe_connection'
-        ? 'Gift cards require Stripe. Connect Stripe in Finance to sell them (Square/PayPal aren’t supported for gift cards yet).'
-        : e.message);
+      // Public page: never name the payment provider or the owner's
+      // settings to a visitor.
+      return badRequest(res, e.code === 'no_stripe_connection' || e.code === 'platform_secret_missing'
+        ? "This business isn't set up to sell gift cards yet."
+        : 'Gift card checkout is unavailable right now. Please try again later.');
     }
 
     const base = appUrl();

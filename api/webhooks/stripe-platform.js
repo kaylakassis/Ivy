@@ -27,6 +27,7 @@ import { applySubscriptionState } from '../_lib/memberships.js';
 import { applyProgramSubscription, revokeProgramPurchaseForRefund } from '../_lib/programs.js';
 import {
   fulfillCheckoutSession, fulfillInvoicePaymentIntent, failInvoiceAsyncPayment,
+  syncRefundToPurchases,
 } from '../_lib/checkoutFulfillment.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
@@ -329,16 +330,18 @@ export default async function handler(req, res) {
          LIMIT 1
       `;
       if (inv.rows.length === 0) {
-        // A one-time program purchase has no invoice: a full refund from
-        // the Dashboard closes the enrollment so the client's access ends
-        // with the money. Booking deposits / orders track refunds
-        // separately; unmatched charges are acknowledged so Stripe stops
-        // retrying.
+        // Purchases with no invoice row. A full refund of a one-time
+        // program closes the enrollment so the client's access ends with the
+        // money; a refunded gift card is voided and a refunded package
+        // cancelled so the money cannot keep being spent. Booking deposits
+        // and orders track refunds separately; unmatched charges are
+        // acknowledged so Stripe stops retrying.
         const programResult = await revokeProgramPurchaseForRefund({ workspaceId, charge });
         if (programResult !== 'not-found') {
           return ok(res, { received: true, applied: 'program-refund', result: programResult });
         }
-        return ok(res, { received: true, ignored: 'no invoice for payment_intent' });
+        const synced = await syncRefundToPurchases({ workspaceId, charge });
+        return ok(res, { received: true, ...synced });
       }
       const i = inv.rows[0];
       const refundedTotal = Math.round(Number(charge.amount_refunded || 0)) / 100;

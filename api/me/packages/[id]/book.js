@@ -33,6 +33,7 @@ import { notifyNewBooking } from '../../../_lib/bookingNotify.js';
 import { notifyPackageExhausted } from '../../../_lib/packageNotify.js';
 import { syncOnBookingCreated } from '../../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../../_lib/intake.js';
+import { archivedForbidden } from '../../../_lib/businessAccess.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../../_lib/json.js';
 
 const MAX_OCCURRENCES = 52;          // hard ceiling regardless of credits
@@ -61,6 +62,10 @@ export default async function handler(req, res) {
     );
     if (pkgRows.length === 0) return notFound(res, 'Package not found');
     const cp = pkgRows[0];
+    // The business's subscription has lapsed: its booking page is archived,
+    // so credits cannot be spent there either (the portal hides the button;
+    // this is the server-side half of that).
+    if (memberships.find((m) => m.clientId === cp.client_id)?.archived) return archivedForbidden(res);
     if (cp.status !== 'active') return badRequest(res, 'This package is no longer active.');
     if (cp.credits_remaining <= 0) return badRequest(res, "You're out of credits on this package.");
     if (cp.expires_at && new Date(cp.expires_at).getTime() < Date.now()) {
@@ -103,7 +108,7 @@ export default async function handler(req, res) {
         const startMin = Number(raw?.startMin);
         const endMin = Number(raw?.endMin);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return badRequest(res, 'Each slot needs date YYYY-MM-DD.');
-        if (!Number.isInteger(startMin) || startMin < 0 || startMin > 1440) return badRequest(res, 'Each slot needs startMin 0–1440.');
+        if (!Number.isInteger(startMin) || startMin < 0 || startMin > 1440) return badRequest(res, 'Each slot needs a start time between 0 and 1440 minutes.');
         if (!Number.isInteger(endMin) || endMin <= startMin || endMin > 1440) return badRequest(res, 'Each slot needs endMin > startMin.');
         slots.push({ date, startMin, endMin });
       }

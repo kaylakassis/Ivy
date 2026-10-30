@@ -46,7 +46,13 @@ export async function issueGiftCardFromSession({ workspaceId, session }) {
       return { ignored: 'gift card already issued for this PI' };
     }
   }
-  const amountCents = Number(session.metadata?.amount_cents || 0);
+  // The card is worth what the buyer paid. metadata.amount_cents is what
+  // our checkout asked for; amount_total is what Stripe actually charged.
+  // Fall back so a session minted without the metadata can never insert a
+  // $0 card (CHECK violation → 500 → Stripe retries forever).
+  const amountCents = Number(session.metadata?.amount_cents || 0)
+    || Number(session.amount_total || 0);
+  if (amountCents <= 0) return { ignored: 'gift card amount missing' };
   const senderName  = session.metadata?.sender_name || null;
   const senderEmail = session.metadata?.sender_email || null;
   const recipName   = session.metadata?.recipient_name || null;
@@ -523,15 +529,27 @@ async function fulfillPackageSession({ workspaceId, session }) {
   const credits = Math.max(1, Number(p.session_count) || 1);
   const priceCharged = Number.isFinite(session.amount_total) ? session.amount_total / 100 : Number(p.price || 0);
   const expiresAt = p.expiry_days ? new Date(Date.now() + Number(p.expiry_days) * 86400 * 1000) : null;
-  await sql`
-    INSERT INTO client_packages (
-      workspace_id, client_id, package_id, name, service_ids,
-      credits_total, credits_remaining, price, expires_at, status, stripe_session_id
-    ) VALUES (
-      ${workspaceId}, ${clientId}, ${p.id}, ${p.name}, ${p.service_ids || []},
-      ${credits}, ${credits}, ${priceCharged}, ${expiresAt}, 'active', ${session.id}
-    )
-  `;
+  const paymentIntentId = typeof session.payment_intent === 'string'
+    ? session.payment_intent : session.payment_intent?.id || null;
+  try {
+    await sql`
+      INSERT INTO client_packages (
+        workspace_id, client_id, package_id, name, service_ids,
+        credits_total, credits_remaining, price, expires_at, status,
+        stripe_session_id, stripe_payment_intent
+      ) VALUES (
+        ${workspaceId}, ${clientId}, ${p.id}, ${p.name}, ${p.service_ids || []},
+        ${credits}, ${credits}, ${priceCharged}, ${expiresAt}, 'active',
+        ${session.id}, ${paymentIntentId}
+      )
+    `;
+  } catch (err) {
+    // Two deliveries of the same session racing past the SELECT above:
+    // the unique index on stripe_session_id makes the loser a no-op
+    // instead of a 500 that Stripe would keep retrying.
+    if (err?.code === '23505') return { ignored: 'package already provisioned' };
+    throw err;
+  }
   notifyOwnerSafe({
     workspaceId, type: 'payments',
     payload: { title: 'Package sold 🎟️', body: `${p.name} (${credits} sessions) - $${priceCharged.toFixed(0)}`,
@@ -571,4 +589,103 @@ export async function fulfillCheckoutSession({ workspaceId, session, creds = nul
   }
   const result = await fulfillInvoiceCheckoutSession({ workspaceId, session, creds, settledAsync });
   return { applied: 'invoice-paid', result };
+}
+
+// charge.refunded for a purchase that has no invoice row: a gift card or a
+// package bought from the public booking page and refunded from the
+// payment dashboard (or by a dispute). Without this the recipient keeps
+// spending a card the owner already gave the money back for, and the
+// client keeps booking on refunded credits. Shared by both webhooks.
+//
+// charge.amount_refunded is CUMULATIVE cents, so every branch is
+// idempotent on an exact re-delivery and only applies the new delta on a
+// second partial refund. Returns { applied } or { ignored } for the
+// webhook's response body.
+export async function syncRefundToPurchases({ workspaceId, charge }) {
+  const pi = typeof charge?.payment_intent === 'string'
+    ? charge.payment_intent : charge?.payment_intent?.id || null;
+  if (!pi) return { ignored: 'no payment_intent on charge' };
+  const refundedCents = Math.max(0, Math.round(Number(charge.amount_refunded || 0)));
+  const chargedCents  = Math.max(0, Math.round(Number(charge.amount || 0)));
+  const fully = chargedCents > 0 && refundedCents >= chargedCents;
+
+  // Gift card: take the newly refunded cents off the balance; a full
+  // refund voids the card outright so findActiveByCode never matches it.
+  const card = (await sql`
+    SELECT id, balance_cents, refunded_cents, status, code_last4
+      FROM gift_cards
+     WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi}
+     LIMIT 1
+  `).rows[0];
+  if (card) {
+    const already = Number(card.refunded_cents || 0);
+    if (refundedCents <= already) return { ignored: 'refund already recorded' };
+    const delta = refundedCents - already;
+    // Every RHS reference to balance_cents is the pre-update value, so the
+    // status flip and the new balance agree.
+    const upd = await sql`
+      UPDATE gift_cards SET
+        balance_cents  = CASE WHEN ${fully} THEN 0 ELSE GREATEST(0, balance_cents - ${delta}) END,
+        refunded_cents = ${refundedCents},
+        status         = CASE WHEN ${fully} OR balance_cents - ${delta} <= 0 THEN 'voided' ELSE status END,
+        updated_at     = NOW()
+      WHERE id = ${card.id} AND workspace_id = ${workspaceId}
+        AND refunded_cents = ${already}
+      RETURNING balance_cents, status
+    `;
+    if (upd.rows.length === 0) return { ignored: 'refund already recorded' };
+    const left = Number(upd.rows[0].balance_cents);
+    notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: {
+        title: fully ? 'Gift card refunded' : 'Gift card partly refunded',
+        body: `Card …${card.code_last4}: ${fmtMoney(delta / 100)} refunded${fully ? '; the card is now void.' : `; ${fmtMoney(left / 100)} left on it.`}`,
+        url: '/finance?section=giftcards',
+        tag: `gc-refund-${card.id}`,
+      },
+    });
+    return { applied: 'gift-card-refund-synced', fully, balanceCents: left };
+  }
+
+  // Package: a full refund cancels the bundle. A partial refund is left
+  // to the owner (they can trim credits from the client's page); the
+  // push tells them it happened.
+  const cp = (await sql`
+    SELECT id, name, client_id, status, credits_remaining
+      FROM client_packages
+     WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi}
+     LIMIT 1
+  `).rows[0];
+  if (cp) {
+    if (!fully) {
+      notifyOwnerSafe({
+        workspaceId, type: 'payments',
+        payload: {
+          title: 'Package partly refunded',
+          body: `${cp.name}: ${fmtMoney(refundedCents / 100)} refunded. Adjust the client's remaining sessions if needed.`,
+          url: `/clients?id=${encodeURIComponent(cp.client_id)}`,
+          tag: `pkg-refund-${cp.id}`,
+        },
+      });
+      return { applied: 'package-refund-noted', fully: false };
+    }
+    const upd = await sql`
+      UPDATE client_packages SET status = 'cancelled', credits_remaining = 0, updated_at = NOW()
+       WHERE id = ${cp.id} AND workspace_id = ${workspaceId} AND status <> 'cancelled'
+       RETURNING id
+    `;
+    if (upd.rows.length === 0) return { ignored: 'refund already recorded' };
+    const n = Number(cp.credits_remaining || 0);
+    notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: {
+        title: 'Package refunded',
+        body: `${cp.name} was refunded in full; its ${n} remaining session${n === 1 ? '' : 's'} were cancelled.`,
+        url: `/clients?id=${encodeURIComponent(cp.client_id)}`,
+        tag: `pkg-refund-${cp.id}`,
+      },
+    });
+    return { applied: 'package-refund-synced', fully: true };
+  }
+  return { ignored: 'no purchase for payment_intent' };
 }

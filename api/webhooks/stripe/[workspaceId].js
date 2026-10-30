@@ -16,6 +16,7 @@ import { applySubscriptionState } from '../../_lib/memberships.js';
 import { applyProgramSubscription } from '../../_lib/programs.js';
 import {
   fulfillCheckoutSession, fulfillInvoicePaymentIntent, failInvoiceAsyncPayment,
+  syncRefundToPurchases,
 } from '../../_lib/checkoutFulfillment.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
 import { fetchWithTimeout } from '../../_lib/fetchTimeout.js';
@@ -171,6 +172,15 @@ export default async function handler(req, res) {
       }
       const result = await failInvoiceAsyncPayment({ workspaceId, session });
       return ok(res, { received: true, applied: 'invoice-payment-failed', result });
+    }
+
+    // A refund issued from the payment dashboard for a gift card or a
+    // package sold from the booking page: void the card / cancel the
+    // bundle. (Invoice refunds on this legacy path are recorded by the
+    // owner's own refund action, which also moves the money.)
+    if (event.type === 'charge.refunded') {
+      const synced = await syncRefundToPurchases({ workspaceId, charge: event.data?.object || {} });
+      return ok(res, { received: true, ...synced });
     }
 
     // Only checkout.session.completed remains as the path that
