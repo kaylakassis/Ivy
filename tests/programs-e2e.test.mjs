@@ -383,7 +383,7 @@ async function run() {
   r = await fire('charge.refunded', { id: 'ch_2', payment_intent: 'pi_unknown', amount: 4900, amount_refunded: 4900, metadata: { purpose: 'program', program_id: oneTime.id, client_id: client.id, workspace_id: A.wid } }, A.acct);
   assert(r.body.result === 'revoked', 'refund matched through charge metadata');
   r = await fire('charge.refunded', { id: 'ch_3', payment_intent: 'pi_nothing', amount: 100, amount_refunded: 100 }, A.acct);
-  assert(r.body.ignored === 'no invoice for payment_intent', 'unrelated refund is acknowledged and ignored');
+  assert(r.body.ignored === 'no purchase for payment_intent', 'unrelated refund is acknowledged and ignored');
 
   // Manual grant by the owner (free / paid elsewhere).
   r = await call(programMembers, req({ method: 'POST', cookie: A.cookie, query: { id: free.id }, body: { name: 'Casey', email: buyer.email } }));
