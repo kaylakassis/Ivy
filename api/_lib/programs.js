@@ -1,8 +1,14 @@
 // Programs: shared helpers for the owner API, the client portal and checkout.
 import { sql } from './db.js';
 import { myClientIds, ids } from './clientPortal.js';
+import { mapSubStatus } from './memberships.js';
+import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
 
 export const BILLING = new Set(['one_time', 'month', 'year']);
+
+// Ids arrive from the URL; anything that is not a UUID would make Postgres
+// throw (a 500) instead of the 404 the caller should see.
+export const isUuid = (s) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(s || ''));
 export const ITEM_TYPES = new Set(['pdf', 'post', 'video']);
 export const POST_KINDS = new Set(['post', 'win', 'question']);
 
@@ -26,6 +32,7 @@ export function serializeEnrollment(r) {
     clientEmail: r.client_email || null, source: r.source, status: r.status, billing: r.billing,
     priceCents: Number(r.price_cents) || 0, currentPeriodEnd: r.current_period_end, expiresAt: r.expires_at || null, grantedAt: r.granted_at,
     cancelledAt: r.cancelled_at, stripeSubscriptionId: r.stripe_subscription_id || null,
+    cancelAtPeriodEnd: !!r.cancel_at_period_end,
   };
 }
 export function serializePost(r) {
@@ -110,9 +117,10 @@ export async function activeMemberCount(programId) {
 }
 
 // Grants or refreshes access for a client. Idempotent on the Stripe ids.
-export async function grantEnrollment({ programId, workspaceId, clientId, source, billing, priceCents, stripeSubscriptionId = null, stripeSessionId = null, status = 'active', currentPeriodEnd = null, expiresAt = null }) {
+// Returns { id, previousStatus } (previousStatus null on a fresh insert).
+export async function grantEnrollment({ programId, workspaceId, clientId, source, billing, priceCents, stripeSubscriptionId = null, stripeSessionId = null, stripePaymentIntent = null, status = 'active', currentPeriodEnd = null, expiresAt = null, cancelAtPeriodEnd = false }) {
   const existing = await sql`
-    SELECT id FROM program_enrollments
+    SELECT id, status FROM program_enrollments
      WHERE program_id = ${programId} AND client_id = ${clientId}
        AND (${stripeSubscriptionId}::text IS NULL OR stripe_subscription_id = ${stripeSubscriptionId} OR stripe_subscription_id IS NULL)
      ORDER BY granted_at DESC LIMIT 1`;
@@ -121,30 +129,69 @@ export async function grantEnrollment({ programId, workspaceId, clientId, source
       UPDATE program_enrollments SET status = ${status}, source = ${source}, billing = ${billing}, price_cents = ${priceCents},
         stripe_subscription_id = COALESCE(${stripeSubscriptionId}, stripe_subscription_id),
         stripe_session_id = COALESCE(${stripeSessionId}, stripe_session_id),
+        stripe_payment_intent = COALESCE(${stripePaymentIntent}, stripe_payment_intent),
+        cancel_at_period_end = ${!!cancelAtPeriodEnd},
         current_period_end = ${currentPeriodEnd}, expires_at = ${expiresAt}, cancelled_at = CASE WHEN ${status} = 'cancelled' THEN NOW() ELSE NULL END, updated_at = NOW()
        WHERE id = ${existing.rows[0].id}`;
-    return existing.rows[0].id;
+    return { id: existing.rows[0].id, previousStatus: existing.rows[0].status };
   }
   const ins = await sql`
-    INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, billing, price_cents, stripe_subscription_id, stripe_session_id, status, current_period_end, expires_at)
-    VALUES (${programId}, ${workspaceId}, ${clientId}, ${source}, ${billing}, ${priceCents}, ${stripeSubscriptionId}, ${stripeSessionId}, ${status}, ${currentPeriodEnd}, ${expiresAt})
+    INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, billing, price_cents, stripe_subscription_id, stripe_session_id, stripe_payment_intent, status, current_period_end, expires_at, cancel_at_period_end, cancelled_at)
+    VALUES (${programId}, ${workspaceId}, ${clientId}, ${source}, ${billing}, ${priceCents}, ${stripeSubscriptionId}, ${stripeSessionId}, ${stripePaymentIntent}, ${status}, ${currentPeriodEnd}, ${expiresAt}, ${!!cancelAtPeriodEnd}, CASE WHEN ${status} = 'cancelled' THEN NOW() ELSE NULL END)
     ON CONFLICT DO NOTHING RETURNING id`;
-  return ins.rows[0]?.id || null;
+  return { id: ins.rows[0]?.id || null, previousStatus: null };
 }
 
 // Webhook: a connected-account subscription with metadata.purpose='program'.
+// Mirrors the Stripe state (same status mapping as memberships: paused and
+// unpaid are past_due, anything unknown is not entitled) including
+// cancel_at_period_end, so the portal can say "Access until <date>". A
+// transition into past_due tells the owner and the client once.
 export async function applyProgramSubscription({ workspaceId, sub }) {
   const md = sub?.metadata || {};
   if (md.purpose !== 'program' || !md.program_id || !md.client_id) return 'ignored';
   if (md.workspace_id && md.workspace_id !== workspaceId) return 'mismatch';
-  const p = (await sql`SELECT id, billing, price_cents FROM programs WHERE id = ${md.program_id} AND workspace_id = ${workspaceId}`).rows[0];
+  const p = (await sql`SELECT id, title, billing, price_cents FROM programs WHERE id = ${md.program_id} AND workspace_id = ${workspaceId}`).rows[0];
   const c = (await sql`SELECT id FROM clients WHERE id = ${md.client_id} AND workspace_id = ${workspaceId}`).rows[0];
   if (!p || !c) return 'missing';
-  const s = sub.status;
-  const status = (s === 'active' || s === 'trialing') ? 'active' : (s === 'past_due' || s === 'unpaid') ? 'past_due' : 'cancelled';
+  const mapped = mapSubStatus(sub.status);
+  const status = mapped === 'incomplete' ? 'cancelled' : mapped;
   const cpe = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
-  await grantEnrollment({ programId: p.id, workspaceId, clientId: c.id, source: 'subscription', billing: p.billing, priceCents: p.price_cents, stripeSubscriptionId: sub.id, status, currentPeriodEnd: cpe });
+  const r = await grantEnrollment({
+    programId: p.id, workspaceId, clientId: c.id, source: 'subscription', billing: p.billing, priceCents: p.price_cents,
+    stripeSubscriptionId: sub.id, status, currentPeriodEnd: cpe, cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+  });
+  if (status === 'past_due' && r.previousStatus !== 'past_due') {
+    notifyClientSubscriptionPastDue({ workspaceId, clientId: c.id, kind: 'program', label: p.title }).catch(() => {});
+  }
   return 'applied';
+}
+
+// Dashboard refund of a one-time program purchase (charge.refunded). A full
+// refund closes the enrollment; a partial refund leaves access alone. The
+// charge is matched by the PaymentIntent stamped at grant time, falling back
+// to the metadata Stripe copies from payment_intent_data onto the charge.
+// Returns 'revoked' | 'partial' | 'not-found' | 'already-cancelled'.
+export async function revokeProgramPurchaseForRefund({ workspaceId, charge }) {
+  const pi = typeof charge?.payment_intent === 'string' ? charge.payment_intent : charge?.payment_intent?.id || null;
+  const md = charge?.metadata || {};
+  let e = null;
+  if (pi) {
+    e = (await sql`SELECT id, status FROM program_enrollments WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi} LIMIT 1`).rows[0] || null;
+  }
+  if (!e && md.purpose === 'program' && md.program_id && md.client_id) {
+    e = (await sql`
+      SELECT id, status FROM program_enrollments
+       WHERE workspace_id = ${workspaceId} AND program_id = ${md.program_id} AND client_id = ${md.client_id}
+         AND source = 'purchase' ORDER BY granted_at DESC LIMIT 1`).rows[0] || null;
+  }
+  if (!e) return 'not-found';
+  const fully = Number(charge.amount_refunded || 0) >= Number(charge.amount || 0) && Number(charge.amount || 0) > 0;
+  if (!fully) return 'partial';
+  if (e.status === 'cancelled') return 'already-cancelled';
+  await sql`UPDATE program_enrollments SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW()
+             WHERE id = ${e.id} AND workspace_id = ${workspaceId}`;
+  return 'revoked';
 }
 
 // One-time access window → expiry timestamp (null = forever).

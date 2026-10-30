@@ -1,12 +1,17 @@
 // Members of a program (owner only).
 //   POST   { clientId } | { name, email }  → grant access by hand (free / paid elsewhere)
-//   DELETE ?enrollmentId=                  → revoke access (does not cancel a Stripe subscription; do that in Finance)
+//   DELETE ?enrollmentId=                  → revoke access. A subscription enrollment also
+//                                            cancels the Stripe subscription right away, so the
+//                                            client stops being charged and the next renewal
+//                                            webhook cannot quietly restore the access.
 import { sql } from '../../_lib/db.js';
 import { requireUser, validEmail } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
-import { grantEnrollment, expiryFor } from '../../_lib/programs.js';
+import { grantEnrollment, expiryFor, isUuid } from '../../_lib/programs.js';
+import { loadStripeCreds } from '../../_lib/stripeCreds.js';
+import { cancelSubscription } from '../../_lib/stripe.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -15,6 +20,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res); if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res); if (!workspaceId) return;
     const programId = String(req.query.id || '');
+    if (!isUuid(programId)) return notFound(res, 'Program not found');
     const p = (await sql`SELECT * FROM programs WHERE id = ${programId} AND workspace_id = ${workspaceId}`).rows[0];
     if (!p) return notFound(res, 'Program not found');
 
@@ -32,14 +38,30 @@ export default async function handler(req, res) {
         clientId = existing?.id || (await sql`
           INSERT INTO clients (workspace_id, name, email, stage, source) VALUES (${workspaceId}, ${name}, ${email}, 'active', 'program') RETURNING id`).rows[0].id;
       }
-      const id = await grantEnrollment({ programId, workspaceId, clientId, source: 'manual', billing: p.billing, priceCents: 0, expiresAt: expiryFor(p) });
-      return created(res, { enrollmentId: id, clientId });
+      const granted = await grantEnrollment({ programId, workspaceId, clientId, source: 'manual', billing: p.billing, priceCents: 0, expiresAt: expiryFor(p) });
+      return created(res, { enrollmentId: granted.id, clientId });
     }
     if (req.method === 'DELETE') {
       const enrollmentId = String(req.query.enrollmentId || '');
-      await sql`UPDATE program_enrollments SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW()
+      const e = (await sql`SELECT id, status, stripe_subscription_id FROM program_enrollments
+                            WHERE id = ${enrollmentId} AND program_id = ${programId} AND workspace_id = ${workspaceId}`).rows[0];
+      if (!e) return notFound(res, 'Member not found');
+      if (e.status === 'cancelled') return ok(res, { revoked: true, alreadyCancelled: true });
+      let subscriptionCancelled = false;
+      if (e.stripe_subscription_id) {
+        try {
+          const creds = await loadStripeCreds(workspaceId);
+          await cancelSubscription({ secretKey: creds.secretKey, stripeAccount: creds.stripeAccount, subscriptionId: e.stripe_subscription_id, atPeriodEnd: false });
+          subscriptionCancelled = true;
+        } catch (err) {
+          // A subscription Stripe no longer knows about is already over; anything
+          // else must stop us, or the client would keep paying for access they lost.
+          if (err.status !== 404) return badRequest(res, `Could not cancel the subscription in Stripe: ${err.message}`);
+        }
+      }
+      await sql`UPDATE program_enrollments SET status = 'cancelled', cancelled_at = NOW(), cancel_at_period_end = FALSE, updated_at = NOW()
                 WHERE id = ${enrollmentId} AND program_id = ${programId} AND workspace_id = ${workspaceId}`;
-      return ok(res, { revoked: true });
+      return ok(res, { revoked: true, subscriptionCancelled });
     }
     return methodNotAllowed(res, ['POST', 'DELETE']);
   } catch (err) { return serverError(res, err); }

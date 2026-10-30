@@ -13,6 +13,7 @@ import { decrypt } from '../../_lib/secrets.js';
 import { verifyWebhookSignature, fetchPaymentMethod, setDefaultPaymentMethod } from '../../_lib/stripe.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { applySubscriptionState } from '../../_lib/memberships.js';
+import { applyProgramSubscription } from '../../_lib/programs.js';
 import {
   fulfillCheckoutSession, fulfillInvoicePaymentIntent, failInvoiceAsyncPayment,
 } from '../../_lib/checkoutFulfillment.js';
@@ -90,6 +91,14 @@ export default async function handler(req, res) {
       const eventWorkspaceId = sub.metadata?.workspace_id;
       if (eventWorkspaceId && eventWorkspaceId !== workspaceId) {
         return res.status(400).json({ error: 'workspace mismatch' });
+      }
+      // Programs sold on a subscription carry metadata.purpose='program';
+      // their access lives in program_enrollments, not memberships. Same
+      // routing as the platform webhook, so legacy-keys workspaces grant
+      // and revoke program access too.
+      if (sub.metadata?.purpose === 'program') {
+        const result = await applyProgramSubscription({ workspaceId, sub });
+        return ok(res, { received: true, applied: 'program-subscription', result });
       }
       // No metadata.purpose gate: applySubscriptionState resolves both
       // Ivy-originated and Stripe-Dashboard-originated subs by

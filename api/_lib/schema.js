@@ -3319,6 +3319,16 @@ CREATE INDEX IF NOT EXISTS idx_program_posts_program ON program_posts(program_id
 ALTER TABLE programs ADD COLUMN IF NOT EXISTS access_days INT CHECK (access_days IS NULL OR access_days > 0);
 ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_program_enrollments_expiry ON program_enrollments(expires_at) WHERE status = 'active' AND expires_at IS NOT NULL;
+-- Subscription programs: the member turned auto-renew off (Stripe
+-- cancel_at_period_end) but keeps access until current_period_end. Lets the
+-- portal say "Access until <date>" instead of "Renews <date>" and hides the
+-- Cancel button once it has been used.
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;
+-- One-time purchases: the PaymentIntent behind the Checkout session, so a
+-- refund issued from the Stripe Dashboard (charge.refunded) can find and
+-- close the matching enrollment.
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
+CREATE INDEX IF NOT EXISTS idx_program_enrollments_pi ON program_enrollments(stripe_payment_intent) WHERE stripe_payment_intent IS NOT NULL;
 
 -- ─── Owner↔client messaging moderation (App Review: report + block) ──
 -- contact_blocks: either side can switch messaging off with the other.

@@ -3,7 +3,7 @@
 // only titles and types, so the outline can be shown without leaking it.
 import { sql } from '../../_lib/db.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
-import { serializeProgram } from '../../_lib/programs.js';
+import { serializeProgram, isUuid } from '../../_lib/programs.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 import { loadWorkspaceAccess, archivedPayload } from '../../_lib/businessAccess.js';
 
@@ -13,6 +13,7 @@ export default async function handler(req, res) {
     const blocked = await enforce(req, res, [{ key: `program:pub:${getClientIp(req)}`, max: 120, windowSeconds: 60 * 10 }]);
     if (blocked) return;
     const id = String(req.query.id || '');
+    if (!isUuid(id)) return notFound(res, 'This program is not available.');
     const p = (await sql`
       SELECT p.*, cs.slug, cs.biz_name, w.name AS workspace_name
         FROM programs p JOIN workspaces w ON w.id = p.workspace_id

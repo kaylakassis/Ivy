@@ -71,9 +71,11 @@ export default async function handler(req, res) {
     // resulting subscription back to a known client_id.
     let clientId = null;
     let stripeCustomerId = null;
+    // Case-insensitive: a client the owner typed in as Jane@Example.com must
+    // not become a second client row (and a second Stripe customer) here.
     const existing = await sql`
       SELECT id, stripe_customer_id FROM clients
-       WHERE workspace_id = ${workspaceId} AND email = ${buyerEmail}
+       WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${buyerEmail}
        LIMIT 1
     `;
     if (existing.rows.length > 0) {

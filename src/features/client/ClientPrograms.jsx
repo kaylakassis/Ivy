@@ -7,6 +7,17 @@ import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { ContentList, Community } from '../programs/ProgramContent.jsx';
 
+// "Access until <date>" for a fixed window or a subscription the member has
+// already cancelled, "Renews <date>" while a subscription is still live,
+// nothing for lifetime access. `prefix` separates it from the text before.
+export function accessLine(p, prefix) {
+  const fmt = (d) => new Date(d).toLocaleDateString();
+  const until = p.accessUntil || p.expiresAt || (p.cancelAtPeriodEnd ? p.currentPeriodEnd : null);
+  if (until) return `${prefix}Access until ${fmt(until)}`;
+  if (p.currentPeriodEnd) return `${prefix}Renews ${fmt(p.currentPeriodEnd)}`;
+  return '';
+}
+
 export default function ClientPrograms() {
   const [programs, setPrograms] = useState(null);
   const [err, setErr] = useState(null);
@@ -27,7 +38,7 @@ export default function ClientPrograms() {
                 <div style={{ fontSize: 11, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--accent)' }}>{p.businessName}</div>
                 <div style={{ fontSize: 16, fontWeight: 600 }}>{p.title}</div>
                 <div style={{ fontSize: 13, color: 'var(--muted)', lineHeight: 1.45, display: '-webkit-box', WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', overflow: 'hidden' }}>{p.description}</div>
-                <div style={{ marginTop: 'auto', fontSize: 12.5, color: 'var(--fg-2)' }}>{p.items} item{p.items === 1 ? '' : 's'}{p.enrollmentStatus === 'past_due' ? ' · payment past due' : ''}{p.expiresAt ? ` · access until ${new Date(p.expiresAt).toLocaleDateString()}` : p.currentPeriodEnd ? ` · renews ${new Date(p.currentPeriodEnd).toLocaleDateString()}` : ''}</div>
+                <div style={{ marginTop: 'auto', fontSize: 12.5, color: 'var(--fg-2)' }}>{p.items} item{p.items === 1 ? '' : 's'}{p.enrollmentStatus === 'past_due' ? ' · payment past due' : ''}{accessLine(p, ' · ')}</div>
               </Link>
             ))}
           </div>
@@ -43,8 +54,11 @@ export function ClientProgram() {
   useEffect(() => { api.get(`/me/programs/${id}`).then(setData).catch((e) => setErr(e.message)); api.get('/me/programs').then((r) => setMine((r.programs || []).find((p) => p.id === id) || null)).catch(() => {}); }, [id]);
   const cancel = async () => {
     if (!window.confirm('Cancel this subscription? You keep access until the end of the period you already paid for.')) return;
-    try { const r = await api.del(`/me/programs/${id}/subscription`); setCancelMsg(`Cancelled. Access continues until ${r.accessUntil ? new Date(r.accessUntil).toLocaleDateString() : 'the end of the current period'}.`); }
-    catch (e) { setCancelMsg(e.message); }
+    try {
+      const r = await api.del(`/me/programs/${id}/subscription`);
+      setCancelMsg(`Cancelled. Access continues until ${r.accessUntil ? new Date(r.accessUntil).toLocaleDateString() : 'the end of the current period'}.`);
+      setMine((m) => (m ? { ...m, cancelAtPeriodEnd: true, canCancel: false, accessUntil: r.accessUntil || m.currentPeriodEnd } : m));
+    } catch (e) { setCancelMsg(e.message); }
   };
   if (err) return <div className="page-pad"><EmptyNote icon="Lock" title="No access" hint={err} action={<Link className="btn btn-outline" to="/me/programs">Back to programs</Link>}/></div>;
   if (!data) return <div className="page-pad" style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
@@ -58,7 +72,7 @@ export function ClientProgram() {
         {program.description && <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginTop: 6, lineHeight: 1.5 }}>{program.description}</div>}
         {mine && (
           <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--muted)', display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span>{mine.expiresAt ? `Access until ${new Date(mine.expiresAt).toLocaleDateString()}` : mine.currentPeriodEnd ? `Renews ${new Date(mine.currentPeriodEnd).toLocaleDateString()}` : 'Lifetime access'}{mine.enrollmentStatus === 'past_due' ? ' · payment past due' : ''}</span>
+            <span>{accessLine(mine, '') || 'Lifetime access'}{mine.enrollmentStatus === 'past_due' ? ' · payment past due' : ''}</span>
             {mine.canCancel && !cancelMsg && <button type="button" onClick={cancel} style={{ color: 'var(--accent)', fontSize: 12.5 }}>Cancel subscription</button>}
             {cancelMsg && <span style={{ color: 'var(--fg-2)' }}>{cancelMsg}</span>}
           </div>

@@ -1,6 +1,7 @@
 // Helpers for membership tier templates + per-client subscription state.
 import { sql } from './db.js';
 import { fetchStripeCustomer } from './stripe.js';
+import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
 
 export const VALID_INTERVAL = new Set(['week', 'month', 'quarter', 'year']);
 export const VALID_STATUS = new Set(['active', 'past_due', 'cancelled', 'incomplete']);
@@ -141,7 +142,7 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
   const subId = sub?.id;
   if (!subId) return 'invalid';
   const ours = await sql`
-    SELECT id, workspace_id, membership_id FROM client_memberships
+    SELECT id, workspace_id, membership_id, client_id, membership_name, status FROM client_memberships
      WHERE stripe_subscription_id = ${subId}
      LIMIT 1
   `;
@@ -318,5 +319,13 @@ export async function applySubscriptionState({ workspaceId, sub, stripeContext }
       updated_at = NOW()
     WHERE stripe_subscription_id = ${subId} AND workspace_id = ${workspaceId}
   `;
+  // A renewal that failed: tell the owner (push) and the client (email)
+  // once, on the transition into past_due. Stripe keeps retrying the card;
+  // the deleted event closes the membership if every retry fails.
+  if (status === 'past_due' && ours.rows[0].status !== 'past_due') {
+    notifyClientSubscriptionPastDue({
+      workspaceId, clientId: ours.rows[0].client_id, kind: 'membership', label: ours.rows[0].membership_name,
+    }).catch(() => {});
+  }
   return retiered ? 'retiered' : 'ok';
 }

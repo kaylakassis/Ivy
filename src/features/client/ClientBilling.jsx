@@ -217,7 +217,9 @@ export default function ClientBilling() {
                   <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>
                     {m.businessName} · {fmtMoney(m.priceCents)} {intervalLabel(m.interval)}
                     {m.status === 'past_due' && ' · Payment past due'}
-                    {m.cancelAtPeriodEnd && m.currentPeriodEnd && ` · Cancels ${new Date(m.currentPeriodEnd).toLocaleDateString()}`}
+                    {m.status === 'incomplete' && ' · Waiting for your first payment'}
+                    {m.cancelAtPeriodEnd && m.currentPeriodEnd && ` · Access until ${new Date(m.currentPeriodEnd).toLocaleDateString()}`}
+                    {!m.cancelAtPeriodEnd && m.status === 'active' && m.currentPeriodEnd && ` · Renews ${new Date(m.currentPeriodEnd).toLocaleDateString()}`}
                   </div>
                 </div>
                 {!m.cancelAtPeriodEnd && m.status !== 'cancelled' && (

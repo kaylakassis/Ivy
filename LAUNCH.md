@@ -87,10 +87,13 @@ In **Stripe Dashboard → Developers → Webhooks → Add endpoint**:
 - **URL:** `https://<your-domain>/api/webhooks/stripe-platform`
 - **Events:**
   - `checkout.session.completed`
+  - `checkout.session.async_payment_succeeded` (ACH Direct Debit settled)
+  - `checkout.session.async_payment_failed` (ACH Direct Debit bounced)
   - `payment_intent.succeeded` (safety net - added in 2026-05)
-  - `customer.subscription.created`
-  - `customer.subscription.updated`
-  - `customer.subscription.deleted`
+  - `customer.subscription.created` (memberships + subscription programs)
+  - `customer.subscription.updated` (renewals, past due, cancel at period end, plan changes)
+  - `customer.subscription.deleted` (access ends)
+  - `charge.refunded` (Dashboard refunds: invoices + one-time program purchases)
   - `account.updated`
 
 After saving, click the endpoint and copy the **Signing secret** into

@@ -486,12 +486,23 @@ async function fulfillProgramSession({ workspaceId, session }) {
   const programId = session.metadata?.program_id;
   const clientId = session.metadata?.client_id;
   if (!programId || !clientId) return { ignored: 'program metadata incomplete' };
-  const prog = (await sql`SELECT id, billing, price_cents, access_days FROM programs WHERE id = ${programId} AND workspace_id = ${workspaceId}`).rows[0];
-  const cli = (await sql`SELECT id FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`).rows[0];
+  const prog = (await sql`SELECT id, title, billing, price_cents, access_days FROM programs WHERE id = ${programId} AND workspace_id = ${workspaceId}`).rows[0];
+  const cli = (await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`).rows[0];
   if (!prog || !cli) return { ignored: 'program or client not found' };
   const already = (await sql`SELECT id FROM program_enrollments WHERE stripe_session_id = ${session.id}`).rows[0];
   if (already) return { applied: 'program-purchase', duplicate: true };
-  await grantEnrollment({ programId, workspaceId, clientId, source: 'purchase', billing: 'one_time', priceCents: prog.price_cents, stripeSessionId: session.id, expiresAt: expiryFor(prog) });
+  // The PaymentIntent lets a Dashboard refund (charge.refunded) find and
+  // close this enrollment later.
+  await grantEnrollment({
+    programId, workspaceId, clientId, source: 'purchase', billing: 'one_time', priceCents: prog.price_cents,
+    stripeSessionId: session.id, stripePaymentIntent: sessionPaymentIntentId(session), expiresAt: expiryFor(prog),
+  });
+  const paidCents = Number.isFinite(session.amount_total) ? session.amount_total : Number(prog.price_cents || 0);
+  notifyOwnerSafe({
+    workspaceId, type: 'payments',
+    payload: { title: 'Program sold', body: `${cli.name || cli.email || 'A client'} bought ${prog.title} · ${fmtMoney(paidCents / 100)}`,
+      url: '/programs', tag: `program-${session.id}` },
+  });
   return { applied: 'program-purchase' };
 }
 

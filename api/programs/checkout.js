@@ -12,6 +12,7 @@ import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { stripeFetch, findOrCreateCustomer } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { fetchFinanceSettings } from '../_lib/finance.js';
+import { isUuid } from '../_lib/programs.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
 
@@ -25,6 +26,7 @@ export default async function handler(req, res) {
     const buyerName = String(body.name || '').trim().slice(0, 200);
     const buyerEmail = String(body.email || '').trim().toLowerCase().slice(0, 200);
     if (!programId) return badRequest(res, 'programId is required');
+    if (!isUuid(programId)) return notFound(res, 'This program is not available.');
     if (!buyerName) return badRequest(res, 'Please share your name.');
     if (!validEmail(buyerEmail)) return badRequest(res, 'A valid email is required.');
 

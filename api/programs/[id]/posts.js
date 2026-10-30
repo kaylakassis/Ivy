@@ -7,7 +7,7 @@ import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
-import { programAccess, serializePost, POST_KINDS } from '../../_lib/programs.js';
+import { programAccess, serializePost, POST_KINDS, isUuid } from '../../_lib/programs.js';
 import { badRequest, created, forbidden, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 async function ownerWorkspace(user) {
@@ -20,6 +20,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res); if (!user) return;
     const programId = String(req.query.id || '');
+    if (!isUuid(programId)) return notFound(res, 'Program not found');
     const access = await programAccess(user, programId, await ownerWorkspace(user));
     if (!access.program) return notFound(res, 'Program not found');
     if (!access.role) return forbidden(res, 'You are not a member of this program.');
