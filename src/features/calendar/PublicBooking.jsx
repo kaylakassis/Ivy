@@ -472,8 +472,10 @@ export default function PublicBooking({ embedded = false }) {
       )}
 
       {/* Gift card CTA - same step as the slot picker so it doesn't
-          get in the way of someone who's actively trying to book. */}
-      {step === 'pick' && (
+          get in the way of someone who's actively trying to book. Only
+          when the business can take card payments (the API says so);
+          otherwise the form would end in a "not set up" error. */}
+      {step === 'pick' && cal.giftCardsAvailable !== false && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           padding: '10px 14px', borderRadius: 10, marginTop: 14,

@@ -27,6 +27,7 @@ import { applySubscriptionState } from '../_lib/memberships.js';
 import { applyProgramSubscription } from '../_lib/programs.js';
 import {
   fulfillCheckoutSession, fulfillInvoicePaymentIntent, failInvoiceAsyncPayment,
+  syncRefundToPurchases,
 } from '../_lib/checkoutFulfillment.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
@@ -329,9 +330,12 @@ export default async function handler(req, res) {
          LIMIT 1
       `;
       if (inv.rows.length === 0) {
+        // Gift cards and packages have no invoice row: void the card /
+        // cancel the bundle so refunded money cannot keep being spent.
         // Booking deposits / orders track refunds separately; unmatched
         // charges are acknowledged so Stripe stops retrying.
-        return ok(res, { received: true, ignored: 'no invoice for payment_intent' });
+        const synced = await syncRefundToPurchases({ workspaceId, charge });
+        return ok(res, { received: true, ...synced });
       }
       const i = inv.rows[0];
       const refundedTotal = Math.round(Number(charge.amount_refunded || 0)) / 100;

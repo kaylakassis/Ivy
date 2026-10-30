@@ -51,7 +51,7 @@ export default function GiftCards() {
       }}>
         <Icons.Gift size={14} stroke="var(--accent)"/>
         <span style={{ flex: 1, minWidth: 240 }}>
-          Gift cards are sold from your public booking page; recipients get the code by email immediately after payment, and apply it at checkout. Stripe handles every charge.
+          Gift cards are sold from your public booking page once card payments are connected in Finance. Recipients get the code by email immediately after payment and apply it when they book. Refunds you issue from your payment dashboard void the card automatically.
         </span>
       </div>
 

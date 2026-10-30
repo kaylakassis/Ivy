@@ -229,8 +229,22 @@ async function getCalendar(req, res) {
       programsOut = progs.rows.map((r) => ({ id: r.id, title: r.title, description: r.description || '', priceCents: Number(r.price_cents) || 0, billing: r.billing, accessDays: r.access_days == null ? null : Number(r.access_days), communityEnabled: !!r.community_enabled, items: r.items }));
     } catch (e) { console.error('[calendar/public] programs skipped:', e.message); }
 
+    // Gift cards are sold through the business's connected card
+    // processor. Only offer the "Buy a gift card" button when the
+    // business can actually take the payment, so a visitor never fills
+    // in the form just to be told it cannot go through.
+    let giftCardsAvailable = false;
+    try {
+      const fs = await sql`
+        SELECT stripe_connect_user_id, stripe_secret_encrypted
+          FROM finance_settings WHERE workspace_id = ${s.workspace_id} LIMIT 1
+      `;
+      giftCardsAvailable = !!(fs.rows[0]?.stripe_connect_user_id || fs.rows[0]?.stripe_secret_encrypted);
+    } catch (e) { console.error('[calendar/public] gift card availability skipped:', e.message); }
+
     return ok(res, {
       calendar: {
+        giftCardsAvailable,
         settings: serializeSettings(s),
         services: services.rows.map(serializeService),
         blocks:   blocksOut,

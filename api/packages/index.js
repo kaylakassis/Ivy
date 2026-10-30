@@ -73,13 +73,13 @@ export default async function handler(req, res) {
       if (!name) return badRequest(res, 'Name is required');
       if (name.length > 120) return badRequest(res, 'Name too long');
       if (!Number.isInteger(sessionCount) || sessionCount < 1 || sessionCount > 1000) {
-        return badRequest(res, 'sessionCount must be an integer 1–1000');
+        return badRequest(res, 'Sessions must be a whole number from 1 to 1000');
       }
       if (!Number.isFinite(price) || price < 0 || price > 1e7) {
         return badRequest(res, 'price must be a non-negative number');
       }
       if (expiryDays != null && (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 365 * 10)) {
-        return badRequest(res, 'expiryDays must be 1–3650 or omitted');
+        return badRequest(res, 'Validity must be from 1 to 3650 days, or left blank');
       }
       const sv = validateServiceIds(body.serviceIds);
       if (!sv.ok) return badRequest(res, sv.error);

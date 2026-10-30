@@ -341,6 +341,17 @@ function PackagesCard() {
                     Book sessions
                   </button>
                 )}
+                {/* Renewal nudge: on the last session (or two of a bigger
+                    pack) point at the booking page, where the business
+                    sells its packages. */}
+                {!isInactive && p.bookingSlug && !p.archived && p.creditsRemaining <= Math.max(1, Math.min(2, Math.floor(p.creditsTotal / 5))) && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                    Running low: {p.creditsRemaining === 1 ? 'this is your last session' : `only ${p.creditsRemaining} sessions left`}.{' '}
+                    <a href={`/book/${encodeURIComponent(p.bookingSlug)}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                      Buy another package
+                    </a>
+                  </div>
+                )}
               </div>
             );
           })}

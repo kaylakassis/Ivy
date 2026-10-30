@@ -3168,6 +3168,20 @@ ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_client_packages_stripe_session
   ON client_packages(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
 
+-- Refund sync for purchases that have no invoice row. A refund issued from
+-- the payment dashboard arrives as charge.refunded carrying the payment
+-- intent; these columns let the webhook find the purchase it paid for.
+--   client_packages.stripe_payment_intent: a full refund cancels the bundle
+--     (credits_remaining 0) so the client cannot keep booking on money that
+--     was returned. Owner-sold / legacy rows have NULL here.
+--   gift_cards.refunded_cents: cumulative cents refunded so far, so a
+--     repeated charge.refunded (Stripe retries, a second partial refund)
+--     only takes the NEW delta off the card's balance; a full refund voids it.
+ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
+CREATE INDEX IF NOT EXISTS idx_client_packages_payment_intent
+  ON client_packages(workspace_id, stripe_payment_intent) WHERE stripe_payment_intent IS NOT NULL;
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
+
 -- ─── pg_trgm GIN search indexes ──────────────────────────────────────
 -- /api/search runs LOWER(col) LIKE '%q%' against ~8 entity tables. At
 -- low scale these are sequential scans on a few thousand rows each —

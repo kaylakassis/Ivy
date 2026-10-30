@@ -32,6 +32,7 @@ export function serializeGiftCard(row) {
     codeLast4:           row.code_last4,
     originalAmountCents: Number(row.original_amount_cents || 0),
     balanceCents:        Number(row.balance_cents || 0),
+    refundedCents:       Number(row.refunded_cents || 0),
     senderName:          row.sender_name,
     senderEmail:         row.sender_email,
     recipientName:       row.recipient_name,

@@ -55,7 +55,7 @@ export default async function handler(req, res) {
       if ('sessionCount' in body) {
         const n = Number(body.sessionCount);
         if (!Number.isInteger(n) || n < 1 || n > 1000) {
-          return badRequest(res, 'sessionCount must be 1–1000');
+          return badRequest(res, 'Sessions must be a whole number from 1 to 1000');
         }
         push('session_count', n);
       }
@@ -72,7 +72,7 @@ export default async function handler(req, res) {
         else {
           const n = Number(v);
           if (!Number.isInteger(n) || n < 1 || n > 3650) {
-            return badRequest(res, 'expiryDays must be 1–3650');
+            return badRequest(res, 'Validity must be from 1 to 3650 days');
           }
           push('expiry_days', n);
         }

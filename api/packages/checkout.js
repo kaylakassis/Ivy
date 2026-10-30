@@ -64,9 +64,11 @@ export default async function handler(req, res) {
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }
     catch (e) {
-      return badRequest(res, e.code === 'no_stripe_connection'
-        ? 'Packages require Stripe. Ask the business to connect Stripe in Finance.'
-        : e.message);
+      // Public page: never name the payment provider or the owner's
+      // settings to a visitor.
+      return badRequest(res, e.code === 'no_stripe_connection' || e.code === 'platform_secret_missing'
+        ? "This business isn't set up to sell packages online yet. Contact them to buy one."
+        : 'Package checkout is unavailable right now. Please try again later.');
     }
 
     // Find-or-create a clients row + Stripe customer for the buyer
