@@ -20,6 +20,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
+import { FLAGS } from '../../lib/featureFlags.js';
 
 // Each step:
 //   selector?  - query string. If absent, step renders as a centered card.
@@ -98,7 +99,7 @@ const STEPS = [
   {
     id: 'marketing',
     title: 'Marketing - campaigns, workflows, rewards',
-    body: "Email campaigns, automated follow-ups, review requests, and a rewards program that brings repeat clients back. Referrals live on your Account page.",
+    body: "Email campaigns, automated follow-ups, review requests, and a rewards program that brings repeat clients back." + (FLAGS.referrals ? ' Referrals live on your Account page.' : ''),
     route: '/marketing?tab=rewards',
     selector: '[data-tour="nav-marketing"]',
     placement: 'right',

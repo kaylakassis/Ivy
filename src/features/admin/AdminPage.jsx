@@ -1895,7 +1895,7 @@ function ReferralsTab() {
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
       <DateRangeBar {...dr}/>
       <div style={{ fontSize: 12, color: 'var(--muted)' }}>
-        The self-serve program every owner can use — both sides get one free week
+        The self-serve program every owner can use: the owner whose code was used gets one free week
         when a referred owner subscribes. Distinct from the paid Affiliates program.
       </div>
       {err && <ErrCard msg={err}/>}

@@ -20,6 +20,7 @@ import { BlockedCard, ReportsCard, ownerModeration } from '../../components/Mode
 import { hideableNav } from '../../lib/nav.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { FLAGS } from '../../lib/featureFlags.js';
 import {
   pushSupported, permissionState, getSubscription,
   subscribePush, unsubscribePush,
@@ -117,8 +118,9 @@ export default function AccountPage() {
 
       <SubscriptionCard/>
 
-      {/* Referrals (was its own tab): refer a friend, get a free week. */}
-      {ctx?.isOwner && (
+      {/* Referrals (was its own tab): refer a friend, get a free week.
+          Tabled behind FLAGS.referrals. */}
+      {ctx?.isOwner && FLAGS.referrals && (
         <div id="referrals" style={{ scrollMarginTop: 80 }}>
           <div className="metric-label" style={{ marginBottom: 12 }}>Refer a friend</div>
           <Referrals embedded/>

@@ -19,6 +19,7 @@ import WorkflowSuggestionCard from './WorkflowSuggestionCard.jsx';
 import IvyNoticedCard from './IvyNoticedCard.jsx';
 import { FirstWinReadyCard, FirstWinMoment } from './FirstWinCards.jsx';
 import NotifyPrompt from '../../components/NotifyPrompt.jsx';
+import { FLAGS } from '../../lib/featureFlags.js';
 
 // Dashboard tiles per business type. 'both' is the default and shows
 // the original service-centric mix so existing workspaces look the
@@ -525,7 +526,7 @@ export default function Dashboard() {
         <SetupChecklist/>
         <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
-        <InviteFriendCard/>
+        {FLAGS.referrals && <InviteFriendCard/>}
         <div className="grid-auto stagger">
           {metricsFor(businessType).map((m, i) => (
             <MetricCard key={m.k} label={m.label} kind={m.kind} to={m.to} index={i}

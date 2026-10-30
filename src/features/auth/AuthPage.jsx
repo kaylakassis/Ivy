@@ -5,6 +5,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import AuthShell from './AuthShell.jsx';
+import { FLAGS } from '../../lib/featureFlags.js';
 
 export default function AuthPage({ mode = 'signin' }) {
   const { signIn, signUp, mfaChallenge } = useAuth();
@@ -192,7 +193,7 @@ export default function AuthPage({ mode = 'signin' }) {
               autoComplete="name" style={inputS} />
           </Field>
         )}
-        {isSignUp && role === 'owner' && !refCode && (
+        {isSignUp && role === 'owner' && !refCode && FLAGS.referrals && (
           <Field label="Referral code (optional)">
             <input value={refInput} onChange={(e) => setRefInput(e.target.value.toUpperCase())}
               placeholder="A friend's code, if you have one"
