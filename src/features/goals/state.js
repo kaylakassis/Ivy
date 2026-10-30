@@ -1,6 +1,7 @@
 // Tasks + Goals stores. Both fetched in parallel on mount.
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api.js';
+import { haptic } from '../../lib/celebrate.js';
 
 export function useGoals() {
   const [tasks, setTasks] = useState([]);
@@ -29,6 +30,7 @@ export function useGoals() {
   }, []);
   const updateTask = useCallback(async (id, patch) => {
     const r = await api.patch('/tasks/' + id, patch);
+    if (patch?.done === true) haptic();
     setTasks((xs) => xs.map((t) => t.id === id ? r.task : t));
     return r.task;
   }, []);

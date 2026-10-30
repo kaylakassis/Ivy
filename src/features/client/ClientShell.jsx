@@ -15,6 +15,9 @@ import { useAuth } from '../../lib/auth.jsx';
 import { useClientPortal, ClientPortalProvider } from './clientContext.jsx';
 import { ViewSwitch } from '../../components/ViewToggle.jsx';
 import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
+import { initNative } from '../../lib/native.js';
+import PullToRefresh from '../../components/PullToRefresh.jsx';
+import OfflineBanner from '../../components/OfflineBanner.jsx';
 
 // Sections mirror the business sidebar's RUN / MONEY / GROW grouping so
 // toggling between views feels like the same product, not two apps.
@@ -41,7 +44,8 @@ export default function ClientShell() {
 function ClientShellInner() {
   const [tweaks] = useTweaks();
   const viewport = useViewport();
-  const { data, loading } = useClientPortal();
+  const { data, loading, refresh } = useClientPortal();
+  useEffect(() => { initNative(); }, []);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const location = useLocation();
   // Keep the drawer mounted for its 140ms slide-out (.is-closing).
@@ -85,6 +89,8 @@ function ClientShellInner() {
               pages that fetch on mount never double-render. */}
           <div key={location.pathname} className="page-frame page-enter">
             <Outlet/>
+            <PullToRefresh onRefresh={refresh} fallbackReload/>
+            <OfflineBanner/>
           </div>
         </main>
       </div>

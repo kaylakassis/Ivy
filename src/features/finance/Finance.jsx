@@ -26,6 +26,7 @@ import Products from './Products.jsx';
 import PointOfSale from './PointOfSale.jsx';
 import FinanceServices from './Services.jsx';
 import FinancePackages from './Packages.jsx';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -41,7 +42,9 @@ export default function Finance() {
     invoices, summary, loading, error,
     create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim,
     hasMore, loadMore, loadingMore,
+    reload: reloadInvoices,
   } = useInvoices();
+  usePullRefresh(reloadInvoices);
 
   const [tab, setTab]               = useState('all');
   const [section, setSection]       = useState('invoices'); // 'invoices' | 'recurring' | 'expenses'

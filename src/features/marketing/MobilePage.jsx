@@ -74,14 +74,14 @@ export default function MobilePage() {
             margin: '0 0 16px', fontFamily: 'var(--font-display)',
             fontSize: 24, fontWeight: 500, letterSpacing: '-0.02em',
           }}>
-            Install on your phone in two taps
+            Get Ivy on your phone
           </h2>
           <div style={{
             display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 18,
           }}>
-            <Step n={1} title="Open joinivy.ai on your phone" body="Any modern browser - Safari, Chrome, Firefox, Edge." />
-            <Step n={2} title="Tap Share, then Add to Home Screen" body="iOS: the Share icon at the bottom. Android: the three-dot menu at the top." />
-            <Step n={3} title="Done" body='Ivy shows up as an app icon. Opens full-screen, no browser chrome - looks and feels like a native app.' />
+            <Step n={1} title="iPhone and iPad" body={<>Download Ivy from the <a href="https://apps.apple.com/us/app/ivy-for-solo-businesses/id6808542331" target="_blank" rel="noopener noreferrer" style={{ color: 'var(--accent)' }}>App Store</a>. Same account as the web, with Face ID and push notifications.</>} />
+            <Step n={2} title="Android" body="Open joinivy.ai in Chrome, tap the three-dot menu at the top, then Add to Home Screen." />
+            <Step n={3} title="Done" body="Ivy opens full-screen from its own icon, signed in to the same account everywhere." />
           </div>
         </section>
 

@@ -29,6 +29,8 @@ function isIosSafari() {
   return iOS && /WebKit/.test(ua) && !otherBrowser;
 }
 
+const SHOW_IOS_HOME_SCREEN_HINT = false;
+
 export default function PWAPrompts() {
   const [updateReg, setUpdateReg] = useState(null);
   const [showInstall, setShowInstall] = useState(false);
@@ -43,8 +45,10 @@ export default function PWAPrompts() {
     window.addEventListener('pwa:installed', onInstalled);
     // The prompt may have fired before this component mounted.
     if (canInstall() && !installSnoozed()) setShowInstall(true);
-    // iOS Safari: no install event ever fires, so offer the manual hint.
-    if (isIosSafari() && !isStandalone() && !snoozed(IOS_SNOOZE_KEY)) setShowIos(true);
+    // iOS: Ivy is on the App Store now, so the old "Share, then Add to Home
+    // Screen" hint is retired; client pages show the App Store prompt
+    // (GetAppBanner) instead. Kept behind a constant in case it is needed.
+    if (SHOW_IOS_HOME_SCREEN_HINT && isIosSafari() && !isStandalone() && !snoozed(IOS_SNOOZE_KEY)) setShowIos(true);
     return () => {
       window.removeEventListener('pwa:update-available', onUpdate);
       window.removeEventListener('pwa:install-available', onInstall);

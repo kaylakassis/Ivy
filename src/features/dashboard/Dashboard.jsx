@@ -20,6 +20,7 @@ import IvyNoticedCard from './IvyNoticedCard.jsx';
 import { FirstWinReadyCard, FirstWinMoment } from './FirstWinCards.jsx';
 import NotifyPrompt from '../../components/NotifyPrompt.jsx';
 import { FLAGS } from '../../lib/featureFlags.js';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
 
 // Dashboard tiles per business type. 'both' is the default and shows
 // the original service-centric mix so existing workspaces look the
@@ -436,6 +437,7 @@ export default function Dashboard() {
     finally { setLoading(false); }
   }, []);
   useEffect(() => { loadDashboard(); }, [loadDashboard]);
+  usePullRefresh(loadDashboard);
   // /dashboard#goals (the old Goals & Tasks tab) scrolls to the section
   // once the page has rendered.
   useEffect(() => {

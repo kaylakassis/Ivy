@@ -16,6 +16,7 @@ import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { AudioPlayer, RecordingBar, uploadVoiceMemo } from '../../components/AudioMessage.jsx';
 import GroupChats from './GroupChats.jsx';
 import { MoreMenu, ReportModal, BlockedNotice, ownerModeration } from '../../components/Moderation.jsx';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
 
 export default function Messages() {
   // ?group=<id> (group-chat push notifications, api/_lib/groupChat.js)
@@ -51,7 +52,8 @@ function TabButton({ active, onClick, children }) {
 }
 
 function DirectMessages() {
-  const { threads, loading, error, startThread, updateThread, setMode } = useThreads();
+  const { threads, loading, error, startThread, updateThread, setMode, refresh: refreshThreads } = useThreads();
+  usePullRefresh(refreshThreads);
   const [selectedId, setSelectedId] = useState(null);
   const [newOpen, setNewOpen] = useState(false);
   const { isMobile } = useViewport();

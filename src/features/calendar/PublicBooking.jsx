@@ -331,7 +331,7 @@ export default function PublicBooking({ embedded = false }) {
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
       setConfirmedCalendar(r.booking?.calendar || null);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
-      haptic(); // a little "done!" tap on the client's phone
+      haptic('success'); // a little "done!" tap on the client's phone
     } catch (e) {
       // The business was archived between page load and submit.
       if (isArchivedError(e)) { setArchived({ businessName: cal?.settings?.bizName }); return; }

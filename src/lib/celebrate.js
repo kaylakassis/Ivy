@@ -10,17 +10,29 @@ const COLORS = ['#7c5cff', '#22c55e', '#f59e0b', '#ec4899', '#38bdf8', '#facc15'
 
 let lastFire = 0;
 
-// A short haptic tap for confirm/paid/charge moments. Uses the Vibration API
-// (Android/Chrome; iOS Safari ignores it, which is a silent no-op — the app is
-// a PWA, there's no native Capacitor layer). Honors reduced-motion. `pattern`
-// is ms or an array of on/off ms (default a single light 15ms tap).
-export function haptic(pattern = 15) {
+// Haptic feedback for confirm / sent / paid moments.
+//   haptic()          light tap (default)
+//   haptic('medium')  firmer tap
+//   haptic('success') Apple's success pattern (paid, booked)
+//   haptic('warning') Apple's warning pattern
+// iPhone app: the native Taptic Engine (@capacitor/haptics). Elsewhere:
+// the Vibration API where it exists (Android browsers; iOS Safari ignores
+// it). Never throws.
+export function haptic(kind = 'light') {
+  if (typeof window === 'undefined') return;
+  if (window.Capacitor?.isNativePlatform?.()) {
+    import('@capacitor/haptics').then(({ Haptics, ImpactStyle, NotificationType }) => {
+      if (kind === 'success') return Haptics.notification({ type: NotificationType.Success });
+      if (kind === 'warning') return Haptics.notification({ type: NotificationType.Warning });
+      return Haptics.impact({ style: kind === 'medium' ? ImpactStyle.Medium : ImpactStyle.Light });
+    }).catch(() => {});
+    return;
+  }
   if (typeof navigator === 'undefined' || typeof navigator.vibrate !== 'function') return;
   try {
-    if (typeof window !== 'undefined' && window.matchMedia
-        && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    navigator.vibrate(pattern);
-  } catch { /* unsupported — ignore */ }
+    if (window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    navigator.vibrate(kind === 'success' ? [12, 60, 18] : typeof kind === 'number' ? kind : 15);
+  } catch { /* unsupported - ignore */ }
 }
 
 export function fireConfetti(opts = {}) {

@@ -2,6 +2,7 @@
 // GET on mount; mutations call dedicated endpoints and refresh local state.
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api.js';
+import { haptic } from '../../lib/celebrate.js';
 
 export const EMPTY_CAL = {
   settings: {
@@ -131,6 +132,7 @@ export function useCalendar(window) {
 
   const createBooking = useCallback(async (input) => {
     const r = await api.post('/calendar/bookings', input);
+    haptic('success');
     setCal((c) => ({ ...c, bookings: [...c.bookings, r.booking] }));
     return r.booking;
   }, []);

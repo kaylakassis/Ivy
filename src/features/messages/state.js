@@ -12,6 +12,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
+import { haptic } from '../../lib/celebrate.js';
 
 export function useThreads() {
   const [threads, setThreads] = useState([]);
@@ -136,6 +137,7 @@ export function useThread(threadId) {
     const atts = Array.isArray(attachments) ? attachments : [];
     if (!trimmed && atts.length === 0) return null;
     const r = await api.post('/messages/' + threadId, { text: trimmed, attachments: atts, channel });
+    haptic();
     setMessages((m) => [...m, r.message]);
     setThread((t) => t ? {
       ...t,

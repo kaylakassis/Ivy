@@ -37,6 +37,9 @@ import { useAuth } from '../../lib/auth.jsx';
 import { isNative } from '../../lib/platform.js';
 import PageTransition from '../motion/PageTransition.jsx';
 import { useExitAnimation } from '../motion/useExitAnimation.js';
+import { initNative } from '../../lib/native.js';
+import PullToRefresh from '../PullToRefresh.jsx';
+import OfflineBanner from '../OfflineBanner.jsx';
 
 export default function AppShell() {
   return (
@@ -138,6 +141,7 @@ function AppShellInner() {
   // the user already granted notifications (Apple rotates tokens; the
   // server upserts). No-op on web, never prompts.
   useEffect(() => { Promise.resolve().then(() => initNativePushOnLaunch()).catch(() => {}); }, []);
+  useEffect(() => { initNative(); }, []);
 
   // iOS in-app purchases: bind the RevenueCat customer to this workspace as
   // soon as we know it. The billing webhook matches on app_user_id, so an
@@ -252,6 +256,8 @@ function AppShellInner() {
       )}
 
       {needsPaywall && <Paywall ctx={ctx} onRefresh={refresh}/>}
+      {!needsPaywall && <PullToRefresh onRefresh={refresh}/>}
+      <OfflineBanner/>
 
       {/* Super-admin preview escape: the wall is unskippable by design, so
           when it's been FORCED on for preview we surface a clear way back

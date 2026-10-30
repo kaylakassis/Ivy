@@ -7,7 +7,7 @@ import { useEscapeKey } from '../../lib/useEscapeKey.js';
 import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { useSuccessFlash } from '../../components/motion/useSuccessFlash.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
-import { fireConfetti, haptic } from '../../lib/celebrate.js';
+import { fireConfetti } from '../../lib/celebrate.js';
 
 // Labels for paid_method / payment_claimed_method values. Mirrors
 // PAID_METHOD_LABELS in api/_lib/finance.js.
@@ -138,7 +138,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
                     style={{ fontSize: 12, padding: '6px 12px' }}
                     onClick={async () => {
                       setClaimBusy('confirm'); setErr(null);
-                      try { await onMarkPaid(claim.method); fireConfetti(); haptic(); }
+                      try { await onMarkPaid(claim.method); fireConfetti(); }
                       catch (e) { setErr(e.message || 'Could not confirm'); }
                       finally { setClaimBusy(null); }
                     }}>
@@ -385,7 +385,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
               <button className="btn btn-primary" disabled={busy}
                 onClick={async () => {
                   setBusy(true); setErr(null);
-                  try { await onMarkPaid(paidMethod); fireConfetti(); haptic(); setConfirm(null); }
+                  try { await onMarkPaid(paidMethod); fireConfetti(); setConfirm(null); }
                   catch (e) { setErr(e.message || 'Mark-paid failed'); }
                   finally { setBusy(false); }
                 }}>

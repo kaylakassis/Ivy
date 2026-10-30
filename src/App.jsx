@@ -24,6 +24,7 @@ import { ClientPortalProvider } from './features/client/clientContext.jsx';
 import { ErrorBoundary } from './lib/monitoring.js';
 import { tryStaleChunkRecovery } from './lib/staleChunk.js';
 import { isPlatformHost } from './lib/publicUrl.js';
+import GetAppBanner from './components/GetAppBanner.jsx';
 
 // ── Lazy: business app pages ──
 const Dashboard   = lazy(() => import('./features/dashboard/Dashboard.jsx'));
@@ -260,6 +261,7 @@ export default function App() {
 
   return (
     <>
+    <GetAppBanner/>
     <Suspense fallback={<RouteFallback/>}>
       <ErrorBoundary fallback={({ resetError, error }) => <RouteCrash resetError={resetError} error={error}/>}>
       <Routes>

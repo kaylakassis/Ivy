@@ -1,6 +1,7 @@
 // API-backed finance store: invoices + dashboard summary.
 import { useEffect, useState, useCallback } from 'react';
 import { api } from '../../lib/api.js';
+import { haptic } from '../../lib/celebrate.js';
 
 export function useInvoices() {
   const [invoices, setInvoices] = useState([]);
@@ -19,21 +20,29 @@ export function useInvoices() {
     } catch { /* non-fatal */ }
   }, []);
 
-  useEffect(() => {
-    let live = true;
-    Promise.all([
+  const load = useCallback(async (isLive = () => true) => {
+    await Promise.all([
       api.get('/invoices').then((r) => {
-        if (!live) return;
+        if (!isLive()) return;
         setInvoices(r.invoices || []);
         setHasMore(!!r.hasMore);
         setNextOffset(r.nextOffset ?? null);
+        setError(null);
       }),
-      api.get('/finance').then((r) => live && setSummary(r.summary)),
+      api.get('/finance').then((r) => isLive() && setSummary(r.summary)),
     ])
-      .catch((e) => live && setError(e))
-      .finally(() => live && setLoading(false));
-    return () => { live = false; };
+      .catch((e) => isLive() && setError(e))
+      .finally(() => isLive() && setLoading(false));
   }, []);
+
+  useEffect(() => {
+    let live = true;
+    load(() => live);
+    return () => { live = false; };
+  }, [load]);
+
+  // Pull to refresh / back online: reload invoices and the summary.
+  const reload = useCallback(() => load(), [load]);
 
   const loadMore = useCallback(async () => {
     if (!hasMore || nextOffset == null || loadingMore) return;
@@ -89,6 +98,7 @@ export function useInvoices() {
 
   const markPaid = useCallback(async (id, method) => {
     const r = await api.post('/invoices/mark-paid', { id, method });
+    haptic('success');
     setInvoices((xs) => xs.map((i) => i.id === id ? r.invoice : i));
     await refreshSummary();
     return r.invoice;
@@ -119,6 +129,6 @@ export function useInvoices() {
   return {
     invoices, summary, loading, error,
     create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim,
-    hasMore, loadMore, loadingMore,
+    hasMore, loadMore, loadingMore, reload,
   };
 }

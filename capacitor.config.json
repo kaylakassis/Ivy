@@ -13,6 +13,10 @@
         "sound",
         "alert"
       ]
+    },
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
     }
   },
   "server": {

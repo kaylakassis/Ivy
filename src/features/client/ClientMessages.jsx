@@ -22,6 +22,7 @@ import {
 } from '../../components/AudioMessage.jsx';
 import { MoreMenu, ReportModal, BlockedNotice, clientModeration } from '../../components/Moderation.jsx';
 import { ArchivedNotice, ArchivedBadge } from '../../components/ArchivedBusiness.jsx';
+import { haptic } from '../../lib/celebrate.js';
 
 export default function ClientMessagesPage() {
   // Deep links pick the right tab: accepting a group invite lands on
@@ -410,6 +411,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
     setSending(true);
     try {
       const r = await api.post('/me/threads/' + threadId, { text });
+      haptic();
       setMessages((m) => [...m, r.message]);
       setInput('');
       onUpdated?.();
