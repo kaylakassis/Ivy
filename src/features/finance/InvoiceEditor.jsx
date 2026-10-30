@@ -8,6 +8,7 @@ import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
 import { useSuccessFlash } from '../../components/motion/useSuccessFlash.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
 import { fireConfetti } from '../../lib/celebrate.js';
+import InvoicePreviewModal from './InvoicePreviewModal.jsx';
 
 // Labels for paid_method / payment_claimed_method values. Mirrors
 // PAID_METHOD_LABELS in api/_lib/finance.js.
@@ -23,6 +24,7 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
   // "Save draft" pulses green once when the save lands.
   const [saveFlash, flashSaved] = useSuccessFlash();
   const [collectOpen, setCollectOpen] = useState(false);
+  const [previewOpen, setPreviewOpen] = useState(false);
   // "Client says they paid" - set from the public invoice page for Zelle /
   // Venmo / Cash App / cash / check. Owner confirms or clears it here.
   const claim = invoice.paymentClaimedAt && (invoice.status === 'sent' || invoice.status === 'overdue')
@@ -452,6 +454,13 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
               )}
               <div style={{ flex: 1 }}/>
               {err && <span style={{ fontSize: 11.5, color: 'var(--danger)' }}>{err}</span>}
+              {/* Preview: the invoice and the email exactly as the client
+                  gets them. Saves the draft first so the server renders
+                  the current line items. */}
+              <button className="btn btn-outline" disabled={busy}
+                onClick={async () => { if (!isLocked) await save(); setPreviewOpen(true); }}>
+                <Icons.Eye size={13}/> Preview
+              </button>
               {!isLocked && (
                 <>
                   <button className={`btn btn-outline ${saveFlash}`} onClick={save} disabled={busy}>
@@ -495,6 +504,19 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
         <CollectInPersonModal
           invoice={invoice}
           onClose={() => setCollectOpen(false)}
+        />
+      )}
+      {previewOpen && (
+        <InvoicePreviewModal
+          invoiceId={invoice.id}
+          draft={{ items, taxRate: Number(taxRate), discount: Number(discount), issueDate, dueDate: dueDate || null, notes }}
+          onClose={() => setPreviewOpen(false)}
+          sendLabel={invoice.status === 'sent' || invoice.status === 'overdue' ? 'Resend' : 'Send invoice'}
+          onSend={isLocked ? null : async () => {
+            setPreviewOpen(false);
+            const alreadySent = invoice.status === 'sent' || invoice.status === 'overdue';
+            if (alreadySent && onResend) await onResend(); else onSend();
+          }}
         />
       )}
     </div>

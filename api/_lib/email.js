@@ -265,8 +265,10 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
   const businessName = (branding?.businessName || '').trim();
   const logoUrl = sanitizeUrl(branding?.logoUrl);
   const sig = (branding?.emailSignature || '').trim();
-  const fontDisplay = `'Neue Haas Grotesk Display','Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
-  const fontSans    = `'Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
+  // Brand font: the mail-safe stack for the owner's chosen invoice font.
+  const brandStack = typeof branding?.fontStack === 'string' && /^[\w\s,'"-]+$/.test(branding.fontStack) ? branding.fontStack : null;
+  const fontDisplay = brandStack || `'Neue Haas Grotesk Display','Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
+  const fontSans    = brandStack || `'Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
 
   // Letterhead: logo > business name > Ivy wordmark. The "Business
   // OS" tag is dropped when a workspace is branded so the recipient

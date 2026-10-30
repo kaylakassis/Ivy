@@ -11,6 +11,7 @@ import Loader from '../../components/motion/Loader.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { fmtMoney as fmtMoneyShared } from '../../lib/money.js';
+import InvoiceDocument, { printInvoice } from './InvoiceDocument.jsx';
 
 const MANUAL_LABELS = { zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', cash: 'Cash', check: 'Check', other: 'Other' };
 const manualLabel = (t) => MANUAL_LABELS[t] || 'Other';
@@ -282,121 +283,18 @@ export default function PublicInvoice() {
 
   return (
     <PageWrap tweaks={tweaks}>
-      {/* Header */}
-      <div style={{ display: 'flex', alignItems: 'flex-end', gap: 14, marginBottom: 24 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12, background: 'var(--accent)', color: 'var(--accent-ink)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-        }}><Icons.Dollar size={20}/></div>
-        <div style={{ flex: 1 }}>
-          <div className="metric-label">Invoice</div>
-          <h1 className="page-title" style={{ margin: 0, fontSize: 26 }}>{inv.number}</h1>
+      {/* The invoice itself: same renderer as the owner's preview and the
+          PDF, in the business's own design. */}
+      <div className="print-hide" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: 14 }}>
+        <div>
+          <div className="metric-label">Invoice from</div>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>{inv.business?.name || 'An Ivy business'}</div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-          <div className="metric-label" style={{ fontSize: 10 }}>From</div>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{inv.business?.name || 'An Ivy business'}</div>
-        </div>
-        {/* Print / Save-as-PDF: triggers the browser's native print
-            dialog. On every modern browser "Save as PDF" is a
-            destination in that dialog - no client-side PDF library
-            needed. Hidden from the printed output itself via the
-            print-hide CSS class so the button doesn't appear on the
-            generated PDF. */}
-        <button
-          type="button"
-          onClick={() => window.print()}
-          className="btn btn-outline print-hide"
-          title="Print or save as PDF"
-          style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}>
+        <button type="button" onClick={printInvoice} className="btn btn-outline" title="Print or save as PDF" style={{ padding: '6px 12px', fontSize: 12, gap: 6 }}>
           <Icons.Doc size={12}/> Print / PDF
         </button>
       </div>
-
-      {/* Card */}
-      <div className="card" style={{ padding: 36 }}>
-        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
-          <div>
-            <div className="metric-label">Bill to</div>
-            <div style={{ fontSize: 16, fontWeight: 600, marginTop: 4 }}>{inv.clientName}</div>
-            {inv.clientEmail && <div style={{ fontSize: 12, color: 'var(--muted)' }}>{inv.clientEmail}</div>}
-          </div>
-          <div style={{ textAlign: 'right' }}>
-            <div className="metric-label">Issued</div>
-            <div style={{ fontSize: 14, fontWeight: 500, marginTop: 4 }}>
-              {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString([], { dateStyle: 'medium' }) : '-'}
-            </div>
-            {inv.dueDate && (
-              <>
-                <div className="metric-label" style={{ marginTop: 8 }}>Due</div>
-                <div style={{ fontSize: 14, fontWeight: 500, marginTop: 4 }}>
-                  {new Date(inv.dueDate).toLocaleDateString([], { dateStyle: 'medium' })}
-                </div>
-              </>
-            )}
-          </div>
-        </div>
-
-        {/* Line items */}
-        <div className="table-scroll" style={{
-          borderRadius: 12, overflow: 'hidden',
-          border: '1px solid var(--border)',
-        }}>
-          <div style={{
-            display: 'grid', gridTemplateColumns: '1fr 80px 110px 110px',
-            padding: '10px 16px', fontSize: 10.5, fontWeight: 600,
-            background: 'var(--surface-2)', borderBottom: '1px solid var(--border)',
-            color: 'var(--muted)', textTransform: 'uppercase', letterSpacing: '0.06em',
-            minWidth: 520,
-          }}>
-            <div>Description</div>
-            <div style={{ textAlign: 'right' }}>Qty</div>
-            <div style={{ textAlign: 'right' }}>Rate</div>
-            <div style={{ textAlign: 'right' }}>Amount</div>
-          </div>
-          {(inv.items || []).map((it, i) => (
-            <div key={it.id || i} style={{
-              display: 'grid', gridTemplateColumns: '1fr 80px 110px 110px',
-              padding: '12px 16px',
-              borderTop: i === 0 ? 'none' : '1px solid var(--border)',
-              minWidth: 520,
-              alignItems: 'center', fontSize: 13,
-            }}>
-              <div>{it.description || '-'}</div>
-              <div style={{ textAlign: 'right' }}>{it.quantity}</div>
-              <div className="mono-num" style={{ textAlign: 'right' }}>{fmtMoney(it.rate)}</div>
-              <div className="mono-num" style={{ textAlign: 'right', fontWeight: 600 }}>
-                {fmtMoney(Number(it.quantity || 0) * Number(it.rate || 0))}
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Totals */}
-        <div style={{ marginTop: 18, display: 'flex', justifyContent: 'flex-end' }}>
-          <div style={{ minWidth: 240, display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <Row label="Subtotal" value={fmtMoney(inv.subtotal)}/>
-            {inv.discount > 0 && <Row label="Discount" value={'– ' + fmtMoney(inv.discount)}/>}
-            {inv.taxRate > 0 && <Row label={`Tax (${inv.taxRate}%)`} value={fmtMoney(inv.tax)}/>}
-            <div style={{ height: 1, background: 'var(--border)', margin: '4px 0' }}/>
-            <Row label="Total" value={fmtMoney(inv.total)} bold/>
-            {Number(inv.paidAmount) > 0 && inv.status !== 'paid' && inv.status !== 'refunded' && (
-              <>
-                <Row label="Already paid" value={'-' + fmtMoney(inv.paidAmount)}/>
-                <Row label="Remaining" value={fmtMoney(Math.max(0, inv.total - inv.paidAmount))} bold/>
-              </>
-            )}
-          </div>
-        </div>
-
-        {inv.notes && (
-          <div style={{ marginTop: 28, paddingTop: 24, borderTop: '1px solid var(--border)' }}>
-            <div className="metric-label" style={{ marginBottom: 8 }}>Notes</div>
-            <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55, whiteSpace: 'pre-wrap' }}>
-              {inv.notes}
-            </div>
-          </div>
-        )}
-      </div>
+      <InvoiceDocument invoice={inv} business={inv.business}/>
 
       {/* Pay action */}
       <div className="card" style={{ padding: 24, marginTop: 16, textAlign: 'center' }}>

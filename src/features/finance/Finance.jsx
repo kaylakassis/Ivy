@@ -16,6 +16,7 @@ import { stagger } from '../../components/motion/stagger.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
 import ManualMethodsCard from './ManualMethodsCard.jsx';
+import InvoiceDesignCard from './InvoiceDesignCard.jsx';
 import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
@@ -329,6 +330,7 @@ function InvoicesSection({
     <>
       <PaymentProviderCard/>
       <ManualMethodsCard/>
+      <InvoiceDesignCard/>
 
       {/* Summary cards: rise in with a 25ms stagger; numbers count up once. */}
       <div className="grid-auto stagger">

@@ -1430,11 +1430,13 @@ function BrandingCard() {
 
   return (
     <div className="card" style={{ padding: 22 }}>
-      <div className="metric-label" style={{ marginBottom: 8 }}>Email branding</div>
-      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Make every email feel like yours</h3>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Brand</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Make every email and invoice feel like yours</h3>
       <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
         Your logo and brand color appear on every invoice, document, and
         booking email your clients receive. Replies route to your inbox.
+        Fonts and layouts for invoices live in{' '}
+        <a href="/finance?design=1" style={{ color: 'var(--accent)' }}>Finance → Invoice design</a>.
       </p>
 
       {/* Logo */}

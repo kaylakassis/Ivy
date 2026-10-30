@@ -1180,6 +1180,13 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_url TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_blob_pathname TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_accent_color TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_email_signature TEXT;
+-- Invoice design (src/lib/invoiceDesign.js): font key, layout key, the
+-- footer line printed under every invoice, and the business's own contact
+-- lines (address, phone, email) shown in the From block.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_font TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS invoice_layout TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS invoice_footer TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS biz_contact TEXT;
 
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional - null means "uncategorized" and the biz

@@ -7,6 +7,7 @@
 //
 // Token is sha256-hashed before lookup.
 import { sql } from '../_lib/db.js';
+import { invoiceBusinessMeta } from '../_lib/branding.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { serializeInvoicePublic, fetchEnabledManualMethods, fetchFinanceSettings } from '../_lib/finance.js';
@@ -33,12 +34,10 @@ async function fetchByToken(rawToken) {
   return rows[0] || null;
 }
 
-async function loadBusinessMeta(workspaceId) {
-  const { rows } = await sql`
-    SELECT biz_name, slug FROM calendar_settings WHERE workspace_id = ${workspaceId}
-  `;
-  return rows[0] ? { name: rows[0].biz_name, slug: rows[0].slug } : null;
-}
+// Name, logo and the owner's invoice design (font, layout, color, footer,
+// contact lines) so the client sees the invoice exactly as the owner
+// previewed it. api/_lib/branding.js owns the shape.
+const loadBusinessMeta = (workspaceId) => invoiceBusinessMeta(workspaceId);
 
 // Returns true when this workspace has Stripe wired up enough to accept a
 // card payment from a public invoice viewer (secret + webhook secret both

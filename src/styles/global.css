@@ -1110,3 +1110,11 @@ html body.ivy-fill.keyboard-open.has-mobile-nav .app-root > .app-frame { padding
   background: transparent; color: var(--muted, #93a3a0);
   display: flex; align-items: center; justify-content: center; cursor: pointer;
 }
+
+/* ── Invoice document: print only the paper ── */
+@media print {
+  body.print-invoice-only > * { display: none !important; }
+  body.print-invoice-only { background: #fff !important; }
+  body.print-invoice-only .invoice-print-host { display: block !important; position: static; }
+  body.print-invoice-only .invoice-doc { box-shadow: none !important; border-radius: 0 !important; }
+}
