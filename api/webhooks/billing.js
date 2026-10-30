@@ -281,6 +281,11 @@ async function onInvoiceEvent(invoice, type, secretKey) {
   if (!subId) return;
   const sub = await fetchSubscription({ secretKey, subscriptionId: subId });
   const status = type === 'invoice.payment_failed' ? 'past_due' : mapStripeStatus(sub.status);
+  // Stripe marks the $0 invoice that starts a free trial as "paid" and
+  // sends invoice.payment_succeeded for it. Only money actually collected
+  // counts as a first payment: it stamps converted_at, converts a referral
+  // (rewarding the referrer) and attributes affiliate revenue.
+  const realPayment = Number(invoice.amount_paid || 0) > 0;
   const periodEnd = sub.current_period_end
     ? new Date(sub.current_period_end * 1000)
     : null;
@@ -315,7 +320,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
         subscription_failed_attempts = 0,
         subscription_suspended_at   = NULL,
         subscription_last_dunning_at = NULL,
-        converted_at                = COALESCE(converted_at, NOW())
+        converted_at                = CASE WHEN ${realPayment} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
       WHERE stripe_subscription_id = ${sub.id}
         AND COALESCE(subscription_source, 'stripe') <> 'apple'
       RETURNING id
@@ -331,7 +336,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
     `;
   }
 
-  if (type === 'invoice.payment_succeeded' && r.rows[0]?.id) {
+  if (type === 'invoice.payment_succeeded' && realPayment && r.rows[0]?.id) {
     await attributePayment({
       workspaceId: r.rows[0].id,
       valueCents: monthlyValueCents(sub),
