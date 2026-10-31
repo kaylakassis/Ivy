@@ -9,6 +9,7 @@ import { sql } from '../_lib/db.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
 import { recordAudit } from '../_lib/audit.js';
+import { csvCell } from '../_lib/csv.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { sheetConfigured } from '../_lib/waitlistSheet.js';
 
@@ -117,9 +118,4 @@ async function writeCsv(res, { q, statusFilter }) {
 }
 
 function iso(v) { return v ? new Date(v).toISOString() : ''; }
-function csvCell(v) {
-  if (v == null) return '';
-  const s = String(v);
-  if (/[,"\n\r]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-  return s;
-}
+

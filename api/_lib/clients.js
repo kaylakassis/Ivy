@@ -31,6 +31,25 @@ export function serializeClient(row) {
   };
 }
 
+// What a helper WITHOUT the clients permission gets: enough to pick a
+// client for a booking and greet them, nothing else (no notes, no
+// lifetime value, no address, no files, no consent/referral state).
+export function serializeClientMinimal(row) {
+  if (!row) return null;
+  return {
+    id:    row.id,
+    name:  row.name,
+    email: row.email,
+    phone: row.phone || null,
+  };
+}
+
+// True when the request runs in helper mode without the clients
+// permission - the client book must then be served minimal.
+export function helperSeesMinimalClients(req) {
+  return !!req?.helper && req.helper.permissions?.clients !== true;
+}
+
 // Fetch a single client and verify it belongs to the given workspace.
 // Returns the row or null.
 export async function fetchOwnedClient({ id, workspaceId }) {

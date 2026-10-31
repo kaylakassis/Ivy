@@ -9,7 +9,9 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { fetchOwnedClient, serializeClient, VALID_STAGES } from '../_lib/clients.js';
+import { fetchOwnedClient, serializeClient, serializeClientMinimal, helperSeesMinimalClients, VALID_STAGES } from '../_lib/clients.js';
+import { helperClientScope } from '../_lib/helpers.js';
+import { blobPathnameForWorkspace } from '../_lib/blobScope.js';
 import { normalizePhone } from '../_lib/sms.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
@@ -28,6 +30,13 @@ export default async function handler(req, res) {
     if (!existing) return notFound(res, 'Client not found');
 
     if (req.method === 'GET') {
+      // Helper without the clients permission: minimal projection, and
+      // only clients they are booked with unless they hold schedule.
+      if (helperSeesMinimalClients(req)) {
+        const scope = await helperClientScope(req.helper);
+        if (scope !== null && !scope.includes(existing.id)) return notFound(res, 'Client not found');
+        return ok(res, { client: serializeClientMinimal(existing) });
+      }
       return ok(res, { client: serializeClient(existing) });
     }
 
@@ -106,12 +115,18 @@ export default async function handler(req, res) {
         // Sanitize each entry - only the URL/type/name/uploadedAt
         // shape we control. Strip anything else clients send so a
         // client-side bug can't poison the row with arbitrary JSON.
-        const cleaned = body.attachments.map((a) => ({
-          url:        String(a?.url || '').slice(0, 1000),
-          type:       String(a?.type || '').slice(0, 80),
-          name:       a?.name ? String(a.name).slice(0, 200) : null,
-          uploadedAt: a?.uploadedAt ? String(a.uploadedAt).slice(0, 40) : new Date().toISOString(),
-        })).filter((a) => a.url && a.type && /^https:\/\//i.test(a.url));
+        // blobPathname is derived server-side from the URL and only
+        // kept when the object sits under this workspace's prefix.
+        const cleaned = body.attachments.map((a) => {
+          const url = String(a?.url || '').slice(0, 1000);
+          return {
+            url,
+            blobPathname: blobPathnameForWorkspace(url, workspaceId),
+            type:       String(a?.type || '').slice(0, 80),
+            name:       a?.name ? String(a.name).slice(0, 200) : null,
+            uploadedAt: a?.uploadedAt ? String(a.uploadedAt).slice(0, 40) : new Date().toISOString(),
+          };
+        }).filter((a) => a.url && a.type && /^https:\/\//i.test(a.url));
         // Cast inline because the dynamic query builder produces a
         // bare $N placeholder; without the cast PG won't assign TEXT
         // to a JSONB column.
@@ -129,15 +144,24 @@ export default async function handler(req, res) {
         // we only persist the keys we render. Caption is optional;
         // takenAt is when the photo was actually taken (per the
         // owner's annotation); uploadedAt is the upload time we set
-        // server-side if missing.
-        const cleanedGallery = body.galleryPhotos.map((p) => ({
-          id:           p?.id ? String(p.id).slice(0, 64) : crypto.randomUUID(),
-          url:          String(p?.url || '').slice(0, 1000),
-          blobPathname: p?.blobPathname ? String(p.blobPathname).slice(0, 400) : null,
-          caption:      p?.caption ? String(p.caption).slice(0, 280) : null,
-          takenAt:      p?.takenAt ? String(p.takenAt).slice(0, 40) : null,
-          uploadedAt:   p?.uploadedAt ? String(p.uploadedAt).slice(0, 40) : new Date().toISOString(),
-        })).filter((p) => p.url);
+        // server-side if missing. The client-supplied blobPathname is
+        // IGNORED: a photo already on the row keeps the pathname we
+        // stored for it, a new one gets the pathname derived from its
+        // URL when that URL sits under this workspace's blob prefix,
+        // anything else is null (never deleted by us, left alone).
+        const storedGallery = Array.isArray(existing.gallery_photos) ? existing.gallery_photos : [];
+        const storedPathByUrl = new Map(storedGallery.filter((p) => p?.url).map((p) => [p.url, p.blobPathname || null]));
+        const cleanedGallery = body.galleryPhotos.map((p) => {
+          const url = String(p?.url || '').slice(0, 1000);
+          return {
+            id:           p?.id ? String(p.id).slice(0, 64) : crypto.randomUUID(),
+            url,
+            blobPathname: storedPathByUrl.has(url) ? storedPathByUrl.get(url) : blobPathnameForWorkspace(url, workspaceId),
+            caption:      p?.caption ? String(p.caption).slice(0, 280) : null,
+            takenAt:      p?.takenAt ? String(p.takenAt).slice(0, 40) : null,
+            uploadedAt:   p?.uploadedAt ? String(p.uploadedAt).slice(0, 40) : new Date().toISOString(),
+          };
+        }).filter((p) => p.url);
         values.push(JSON.stringify(cleanedGallery));
         sets.push(`gallery_photos = $${values.length}::jsonb`);
       }

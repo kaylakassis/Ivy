@@ -44,6 +44,14 @@ export default async function handler(req, res) {
                WHERE workspace_id = ${workspaceId} AND active = TRUE
                ORDER BY created_at DESC
             `;
+        // Helper mode (schedule permission): just enough to assign a
+        // booking to a colleague. No pay, no contact details, no login
+        // or seat state - that is the owner's business.
+        if (req.helper) {
+          return ok(res, {
+            staff: rows.map((r) => ({ id: r.id, name: r.name, color: r.color || null, active: !!r.active })),
+          });
+        }
         const [pending, seats] = await Promise.all([
           pendingInvitesByStaff(workspaceId),
           helperSeatUsage(workspaceId).catch(() => ({ attached: 0, pending: 0, used: 0, seats: HELPER_SEATS })),

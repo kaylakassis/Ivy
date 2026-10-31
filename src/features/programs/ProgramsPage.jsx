@@ -7,7 +7,6 @@ import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
-import { useUserContext } from '../../lib/userContext.jsx';
 import { ContentList, Community, fmtPrice, billingLabel } from './ProgramContent.jsx';
 
 const UNLOCK_KEY = 'ivy_programs_unlocked';
@@ -163,11 +162,10 @@ function ItemForm({ programId, item, onClose, onSaved }) {
   const [type, setType] = useState(item?.type || 'post');
   const [f, setF] = useState({ title: item?.title || '', body: item?.body || '', youtube: item?.youtubeId ? `https://youtu.be/${item.youtubeId}` : '', fileUrl: item?.fileUrl || null, fileName: item?.fileName || null });
   const [busy, setBusy] = useState(false); const [uploading, setUploading] = useState(false); const [err, setErr] = useState(null);
-  const { ctx } = useUserContext();
   const pick = async (file) => {
     if (!file) return; setUploading(true); setErr(null);
     try {
-      const blob = await upload(`programs/${ctx?.owns?.id || 'ws'}/${Date.now()}-${file.name}`, file, { access: 'public', handleUploadUrl: '/api/programs/upload-token' });
+      const blob = await upload(`programs/${Date.now()}-${file.name}`, file, { access: 'public', handleUploadUrl: '/api/programs/upload-token' });
       setF({ ...f, fileUrl: blob.url, fileName: file.name, title: f.title || file.name.replace(/\.pdf$/i, '') });
     } catch (ex) { setErr(ex.message || 'Upload failed'); } finally { setUploading(false); }
   };

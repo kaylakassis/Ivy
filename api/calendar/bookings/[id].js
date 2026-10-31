@@ -24,6 +24,8 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res, { helper: 'schedule' });
     if (!workspaceId) return;
+    // Helper mode: the booking without its money fields.
+    const bopts = { redactMoney: !!req.helper };
     const { id } = req.query;
 
     const found = await sql`
@@ -188,7 +190,7 @@ export default async function handler(req, res) {
           oldEndMin:   booking.end_min,
           source: 'owner',
         });
-        return ok(res, { booking: serializeBooking(updated.rows[0]) });
+        return ok(res, { booking: serializeBooking(updated.rows[0], bopts) });
       }
 
       // Convenience: cancel a single occurrence in a recurring series.
@@ -212,7 +214,7 @@ export default async function handler(req, res) {
           workspaceId, bookingId: id,
           occurrenceDate: body.cancelOccurrence, source: 'owner',
         });
-        return ok(res, { booking: serializeBooking(updated.rows[0]) });
+        return ok(res, { booking: serializeBooking(updated.rows[0], bopts) });
       }
 
       const sets = [];
@@ -243,7 +245,7 @@ export default async function handler(req, res) {
         push('staff_id', sid);
       }
 
-      if (sets.length === 0) return ok(res, { booking: serializeBooking(found.rows[0]) });
+      if (sets.length === 0) return ok(res, { booking: serializeBooking(found.rows[0], bopts) });
 
       values.push(id, workspaceId);
       const queryText = `
@@ -266,7 +268,7 @@ export default async function handler(req, res) {
         } else { throw e; }
       }
       syncOnBookingUpdated({ workspaceId, bookingId: id });
-      return ok(res, { booking: serializeBooking(rows[0]) });
+      return ok(res, { booking: serializeBooking(rows[0], bopts) });
     }
 
     if (req.method === 'DELETE') {

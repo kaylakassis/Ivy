@@ -34,6 +34,8 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res, { helper: 'schedule' });
     if (!workspaceId) return;
+    // Helper mode: the booking without its money fields.
+    const bopts = { redactMoney: !!req.helper };
 
     const body = await readBody(req);
     const id = body.id ? String(body.id) : null;
@@ -50,7 +52,7 @@ export default async function handler(req, res) {
       if (undone.rows.length === 0) {
         return badRequest(res, 'Booking not found or not marked as a no-show');
       }
-      return ok(res, { booking: serializeBooking(undone.rows[0]), undone: true });
+      return ok(res, { booking: serializeBooking(undone.rows[0], bopts), undone: true });
     }
 
     // Owner-side ownership check + pull the bits we need to charge.
@@ -119,7 +121,7 @@ export default async function handler(req, res) {
     `;
 
     return ok(res, {
-      booking: serializeBooking(upd.rows[0]),
+      booking: serializeBooking(upd.rows[0], bopts),
       charged: !!paymentIntentId,
       chargeAmount: paymentIntentId ? feeAmount : 0,
       chargeError,

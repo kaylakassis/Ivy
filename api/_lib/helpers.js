@@ -390,10 +390,37 @@ export async function inviteHelper({ workspaceId, owner, staff }) {
   `;
   const raw = generateRawToken();
   const expiresAt = new Date(Date.now() + HELPER_INVITE_TTL_DAYS * 86400 * 1000).toISOString();
-  await sql`
+  const ins = await sql`
     INSERT INTO helper_invites (workspace_id, staff_member_id, email, token_hash, expires_at)
     VALUES (${workspaceId}, ${staff.id}, ${email}, ${hashToken(raw)}, ${expiresAt})
+    RETURNING id, created_at
   `;
+  // Race guard. The seat check above is read-then-write and the Neon
+  // HTTP driver cannot hold a transaction (so no advisory lock), so two
+  // simultaneous invites can both pass it. Resolve it the way bookings
+  // do (losesBookingRace): now that our row is in, count the seats that
+  // rank AHEAD of it - attached helpers plus live invites for other
+  // staff rows ordered by (created_at, id). If those already fill the
+  // cap we lost: withdraw our invite and refuse. The order is total, so
+  // exactly the first HELPER_SEATS survive and no racer pushes past it.
+  if (!pending.has(staff.id)) {
+    const me = ins.rows[0];
+    const { rows: ahead } = await sql`
+      SELECT
+        (SELECT COUNT(*)::int FROM staff_members
+           WHERE workspace_id = ${workspaceId} AND user_id IS NOT NULL) AS attached,
+        (SELECT COUNT(DISTINCT hi.staff_member_id)::int FROM helper_invites hi
+           JOIN staff_members sm ON sm.id = hi.staff_member_id AND sm.user_id IS NULL
+          WHERE hi.workspace_id = ${workspaceId}
+            AND hi.staff_member_id <> ${staff.id}
+            AND hi.used_at IS NULL AND hi.cancelled_at IS NULL AND hi.expires_at > NOW()
+            AND (hi.created_at < ${me.created_at} OR (hi.created_at = ${me.created_at} AND hi.id < ${me.id}))) AS earlier
+    `;
+    if ((ahead[0]?.attached || 0) + (ahead[0]?.earlier || 0) >= HELPER_SEATS) {
+      await sql`DELETE FROM helper_invites WHERE id = ${me.id}`;
+      throw new HelperError(409, `Ivy includes ${HELPER_SEATS} helpers. Revoke one to invite another.`);
+    }
+  }
   await sql`
     UPDATE staff_members SET email = ${email}, invited_at = NOW(), revoked_at = NULL, updated_at = NOW()
      WHERE id = ${staff.id} AND workspace_id = ${workspaceId}
