@@ -52,6 +52,8 @@ export async function loadPublicSite({ handle, slug, host }) {
       WHERE w2.handle = ${handle.toLowerCase()}
         AND w2.published_at IS NOT NULL
         AND w2.visibility != 'only_me'
+      ORDER BY w2.published_at DESC
+      LIMIT 1
     `);
   } else if (host && typeof host === 'string') {
     const variants = hostVariants(host);

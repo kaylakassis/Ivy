@@ -39,7 +39,8 @@ export default function AuthPage({ mode = 'signin' }) {
   const [role,     setRole]     = useState(params.get('mode') === 'client' ? 'client' : 'owner'); // 'owner' | 'client'
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [busy, setBusy]   = useState(false);
-  const [mfaStep, setMfaStep] = useState(false);
+  // ?mfa=1: a password reset on a 2FA account lands here for the code step.
+  const [mfaStep, setMfaStep] = useState(params.get('mfa') === '1');
   const [mfaCode, setMfaCode] = useState('');
   const [err,  setErr]    = useState(null);
   // When signup succeeds but the welcome / verification email failed to

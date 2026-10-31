@@ -92,7 +92,8 @@ export function serializeDmThread(row, myClientId) {
     id:                row.id,
     otherClientId:     meIsA ? row.client_b_id : row.client_a_id,
     otherClientName:   row.other_name || null,
-    otherClientEmail:  row.other_email || null,
+    // Never the other client's email: a DM partner gets a name, nothing more.
+    otherClientEmail:  null,
     lastMessageAt:     row.last_message_at,
     lastPreview:       row.last_message_preview || '',
     unread:            meIsA ? Number(row.unread_a || 0) : Number(row.unread_b || 0),

@@ -1,6 +1,7 @@
 // /me/bookings - every appointment across all the user's businesses,
 // grouped Upcoming / Past / Cancelled with a tab picker.
 import React, { useEffect, useRef, useState } from 'react';
+import { safeHref } from '../../lib/safeHref.js';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
@@ -339,7 +340,7 @@ function BookingRow({ booking, first, cancellable, reschedulable, reviewable, on
             {booking.completionAttachments.map((a, i) => {
               const isImage = (a.mimeType || '').startsWith('image/');
               return (
-                <a key={a.url + i} href={a.url} target="_blank" rel="noopener noreferrer"
+                <a key={a.url + i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer"
                   style={{ textDecoration: 'none' }}>
                   {isImage ? (
                     <img src={a.url} alt={a.filename || ''}

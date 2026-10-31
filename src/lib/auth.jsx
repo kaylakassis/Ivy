@@ -64,6 +64,13 @@ export function AuthProvider({ children }) {
     return r.user;
   }, []);
 
+  // A password reset on a 2FA account ends at the same code step as login.
+  // The reset page hands over the native-only token here before routing to
+  // the sign-in screen with ?mfa=1.
+  const beginMfa = useCallback((mfaToken) => {
+    mfaTokenRef.current = mfaToken || null;
+  }, []);
+
   // Second factor: exchange a 6-digit TOTP or a backup code for a real session.
   const mfaChallenge = useCallback(async (code) => {
     const r = await api.post('/auth/totp/challenge', {
@@ -191,7 +198,7 @@ export function AuthProvider({ children }) {
 
   return (
     <Ctx.Provider value={{
-      user, loading, signIn, mfaChallenge, signUp, signOut, refresh, impersonating,
+      user, loading, signIn, mfaChallenge, beginMfa, signUp, signOut, refresh, impersonating,
       terms,
       mustAcceptTerms: !!(user && terms?.needsAcceptance),
       acceptCurrentTerms,

@@ -2,6 +2,7 @@
 // clients in groups you share. Each conversation has block / mute / leave /
 // report actions.
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { safeHref } from '../../lib/safeHref.js';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
@@ -93,7 +94,7 @@ export default function ClientDms() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ flex: 1, fontSize: 13.5, fontWeight: 600, minWidth: 0,
                     whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {d.otherClientName || d.otherClientEmail || 'Unnamed'}
+                    {d.otherClientName || 'Unnamed'}
                   </div>
                   {d.unread > 0 && (
                     <span style={{ fontSize: 10, fontWeight: 700, color: 'var(--surface)',
@@ -279,7 +280,7 @@ function DmView({ dmId, onBack, onChanged, onLeave }) {
           </button>
         )}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{dm.otherClientName || dm.otherClientEmail}</div>
+          <div style={{ fontSize: 14, fontWeight: 600 }}>{dm.otherClientName || 'Unnamed'}</div>
           <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 2 }}>
             {dm.mutedByMe && '🔕 Muted · '}{dm.blockedByMe && '🚫 Blocked · '}Direct message
           </div>
@@ -433,14 +434,14 @@ function DmBubble({ msg, parent, onReply, onReport }) {
                 }
                 if ((a.type || '').startsWith('image/')) {
                   return (
-                    <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
+                    <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer">
                       <img src={a.url} alt={a.name || 'image'}
                         style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
                     </a>
                   );
                 }
                 return (
-                  <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" download={a.name || true}
+                  <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer" download={a.name || true}
                     style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8,
                       background: msg.mine ? 'rgba(255,255,255,0.18)' : 'var(--surface)',
                       border: '1px solid ' + (msg.mine ? 'rgba(255,255,255,0.18)' : 'var(--border)'),

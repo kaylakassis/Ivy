@@ -11,6 +11,7 @@
 // whatever the per-section renderer outputs - keeps the renderers focused.
 import React, { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { resolveSiteLink } from '../../lib/siteLinks.js';
+import { safeHref } from '../../lib/safeHref.js';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
 // These modules only load when a customer site is rendered or edited, so
 // requesting the builder font palette here keeps it off every other page.
@@ -1094,7 +1095,7 @@ function Blog({ data }) {
           gap: 24, marginTop: 40,
         }}>
           {posts.map((p) => (
-            <a key={p.id} href={p.url || '#'} style={{
+            <a key={p.id} href={safeHref(p.url || '#')} style={{
               textDecoration: 'none', color: 'inherit',
               padding: 24,
               background: 'var(--site-surface)',
@@ -1153,7 +1154,7 @@ function Instagram({ data }) {
               background: 'var(--site-surface)',
             }} allowFullScreen scrolling="no"/>
           ) : url ? (
-            <a href={url} target="_blank" rel="noreferrer" style={{
+            <a href={safeHref(url)} target="_blank" rel="noreferrer" style={{
               display: 'inline-flex', alignItems: 'center', gap: 8,
               padding: '14px 22px',
               background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
@@ -1390,7 +1391,7 @@ function SocialFeed({ data }) {
         {(data.headline || data.sub) && <Heading text={data.headline} sub={data.sub}/>}
         <div style={{ marginTop: data.headline ? 28 : 0 }}>
           {data.url ? (
-            <a href={data.url} target="_blank" rel="noreferrer" style={{
+            <a href={safeHref(data.url)} target="_blank" rel="noreferrer" style={{
               display: 'inline-flex', alignItems: 'center', gap: 10,
               padding: '14px 24px',
               background: 'var(--site-accent)', color: 'var(--site-accent-ink)',

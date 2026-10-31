@@ -111,7 +111,7 @@ export default async function handler(req, res) {
           type:       String(a?.type || '').slice(0, 80),
           name:       a?.name ? String(a.name).slice(0, 200) : null,
           uploadedAt: a?.uploadedAt ? String(a.uploadedAt).slice(0, 40) : new Date().toISOString(),
-        })).filter((a) => a.url && a.type);
+        })).filter((a) => a.url && a.type && /^https:\/\//i.test(a.url));
         // Cast inline because the dynamic query builder produces a
         // bare $N placeholder; without the cast PG won't assign TEXT
         // to a JSONB column.

@@ -1,5 +1,6 @@
 // Event drawer - for both blocks (editable) and bookings (view + cancel options).
 import React, { useRef, useState } from 'react';
+import { safeHref } from '../../lib/safeHref.js';
 import { uploadFile as upload } from '../../lib/blobUpload.js';
 import Drawer, { TimeInput, inputSty } from './Drawer.jsx';
 import { minToHM, hmToMin, parseISO, RECURRENCE_OPTIONS, isOccurrencePast } from './utils.js';
@@ -836,7 +837,7 @@ function AttachmentGrid({ attachments }) {
       {attachments.map((a, i) => {
         const isImage = (a.mimeType || '').startsWith('image/');
         return (
-          <a key={a.url + i} href={a.url} target="_blank" rel="noopener noreferrer"
+          <a key={a.url + i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer"
             style={{ textDecoration: 'none' }}>
             {isImage ? (
               <img src={a.url} alt={a.filename || ''}

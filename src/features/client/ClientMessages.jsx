@@ -5,6 +5,7 @@
 // Lives on its own state hooks (no shared store with the owner Messages
 // because of different endpoints + different unread accounting).
 import React, { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { safeHref } from '../../lib/safeHref.js';
 import { useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
@@ -609,12 +610,12 @@ function Bubble({ msg, onReport }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
           {nonAudio.map((a, i) => (
             (a.type || '').startsWith('image/') ? (
-              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
+              <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer">
                 <img src={a.url} alt={a.name || 'image'}
                   style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
               </a>
             ) : (
-              <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" download={a.name || true}
+              <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer" download={a.name || true}
                 style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8,
                   background: mine ? 'rgba(255,255,255,0.18)' : 'var(--surface-2)',
                   border: '1px solid ' + (mine ? 'rgba(255,255,255,0.18)' : 'var(--border)'),

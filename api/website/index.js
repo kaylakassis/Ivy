@@ -18,6 +18,8 @@ import { readBody } from '../_lib/body.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { removeProjectDomain } from '../_lib/vercelDomains.js';
+import { checkCustomDomainForWorkspace, isReservedDomain } from '../_lib/customDomains.js';
+import { sanitizeSiteLinks } from '../_lib/siteLinkSafety.js';
 
 // Normalize a domain for change-detection: lowercase, strip scheme,
 // trailing slashes/dots. Mirrors api/_lib/publicSite.js host handling.
@@ -181,13 +183,13 @@ export default async function handler(req, res) {
       }
       if ('sections' in body) {
         if (!Array.isArray(body.sections)) return badRequest(res, 'sections must be an array');
-        patch.sections = body.sections;
+        patch.sections = sanitizeSiteLinks(body.sections);
       }
       if ('pages' in body) {
         if (!Array.isArray(body.pages)) return badRequest(res, 'pages must be an array');
         if (body.pages.length > 50) return badRequest(res, 'Up to 50 pages per site');
         try {
-          patch.pages = body.pages.map(sanitizePage);
+          patch.pages = sanitizeSiteLinks(body.pages.map(sanitizePage));
           // Slug uniqueness across pages.
           const slugs = patch.pages.map((p) => p.slug);
           if (new Set(slugs).size !== slugs.length) {
@@ -197,7 +199,15 @@ export default async function handler(req, res) {
           return badRequest(res, e.message);
         }
       }
-      if ('customDomain' in body) patch.customDomain = body.customDomain ? String(body.customDomain).slice(0, 255) : null;
+      if ('customDomain' in body) {
+        if (body.customDomain) {
+          const chk = await checkCustomDomainForWorkspace(body.customDomain, workspaceId);
+          if (chk.error) return badRequest(res, chk.error);
+          patch.customDomain = chk.domain;
+        } else {
+          patch.customDomain = null;
+        }
+      }
       if ('launched' in body) patch.launched = !!body.launched;
       // Site-level SEO defaults. Empty strings clear the override
       // (the renderer falls back to derived values from the hero/about).
@@ -225,7 +235,7 @@ export default async function handler(req, res) {
           }));
       }
       if ('exitIntentPopup' in body) patch.exitIntentPopup = body.exitIntentPopup === null ? null : sanitizePopup(body.exitIntentPopup);
-      if ('stickyCta' in body)       patch.stickyCta       = body.stickyCta       === null ? null : sanitizeStickyCta(body.stickyCta);
+      if ('stickyCta' in body)       patch.stickyCta       = body.stickyCta       === null ? null : sanitizeSiteLinks(sanitizeStickyCta(body.stickyCta));
       if ('scheduledPublishAt' in body) {
         const v = body.scheduledPublishAt;
         patch.scheduledPublishAt = v ? new Date(v) : null;
@@ -233,7 +243,7 @@ export default async function handler(req, res) {
       if ('scheduledPages' in body) {
         if (body.scheduledPages === null) patch.scheduledPages = null;
         else if (!Array.isArray(body.scheduledPages)) return badRequest(res, 'scheduledPages must be an array');
-        else patch.scheduledPages = body.scheduledPages.map(sanitizePage);
+        else patch.scheduledPages = sanitizeSiteLinks(body.scheduledPages.map(sanitizePage));
       }
       if ('visibility' in body) {
         if (!['public', 'private', 'only_me'].includes(body.visibility)) {
@@ -259,11 +269,14 @@ export default async function handler(req, res) {
       // reused). Best-effort - never block the save on Vercel.
       let domainChanged = false;
       if ('customDomain' in body) {
-        const cur = await sql`SELECT custom_domain FROM websites WHERE workspace_id = ${workspaceId}`;
+        const cur = await sql`SELECT custom_domain, domain_status FROM websites WHERE workspace_id = ${workspaceId}`;
         const oldDomain = normDomain(cur.rows[0]?.custom_domain);
         const newDomain = normDomain(patch.customDomain);
         domainChanged = oldDomain !== newDomain;
-        if (domainChanged && oldDomain) {
+        // Only a domain THIS workspace verified gets detached from the
+        // hosting project. A typed-but-never-verified value (which could be
+        // anyone's domain, or our own) is simply forgotten.
+        if (domainChanged && oldDomain && cur.rows[0]?.domain_status === 'verified' && !isReservedDomain(oldDomain)) {
           await removeProjectDomain(oldDomain).catch(() => {});
         }
       }

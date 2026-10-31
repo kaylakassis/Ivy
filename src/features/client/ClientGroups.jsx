@@ -2,6 +2,7 @@
 // across all the businesses they're a client of, with per-thread
 // view/send/leave.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { safeHref } from '../../lib/safeHref.js';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
@@ -337,7 +338,7 @@ function GroupView({ groupId, onBack, onLeave }) {
                 display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 13,
               }}>
                 <div style={{ flex: 1 }}>
-                  {m.clientName || m.clientEmail}
+                  {m.clientName || 'Member'}
                   {isMe && <span style={{ color: 'var(--muted)', marginLeft: 6 }}>(you)</span>}
                 </div>
                 {!isMe && (
@@ -501,14 +502,14 @@ function MessageBubble({ msg, mine, parent, onReact, onReply }) {
                 }
                 if ((a.type || '').startsWith('image/')) {
                   return (
-                    <a key={i} href={a.url} target="_blank" rel="noopener noreferrer">
+                    <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer">
                       <img src={a.url} alt={a.name || 'image'}
                         style={{ maxWidth: 260, maxHeight: 260, borderRadius: 8, display: 'block' }}/>
                     </a>
                   );
                 }
                 return (
-                  <a key={i} href={a.url} target="_blank" rel="noopener noreferrer" download={a.name || true}
+                  <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer" download={a.name || true}
                     style={{ fontSize: 12, padding: '6px 10px', borderRadius: 8,
                       background: mine ? 'rgba(255,255,255,0.18)' : 'var(--surface)',
                       border: '1px solid ' + (mine ? 'rgba(255,255,255,0.18)' : 'var(--border)'),

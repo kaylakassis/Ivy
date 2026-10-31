@@ -4,6 +4,7 @@
 import React, { useEffect, useState } from 'react';
 import { Icons } from '../../components/Icons.jsx';
 import { ensureBuilderFonts } from '../../lib/builderFonts.js';
+import { safeHref } from '../../lib/safeHref.js';
 // These modules only load when a customer site is rendered or edited, so
 // requesting the builder font palette here keeps it off every other page.
 ensureBuilderFonts();
@@ -239,7 +240,7 @@ function StickyCta({ cfg }) {
   if (!cfg || !cfg.enabled || !cfg.text) return null;
   const pos = cfg.position === 'top' ? { top: 0 } : { bottom: 0 };
   return (
-    <a href={cfg.link || '#'} style={{
+    <a href={safeHref(cfg.link || '#')} style={{
       position: 'fixed', left: 0, right: 0, ...pos, zIndex: 9000,
       padding: '14px 24px', background: 'var(--site-accent)', color: 'var(--site-accent-ink)',
       textAlign: 'center', fontWeight: 600, textDecoration: 'none',
@@ -282,7 +283,7 @@ function ExitIntent({ cfg }) {
         {cfg.sub && <p style={{ margin: '10px 0 0', color: 'var(--site-fg-2)', lineHeight: 1.55 }}>{cfg.sub}</p>}
         {cfg.cta && (
           <p style={{ margin: '20px 0 0' }}>
-            <a href={cfg.ctaLink || '#'} style={{
+            <a href={safeHref(cfg.ctaLink || '#')} style={{
               display: 'inline-block', padding: '12px 22px', background: 'var(--site-accent)',
               color: 'var(--site-accent-ink)', borderRadius: 'var(--site-radius)', textDecoration: 'none', fontWeight: 600,
             }}>{cfg.cta} →</a>

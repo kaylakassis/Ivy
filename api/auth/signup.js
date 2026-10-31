@@ -268,15 +268,12 @@ export default async function handler(req, res) {
           // eslint-disable-next-line no-console
           console.warn('[signup] waitlist discount stamp failed:', wlErr.message);
         }
-      } else {
-        // Client signup: claim every existing `clients` row that already
-        // matches this email so they immediately see their data when they
-        // hit /me. Idempotent.
-        await sql`
-          UPDATE clients SET user_id = ${user.id}
-          WHERE email = ${emailKey} AND user_id IS NULL
-        `;
       }
+      // Client signup used to claim every `clients` row with this email
+      // right here. That let anyone who knew a client's address sign up as
+      // them and read their bookings, invoices and messages before ever
+      // proving they own the inbox. The claim now happens only after email
+      // verification (myClientIds in api/_lib/clientPortal.js).
     } catch (setupErr) {
       await sql`DELETE FROM users WHERE id = ${user.id}`.catch(() => {});
       throw setupErr;

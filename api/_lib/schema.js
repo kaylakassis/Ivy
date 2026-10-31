@@ -3537,4 +3537,20 @@ CREATE OR REPLACE VIEW admin_real_reviews AS
   SELECT r.* FROM reviews r WHERE r.workspace_id IN (SELECT id FROM admin_real_workspaces);
 CREATE OR REPLACE VIEW admin_real_workspace_profile AS
   SELECT p.* FROM workspace_profile p WHERE p.workspace_id IN (SELECT id FROM admin_real_workspaces);
+
+-- ─── One custom domain per site ────────────────────────────────────────
+-- The website builder refuses a domain another workspace holds; this index
+-- is the backstop. Created only when no duplicates already exist, so an
+-- older database with a clash keeps migrating (the app-level check still
+-- applies) instead of failing to boot.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM websites WHERE custom_domain IS NOT NULL
+    GROUP BY lower(custom_domain) HAVING COUNT(*) > 1
+  ) THEN
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_websites_custom_domain_unique
+      ON websites (lower(custom_domain)) WHERE custom_domain IS NOT NULL;
+  END IF;
+END $$;
 `;

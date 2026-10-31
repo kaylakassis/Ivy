@@ -24,7 +24,7 @@ import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js'
 async function maybeUser(req) {
   const session = readSession(req);
   if (!session?.sub) return null;
-  const { rows } = await sql`SELECT id, email FROM users WHERE id = ${session.sub} LIMIT 1`;
+  const { rows } = await sql`SELECT id, email, email_verified_at FROM users WHERE id = ${session.sub} AND deleted_at IS NULL LIMIT 1`;
   return rows[0] || null;
 }
 
@@ -96,10 +96,12 @@ export default async function handler(req, res) {
     let eligibility = null;
     const me = await maybeUser(req);
     if (me) {
+      // Email matches count only for a verified address (see reviews.js).
+      const emailMatch = me.email_verified_at ? me.email : null;
       const clientRows = await sql`
         SELECT id FROM clients
         WHERE workspace_id = ${workspaceId}
-          AND (user_id = ${me.id} OR LOWER(email) = LOWER(${me.email}))
+          AND (user_id = ${me.id} OR (${emailMatch}::text IS NOT NULL AND LOWER(email) = LOWER(${emailMatch})))
       `;
       const clientIds = clientRows.rows.map((r) => r.id);
 

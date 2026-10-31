@@ -1,7 +1,10 @@
 // POST /api/auth/reset-password  { token, password }
 // Verifies the reset token, sets a new password, signs the user in.
 import { sql } from '../_lib/db.js';
-import { hashPassword, signSession, setSessionCookie, invalidateUserCache } from '../_lib/auth.js';
+import {
+  hashPassword, signSession, setSessionCookie, invalidateUserCache,
+  signMfaToken, setMfaCookie, isNativeClient,
+} from '../_lib/auth.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -26,7 +29,13 @@ export default async function handler(req, res) {
     if (blocked) return;
 
     const valid = await findValidToken({ kind: KIND_RESET, raw: token });
-    if (!valid) return unauthorized(res, 'This reset link is invalid or has expired');
+    // A reset link works exactly once. A used link is as dead as an expired
+    // one, and the token is burned BEFORE the password changes so two
+    // simultaneous submissions cannot both set a password.
+    if (!valid || valid.alreadyUsed) return unauthorized(res, 'This reset link is invalid or has expired');
+    if (!(await consumeToken(valid.tokenId))) {
+      return unauthorized(res, 'This reset link is invalid or has expired');
+    }
 
     const password_hash = await hashPassword(password);
     // Stamp password_changed_at so requireUser invalidates every JWT
@@ -50,17 +59,32 @@ export default async function handler(req, res) {
     // would survive for up to the cache TTL after the reset.
     invalidateUserCache(valid.userId);
 
-    // Burn this token, plus any other live reset tokens for the user.
-    await consumeToken(valid.tokenId);
+    // Burn any other live reset tokens for the user.
     await invalidateUserTokens({ userId: valid.userId, kind: KIND_RESET });
 
-    // Sign them in immediately - they just proved control of the email.
-    setSessionCookie(res, signSession(valid.userId));
-    const { rows } = await sql`SELECT id, email, name, created_at FROM users WHERE id = ${valid.userId}`;
+    const { rows } = await sql`SELECT id, email, name, created_at, totp_enrolled_at FROM users WHERE id = ${valid.userId}`;
     recordAudit(req, { actor: rows[0], action: 'auth.password_reset', meta: {} });
     // "Your password was changed" security alert. Fire-and-forget.
     notifyPasswordChanged({ userId: valid.userId, ip, userAgent: req.headers['user-agent'] });
-    return ok(res, { user: rows[0] });
+
+    // Control of the inbox proves the email, not the second factor. An
+    // account with 2FA enrolled gets the same MFA-pending step as login
+    // instead of a session.
+    if (rows[0]?.totp_enrolled_at) {
+      const mfaToken = signMfaToken(valid.userId);
+      setMfaCookie(res, mfaToken);
+      const out = { mfaRequired: true };
+      if (isNativeClient(req)) out.mfaToken = mfaToken;
+      return ok(res, out);
+    }
+
+    // Sign them in immediately - they just proved control of the email.
+    const sessionToken = signSession(valid.userId);
+    setSessionCookie(res, sessionToken);
+    const { totp_enrolled_at: _t, ...user } = rows[0];
+    const payload = { user };
+    if (isNativeClient(req)) payload.token = sessionToken;
+    return ok(res, payload);
   } catch (err) {
     return serverError(res, err);
   }

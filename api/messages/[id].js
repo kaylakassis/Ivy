@@ -102,7 +102,7 @@ export default async function handler(req, res) {
           name: a?.name ? String(a.name).slice(0, 200) : null,
           durationMs: Number.isFinite(Number(a?.durationMs)) ? Number(a.durationMs) : null,
         }))
-        .filter((a) => a.url && a.type);
+        .filter((a) => a.url && a.type && /^https:\/\//i.test(a.url));
       if (!text && attachments.length === 0) {
         return { status: 400, body: { error: 'Message text or attachment is required' } };
       }

@@ -17,6 +17,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { enforce } from '../_lib/rate-limit.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { addProjectDomain, getDomainConfig } from '../_lib/vercelDomains.js';
+import { isReservedDomain, domainHeldByOtherWorkspace } from '../_lib/customDomains.js';
 import dns from 'node:dns/promises';
 
 // The platform-level CNAME owners point their domain at. Owners type
@@ -46,6 +47,13 @@ export default async function handler(req, res) {
       return badRequest(res, 'Set a custom domain first.');
     }
     const domain = norm(row.rows[0].custom_domain);
+    // A shared CNAME target means DNS alone cannot tell one Ivy site from
+    // another. The domain must not be ours and must not already belong to
+    // a different workspace, whatever DNS says.
+    if (isReservedDomain(domain)) return badRequest(res, 'That domain cannot be connected to a site.');
+    if (await domainHeldByOtherWorkspace(domain, workspaceId)) {
+      return badRequest(res, 'That domain is already connected to another site on Ivy.');
+    }
     let status = 'failed';
     let detail = '';
     try {

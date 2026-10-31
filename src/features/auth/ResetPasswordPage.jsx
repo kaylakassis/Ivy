@@ -8,7 +8,7 @@ import { PasswordInput } from './AuthPage.jsx';
 import AuthShell from './AuthShell.jsx';
 
 export default function ResetPasswordPage() {
-  const { refresh } = useAuth();
+  const { refresh, beginMfa } = useAuth();
   const [params] = useSearchParams();
   const nav = useNavigate();
   const token = params.get('token') || '';
@@ -28,7 +28,14 @@ export default function ResetPasswordPage() {
     if (password !== confirm) { setErr("Passwords don't match"); return; }
     setBusy(true);
     try {
-      await api.post('/auth/reset-password', { token, password });
+      const r = await api.post('/auth/reset-password', { token, password });
+      // 2FA account: the password is saved, but the session waits for the
+      // authenticator code, exactly like signing in.
+      if (r?.mfaRequired) {
+        beginMfa(r.mfaToken);
+        nav('/signin?mfa=1', { replace: true });
+        return;
+      }
       // The server set a fresh session cookie — sync the auth context before
       // navigating so RootRouter sees the logged-in user instead of flashing
       // the logged-out marketing home.

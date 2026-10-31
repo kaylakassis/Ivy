@@ -142,10 +142,18 @@ export default async function handler(req, res) {
     const tz = settings.timezone || null;
 
     const sv = await sql`
-      SELECT capacity, availability, name, travel_buffer_minutes FROM services
+      SELECT capacity, availability, name, travel_buffer_minutes, duration_minutes FROM services
        WHERE id = ${serviceId} AND workspace_id = ${cp.workspace_id}
     `;
     if (sv.rows.length === 0) return badRequest(res, "That service isn't offered anymore.");
+    // Every slot is exactly as long as the service. A credit buys one
+    // session, never a block of the owner's day.
+    const expectedDuration = Math.max(5, Number(sv.rows[0].duration_minutes) || 60);
+    for (const s of slots) {
+      if (s.endMin - s.startMin !== expectedDuration) {
+        return badRequest(res, `Each session is ${expectedDuration} minutes long.`);
+      }
+    }
     const capacity = Math.max(1, Number(sv.rows[0].capacity) || 1);
     const serviceAvail = sv.rows[0].availability || null;
     const travelBuffer = Math.max(0, Number(sv.rows[0].travel_buffer_minutes ?? 0));

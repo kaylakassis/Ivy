@@ -55,15 +55,22 @@ export async function findValidToken({ kind, raw }) {
   `;
   if (rows.length === 0) return null;
   const t = rows[0];
+  // Expiry applies to used tokens too: a link that was clicked once must
+  // not stay recognisable forever. Callers that treat `alreadyUsed` as a
+  // friendly duplicate click only do so inside the token's lifetime.
+  if (new Date(t.expires_at).getTime() < Date.now()) return null;
   if (t.used_at) {
     return { tokenId: t.id, userId: t.user_id, alreadyUsed: true };
   }
-  if (new Date(t.expires_at).getTime() < Date.now()) return null;
   return { tokenId: t.id, userId: t.user_id };
 }
 
+// Marks the token used. Returns true only for the request that actually
+// flipped it, so two concurrent submissions of the same link cannot both
+// proceed (the loser sees false and must stop).
 export async function consumeToken(tokenId) {
-  await sql`UPDATE auth_tokens SET used_at = NOW() WHERE id = ${tokenId} AND used_at IS NULL`;
+  const r = await sql`UPDATE auth_tokens SET used_at = NOW() WHERE id = ${tokenId} AND used_at IS NULL RETURNING id`;
+  return r.rows.length > 0;
 }
 
 // Invalidate all live tokens of a kind for a user (e.g. after password reset succeeds).

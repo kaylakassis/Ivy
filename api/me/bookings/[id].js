@@ -176,13 +176,18 @@ export default async function handler(req, res) {
         const r = body.rescheduleTo;
         const newDate  = (r.date || '').toString();
         const newStart = Number(r.startMin);
-        const newEnd   = Number(r.endMin);
         if (!/^\d{4}-\d{2}-\d{2}$/.test(newDate)) return badRequest(res, 'rescheduleTo.date must be YYYY-MM-DD');
         if (!Number.isInteger(newStart) || newStart < 0 || newStart >= 24 * 60) {
           return badRequest(res, 'rescheduleTo.startMin out of range');
         }
-        if (!Number.isInteger(newEnd) || newEnd <= newStart || newEnd > 24 * 60) {
-          return badRequest(res, 'rescheduleTo.endMin out of range');
+        // A reschedule moves the session; it never changes how long it is.
+        // The end time is derived from the booking's own duration, so a
+        // client cannot stretch one slot across the whole day.
+        const durationMin = Math.max(5, Number(booking.end_min) - Number(booking.start_min) || 60);
+        const newEnd = newStart + durationMin;
+        if (newEnd > 24 * 60) return badRequest(res, 'That start time runs past the end of the day');
+        if (r.endMin != null && Number(r.endMin) !== newEnd) {
+          return badRequest(res, 'A session keeps its length when rescheduled');
         }
         const today = new Date().toISOString().slice(0, 10);
         if (newDate < today) return badRequest(res, "Can't reschedule into the past");

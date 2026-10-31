@@ -7,6 +7,7 @@ import { Link, useSearchParams, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import AuthShell from './AuthShell.jsx';
+import { useAuth } from '../../lib/auth.jsx';
 
 export default function AccountRecoverPage() {
   const [params] = useSearchParams();
@@ -28,6 +29,13 @@ export default function AccountRecoverPage() {
       try {
         const r = await api.post('/account/restore', { token });
         if (cancelled) return;
+        if (r.mfaRequired) {
+          // 2FA account: the account is back, the session waits for the code.
+          beginMfa(r.mfaToken);
+          nav('/signin?mfa=1', { replace: true });
+          return;
+        }
+        if (r.alreadyRestored && !r.restored) { setState('already'); return; }
         setRestored(r.user || null);
         setState('done');
       } catch (ex) {
@@ -79,6 +87,16 @@ export default function AccountRecoverPage() {
             <button type="button" className="btn btn-primary" onClick={() => nav('/', { replace: true })}>
               Go to my dashboard
             </button>
+          </>
+        )}
+
+        {state === 'already' && (
+          <>
+            <h1 style={{ margin: 0, fontSize: 22, fontWeight: 600 }}>This account is already restored</h1>
+            <p style={{ margin: 0, fontSize: 14, color: 'var(--fg-2)', lineHeight: 1.55 }}>
+              Your account is active. Sign in with your email and password to pick up where you left off.
+            </p>
+            <Link to="/signin" className="btn btn-primary">Sign in</Link>
           </>
         )}
 

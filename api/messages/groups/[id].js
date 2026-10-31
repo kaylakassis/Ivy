@@ -59,7 +59,7 @@ export default async function handler(req, res) {
       const reactionMap = await loadReactionsForMessages(messages.rows.map((r) => r.id), 'biz');
       return ok(res, {
         group: serializeGroupThread(thread, { memberCount: members.rows.length }),
-        members: members.rows.map(serializeGroupMember),
+        members: members.rows.map((m) => serializeGroupMember(m, { forOwner: true })),
         messages: messages.rows.map((r) =>
           serializeGroupMessage({ ...r, reactions: reactionMap[r.id] || [] }),
         ),

@@ -25,12 +25,15 @@ export function serializeGroupThread(row, { memberCount, currentMember } = {}) {
   };
 }
 
-export function serializeGroupMember(row) {
+// `forOwner` includes the member's email. The client-facing roster never
+// does: fellow members get names only, so a group invite link cannot be
+// used to harvest the business's client email list.
+export function serializeGroupMember(row, { forOwner = false } = {}) {
   if (!row) return null;
   return {
     clientId:    row.client_id,
     clientName:  row.client_name || null,
-    clientEmail: row.client_email || null,
+    clientEmail: forOwner ? (row.client_email || null) : null,
     joinedAt:    row.joined_at,
     leftAt:      row.left_at,
     muted:       !!row.muted,
@@ -349,5 +352,5 @@ export function cleanAttachments(raw) {
       name:       a?.name ? String(a.name).slice(0, 200) : null,
       durationMs: Number.isFinite(Number(a?.durationMs)) ? Number(a.durationMs) : null,
     }))
-    .filter((a) => a.url && a.type);
+    .filter((a) => a.url && a.type && /^https:\/\//i.test(a.url));
 }

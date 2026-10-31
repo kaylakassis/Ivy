@@ -1,6 +1,6 @@
 // Daily: schedule, remind, rescue and run the 7-day data deletion for
 // workspaces whose paid subscription has ended. See api/_lib/dataRetention.js.
-import { isSuperAdminBySession } from '../_lib/auth.js';
+import { isSuperAdminBySession } from '../_lib/admin.js';
 import { runDataRetention } from '../_lib/dataRetention.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';

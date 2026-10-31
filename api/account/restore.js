@@ -19,7 +19,10 @@
 //
 // Public endpoint: no requireUser. The token is the proof.
 import { sql } from '../_lib/db.js';
-import { signSession, setSessionCookie, isNativeClient, invalidateUserCache } from '../_lib/auth.js';
+import {
+  signSession, setSessionCookie, isNativeClient, invalidateUserCache,
+  signMfaToken, setMfaCookie,
+} from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -48,19 +51,14 @@ export default async function handler(req, res) {
     if (!valid) {
       return unauthorized(res, 'This recovery link is invalid, already used, or expired.');
     }
-    // A used token from a duplicate click (e.g. the user clicked twice or
-    // an email scanner prefetched) is treated as success - same convention
-    // as verify_email.
+    // A used token from a duplicate click (the user clicked twice or an
+    // email scanner prefetched) is reported as "already restored" so the
+    // page can say so. It never signs anyone in: the recovery email must
+    // not double as a permanent passwordless login.
     if (valid.alreadyUsed) {
-      const { rows } = await sql`SELECT id, email, name, deleted_at FROM users WHERE id = ${valid.userId}`;
+      const { rows } = await sql`SELECT id, deleted_at FROM users WHERE id = ${valid.userId}`;
       if (rows[0] && rows[0].deleted_at == null) {
-        // Already restored. Sign them in again and return 200.
-        const u = rows[0];
-        const sessionToken = signSession(u.id);
-        setSessionCookie(res, sessionToken);
-        const payload = { restored: true, alreadyRestored: true, user: { id: u.id, email: u.email, name: u.name } };
-        if (isNativeClient(req)) payload.token = sessionToken;
-        return ok(res, payload);
+        return ok(res, { restored: false, alreadyRestored: true });
       }
       return unauthorized(res, 'This recovery link was used already, but the account is no longer recoverable.');
     }
@@ -68,7 +66,7 @@ export default async function handler(req, res) {
     // Load the soft-deleted row. requireUser would reject it (deleted_at),
     // but we're operating on a token + raw SQL so we can see it.
     const { rows } = await sql`
-      SELECT id, email, name, deleted_at FROM users WHERE id = ${valid.userId}
+      SELECT id, email, name, deleted_at, totp_enrolled_at FROM users WHERE id = ${valid.userId}
     `;
     const u = rows[0];
     if (!u) {
@@ -77,13 +75,15 @@ export default async function handler(req, res) {
       return unauthorized(res, 'This account has already been permanently deleted and can no longer be restored.');
     }
     if (u.deleted_at == null) {
-      // Already restored some other way. Just sign in.
-      const sessionToken = signSession(u.id);
-      setSessionCookie(res, sessionToken);
-      const payload = { restored: true, alreadyRestored: true, user: { id: u.id, email: u.email, name: u.name } };
-      if (isNativeClient(req)) payload.token = sessionToken;
+      // Already restored some other way. Burn the link; no session.
       await consumeToken(valid.tokenId);
-      return ok(res, payload);
+      return ok(res, { restored: false, alreadyRestored: true });
+    }
+
+    // Burn the token BEFORE restoring so two submissions of the same link
+    // cannot both run (the loser sees false and stops here).
+    if (!(await consumeToken(valid.tokenId))) {
+      return ok(res, { restored: false, alreadyRestored: true });
     }
 
     // Reverse the mangle: 'foo+deleted-<userId>@bar' → 'foo@bar'.
@@ -112,7 +112,6 @@ export default async function handler(req, res) {
     // restored, non-deleted state on the very next request rather than
     // continuing to 401 for up to the cache TTL.
     invalidateUserCache(u.id);
-    await consumeToken(valid.tokenId);
     // Burn any other live recovery tokens for this user so a second copy
     // of the email (or a leaked one) can't be replayed.
     await invalidateUserTokens({ userId: u.id, kind: KIND_RECOVER });
@@ -124,15 +123,23 @@ export default async function handler(req, res) {
       meta: { restored_email: finalEmail, was_mangled: finalEmail !== u.email },
     });
 
-    // Sign them in so the redirect lands on a working app.
-    const sessionToken = signSession(u.id);
-    setSessionCookie(res, sessionToken);
-
     // Best-effort confirmation that we did the restore. Mirrors the style
     // of the security-alert family.
     sendRestoreConfirmation({ email: finalEmail, name: u.name }).catch(() => {});
 
     const payload = { restored: true, user: { id: u.id, email: finalEmail, name: u.name } };
+
+    // Sign them in so the redirect lands on a working app. A 2FA account
+    // gets the code step instead (same as login and password reset).
+    if (u.totp_enrolled_at) {
+      const mfaToken = signMfaToken(u.id);
+      setMfaCookie(res, mfaToken);
+      payload.mfaRequired = true;
+      if (isNativeClient(req)) payload.mfaToken = mfaToken;
+      return ok(res, payload);
+    }
+    const sessionToken = signSession(u.id);
+    setSessionCookie(res, sessionToken);
     if (isNativeClient(req)) payload.token = sessionToken;
     return ok(res, payload);
   } catch (err) {

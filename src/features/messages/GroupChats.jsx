@@ -1,6 +1,7 @@
 // Owner-side cohort group chat UI. Sibling of Messages.jsx - they
 // share a tab toggle in MessagesPage but each owns its own layout.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { safeHref } from '../../lib/safeHref.js';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
@@ -586,7 +587,7 @@ function AttachmentList({ attachments, fromBiz }) {
         }
         if ((a.type || '').startsWith('image/')) {
           return (
-            <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
+            <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer"
               style={{ display: 'block' }}>
               <img src={a.url} alt={a.name || 'image'}
                 style={{ maxWidth: 280, maxHeight: 280, borderRadius: 8, display: 'block' }}/>
@@ -594,7 +595,7 @@ function AttachmentList({ attachments, fromBiz }) {
           );
         }
         return (
-          <a key={i} href={a.url} target="_blank" rel="noopener noreferrer"
+          <a key={i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer"
             download={a.name || true}
             style={{
               fontSize: 12, padding: '6px 10px', borderRadius: 8,

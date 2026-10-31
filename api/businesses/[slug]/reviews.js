@@ -99,10 +99,14 @@ async function createReview(req, res) {
     // Find this user's clients row(s) on the workspace - match by linked
     // user_id or email. The reviewer is "verified" only if at least one
     // such client exists AND has booked OR messaged this workspace.
+    // Matching by email address counts only once the address is verified.
+    // Signup issues a session before verification, so an unverified
+    // account must never speak for a client record that shares its email.
+    const emailMatch = user.email_verified_at ? user.email : null;
     const clientRows = await sql`
       SELECT id FROM clients
       WHERE workspace_id = ${workspaceId}
-        AND (user_id = ${user.id} OR LOWER(email) = LOWER(${user.email}))
+        AND (user_id = ${user.id} OR (${emailMatch}::text IS NOT NULL AND LOWER(email) = LOWER(${emailMatch})))
     `;
     const clientIds = clientRows.rows.map((r) => r.id);
     if (clientIds.length === 0) {

@@ -1,3 +1,4 @@
+import { safeHref } from './safeHref.js';
 // Anchors and link targets for published sites. Shared by the server
 // renderer (api/_lib/siteHtml.js, via a copy in api/_lib/siteLinks.js) and
 // the in-app renderer. Keep the two copies identical.
@@ -50,7 +51,7 @@ export function sectionAnchors(sections) {
 export function resolveSiteLink(href, ctx = {}) {
   if (href == null) return href;
   const h = String(href).trim();
-  if (!h.startsWith('#')) return h;
+  if (!h.startsWith('#')) return safeHref(h);
   const key = slugify(h.slice(1));
   if (!key) return h;
   const { anchors = {}, pages = [], linkBase = '', sections = [], bookingHref = '' } = ctx;

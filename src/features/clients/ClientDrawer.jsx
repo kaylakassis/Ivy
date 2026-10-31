@@ -2,6 +2,7 @@
 // Inline-editable: name, email, lifetime value. Stage, tags, notes also editable.
 // Shows a "Saved" / error banner after each save so failures aren't silent.
 import React, { useState, useEffect, useRef } from 'react';
+import { safeHref } from '../../lib/safeHref.js';
 import { useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { useAnimatedClose } from '../../components/motion/useExitAnimation.js';
@@ -941,7 +942,7 @@ function ClientAttachments({ client, onSave }) {
                   background: "var(--surface)", border: "1px solid var(--border)",
                 }}>
                   {isImage ? (
-                    <a href={a.url} target="_blank" rel="noreferrer"
+                    <a href={safeHref(a.url)} target="_blank" rel="noreferrer"
                       style={{ flexShrink: 0, lineHeight: 0 }}>
                       <img src={a.url} alt={a.name || ""}
                         style={{ width: 40, height: 40, borderRadius: 8, objectFit: "cover" }}/>
@@ -954,7 +955,7 @@ function ClientAttachments({ client, onSave }) {
                     }}><Icons.FileIcon size={18} sw={1.6}/></div>
                   )}
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <a href={a.url} target="_blank" rel="noreferrer"
+                    <a href={safeHref(a.url)} target="_blank" rel="noreferrer"
                       style={{
                         fontSize: 13, fontWeight: 500, color: "var(--fg)",
                         textDecoration: "none",
@@ -1079,7 +1080,7 @@ function ServiceLogEntry({ entry }) {
           {entry.attachments.map((a, i) => {
             const isImage = (a.mimeType || '').startsWith('image/');
             return (
-              <a key={a.url + i} href={a.url} target="_blank" rel="noopener noreferrer"
+              <a key={a.url + i} href={safeHref(a.url)} target="_blank" rel="noopener noreferrer"
                 style={{ textDecoration: 'none' }}>
                 {isImage ? (
                   <img src={a.url} alt={a.filename || ''}
