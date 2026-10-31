@@ -290,6 +290,34 @@ export async function collectReferencedPathnames() {
       },
     ));
 
+    // Program community (api/programs/[id]/posts.js + community.js):
+    // photo posts and lesson comments keep up to 6 full Blob URLs in
+    // program_posts.images (JSONB array of strings); member and coach
+    // avatars live in program_member_profiles.avatar_url. Photos of a
+    // removed post are left to the prune.
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, images FROM program_posts
+          WHERE images <> '[]'::jsonb AND deleted_at IS NULL
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => { for (const u of (Array.isArray(r.images) ? r.images : [])) addUrl(typeof u === 'string' ? u : u?.url); },
+    ));
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, avatar_url FROM program_member_profiles
+          WHERE avatar_url IS NOT NULL
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => addUrl(r.avatar_url),
+    ));
+
     if (drained.some((d) => d === false)) {
       // eslint-disable-next-line no-console
       console.error('[blob-prune] a ref source exceeded MAX_COLLECT_PAGES - aborting to avoid false deletes');

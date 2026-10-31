@@ -119,6 +119,10 @@
       "schedule": "20 5 * * *"
     },
     {
+      "path": "/api/cron/program-events",
+      "schedule": "3,13,23,33,43,53 * * * *"
+    },
+    {
       "path": "/api/cron/plan-ending",
       "schedule": "20 10 * * *"
     },

@@ -12,6 +12,7 @@ import {
   invalidateCalendarSettings,
 } from '../_lib/calendar.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
+import { sessionsAsCalendarBlocks } from '../_lib/programEvents.js';
 import { validateAvailability, validateTimezone } from '../_lib/settingsValidation.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
@@ -79,11 +80,22 @@ export default async function handler(req, res) {
           AND b.date >= ${from}::date AND b.date <= ${to}::date
         ORDER BY b.date, b.start_min
       `, { rows: [] });
+      // Program live sessions: read-only entries shaped like blocks so the
+      // existing views show them (owner only; helpers see the plain schedule).
+      const sessions = req.helper ? { rows: [] } : await safe(sql`
+        SELECT e.id, e.program_id, e.title, e.starts_at, e.duration_min, p.title AS program_title
+        FROM program_events e JOIN programs p ON p.id = e.program_id AND p.workspace_id = e.workspace_id
+        WHERE e.workspace_id = ${workspaceId} AND e.cancelled_at IS NULL
+          AND e.starts_at >= ${from}::date - INTERVAL '1 day' AND e.starts_at < ${to}::date + INTERVAL '2 days'
+        ORDER BY e.starts_at
+      `, { rows: [] });
+      const sessionBlocks = sessionsAsCalendarBlocks(sessions.rows, settings?.timezone)
+        .filter((b) => b.date >= from && b.date <= to);
       return ok(res, {
         calendar: {
           settings: serializeSettings(settings),
           services: services.rows.map(serializeService),
-          blocks:   blocks.rows.map(serializeBlock),
+          blocks:   [...blocks.rows.map(serializeBlock), ...sessionBlocks],
           // Helper mode (schedule permission): the calendar without revenue.
           bookings: bookings.rows.map((r) => serializeBooking(r, { redactMoney: !!req.helper })),
         },

@@ -5,7 +5,8 @@ import { Link, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
-import { ContentList, Community } from '../programs/ProgramContent.jsx';
+import { ContentList } from '../programs/ProgramContent.jsx';
+import { useProgramExtras, memberTabs, TabBar, ProgramTabBody } from '../programs/ProgramTabs.jsx';
 
 // "Access until <date>" for a fixed window or a subscription the member has
 // already cancelled, "Renews <date>" while a subscription is still live,
@@ -51,6 +52,7 @@ export function ClientProgram() {
   const { id } = useParams();
   const [data, setData] = useState(null); const [err, setErr] = useState(null); const [tab, setTab] = useState('content');
   const [mine, setMine] = useState(null); const [cancelMsg, setCancelMsg] = useState(null);
+  const extras = useProgramExtras(id);
   useEffect(() => { api.get(`/me/programs/${id}`).then(setData).catch((e) => setErr(e.message)); api.get('/me/programs').then((r) => setMine((r.programs || []).find((p) => p.id === id) || null)).catch(() => {}); }, [id]);
   const cancel = async () => {
     if (!window.confirm('Cancel this subscription? You keep access until the end of the period you already paid for.')) return;
@@ -78,14 +80,8 @@ export function ClientProgram() {
           </div>
         )}
       </div>
-      {program.communityEnabled && (
-        <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, alignSelf: 'flex-start' }}>
-          {[['content', `Content (${items.length})`], ['community', 'Community']].map(([t, l]) => (
-            <button key={t} type="button" onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 550, background: tab === t ? 'var(--surface-2)' : 'transparent', color: tab === t ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
-          ))}
-        </div>
-      )}
-      {tab === 'content' ? <ContentList items={items}/> : <Community programId={id} enabled={program.communityEnabled}/>}
+      {(() => { const tabs = memberTabs({ contentLabel: `Content (${items.length})`, communityEnabled: program.communityEnabled, extras }); return tabs.length > 1 && <TabBar tabs={tabs} tab={tab} setTab={setTab}/>; })()}
+      {tab === 'content' ? <ContentList items={items}/> : <ProgramTabBody tab={tab} programId={id} role="member" communityEnabled={program.communityEnabled}/>}
     </div>
   );
 }
