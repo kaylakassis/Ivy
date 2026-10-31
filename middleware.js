@@ -42,6 +42,7 @@ const ALLOWED_HEADERS = [
   'Authorization',
   'Content-Type',
   'X-Client-Platform',
+  'X-Helper-Workspace',
   'X-Requested-With',
   'Idempotency-Key',
 ].join(', ');

@@ -4,7 +4,7 @@
 // flag when the owner's subscription has lapsed (the API answers 402).
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { api } from '../../lib/api.js';
+import { api, setHelperWorkspace } from '../../lib/api.js';
 
 const Ctx = createContext(null);
 const WS_KEY = 'ivy_helper_ws';
@@ -31,6 +31,10 @@ export function HelperProvider({ children }) {
     try {
       const q = ws ? `?workspaceId=${encodeURIComponent(ws)}` : '';
       const r = await api.get(`/helper/me${q}`);
+      // Set the helper-mode header BEFORE the screens render with this
+      // context: their own effects (schedule, clients) fire before the
+      // provider's effect below would, and must already carry it.
+      if (r?.business?.workspaceId) setHelperWorkspace(r.business.workspaceId);
       setMe(r);
       setPaused(null);
       setError(null);
@@ -54,9 +58,19 @@ export function HelperProvider({ children }) {
 
   useEffect(() => { load(workspaceId); }, [workspaceId, load]);
 
+  // While the shell is mounted every API call names the business the
+  // helper is acting on (X-Helper-Workspace). Cleared on unmount so the
+  // owner/client views never send it.
+  // Clear only on unmount. A dependency-driven cleanup would null the
+  // header between renders, right before the child screens' effects fire.
+  const resolvedWs = me?.business?.workspaceId || null;
+  useEffect(() => { if (resolvedWs) setHelperWorkspace(resolvedWs); }, [resolvedWs]);
+  useEffect(() => () => setHelperWorkspace(null), []);
+
   const value = useMemo(() => ({
     me, paused, error, loading, workspaceId,
     helps: me?.helps || [],
+    permissions: me?.permissions || { schedule: false, clients: false, messages: false },
     switchBusiness: setWorkspaceId,
     refresh: () => load(workspaceId),
   }), [me, paused, error, loading, workspaceId, setWorkspaceId, load]);

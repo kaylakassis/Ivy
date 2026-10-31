@@ -22,7 +22,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    const workspaceId = await ensureActiveWorkspace(user, req, res, { helper: 'schedule' });
     if (!workspaceId) return;
     const { id } = req.query;
 

@@ -15,6 +15,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { serializeStaff } from '../_lib/staff.js';
 import {
   HELPER_SEATS, helperFieldsFor, helperSeatUsage, inviteHelper, pendingInvitesByStaff, HelperError,
+  normalizePermissions,
 } from '../_lib/helpers.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -23,7 +24,11 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    // Helpers with the schedule permission may LIST staff (to assign a
+    // booking to someone); creating/editing staff stays owner-only.
+    const workspaceId = await ensureActiveWorkspace(user, req, res, {
+      helper: req.method === 'GET' ? 'schedule' : undefined,
+    });
     if (!workspaceId) return;
     if (req.method === 'GET') {
       try {
@@ -88,13 +93,14 @@ export default async function handler(req, res) {
         }
       }
 
+      const permissions = normalizePermissions(body.permissions);
       const ins = await sql`
         INSERT INTO staff_members (
           workspace_id, name, email, phone, role, color,
-          hourly_rate, commission_rate, active, owner_managed
+          hourly_rate, commission_rate, active, owner_managed, permissions
         ) VALUES (
           ${workspaceId}, ${name}, ${email}, ${phone}, ${role}, ${color},
-          ${hourlyRate}, ${commissionRate}, TRUE, TRUE
+          ${hourlyRate}, ${commissionRate}, TRUE, TRUE, ${JSON.stringify(permissions)}::jsonb
         )
         RETURNING *
       `;

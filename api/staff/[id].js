@@ -10,6 +10,7 @@ import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedStaff, serializeStaff } from '../_lib/staff.js';
+import { helperFieldsFor, normalizePermissions, invalidateHelperCache, pendingInvitesByStaff } from '../_lib/helpers.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -60,6 +61,11 @@ export default async function handler(req, res) {
         }
       }
       if ('active' in body) push('active', !!body.active);
+      // Helper permissions: applies on the helper's next request.
+      if ('permissions' in body) {
+        values.push(JSON.stringify(normalizePermissions(body.permissions)));
+        sets.push(`permissions = $${values.length}::jsonb`);
+      }
 
       if (sets.length === 0) return ok(res, { staff: serializeStaff(existing) });
       sets.push('updated_at = NOW()');
@@ -70,7 +76,9 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       const upd = await sql.query(queryText, values);
-      return ok(res, { staff: serializeStaff(upd.rows[0]) });
+      if ('permissions' in body || 'active' in body) invalidateHelperCache(existing.user_id);
+      const pending = await pendingInvitesByStaff(workspaceId);
+      return ok(res, { staff: serializeStaff(upd.rows[0], helperFieldsFor(upd.rows[0], pending.get(id))) });
     }
 
     if (req.method === 'DELETE') {

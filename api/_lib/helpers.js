@@ -4,20 +4,32 @@
 // admin role. A HELPER is an existing staff_members row (assistant,
 // second shooter, Saturday cover) that the owner has invited to sign in.
 // Accepting attaches the helper's own users row (staff_members.user_id)
-// so they can see THEIR assigned bookings and mark them done. Nothing
-// else: no money, no other clients, no settings.
+// so they can see THEIR assigned bookings and mark them done. The owner
+// can grant three extra permissions (staff_members.permissions JSONB,
+// all off by default):
+//   messages - message the business's clients from the business inbox
+//   schedule - the whole calendar: see every booking, add, move, cancel,
+//              assign to any staff member
+//   clients  - the full client list: add, edit, delete, read/write notes
+// Everything else (money, Ivy, documents, website, settings, other staff
+// management, programs/memberships/gift cards, reviews, branding) is
+// always off and has no toggle.
 //
 // This module is the single source of truth for:
 //   • HELPER_SEATS         - how many helpers a workspace may attach (2)
 //   • helperMembershipsFor - which workspaces a user helps at
 //   • requireHelper        - the gate every /api/helper/* endpoint uses
-//   • inviteHelper / revokeHelper / cancelHelperInvite
+//   • resolveHelperAccess  - helper mode on the owner endpoints that opt
+//                            in (workspaceGate.js), via X-Helper-Workspace
+//   • inviteHelper / revokeHelper / cancelHelperInvite / acceptInvite
 //   • helperSeatUsage      - attached + pending-invite count vs the cap
 //
 // SECURITY: every helper read is scoped by workspace_id AND
 // staff_member_id resolved from the SESSION user, never from the request.
-// Helper access rides on the owner's subscription: when isWorkspaceActive
-// says the business is paused, requireHelper denies with 402.
+// The X-Helper-Workspace header only PICKS one of the user's own
+// memberships; it never grants one. Helper access rides on the owner's
+// subscription: when isWorkspaceActive says the business is paused,
+// every gate denies with 402.
 import crypto from 'node:crypto';
 import { sql } from './db.js';
 import { requireUser } from './auth.js';
@@ -34,10 +46,25 @@ export const HELPER_SEATS = 2;
 // Signed invite links live for a week, then the owner resends.
 export const HELPER_INVITE_TTL_DAYS = 7;
 
+// The owner-granted permissions, in the order the UI lists them.
+export const PERMISSION_KEYS = ['schedule', 'clients', 'messages'];
+export const PERMISSION_LABELS = {
+  schedule: 'See the whole calendar and add, move, cancel or reassign bookings',
+  clients:  'See the full client list, add and edit clients, read and write notes',
+  messages: 'Message clients from the business inbox',
+};
+// What every helper can do regardless of toggles (for the invite email).
+export const BASE_ABILITY = 'See the sessions assigned to you, the client details for those sessions, and mark them done';
+
+// Request header (or ?helperWorkspaceId=) that puts an owner endpoint in
+// helper mode. Set automatically by the web client inside the helper
+// shell (src/lib/api.js setHelperWorkspace).
+export const HELPER_HEADER = 'x-helper-workspace';
+
 // Cached per session user (requireHelper runs on every helper request).
-// Short TTL; revoke/accept/delete call invalidateHelperCache so the
-// change lands immediately in practice. The test harness bypasses the
-// cache entirely (IVY_DISABLE_HOTCACHE).
+// Short TTL; revoke/accept/delete/permission edits call
+// invalidateHelperCache so the change lands immediately in practice. The
+// test harness bypasses the cache entirely (IVY_DISABLE_HOTCACHE).
 const HELPS_TTL_MS = 15_000;
 
 export function invalidateHelperCache(userId) {
@@ -54,14 +81,29 @@ function escapeHtml(s) {
   }[c]));
 }
 
+// Only the three known keys, only literal true counts.
+export function normalizePermissions(raw) {
+  const out = {};
+  for (const k of PERMISSION_KEYS) out[k] = !!(raw && typeof raw === 'object' && raw[k] === true);
+  return out;
+}
+
+// `perm`: undefined/true = nothing extra required; a key = that key;
+// an array = any of those keys.
+export function hasPermission(membership, perm) {
+  if (perm === undefined || perm === true || perm === null) return true;
+  const list = Array.isArray(perm) ? perm : [perm];
+  return list.some((p) => !!membership?.permissions?.[p]);
+}
+
 // Every workspace this user helps at, or WAS helping at until the owner
 // revoked them. Shape is what /api/me exposes as `helps`:
-//   [{ workspaceId, businessName, staffId, staffName, status, active }]
+//   [{ workspaceId, businessName, staffId, staffName, status, active, permissions }]
 //   status: 'active' (login attached) | 'revoked' (owner removed them)
 //   active: the owner's subscription is live (isWorkspaceActive, with the
 //           sponsored/beta bypass the owner's own gate applies)
 // Revoked rows are kept so the helper shell can say "you're no longer
-// part of <Business>" rather than a bare 403.
+// part of this team" rather than a bare 403.
 export async function helperMembershipsFor(userId) {
   if (!userId) return [];
   return getOrSet(`helps:${userId}`, HELPS_TTL_MS, () => helperMembershipsFromDb(userId));
@@ -75,7 +117,7 @@ export async function activeHelperMembershipsFor(userId) {
 async function helperMembershipsFromDb(userId) {
   try {
     const { rows } = await sql`
-      SELECT sm.id AS staff_id, sm.name AS staff_name, sm.workspace_id,
+      SELECT sm.id AS staff_id, sm.name AS staff_name, sm.workspace_id, sm.permissions,
              (sm.user_id = ${userId}) AS is_live, sm.revoked_at,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
              w.owner_id,
@@ -97,6 +139,7 @@ async function helperMembershipsFromDb(userId) {
       ownerId:      r.owner_id,
       status:       r.is_live ? 'active' : 'revoked',
       revokedAt:    r.is_live ? null : r.revoked_at,
+      permissions:  normalizePermissions(r.permissions),
       active:       !!r.is_live && !r.owner_deleted_at && (
         r.owner_user_type === 'sponsored' || r.owner_user_type === 'beta' || isWorkspaceActive(r)
       ),
@@ -116,21 +159,13 @@ export async function isHelperUser(userId) {
   return m.length > 0;
 }
 
-// Gate for /api/helper/*. Resolves the staff membership from the SESSION
-// user. `workspaceId` (query or body) picks one when the user helps at
-// several businesses; otherwise the first. Writes the response on
-// failure and returns null:
-//   401 - no session (requireUser)
-//   403 - the user helps nowhere / not at that workspace
-//         ({ error: 'revoked', businessName } when the owner removed them,
-//         so the shell can say so instead of showing a blank wall)
-//   402 - the business is paused on Ivy (owner's subscription lapsed)
-export async function requireHelper(req, res, { workspaceId } = {}) {
-  const user = await requireUser(req, res);
-  if (!user) return null;
-  const all = await helperMembershipsFor(user.id);
-  const memberships = all.filter((m) => m.status === 'active');
-  const wanted = workspaceId ? String(workspaceId) : null;
+// Shared denial logic. Picks the membership for `wanted` (or the first
+// active one) out of `all` and writes the right refusal:
+//   403 not-a-helper / revoked (with the friendly line), 402 business-paused,
+//   403 permission (names the permission).
+// Returns the membership or null after responding.
+function pickMembership(res, all, wanted, { permission } = {}) {
+  const live = all.filter((m) => m.status === 'active');
   const revokedDeny = (m) => {
     res.status(403).json({
       error: 'revoked',
@@ -140,20 +175,22 @@ export async function requireHelper(req, res, { workspaceId } = {}) {
     });
     return null;
   };
-  if (memberships.length === 0) {
-    const revoked = wanted ? all.find((m) => m.workspaceId === wanted) : all[0];
-    if (revoked) return revokedDeny(revoked);
-    res.status(403).json({ error: 'not-a-helper', message: 'You are not a helper at any business on Ivy.' });
-    return null;
-  }
-  const membership = wanted
-    ? memberships.find((m) => m.workspaceId === wanted)
-    : memberships[0];
-  if (!membership) {
-    const revoked = all.find((m) => m.workspaceId === wanted);
-    if (revoked) return revokedDeny(revoked);
-    res.status(403).json({ error: 'not-a-helper', message: 'You are not a helper at that business.' });
-    return null;
+  let membership;
+  if (wanted) {
+    membership = live.find((m) => m.workspaceId === wanted);
+    if (!membership) {
+      const revoked = all.find((m) => m.workspaceId === wanted);
+      if (revoked) return revokedDeny(revoked);
+      res.status(403).json({ error: 'not-a-helper', message: 'You are not a helper at that business.' });
+      return null;
+    }
+  } else {
+    membership = live[0];
+    if (!membership) {
+      if (all[0]) return revokedDeny(all[0]);
+      res.status(403).json({ error: 'not-a-helper', message: 'You are not a helper at any business on Ivy.' });
+      return null;
+    }
   }
   if (!membership.active) {
     res.status(402).json({
@@ -164,7 +201,83 @@ export async function requireHelper(req, res, { workspaceId } = {}) {
     });
     return null;
   }
-  return { user, membership, memberships };
+  if (!hasPermission(membership, permission)) {
+    const name = Array.isArray(permission) ? permission[0] : permission;
+    res.status(403).json({
+      error: 'permission',
+      permission: name,
+      message: `The owner has not given you the "${name}" permission.`,
+    });
+    return null;
+  }
+  return membership;
+}
+
+// Gate for /api/helper/*. Resolves the staff membership from the SESSION
+// user. `workspaceId` (query or body) picks one when the user helps at
+// several businesses; otherwise the first. `permission` (optional) is one
+// of PERMISSION_KEYS or an array (any of). Writes the response on failure
+// and returns null:
+//   401 - no session (requireUser)
+//   403 - helps nowhere / not at that workspace / revoked / permission
+//   402 - the business is paused on Ivy (owner's subscription lapsed)
+export async function requireHelper(req, res, { workspaceId, permission } = {}) {
+  const user = await requireUser(req, res);
+  if (!user) return null;
+  const all = await helperMembershipsFor(user.id);
+  const membership = pickMembership(res, all, workspaceId ? String(workspaceId) : null, { permission });
+  if (!membership) return null;
+  return { user, membership, memberships: all.filter((m) => m.status === 'active') };
+}
+
+// Which workspace a request wants to act on as a helper, if any.
+export function helperWorkspaceFromRequest(req) {
+  const h = req.headers?.[HELPER_HEADER] || req.headers?.['X-Helper-Workspace'];
+  const q = req.query?.helperWorkspaceId;
+  const v = (Array.isArray(h) ? h[0] : h) || q;
+  return v ? String(v).slice(0, 64) : null;
+}
+
+// Helper mode on an OWNER endpoint (called by workspaceGate when the
+// request carries X-Helper-Workspace). `allowed` is whether the route
+// opted in at all; `permission` is what it requires. On success stashes
+// `req.helper = membership` so the handler can narrow itself (no fee
+// charges, message attribution, thread scope) and returns the workspace
+// id. On failure writes the response and returns null.
+export async function resolveHelperAccess(user, req, res, { permission, allowed }) {
+  const wanted = helperWorkspaceFromRequest(req);
+  const all = await helperMembershipsFor(user.id);
+  // Not opted in: a plain refusal, same code the owner gate uses, so a
+  // helper never discovers more about a surface than "not for you".
+  if (!allowed) {
+    const m = all.find((x) => x.workspaceId === wanted);
+    if (!m) {
+      res.status(403).json({ error: 'not-a-helper', message: 'You are not a helper at that business.' });
+      return null;
+    }
+    res.status(403).json({ error: 'helper-only', message: "Helpers can't use this part of Ivy." });
+    return null;
+  }
+  const membership = pickMembership(res, all, wanted, { permission });
+  if (!membership) return null;
+  req.helper = membership;
+  return membership.workspaceId;
+}
+
+// The client ids a helper may message / look at when they lack the
+// schedule permission: only clients with a booking assigned to them.
+// Returns null when the helper has schedule (no restriction).
+export async function helperClientScope(membership) {
+  if (!membership) return null;
+  if (membership.permissions?.schedule) return null;
+  const { rows } = await sql`
+    SELECT DISTINCT client_id FROM bookings
+     WHERE workspace_id = ${membership.workspaceId}
+       AND staff_id = ${membership.staffId}
+       AND client_id IS NOT NULL
+       AND cancelled_at IS NULL
+  `;
+  return rows.map((r) => r.client_id);
 }
 
 // Seats used = helpers attached + invites still pending (unused,
@@ -221,11 +334,32 @@ export function helperFieldsFor(row, pending) {
     acceptedAt:      row.accepted_at || null,
     revokedAt:       row.revoked_at || null,
     inviteExpiresAt: pending?.expiresAt || null,
+    permissions:     normalizePermissions(row.permissions),
   };
 }
 
 export class HelperError extends Error {
   constructor(status, message) { super(message); this.status = status; }
+}
+
+// Owner action: change what a helper may do. Applies on the helper's
+// next request (membership cache invalidated). Returns the stored set.
+export async function setHelperPermissions({ workspaceId, staffId, permissions }) {
+  const next = normalizePermissions(permissions);
+  const { rows } = await sql`
+    UPDATE staff_members
+       SET permissions = ${JSON.stringify(next)}::jsonb, updated_at = NOW()
+     WHERE id = ${staffId} AND workspace_id = ${workspaceId}
+    RETURNING user_id
+  `;
+  if (rows[0]?.user_id) invalidateHelperCache(rows[0].user_id);
+  return next;
+}
+
+// What the invite email promises, from the row's stored permissions.
+export function abilityLines(permissions) {
+  const p = normalizePermissions(permissions);
+  return [BASE_ABILITY, ...PERMISSION_KEYS.filter((k) => p[k]).map((k) => PERMISSION_LABELS[k])];
 }
 
 // Owner action: mint + email a signed single-use invite for a staff row.
@@ -269,6 +403,7 @@ export async function inviteHelper({ workspaceId, owner, staff }) {
   const bizName = branding.businessName || owner?.name || 'A business';
   const link = `${appUrl()}/helper/invite/${encodeURIComponent(raw)}`;
   const first = (staff.name || '').trim().split(/\s+/)[0] || '';
+  const abilities = abilityLines(staff.permissions);
   const result = await sendEmail({
     to: email,
     subject: `${bizName} invited you to help out on Ivy`,
@@ -278,8 +413,8 @@ export async function inviteHelper({ workspaceId, owner, staff }) {
       branding,
       body: `<p>Hi${first ? ` ${escapeHtml(first)}` : ''},</p>
         <p><strong>${escapeHtml(bizName)}</strong> uses Ivy to run their business and invited you to help out.
-        With your own sign-in you can see the sessions assigned to you, the client's contact details for
-        those sessions, and mark them done.</p>
+        With your own sign-in you will be able to:</p>
+        <ul>${abilities.map((a) => `<li>${escapeHtml(a)}</li>`).join('')}</ul>
         <p>This link works once and expires in ${HELPER_INVITE_TTL_DAYS} days.</p>`,
       ctaText: 'Accept the invite',
       ctaUrl: link,
@@ -287,7 +422,7 @@ export async function inviteHelper({ workspaceId, owner, staff }) {
     }),
   }).catch((err) => ({ sent: false, reason: err.message }));
 
-  return { sent: result?.sent !== false && result?.ok !== false, expiresAt, reason: result?.reason || null };
+  return { sent: result?.sent !== false && result?.ok !== false, expiresAt, reason: result?.reason || null, abilities };
 }
 
 // Owner action: drop a pending invite (link stops working).
@@ -335,6 +470,7 @@ export async function findLiveInvite(raw) {
   if (typeof raw !== 'string' || raw.length < 16 || raw.length > 200) return null;
   const { rows } = await sql`
     SELECT hi.*, sm.name AS staff_name, sm.user_id AS staff_user_id, sm.active AS staff_active,
+           sm.permissions AS staff_permissions,
            w.owner_id, cs.biz_name, w.name AS workspace_name
       FROM helper_invites hi
       JOIN staff_members sm ON sm.id = hi.staff_member_id

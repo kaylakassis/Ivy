@@ -19,7 +19,11 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    // Helpers: the clients permission for the list + adding; the schedule
+    // permission may also READ (a booking needs a client to attach to).
+    const workspaceId = await ensureActiveWorkspace(user, req, res, {
+      helper: req.method === 'GET' ? ['clients', 'schedule'] : 'clients',
+    });
     if (!workspaceId) return;
     if (req.method === 'GET') {
       // Tolerate partial schema: a missing `clients` table or column

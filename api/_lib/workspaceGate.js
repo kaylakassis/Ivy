@@ -32,7 +32,7 @@
 // checkout doesn't get stuck on a stale "blocked".
 import { ensureWorkspace } from './auth.js';
 import { isWorkspaceActive } from './clientPortal.js';
-import { isHelperUser } from './helpers.js';
+import { isHelperUser, helperWorkspaceFromRequest, resolveHelperAccess } from './helpers.js';
 import { sql } from './db.js';
 import { stampRequestId } from './monitoring.js';
 
@@ -88,13 +88,26 @@ function deny(res, payload) {
   return null;
 }
 
-export async function ensureActiveWorkspace(user, req, res) {
+// `opts.helper` lets an owner endpoint accept HELPERS (api/_lib/helpers.js)
+// acting on a business they help at, picked by the X-Helper-Workspace
+// header: a permission key ('schedule' | 'clients' | 'messages'), an
+// array (any of), or true (any active helper). Routes that pass nothing
+// stay owner-only and answer a helper with 403 helper-only. In helper
+// mode `req.helper` carries the membership so the handler can narrow
+// itself (never charge a fee, attribute a message, scope threads).
+export async function ensureActiveWorkspace(user, req, res, opts = {}) {
   // Caller should have already established the user via requireUser;
   // guard anyway because a forgotten guard upstream would otherwise
   // crash here rather than 402 cleanly.
   if (!user?.id) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
+  }
+  if (helperWorkspaceFromRequest(req)) {
+    return resolveHelperAccess(user, req, res, {
+      permission: opts.helper === true ? undefined : opts.helper,
+      allowed: opts.helper !== undefined && opts.helper !== null && opts.helper !== false,
+    });
   }
   // Helper-only accounts (someone's assistant, api/_lib/helpers.js) own
   // nothing and must never get a workspace minted for them by hitting an

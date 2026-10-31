@@ -3463,6 +3463,10 @@ ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
 ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS revoked_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_staff_members_revoked_user
   ON staff_members(revoked_user_id) WHERE revoked_user_id IS NOT NULL;
+-- Owner-granted helper permissions: { schedule, clients, messages } booleans,
+-- all off by default (api/_lib/helpers.js PERMISSION_KEYS). Everything
+-- money-related, Ivy, documents, website and settings has no toggle.
+ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 -- Signed, single-use, 7-day invite links. We store only the sha256 of the
 -- raw token (same pattern as auth_tokens). A newer invite for the same

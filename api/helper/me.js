@@ -32,8 +32,10 @@ export default async function handler(req, res) {
         timezone,
       },
       staff: { id: membership.staffId, name: membership.staffName },
+      permissions: membership.permissions,
       helps: memberships.map((m) => ({
         workspaceId: m.workspaceId, businessName: m.businessName, staffId: m.staffId, active: m.active,
+        permissions: m.permissions,
       })),
     });
   } catch (err) {

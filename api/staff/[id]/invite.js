@@ -10,7 +10,8 @@ import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { fetchOwnedStaff, serializeStaff } from '../../_lib/staff.js';
-import { cancelHelperInvite, helperFieldsFor, inviteHelper, pendingInvitesByStaff, HelperError } from '../../_lib/helpers.js';
+import { cancelHelperInvite, helperFieldsFor, inviteHelper, pendingInvitesByStaff, HelperError, setHelperPermissions } from '../../_lib/helpers.js';
+import { readBody } from '../../_lib/body.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -26,6 +27,12 @@ export default async function handler(req, res) {
     if (!staff) return notFound(res, 'Staff member not found');
 
     if (req.method === 'POST') {
+      // Permissions chosen on the invite form travel with the invite so
+      // the email can list them.
+      const body = await readBody(req);
+      if (body && typeof body.permissions === 'object' && body.permissions) {
+        staff.permissions = await setHelperPermissions({ workspaceId, staffId: id, permissions: body.permissions });
+      }
       let invite;
       try {
         invite = await inviteHelper({ workspaceId, owner: user, staff });
@@ -38,6 +45,7 @@ export default async function handler(req, res) {
         staff: serializeStaff(row, helperFieldsFor(row, { expiresAt: invite.expiresAt })),
         sent: invite.sent,
         reason: invite.reason,
+        abilities: invite.abilities,
       });
     }
 

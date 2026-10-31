@@ -17,6 +17,15 @@ const COLORS = [
   '#34D399', '#FBBF24', '#F87171', '#94A3B8',
 ];
 
+// What a helper may do beyond their own schedule. Mirrors
+// api/_lib/helpers.js PERMISSION_KEYS; the server is the source of truth.
+const PERMISSIONS = [
+  { key: 'schedule', label: 'Full calendar',  hint: 'See every booking, add, move, cancel and assign bookings to anyone. Off: only their own sessions.' },
+  { key: 'clients',  label: 'Clients',        hint: 'See the whole client list, add and edit clients, read and write notes. Off: only contact details for their sessions.' },
+  { key: 'messages', label: 'Messages',       hint: 'Message your clients from your inbox, sent as your business and marked as written by them.' },
+];
+const NO_PERMS = { schedule: false, clients: false, messages: false };
+
 export default function StaffDrawer({ onClose, onChanged }) {
   const [staff, setStaff] = useState(null);
   const [seats, setSeats] = useState(null);
@@ -44,7 +53,7 @@ export default function StaffDrawer({ onClose, onChanged }) {
 
   const startAdd = (kind) => {
     setAdding(kind);
-    setDraft({ name: '', email: '', role: '', color: COLORS[0] });
+    setDraft({ name: '', email: '', role: '', color: COLORS[0], permissions: { ...NO_PERMS } });
     setEditingId(null);
     setErr(null);
   };
@@ -113,7 +122,16 @@ export default function StaffDrawer({ onClose, onChanged }) {
       setErr(e.message || 'Something went wrong');
     } finally { setBusyId(null); }
   };
-  const invite  = (s) => helperAction(s, () => api.post(`/staff/${encodeURIComponent(s.id)}/invite`), `Invite sent to ${s.email}. It works once and expires in 7 days.`);
+  const invite  = (s) => helperAction(s, () => api.post(`/staff/${encodeURIComponent(s.id)}/invite`, { permissions: s.permissions || NO_PERMS }), `Invite sent to ${s.email}. It works once and expires in 7 days.`);
+  // Permission edits save straight away and apply on the helper's next request.
+  const setPermission = (s, key, on) => {
+    const next = { ...(s.permissions || NO_PERMS), [key]: on };
+    // Optimistic: the box flips at once; the reload after the PATCH is the truth.
+    setStaff((list) => (list || []).map((x) => (x.id === s.id ? { ...x, permissions: next } : x)));
+    return helperAction(s,
+      () => api.patch(`/staff/${encodeURIComponent(s.id)}`, { permissions: next }),
+      s.helper?.status === 'active' ? `${s.name}'s permissions updated. Applies right away.` : null);
+  };
   const resend  = (s) => helperAction(s, () => api.post(`/staff/${encodeURIComponent(s.id)}/invite`), `A fresh invite went to ${s.email}. The earlier link no longer works.`);
   const cancelInvite = (s) => helperAction(s, () => api.del(`/staff/${encodeURIComponent(s.id)}/invite`), 'Invite cancelled.');
   const revoke  = (s) => {
@@ -206,7 +224,8 @@ export default function StaffDrawer({ onClose, onChanged }) {
               </div>
               <HelperRow s={s} busy={busyId === s.id} seatsLeft={seatsLeft}
                 onInvite={() => invite(s)} onResend={() => resend(s)}
-                onCancel={() => cancelInvite(s)} onRevoke={() => revoke(s)}/>
+                onCancel={() => cancelInvite(s)} onRevoke={() => revoke(s)}
+                onPermission={(key, on) => setPermission(s, key, on)}/>
             </div>
           ))}
         </div>
@@ -235,44 +254,82 @@ function HelperPill({ status }) {
 
 // The sign-in line under each staff row: what state their helper access
 // is in and the one or two actions that make sense from there.
-function HelperRow({ s, busy, seatsLeft, onInvite, onResend, onCancel, onRevoke }) {
+function HelperRow({ s, busy, seatsLeft, onInvite, onResend, onCancel, onRevoke, onPermission }) {
   const st = s.helper?.status || null;
   const line = { display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--muted)', paddingTop: 8, borderTop: '1px solid var(--border)', flexWrap: 'wrap' };
   const small = { padding: '4px 10px', fontSize: 12 };
   if (!s.active) return null;
+  const perms = (
+    <PermissionToggles value={s.permissions || NO_PERMS} disabled={busy} compact
+      onChange={(key, on) => onPermission(key, on)}/>
+  );
   if (st === 'active') {
     return (
-      <div style={line}>
-        <Icons.Check size={13} sw={2}/>
-        <span style={{ flex: 1 }}>Signs in to see their schedule{s.helper?.acceptedAt ? ` since ${fmtDate(s.helper.acceptedAt)}` : ''}.</span>
-        <button className="btn btn-ghost" disabled={busy} onClick={onRevoke} style={{ ...small, color: 'var(--danger)' }}>Revoke access</button>
-      </div>
+      <>
+        <div style={line}>
+          <Icons.Check size={13} sw={2}/>
+          <span style={{ flex: 1 }}>Signs in to see their schedule{s.helper?.acceptedAt ? ` since ${fmtDate(s.helper.acceptedAt)}` : ''}.</span>
+          <button className="btn btn-ghost" disabled={busy} onClick={onRevoke} style={{ ...small, color: 'var(--danger)' }}>Revoke access</button>
+        </div>
+        {perms}
+      </>
     );
   }
   if (st === 'invited') {
     return (
-      <div style={line}>
-        <Icons.Mail size={13}/>
-        <span style={{ flex: 1 }}>Invite sent{s.helper?.inviteExpiresAt ? `, expires ${fmtDate(s.helper.inviteExpiresAt)}` : ''}.</span>
-        <button className="btn btn-outline" disabled={busy} onClick={onResend} style={small}>Resend</button>
-        <button className="btn btn-ghost" disabled={busy} onClick={onCancel} style={small}>Cancel invite</button>
-      </div>
+      <>
+        <div style={line}>
+          <Icons.Mail size={13}/>
+          <span style={{ flex: 1 }}>Invite sent{s.helper?.inviteExpiresAt ? `, expires ${fmtDate(s.helper.inviteExpiresAt)}` : ''}.</span>
+          <button className="btn btn-outline" disabled={busy} onClick={onResend} style={small}>Resend</button>
+          <button className="btn btn-ghost" disabled={busy} onClick={onCancel} style={small}>Cancel invite</button>
+        </div>
+        {perms}
+      </>
     );
   }
   // Not a helper yet (or revoked).
   const canInvite = !!s.email && seatsLeft !== 0;
   return (
-    <div style={line}>
-      <Icons.Lock size={13}/>
-      <span style={{ flex: 1 }}>
-        {st === 'revoked' ? 'Access removed. ' : ''}
-        {s.email ? 'No sign-in.' : 'Add an email to invite them to Ivy.'}
-        {s.email && seatsLeft === 0 ? ' Both helper spots are in use.' : ''}
-      </span>
-      {s.email && (
-        <button className="btn btn-outline" disabled={busy || !canInvite} onClick={onInvite} style={small}>
-          {st === 'revoked' ? 'Invite again' : 'Invite to Ivy'}
-        </button>
+    <>
+      <div style={line}>
+        <Icons.Lock size={13}/>
+        <span style={{ flex: 1 }}>
+          {st === 'revoked' ? 'Access removed. ' : ''}
+          {s.email ? 'No sign-in.' : 'Add an email to invite them to Ivy.'}
+          {s.email && seatsLeft === 0 ? ' Both helper spots are in use.' : ''}
+        </span>
+        {s.email && (
+          <button className="btn btn-outline" disabled={busy || !canInvite} onClick={onInvite} style={small}>
+            {st === 'revoked' ? 'Invite again' : 'Invite to Ivy'}
+          </button>
+        )}
+      </div>
+      {s.email && canInvite && perms}
+    </>
+  );
+}
+
+// Three checkboxes with one-line explanations. `compact` is the row
+// version under each staff member; the form version is roomier.
+function PermissionToggles({ value, onChange, disabled, compact = false }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: compact ? 6 : 8, paddingTop: compact ? 6 : 0 }}>
+      {!compact && <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>What they can do</div>}
+      {PERMISSIONS.map((p) => (
+        <label key={p.key} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', cursor: disabled ? 'default' : 'pointer' }}>
+          <input type="checkbox" checked={!!value[p.key]} disabled={disabled}
+            onChange={(e) => onChange(p.key, e.target.checked)} style={{ marginTop: 2 }}/>
+          <span style={{ fontSize: compact ? 12 : 13, lineHeight: 1.4 }}>
+            <strong style={{ color: 'var(--fg)' }}>{p.label}</strong>
+            <span style={{ color: 'var(--muted)' }}> {p.hint}</span>
+          </span>
+        </label>
+      ))}
+      {!compact && (
+        <div style={{ fontSize: 11.5, color: 'var(--muted)' }}>
+          Always off for helpers: money, Ivy assistant, documents, website, settings, other staff.
+        </div>
       )}
     </div>
   );
@@ -323,6 +380,10 @@ function StaffForm({ draft, setDraft, onSave, onCancel, busy, err, helper = fals
           ))}
         </div>
       </Field>
+      {helper && (
+        <PermissionToggles value={draft.permissions || NO_PERMS}
+          onChange={(key, on) => setDraft({ ...draft, permissions: { ...(draft.permissions || NO_PERMS), [key]: on } })}/>
+      )}
       {err && <div style={{ color: 'var(--danger)', fontSize: 12 }}>{err}</div>}
       <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
         <button onClick={onCancel} className="btn btn-outline" disabled={busy}>Cancel</button>

@@ -6,6 +6,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
+import { helperClientScope } from '../_lib/helpers.js';
 import { readBody } from '../_lib/body.js';
 import { fetchOwnedThread, serializeThread, serializeMessage } from '../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
@@ -29,12 +30,15 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    const workspaceId = await ensureActiveWorkspace(user, req, res, { helper: 'messages' });
     if (!workspaceId) return;
     const { id } = req.query;
 
     const thread = await fetchOwnedThread({ id, workspaceId });
     if (!thread) return notFound(res, 'Thread not found');
+    // Helper without schedule: only threads for clients they are booked with.
+    const helperScope = await helperClientScope(req.helper);
+    if (helperScope && !helperScope.includes(thread.client_id)) return notFound(res, 'Thread not found');
 
     if (req.method === 'GET') {
       // Defense-in-depth: re-scope by JOINing message_threads + filtering
@@ -107,10 +111,19 @@ export default async function handler(req, res) {
       // message still lands in the thread so the conversation is unified.
       const channel = body.channel === 'sms' ? 'sms' : 'app';
 
+      // Sent as the business ('biz') exactly like the owner's sends; a
+      // helper's send is attributed in meta so the owner can see who wrote it.
+      const meta = channel === 'sms' ? { channel: 'sms' } : {};
+      if (req.helper) {
+        meta.sentBy = 'helper';
+        meta.helperStaffId = req.helper.staffId;
+        meta.helperName = req.helper.staffName;
+        meta.helperUserId = user.id;
+      }
       const inserted = await sql`
         INSERT INTO messages (thread_id, sender, text, attachments, meta)
         VALUES (${id}, 'biz', ${text}, ${JSON.stringify(attachments)}::jsonb,
-                ${JSON.stringify(channel === 'sms' ? { channel: 'sms' } : {})}::jsonb)
+                ${JSON.stringify(meta)}::jsonb)
         RETURNING *
       `;
       const audioOnly = !text && attachments.some((a) => a.type.startsWith('audio/'));

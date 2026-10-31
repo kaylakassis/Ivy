@@ -20,10 +20,17 @@ import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
 import { HelperProvider, useHelper } from './helperContext.jsx';
 import HelperGone from './HelperGone.jsx';
 
-const NAV = [
-  { to: '/helper',         label: 'Schedule', icon: 'Calendar', end: true },
-  { to: '/helper/account', label: 'Account',  icon: 'Settings' },
-];
+// Tabs appear only for granted permissions (api/_lib/helpers.js):
+// Schedule is always there (own bookings, or the whole calendar with the
+// schedule permission); Clients and Messages need their toggles.
+function navFor(permissions = {}) {
+  return [
+    { to: '/helper',          label: 'Schedule', icon: 'Calendar', end: true },
+    ...(permissions.clients  ? [{ to: '/helper/clients',  label: 'Clients',  icon: 'Users' }] : []),
+    ...(permissions.messages ? [{ to: '/helper/messages', label: 'Messages', icon: 'Chat' }] : []),
+    { to: '/helper/account',  label: 'Account',  icon: 'Settings' },
+  ];
+}
 
 export default function HelperShell() {
   return (
@@ -39,8 +46,9 @@ function HelperShellInner() {
   const [tweaks] = useTweaks();
   const viewport = useViewport();
   const location = useLocation();
-  const { me, paused, loading, error, helps, workspaceId, switchBusiness } = useHelper();
+  const { me, paused, loading, error, helps, workspaceId, switchBusiness, permissions } = useHelper();
   const { ctx } = useUserContext();
+  const nav = navFor(permissions);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const drawerExit = useExitAnimation(viewport.isMobile && drawerOpen);
 
@@ -75,11 +83,11 @@ function HelperShellInner() {
     <div className={`app-root dir-${tweaks.direction}`}>
       <div style={{ display: 'flex', alignItems: 'stretch', minHeight: '100vh' }}>
         {!viewport.isMobile && (
-          <HelperSidebar compact={viewport.isTablet} businessName={businessName}
+          <HelperSidebar compact={viewport.isTablet} businessName={businessName} nav={nav}
             showSwitch={showSwitch} helps={helps} workspaceId={workspaceId} onSwitchBusiness={switchBusiness}/>
         )}
         <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
-          <HelperTopbar isMobile={viewport.isMobile} onMenuClick={() => setDrawerOpen(true)} businessName={businessName}/>
+          <HelperTopbar isMobile={viewport.isMobile} onMenuClick={() => setDrawerOpen(true)} businessName={businessName} nav={nav}/>
           <div key={location.pathname} className="page-frame page-enter">
             {revoked ? (
               <div className="page-pad"><HelperGone kind="revoked" ctx={ctx}/></div>
@@ -95,10 +103,10 @@ function HelperShellInner() {
           </div>
         </main>
       </div>
-      {viewport.isMobile && <HelperMobileNav/>}
+      {viewport.isMobile && <HelperMobileNav nav={nav}/>}
       {drawerExit.mounted && (
         <HelperMobileDrawer closing={drawerExit.closing} onClose={() => setDrawerOpen(false)}
-          businessName={businessName} showSwitch={showSwitch}
+          businessName={businessName} showSwitch={showSwitch} nav={nav}
           helps={helps} workspaceId={workspaceId} onSwitchBusiness={switchBusiness}/>
       )}
       <TermsAcceptModal/>
@@ -150,7 +158,7 @@ function BusinessPicker({ helps, workspaceId, onSwitchBusiness }) {
   );
 }
 
-function HelperSidebar({ compact, businessName, showSwitch, helps, workspaceId, onSwitchBusiness }) {
+function HelperSidebar({ compact, businessName, showSwitch, helps, workspaceId, onSwitchBusiness, nav: NAV }) {
   return (
     <aside style={{
       width: compact ? 64 : 248, minWidth: compact ? 64 : 248,
@@ -220,7 +228,7 @@ function UserBlock({ compact }) {
   );
 }
 
-function HelperTopbar({ isMobile, onMenuClick, businessName }) {
+function HelperTopbar({ isMobile, onMenuClick, businessName, nav: NAV }) {
   const { pathname } = useLocation();
   const current = NAV.find((n) => n.end ? pathname === n.to : pathname.startsWith(n.to)) || NAV[0];
   return (
@@ -252,7 +260,7 @@ function HelperTopbar({ isMobile, onMenuClick, businessName }) {
   );
 }
 
-function HelperMobileNav() {
+function HelperMobileNav({ nav: NAV }) {
   return (
     <nav className="mobile-nav" aria-label="Primary">
       {NAV.map((item) => {
@@ -273,7 +281,7 @@ function HelperMobileNav() {
   );
 }
 
-function HelperMobileDrawer({ closing, onClose, businessName, showSwitch, helps, workspaceId, onSwitchBusiness }) {
+function HelperMobileDrawer({ closing, onClose, businessName, showSwitch, helps, workspaceId, onSwitchBusiness, nav: NAV }) {
   const { user, signOut } = useAuth();
   const nav = useNavigate();
   useEffect(() => {

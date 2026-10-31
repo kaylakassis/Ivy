@@ -340,6 +340,7 @@ export async function userContext(user) {
       workspaceId: h.workspaceId, businessName: h.businessName,
       staffId: h.staffId, staffName: h.staffName,
       status: h.status, active: h.active, revokedAt: h.revokedAt || null,
+      permissions: h.permissions,
     })),
   };
 }

@@ -10,13 +10,14 @@ import { serializeThread } from '../_lib/messages.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { requireSameOrigin } from "../_lib/security.js";
 import { blockMapForWorkspace } from '../_lib/moderation.js';
+import { helperClientScope } from '../_lib/helpers.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    const workspaceId = await ensureActiveWorkspace(user, req, res, { helper: 'messages' });
     if (!workspaceId) return;
     if (req.method === 'GET') {
       try {
@@ -34,14 +35,26 @@ export default async function handler(req, res) {
           ? requestedOffset
           : 0;
         const probeLimit = limit + 1;
-        const { rows } = await sql`
-          SELECT t.*, c.name AS client_name, c.email AS client_email
-          FROM message_threads t
-          JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
-          WHERE t.workspace_id = ${workspaceId}
-          ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
-          LIMIT ${probeLimit} OFFSET ${offset}
-        `;
+        // A helper without the schedule permission only sees threads for
+        // the clients they are booked with (null scope = no restriction).
+        const scope = await helperClientScope(req.helper);
+        const { rows } = scope
+          ? await sql`
+              SELECT t.*, c.name AS client_name, c.email AS client_email
+              FROM message_threads t
+              JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
+              WHERE t.workspace_id = ${workspaceId} AND t.client_id = ANY(${scope}::uuid[])
+              ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
+              LIMIT ${probeLimit} OFFSET ${offset}
+            `
+          : await sql`
+              SELECT t.*, c.name AS client_name, c.email AS client_email
+              FROM message_threads t
+              JOIN clients c ON c.id = t.client_id AND c.workspace_id = t.workspace_id
+              WHERE t.workspace_id = ${workspaceId}
+              ORDER BY COALESCE(t.last_message_at, t.created_at) DESC
+              LIMIT ${probeLimit} OFFSET ${offset}
+            `;
         const hasMore = rows.length > limit;
         const page = hasMore ? rows.slice(0, limit) : rows;
         // Blocked threads stay in the list; the flags let the UI explain
@@ -74,6 +87,10 @@ export default async function handler(req, res) {
       // Verify client belongs to this workspace.
       const cl = await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`;
       if (cl.rows.length === 0) return badRequest(res, 'Unknown client');
+      const scope = await helperClientScope(req.helper);
+      if (scope && !scope.includes(clientId)) {
+        return res.status(403).json({ error: 'permission', permission: 'schedule', message: 'You can only message clients you are booked with.' });
+      }
 
       // Upsert: thread per (workspace, client) is unique.
       const r = await sql`

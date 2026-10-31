@@ -39,6 +39,14 @@ import ivyHandler from '../api/ivy/index.js';
 import financeHandler from '../api/finance/index.js';
 import ownerComplete from '../api/calendar/bookings/complete.js';
 import accountDelete from '../api/account/delete.js';
+import calendarIndex from '../api/calendar/index.js';
+import bookingsCreate from '../api/calendar/bookings.js';
+import bookingById from '../api/calendar/bookings/[id].js';
+import ownerNoShow from '../api/calendar/bookings/no-show.js';
+import clientById from '../api/clients/[id].js';
+import staffById from '../api/staff/[id].js';
+import messagesIndex from '../api/messages/index.js';
+import messageThread from '../api/messages/[id].js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -65,11 +73,11 @@ function mockRes() {
   };
 }
 let ipN = 0;
-function req({ method = 'GET', body = {}, query = {}, cookie, ip } = {}) {
+function req({ method = 'GET', body = {}, query = {}, cookie, ip, headers = {} } = {}) {
   ipN++;
   return { method, url: '/test', query, body,
     headers: { 'content-type': 'application/json', origin: 'http://localhost:3000', host: 'localhost:3000',
-      'x-forwarded-for': ip || `203.0.113.${(ipN % 200) + 10}`, ...(cookie ? { cookie } : {}) } };
+      'x-forwarded-for': ip || `203.0.113.${(ipN % 200) + 10}`, ...(cookie ? { cookie } : {}), ...headers } };
 }
 const call = async (handler, opts) => { const r = mockRes(); await handler(req(opts), r); return r; };
 const cookieFor = (userId) => `ivy_session=${signSession(userId)}`;
@@ -224,6 +232,10 @@ async function run() {
     const hp = r.body.helps[0];
     assert(hp.workspaceId === A.workspaceId && hp.businessName === 'Maple Studio' && hp.staffId === s1 && hp.status === 'active' && hp.active === true,
       'helps[0] = { workspaceId, businessName, staffId, status: active, active: true }');
+    assert(hp.permissions && hp.permissions.schedule === false && hp.permissions.clients === false && hp.permissions.messages === false,
+      'helps[0].permissions default to all false');
+    assert(r.body.subscription === null && r.body.isOwner === false && r.body.hasBillingRecord === false && r.body.onboardedAt === null,
+      '/api/me for a helper carries no subscription / paywall state at all');
 
     console.log('\n[9] helper sees only their own bookings and only the clients they meet');
     const svc = await sql`INSERT INTO services (workspace_id, name, duration_minutes, price, location_type, location_label)
@@ -370,6 +382,163 @@ async function run() {
       last = r.statusCode;
     }
     assert(last === 429, `11th attempt from one IP → 429 (got ${last})`);
+
+
+    console.log('\n[17b] per-helper permissions (schedule / clients / messages)');
+    const asA = { 'x-helper-workspace': A.workspaceId };
+    const asB = { 'x-helper-workspace': B.workspaceId };
+    const expectPerm = (r2, name, label) => assert(r2.statusCode === 403 && r2.body?.error === 'permission' && r2.body?.permission === name,
+      `${label} → 403 permission "${name}" (got ${r2.statusCode} ${JSON.stringify(r2.body).slice(0, 80)})`);
+    const expectOwnerOnly = (r2, label) => assert(r2.statusCode === 403 && r2.body?.error === 'helper-only',
+      `${label} → 403 helper-only even in helper mode (got ${r2.statusCode} ${JSON.stringify(r2.body).slice(0, 80)})`);
+    // All off by default → each matching endpoint refuses with the permission name.
+    expectPerm(await call(calendarIndex, { cookie: h1c, headers: asA }), 'schedule', 'GET /api/calendar');
+    expectPerm(await call(bookingsCreate, { method: 'POST', cookie: h1c, headers: asA, body: { date: '2030-01-01', startMin: 600, endMin: 660, clientName: 'X', clientEmail: 'x@example.com' } }), 'schedule', 'POST /api/calendar/bookings');
+    expectPerm(await call(bookingById, { method: 'PATCH', cookie: h1c, headers: asA, query: { id: b2.id }, body: { notes: 'hi' } }), 'schedule', 'PATCH /api/calendar/bookings/:id');
+    expectPerm(await call(staffIndex, { cookie: h1c, headers: asA }), 'schedule', 'GET /api/staff (assignment list)');
+    expectPerm(await call(clientsHandler, { cookie: h1c, headers: asA }), 'clients', 'GET /api/clients');
+    expectPerm(await call(clientsHandler, { method: 'POST', cookie: h1c, headers: asA, body: { name: 'New' } }), 'clients', 'POST /api/clients');
+    expectPerm(await call(clientById, { method: 'PATCH', cookie: h1c, headers: asA, query: { id: c1 }, body: { notes: 'x' } }), 'clients', 'PATCH /api/clients/:id');
+    expectPerm(await call(messagesIndex, { cookie: h1c, headers: asA }), 'messages', 'GET /api/messages');
+    expectPerm(await call(messagesIndex, { method: 'POST', cookie: h1c, headers: asA, body: { clientId: c1 } }), 'messages', 'POST /api/messages');
+    // Owner-only surfaces stay closed in helper mode no matter what.
+    expectOwnerOnly(await call(invoicesHandler, { cookie: h1c, headers: asA }), 'GET /api/invoices');
+    expectOwnerOnly(await call(financeHandler, { cookie: h1c, headers: asA }), 'GET /api/finance');
+    expectOwnerOnly(await call(calendarIndex, { method: 'PATCH', cookie: h1c, headers: asA, body: { bizName: 'Hijack' } }), 'PATCH /api/calendar (settings)');
+    expectOwnerOnly(await call(staffIndex, { method: 'POST', cookie: h1c, headers: asA, body: { name: 'Sneaky' } }), 'POST /api/staff');
+    r = await call(ivyHandler, { cookie: h1c, headers: asA });
+    assert(r.statusCode === 403, `GET /api/ivy in helper mode → 403 (${r.statusCode})`);
+
+    // schedule ON (owner edits, no re-invite) → the whole calendar of A, scoped to A.
+    r = await call(staffById, { method: 'PATCH', cookie: A.cookie, query: { id: s1 }, body: { permissions: { schedule: true } } });
+    assert(r.statusCode === 200 && r.body.staff.permissions.schedule === true && r.body.staff.helper.permissions.schedule === true, 'owner PATCH permissions.schedule = true');
+    r = await call(meHandler, { cookie: h1c });
+    assert(r.body.helps[0].permissions.schedule === true && r.body.helps[0].permissions.clients === false, '/api/me reflects the change immediately');
+    r = await call(calendarIndex, { cookie: h1c, headers: asA });
+    assert(r.statusCode === 200, `GET /api/calendar with schedule → 200 (${r.statusCode})`);
+    const calIds = (r.body.calendar?.bookings || []).map((b) => b.id);
+    assert(calIds.includes(b1.id) && calIds.includes(b2.id), 'sees other staff members\' bookings too');
+    const bBookings = (await sql`SELECT id FROM bookings WHERE workspace_id = ${B.workspaceId}`).rows.map((x) => x.id);
+    assert(bBookings.length > 0 && !bBookings.some((id) => calIds.includes(id)), 'nothing from workspace B in the calendar');
+    r = await call(staffIndex, { cookie: h1c, headers: asA });
+    assert(r.statusCode === 200 && r.body.staff.some((x) => x.id === s4), 'GET /api/staff lists A\'s staff for assignment');
+    r = await call(bookingsCreate, { method: 'POST', cookie: h1c, headers: asA, body: {
+      date: '2030-03-03', startMin: 600, endMin: 660, clientId: c3, clientName: 'Client Three', clientEmail: 'three@example.com',
+      staffId: s4, skipConflictCheck: true,
+    } });
+    assert(r.statusCode === 201 && r.body.booking?.staffId === s4, `helper adds a booking assigned to another staff member (${r.statusCode})`);
+    const bNew = r.body.booking.id;
+    r = await call(bookingById, { method: 'PATCH', cookie: h1c, headers: asA, query: { id: bNew }, body: { staffId: s1 } });
+    assert(r.statusCode === 200 && r.body.booking?.staffId === s1, `helper reassigns it (${r.statusCode} ${JSON.stringify(r.body).slice(0, 80)})`);
+    r = await call(bookingById, { method: 'PATCH', cookie: h1c, headers: asA, query: { id: bNew }, body: { rescheduleTo: { date: '2030-03-04', startMin: 660, endMin: 720 } } });
+    assert(r.statusCode === 200 && r.body.booking?.date === '2030-03-04' && r.body.booking?.startMin === 660, `helper moves it (${r.statusCode} ${JSON.stringify(r.body).slice(0, 80)})`);
+    r = await call(ownerNoShow, { method: 'POST', cookie: h1c, headers: asA, body: { id: bNew, chargeFee: true } });
+    assert(r.statusCode === 200 && r.body.charged === false, 'owner no-show endpoint in helper mode never charges');
+    await call(ownerNoShow, { method: 'DELETE', cookie: h1c, headers: asA, body: { id: bNew } });
+    r = await call(bookingById, { method: 'DELETE', cookie: h1c, headers: asA, query: { id: bNew } });
+    assert(r.statusCode === 204 || r.statusCode === 200, `helper cancels the booking (${r.statusCode})`);
+    const cancelledRow = (await sql`SELECT cancelled_at FROM bookings WHERE id = ${bNew}`).rows[0];
+    assert(!!cancelledRow?.cancelled_at, 'booking cancelled in the DB');
+    // schedule alone does not open clients editing or messages.
+    expectPerm(await call(clientsHandler, { method: 'POST', cookie: h1c, headers: asA, body: { name: 'New' } }), 'clients', 'POST /api/clients with schedule only');
+    expectPerm(await call(messagesIndex, { cookie: h1c, headers: asA }), 'messages', 'GET /api/messages with schedule only');
+
+    // clients ON → full list, add, edit notes, delete; all scoped to A.
+    await call(staffById, { method: 'PATCH', cookie: A.cookie, query: { id: s1 }, body: { permissions: { schedule: false, clients: true } } });
+    r = await call(clientsHandler, { cookie: h1c, headers: asA });
+    const listIds = (r.body.clients || []).map((c) => c.id);
+    assert(r.statusCode === 200 && listIds.includes(c1) && listIds.includes(c3) && !listIds.includes(cB), 'GET /api/clients: every A client, no B client');
+    r = await call(clientsHandler, { method: 'POST', cookie: h1c, headers: asA, body: { name: 'Added By Helper', email: 'added@example.com' } });
+    assert(r.statusCode === 201 && r.body.client?.id, `helper adds a client (${r.statusCode})`);
+    const cNew = r.body.client.id;
+    const cNewRow = (await sql`SELECT workspace_id FROM clients WHERE id = ${cNew}`).rows[0];
+    assert(cNewRow.workspace_id === A.workspaceId, 'new client lands in workspace A');
+    r = await call(clientById, { method: 'PATCH', cookie: h1c, headers: asA, query: { id: cNew }, body: { notes: 'Prefers mornings' } });
+    assert(r.statusCode === 200 && r.body.client?.notes === 'Prefers mornings', 'helper writes client notes');
+    r = await call(clientById, { method: 'PATCH', cookie: h1c, headers: asA, query: { id: cB }, body: { notes: 'nope' } });
+    assert(r.statusCode === 404, "B's client is not found from A");
+    r = await call(clientById, { method: 'DELETE', cookie: h1c, headers: asA, query: { id: cNew } });
+    assert(r.statusCode === 204 || r.statusCode === 200, `helper deletes the client (${r.statusCode})`);
+    expectPerm(await call(calendarIndex, { cookie: h1c, headers: asA }), 'schedule', 'GET /api/calendar with clients only');
+
+    // messages ON (schedule OFF) → only threads for clients they are booked with.
+    await call(staffById, { method: 'PATCH', cookie: A.cookie, query: { id: s1 }, body: { permissions: { messages: true } } });
+    let tr = await call(messagesIndex, { method: 'POST', cookie: A.cookie, body: { clientId: c1 } });
+    const t1 = tr.body.thread.id; // c1 is booked with s1
+    tr = await call(messagesIndex, { method: 'POST', cookie: A.cookie, body: { clientId: c3 } });
+    const t3 = tr.body.thread.id; // c3 is not
+    r = await call(messagesIndex, { cookie: h1c, headers: asA });
+    const tIds = (r.body.threads || []).map((t) => t.id);
+    assert(r.statusCode === 200 && tIds.includes(t1) && !tIds.includes(t3), 'thread list limited to clients they are booked with');
+    r = await call(messageThread, { cookie: h1c, headers: asA, query: { id: t3 } });
+    assert(r.statusCode === 404, 'another client\'s thread is not found');
+    expectPerm(await call(messagesIndex, { method: 'POST', cookie: h1c, headers: asA, body: { clientId: c3 } }), 'schedule', 'starting a thread with a client they are not booked with');
+    r = await call(messageThread, { method: 'POST', cookie: h1c, headers: asA, query: { id: t1 }, body: { text: 'Running five minutes late' } });
+    assert(r.statusCode === 201 || r.statusCode === 200, `helper sends in the booked client's thread (${r.statusCode} ${JSON.stringify(r.body).slice(0, 80)})`);
+    const msgRow = (await sql`SELECT sender, meta FROM messages WHERE thread_id = ${t1} ORDER BY created_at DESC LIMIT 1`).rows[0];
+    assert(msgRow.sender === 'biz' && msgRow.meta?.sentBy === 'helper' && msgRow.meta?.helperStaffId === s1 && msgRow.meta?.helperUserId === h1.id,
+      'sent as the business, attributed to the helper in meta');
+    // messages + schedule → every client.
+    await call(staffById, { method: 'PATCH', cookie: A.cookie, query: { id: s1 }, body: { permissions: { messages: true, schedule: true } } });
+    r = await call(messagesIndex, { cookie: h1c, headers: asA });
+    assert((r.body.threads || []).some((t) => t.id === t3), 'with schedule too, every client\'s thread is listed');
+    r = await call(messagesIndex, { method: 'POST', cookie: h1c, headers: asA, body: { clientId: c3 } });
+    assert(r.statusCode === 201 || r.statusCode === 200, 'and they can start a thread with any client');
+
+    // Every permission on → still nothing of B, and B's helper gets nothing of A.
+    await call(staffById, { method: 'PATCH', cookie: A.cookie, query: { id: s1 }, body: { permissions: { messages: true, schedule: true, clients: true } } });
+    for (const [label, handler, opts] of [
+      ['GET /api/calendar as B', calendarIndex, { cookie: h1c, headers: asB }],
+      ['GET /api/clients as B', clientsHandler, { cookie: h1c, headers: asB }],
+      ['GET /api/messages as B', messagesIndex, { cookie: h1c, headers: asB }],
+    ]) {
+      // eslint-disable-next-line no-await-in-loop
+      r = await call(handler, opts);
+      assert(r.statusCode === 403 && r.body?.error === 'not-a-helper', `${label} → 403 not-a-helper (${r.statusCode})`);
+    }
+    r = await call(calendarIndex, { cookie: h4c, headers: asA });
+    assert(r.statusCode === 403 && r.body?.error === 'not-a-helper', "B's helper asking for A's calendar → 403");
+    r = await call(invoicesHandler, { cookie: h1c, headers: asA });
+    assert(r.statusCode === 403 && r.body?.error === 'helper-only', 'all three permissions still never open invoices');
+    // Back to none: takes effect at once.
+    await call(staffById, { method: 'PATCH', cookie: A.cookie, query: { id: s1 }, body: { permissions: {} } });
+    expectPerm(await call(calendarIndex, { cookie: h1c, headers: asA }), 'schedule', 'permissions cleared → calendar closed again');
+
+    // Invite email lists what they will be able to do ("Add helper" on B, which has a free seat).
+    r = await call(staffIndex, { method: 'POST', cookie: B.cookie, body: { name: 'Listed Abilities', email: em('h7'), invite: true, permissions: { schedule: true, messages: true } } });
+    assert(r.statusCode === 201 && r.body.staff.permissions.schedule === true && r.body.staff.permissions.clients === false, `Add helper stores the chosen permissions (${r.statusCode})`);
+    const inviteHtml = lastEmail().html || '';
+    assert(/See the sessions assigned to you/.test(inviteHtml), 'email lists the base ability');
+    assert(/See the whole calendar/.test(inviteHtml) && /Message clients/.test(inviteHtml), 'email lists the granted abilities');
+    assert(!/full client list/.test(inviteHtml), 'email does not list an ability that was not granted');
+    assert(Array.isArray(r.body.invite?.abilities) && r.body.invite.abilities.length === 3, 'response echoes the abilities');
+    await call(staffInvite, { method: 'DELETE', cookie: B.cookie, query: { id: r.body.staff.id } });
+
+    console.log('\n[17c] helpers never meet a paywall');
+    const src = (rel) => readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', ...rel.split('/')), 'utf8');
+    const shellSrc = src('src/features/helper/HelperShell.jsx');
+    for (const word of ['Paywall', 'SubscriptionBanner', 'Walkthrough', 'start-trial', 'previewPaywall', 'TrialPriming', 'SetupReplay']) {
+      assert(!shellSrc.includes(word), `HelperShell.jsx never mentions ${word}`);
+    }
+    const appSrc = src('src/App.jsx');
+    assert(/<Route element=\{<RequireAuth><HelperShell \/><\/RequireAuth>\}>/.test(appSrc), 'helper routes mount HelperShell directly, not AppShell (where the Paywall lives)');
+    const appShellSrc = src('src/components/layout/AppShell.jsx');
+    assert(/ctx\?\.isOwner && !ctx\?\.subscription\?\.isActive/.test(appShellSrc), 'AppShell paywall is gated on isOwner (false for a helper)');
+    const landingSrc = src('src/lib/landing.js');
+    assert(/return 'helper'/.test(landingSrc), 'landing sends helper-only accounts to /helper, never into the business shell');
+    const roleRouterSrc = src('src/features/auth/RoleRouter.jsx');
+    assert(/effective === 'helper'/.test(roleRouterSrc), 'RoleRouter bounces a helper who types a business URL back to /helper');
+    const paywallImporters = ['src/components/layout/AppShell.jsx', 'src/features/helper/HelperShell.jsx', 'src/features/helper/HelperSchedule.jsx', 'src/features/helper/HelperAccount.jsx', 'src/features/helper/HelperGone.jsx']
+      .filter((f) => /billing\/Paywall|SubscriptionBanner/.test(src(f)));
+    assert(paywallImporters.length === 1 && paywallImporters[0] === 'src/components/layout/AppShell.jsx', 'only AppShell imports the Paywall / SubscriptionBanner');
+    r = await call(helperMe, { cookie: h1c });
+    assert(r.statusCode === 200 && !('subscription' in r.body) && !('paywall' in r.body), '/api/helper/me carries no subscription state');
+    // A helper who also owns a business keeps the owner rules for THAT business only.
+    r = await call(meHandler, { cookie: h4c });
+    assert(r.body.isOwner === true && r.body.subscription && r.body.subscription.isActive === false && r.body.isHelper === true,
+      'owner+helper (h4): their own workspace is paywalled as usual, helper link intact');
+    r = await call(helperMe, { cookie: h4c });
+    assert(r.statusCode === 200, 'and their helper access at B is unaffected by their own paywall');
 
     console.log('\n[18] owner purge leaves the helper\'s own login intact');
     // Data-retention purge sweeps every workspace-keyed table (staff rows
