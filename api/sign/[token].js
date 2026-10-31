@@ -26,7 +26,7 @@ import {
   serializeDocPublic, cleanFields, VALID_FIELD_TYPES,
 } from '../_lib/documents.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
-import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from '../_lib/email.js';
+import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell, redactEmail } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
@@ -391,7 +391,7 @@ async function signDoc(req, res) {
                 }),
               });
             } catch (mailErr) {
-              console.error('[sign] completion email failed for', s.email, '::', mailErr.message);
+              console.error('[sign] completion email failed for', redactEmail(s.email), '::', mailErr.message);
             }
           }
         }));

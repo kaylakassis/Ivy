@@ -16,7 +16,7 @@ import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmail, emailShell, redactEmail } from '../_lib/email.js';
 import { unsubscribeUrlFor } from '../_lib/unsubscribeToken.js';
 import { appUrl } from '../_lib/tokens.js';
 import { recordAudit } from '../_lib/audit.js';
@@ -102,7 +102,7 @@ export default async function handler(req, res) {
         else {
           failed++;
           // eslint-disable-next-line no-console
-          console.warn('[waitlist-announce] failed for', slice[j].email, results[j].reason?.message);
+          console.warn('[waitlist-announce] failed for', redactEmail(slice[j].email), results[j].reason?.message);
         }
       }
     }

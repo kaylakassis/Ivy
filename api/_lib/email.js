@@ -79,6 +79,15 @@ function warnIfSandbox() {
   }
 }
 
+// For log lines: "j***@example.com". Operators can still tell which
+// domain bounced without the full address sitting in the logs.
+export function redactEmail(addr) {
+  const a = String(addr || '');
+  const at = a.indexOf('@');
+  if (at < 1) return a ? '***' : '';
+  return `${a[0]}***${a.slice(at)}`;
+}
+
 export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, unsubscribeUrl, unsubscribeAllUrl, timeoutMs = 8000 }) {
   // HARD STOP for deleted accounts. Deletion mangles the address to
   // user+deleted-<id>@domain to free it for re-signup - but Gmail-style
@@ -521,7 +530,7 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
     // every transactional email and operators only find out via user
     // complaints. Caller can still inspect { ok: false } if they care.
     // eslint-disable-next-line no-console
-    console.error('[email/sendEmailToUser] send failed:', err.message, '(to', to, 'subject', JSON.stringify(subject).slice(0, 80) + ')');
+    console.error('[email/sendEmailToUser] send failed:', err.message, '(to', redactEmail(to), 'subject', JSON.stringify(subject).slice(0, 80) + ')');
     return { ok: false, sent: false, reason: err.message };
   }
 }
