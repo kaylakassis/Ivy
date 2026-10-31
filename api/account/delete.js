@@ -14,7 +14,7 @@
 //
 // After delete we clear the session cookie so the browser is signed out.
 import { sql } from '../_lib/db.js';
-import { requireUser, clearSessionCookie, invalidateUserCache } from '../_lib/auth.js';
+import { requireUser, clearSessionCookie, invalidateUserCache, refuseImpersonated } from '../_lib/auth.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
 import { invalidateHelperCache } from '../_lib/helpers.js';
 import { readBody } from '../_lib/body.js';
@@ -36,6 +36,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
+    if (refuseImpersonated(req, res)) return;
 
     const body = await readBody(req);
     const confirmEmail = (body.confirmEmail || '').toString().trim().toLowerCase();

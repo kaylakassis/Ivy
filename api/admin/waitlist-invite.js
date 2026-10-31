@@ -40,7 +40,7 @@ export default async function handler(req, res) {
         to: row.email,
         subject: "You're in: your Ivy invite",
         html: emailShell({
-          heading: first ? `${esc(first)}, you're in.` : "You're in.",
+          heading: first ? `${first}, you're in.` : "You're in.",
           body: `<p>Your spot on the Ivy waitlist just came up. This link is yours alone and works for 30 days:</p>
                  <p style="margin:18px 0"><a href="${esc(link)}" style="display:inline-block;padding:12px 20px;background:#4CBA7F;color:#012B24;border-radius:10px;text-decoration:none;font-weight:600">Create my Ivy account</a></p>
                  <p>If the button doesn't work, paste this into your browser:<br><span style="word-break:break-all">${esc(link)}</span></p>

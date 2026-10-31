@@ -14,7 +14,7 @@
 // Rate-limited: 5 attempts per minute per user to slow down a
 // brute-force attempt against the 6-digit space (~1M codes).
 import { sql } from '../../_lib/db.js';
-import { requireUser, invalidateUserCache } from '../../_lib/auth.js';
+import { requireUser, invalidateUserCache, refuseImpersonated } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { decrypt } from '../../_lib/secrets.js';
@@ -30,6 +30,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
+    if (refuseImpersonated(req, res)) return;
 
     // 5 attempts / minute / user. A brute-force from a different IP
     // hits this same cap because we key on user, not IP. 1M codes

@@ -28,8 +28,26 @@ export async function verifyPassword(pw, hash) {
   return bcrypt.compare(pw, hash);
 }
 
-export function signSession(userId, extraClaims = {}) {
-  return jwt.sign({ sub: userId, ...extraClaims }, secret(), { expiresIn: `${MAX_AGE}s`, algorithm: 'HS256' });
+// `expiresIn` (seconds) overrides the default 30-day lifetime. Impersonation
+// sessions use IMPERSONATION_MAX_AGE so a leaked "viewing as" token dies
+// within the hour instead of living for a month.
+export const IMPERSONATION_MAX_AGE = 60 * 60; // 1 hour
+
+export function signSession(userId, extraClaims = {}, { expiresIn } = {}) {
+  const ttl = Number.isFinite(expiresIn) && expiresIn > 0 ? Math.floor(expiresIn) : MAX_AGE;
+  return jwt.sign({ sub: userId, ...extraClaims }, secret(), { expiresIn: `${ttl}s`, algorithm: 'HS256' });
+}
+
+// Impersonation is for looking, not for changing the things that lock an
+// owner out of their own account or move their money. Handlers for account
+// deletion, 2FA changes and payment-provider connections call this right
+// after requireUser; it sends a 403 and returns true when the session is an
+// admin "viewing as" session (carries `imp`), false otherwise.
+export function refuseImpersonated(req, res) {
+  const session = readSession(req);
+  if (!session?.imp) return false;
+  res.status(403).json({ error: 'Not available while impersonating' });
+  return true;
 }
 
 // Vercel runs all deployments over HTTPS, so secure: always-on. NODE_ENV check

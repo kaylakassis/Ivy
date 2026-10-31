@@ -9,7 +9,7 @@
 // Re-enabling later goes through /enroll + /verify like the first
 // time. No state is preserved across a disable.
 import { sql } from '../../_lib/db.js';
-import { requireUser, verifyPassword, invalidateUserCache } from '../../_lib/auth.js';
+import { requireUser, verifyPassword, invalidateUserCache, refuseImpersonated } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
@@ -23,6 +23,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
+    if (refuseImpersonated(req, res)) return;
 
     // Cheap rate-limit on password-verify so a stolen-session
     // attacker can't brute-force the password offline through this

@@ -33,7 +33,7 @@ import { sql } from '../_lib/db.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { listStripeSubscriptions } from '../_lib/stripe.js';
 import { applySubscriptionState } from '../_lib/memberships.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_lib/cronShard.js';
@@ -67,12 +67,7 @@ async function retryStripeOn429(fn) {
 }
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     const { shard, shards } = shardFromReq(req);

@@ -25,7 +25,8 @@ import { sql } from '../_lib/db.js';
 import { fetchSubscription, platformStripeSecret } from '../_lib/stripe.js';
 import { mapStripeStatus } from '../_lib/billing.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
-import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { withDeadline, terminationReason } from '../_lib/cronShard.js';
@@ -70,10 +71,7 @@ async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return methodNotAllowed(res, ['GET', 'POST']);
   }
-  const expected = process.env.CRON_SECRET;
-  if (!expected) return res.status(500).json({ error: 'CRON_SECRET not configured' });
-  const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (got !== expected) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

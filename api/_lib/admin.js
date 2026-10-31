@@ -2,7 +2,9 @@
 //
 // A request is treated as super-admin if ANY of:
 //   • `x-admin-secret: $ADMIN_SECRET` header - curl / scripts
-//   • Authenticated session whose user.email matches the allowlist
+//   • Authenticated session whose user.email matches the allowlist AND
+//     whose email is verified (an unverified signup with an operator's
+//     address is just a regular user)
 //   • Authenticated session whose users.user_type = 'super_admin' in the DB
 //
 // The email allowlist comes solely from the SUPER_ADMIN_EMAIL env var
@@ -47,16 +49,33 @@ export function emailIsSuperAdmin(email) {
 // has to remember to flip a column by hand. Best-effort: if the UPDATE
 // fails (schema not migrated, etc.) we silently skip - the email-match
 // path will still work.
+//
+// The account's email must be VERIFIED first. Anyone can sign up with an
+// allowlisted address they do not own; until the confirmation link is
+// clicked that account is an ordinary user and is never promoted.
 export async function ensureSuperAdminPromotion(user) {
   if (!user || !emailIsSuperAdmin(user.email)) return;
   if (user.user_type === 'super_admin') return;
+  if (!(await emailVerified(user))) return;
   try {
-    await sql`UPDATE users SET user_type = 'super_admin' WHERE id = ${user.id} AND user_type IS DISTINCT FROM 'super_admin'`;
+    await sql`UPDATE users SET user_type = 'super_admin' WHERE id = ${user.id} AND user_type IS DISTINCT FROM 'super_admin' AND email_verified_at IS NOT NULL AND deleted_at IS NULL`;
     user.user_type = 'super_admin';
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn('[admin] super-admin promotion failed (non-blocking):', e.message);
   }
+}
+
+// True when the users row has email_verified_at set. Uses the loaded
+// column when the caller already has it (requireUser does), otherwise
+// fetches it. Fails closed on any error.
+async function emailVerified(user) {
+  if (!user?.id) return false;
+  if ('email_verified_at' in user) return !!user.email_verified_at;
+  try {
+    const { rows } = await sql`SELECT email_verified_at FROM users WHERE id = ${user.id}`;
+    return !!rows[0]?.email_verified_at;
+  } catch { return false; }
 }
 
 // Returns true if the caller should be allowed. Sends 401/403 + returns
@@ -72,7 +91,7 @@ export async function requireSuperAdmin(req, res) {
   // the DB user_type column. Either path grants access.
   const user = await requireUser(req, res);
   if (!user) return false;
-  if (emailIsSuperAdmin(user.email)) {
+  if (emailIsSuperAdmin(user.email) && (await emailVerified(user))) {
     // Make sure the DB column is set too, so subsequent requests can
     // skip the email-allowlist lookup entirely.
     ensureSuperAdminPromotion(user).catch(() => {});
@@ -80,14 +99,12 @@ export async function requireSuperAdmin(req, res) {
   }
   if (user.user_type === 'super_admin') return true;
 
-  // Diagnostic goes to SERVER LOGS only - never the response body. The
-  // 403 used to echo the full super-admin allowlist + the caller's
-  // user_type to any authenticated non-admin who probed an admin route,
-  // disclosing operator emails. Keep that detail where only the operator
-  // can see it.
+  // Diagnostic goes to SERVER LOGS only - never the response body, and
+  // never the allowlist or the probing user's address (a log leak would
+  // otherwise disclose operator emails). The user id is enough to
+  // investigate.
   // eslint-disable-next-line no-console
-  console.warn('[admin] super-admin check failed for', JSON.stringify(user.email),
-    '- user_type =', user.user_type, '- allowed =', Array.from(superAdminEmails()));
+  console.warn('[admin] super-admin check failed for user', user.id, '- user_type =', user.user_type);
   res.status(403).json({ error: 'Super-admin only' });
   return false;
 }
@@ -100,10 +117,18 @@ export async function isSuperAdminBySession(req) {
   const session = readSession(req);
   if (!session?.sub) return false;
   try {
-    const { rows } = await sql`SELECT email, user_type FROM users WHERE id = ${session.sub}`;
+    const { rows } = await sql`
+      SELECT email, user_type, email_verified_at, deleted_at, password_changed_at
+        FROM users WHERE id = ${session.sub}`;
     const r = rows[0];
     if (!r) return false;
-    return emailIsSuperAdmin(r.email) || r.user_type === 'super_admin';
+    // Same revocation rules as requireUser: a deleted account has no
+    // session, and a JWT issued before the last password change is dead.
+    if (r.deleted_at) return false;
+    const pcAt = r.password_changed_at;
+    if (pcAt && session.iat && (session.iat * 1000) < new Date(pcAt).getTime()) return false;
+    if (r.user_type === 'super_admin') return true;
+    return emailIsSuperAdmin(r.email) && !!r.email_verified_at;
   } catch { return false; }
 }
 

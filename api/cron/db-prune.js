@@ -34,7 +34,7 @@
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
 import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 
 const BATCH_LIMIT = 5000;
@@ -46,12 +46,7 @@ async function handler(req, res) {
   // Auth: Vercel Cron (Bearer CRON_SECRET), an admin secret, or a
   // signed-in super-admin. This endpoint runs destructive DELETEs, so it
   // must never be reachable unauthenticated.
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     const t0 = Date.now();

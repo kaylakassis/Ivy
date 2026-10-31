@@ -13,6 +13,7 @@
 //   Sends a welcome email with a sign-in link by default.
 //
 // Body shape for POST is documented inline below.
+import { randomBytes } from 'node:crypto';
 import { sql } from '../_lib/db.js';
 import { hashPassword, validEmail } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
@@ -191,7 +192,9 @@ async function createUser(req, res) {
 
   // Generate a random password if not supplied so we never store NULL.
   // The user can reset via the link we email them anyway.
-  const pw = password || Math.random().toString(36).slice(2, 14) + 'A1!';
+  // CSPRNG, not Math.random(): the fallback password is a real credential
+  // until the invitee sets their own.
+  const pw = password || randomBytes(16).toString('base64url') + 'A1!';
   const password_hash = await hashPassword(pw);
 
   const dbUserType = (userType === 'sponsored' || userType === 'beta' || userType === 'affiliate') ? userType : 'regular';
@@ -338,8 +341,8 @@ function subjectFor(type) {
   }
 }
 function headingFor(type, name) {
-  const greet = name ? `Hi ${escapeHtml(name.split(' ')[0])},` : 'Hi,';
-  return greet;
+  // Raw text: emailShell escapes the heading itself.
+  return name ? `Hi ${name.split(' ')[0]},` : 'Hi,';
 }
 function bodyFor(type, name) {
   switch (type) {

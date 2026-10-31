@@ -143,63 +143,37 @@ export default async function handler(req, res) {
   }
 }
 
+// Every segment: verified email only (unverified addresses bounce and hurt
+// deliverability), never a deleted account, never the operator's own
+// super-admin login, never a flagged test account.
+const REAL_RECIPIENT_SQL = `
+      u.email IS NOT NULL
+      AND u.email_verified_at IS NOT NULL
+      AND u.deleted_at IS NULL
+      AND COALESCE(u.user_type, 'regular') <> 'super_admin'
+      AND NOT COALESCE(u.is_tester, FALSE)`;
+
 async function loadSegment(segment) {
-  // Always require a verified email - we never want to blast unverified
-  // addresses (high bounce rate hurts deliverability).
+  const q = (where, params = []) => sql.query(
+    `SELECT u.id, u.email, u.name FROM users u WHERE ${REAL_RECIPIENT_SQL} AND (${where})`, params,
+  );
+  let r;
   if (segment === 'all') {
-    const r = await sql`
-      SELECT id, email, name FROM users
-      WHERE email IS NOT NULL AND email_verified_at IS NOT NULL
-    `;
-    return r.rows;
+    r = await q('TRUE');
+  } else if (segment === 'business-active') {
+    r = await q(`EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id AND w.subscription_status = 'active')`);
+  } else if (segment === 'business-trial') {
+    r = await q(`EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id
+                   AND w.subscription_status = 'trialing' AND w.trial_ends_at > NOW())`);
+  } else if (segment === 'sponsored' || segment === 'beta' || segment === 'affiliate') {
+    r = await q('u.user_type = $1', [segment]);
+  } else if (segment === 'client-only') {
+    r = await q(`NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
+                 AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`);
+  } else {
+    return [];
   }
-  if (segment === 'business-active') {
-    const r = await sql`
-      SELECT u.id, u.email, u.name FROM users u
-      JOIN workspaces w ON w.owner_id = u.id
-      WHERE w.subscription_status = 'active' AND u.email_verified_at IS NOT NULL
-    `;
-    return r.rows;
-  }
-  if (segment === 'business-trial') {
-    const r = await sql`
-      SELECT u.id, u.email, u.name FROM users u
-      JOIN workspaces w ON w.owner_id = u.id
-      WHERE w.subscription_status = 'trialing'
-        AND w.trial_ends_at > NOW()
-        AND u.email_verified_at IS NOT NULL
-    `;
-    return r.rows;
-  }
-  if (segment === 'sponsored') {
-    const r = await sql`
-      SELECT id, email, name FROM users
-      WHERE user_type = 'sponsored' AND email_verified_at IS NOT NULL
-    `;
-    return r.rows;
-  }
-  if (segment === 'beta') {
-    const r = await sql`
-      SELECT id, email, name FROM users
-      WHERE user_type = 'beta' AND email_verified_at IS NOT NULL
-    `;
-    return r.rows;
-  }
-  if (segment === 'affiliate') {
-    const r = await sql`
-      SELECT id, email, name FROM users
-      WHERE user_type = 'affiliate' AND email_verified_at IS NOT NULL
-    `;
-    return r.rows;
-  }
-  if (segment === 'client-only') {
-    const r = await sql`
-      SELECT u.id, u.email, u.name FROM users u
-      WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
-        AND EXISTS    (SELECT 1 FROM clients c WHERE c.user_id = u.id)
-        AND u.email_verified_at IS NOT NULL
-    `;
-    return r.rows;
-  }
-  return [];
+  return r.rows;
 }
+
+export { loadSegment };

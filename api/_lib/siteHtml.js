@@ -32,7 +32,32 @@ import { sectionAnchors, resolveSiteLink } from '../../src/lib/siteLinks.js';
 // Per-render link context (anchors on this page, the site's pages, the
 // link base). Rendering is synchronous, so a module-level slot is safe.
 let LINK_CTX = { anchors: {}, pages: [], linkBase: '', sections: [] };
-function link(href) { return resolveSiteLink(href, LINK_CTX); }
+function link(href) { return safeHref(resolveSiteLink(href, LINK_CTX)); }
+
+// Owner-supplied hrefs may only be web links, mail/phone/sms links, or
+// paths on this site. Anything else (javascript:, data:, vbscript:,
+// protocol-relative //host, a bare word) renders as "#". Exported for tests.
+const SAFE_SCHEMES = new Set(['http:', 'https:', 'mailto:', 'tel:', 'sms:']);
+export function safeHref(href) {
+  if (href == null) return '#';
+  const h = String(href).trim();
+  if (!h) return '#';
+  if (h.startsWith('#')) return h;
+  if (h.startsWith('/')) return h.startsWith('//') ? '#' : h;
+  const m = h.match(/^([a-zA-Z][a-zA-Z0-9+.-]*:)/);
+  if (!m) return '#';
+  return SAFE_SCHEMES.has(m[1].toLowerCase()) ? h : '#';
+}
+
+// Section ids are owner-controlled JSON. They are interpolated into a
+// <style> block and an attribute, so only a short [A-Za-z0-9_-] token is
+// used as-is; anything else is swapped for a generated id at render time.
+// Exported for tests.
+const SAFE_SECTION_ID = /^[A-Za-z0-9_-]{1,64}$/;
+export function safeSectionId(sid, index = 0) {
+  const v = sid == null ? '' : String(sid);
+  return SAFE_SECTION_ID.test(v) ? v : `ivy-sec-${Number.isInteger(index) && index >= 0 ? index : 0}`;
+}
 
 // ----- Shell loading ------------------------------------------------
 
@@ -252,7 +277,7 @@ function renderVideo(s) {
   return `<section class="ivy-video">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
-    ${d.videoUrl ? `<p><a href="${attr(d.videoUrl)}">Watch video</a></p>` : ''}
+    ${d.videoUrl ? `<p><a href="${attr(safeHref(d.videoUrl))}">Watch video</a></p>` : ''}
   </section>`;
 }
 
@@ -281,7 +306,7 @@ function renderBlog(s) {
   const d = s.data || {};
   const posts = (d.posts || []).map((p) => `
     <article>
-      <h3><a href="${attr(p.url || '#')}">${esc(p.title || '')}</a></h3>
+      <h3><a href="${attr(safeHref(p.url || '#'))}">${esc(p.title || '')}</a></h3>
       ${p.excerpt ? `<p>${esc(p.excerpt)}</p>` : ''}
       ${p.date ? `<p class="ivy-date">${esc(p.date)}</p>` : ''}
     </article>`).join('');
@@ -297,7 +322,7 @@ function renderInstagram(s) {
   return `<section class="ivy-instagram">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
-    ${d.url ? `<p><a href="${attr(d.url)}">View on Instagram</a></p>` : ''}
+    ${d.url ? `<p><a href="${attr(safeHref(d.url))}">View on Instagram</a></p>` : ''}
   </section>`;
 }
 
@@ -389,7 +414,7 @@ function renderSocialFeed(s) {
   return `<section class="ivy-social-feed">
     ${d.headline ? `<h2>${esc(d.headline)}</h2>` : ''}
     ${d.sub ? `<p>${esc(d.sub)}</p>` : ''}
-    ${d.url ? `<p><a href="${attr(d.url)}">View on ${esc(d.platform || 'social')}</a></p>` : ''}
+    ${d.url ? `<p><a href="${attr(safeHref(d.url))}">View on ${esc(d.platform || 'social')}</a></p>` : ''}
   </section>`;
 }
 
@@ -434,7 +459,7 @@ const RENDERERS = {
   custom_html:    renderCustomHtml,
 };
 
-function renderSection(section, handle) {
+function renderSection(section, handle, index = 0) {
   if (!section || !section.visible) return '';
   const fn = RENDERERS[section.type];
   if (!fn) return '';
@@ -443,8 +468,9 @@ function renderSection(section, handle) {
   const hideMobile  = !!style.hideOnMobile;
   const hideDesktop = !!style.hideOnDesktop;
   const grad        = style.headlineGradient ? styleVal(style.headlineGradient) : '';
-  const sid = section.id;
-  const anchor = LINK_CTX.anchors[sid] || '';
+  // Anchors are keyed by the ORIGINAL id; the rendered id is the safe one.
+  const anchor = LINK_CTX.anchors[section.id] || '';
+  const sid = safeSectionId(section.id, index);
   if (!hideMobile && !hideDesktop && !grad) {
     return anchor ? `<div id="${esc(anchor)}" class="ivy-anchor" data-section-id="${esc(sid)}">${inner}</div>` : inner;
   }
@@ -538,7 +564,7 @@ function renderJsonLd({ businessName, description, image, url, sections }) {
 function renderStickyCta(cfg) {
   if (!cfg || !cfg.enabled || !cfg.text) return '';
   const pos = cfg.position === 'top' ? 'top:0' : 'bottom:0';
-  return `<a href="${attr(cfg.link || '#')}" style="position:fixed;${pos};left:0;right:0;z-index:9000;padding:14px 24px;background:var(--site-accent);color:var(--site-accent-ink);text-align:center;font-weight:600;text-decoration:none;font-family:var(--site-font-body)">${esc(cfg.text)} →</a>`;
+  return `<a href="${attr(safeHref(cfg.link || '#'))}" style="position:fixed;${pos};left:0;right:0;z-index:9000;padding:14px 24px;background:var(--site-accent);color:var(--site-accent-ink);text-align:center;font-weight:600;text-decoration:none;font-family:var(--site-font-body)">${esc(cfg.text)} →</a>`;
 }
 
 function renderExitIntent(cfg) {
@@ -641,7 +667,7 @@ export function renderSiteHtml({ site, page, nav, handle, currentSlug, host, ord
 
   LINK_CTX = { anchors: sectionAnchors(visible), pages: Array.isArray(nav) ? nav : [], linkBase: `/site/${handle}`, sections: visible, bookingHref: `/book/${handle}` };
   const navHtml = renderNav({ handle, nav, currentSlug, businessName: site.businessName });
-  const sectionsHtml = visible.map((s) => renderSection(s, handle)).join('\n');
+  const sectionsHtml = visible.map((s, i) => renderSection(s, handle, i)).join('\n');
   // No inline scripts here: the site's CSP (vercel.json script-src) has no
   // 'unsafe-inline', so they would never run. The React PublicSite takes
   // over this markup on mount and owns the pageview beacon, the sticky CTA

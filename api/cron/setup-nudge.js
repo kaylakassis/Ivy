@@ -9,7 +9,7 @@
 // are scanned so the daily scan stays bounded. Auth: same three paths as the
 // other crons. Registered in vercel.json.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { sendEmailToUser, emailShell } from '../_lib/email.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { appUrl } from '../_lib/tokens.js';
@@ -55,12 +55,7 @@ function firstMissing(r) {
 }
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     const { shard, shards } = shardFromReq(req);

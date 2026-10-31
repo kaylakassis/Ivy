@@ -18,7 +18,7 @@
 // or a retried run can't double-send. Mirrors the owner-weekly-recap harness
 // (auth triple, ensureSchemaApplied, sharding, withDeadline, trackCron).
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { reportError } from '../_lib/monitoring.js';
 import { buildBriefing } from '../_lib/ivy.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
@@ -40,12 +40,7 @@ const HALF_BUDGET_MS = 135_000; // split the 4m30s cron budget across the two be
 // an Intl-valid-but-PG-unknown name can't throw the query (we COALESCE to UTC);
 // NEVER inline cs.timezone into AT TIME ZONE directly.
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

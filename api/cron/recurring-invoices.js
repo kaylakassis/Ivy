@@ -14,7 +14,7 @@
 // materialization advances next_run_at past today.
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { materializeOne } from '../_lib/recurring.js';
 import { computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
@@ -38,12 +38,7 @@ function escapeHtml(s) {
 function fmtMoney(n) { return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

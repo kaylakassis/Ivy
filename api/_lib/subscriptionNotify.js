@@ -206,7 +206,6 @@ export async function notifyDormantOwner({ workspaceId }) {
     const unpaidN = Number(invRes.rows[0]?.n || 0);
     const owed = Number(invRes.rows[0]?.owed || 0);
 
-    const biz = escapeHtml(o.biz_name || 'your business');
     const bits = [];
     if (upcoming > 0) bits.push(`<strong>${upcoming}</strong> session${upcoming === 1 ? '' : 's'} coming up this week`);
     if (unpaidN > 0) bits.push(`<strong>${unpaidN}</strong> unpaid invoice${unpaidN === 1 ? '' : 's'}${owed > 0 ? ` ($${Math.round(owed).toLocaleString()} to collect)` : ''}`);
@@ -215,7 +214,7 @@ export async function notifyDormantOwner({ workspaceId }) {
     const waiting = bits.length === 2 ? `${bits[0]} and ${bits[1]}` : bits[0];
 
     const html = emailShell({
-      heading: `You've got things waiting at ${biz}`,
+      heading: `You've got things waiting at ${o.biz_name || 'your business'}`,
       body: `<p>Hi ${escapeHtml(firstName(o.name))},</p>
         <p>It's been a little while. Here's what's waiting for you: ${waiting}.</p>
         <p>Ivy can knock most of it out for you, just pick up where you left off.</p>`,

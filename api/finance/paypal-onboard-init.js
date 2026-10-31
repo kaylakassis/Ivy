@@ -7,7 +7,7 @@
 // Reached via a top-level <a href> click, so we redirect back to
 // /finance with a query-string error on failure rather than returning
 // raw JSON (which would show as a blank page in the browser).
-import { requireUser } from '../_lib/auth.js';
+import { requireUser, refuseImpersonated } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { buildOnboardingUrl } from '../_lib/payments/paypal.js';
@@ -37,6 +37,7 @@ export default async function handler(req, res) {
     }
     const user = await requireUser(req, res);
     if (!user) return;
+    if (refuseImpersonated(req, res)) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
 

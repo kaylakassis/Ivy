@@ -24,13 +24,19 @@ const SENSITIVE_KEYS = [
   'invoice_view_token_hash',
   'quote_view_token_hash',
   'sign_token_hash',
+  'view_token_hash',
   'password_hash',
 ];
+// Belt and braces: any column that holds a token hash, present or future,
+// is stripped by name shape too, so a new *_token_hash column cannot leak
+// into an export before someone remembers to list it above.
+const TOKEN_HASH_KEY = /(^|_)token_hash$/i;
 
 function stripSensitive(row) {
   if (!row || typeof row !== 'object') return row;
   const out = { ...row };
   for (const k of SENSITIVE_KEYS) delete out[k];
+  for (const k of Object.keys(out)) if (TOKEN_HASH_KEY.test(k)) delete out[k];
   return out;
 }
 const stripRows = (rows) => (Array.isArray(rows) ? rows.map(stripSensitive) : rows);

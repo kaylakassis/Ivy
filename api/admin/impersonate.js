@@ -16,7 +16,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor, emailIsSuperAdmin } from '../_lib/admin.js';
 import {
-  signSession, setImpersonationCookies, readImpersonationBackup,
+  signSession, setImpersonationCookies, readImpersonationBackup, IMPERSONATION_MAX_AGE,
 } from '../_lib/auth.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -53,7 +53,8 @@ export default async function handler(req, res) {
     const m = cur.match(/(?:^|;\s*)ivy_session=([^;]+)/);
     const backupToken = m ? decodeURIComponent(m[1]) : signSession(actor.id);
 
-    const targetToken = signSession(target.id, { imp: actor.id });
+    // Short-lived: an impersonation token expires after an hour.
+    const targetToken = signSession(target.id, { imp: actor.id }, { expiresIn: IMPERSONATION_MAX_AGE });
     setImpersonationCookies(res, { backupToken, targetToken });
 
     await recordAudit(req, {

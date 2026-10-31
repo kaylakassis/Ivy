@@ -54,6 +54,32 @@ async function run() {
   assert(r.statusCode === 429 && /locked for (60|59) /.test(r.body?.error || ''), `right password is refused while locked, with the time left ("${r.body?.error}")`);
   assert(Number(r.headers['retry-after']) > 3500, 'Retry-After header is about an hour');
 
+  console.log('\n[3] the lock is per email + IP: the owner on another device still gets in');
+  const reqFrom = (ip, body) => ({ ...req(body), headers: { ...req(body).headers, 'x-forwarded-for': ip } });
+  const r3 = mockRes(); await loginHandler(reqFrom(`198.18.78.${Math.floor(Math.random() * 200) + 10}`, { email: EMAIL, password: PW }), r3);
+  assert(r3.statusCode === 200, `right password from a different IP → 200 while the attacker's IP is locked (${r3.statusCode})`);
+  const r3b = mockRes(); await loginHandler(req({ email: EMAIL, password: PW }), r3b);
+  assert(r3b.statusCode === 429, `the attacker's IP stays locked (${r3b.statusCode})`);
+
+  console.log('\n[4] many failures for one email from many IPs: slowed, never locked');
+  const EMAIL2 = `lockout2-${STAMP}@example.com`;
+  await sql`INSERT INTO users (email, password_hash, name, email_verified_at) VALUES (${EMAIL2}, ${await hashPassword(PW)}, 'Lock Out Two', NOW())`;
+  const spray = [];
+  for (let i = 0; i < 10; i++) {
+    const rr = mockRes();
+    await loginHandler(reqFrom(`198.18.${80 + i}.${Math.floor(Math.random() * 200) + 10}`, { email: EMAIL2, password: 'wrong-' + i }), rr);
+    spray.push(rr.statusCode);
+  }
+  assert(spray.every((c) => c === 401), `ten misses from ten IPs are all 401, none locks (${spray.join(',')})`);
+  const t0 = Date.now();
+  const r4 = mockRes(); await loginHandler(reqFrom(`198.18.99.${Math.floor(Math.random() * 200) + 10}`, { email: EMAIL2, password: PW }), r4);
+  const took = Date.now() - t0;
+  assert(r4.statusCode === 200, `the owner still signs in with the right password (${r4.statusCode})`);
+  assert(took >= 1900, `the attempt was slowed by about two seconds (${took}ms)`);
+  const t1 = Date.now();
+  const r5 = mockRes(); await loginHandler(reqFrom(`198.18.99.${Math.floor(Math.random() * 200) + 10}`, { email: EMAIL2, password: PW }), r5);
+  assert(r5.statusCode === 200 && Date.now() - t1 < 1500, `a successful sign-in clears the slow-down (${Date.now() - t1}ms)`);
+
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
 }

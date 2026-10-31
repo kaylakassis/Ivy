@@ -23,9 +23,12 @@ import { maybeNotifyNewSignIn } from '../_lib/securityNotify.js';
 // factor 10 matches hashPassword() in api/_lib/auth.js so timing aligns.
 const DECOY_PASSWORD_HASH = bcrypt.hashSync('ivy-decoy-not-a-real-password', 10);
 
-const LOCK_MAX_FAILURES = 5;
-const IP_MAX_FAILURES = 20;
+const LOCK_MAX_FAILURES = 5;        // per email + IP: hard lock
+const IP_MAX_FAILURES = 20;         // per IP across any emails: hard lock
+const EMAIL_SOFT_FAILURES = 10;     // per email across any IPs: slow down only
+const SOFT_DELAY_MS = 2000;
 const LOCK_WINDOW_SECONDS = 60 * 60;
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // 429 with a message that says how long is left on the lock. The lock
 // lasts 60 minutes from the OLDEST failure still in the window, so it
@@ -70,26 +73,35 @@ export default async function handler(req, res) {
     const emailKey = email.toLowerCase();
 
     // Lockout counts FAILED attempts only. Five wrong passwords for an
-    // email lock it for 60 minutes; each miss tells the person how many
-    // attempts remain. A correct sign-in never counts. The per-IP ceiling
-    // (20 failures/hour across any emails) stops one machine from
-    // spraying guesses at many accounts.
+    // email FROM ONE IP lock that pair for 60 minutes; each miss tells the
+    // person how many attempts remain. A correct sign-in never counts.
+    // The hard lock is keyed on email + IP so a stranger who knows an
+    // owner's address cannot lock her out of her own account by spraying
+    // wrong passwords from elsewhere. The per-IP ceiling (20 failures/hour
+    // across any emails) stops one machine from spraying guesses at many
+    // accounts. A per-email counter across ALL IPs is kept as a soft
+    // measure only: past 10 failures/hour the request is slowed by two
+    // seconds, never locked.
+    const emailIpFailKey = `login:fail:${emailKey}:${ip}`;
     const emailFailKey = `login:fail:${emailKey}`;
     const ipFailKey = `login:ipfail:${ip}`;
     const bypass = await isAdminBypass(req);
-    let emailFails = { count: 0, oldestAt: null };
+    let pairFails = { count: 0, oldestAt: null };
     if (!bypass) {
-      emailFails = await countRecent(emailFailKey, LOCK_WINDOW_SECONDS);
-      if (emailFails.count >= LOCK_MAX_FAILURES) return lockedOut(res, emailFails.oldestAt);
+      pairFails = await countRecent(emailIpFailKey, LOCK_WINDOW_SECONDS);
+      if (pairFails.count >= LOCK_MAX_FAILURES) return lockedOut(res, pairFails.oldestAt);
       const ipFails = await countRecent(ipFailKey, LOCK_WINDOW_SECONDS);
       if (ipFails.count >= IP_MAX_FAILURES) return lockedOut(res, ipFails.oldestAt);
+      const emailFails = await countRecent(emailFailKey, LOCK_WINDOW_SECONDS);
+      if (emailFails.count >= EMAIL_SOFT_FAILURES) await sleep(SOFT_DELAY_MS);
     }
     // One wrong attempt: record it, then tell them how many remain.
     const miss = async () => {
       if (bypass) return unauthorized(res, 'Invalid email or password');
+      await recordAttempt(emailIpFailKey);
       await recordAttempt(emailFailKey);
       await recordAttempt(ipFailKey);
-      const left = Math.max(0, LOCK_MAX_FAILURES - (emailFails.count + 1));
+      const left = Math.max(0, LOCK_MAX_FAILURES - (pairFails.count + 1));
       if (left === 0) return lockedOut(res, Date.now());
       return res.status(401).json({
         error: `Invalid email or password. ${left} attempt${left === 1 ? '' : 's'} left before this account is locked for 60 minutes.`,
@@ -117,6 +129,7 @@ export default async function handler(req, res) {
       return miss();
     }
     // Right password: the slate is clean again.
+    await clearRateLimit(emailIpFailKey);
     await clearRateLimit(emailFailKey);
 
     // 2FA gate: if this user has TOTP enrolled, DON'T issue a session yet.

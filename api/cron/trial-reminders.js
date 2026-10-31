@@ -21,7 +21,7 @@
 // long-lapsed trialing workspace with a "your trial ended" email - those
 // are already the win-back cron's job.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyTrialReminder } from '../_lib/subscriptionNotify.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -116,12 +116,7 @@ async function handler(req, res) {
   // Same three-path auth as the other crons: Vercel cron header, an
   // admin secret for manual kicks, or a super-admin session for an
   // in-app trigger.
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     const { shard, shards } = shardFromReq(req);
