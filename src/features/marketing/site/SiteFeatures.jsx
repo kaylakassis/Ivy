@@ -98,6 +98,7 @@ export default function SiteFeatures() {
               <li><b>Services, packages &amp; capacity</b> with per-weekday availability and blocked time</li>
               <li><b>Deposits, intake forms &amp; signatures</b> collected in the booking flow itself</li>
               <li><b>Automated reminders</b> by email and SMS - 1 week, 2 days, 1 day, and 2 hours before</li>
+              <li><b>Bring your assistant along:</b> up to 2 helpers can sign in to see their schedule and mark sessions done. Included.</li>
               <li><b>Card on file</b> - late-cancel and no-show policies that actually enforce themselves</li>
             </ul>
           </div>

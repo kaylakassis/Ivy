@@ -57,6 +57,14 @@ const ClientDiscover  = lazy(() => import('./features/client/ClientDiscover.jsx'
 const ClientNotifications = lazy(() => import('./features/client/ClientNotifications.jsx'));
 const ClientProfile   = lazy(() => import('./features/client/ClientProfile.jsx'));
 const AcceptGroupInvite = lazy(() => import('./features/client/AcceptGroupInvite.jsx'));
+
+// ── Lazy: helper shell (an owner's assistant with their own small view) ──
+const HelperShell        = lazy(() => import('./features/helper/HelperShell.jsx'));
+const HelperSchedule     = lazy(() => import('./features/helper/HelperSchedule.jsx'));
+const HelperAccount      = lazy(() => import('./features/helper/HelperAccount.jsx'));
+const HelperClients      = lazy(() => import('./features/helper/HelperClients.jsx'));
+const HelperMessages     = lazy(() => import('./features/helper/HelperMessages.jsx'));
+const AcceptHelperInvite = lazy(() => import('./features/helper/AcceptHelperInvite.jsx'));
 const NotFoundPage    = lazy(() => import('./features/marketing/NotFoundPage.jsx'));
 
 // ── Lazy: secondary auth flows + onboarding ──
@@ -102,7 +110,7 @@ const WaitlistPage    = lazy(() => import('./features/auth/WaitlistPage.jsx'));
 // lines; the marketing site and auth pages keep the quiet spinner.
 const OWNER_PREFIXES = ['/dashboard', '/clients', '/calendar', '/finance', '/messages', '/ivy',
   '/programs', '/marketing', '/reviews', '/website', '/documents', '/admin', '/account', '/more', '/onboarding'];
-const CLIENT_PREFIXES = ['/me', '/book/', '/invoice/', '/quote/', '/sign/', '/review/', '/site/', '/embed/'];
+const CLIENT_PREFIXES = ['/me', '/helper', '/book/', '/invoice/', '/quote/', '/sign/', '/review/', '/site/', '/embed/'];
 function RouteFallback({ client = false }) {
   const { pathname } = useLocation();
   const hit = (list) => list.some((p) => pathname === p || pathname.startsWith(p.endsWith('/') ? p : p + '/'));
@@ -374,6 +382,16 @@ export default function App() {
           <Route path="/me/profile"       element={<ClientProfile />} />
           <Route path="/me/programs" element={<ClientPrograms />} />
           <Route path="/me/programs/:id" element={<ClientProgram />} />
+        </Route>
+
+        {/* Helper invite landing (public: the page itself handles signed-out
+            vs signed-in) and the helper shell (auth-gated; its own tiny nav). */}
+        <Route path="/helper/invite/:token" element={<AcceptHelperInvite />} />
+        <Route element={<RequireAuth><HelperShell /></RequireAuth>}>
+          <Route path="/helper"          element={<HelperSchedule />} />
+          <Route path="/helper/clients"  element={<HelperClients />} />
+          <Route path="/helper/messages" element={<HelperMessages />} />
+          <Route path="/helper/account"  element={<HelperAccount />} />
         </Route>
 
         {/* 404 catch-all. Must be last so it only matches when nothing

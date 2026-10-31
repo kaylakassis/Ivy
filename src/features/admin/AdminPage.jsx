@@ -2459,6 +2459,7 @@ function Pill({ text }) {
     if (text === 'Business-Active') return 'var(--ok)';
     if (text === 'Business-Trial') return 'var(--warn)';
     if (text === 'Client-only') return 'var(--muted)';
+    if (text === 'Helper') return 'var(--accent)';
     return 'var(--muted)';
   })();
   return (

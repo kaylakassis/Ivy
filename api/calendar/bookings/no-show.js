@@ -32,7 +32,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    const workspaceId = await ensureActiveWorkspace(user, req, res, { helper: 'schedule' });
     if (!workspaceId) return;
 
     const body = await readBody(req);
@@ -69,7 +69,9 @@ export default async function handler(req, res) {
     if (b.cancelled_at) return badRequest(res, "Can't mark a cancelled booking as a no-show");
     if (b.no_show_at)   return badRequest(res, 'Already marked as a no-show');
 
-    const wantCharge = body.chargeFee !== false;
+    // Money stays with the owner: a helper (schedule permission) marks the
+    // no-show but never charges the fee.
+    const wantCharge = !req.helper && body.chargeFee !== false;
     const feeAmount = Number(b.no_show_fee_amount || 0);
     const chargeFee = wantCharge && feeAmount > 0
       && b.stripe_customer_id && b.payment_method_id;

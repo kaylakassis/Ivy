@@ -21,7 +21,11 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
-    const workspaceId = await ensureActiveWorkspace(user, req, res);
+    // Helpers with the schedule permission read the calendar; settings
+    // (PATCH) stay owner-only.
+    const workspaceId = await ensureActiveWorkspace(user, req, res, {
+      helper: req.method === 'GET' ? 'schedule' : undefined,
+    });
     if (!workspaceId) return;
     if (req.method === 'GET') {
       // Per-query try/catch so a single missing table/column degrades to

@@ -19,7 +19,7 @@ import { sendClientSms } from '../_lib/sms.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
 import { isSuperAdminBySession } from '../_lib/admin.js';
-import { notifyClientSafe } from '../_lib/push.js';
+import { notifyClientSafe, notifyHelperSafe } from '../_lib/push.js';
 import { renderPrepInstructions } from '../_lib/bookingNotify.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -77,7 +77,7 @@ export async function fetchDueBookings(cursor, shardFilter = '') {
       b.id, b.workspace_id, b.client_id, b.client_email, b.client_name,
       COALESCE(b.client_phone, c.phone) AS client_phone,
       c.sms_consent_at,
-      b.date, b.start_min, b.end_min, b.notes,
+      b.date, b.start_min, b.end_min, b.notes, b.staff_id,
       b.reminders_sent, b.sms_sent,
       s.name AS service_name, s.prep_instructions,
       COALESCE(s.reminder_minutes, ARRAY[]::int[]) AS reminder_minutes,
@@ -221,6 +221,20 @@ async function handler(req, res) {
                   body: `${r.biz_name || 'Your business'} · ${fmtDay(dateISO)} at ${fmtTime(r.start_min)}`,
                   url: `/me`,
                   tag: `reminder-${r.id}-${key}`,
+                },
+              });
+            }
+            // The assigned helper gets the same beat (no-op when the
+            // staff row has no login). Rides the same idempotency claim.
+            if (r.staff_id) {
+              await notifyHelperSafe({
+                workspaceId: r.workspace_id, staffId: r.staff_id,
+                type: 'bookings',
+                payload: {
+                  title: `Reminder: ${r.service_name || 'Session'} ${describeWindow(minsNum)}`,
+                  body: `${r.client_name || 'Client'} · ${fmtDay(dateISO)} at ${fmtTime(r.start_min)}`,
+                  url: `/helper?date=${dateISO}`,
+                  tag: `helper-reminder-${r.id}-${key}`,
                 },
               });
             }

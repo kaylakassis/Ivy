@@ -30,6 +30,14 @@ const RETRY_METHODS = new Set(['GET']);
 // string per bundle.
 const API_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/+$/, '');
 
+// Helper mode (api/_lib/helpers.js): while the helper shell is mounted
+// every request names the business the helper is acting on. The server
+// only honours it on routes that opted in, and only for the user's own
+// memberships; it never widens access on its own.
+let helperWorkspace = null;
+export function setHelperWorkspace(id) { helperWorkspace = id || null; }
+export function getHelperWorkspace() { return helperWorkspace; }
+
 // Headers every request carries: JSON content type when there is a body,
 // native auth on the iOS/Android shell, plus anything the caller adds.
 async function buildHeaders(body, opts = {}) {
@@ -37,6 +45,7 @@ async function buildHeaders(body, opts = {}) {
   // on a bodiless DELETE/GET makes some serverless routing layers cranky.
   const headers = {};
   if (body !== undefined && body !== null) headers['Content-Type'] = 'application/json';
+  if (helperWorkspace) headers['X-Helper-Workspace'] = helperWorkspace;
   // Native auth - Bearer token + platform marker. The server's readSession
   // (api/_lib/auth.js) checks Authorization first, falls back to cookie.
   if (isNative()) {

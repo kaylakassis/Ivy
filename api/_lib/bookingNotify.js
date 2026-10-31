@@ -18,7 +18,7 @@ import { recordFirstRealBooking } from './firstWin.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
-import { notifyOwnerSafe, notifyClientSafe } from './push.js';
+import { notifyOwnerSafe, notifyClientSafe, notifyHelperSafe } from './push.js';
 
 function fmtDate(iso) {
   if (!iso) return '';
@@ -44,7 +44,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         b.id, b.client_id, b.client_name, b.client_email,
         b.date, b.start_min, b.end_min, b.notes,
         b.video_room_url, b.location_address,
-        b.client_phone, b.created_at, b.updated_at,
+        b.client_phone, b.staff_id, b.created_at, b.updated_at,
         c.sms_consent_at,
         s.name AS service_name, s.location_type, s.location_label,
         s.prep_instructions,
@@ -174,6 +174,21 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
           body: `${ctx.client_name || 'A client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,
           url: `/calendar`,
           tag: `booking-${ctx.id}`,
+        },
+      }));
+    }
+
+    // 5. The helper this booking is assigned to (if they have a login) -
+    //    whoever created it. Their shell deep-links to the day.
+    if (ctx.staff_id) {
+      tasks.push(notifyHelperSafe({
+        workspaceId, staffId: ctx.staff_id,
+        type: 'bookings',
+        payload: {
+          title: 'New booking for you',
+          body: `${ctx.client_name || 'A client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,
+          url: `/helper?date=${dateISO}`,
+          tag: `helper-booking-${ctx.id}`,
         },
       }));
     }
@@ -351,7 +366,7 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
     const { rows } = await sql`
       SELECT
         b.id, b.client_id, b.client_name, b.client_email,
-        b.date, b.start_min, b.end_min,
+        b.date, b.start_min, b.end_min, b.staff_id,
         s.name AS service_name,
         cs.biz_name,
         w.owner_id,
@@ -436,6 +451,19 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
         },
       }));
     }
+    // The assigned helper loses a session off their day.
+    if (ctx.staff_id) {
+      tasks.push(notifyHelperSafe({
+        workspaceId, staffId: ctx.staff_id,
+        type: 'bookings',
+        payload: {
+          title: 'Booking cancelled',
+          body: `${ctx.client_name || 'Client'} · ${serviceName} · ${dateLabel} ${fmtTime(ctx.start_min)}`,
+          url: `/helper?date=${dateISO}`,
+          tag: `helper-booking-cancel-${ctx.id}-${dateISO}`,
+        },
+      }));
+    }
 
     await Promise.allSettled(tasks).then((results) => {
       for (const r of results) {
@@ -512,7 +540,7 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
     const { rows } = await sql`
       SELECT
         b.id, b.client_id, b.client_name, b.client_email,
-        b.date, b.start_min, b.end_min,
+        b.date, b.start_min, b.end_min, b.staff_id,
         b.video_room_url, b.location_address, b.created_at, b.updated_at,
         s.name AS service_name, s.location_type, s.location_label,
         cs.biz_name, cs.timezone,
@@ -576,6 +604,18 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
         tag: `booking-reschedule-${ctx.id}`,
       },
     }));
+    if (ctx.staff_id) {
+      tasks.push(notifyHelperSafe({
+        workspaceId, staffId: ctx.staff_id,
+        type: 'bookings',
+        payload: {
+          title: 'Booking moved',
+          body: `${ctx.client_name || 'Client'} · ${serviceName} · ${newDate} ${fmtTime(ctx.start_min)}`,
+          url: `/helper?date=${newDateISO}`,
+          tag: `helper-booking-reschedule-${ctx.id}`,
+        },
+      }));
+    }
 
     await Promise.allSettled(tasks).then((results) => {
       for (const r of results) {

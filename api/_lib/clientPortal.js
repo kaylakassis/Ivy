@@ -6,6 +6,9 @@
 //     clients.email matches the user's email - the latter handles "claim
 //     your account" before user_id is wired up)
 //   • Both, if they own a business AND book with another business
+//   • A HELPER at one or more businesses (staff_members.user_id = user.id;
+//     api/_lib/helpers.js) - an assistant the owner invited to see their
+//     own schedule. Surfaced as `helps` / `isHelper`.
 //
 // All client-portal queries are scoped to the joined set of `clients` rows
 // owned by this user. We never trust user-supplied workspaceId / clientId
@@ -13,6 +16,7 @@
 // can't peek at someone else's data.
 import { sql } from './db.js';
 import { getOrSet, invalidate as cacheInvalidate } from './hotCache.js';
+import { helperMembershipsFor } from './helpers.js';
 
 // Returns the IDs of every `clients` row this user owns, across workspaces.
 // Matches by user_id first, then auto-claims any rows with the same email
@@ -269,9 +273,10 @@ function deriveSubscription(row) {
 // Build a context object the frontend uses to choose the default app +
 // render the view-switcher only when the user is genuinely both.
 export async function userContext(user) {
-  const [workspace, memberships] = await Promise.all([
+  const [workspace, memberships, helps] = await Promise.all([
     ownsWorkspace(user.id),
     myClientIds(user),
+    helperMembershipsFor(user.id),
   ]);
 
   // Sponsored and beta accounts are comp'd by the platform - we
@@ -303,6 +308,7 @@ export async function userContext(user) {
     },
     isOwner:  !!workspace,
     isClient: memberships.length > 0,
+    isHelper: helps.some((h) => h.status === 'active'),
     workspaceId: workspace?.id || null,
     // The owner's workspace as one object. Several screens read
     // ctx.owns.<field> (the iPhone purchase identity, the notifications
@@ -326,5 +332,15 @@ export async function userContext(user) {
     hasBillingRecord: !!workspace?.hasBillingRecord,
     walkthroughCompletedAt: user.walkthrough_completed_at || null,
     memberships,
+    // Businesses this user helps at (owner-invited staff login). The
+    // helper shell reads `active` to show "This business is paused".
+    // status 'revoked' entries stay listed so the helper shell can
+    // explain the removal by name.
+    helps: helps.map((h) => ({
+      workspaceId: h.workspaceId, businessName: h.businessName,
+      staffId: h.staffId, staffName: h.staffName,
+      status: h.status, active: h.active, revokedAt: h.revokedAt || null,
+      permissions: h.permissions,
+    })),
   };
 }

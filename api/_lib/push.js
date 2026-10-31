@@ -159,11 +159,29 @@ export async function notifyClient({ clientId, payload, type }) {
   return sendPushToUser({ userId, payload, type });
 }
 
+// Convenience: notify the HELPER assigned to a booking (staff_members
+// row with a login attached, api/_lib/helpers.js). Resolves staff →
+// user_id within the same workspace so a staff id from another business
+// can never route a notification. Unattached staff → nothing to send.
+export async function notifyHelper({ workspaceId, staffId, payload, type }) {
+  if (!workspaceId || !staffId) return { ok: false, reason: 'no staff', sent: 0 };
+  const { rows } = await sql`
+    SELECT sm.user_id FROM staff_members sm
+      JOIN users u ON u.id = sm.user_id AND u.deleted_at IS NULL
+     WHERE sm.id = ${staffId} AND sm.workspace_id = ${workspaceId} AND sm.active = TRUE
+       AND sm.user_id IS NOT NULL`;
+  const userId = rows[0]?.user_id;
+  if (!userId) return { ok: false, reason: 'unattached', sent: 0 };
+  await recordNotificationRow({ userId, workspaceId, type, payload });
+  return sendPushToUser({ userId, payload, type });
+}
+
 // Fire-and-forget wrapper. Swallows everything so callers never have to
 // guard with try/catch - push failures must never break the primary
 // action (sending a message, marking an invoice paid, etc.).
 export function notifyOwnerSafe(args)  { return notifyOwner(args).catch((e) => console.warn('[push] notifyOwner', e.message)); }
 export function notifyClientSafe(args) { return notifyClient(args).catch((e) => console.warn('[push] notifyClient', e.message)); }
+export function notifyHelperSafe(args) { return notifyHelper(args).catch((e) => console.warn('[push] notifyHelper', e.message)); }
 
 export async function sendPushToUser({ userId, payload, type }) {
   if (!userId || !payload?.title) return { ok: false, reason: 'bad args', sent: 0 };

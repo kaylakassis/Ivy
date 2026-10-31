@@ -3470,6 +3470,41 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gift_card_credit_restored_cents IN
 -- second is a no-op instead of a second state change.
 ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
 ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
+-- ── Helpers: a staff member who signs in to Ivy ──────────────────────
+-- Ivy stays one owner per business. A helper (assistant, second shooter,
+-- Saturday cover) is a staff_members row with a login attached: user_id
+-- set + accepted_at stamped. Revoking clears user_id and stamps
+-- revoked_at. Up to HELPER_SEATS (api/_lib/helpers.js) per workspace.
+ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ;
+ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS accepted_at TIMESTAMPTZ;
+ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS revoked_at TIMESTAMPTZ;
+-- Who was revoked. Kept so the former helper's /api/me still lists the
+-- business with status 'revoked' and their shell can say so plainly
+-- instead of a bare 403. Cleared when they accept a fresh invite.
+ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS revoked_user_id UUID REFERENCES users(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_staff_members_revoked_user
+  ON staff_members(revoked_user_id) WHERE revoked_user_id IS NOT NULL;
+-- Owner-granted helper permissions: { schedule, clients, messages } booleans,
+-- all off by default (api/_lib/helpers.js PERMISSION_KEYS). Everything
+-- money-related, Ivy, documents, website and settings has no toggle.
+ALTER TABLE staff_members ADD COLUMN IF NOT EXISTS permissions JSONB NOT NULL DEFAULT '{}'::jsonb;
+
+-- Signed, single-use, 7-day invite links. We store only the sha256 of the
+-- raw token (same pattern as auth_tokens). A newer invite for the same
+-- staff row cancels the earlier ones (cancelled_at).
+CREATE TABLE IF NOT EXISTS helper_invites (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  staff_member_id UUID NOT NULL REFERENCES staff_members(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  token_hash TEXT NOT NULL UNIQUE,
+  expires_at TIMESTAMPTZ NOT NULL,
+  used_at TIMESTAMPTZ,
+  cancelled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_helper_invites_staff ON helper_invites(staff_member_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_helper_invites_workspace ON helper_invites(workspace_id);
 
 -- ─── Analytics scope: real customers only ──────────────────────────────
 -- Admin analytics (api/admin/analytics.js, api/cron/refresh-admin-analytics.js)

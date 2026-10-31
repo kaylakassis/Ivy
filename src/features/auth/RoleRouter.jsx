@@ -40,5 +40,6 @@ export default function RoleRouter({ children }) {
   }
   if (effective === 'onboarding') return <Navigate to={{ pathname: '/onboarding', search: window.location.search }} replace/>;
   if (effective === 'client')     return <Navigate to={{ pathname: '/me', search: window.location.search }} replace/>;
+  if (effective === 'helper')     return <Navigate to={{ pathname: '/helper', search: window.location.search }} replace/>;
   return children;
 }

@@ -121,7 +121,7 @@ function ClientSidebar({ variant, data, direction }) {
 
       {/* Business ↔ Client switch, inline under the brand - same spot as
           the business sidebar so the two views read as one product. */}
-      {!compact && <ViewSwitch/>}
+      {!compact && <ViewSwitch showHelper={!!data?.isHelper}/>}
 
       <nav style={{
         display: 'flex', flexDirection: 'column', gap: compact ? 4 : 2,
@@ -225,6 +225,11 @@ function UserBlock({ data, compact }) {
           {data?.isOwner && (
             <button onClick={goBusiness} style={menuBtn}>
               <Icons.Trending size={13}/> Switch to business view
+            </button>
+          )}
+          {data?.isHelper && (
+            <button onClick={() => nav('/helper')} style={menuBtn}>
+              <Icons.Calendar size={13}/> Switch to helper view
             </button>
           )}
           <NavLink to="/me/profile" onClick={() => setOpen(false)} style={{ ...menuBtn, textDecoration: 'none' }}>
@@ -396,6 +401,11 @@ function ClientMobileDrawer({ direction, data, onClose, closing = false }) {
           {data?.isOwner && (
             <NavLink to="/" className="nav-item" style={{ padding: '10px 12px' }}>
               <Icons.Trending size={16} sw={1.6}/> Switch to business view
+            </NavLink>
+          )}
+          {data?.isHelper && (
+            <NavLink to="/helper" className="nav-item" style={{ padding: '10px 12px' }}>
+              <Icons.Calendar size={16} sw={1.6}/> Switch to helper view
             </NavLink>
           )}
           <NavLink to="/me/profile" className="nav-item" style={{ padding: '10px 12px' }}>

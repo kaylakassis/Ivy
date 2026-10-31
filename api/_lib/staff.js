@@ -1,7 +1,11 @@
 // Shared serializer for staff_members. Used by /api/staff endpoints.
 import { sql } from './db.js';
 
-export function serializeStaff(row) {
+// `helper` (optional) is the login status block from
+// api/_lib/helpers.js helperFieldsFor(): { status, invitedAt, acceptedAt,
+// revokedAt, inviteExpiresAt }. Owner endpoints attach it; callers that
+// only need the record (Ivy tools, bookings) leave it off.
+export function serializeStaff(row, helper = undefined) {
   if (!row) return null;
   return {
     id:             row.id,
@@ -15,6 +19,14 @@ export function serializeStaff(row) {
     active:         !!row.active,
     ownerManaged:   row.owner_managed !== false,
     userId:         row.user_id || null,
+    hasLogin:       !!row.user_id,
+    // Owner-granted helper permissions (all false unless set).
+    permissions:    {
+      schedule: row.permissions?.schedule === true,
+      clients:  row.permissions?.clients === true,
+      messages: row.permissions?.messages === true,
+    },
+    helper:         helper === undefined ? undefined : helper,
     createdAt:      row.created_at,
     updatedAt:      row.updated_at,
   };

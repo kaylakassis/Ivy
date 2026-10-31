@@ -5,6 +5,7 @@ import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../Icons.jsx';
 import { visibleNavFor } from '../../lib/nav.js';
 import { useAuth } from '../../lib/auth.jsx';
+import { useUserContext } from '../../lib/userContext.jsx';
 
 function initialsOf(user) {
   if (!user) return '?';
@@ -28,8 +29,12 @@ export default function MobileDrawer({ onClose, closing = false }) {
   // Mirror the floating ViewToggle's URL-based logic so the drawer
   // version of the switcher stays in sync without needing /api/me.
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
+  const onHelper = location.pathname === '/helper' || location.pathname.startsWith('/helper/');
+  // Only offered when /api/me says this person also helps at a business.
+  const { ctx } = useUserContext();
+  const isHelper = !!ctx?.isHelper;
   const goView = (target) => {
-    const dest = target === 'client' ? '/me' : '/dashboard';
+    const dest = target === 'client' ? '/me' : target === 'helper' ? '/helper' : '/dashboard';
     nav(dest);
     onClose();
   };
@@ -124,13 +129,19 @@ export default function MobileDrawer({ onClose, closing = false }) {
             borderRadius: 999,
           }}>
             <DrawerViewBtn
-              active={!onClient} onClick={() => goView('business')}
+              active={!onClient && !onHelper} onClick={() => goView('business')}
               icon="Trending" label="Business"
             />
             <DrawerViewBtn
               active={onClient} onClick={() => goView('client')}
               icon="Users" label="Client" sub="free"
             />
+            {isHelper && (
+              <DrawerViewBtn
+                active={onHelper} onClick={() => goView('helper')}
+                icon="Calendar" label="Helper"
+              />
+            )}
           </div>
           <NavLink to="/account"
             className="nav-item"
