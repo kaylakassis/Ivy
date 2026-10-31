@@ -33,6 +33,7 @@ const ProgramsPage = lazy(() => import('./features/programs/ProgramsPage.jsx'));
 const PublicProgram = lazy(() => import('./features/programs/PublicProgram.jsx'));
 const ClientPrograms = lazy(() => import('./features/client/ClientPrograms.jsx'));
 const ClientProgram = lazy(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientProgram })));
+const ClientLesson = lazy(() => import('./features/client/ClientPrograms.jsx').then((m) => ({ default: m.ClientLesson })));
 const Calendar    = lazy(() => import('./features/calendar/Calendar.jsx'));
 const Finance     = lazy(() => import('./features/finance/Finance.jsx'));
 const Marketing   = lazy(() => import('./features/grow/Marketing.jsx'));
@@ -382,6 +383,7 @@ export default function App() {
           <Route path="/me/profile"       element={<ClientProfile />} />
           <Route path="/me/programs" element={<ClientPrograms />} />
           <Route path="/me/programs/:id" element={<ClientProgram />} />
+          <Route path="/me/programs/:id/lessons/:itemId" element={<ClientLesson />} />
         </Route>
 
         {/* Helper invite landing (public: the page itself handles signed-out

@@ -1,5 +1,5 @@
 // /p/:id - the public sales page for a published program. Shows the
-// outline (titles only), the price, and a name + email form that sends
+// outline (module and lesson titles, plus any free-preview lessons), the price, and a name + email form that sends
 // the buyer to Stripe Checkout on the coach's account. Access is granted
 // by the webhook after payment; the buyer then signs in to the client
 // portal with the same email.
@@ -8,7 +8,8 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { useTweaks } from '../../lib/tweaks.js';
 import { Icons } from '../../components/Icons.jsx';
-import { fmtPrice, billingLabel, TYPE_META } from './ProgramContent.jsx';
+import { fmtPrice, billingLabel } from './ProgramContent.jsx';
+import SalesOutline from './SalesOutline.jsx';
 import ArchivedBusinessCard, { isArchivedError } from '../../components/ArchivedBusiness.jsx';
 
 export default function PublicProgram() {
@@ -85,18 +86,7 @@ export default function PublicProgram() {
         </>)}
       </form>
     </>)}
-    {outline.length > 0 && (
-      <div className="card" style={{ padding: 4 }}>
-        <div style={{ padding: '12px 16px 6px', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)' }}>What's inside · {outline.length} item{outline.length === 1 ? '' : 's'}</div>
-        {outline.map((o) => { const m = TYPE_META[o.type] || TYPE_META.post; const Icon = Icons[m.icon] || Icons.Doc; return (
-          <div key={o.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', borderTop: '1px solid var(--border)' }}>
-            <span style={{ width: 30, height: 30, borderRadius: 8, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><Icon size={14} sw={1.8}/></span>
-            <span style={{ flex: 1, fontSize: 14 }}>{o.title}</span>
-            <span style={{ fontSize: 11.5, color: 'var(--muted)' }}>{m.label}</span>
-            <Icons.Lock size={13} stroke="var(--muted-2)"/>
-          </div>); })}
-      </div>
-    )}
+    <SalesOutline outline={outline} modules={data.modules || []} previews={data.previews || []}/>
     {program.communityEnabled && <div style={{ fontSize: 13, color: 'var(--muted)', display: 'flex', gap: 8, alignItems: 'center' }}><Icons.Users size={14}/> Includes a private members community.</div>}
   </>);
 }

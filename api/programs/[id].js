@@ -6,8 +6,9 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeProgram, serializeItem, serializeEnrollment, cleanProgramInput, isUuid } from '../_lib/programs.js';
+import { serializeProgram, serializeEnrollment, cleanProgramInput, isUuid } from '../_lib/programs.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { loadModules, serializeModule, serializeLesson, courseOrder } from '../_lib/programCourse.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -20,13 +21,35 @@ export default async function handler(req, res) {
     if (!p) return notFound(res, 'Program not found');
 
     if (req.method === 'GET') {
-      const items = (await sql`SELECT * FROM program_items WHERE program_id = ${id} AND deleted_at IS NULL ORDER BY position ASC, created_at ASC`).rows;
+      const modules = await loadModules(id, workspaceId);
+      const items = courseOrder(modules, (await sql`SELECT * FROM program_items WHERE program_id = ${id} AND workspace_id = ${workspaceId} AND deleted_at IS NULL ORDER BY position ASC, created_at ASC`).rows);
       const members = (await sql`
         SELECT e.*, c.name AS client_name, c.email AS client_email FROM program_enrollments e
-        JOIN clients c ON c.id = e.client_id WHERE e.program_id = ${id} ORDER BY e.granted_at DESC`).rows;
+        JOIN clients c ON c.id = e.client_id WHERE e.program_id = ${id} AND e.workspace_id = ${workspaceId} ORDER BY e.granted_at DESC`).rows;
+      // Owner insight: completions per lesson, and each member's progress.
+      const perItem = new Map((await sql`
+        SELECT pp.item_id, COUNT(*)::int AS n FROM program_progress pp
+          JOIN program_enrollments e ON e.client_id = pp.client_id AND e.program_id = pp.program_id AND e.status IN ('active','past_due')
+         WHERE pp.program_id = ${id} AND pp.workspace_id = ${workspaceId} GROUP BY pp.item_id`).rows.map((r) => [r.item_id, r.n]));
+      const live = new Set(items.map((i) => i.id));
+      const perClient = new Map();
+      for (const r of (await sql`SELECT client_id, item_id, completed_at FROM program_progress WHERE program_id = ${id} AND workspace_id = ${workspaceId}`).rows) {
+        if (!live.has(r.item_id)) continue;
+        const cur = perClient.get(r.client_id) || { n: 0, last: null };
+        cur.n += 1;
+        if (!cur.last || new Date(r.completed_at) > new Date(cur.last)) cur.last = r.completed_at;
+        perClient.set(r.client_id, cur);
+      }
+      const activeMembers = members.filter((m) => m.status !== 'cancelled').length;
       return ok(res, {
-        program: serializeProgram(p, { members: members.filter((m) => m.status !== 'cancelled').length, items: items.length }),
-        items: items.map(serializeItem), members: members.map(serializeEnrollment),
+        program: serializeProgram(p, { members: activeMembers, items: items.length }),
+        items: items.map((r) => ({ ...serializeLesson(r), completedCount: perItem.get(r.id) || 0 })),
+        modules: modules.map((m) => serializeModule(m, { lessons: items.filter((i) => i.module_id === m.id).length })),
+        members: members.map((m) => {
+          const pr = perClient.get(m.client_id) || { n: 0, last: null };
+          return { ...serializeEnrollment(m), completedCount: pr.n, progressPercent: items.length ? Math.round((pr.n / items.length) * 100) : 0, lastActivityAt: pr.last };
+        }),
+        activeMembers,
       });
     }
     if (req.method === 'PATCH') {

@@ -7,7 +7,7 @@
 //     Stored on users.notification_prefs as bare keys.
 //
 //   • Email prefs (EMAIL_NOTIFY_TYPES below):
-//       bookings, invoices, documents, messages, marketing, billing
+//       bookings, invoices, documents, messages, marketing, billing, reports, programs
 //     Stored on users.notification_prefs prefixed with `email_`, AND on
 //     clients.notification_prefs as bare keys (clients are workspace-
 //     scoped so each client row holds prefs for that one workspace).
@@ -28,6 +28,7 @@ export const EMAIL_NOTIFY_TYPES = [
   'marketing',   // review prompts, announcements, gift-card receipts
   'billing',     // owner-only: subscription renewal, failure, cancellation
   'reports',     // owner-only: weekly recap of bookings, revenue, etc.
+  'programs',    // client: new lessons and newly opened modules in their programs
 ];
 
 // Labels shown in the notification settings UI. Keep terse - the
@@ -40,6 +41,7 @@ export const EMAIL_NOTIFY_LABELS = {
   marketing: 'Reviews & announcements',
   billing:   'Subscription billing',
   reports:   'Weekly business recap',
+  programs:  'Programs',
 };
 
 // Critical sends bypass preferences. These are tied to account

@@ -11,7 +11,7 @@ export const BILLING = new Set(['one_time', 'month', 'year']);
 // Ids arrive from the URL; anything that is not a UUID would make Postgres
 // throw (a 500) instead of the 404 the caller should see.
 export const isUuid = (s) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(s || ''));
-export const ITEM_TYPES = new Set(['pdf', 'post', 'video']);
+export const ITEM_TYPES = new Set(['pdf', 'post', 'video', 'audio']);
 export const POST_KINDS = new Set(['post', 'win', 'question']);
 
 export function serializeProgram(r, extra = {}) {
@@ -170,6 +170,12 @@ export async function applyProgramSubscription({ workspaceId, sub }) {
     programId: p.id, workspaceId, clientId: c.id, source: 'subscription', billing: p.billing, priceCents: p.price_cents,
     stripeSubscriptionId: sub.id, status, currentPeriodEnd: cpe, cancelAtPeriodEnd: !!sub.cancel_at_period_end,
   });
+  // A fresh (or returning) subscriber: tell the owner once per enrollment.
+  if (status === 'active' && (r.previousStatus == null || r.previousStatus === 'cancelled') && r.id) {
+    const who = (await sql`SELECT name, email FROM clients WHERE id = ${c.id}`).rows[0];
+    const { notifyOwnerProgramJoin } = await import('./programNotify.js');
+    notifyOwnerProgramJoin({ workspaceId, programTitle: p.title, clientName: who?.name || who?.email, enrollmentId: r.id });
+  }
   if (status === 'past_due' && r.previousStatus !== 'past_due') {
     notifyClientSubscriptionPastDue({ workspaceId, clientId: c.id, kind: 'program', label: p.title }).catch(() => {});
   }

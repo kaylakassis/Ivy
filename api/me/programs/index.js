@@ -5,6 +5,7 @@ import { requireUser } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { myClientIds, ids } from '../../_lib/clientPortal.js';
 import { serializeProgram } from '../../_lib/programs.js';
+import { progressFor } from '../../_lib/programCourse.js';
 import { methodNotAllowed, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -23,6 +24,7 @@ export default async function handler(req, res) {
          FROM program_enrollments e JOIN programs p ON p.id = e.program_id
         WHERE e.client_id = ANY($1) AND e.status IN ('active','past_due') AND (e.expires_at IS NULL OR e.expires_at > NOW())
         ORDER BY e.granted_at DESC`, [myIds]);
+    const done = await progressFor([...new Set(rows.map((r) => r.id))], myIds);
     return ok(res, {
       programs: rows.map((r) => {
         const cancelAtPeriodEnd = !!r.cancel_at_period_end;
@@ -35,6 +37,8 @@ export default async function handler(req, res) {
           accessUntil: r.expires_at || (cancelAtPeriodEnd ? r.current_period_end : null),
           canCancel: !!r.stripe_subscription_id && !cancelAtPeriodEnd,
           businessName: byClient.get(r.client_id)?.businessName || 'Business',
+          completedCount: Math.min(done.get(r.id) || 0, r.items),
+          progressPercent: r.items ? Math.round((Math.min(done.get(r.id) || 0, r.items) / r.items) * 100) : 0,
         });
       }),
     });

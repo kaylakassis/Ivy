@@ -1,66 +1,20 @@
-// Programs - sell courses, coaching programs and paid communities with
-// PDFs, lessons, videos and a members-only feed. Behind a preview
-// password while it is being finished; without it, owners see the
-// coming-soon page.
+// Programs - sell courses, coaching programs and paid communities:
+// modules and lessons (written, video, audio, PDF, downloads), drip
+// schedules, member progress and a members-only feed.
 import React, { useEffect, useState } from 'react';
-import { uploadFile as upload } from '../../lib/blobUpload.js';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
-import { ContentList, Community, fmtPrice, billingLabel } from './ProgramContent.jsx';
-
-const UNLOCK_KEY = 'ivy_programs_unlocked';
-const PREVIEW_PASSWORD = 'IVYTOTHEMOON2026';
-const isUnlocked = () => { try { return localStorage.getItem(UNLOCK_KEY) === '1'; } catch { return false; } };
+import { Community, fmtPrice, billingLabel } from './ProgramContent.jsx';
+import ModuleEditor from './ModuleEditor.jsx';
+import CoursePreview from './CoursePreview.jsx';
 
 export default function ProgramsPage() {
-  const [unlocked, setUnlocked] = useState(isUnlocked);
-  if (unlocked) return <Builder onLock={() => { try { localStorage.removeItem(UNLOCK_KEY); } catch { /* ignore */ } setUnlocked(false); }}/>;
-  return <ComingSoon onUnlock={() => { try { localStorage.setItem(UNLOCK_KEY, '1'); } catch { /* ignore */ } setUnlocked(true); }}/>;
-}
-
-const FEATURES = [
-  { icon: 'Dollar', title: 'Sell it your way',           body: 'One-time purchase or a monthly subscription, paid straight to your Stripe account.' },
-  { icon: 'Doc',    title: 'PDFs and written lessons',   body: 'Upload workout plans, meal guides, workbooks and templates. Write lessons right inside Ivy.' },
-  { icon: 'Globe',  title: 'Video lessons',              body: 'Drop in an unlisted YouTube link and it plays inside the app and the client portal, never in a separate tab.' },
-  { icon: 'Users',  title: 'A private community',        body: 'A members-only feed where clients share wins, ask questions and cheer each other on.' },
-  { icon: 'Check',  title: 'Edit without breaking anything', body: 'Add, reorder or remove content any time. Access and subscriptions are never affected.' },
-  { icon: 'Spark',  title: 'Members in your CRM',        body: 'Every buyer becomes a client in Ivy with their program, payments and messages in one place.' },
-];
-
-function ComingSoon({ onUnlock }) {
-  const [pw, setPw] = useState(''); const [err, setErr] = useState(false); const [show, setShow] = useState(false);
-  const submit = (e) => { e.preventDefault(); if (pw.trim() === PREVIEW_PASSWORD) onUnlock(); else { setErr(true); setPw(''); } };
-  return (
-    <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 28, maxWidth: 1040 }}>
-      <div className="card" style={{ padding: 'clamp(22px, 4vw, 40px)', display: 'flex', flexDirection: 'column', gap: 12, background: 'linear-gradient(135deg, var(--accent-soft), var(--surface))' }}>
-        <div style={{ display: 'inline-flex', alignSelf: 'flex-start', alignItems: 'center', gap: 8, padding: '5px 12px', borderRadius: 999, background: 'var(--accent)', color: 'var(--accent-ink)', fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}><Icons.Spark size={13} sw={2}/> Coming soon</div>
-        <h2 className="page-title" style={{ margin: 0, fontSize: 'clamp(28px, 4vw, 40px)' }}>Sell what you know, not just your hours.</h2>
-        <p style={{ margin: 0, fontSize: 16, color: 'var(--fg-2)', maxWidth: 640, lineHeight: 1.6 }}>Programs turn your expertise into something clients can buy: coaching curricula, training plans, courses and paid communities. Built for fitness coaches, business coaches and every expert whose clients want more than a session.</p>
-      </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 14 }}>
-        {FEATURES.map((f) => { const Icon = Icons[f.icon] || Icons.Spark; return (
-          <div key={f.title} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <span style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--accent-soft)', color: 'var(--accent)', display: 'inline-flex', alignItems: 'center', justifyContent: 'center' }}><Icon size={18} sw={1.8}/></span>
-            <div style={{ fontSize: 16, fontWeight: 600 }}>{f.title}</div>
-            <div style={{ fontSize: 14, color: 'var(--muted)', lineHeight: 1.55 }}>{f.body}</div>
-          </div>); })}
-      </div>
-      <form onSubmit={submit} className="card" style={{ padding: 20, display: 'flex', flexDirection: 'column', gap: 10, maxWidth: 440 }}>
-        <div style={{ fontSize: 13, fontWeight: 600 }}>Have a preview password?</div>
-        <div style={{ position: 'relative' }}>
-          <input className="input" type={show ? 'text' : 'password'} value={pw} autoComplete="off" onChange={(e) => { setPw(e.target.value); setErr(false); }} placeholder="Preview password" style={{ paddingRight: 40 }}/>
-          <button type="button" onClick={() => setShow((v) => !v)} aria-label={show ? 'Hide password' : 'Show password'} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', padding: 6, color: 'var(--muted)', display: 'inline-flex' }}>{show ? <Icons.EyeOff size={16}/> : <Icons.Eye size={16}/>}</button>
-        </div>
-        {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>That password isn't right.</div>}
-        <button type="submit" className="btn btn-primary" style={{ justifyContent: 'center' }} disabled={!pw.trim()}>Open the preview</button>
-      </form>
-    </div>
-  );
+  return <Builder/>;
 }
 
 // ── Builder ───────────────────────────────────────────────────────────
-function Builder({ onLock }) {
+function Builder() {
   const [programs, setPrograms] = useState(null);
   const [openId, setOpenId] = useState(null);
   const [creating, setCreating] = useState(false);
@@ -76,7 +30,6 @@ function Builder({ onLock }) {
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Courses, plans and paid communities your clients can buy.</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button className="btn btn-ghost" onClick={onLock} title="Hide the preview again">Lock preview</button>
           <button className="btn btn-primary" onClick={() => setCreating(true)}><Icons.Plus size={13} sw={2}/> New program</button>
         </div>
       </div>
@@ -137,7 +90,7 @@ function ProgramForm({ program, onClose, onSaved }) {
   return (
     <Sheet title={program ? 'Edit program' : 'New program'} onClose={onClose}>
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        <Field label="Title"><input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="12-Week Strength Foundations" autoFocus required/></Field>
+        <Field label="Title"><input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="The 6-Week Confidence Course" autoFocus required/></Field>
         <Field label="Description" hint="What's inside and who it's for. Shown on the sales page."><textarea className="input" rows={4} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} style={{ resize: 'vertical' }}/></Field>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <Field label="Price" hint="0 = free (add members by hand)"><input className="input" type="number" min="0" step="0.01" inputMode="decimal" value={f.price} onChange={(e) => setF({ ...f, price: e.target.value })} placeholder="0.00"/></Field>
@@ -158,54 +111,9 @@ function ProgramForm({ program, onClose, onSaved }) {
   );
 }
 
-function ItemForm({ programId, item, onClose, onSaved }) {
-  const [type, setType] = useState(item?.type || 'post');
-  const [f, setF] = useState({ title: item?.title || '', body: item?.body || '', youtube: item?.youtubeId ? `https://youtu.be/${item.youtubeId}` : '', fileUrl: item?.fileUrl || null, fileName: item?.fileName || null });
-  const [busy, setBusy] = useState(false); const [uploading, setUploading] = useState(false); const [err, setErr] = useState(null);
-  const pick = async (file) => {
-    if (!file) return; setUploading(true); setErr(null);
-    try {
-      const blob = await upload(`programs/${Date.now()}-${file.name}`, file, { access: 'public', handleUploadUrl: '/api/programs/upload-token' });
-      setF({ ...f, fileUrl: blob.url, fileName: file.name, title: f.title || file.name.replace(/\.pdf$/i, '') });
-    } catch (ex) { setErr(ex.message || 'Upload failed'); } finally { setUploading(false); }
-  };
-  const submit = async (e) => {
-    e.preventDefault(); setBusy(true); setErr(null);
-    try {
-      const payload = { type, title: f.title, body: f.body, youtube: f.youtube, fileUrl: f.fileUrl, fileName: f.fileName };
-      const r = item ? await api.patch(`/programs/${programId}/items`, { itemId: item.id, ...payload }) : await api.post(`/programs/${programId}/items`, payload);
-      onSaved(r.item);
-    } catch (ex) { setErr(ex.message); } finally { setBusy(false); }
-  };
-  return (
-    <Sheet title={item ? 'Edit content' : 'Add content'} onClose={onClose}>
-      <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-        {!item && (
-          <div style={{ display: 'flex', gap: 6 }}>
-            {[['post', 'Lesson'], ['pdf', 'PDF'], ['video', 'Video']].map(([t, l]) => <button key={t} type="button" onClick={() => setType(t)} className={`btn ${type === t ? 'btn-primary' : 'btn-outline'}`} style={{ flex: 1, justifyContent: 'center' }}>{l}</button>)}
-          </div>
-        )}
-        <Field label="Title"><input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} required autoFocus/></Field>
-        {type === 'video' && <Field label="YouTube link" hint="Unlisted videos work. It plays inside Ivy, not on YouTube."><input className="input" value={f.youtube} onChange={(e) => setF({ ...f, youtube: e.target.value })} placeholder="https://youtu.be/…" required/></Field>}
-        {type === 'pdf' && (
-          <Field label="PDF file" hint="Up to 25 MB.">
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-              <label className="btn btn-outline" style={{ cursor: 'pointer' }}><Icons.Doc size={13}/> {uploading ? 'Uploading…' : f.fileUrl ? 'Replace PDF' : 'Choose PDF'}<input type="file" accept="application/pdf" hidden onChange={(e) => pick(e.target.files?.[0])}/></label>
-              {f.fileName && <span style={{ fontSize: 13, color: 'var(--fg-2)' }}>{f.fileName}</span>}
-            </div>
-          </Field>
-        )}
-        <Field label={type === 'post' ? 'Lesson' : 'Notes (optional)'} hint="Plain text with **bold**, *italics* and lists."><textarea className="input" rows={type === 'post' ? 10 : 3} value={f.body} onChange={(e) => setF({ ...f, body: e.target.value })} style={{ resize: 'vertical' }} required={type === 'post'}/></Field>
-        {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
-        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy || uploading || (type === 'pdf' && !f.fileUrl)}>{busy ? 'Saving…' : 'Save'}</button></div>
-      </form>
-    </Sheet>
-  );
-}
-
 function ProgramDetail({ id, onBack }) {
   const [data, setData] = useState(null); const [tab, setTab] = useState('content');
-  const [editing, setEditing] = useState(false); const [adding, setAdding] = useState(false); const [editItem, setEditItem] = useState(null);
+  const [editing, setEditing] = useState(false); const [previewing, setPreviewing] = useState(false);
   const [addMember, setAddMember] = useState(false); const [err, setErr] = useState(null); const [copied, setCopied] = useState(false);
   const [refunding, setRefunding] = useState(null); const [refundAmount, setRefundAmount] = useState(''); const [refundReason, setRefundReason] = useState('');
   const [refundBusy, setRefundBusy] = useState(false); const [refundNote, setRefundNote] = useState(null);
@@ -213,12 +121,11 @@ function ProgramDetail({ id, onBack }) {
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <div className="page-pad" style={{ color: 'var(--danger)' }}>{err}</div>;
   if (!data) return <div className="page-pad" style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
+  if (previewing) return <CoursePreview programId={id} onClose={() => { setPreviewing(false); load(); }}/>;
   const { program, items, members } = data;
   const publicUrl = `${window.location.origin}/p/${program.id}`;
   const toggle = async () => { try { await api.patch(`/programs/${id}`, { status: program.status === 'published' ? 'draft' : 'published' }); load(); } catch (e) { setErr(e.message); } };
   const archive = async () => { if (!window.confirm('Archive this program? It stops being sold. Current members keep their access.')) return; try { await api.del(`/programs/${id}`); onBack(); } catch (e) { setErr(e.message); } };
-  const removeItem = async (it) => { if (!window.confirm(`Remove "${it.title}"? Members keep their access; only this content goes away.`)) return; try { await api.del(`/programs/${id}/items?itemId=${it.id}`); load(); } catch (e) { setErr(e.message); } };
-  const move = async (it, dir) => { const order = items.map((x) => x.id); const i = order.indexOf(it.id); const j = i + dir; if (j < 0 || j >= order.length) return; [order[i], order[j]] = [order[j], order[i]]; try { await api.patch(`/programs/${id}/items`, { order }); load(); } catch (e) { setErr(e.message); } };
   const startRefund = (m) => { setRefunding(m.id); setRefundAmount(''); setRefundReason(''); setErr(null); setRefundNote(null); };
   const refund = async (m) => {
     setRefundBusy(true); setErr(null);
@@ -253,6 +160,7 @@ function ProgramDetail({ id, onBack }) {
             <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}><b style={{ color: 'var(--fg)' }}>{program.priceCents ? fmtPrice(program.priceCents) : 'Free'}</b> {program.priceCents ? billingLabel(program.billing) : ''}{program.billing === 'one_time' ? ` · access ${program.accessDays ? `${program.accessDays} days` : 'forever'}` : ''} · {activeMembers.length} member{activeMembers.length === 1 ? '' : 's'} · community {program.communityEnabled ? 'on' : 'off'}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <button className="btn btn-outline" onClick={() => setPreviewing(true)}><Icons.Eye size={13}/> Preview as member</button>
             <button className="btn btn-outline" onClick={() => setEditing(true)}>Edit</button>
             <button className="btn btn-primary" onClick={toggle}>{program.status === 'published' ? 'Unpublish' : 'Publish'}</button>
           </div>
@@ -271,17 +179,7 @@ function ProgramDetail({ id, onBack }) {
         ))}
       </div>
       {tab === 'content' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn btn-primary" onClick={() => setAdding(true)}><Icons.Plus size={13} sw={2}/> Add content</button></div>
-          <ContentList items={items} renderActions={(it) => (
-            <span style={{ display: 'inline-flex', gap: 2 }} onClick={(e) => e.stopPropagation()}>
-              <button type="button" aria-label="Move up" onClick={() => move(it, -1)} style={{ padding: 6, color: 'var(--muted)' }}>↑</button>
-              <button type="button" aria-label="Move down" onClick={() => move(it, 1)} style={{ padding: 6, color: 'var(--muted)' }}>↓</button>
-              <button type="button" onClick={() => setEditItem(it)} style={{ padding: 6, color: 'var(--muted)', fontSize: 12.5 }}>Edit</button>
-              <button type="button" onClick={() => removeItem(it)} style={{ padding: 6, color: 'var(--muted)', fontSize: 12.5 }}>Remove</button>
-            </span>
-          )}/>
-        </div>
+        <ModuleEditor programId={id} program={program} items={items} modules={data.modules || []} activeMembers={activeMembers.length} reload={load} onError={setErr}/>
       )}
       {tab === 'members' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -297,6 +195,7 @@ function ProgramDetail({ id, onBack }) {
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.clientName || m.clientEmail}</div>
+                    {m.status !== 'cancelled' && items.length > 0 && <MemberProgress m={m}/>}
                     <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.clientEmail} · {m.source === 'manual' ? 'added by you' : m.source === 'subscription' ? `subscription${m.currentPeriodEnd && m.status !== 'cancelled' ? ` · ${m.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(m.currentPeriodEnd).toLocaleDateString()}` : ''}` : 'purchased'}{m.expiresAt ? ` · ends ${new Date(m.expiresAt).toLocaleDateString()}` : ''} · {m.status === 'past_due' ? 'payment past due' : m.status}{Number(m.refundedCents) > 0 ? ` · ${fmtPrice(m.refundedCents)} refunded` : ''}</div>
                   </div>
                   {m.refundable && !confirming && <button type="button" onClick={() => startRefund(m)} className="btn btn-ghost" style={{ fontSize: 12.5, padding: '6px 10px', minHeight: 32, color: 'var(--danger)' }}>Refund{Number(m.refundedCents) > 0 ? ` (${fmtPrice(refundLeftCents)} left)` : ''}</button>}
@@ -328,8 +227,6 @@ function ProgramDetail({ id, onBack }) {
       {tab === 'community' && <Community programId={id} enabled={program.communityEnabled}/>}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="button" onClick={archive} style={{ fontSize: 12.5, color: 'var(--muted)' }}>Archive program</button></div>
       {editing && <ProgramForm program={program} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }}/>}
-      {adding && <ItemForm programId={id} onClose={() => setAdding(false)} onSaved={() => { setAdding(false); load(); }}/>}
-      {editItem && <ItemForm programId={id} item={editItem} onClose={() => setEditItem(null)} onSaved={() => { setEditItem(null); load(); }}/>}
       {addMember && <AddMember programId={id} onClose={() => setAddMember(false)} onSaved={() => { setAddMember(false); load(); }}/>}
     </div>
   );
@@ -348,5 +245,16 @@ function AddMember({ programId, onClose, onSaved }) {
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy || !email}>{busy ? 'Adding…' : 'Add member'}</button></div>
       </form>
     </Sheet>
+  );
+}
+
+// Members tab: how far a member is and when they last finished a lesson.
+function MemberProgress({ m }) {
+  const pct = Math.max(0, Math.min(100, m.progressPercent || 0));
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '4px 0 3px', fontSize: 12, color: 'var(--fg-2)' }}>
+      <span style={{ width: 80, height: 5, borderRadius: 999, background: 'var(--surface-2)', overflow: 'hidden', flexShrink: 0 }}><span style={{ display: 'block', width: `${pct}%`, height: '100%', background: 'var(--accent)' }}/></span>
+      <span>{pct}% complete{m.lastActivityAt ? ` · last active ${new Date(m.lastActivityAt).toLocaleDateString()}` : ' · not started'}</span>
+    </div>
   );
 }
