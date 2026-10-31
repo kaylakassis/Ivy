@@ -71,6 +71,12 @@ async function listUsers(req, res) {
   } else if (filter === 'client-only') {
     where.push(`NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`);
     where.push(`EXISTS    (SELECT 1 FROM clients c WHERE c.user_id = u.id)`);
+  } else if (filter === 'testers') {
+    // Everyone analytics leave out: beta, sponsored, super admins, comped,
+    // and accounts flagged as test accounts (the admin_real_users view).
+    where.push(`NOT EXISTS (SELECT 1 FROM admin_real_users ru WHERE ru.id = u.id)`);
+  } else if (filter === 'real') {
+    where.push(`EXISTS (SELECT 1 FROM admin_real_users ru WHERE ru.id = u.id)`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -89,6 +95,8 @@ async function listUsers(req, res) {
       w.data_deletion_at,
       w.data_purged_at,
       EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id) AS is_client,
+      u.is_tester,
+      NOT EXISTS (SELECT 1 FROM admin_real_users ru WHERE ru.id = u.id) AS excluded_from_analytics,
       af.code AS affiliate_code
     FROM users u
     LEFT JOIN workspaces w ON w.owner_id = u.id
@@ -131,6 +139,11 @@ async function listUsers(req, res) {
     affiliateCode: row.affiliate_code,
     // Combined classification used by the admin UI.
     classification: classify(row),
+    // Flagged by the operator as a test account (Manage → Mark as test
+    // account), or excluded automatically (beta, sponsored, super admin,
+    // comped). Excluded accounts never count in Admin → Overview.
+    isTester: !!row.is_tester,
+    excludedFromAnalytics: !!row.excluded_from_analytics,
   }));
 
   return ok(res, {

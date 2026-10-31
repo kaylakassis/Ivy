@@ -3470,4 +3470,36 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gift_card_credit_restored_cents IN
 -- second is a no-op instead of a second state change.
 ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
 ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
+
+-- ─── Analytics scope: real customers only ──────────────────────────────
+-- Admin analytics (api/admin/analytics.js, api/cron/refresh-admin-analytics.js)
+-- read through these views so beta testers, comped accounts, super admins
+-- and anyone flagged "test account" never skew signups, revenue, funnel
+-- or platform-impact numbers. Keep the rule in ONE place: here.
+-- Note: dropping or retyping a users/workspaces column that a view
+-- selects needs the view recreated first (ADD COLUMN is fine).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_tester BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE OR REPLACE VIEW admin_real_users AS
+  SELECT u.* FROM users u
+   WHERE u.deleted_at IS NULL
+     AND NOT COALESCE(u.is_tester, FALSE)
+     AND COALESCE(u.user_type, 'regular') NOT IN ('beta', 'sponsored', 'super_admin')
+     AND NOT EXISTS (SELECT 1 FROM workspaces cw WHERE cw.owner_id = u.id AND cw.comp_until IS NOT NULL)
+     AND NOT EXISTS (SELECT 1 FROM comp_invites ci WHERE LOWER(ci.email) = LOWER(u.email));
+CREATE OR REPLACE VIEW admin_real_workspaces AS
+  SELECT w.* FROM workspaces w WHERE w.owner_id IN (SELECT id FROM admin_real_users);
+CREATE OR REPLACE VIEW admin_real_bookings AS
+  SELECT b.* FROM bookings b WHERE b.workspace_id IN (SELECT id FROM admin_real_workspaces);
+CREATE OR REPLACE VIEW admin_real_invoices AS
+  SELECT i.* FROM invoices i WHERE i.workspace_id IN (SELECT id FROM admin_real_workspaces);
+CREATE OR REPLACE VIEW admin_real_clients AS
+  SELECT c.* FROM clients c WHERE c.workspace_id IN (SELECT id FROM admin_real_workspaces);
+CREATE OR REPLACE VIEW admin_real_workflows AS
+  SELECT f.* FROM workflows f WHERE f.workspace_id IN (SELECT id FROM admin_real_workspaces);
+CREATE OR REPLACE VIEW admin_real_ivy_sessions AS
+  SELECT s.* FROM ivy_sessions s WHERE s.workspace_id IN (SELECT id FROM admin_real_workspaces);
+CREATE OR REPLACE VIEW admin_real_reviews AS
+  SELECT r.* FROM reviews r WHERE r.workspace_id IN (SELECT id FROM admin_real_workspaces);
+CREATE OR REPLACE VIEW admin_real_workspace_profile AS
+  SELECT p.* FROM workspace_profile p WHERE p.workspace_id IN (SELECT id FROM admin_real_workspaces);
 `;

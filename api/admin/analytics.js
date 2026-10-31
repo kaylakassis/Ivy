@@ -122,39 +122,39 @@ export default async function handler(req, res) {
       // the admin UI.
       cachedTotals
         ? { rows: [{ n: cachedTotals.users }] }
-        : sql`SELECT COUNT(*)::int AS n FROM users`,
+        : sql`SELECT COUNT(*)::int AS n FROM admin_real_users`,
       sql.query(
-        `SELECT COUNT(*)::int AS n FROM users WHERE created_at >= $1 AND created_at < $2`,
+        `SELECT COUNT(*)::int AS n FROM admin_real_users WHERE created_at >= $1 AND created_at < $2`,
         [fromIso, toIso],
       ),
       cachedTotals
         ? { rows: [{ n: cachedTotals.businessActive }] }
-        : sql`SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'`,
+        : sql`SELECT COUNT(*)::int AS n FROM admin_real_workspaces WHERE subscription_status = 'active'`,
       cachedTotals
         ? { rows: [{ n: cachedTotals.businessTrial }] }
-        : sql`SELECT COUNT(*)::int AS n FROM workspaces
+        : sql`SELECT COUNT(*)::int AS n FROM admin_real_workspaces
                 WHERE subscription_status = 'trialing'
                   AND trial_ends_at IS NOT NULL
                   AND trial_ends_at > NOW()`,
       cachedTotals
         ? { rows: [{ n: cachedTotals.sponsored }] }
-        : sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'sponsored'`,
+        : sql`SELECT COUNT(*)::int AS n FROM admin_real_users WHERE user_type = 'sponsored'`,
       cachedTotals
         ? { rows: [{ n: cachedTotals.affiliate }] }
-        : sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'affiliate'`,
+        : sql`SELECT COUNT(*)::int AS n FROM admin_real_users WHERE user_type = 'affiliate'`,
       cachedTotals
         ? { rows: [{ n: cachedTotals.clientOnly }] }
         : sql`SELECT COUNT(DISTINCT u.id)::int AS n
-                FROM users u
-                WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
-                  AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`,
+                FROM admin_real_users u
+                WHERE NOT EXISTS (SELECT 1 FROM admin_real_workspaces w WHERE w.owner_id = u.id)
+                  AND EXISTS (SELECT 1 FROM admin_real_clients c WHERE c.user_id = u.id)`,
       cachedTotals
         ? { rows: [{ total: cachedTotals.revenueAllTime }] }
         : sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-              FROM invoices WHERE status = 'paid'`,
+              FROM admin_real_invoices WHERE status = 'paid'`,
       sql.query(
         `SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-          FROM invoices
+          FROM admin_real_invoices
           WHERE status = 'paid' AND paid_at >= $1 AND paid_at < $2`,
         [fromIso, toIso],
       ),
@@ -163,7 +163,7 @@ export default async function handler(req, res) {
       // approximate via subscription_period_end falling inside the window
       // for cancelled rows).
       sql.query(
-        `SELECT COUNT(*)::int AS n FROM workspaces
+        `SELECT COUNT(*)::int AS n FROM admin_real_workspaces
           WHERE subscription_status = 'cancelled'
             AND subscription_period_end >= $1
             AND subscription_period_end < $2`,
@@ -172,7 +172,7 @@ export default async function handler(req, res) {
       // Active denominator at start of window - best-effort proxy:
       // workspaces created before window start that are or were paying.
       sql.query(
-        `SELECT COUNT(*)::int AS n FROM workspaces
+        `SELECT COUNT(*)::int AS n FROM admin_real_workspaces
           WHERE created_at < $1
             AND subscription_status IN ('active', 'past_due', 'trialing', 'cancelled')`,
         [fromIso],
@@ -196,7 +196,7 @@ export default async function handler(req, res) {
            COUNT(*)::int                                    AS total,
            COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int  AS no_shows,
            COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled
-           FROM bookings
+           FROM admin_real_bookings
           WHERE date >= CURRENT_DATE - ($1::int || ' days')::interval`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
@@ -211,18 +211,18 @@ export default async function handler(req, res) {
                AND no_show_at IS NULL
                AND date < CURRENT_DATE
            )::int AS past_attendable
-           FROM bookings
+           FROM admin_real_bookings
           WHERE date >= CURRENT_DATE - ($1::int || ' days')::interval
             AND date < CURRENT_DATE`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
       cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `WITH active AS (
-           SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'
+           SELECT COUNT(*)::int AS n FROM admin_real_workspaces WHERE subscription_status = 'active'
          ),
          rev AS (
            SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-             FROM invoices
+             FROM admin_real_invoices
             WHERE status = 'paid'
               AND paid_at >= NOW() - ($1::int || ' days')::interval
          )
@@ -234,12 +234,12 @@ export default async function handler(req, res) {
       ),
       cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         WITH active_ws AS (
-          SELECT id FROM workspaces WHERE subscription_status = 'active'
+          SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active'
         ),
         counts AS (
           SELECT w.id, COUNT(c.id) AS n
             FROM active_ws w
-            LEFT JOIN clients c ON c.workspace_id = w.id
+            LEFT JOIN admin_real_clients c ON c.workspace_id = w.id
            GROUP BY w.id
         )
         SELECT
@@ -249,12 +249,12 @@ export default async function handler(req, res) {
       `,
       cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `WITH active_ws AS (
-           SELECT id FROM workspaces WHERE subscription_status = 'active'
+           SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active'
          ),
          counts AS (
            SELECT w.id, COUNT(b.id) AS n
              FROM active_ws w
-             LEFT JOIN bookings b
+             LEFT JOIN admin_real_bookings b
                ON b.workspace_id = w.id
               AND b.date >= CURRENT_DATE - ($1::int || ' days')::interval
             GROUP BY w.id
@@ -266,39 +266,39 @@ export default async function handler(req, res) {
       cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         SELECT
           (SELECT COUNT(DISTINCT workspace_id)::int
-             FROM workflows
+             FROM admin_real_workflows
             WHERE enabled = TRUE
-              AND workspace_id IN (SELECT id FROM workspaces WHERE subscription_status = 'active')
+              AND workspace_id IN (SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active')
           ) AS adopters,
-          (SELECT COUNT(*)::int FROM workspaces WHERE subscription_status = 'active') AS denom
+          (SELECT COUNT(*)::int FROM admin_real_workspaces WHERE subscription_status = 'active') AS denom
       `,
       cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         SELECT
           (SELECT COUNT(DISTINCT workspace_id)::int
-             FROM ivy_sessions
-            WHERE workspace_id IN (SELECT id FROM workspaces WHERE subscription_status = 'active')
+             FROM admin_real_ivy_sessions
+            WHERE workspace_id IN (SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active')
           ) AS adopters,
-          (SELECT COUNT(*)::int FROM workspaces WHERE subscription_status = 'active') AS denom
+          (SELECT COUNT(*)::int FROM admin_real_workspaces WHERE subscription_status = 'active') AS denom
       `,
       cachedPlatform ? Promise.resolve({ rows: [] }) : sql`
         SELECT
           COUNT(*)::int                       AS count,
           COALESCE(AVG(rating)::numeric(3,2), 0) AS avg_rating
-          FROM reviews
+          FROM admin_real_reviews
          WHERE status = 'visible'
       `,
       cachedPlatform ? Promise.resolve({ rows: [] }) : sql.query(
         `WITH first_booking AS (
            SELECT b.workspace_id, MIN(b.created_at) AS first_at
-             FROM bookings b
+             FROM admin_real_bookings b
             GROUP BY b.workspace_id
          )
          SELECT
            (SELECT COUNT(*)::int FROM first_booking f
-              JOIN workspaces w ON w.id = f.workspace_id
+              JOIN admin_real_workspaces w ON w.id = f.workspace_id
              WHERE f.first_at <= w.created_at + INTERVAL '7 days'
           ) AS activated,
-          (SELECT COUNT(*)::int FROM workspaces WHERE created_at < NOW() - INTERVAL '7 days') AS eligible
+          (SELECT COUNT(*)::int FROM admin_real_workspaces WHERE created_at < NOW() - INTERVAL '7 days') AS eligible
         `,
       ),
       // ─── Acquisition funnel (cohort = workspaces created in window) ──
@@ -324,8 +324,8 @@ export default async function handler(req, res) {
                   w.trial_started_at, w.converted_at, w.subscription_source,
                   w.walkthrough_started_at, w.aha_cta_clicked_at, w.aha_cta_skipped_at,
                   u.onboarding_state
-             FROM workspaces w
-             LEFT JOIN users u ON u.id = w.owner_id
+             FROM admin_real_workspaces w
+             LEFT JOIN admin_real_users u ON u.id = w.owner_id
             WHERE w.created_at >= $1 AND w.created_at < $2
          )
          SELECT
@@ -376,8 +376,8 @@ export default async function handler(req, res) {
       sql.query(
         `WITH cohort AS (
            SELECT u.onboarding_state
-             FROM workspaces w
-             LEFT JOIN users u ON u.id = w.owner_id
+             FROM admin_real_workspaces w
+             LEFT JOIN admin_real_users u ON u.id = w.owner_id
             WHERE w.created_at >= $1 AND w.created_at < $2
          ),
          steps(id) AS (
@@ -409,8 +409,8 @@ export default async function handler(req, res) {
                 OR wp.heard_from IS NOT NULL OR wp.heard_from_other IS NOT NULL
                 OR wp.stage IS NOT NULL
            )::int AS answered
-           FROM workspaces w
-           LEFT JOIN workspace_profile wp ON wp.workspace_id = w.id
+           FROM admin_real_workspaces w
+           LEFT JOIN admin_real_workspace_profile wp ON wp.workspace_id = w.id
           WHERE w.created_at >= $1 AND w.created_at < $2`,
         [fromIso, toIso],
       ),
@@ -511,9 +511,9 @@ export default async function handler(req, res) {
         }
       : await (async () => {
           const [d, w, m] = await Promise.all([1, 7, 30].map((days) => sql.query(
-            `SELECT COUNT(*)::int AS n FROM users u
+            `SELECT COUNT(*)::int AS n FROM admin_real_users u
                WHERE u.last_active_at >= NOW() - ($1::int || ' days')::interval
-                 AND EXISTS (SELECT 1 FROM workspaces ws WHERE ws.owner_id = u.id)`,
+                 AND EXISTS (SELECT 1 FROM admin_real_workspaces ws WHERE ws.owner_id = u.id)`,
             [days],
           )));
           return { day: d.rows[0]?.n || 0, week: w.rows[0]?.n || 0, month: m.rows[0]?.n || 0 };
@@ -652,8 +652,8 @@ function onbDist(field, otherField, fromIso, toIso) {
     : `wp.${field}`;
   return sql.query(
     `SELECT ${keyExpr} AS k, COUNT(*)::int AS n
-       FROM workspace_profile wp
-       JOIN workspaces w ON w.id = wp.workspace_id
+       FROM admin_real_workspace_profile wp
+       JOIN admin_real_workspaces w ON w.id = wp.workspace_id
       WHERE w.created_at >= $1 AND w.created_at < $2
         AND ${keyExpr} IS NOT NULL
       GROUP BY 1
