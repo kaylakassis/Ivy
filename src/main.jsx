@@ -14,6 +14,12 @@ import './styles/global.css';
 
 initMonitoring();
 
+// Promote the preloaded web-font stylesheet (index.html) without an inline
+// onload handler, which the Content-Security-Policy blocks.
+for (const link of document.querySelectorAll('link[rel="preload"][as="style"]')) {
+  link.rel = 'stylesheet';
+}
+
 // Lets the stylesheet give the phone app its own chrome (see the
 // "NATIVE APP" block in global.css) without touching the web.
 if (isNative()) document.documentElement.classList.add('native');

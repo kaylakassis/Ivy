@@ -3576,4 +3576,8 @@ CREATE TABLE IF NOT EXISTS ivy_pending_actions (
   result JSONB
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_pending_actions_workspace ON ivy_pending_actions(workspace_id, created_at DESC);
+
+-- Short-lived per-business lock so helper invites are seat-checked one at a
+-- time (api/_lib/helpers.js inviteHelper). Expires on its own.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS helper_invite_lock_until TIMESTAMPTZ;
 `;

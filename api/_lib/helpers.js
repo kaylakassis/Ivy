@@ -365,7 +365,41 @@ export function abilityLines(permissions) {
 // Owner action: mint + email a signed single-use invite for a staff row.
 // Also used for "resend" (a fresh link; earlier pending ones are cancelled).
 // Throws HelperError(400/409) with a plain message the UI shows as-is.
-export async function inviteHelper({ workspaceId, owner, staff }) {
+// Invites for one business are checked one at a time. The Neon HTTP
+// driver cannot hold a transaction, so a short-lived lock column on the
+// workspace stands in for one: whoever sets it runs the seat check and the
+// insert; a simultaneous invite waits briefly and then sees the result.
+// The lock expires on its own after 10 seconds if a function dies holding it.
+const INVITE_LOCK_TRIES = 25;
+const INVITE_LOCK_WAIT_MS = 120;
+
+async function acquireInviteLock(workspaceId) {
+  for (let i = 0; i < INVITE_LOCK_TRIES; i++) {
+    // eslint-disable-next-line no-await-in-loop
+    const r = await sql`
+      UPDATE workspaces SET helper_invite_lock_until = NOW() + INTERVAL '10 seconds'
+       WHERE id = ${workspaceId}
+         AND (helper_invite_lock_until IS NULL OR helper_invite_lock_until < NOW())
+       RETURNING id`;
+    if (r.rows.length > 0) return true;
+    // eslint-disable-next-line no-await-in-loop
+    await new Promise((resolve) => setTimeout(resolve, INVITE_LOCK_WAIT_MS + Math.floor(Math.random() * 60)));
+  }
+  return false;
+}
+
+export async function inviteHelper(args) {
+  if (!(await acquireInviteLock(args.workspaceId))) {
+    throw new HelperError(409, 'Another invite is being sent right now. Try again in a moment.');
+  }
+  try {
+    return await inviteHelperLocked(args);
+  } finally {
+    await sql`UPDATE workspaces SET helper_invite_lock_until = NULL WHERE id = ${args.workspaceId}`.catch(() => {});
+  }
+}
+
+async function inviteHelperLocked({ workspaceId, owner, staff }) {
   const email = (staff.email || '').trim().toLowerCase();
   if (!email) throw new HelperError(400, 'Add an email for this helper first.');
   if (owner?.email && email === owner.email.toLowerCase()) {
