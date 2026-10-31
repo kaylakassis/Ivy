@@ -1,10 +1,9 @@
-// One-tap confirmation card for an action Ivy proposed that is outbound or
-// hard to reverse (send a message, send an invoice, change settings…). Ivy's
-// server-side confirm-gate returns these as `pendingActions` on her message.
-// Approving sends the owner's OWN explicit approval through the normal chat
-// path — the model then re-issues the tool with confirm:true — so this is
-// just a faster "yes", not a new execution path, and the security model is
-// unchanged. Renders nothing when there's nothing pending.
+// One-tap approval card for an action Ivy proposed that is outbound or hard
+// to reverse (send a message, send an invoice, change settings…). The server
+// records each proposed call and returns it as `pendingActions` on Ivy's
+// message, each with its `id`. Approve calls POST /api/ivy/approve with that
+// id, the only path that runs the stored call; Dismiss declines it. Renders
+// nothing when there's nothing pending.
 //
 // Motion: the border glows once (600ms) when the card mounts so the owner's
 // eye lands on the thing that needs a decision; Approve flashes green.

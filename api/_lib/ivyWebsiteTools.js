@@ -29,7 +29,6 @@ export const WEBSITE_TOOLS = [
         template_pack: { type: 'string', description: 'One of: service_pro, creative_studio, coach_consultant, studio_team, premium_minimal, writer_speaker.' },
         business_name: { type: 'string', description: "The owner's business name as it should appear on the site." },
         handle:        { type: 'string', description: 'Optional URL handle (lowercase letters, digits, hyphens). Defaults to a slug of the business name.' },
-        confirm:       { type: 'boolean', description: 'Only true after the owner explicitly approved building (or replacing) the site.' },
       },
       required: ['template_pack', 'business_name'],
     },
@@ -84,7 +83,7 @@ export const WEBSITE_TOOLS = [
     description: "Make the current draft live at the site's public URL (joinivy.ai/site/<handle>, or the owner's custom domain). Confirmation-gated: describe what will go live and get the owner's yes first. Requires a handle.",
     input_schema: {
       type: 'object',
-      properties: { confirm: { type: 'boolean', description: 'Only true after the owner explicitly approved publishing.' } },
+      properties: {},
     },
   },
 ];

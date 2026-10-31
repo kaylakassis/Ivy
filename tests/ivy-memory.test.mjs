@@ -5,7 +5,7 @@
 
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
-import { executeIvyTool } from '../api/_lib/ivyTools.js';
+import { executeIvyTool, runApprovedTool } from '../api/_lib/ivyTools.js';
 import { workspaceContext } from '../api/_lib/ivy.js';
 
 let pass = 0, fail = 0;
@@ -24,10 +24,10 @@ async function run() {
     wsB = (await sql`INSERT INTO workspaces (owner_id) VALUES (${oB}) RETURNING id`).rows[0].id;
 
     console.log('\n[1] remember stores durable facts; exact dupes are skipped');
-    const r1 = await executeIvyTool('remember', { fact: 'Raising rates to $150 in March' }, { workspaceId: wsA });
+    const r1 = await runApprovedTool('remember', { fact: 'Raising rates to $150 in March' }, { workspaceId: wsA });
     assert(r1.remembered && /150/.test(r1.remembered), 'first fact remembered');
-    await executeIvyTool('remember', { fact: 'Busy season is December' }, { workspaceId: wsA });
-    await executeIvyTool('remember', { fact: 'Raising rates to $150 in March' }, { workspaceId: wsA }); // dupe
+    await runApprovedTool('remember', { fact: 'Busy season is December' }, { workspaceId: wsA });
+    await runApprovedTool('remember', { fact: 'Raising rates to $150 in March' }, { workspaceId: wsA }); // dupe
     const lm = await executeIvyTool('list_memories', {}, { workspaceId: wsA });
     assert(lm.memories.length === 2, `exactly 2 memories, dupe skipped (got ${lm.memories.length})`);
 

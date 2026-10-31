@@ -14,6 +14,7 @@ import {
   serializeSession, workspaceContext, buildBriefing, generateReply, getDailyUsage,
 } from '../_lib/ivy.js';
 import { beginTurn, finishTurn } from '../_lib/ivyTurn.js';
+import { screenOwnerPrompt, screenReply, guardedReply } from '../_lib/ivyGuard.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 
@@ -53,7 +54,7 @@ export default async function handler(req, res) {
       // Fallback must match getDailyUsage's real shape - the usage meter
       // reads usage.outputTokens.toLocaleString() and would TypeError on
       // the old { used, limit } placeholder.
-      const usage = await safe(getDailyUsage(workspaceId), { requests: 0, outputTokens: 0, requestCap: 0, outputTokenCap: 0, monthMessages: 0, monthAllowance: 0, monthResetsAt: null });
+      const usage = await safe(getDailyUsage(workspaceId), { requests: 0, inputTokens: 0, outputTokens: 0, tokens: 0, requestCap: 0, tokenCap: 0, outputTokenCap: 0, monthMessages: 0, monthAllowance: 0, monthResetsAt: null });
       return ok(res, {
         sessions: sessions.rows.map((r) => serializeSession(r)),
         context,
@@ -78,7 +79,21 @@ export default async function handler(req, res) {
       const turn = await beginTurn(body, workspaceId);
       if (turn.error) return badRequest(res, turn.error);
 
-      const reply = await generateReply(turn.text, turn.ctx, turn.history, workspaceId, turn.attachment, user.id);
+      // Content guard (api/_lib/ivyGuard.js): an obviously disallowed request
+      // gets the fixed line without a model call; a reply that trips the
+      // screen is replaced before it is stored. The model's own refusal is
+      // the primary layer; this is defence in depth.
+      let reply;
+      const screened = screenOwnerPrompt(turn.text);
+      if (screened.blocked) {
+        reply = guardedReply(screened.reason);
+      } else {
+        // sessionId rides along so approval-gated tool calls are recorded
+        // against this chat (see executeIvyTool / api/ivy/approve.js).
+        reply = await generateReply(turn.text, { ...turn.ctx, sessionId: turn.session.id }, turn.history, workspaceId, turn.attachment, user.id);
+        const out = screenReply(reply.text);
+        if (out.blocked) reply = guardedReply(out.reason);
+      }
       return ok(res, await finishTurn({ ...turn, reply, workspaceId }));
     }
 

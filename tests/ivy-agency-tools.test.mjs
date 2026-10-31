@@ -6,7 +6,7 @@
 
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
-import { executeIvyTool, SENSITIVE_TOOLS } from '../api/_lib/ivyTools.js';
+import { executeIvyTool, runApprovedTool, SENSITIVE_TOOLS } from '../api/_lib/ivyTools.js';
 import { fetchCalendarSettings } from '../api/_lib/calendar.js';
 
 let pass = 0, fail = 0;
@@ -30,15 +30,14 @@ async function run() {
     let r = await executeIvyTool('set_availability', { preset: 'weekdays' }, ctx);
     assert(r.needs_confirmation === true, 'gated without confirm');
     assert(/Mon: 9:00 AM-5:00 PM/.test(r.summary || ''), 'summary previews the schedule');
-    r = await executeIvyTool('set_availability', { preset: 'weekdays', confirm: true }, ctx);
+    r = await runApprovedTool('set_availability', { preset: 'weekdays' }, ctx);
     assert(r.ok === true && r.days_open === 5, 'weekdays preset writes 5 days');
     let av = (await settings()).availability;
     assert(av['1'] && av['5'] && !av['0'] && !av['6'], 'Mon-Fri open, weekend closed');
     assert(av['1'][0].start === 540 && av['1'][0].end === 1020, 'windows are 9:00-17:00');
 
     console.log('\n[3] set_availability with explicit day-name windows (normalized to 0-6)');
-    r = await executeIvyTool('set_availability', {
-      confirm: true, availability: { monday: [{ start: 600, end: 720 }], sat: [{ start: 540, end: 780 }] },
+    r = await runApprovedTool('set_availability', { availability: { monday: [{ start: 600, end: 720 }], sat: [{ start: 540, end: 780 }] },
     }, ctx);
     assert(r.ok === true, 'explicit windows accepted');
     av = (await settings()).availability;
@@ -46,33 +45,32 @@ async function run() {
     assert(av['1'][0].end === 720, 'Monday window updated to 10:00-12:00');
 
     console.log('\n[4] set_availability rejects a bad window');
-    r = await executeIvyTool('set_availability', { confirm: true, availability: { monday: [{ start: 800, end: 700 }] } }, ctx);
+    r = await runApprovedTool('set_availability', { availability: { monday: [{ start: 800, end: 700 }] } }, ctx);
     assert(typeof r.error === 'string' && /start < end/.test(r.error), 'start>=end rejected');
 
     console.log('\n[5] update_booking_rules writes + validates');
-    r = await executeIvyTool('update_booking_rules', {
-      confirm: true, min_notice_hours: 48, max_advance_days: 30, slot_fit_service: true,
+    r = await runApprovedTool('update_booking_rules', { min_notice_hours: 48, max_advance_days: 30, slot_fit_service: true,
     }, ctx);
     assert(r.ok === true, 'rules written');
     let s = await settings();
     assert(Number(s.min_notice_hours) === 48 && Number(s.max_advance_days) === 30 && s.slot_fit_service === true, 'rule columns set');
-    r = await executeIvyTool('update_booking_rules', { confirm: true, min_notice_hours: 9999 }, ctx);
+    r = await runApprovedTool('update_booking_rules', { min_notice_hours: 9999 }, ctx);
     assert(typeof r.error === 'string' && /0-720/.test(r.error), 'out-of-range notice rejected');
 
     console.log('\n[6] update_settings timezone/category + CACHE invalidation');
     // Prime the cache with the current (null) timezone.
     const before = await fetchCalendarSettings(workspaceId);
     assert(!before.timezone, 'timezone starts unset (cached)');
-    r = await executeIvyTool('update_settings', { confirm: true, timezone: 'America/Los_Angeles', category: 'Wellness' }, ctx);
+    r = await runApprovedTool('update_settings', { timezone: 'America/Los_Angeles', category: 'Wellness' }, ctx);
     assert(r.ok === true, 'timezone/category written');
     const after = await fetchCalendarSettings(workspaceId); // must reflect the write (cache busted)
     assert(after.timezone === 'America/Los_Angeles', 'settings cache reflects new timezone (invalidation fix)');
     assert((await settings()).category === 'Wellness', 'category written');
 
     console.log('\n[7] update_settings rejects a non-canonical slug + bad timezone');
-    r = await executeIvyTool('update_settings', { confirm: true, slug: '-bad-' }, ctx);
+    r = await runApprovedTool('update_settings', { slug: '-bad-' }, ctx);
     assert(typeof r.error === 'string', 'leading/trailing-hyphen slug rejected (VALID_HANDLE)');
-    r = await executeIvyTool('update_settings', { confirm: true, timezone: 'Not/AZone' }, ctx);
+    r = await runApprovedTool('update_settings', { timezone: 'Not/AZone' }, ctx);
     assert(typeof r.error === 'string' && /timezone/i.test(r.error), 'bad IANA timezone rejected');
 
     console.log('\n[8] complete_onboarding (routine, idempotent)');

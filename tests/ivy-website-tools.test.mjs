@@ -2,7 +2,7 @@
 // Run: node --import ./tests/bootstrap.mjs ./tests/ivy-website-tools.test.mjs
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
-import { executeIvyTool, IVY_TOOLS, SENSITIVE_TOOLS } from '../api/_lib/ivyTools.js';
+import { executeIvyTool, runApprovedTool, IVY_TOOLS, SENSITIVE_TOOLS } from '../api/_lib/ivyTools.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -34,7 +34,7 @@ async function run() {
   console.log('\n[3] create_website is confirmation-gated, then builds a multi-page site');
   r = await executeIvyTool('create_website', { template_pack: 'creative_studio', business_name: `Market Theory ${S}` }, ctx);
   assert(r.needs_confirmation === true && /template/i.test(r.summary || ''), `asks for approval first (${(r.summary || '').slice(0, 70)}…)`);
-  r = await executeIvyTool('create_website', { template_pack: 'creative_studio', business_name: `Market Theory ${S}`, confirm: true }, ctx);
+  r = await runApprovedTool('create_website', { template_pack: 'creative_studio', business_name: `Market Theory ${S}` }, ctx);
   assert(r.ok === true && r.website.pages.length === 3, `built 3 pages (got ${r.website?.pages?.length})`);
   assert(r.website.handle === `market-theory-${S}`, `handle derived from the name (${r.website.handle})`);
   assert(r.website.launched === false, 'not public yet');
@@ -64,7 +64,7 @@ async function run() {
   console.log('\n[5] publish is gated, then goes live');
   r = await executeIvyTool('publish_website', {}, ctx);
   assert(r.needs_confirmation === true, 'publish asks for approval');
-  r = await executeIvyTool('publish_website', { confirm: true }, ctx);
+  r = await runApprovedTool('publish_website', {}, ctx);
   assert(r.ok === true && /\/site\/market-theory-/.test(r.url || ''), `live URL returned (${r.url})`);
   const row = (await sql`SELECT launched, published_pages FROM websites WHERE workspace_id = ${a.workspaceId}`).rows[0];
   assert(row.launched === true && row.published_pages.length === 4, 'launched with the 4 pages published');

@@ -68,9 +68,10 @@ export default function IvyPro() {
   }, [streamedLength]);
 
   // ?prompt=… deep-link consumed by push notifications and similar
-  // hand-offs. Drops the text into the composer (or auto-sends if also
-  // ?send=1) so the user can review before firing it off. Strips the
-  // params after consumption so a refresh doesn't re-prefill.
+  // hand-offs. Only ever prefills the composer: a link must never send a
+  // message on the owner's behalf (a crafted URL would otherwise put words
+  // in their mouth), so they always review and press send themselves.
+  // Strips the params after consumption so a refresh doesn't re-prefill.
   const location = useLocation();
   const navigate = useNavigate();
   const consumedRef = useRef(false);
@@ -80,15 +81,10 @@ export default function IvyPro() {
     const prompt = params.get('prompt');
     if (!prompt) return;
     consumedRef.current = true;
-    const autoSend = params.get('send') === '1';
     params.delete('prompt');
     params.delete('send');
     navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-    if (autoSend) {
-      send(prompt);
-    } else {
-      setDraft(prompt);
-    }
+    setDraft(prompt);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, location.search]);
 

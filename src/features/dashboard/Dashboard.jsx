@@ -374,7 +374,7 @@ function HeroBand() {
 // "Today with Ivy" — the deterministic briefing (today's sessions / unpaid
 // invoices / quiet clients) that used to live only in the Ivy dock, surfaced on
 // the highest-traffic screen. Each row hands the job straight to Ivy via a
-// pre-filled, auto-sent prompt (/ivy?prompt=…&send=1), so the dashboard becomes
+// pre-filled prompt (/ivy?prompt=…) the owner reviews and sends, so the dashboard becomes
 // a place to ACT, not just read numbers. Hidden when there's nothing to say.
 function TodayWithIvyCard({ items }) {
   if (!Array.isArray(items) || items.length === 0) return null;
@@ -394,7 +394,7 @@ function TodayWithIvyCard({ items }) {
         {items.map((item, i) => {
           const Icon = Icons[item.icon] || Icons.Spark;
           return (
-            <Link key={i} to={`/ivy?prompt=${encodeURIComponent(item.prompt)}&send=1`} style={{
+            <Link key={i} to={`/ivy?prompt=${encodeURIComponent(item.prompt)}`} style={{
               display: 'flex', alignItems: 'center', gap: 11, padding: '10px 12px',
               borderRadius: 9, border: '1px solid var(--border)',
               background: 'var(--surface)', textDecoration: 'none', color: 'inherit',

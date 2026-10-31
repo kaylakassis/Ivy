@@ -61,7 +61,7 @@ export default function IvyNoticedCard() {
                   <div style={{ fontSize: 12.5, color: 'var(--fg-2)', marginTop: 2, lineHeight: 1.4 }}>{s.detail}</div>
                 )}
                 <div style={{ display: 'flex', gap: 8, marginTop: 9, flexWrap: 'wrap' }}>
-                  <Link to={`/ivy?prompt=${encodeURIComponent(s.prompt)}&send=1`}
+                  <Link to={`/ivy?prompt=${encodeURIComponent(s.prompt)}`}
                     className="btn btn-primary" style={{ padding: '6px 12px', fontSize: 12.5, gap: 6 }}>
                     Do it <Icons.Arrow size={12} sw={2}/>
                   </Link>
