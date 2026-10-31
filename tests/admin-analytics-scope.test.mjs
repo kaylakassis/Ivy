@@ -19,7 +19,7 @@ const adminReq = ({ method = 'GET', body = {}, query = {}, url = '/test' } = {})
 
 async function owner(tag, { userType = 'regular', comp = false, compInvite = false, tester = false } = {}) {
   const email = `scope-${tag}-${S}@example.com`;
-  const u = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, user_type, is_tester, last_active_at) VALUES (${email}, 'x', ${tag}, NOW(), ${userType}, ${tester}, NOW()) RETURNING id`).rows[0].id;
+  const u = (await sql`INSERT INTO users (email, password_hash, name, email_verified_at, user_type, is_tester, last_active_at) VALUES (${email}, 'x', ${tag}, NOW(), ${userType}, ${tester}, NULL) RETURNING id`).rows[0].id;
   const w = (await sql.query(
     `INSERT INTO workspaces (owner_id, name, subscription_status, subscription_period_end, onboarded_at, converted_at, paywall_first_seen_at, comp_until)
      VALUES ($1, $2, 'active', NOW() + INTERVAL '30 days', NOW(), NOW(), NOW(), ${comp ? "NOW() + INTERVAL '365 days'" : 'NULL'}) RETURNING id`, [u, tag])).rows[0].id;
