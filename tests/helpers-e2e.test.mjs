@@ -335,7 +335,7 @@ async function run() {
       'Start your 14-day free trial',
       'Go to your business', 'Go to your client portal', 'Log out',
     ]) assert(goneSrc.includes(line), `copy present: "${line.slice(0, 50)}"`);
-    assert(!goneSrc.includes('—'), 'no em dashes in the screen');
+    assert(!goneSrc.includes('\u2014'), 'no em dashes in the screen');
     assert(!/businessName/.test(goneSrc), 'screen never shows the business name');
 
     console.log('\n[15] lapse: owner subscription ends → helper access pauses (402)');
