@@ -55,7 +55,7 @@ const STOPS = [
     id: 'invoices', act: 'paid', area: 'Invoices & estimates',
     title: 'Invoices that chase themselves.',
     blurb: 'Session ends, the invoice drafts itself. One tap to send, a pay link your client actually uses, and reminders that go out so you never have to.',
-    chips: ['Branded invoices', 'Line items, tax & discounts', 'Public pay links, no client login', 'Estimates that become invoices when accepted', 'Recurring invoices', 'Card on file & auto-charge', 'Due-soon & overdue nudges', 'Partial payments & refunds', 'Payments straight to your Stripe', 'Square & PayPal connections coming'],
+    chips: ['Branded invoices', 'Cards, Apple Pay, Google Pay & Link', 'Cash App Pay & Amazon Pay', 'ACH bank debit', 'Klarna, Affirm & Afterpay', 'Line items, tax & discounts', 'Public pay links, no client login', 'Estimates that become invoices when accepted', 'Recurring invoices', 'Card on file & auto-charge', 'Due-soon & overdue nudges', 'Partial payments & refunds', 'Payments straight to your Stripe', 'Square & PayPal connections coming'],
     mock: 'invoice',
   },
   {

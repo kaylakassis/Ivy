@@ -148,7 +148,7 @@ export default function PaymentProviderCard() {
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         <ProviderRow
           id="stripe" label="Stripe"
-          description="Cards, Apple Pay, Google Pay. Best for card-on-file + recurring billing."
+          description="Cards, Apple Pay, Google Pay, Link, Amazon Pay, Cash App Pay, ACH bank debit, Klarna, Affirm and Afterpay. Best for card-on-file + recurring billing."
           provider={providers.stripe}
           platformReady={platform.stripeReady}
           active={data?.active === 'stripe'}
@@ -192,8 +192,8 @@ export default function PaymentProviderCard() {
       </div>
 
       <div style={{ marginTop: 12, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.55 }}>
-        Apple Pay, Google Pay and Cash App Pay come through Stripe or Square when they are enabled
-        in that dashboard. Zelle is never a checkout method anywhere; list it under Other ways to get paid instead.
+        Wallets, bank debit and buy now, pay later options appear on your checkout automatically when Stripe
+        offers them for your business and your client's location; Stripe decides eligibility per payment. Zelle is never a checkout method anywhere; list it under Other ways to get paid instead.
       </div>
 
       {(FLAGS.square || FLAGS.paypal) && (

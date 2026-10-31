@@ -11,6 +11,7 @@
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { loadPublicSite } from '../../_lib/publicSite.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
+import { loadWorkspaceAccess, archivedPayload } from '../../_lib/businessAccess.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -21,6 +22,10 @@ export default async function handler(req, res) {
     const { handle, slug } = req.query;
     const result = await loadPublicSite({ handle, slug });
     if (result.kind !== 'ok') return notFound(res, 'Site not published');
+    // Owner's subscription lapsed: the site is archived. 200 with the
+    // marker only, no pages.
+    const access = await loadWorkspaceAccess(result.workspaceId);
+    if (!access.active) return ok(res, archivedPayload(access));
 
     return ok(res, {
       site: {

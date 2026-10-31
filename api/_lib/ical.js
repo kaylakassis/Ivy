@@ -100,43 +100,97 @@ function firstName(s) {
   return String(s).trim().split(/\s+/)[0] || 'client';
 }
 
-// A single-event .ics for a booking confirmation email attachment, so the
-// client can one-tap "add to calendar" (a proven no-show reducer). Unlike
-// buildICalFeed (a read-only mirror of ALL the owner's bookings), this is a
-// client-facing invite: SUMMARY names the business, and it carries the
-// location + a friendly description. When the workspace timezone is known the
-// times are absolute UTC ("…Z") so the event lands correctly in the client's
-// own calendar zone; without it we fall back to floating local (legacy).
+// Compact UTC stamp for a wall-clock booking time: "20260814T133000Z" when the
+// workspace timezone is known, floating local ("20260814T093000") otherwise.
+// Shared by the .ics builder and the Google Calendar deep link so both land
+// the event at the same instant.
+export function bookingStamp(dateStr, mins, tz) {
+  return fmtDT(dateStr, mins, tz);
+}
+
+// Mailbox-safe fragment of an address for ORGANIZER/ATTENDEE mailto: values.
+function mailto(addr) {
+  const a = String(addr || '').trim();
+  if (!a || !/^[^\s@]+@[^\s@]+$/.test(a)) return null;
+  return a;
+}
+
+// A single-event .ics for a booking confirmation / reschedule email and the
+// one-tap "Add to Apple/Outlook" download. Unlike buildICalFeed (a read-only
+// mirror of ALL the owner's bookings), this is a client-facing invitation:
+//
+//   • METHOD:REQUEST + ORGANIZER (the business) + ATTENDEE (the client) so
+//     Apple Mail, Outlook and Gmail render it as an invitation to accept
+//     rather than an opaque attachment.
+//   • A stable UID (<bookingId>@joinivy.ai) and a SEQUENCE that rises on
+//     every reschedule, so re-sending after a move UPDATES the calendar
+//     entry the client already saved instead of creating a second one.
+//   • LOCATION carries the venue address or the video link; when the
+//     workspace timezone is known the times are absolute UTC ("…Z") so the
+//     event lands correctly in the client's own calendar zone.
 export function buildBookingInvite({
   bizName, serviceName, date, startMin, endMin, bookingId,
   locationAddress, description, url, timezone,
+  method = 'REQUEST', sequence = 0, status = 'CONFIRMED',
+  organizerEmail, attendeeEmail, attendeeName,
 }) {
   const stamp = fmtUtcStamp();
   const summary = serviceName
     ? `${serviceName}${bizName ? ` with ${bizName}` : ''}`
     : (bizName ? `Appointment with ${bizName}` : 'Appointment');
   const uid = `${bookingId || 'booking'}@joinivy.ai`;
+  const seq = Number.isFinite(Number(sequence)) && Number(sequence) >= 0 ? Math.floor(Number(sequence)) : 0;
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
     'PRODID:-//Ivy//Booking invite//EN',
     'CALSCALE:GREGORIAN',
-    'METHOD:PUBLISH',
+    `METHOD:${method === 'PUBLISH' || method === 'CANCEL' ? method : 'REQUEST'}`,
     'BEGIN:VEVENT',
     fold(`UID:${uid}`),
+    `SEQUENCE:${seq}`,
     `DTSTAMP:${stamp}`,
     `DTSTART:${fmtDT(date, startMin, timezone)}`,
     `DTEND:${fmtDT(date, endMin, timezone)}`,
     fold(`SUMMARY:${escText(summary)}`),
-    'STATUS:CONFIRMED',
+    `STATUS:${status === 'CANCELLED' ? 'CANCELLED' : 'CONFIRMED'}`,
     'TRANSP:OPAQUE',
   ];
+  // ORGANIZER is the business. A mailto: value is mandatory per RFC 5545,
+  // so we fall back to a no-reply mailbox when the workspace has no
+  // reply-to address; the CN is what calendar apps actually display.
+  const orgMail = mailto(organizerEmail) || 'no-reply@joinivy.ai';
+  lines.push(fold(`ORGANIZER;CN=${escText(bizName || 'Ivy')}:mailto:${orgMail}`));
+  const attMail = mailto(attendeeEmail);
+  if (attMail) {
+    lines.push(fold(`ATTENDEE;CN=${escText(attendeeName || attMail)};ROLE=REQ-PARTICIPANT;PARTSTAT=ACCEPTED;RSVP=FALSE:mailto:${attMail}`));
+  }
   if (locationAddress) lines.push(fold(`LOCATION:${escText(locationAddress)}`));
   if (url) lines.push(fold(`URL:${escText(url)}`));
   lines.push(fold(`DESCRIPTION:${escText(description || 'Booked via Ivy.')}`));
   lines.push('END:VEVENT');
   lines.push('END:VCALENDAR');
   return lines.join('\r\n') + '\r\n';
+}
+
+// Google Calendar "add event" deep link for the same booking. Google
+// accepts the compact UTC form ("…Z") and the floating form; we pass the
+// workspace timezone as ctz so a floating time is read in the right zone.
+export function buildGoogleCalendarUrl({
+  bizName, serviceName, date, startMin, endMin, timezone, locationAddress, description,
+}) {
+  const summary = serviceName
+    ? `${serviceName}${bizName ? ` with ${bizName}` : ''}`
+    : (bizName ? `Appointment with ${bizName}` : 'Appointment');
+  const params = new URLSearchParams({
+    action: 'TEMPLATE',
+    text: summary,
+    dates: `${fmtDT(date, startMin, timezone)}/${fmtDT(date, endMin, timezone)}`,
+  });
+  if (description) params.set('details', description);
+  if (locationAddress) params.set('location', locationAddress);
+  if (timezone) params.set('ctz', timezone);
+  return `https://calendar.google.com/calendar/render?${params.toString()}`;
 }
 
 export function buildICalFeed({ bizName, bookings, services, timezone }) {

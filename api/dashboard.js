@@ -9,6 +9,8 @@ import { workspaceTimeZone } from './_lib/calendar.js';
 import { touchStreak } from './_lib/streak.js';
 import { detectWorkflowSuggestion } from './_lib/workflowSuggest.js';
 import { buildBriefing } from './_lib/ivy.js';
+import { buildWeekStats, recapHasActivity, recapIvyRows, ivyTaskCount, timeSavedMinutes, MINUTES_PER_IVY_TASK } from './_lib/weeklyRecap.js';
+import { firstWinForDashboard } from './_lib/firstWin.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
 export default async function handler(req, res) {
@@ -100,8 +102,42 @@ export default async function handler(req, res) {
       if (b?.items?.length) briefing = { items: b.items };
     } catch { /* no "today" card this load */ }
 
+    // "This week": the same numbers the Monday recap email carries (last 7
+    // days, rolling), so the card and the email never disagree. null when
+    // nothing happened, which hides the card. Best-effort.
+    let week = null;
+    try {
+      const to = new Date();
+      const from = new Date(Date.now() - 7 * 86400000);
+      const stats = await buildWeekStats({ workspaceId, from, to });
+      if (recapHasActivity(stats)) {
+        week = {
+          from: from.toISOString(), to: to.toISOString(),
+          bookingsTaken: stats.bookingsTaken,
+          completedBookings: stats.completedBookings,
+          revenuePaid: stats.revenuePaid,
+          outstandingTotal: stats.outstandingTotal,
+          newClients: stats.newClients,
+          ivyRows: recapIvyRows(stats),
+          ivyTasks: ivyTaskCount(stats),
+          timeSavedMinutes: timeSavedMinutes(stats),
+          minutesPerTask: MINUTES_PER_IVY_TASK,
+          upcomingBookings: stats.upcomingBookings,
+          overdueInvoiceCount: stats.overdueInvoiceCount,
+          overdueInvoiceTotal: stats.overdueInvoiceTotal,
+        };
+      }
+    } catch { /* no "this week" card this load */ }
+
+    // First win: whether to show the "Your business is ready" cards (a new
+    // owner's first dashboard visit) and any one-time first-booking /
+    // first-payment moment waiting to be shown. Never throws.
+    const firstWin = await firstWinForDashboard(workspaceId);
+
     return ok(res, {
       currency,
+      week,
+      firstWin,
       streak: { days: streak.days, best: streak.best, milestone: streak.milestone },
       workflowSuggestion,
       briefing,

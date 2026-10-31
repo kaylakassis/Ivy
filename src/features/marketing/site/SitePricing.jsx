@@ -159,7 +159,7 @@ export default function SitePricing() {
               <li>Goals + finance dashboard</li>
               <li>Reviews + rewards</li>
               <li>Ivy AI assistant (chat + actions, personalized to you)</li>
-              <li>Stripe payments, settled in your own account</li>
+              <li>Stripe payments in your own account: cards, Apple Pay, Google Pay, Link, Amazon Pay, Cash App Pay, ACH bank debit, Klarna, Affirm and Afterpay</li>
               <li>Email support</li>
             </ul>
           </div>

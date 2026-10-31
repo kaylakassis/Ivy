@@ -22,6 +22,7 @@ import ServicesDrawer from './ServicesDrawer.jsx';
 import AddBookingModal from './AddBookingModal.jsx';
 import DayView from './DayView.jsx';
 import MonthView from './MonthView.jsx';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
 
 const VIEW_KEY = 'Ivy:calendar:view';
 
@@ -62,6 +63,7 @@ export default function Calendar() {
     createBooking, updateBooking, applyBooking, cancelBooking, cancelOccurrence,
     completeBooking, editCompletion, clearCompletion,
   } = useCalendar(dataWindow);
+  usePullRefresh(refresh);
 
   // After a no-show / tip / fee charge (the drawer hits those endpoints
   // directly), merge the returned booking into state AND patch the open

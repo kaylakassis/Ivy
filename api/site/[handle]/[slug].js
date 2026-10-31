@@ -6,6 +6,7 @@ import { warmupDbOnce } from '../../_lib/db.js';
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { loadPublicSite } from '../../_lib/publicSite.js';
 import { renderSiteHtml } from '../../_lib/siteHtml.js';
+import { loadWorkspaceAccess, renderArchivedHtml } from '../../_lib/businessAccess.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET' && req.method !== 'HEAD') {
@@ -29,6 +30,8 @@ export default async function handler(req, res) {
 
     const result = await loadPublicSite({ handle, slug });
     if (result.kind !== 'ok') return notFound(res, handle, slug);
+    const access = await loadWorkspaceAccess(result.workspaceId);
+    if (!access.active) return archived(res, access);
     // 301 redirect if the owner has a rule for this slug.
     const hit = matchRedirect(result.site.redirects, slug || '');
     if (hit) return redirect(res, hit, handle);
@@ -50,6 +53,17 @@ export default async function handler(req, res) {
   } catch (err) {
     return serverError(res, err);
   }
+}
+
+
+// Subscription lapsed: a static, noindex "no longer on Ivy" page. Not
+// cached at the edge so a resubscribe brings the site back right away.
+function archived(res, access) {
+  res.statusCode = 200;
+  res.setHeader('Content-Type', 'text/html; charset=utf-8');
+  res.setHeader('Cache-Control', 'no-store');
+  res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+  return res.end(renderArchivedHtml({ businessName: access.businessName }));
 }
 
 function notFound(res, handle, slug) {

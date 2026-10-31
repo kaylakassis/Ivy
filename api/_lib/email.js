@@ -79,7 +79,7 @@ function warnIfSandbox() {
   }
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, unsubscribeUrl, timeoutMs = 8000 }) {
+export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, unsubscribeUrl, unsubscribeAllUrl, timeoutMs = 8000 }) {
   // HARD STOP for deleted accounts. Deletion mangles the address to
   // user+deleted-<id>@domain to free it for re-signup - but Gmail-style
   // plus-addressing still DELIVERS that to the original inbox. Every
@@ -106,7 +106,7 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   // render it — recipients there need a clickable link in the body or
   // they have no opt-out at all. Done at send-time so we don't have to
   // thread unsubscribeUrl through every emailShell call site.
-  const finalHtml = unsubscribeUrl ? injectUnsubFooter(html, unsubscribeUrl) : html;
+  const finalHtml = unsubscribeUrl ? injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl) : html;
   const body = {
     from: fromAddress(),
     to: Array.isArray(to) ? to : [to],
@@ -200,12 +200,15 @@ function stripHtml(s = '') {
 // document, we tack it on the end. Idempotent on the marker so a
 // double-call (test wrappers, retries) doesn't double-print the line.
 const UNSUB_MARKER = 'data-ivy-unsub="1"';
-function injectUnsubFooter(html, unsubscribeUrl) {
+function injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl) {
   if (!html || typeof html !== 'string') return html;
   if (html.includes(UNSUB_MARKER)) return html;
   const prefsUrl = `${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications`;
+  const allLink = unsubscribeAllUrl && unsubscribeAllUrl !== unsubscribeUrl
+    ? `&nbsp;·&nbsp;<a href="${unsubscribeAllUrl}" style="color:#93A3A0;text-decoration:underline;">Unsubscribe from all emails</a>`
+    : '';
   const block = `<div ${UNSUB_MARKER} style="margin:18px auto 0;max-width:600px;text-align:center;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Inter',Helvetica,Arial,sans-serif;font-size:11px;color:#93A3A0;line-height:1.5;">
-    <a href="${unsubscribeUrl}" style="color:#93A3A0;text-decoration:underline;">Unsubscribe</a>
+    <a href="${unsubscribeUrl}" style="color:#93A3A0;text-decoration:underline;">Unsubscribe</a>${allLink}
     &nbsp;·&nbsp;
     <a href="${prefsUrl}" style="color:#93A3A0;text-decoration:underline;">Manage email preferences</a>
   </div>`;
@@ -262,8 +265,10 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
   const businessName = (branding?.businessName || '').trim();
   const logoUrl = sanitizeUrl(branding?.logoUrl);
   const sig = (branding?.emailSignature || '').trim();
-  const fontDisplay = `'Neue Haas Grotesk Display','Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
-  const fontSans    = `'Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
+  // Brand font: the mail-safe stack for the owner's chosen invoice font.
+  const brandStack = typeof branding?.fontStack === 'string' && /^[\w\s,'"-]+$/.test(branding.fontStack) ? branding.fontStack : null;
+  const fontDisplay = brandStack || `'Neue Haas Grotesk Display','Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
+  const fontSans    = brandStack || `'Neue Haas Grotesk Text','Helvetica Neue',Helvetica,Arial,sans-serif`;
 
   // Letterhead: logo > business name > Ivy wordmark. The "Business
   // OS" tag is dropped when a workspace is branded so the recipient
@@ -505,8 +510,9 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
   const unsubscribeUrl = (userId && type && !CRITICAL_EMAIL_TYPES.has(type))
     ? unsubscribeUrlFor({ scope: 'user', id: userId, type })
     : null;
+  const unsubscribeAllUrl = unsubscribeUrl ? unsubscribeUrlFor({ scope: 'user', id: userId, type: 'all' }) : null;
   try {
-    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl });
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl, unsubscribeAllUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     // Log loudly even though we don't throw - callers commonly wrap us
@@ -533,8 +539,9 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
   const unsubscribeUrl = (clientId && type && !CRITICAL_EMAIL_TYPES.has(type))
     ? unsubscribeUrlFor({ scope: 'client', id: clientId, type })
     : null;
+  const unsubscribeAllUrl = unsubscribeUrl ? unsubscribeUrlFor({ scope: 'client', id: clientId, type: 'all' }) : null;
   try {
-    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl });
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl, unsubscribeAllUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     // Same rationale as sendEmailToUser above - log loud on failure so
@@ -561,8 +568,9 @@ export async function sendEmailToClientByAddress({ workspaceId, email, type, sub
   const unsubscribeUrl = (workspaceId && email && type && !CRITICAL_EMAIL_TYPES.has(type))
     ? unsubscribeUrlFor({ scope: 'clientEmail', id: email, workspaceId, type })
     : null;
+  const unsubscribeAllUrl = unsubscribeUrl ? unsubscribeUrlFor({ scope: 'clientEmail', id: email, workspaceId, type: 'all' }) : null;
   try {
-    const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl });
+    const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl, unsubscribeAllUrl });
     return { ok: true, sent: true, result };
   } catch (err) {
     return { ok: false, sent: false, reason: err.message };

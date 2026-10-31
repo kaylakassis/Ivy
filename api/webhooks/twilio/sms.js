@@ -13,6 +13,7 @@ import crypto from 'node:crypto';
 import { sql } from '../../_lib/db.js';
 import { readRawBody } from '../../_lib/body.js';
 import { verifyTwilioSignature } from '../../_lib/twilio.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../../_lib/webhookFailures.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { markProcessed, releaseProcessed } from '../../_lib/webhookDedup.js';
@@ -48,6 +49,7 @@ export default async function handler(req, res) {
     const proto = req.headers['x-forwarded-proto'] || 'https';
     const url = `${proto}://${req.headers.host}${req.url || '/api/webhooks/twilio/sms'}`;
     if (!verifyTwilioSignature({ url, params, signature: req.headers['x-twilio-signature'] })) {
+      await recordWebhookFailure({ source: 'twilio', eventType: SIGNATURE_FAILURE, message: 'Invalid signature' });
       res.statusCode = 403;
       return res.end('Invalid signature');
     }
@@ -137,6 +139,7 @@ export default async function handler(req, res) {
     if (claimedSid) await releaseProcessed('twilio', claimedSid);
     // 500 (plain, not TwiML) so the failure is visible in Twilio's debugger
     // and the message is retried instead of silently dropped with a 200.
+    await recordWebhookFailure({ source: 'twilio', eventType: 'inbound_sms', message: err.message });
     res.statusCode = 500;
     return res.end('Internal error');
   }

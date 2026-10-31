@@ -25,6 +25,7 @@ import {
 } from '../_lib/subscriptionNotify.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
 
 // Stripe statuses that count as "this user is paying us". Trialing is
 // excluded - affiliates only earn attribution on real revenue.
@@ -38,6 +39,7 @@ export default async function handler(req, res) {
   // let Stripe's retry re-process the event instead of getting silently
   // deduped on a transient error. Same pattern as stripe/[workspaceId].js.
   let claimedEventId = null;
+  let eventType = null;
   try {
     const secretKey     = platformStripeSecret();
     const webhookSecret = billingWebhookSecret();
@@ -54,8 +56,10 @@ export default async function handler(req, res) {
         secret: webhookSecret,
       });
     } catch (err) {
+      await recordWebhookFailure({ source: 'billing', eventType: SIGNATURE_FAILURE, message: err.message });
       return res.status(400).json({ error: `Webhook verification failed: ${err.message}` });
     }
+    eventType = event.type;
 
     // Idempotency. Stripe redelivers events on any non-2xx or timeout;
     // without this, a redelivered invoice.payment_succeeded re-sends
@@ -96,6 +100,7 @@ export default async function handler(req, res) {
     // Processing threw after we claimed the event - release the claim so
     // Stripe's retry re-runs the handler rather than getting deduped.
     if (claimedEventId) await releaseProcessed('billing', claimedEventId);
+    await recordWebhookFailure({ source: 'billing', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }
@@ -135,6 +140,9 @@ async function onCheckoutCompleted(session, secretKey) {
       stripe_customer_id      = ${session.customer || null},
       stripe_subscription_id  = ${sub?.id || null},
       subscription_period_end = ${periodEnd},
+      cancel_at_period_end    = FALSE,
+      plan_ending_reminder_sent_at = NULL,
+      data_deletion_at = NULL, data_deletion_notice_sent_at = NULL, data_deletion_reminder_sent_at = NULL,
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isTrialing} THEN converted_at ELSE COALESCE(converted_at, NOW()) END
@@ -178,6 +186,9 @@ async function onSubscriptionChanged(sub, eventType) {
   // Conversion = the first time the sub is actually paying (active). For a
   // trial that's the trialing→active flip; for a no-trial sub it's immediate.
   const isActive = status === 'active';
+  // Auto-renew turned off in the billing portal: access runs to period end,
+  // then Stripe sends subscription.deleted. A fresh active sub clears it.
+  const cancelAtEnd = !!sub.cancel_at_period_end && (status === 'active' || status === 'trialing' || status === 'past_due');
 
   // Try by subscription id first. The subscription_source guard keeps a
   // lifecycle event for a leftover Stripe sub from clobbering the state
@@ -188,6 +199,9 @@ async function onSubscriptionChanged(sub, eventType) {
     UPDATE workspaces SET
       subscription_status     = ${status},
       subscription_period_end = ${periodEnd},
+      cancel_at_period_end    = ${cancelAtEnd},
+      plan_ending_reminder_sent_at = CASE WHEN ${cancelAtEnd} THEN plan_ending_reminder_sent_at ELSE NULL END,
+      data_deletion_at = CASE WHEN ${isActive || isTrialing} THEN NULL ELSE data_deletion_at END,
       trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
       trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
       converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
@@ -203,6 +217,9 @@ async function onSubscriptionChanged(sub, eventType) {
         stripe_subscription_id  = ${sub.id},
         stripe_customer_id      = ${sub.customer || null},
         subscription_period_end = ${periodEnd},
+        cancel_at_period_end    = ${cancelAtEnd},
+      plan_ending_reminder_sent_at = CASE WHEN ${cancelAtEnd} THEN plan_ending_reminder_sent_at ELSE NULL END,
+      data_deletion_at = CASE WHEN ${isActive || isTrialing} THEN NULL ELSE data_deletion_at END,
         trial_ends_at    = CASE WHEN ${isTrialing} THEN ${trialEnd} ELSE trial_ends_at END,
         trial_started_at = CASE WHEN ${isTrialing} THEN COALESCE(trial_started_at, NOW()) ELSE trial_started_at END,
         converted_at     = CASE WHEN ${isActive} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
@@ -264,6 +281,11 @@ async function onInvoiceEvent(invoice, type, secretKey) {
   if (!subId) return;
   const sub = await fetchSubscription({ secretKey, subscriptionId: subId });
   const status = type === 'invoice.payment_failed' ? 'past_due' : mapStripeStatus(sub.status);
+  // Stripe marks the $0 invoice that starts a free trial as "paid" and
+  // sends invoice.payment_succeeded for it. Only money actually collected
+  // counts as a first payment: it stamps converted_at, converts a referral
+  // (rewarding the referrer) and attributes affiliate revenue.
+  const realPayment = Number(invoice.amount_paid || 0) > 0;
   const periodEnd = sub.current_period_end
     ? new Date(sub.current_period_end * 1000)
     : null;
@@ -298,7 +320,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
         subscription_failed_attempts = 0,
         subscription_suspended_at   = NULL,
         subscription_last_dunning_at = NULL,
-        converted_at                = COALESCE(converted_at, NOW())
+        converted_at                = CASE WHEN ${realPayment} THEN COALESCE(converted_at, NOW()) ELSE converted_at END
       WHERE stripe_subscription_id = ${sub.id}
         AND COALESCE(subscription_source, 'stripe') <> 'apple'
       RETURNING id
@@ -314,7 +336,7 @@ async function onInvoiceEvent(invoice, type, secretKey) {
     `;
   }
 
-  if (type === 'invoice.payment_succeeded' && r.rows[0]?.id) {
+  if (type === 'invoice.payment_succeeded' && realPayment && r.rows[0]?.id) {
     await attributePayment({
       workspaceId: r.rows[0].id,
       valueCents: monthlyValueCents(sub),

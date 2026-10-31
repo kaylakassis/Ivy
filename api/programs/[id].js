@@ -6,7 +6,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeProgram, serializeItem, serializeEnrollment, cleanProgramInput } from '../_lib/programs.js';
+import { serializeProgram, serializeItem, serializeEnrollment, cleanProgramInput, isUuid } from '../_lib/programs.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -15,6 +15,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res); if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res); if (!workspaceId) return;
     const id = String(req.query.id || '');
+    if (!isUuid(id)) return notFound(res, 'Program not found');
     const p = (await sql`SELECT * FROM programs WHERE id = ${id} AND workspace_id = ${workspaceId}`).rows[0];
     if (!p) return notFound(res, 'Program not found');
 

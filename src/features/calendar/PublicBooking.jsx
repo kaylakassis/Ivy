@@ -15,6 +15,7 @@ import { useTweaks } from '../../lib/tweaks.js';
 import { useEmbedResize } from '../../lib/embedResize.js';
 import { tzDisplay } from '../../lib/timezones.js';
 import { haptic } from '../../lib/celebrate.js';
+import ArchivedBusinessCard, { isArchivedError } from '../../components/ArchivedBusiness.jsx';
 import {
   addDays, fmtDateISO, minToHM, parseISO, slotsForDate, startOfToday, WEEKDAYS_SHORT,
 } from './utils.js';
@@ -28,6 +29,9 @@ export default function PublicBooking({ embedded = false }) {
   const [cal, setCal] = useState(null);
   const [loadErr, setLoadErr] = useState(null);
   const [loading, setLoading] = useState(true);
+  // Owner's subscription lapsed: the API returns { archived, businessName }
+  // instead of a calendar, and any POST answers 403 business_archived.
+  const [archived, setArchived] = useState(null);
 
   const [serviceId, setServiceId] = useState(null);
   // Anchor the day strip on TODAY (never a past day). Past days are
@@ -55,6 +59,10 @@ export default function PublicBooking({ embedded = false }) {
   // Video room URL returned from the confirmed booking response. Shown
   // on the success screen for virtual services.
   const [confirmedVideoUrl, setConfirmedVideoUrl] = useState(null);
+  // Add-to-calendar links (Google deep link + signed .ics URL) returned
+  // with the confirmed booking, for the one-tap buttons on the success
+  // screen.
+  const [confirmedCalendar, setConfirmedCalendar] = useState(null);
   // After a deposit checkout redirect (?deposit=paid|cancelled) we land back
   // here on a FRESH page load with no slot/email in memory. Show a standalone
   // thank-you (paid) or a reassuring note (cancelled) instead of dumping the
@@ -120,6 +128,11 @@ export default function PublicBooking({ embedded = false }) {
     api.get('/calendar/public/' + encodeURIComponent(slug))
       .then((r) => {
         if (!live) return;
+        if (r.archived) {
+          setArchived({ businessName: r.businessName });
+          document.title = (r.businessName || slug) + ' · Ivy';
+          return;
+        }
         setCal(r.calendar);
         setServiceId(r.calendar.services[0]?.id || null);
         document.title = (r.calendar.settings.bizName || slug) + ' · Book';
@@ -219,6 +232,14 @@ export default function PublicBooking({ embedded = false }) {
     );
   }
 
+  if (archived) {
+    return (
+      <PageWrap tweaks={tweaks} embedded={embedded}>
+        <ArchivedBusinessCard businessName={archived.businessName} compact={embedded}/>
+      </PageWrap>
+    );
+  }
+
   if (loadErr || !cal) {
     const status = loadErr?.status;
     const title  = status === 404
@@ -308,9 +329,12 @@ export default function PublicBooking({ embedded = false }) {
         setDepositPending(Number(r.booking.depositRequired));
       }
       if (r.booking?.videoRoomUrl) setConfirmedVideoUrl(r.booking.videoRoomUrl);
+      setConfirmedCalendar(r.booking?.calendar || null);
       setStep(joinWaitlist ? 'waitlisted' : 'confirmed');
-      haptic(); // a little "done!" tap on the client's phone
+      haptic('success'); // a little "done!" tap on the client's phone
     } catch (e) {
+      // The business was archived between page load and submit.
+      if (isArchivedError(e)) { setArchived({ businessName: cal?.settings?.bizName }); return; }
       setBookErr(e.message || 'Could not confirm - try another slot.');
     } finally {
       setBusy(false);
@@ -448,8 +472,10 @@ export default function PublicBooking({ embedded = false }) {
       )}
 
       {/* Gift card CTA - same step as the slot picker so it doesn't
-          get in the way of someone who's actively trying to book. */}
-      {step === 'pick' && (
+          get in the way of someone who's actively trying to book. Only
+          when the business can take card payments (the API says so);
+          otherwise the form would end in a "not set up" error. */}
+      {step === 'pick' && cal.giftCardsAvailable !== false && (
         <div style={{
           display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
           padding: '10px 14px', borderRadius: 10, marginTop: 14,
@@ -538,6 +564,21 @@ export default function PublicBooking({ embedded = false }) {
                 booking. Online payment isn't set up yet, so {cal.settings.bizName || 'the business'} will
                 follow up with you about it directly.
               </p>
+            )}
+            {confirmedCalendar?.google && confirmedCalendar?.ics && (
+              <div style={{ marginTop: 18 }}>
+                <div style={{ fontSize: 12.5, color: 'var(--muted)', marginBottom: 8 }}>Add it to your calendar</div>
+                <div style={{ display: 'inline-flex', gap: 8, flexWrap: 'wrap', justifyContent: 'center' }}>
+                  <a href={confirmedCalendar.google} target="_blank" rel="noopener noreferrer"
+                    className="btn btn-outline" style={{ fontSize: 13, padding: '9px 14px', textDecoration: 'none' }}>
+                    <Icons.Calendar size={13} sw={2}/> Google Calendar
+                  </a>
+                  <a href={confirmedCalendar.ics} className="btn btn-outline"
+                    style={{ fontSize: 13, padding: '9px 14px', textDecoration: 'none' }}>
+                    <Icons.Calendar size={13} sw={2}/> Apple/Outlook (.ics)
+                  </a>
+                </div>
+              </div>
             )}
           </div>
           {confirmedVideoUrl && (

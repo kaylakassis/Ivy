@@ -28,6 +28,7 @@ export default async function handler(req, res) {
     const { rows } = await sql`SELECT id, email, first_name, name, status FROM waitlist_signups WHERE id = ${id}`;
     const row = rows[0];
     if (!row) return notFound(res, 'Not on the waitlist');
+    if (row.unsubscribed_at) return badRequest(res, 'This person unsubscribed from waitlist emails, so no invite was sent.');
 
     const token = makeInviteToken(row.id, row.email);
     const link = `${appUrl()}/signup?invite=${encodeURIComponent(token)}`;

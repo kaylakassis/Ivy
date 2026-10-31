@@ -46,6 +46,8 @@ export default async function handler(req, res) {
           ...serializeThread(r),
           workspaceId: r.workspace_id,
           businessName: m?.businessName || 'Business',
+          // Business no longer on Ivy: the composer is replaced.
+          archived: !!m?.archived,
           // From the client's perspective, the unread count that matters
           // is unread_client (messages they haven't seen from the biz).
           blocked: !!(b && (b.ownerBlocked || b.clientBlocked)),

@@ -1,14 +1,17 @@
 // GET /api/me/programs/:id → full content for an enrolled client.
 import { sql } from '../../_lib/db.js';
 import { requireUser } from '../../_lib/auth.js';
-import { programAccess, serializeProgram, serializeItem } from '../../_lib/programs.js';
+import { requireSameOrigin } from '../../_lib/security.js';
+import { programAccess, serializeProgram, serializeItem, isUuid } from '../../_lib/programs.js';
 import { forbidden, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
+  if (!requireSameOrigin(req, res)) return;
   try {
     const user = await requireUser(req, res); if (!user) return;
     const id = String(req.query.id || '');
+    if (!isUuid(id)) return notFound(res, 'Program not found');
     const owner = (await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`).rows[0]?.id || null;
     const access = await programAccess(user, id, owner);
     if (!access.program) return notFound(res, 'Program not found');

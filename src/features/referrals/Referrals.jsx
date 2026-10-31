@@ -196,7 +196,7 @@ export default function Referrals({ embedded = false }) {
         <div className="card" style={{ padding: 20 }}>
           {attachedCode ? (
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)' }}>
-              Code <strong>{attachedCode}</strong> is on your account. When you subscribe, you and your friend each get a free week.
+              Code <strong>{attachedCode}</strong> is on your account. When you pay for your first week, your friend gets a free week.
             </div>
           ) : (
             <>

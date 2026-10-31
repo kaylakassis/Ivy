@@ -69,6 +69,23 @@ let configured = false;
 let configuring = null;
 let currentAppUserId = null;
 let purchasesPromise = null;
+// Why the last configure() attempt failed, so the UI can say the real
+// reason instead of the store library's generic "must be configured".
+let lastConfigureError = null;
+
+// A human-readable reason in-app purchasing cannot run right now, or null
+// when it is ready. Used by every purchase entry point and the Account page.
+export function iapUnavailableReason() {
+  if (!isIos()) return 'In-app purchases only work in the iPhone app.';
+  if (!PUBLIC_KEY) return 'This build was made without the App Store purchase key, so subscriptions and promo codes cannot run. Rebuild the app with the key set.';
+  if (!configured) {
+    return `The App Store purchase service could not start${lastConfigureError ? ` (${lastConfigureError})` : ''}. Sign out and back in, then try again. If it keeps happening, contact support.`;
+  }
+  return null;
+}
+export function iapStatus() {
+  return { available: iapAvailable(), configured, error: lastConfigureError, reason: iapUnavailableReason() };
+}
 
 // Resolves to the MODULE, never the Purchases proxy: resolving a promise
 // with a Capacitor plugin proxy makes the engine look up `.then` on it,
@@ -93,10 +110,12 @@ export async function initIAP() {
       const { Purchases: P } = await purchases();
       await P.configure({ apiKey: PUBLIC_KEY });
       configured = true;
+      lastConfigureError = null;
       return true;
     } catch (err) {
+      lastConfigureError = String(err?.message || err?.code || err || 'unknown error').slice(0, 200);
       // eslint-disable-next-line no-console
-      console.error('[iap] configure failed:', err?.message || err);
+      console.error('[iap] configure failed:', lastConfigureError);
       return false;
     } finally {
       configuring = null;
@@ -244,7 +263,8 @@ export async function getIapOfferings() {
 // what flips subscription_status. `hasPro` lets the UI unlock optimistically
 // while that round trip lands.
 export async function purchaseIapPackage(pkg) {
-  if (!iapAvailable()) return { ok: false, error: 'In-app purchase is not available on this device.' };
+  if (!iapAvailable()) return { ok: false, error: iapUnavailableReason() };
+  if (!(await initIAP())) return { ok: false, error: iapUnavailableReason() };
   if (!pkg?.raw) return { ok: false, error: 'That plan is unavailable. Please try again.' };
   try {
     const { Purchases: P } = await purchases();
@@ -264,7 +284,8 @@ export async function purchaseIapPackage(pkg) {
 // Apple requires every app selling subscriptions to offer this, so a
 // customer who reinstalls or switches device can recover access.
 export async function restoreIapPurchases() {
-  if (!iapAvailable()) return { ok: false, error: 'In-app purchase is not available on this device.' };
+  if (!iapAvailable()) return { ok: false, error: iapUnavailableReason() };
+  if (!(await initIAP())) return { ok: false, error: iapUnavailableReason() };
   try {
     const { Purchases: P } = await purchases();
     // The SDK returns { customerInfo } - reading entitlements off the top
@@ -283,7 +304,8 @@ export async function restoreIapPurchases() {
 // reflects the entitlement a couple of seconds later, so callers should
 // also refresh the workspace from the server.
 export async function redeemIapOfferCode() {
-  if (!iapAvailable()) return { ok: false, error: 'Promo codes can only be redeemed in the iPhone app.' };
+  if (!iapAvailable()) return { ok: false, error: iapUnavailableReason() };
+  if (!(await initIAP())) return { ok: false, error: iapUnavailableReason() };
   try {
     const { Purchases: P } = await purchases();
     await P.presentCodeRedemptionSheet();

@@ -48,8 +48,8 @@ async function run() {
     // Workspace + website + products + Stripe creds.
     const uid = (await sql`INSERT INTO users (email, password_hash, terms_version, terms_accepted_at)
       VALUES (${`${tag}@example.com`}, 'x', '2026-05-05', NOW()) RETURNING id`).rows[0].id;
-    const wid = (await sql`INSERT INTO workspaces (owner_id, subscription_status, business_type)
-      VALUES (${uid}, 'active', 'product') RETURNING id`).rows[0].id;
+    const wid = (await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_period_end, business_type)
+      VALUES (${uid}, 'active', NOW() + INTERVAL '30 days', 'product') RETURNING id`).rows[0].id;
     await sql`INSERT INTO finance_settings (workspace_id, stripe_connect_user_id, stripe_onboarding_status, currency)
       VALUES (${wid}, ${acctId}, 'complete', 'USD')`;
     await sql`INSERT INTO websites (workspace_id, handle, published_at)

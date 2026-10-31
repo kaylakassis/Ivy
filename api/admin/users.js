@@ -23,6 +23,7 @@ import { sendEmail, emailShell } from '../_lib/email.js';
 import { createToken, KIND_RESET, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { isWorkspaceActive } from '../_lib/clientPortal.js';
 
 const PAGE_SIZE = 50;
 // Internally we surface 'business-trial' / 'business-active' as creation
@@ -87,6 +88,8 @@ async function listUsers(req, res) {
       w.trial_ends_at,
       w.subscription_period_end,
       w.comp_until,
+      w.data_deletion_at,
+      w.data_purged_at,
       EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id) AS is_client,
       EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id) AS is_helper,
       af.code AS affiliate_code
@@ -120,6 +123,12 @@ async function listUsers(req, res) {
       trialEndsAt: row.trial_ends_at,
       periodEndsAt: row.subscription_period_end,
       comped: !!(row.comp_until && new Date(row.comp_until) > new Date()),
+      // Same predicate as the paywall + the client-facing archive, so
+      // the operator sees "Archived" exactly when clients do.
+      active: isWorkspaceActive(row),
+      // 7-day retention after a paid subscription ends (data-retention cron).
+      dataDeletionAt: (!isWorkspaceActive(row) && row.data_deletion_at) ? row.data_deletion_at : null,
+      dataPurgedAt: row.data_purged_at || null,
     } : null,
     isClient: !!row.is_client,
     // Helper at someone else's business (api/_lib/helpers.js).

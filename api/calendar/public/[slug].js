@@ -18,12 +18,14 @@ import { findActiveByCode, redeemAtomic } from '../../_lib/giftCards.js';
 import { validEmail } from '../../_lib/auth.js';
 import { normalizePhone } from '../../_lib/sms.js';
 import { notifyNewBooking } from '../../_lib/bookingNotify.js';
+import { loadBookingForInvite, calendarLinksFor } from '../../_lib/calendarLinks.js';
 import { syncOnBookingCreated } from '../../_lib/googleSync.js';
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { getProvider } from '../../_lib/payments/index.js';
 import { appUrl } from '../../_lib/tokens.js';
 import { sendClientInvite } from '../../_lib/clientNotify.js';
 import { fireClientCreatedWorkflows } from '../../_lib/workflows.js';
+import { loadWorkspaceAccess, archivedPayload, archivedForbidden } from '../../_lib/businessAccess.js';
 import {
   badRequest, created, methodNotAllowed, notFound, ok, serverError,
 } from '../../_lib/json.js';
@@ -72,6 +74,11 @@ async function getCalendar(req, res) {
     `;
     if (settings.rows.length === 0) return notFound(res, 'No booking page for that handle');
     const s = settings.rows[0];
+
+    // Subscription lapsed: the page is archived. 200 with the archived
+    // marker and nothing else - no services, slots or bookings leak.
+    const access = await loadWorkspaceAccess(s.workspace_id);
+    if (!access.active) return ok(res, archivedPayload(access));
 
     // Pull the workspace's business_type + website handle so the
     // public booking page can render a "Visit our shop" CTA when the
@@ -222,8 +229,22 @@ async function getCalendar(req, res) {
       programsOut = progs.rows.map((r) => ({ id: r.id, title: r.title, description: r.description || '', priceCents: Number(r.price_cents) || 0, billing: r.billing, accessDays: r.access_days == null ? null : Number(r.access_days), communityEnabled: !!r.community_enabled, items: r.items }));
     } catch (e) { console.error('[calendar/public] programs skipped:', e.message); }
 
+    // Gift cards are sold through the business's connected card
+    // processor. Only offer the "Buy a gift card" button when the
+    // business can actually take the payment, so a visitor never fills
+    // in the form just to be told it cannot go through.
+    let giftCardsAvailable = false;
+    try {
+      const fs = await sql`
+        SELECT stripe_connect_user_id, stripe_secret_encrypted
+          FROM finance_settings WHERE workspace_id = ${s.workspace_id} LIMIT 1
+      `;
+      giftCardsAvailable = !!(fs.rows[0]?.stripe_connect_user_id || fs.rows[0]?.stripe_secret_encrypted);
+    } catch (e) { console.error('[calendar/public] gift card availability skipped:', e.message); }
+
     return ok(res, {
       calendar: {
+        giftCardsAvailable,
         settings: serializeSettings(s),
         services: services.rows.map(serializeService),
         blocks:   blocksOut,
@@ -264,6 +285,9 @@ async function createBooking(req, res) {
     `;
     if (settingsRows.rows.length === 0) return notFound(res, 'Booking page not found');
     const { workspace_id: workspaceId, availability, slot_minutes: slotMinutes } = settingsRows.rows[0];
+    // Archived business: no new bookings or waitlist joins.
+    const access = await loadWorkspaceAccess(workspaceId);
+    if (!access.active) return archivedForbidden(res);
     const minNoticeHours = Math.max(0, Number(settingsRows.rows[0].min_notice_hours ?? 24));
     const slotFitService = !!settingsRows.rows[0].slot_fit_service;
     const bufferMinutes = Math.max(0, Number(settingsRows.rows[0].buffer_minutes || 0));
@@ -552,7 +576,7 @@ async function createBooking(req, res) {
         workspace_id, service_id, client_id, client_name, client_email, client_phone,
         date, start_min, end_min, notes, deposit_required, location_address,
         video_room_url, custom_field_values, add_on_ids, booking_total,
-        gift_card_credit_cents
+        gift_card_credit_cents, source
       )
       VALUES (
         ${workspaceId}, ${serviceId}, ${clientId}, ${clientName}, ${clientEmail}, ${clientPhone},
@@ -561,7 +585,8 @@ async function createBooking(req, res) {
         ${JSON.stringify(cleanedCustomValues)}::jsonb,
         ${JSON.stringify(requestedAddOnIds)}::jsonb,
         ${bookingTotal},
-        ${giftCardCreditCents}
+        ${giftCardCreditCents},
+        'client'
       )
       RETURNING *
     `;
@@ -675,6 +700,13 @@ async function createBooking(req, res) {
       .catch((e) => console.error('[booking] syncOnBookingCreated failed:', e?.message));
     attachIntakeForms({ workspaceId, bookingId: b.id })
       .catch((e) => console.error('[booking] attachIntakeForms failed:', e?.message));
+    // One-tap add-to-calendar for the confirmation screen: a Google deep
+    // link + a signed .ics URL (api/_lib/calendarLinks.js). Best-effort.
+    let calendar = null;
+    try {
+      const inviteRow = await loadBookingForInvite({ bookingId: b.id, workspaceId });
+      if (inviteRow) calendar = calendarLinksFor(inviteRow);
+    } catch { /* confirmation still renders without the links */ }
     return created(res, {
       booking: {
         id: b.id,
@@ -685,6 +717,7 @@ async function createBooking(req, res) {
         bookingTotal: Number(b.booking_total || 0),
         locationType,
         depositRequired,
+        calendar,
       },
       depositCheckoutUrl,
     });

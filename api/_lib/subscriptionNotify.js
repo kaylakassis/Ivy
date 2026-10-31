@@ -15,7 +15,7 @@
 // obvious next step. Merge fields are filled here at send-time (never
 // shipped as literal `{{ ... }}` to the recipient).
 import { sql } from './db.js';
-import { sendEmailToUser, emailShell } from './email.js';
+import { sendEmailToUser, sendEmail, emailShell } from './email.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
 import { workspaceTimeZone } from './calendar.js';
@@ -107,16 +107,18 @@ export function renderTrialReminder({ stage, trialEndsAt, firstName: fnRaw, busi
     heading = 'Your trial ends tomorrow';
     body = `<p>Hi ${fn},</p>
       <p>Quick heads-up: your trial ends <strong>tomorrow, ${endDate}</strong>.</p>
-      <p>After that, <strong>${biz}</strong> moves to a free account and your business tools — client management, scheduling, Ivy, financials, and reporting — switch off until you pick a plan. Your data stays safe and waiting, but the automations stop.</p>
+      <p>After that, your business tools — client management, scheduling, Ivy, financials, and reporting — switch off until you pick a plan, and your booking page, website and client portal for <strong>${biz}</strong> are archived for clients. Your data stays safe and waiting, but everything stops until you subscribe.</p>
       <p>You've already done the hard part of setting it up. Don't let it go quiet.</p>`;
     ctaText = 'Keep everything — subscribe →';
   } else if (stage === 'expired') {
     subject = 'Your Ivy trial has ended';
-    preheader = `Your account and data are safe — reactivate whenever you're ready.`;
+    const keepUntil = fmtDate(new Date(new Date(trialEndsAt).getTime() + 28 * 864e5));
+    preheader = `Everything you set up is kept until ${keepUntil}. Pick a plan to keep going.`;
     heading = 'Your trial has ended';
     body = `<p>Hi ${fn},</p>
-      <p>Your Ivy trial has ended, and <strong>${biz}</strong> has moved to a free Client account. Nothing was deleted — your clients, bookings, documents, and history are all still here.</p>
-      <p>To switch your business tools back on, you'll want to reactivate:</p>
+      <p>Your Ivy trial has ended. Your business tools are switched off and your booking page, website and client portal for <strong>${biz}</strong> are archived for clients.</p>
+      <p>Everything you set up is kept for <strong>4 weeks, until ${keepUntil}</strong>, so you can pick up exactly where you left off. After that it is permanently deleted. You can download your data any time before then from the subscription screen.</p>
+      <p>To switch your business tools back on, pick a plan:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         <li>Unlimited client management</li>
         <li>Scheduling, reminders, and your booking page</li>
@@ -462,7 +464,7 @@ export async function notifyWinbackOffer({
       firstName: firstName(o.name), businessName: o.biz_name,
     });
     await sendEmailToUser({
-      userId: o.owner_id, type: 'billing',
+      userId: o.owner_id, type: 'marketing',
       to: o.email, subject: rendered.subject, html: rendered.html,
     });
   } catch (err) {
@@ -527,7 +529,7 @@ export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, business
   const biz = escapeHtml(businessName || 'your business');
   const accessUntil = endsAt
     ? `<li>You keep <strong>full access until ${fmtDate(endsAt)}</strong> (the end of your paid period)</li>`
-    : `<li>Your workspace has moved to the free account immediately</li>`;
+    : `<li>Your access ended with this cancellation, so the next point applies now</li>`;
   const preheader = endsAt ? `You keep full access until ${fmtDate(endsAt)}.` : `Your account is safe — reactivate any time.`;
   const html = emailShell({
     heading: `Your subscription is cancelled — what happens next`,
@@ -536,8 +538,9 @@ export function renderSubscriptionCancelled({ endsAt, firstName: fnRaw, business
       <p>Your Ivy subscription is cancelled. We're sorry to see you go — but a few things to make this painless:</p>
       <ul style="padding-left:20px;margin:14px 0;">
         ${accessUntil}
-        <li>After that, <strong>${biz}</strong> moves to a free account; <strong>nothing is deleted</strong></li>
-        <li>You can reactivate anytime and pick up exactly where you left off</li>
+        <li>After that, your booking page, website and client portal for <strong>${biz}</strong> are archived: clients see a notice instead, and nothing can be booked or bought</li>
+        <li>Your data is kept for <strong>7 days</strong> after that so you can download it (Account → Your data, or the subscription screen), then it is <strong>permanently deleted</strong></li>
+        <li>Resubscribe before then and everything is exactly as you left it</li>
       </ul>
       <p>If something wasn't working — Ivy, a missing feature, pricing — just reply and tell me. I read every one, and it genuinely shapes what we build next.</p>`,
     ctaText: 'Changed your mind? Reactivate →',
@@ -561,5 +564,184 @@ export async function notifySubscriptionCancelled({ workspaceId, endsAt }) {
   } catch (err) {
     console.error('[subscriptionNotify.cancelled] failed:', err.message);
     reportError(err, { extra: { workspaceId } });
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Plan ending soon (owner turned auto-renew off; access ends at periodEnd)
+// ─────────────────────────────────────────────────────────────────────
+
+export function renderPlanEnding({ endsAt, firstName: fnRaw, businessName, source }) {
+  const fn = escapeHtml(fnRaw || 'there');
+  const biz = escapeHtml(businessName || 'your business');
+  const endDate = fmtDate(endsAt);
+  const where = source === 'apple' ? 'in the App Store' : 'from your Account page';
+  const preheader = `Your plan ends on ${endDate}. After that your booking page, website and client portal are archived.`;
+  const html = emailShell({
+    heading: `Your Ivy plan ends on ${endDate}`,
+    preheader,
+    body: `<p>Hi ${fn},</p>
+      <p>A heads-up, since you turned off renewal: your Ivy plan ends on <strong>${endDate}</strong>.</p>
+      <p>After that, <strong>${biz}</strong> is archived for your clients. Your booking page and website show a notice instead of taking bookings, the client portal closes to new messages and purchases, and your dashboard is locked.</p>
+      <p>Your data is kept for <strong>7 days</strong> after that date so you can download it, then it is <strong>permanently deleted</strong>. Resubscribe before then and everything is exactly as you left it.</p>
+      <p>If you meant to keep going, turn renewal back on ${where} before ${endDate} and nothing changes.</p>`,
+    ctaText: source === 'apple' ? 'Manage in the App Store →' : 'Keep my plan →',
+    ctaUrl: source === 'apple' ? 'https://apps.apple.com/account/subscriptions' : billingUrl(),
+    footer: `— The Ivy Team`,
+  });
+  return { subject: `Your Ivy plan ends on ${endDate}`, html, preheader };
+}
+
+export async function notifyPlanEnding({ workspaceId, endsAt, source }) {
+  try {
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const rendered = renderPlanEnding({ endsAt, source, firstName: firstName(o.name), businessName: o.biz_name });
+    await sendEmailToUser({ userId: o.owner_id, type: 'billing', to: o.email, subject: rendered.subject, html: rendered.html });
+    await notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: {
+        title: `Your Ivy plan ends ${fmtDate(endsAt)}`,
+        body: 'After that your business is archived for clients and your data is deleted 7 days later. Turn renewal back on to keep everything.',
+        url: '/account?tab=billing', tag: `plan-ending-${workspaceId}`,
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[subscriptionNotify.planEnding] failed:', err.message);
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Data retention after a paid subscription ends (api/_lib/dataRetention.js)
+// ─────────────────────────────────────────────────────────────────────
+
+const WHAT_IS_DELETED = 'clients, bookings, invoices and payment records, documents, messages, your website, automations and Ivy history';
+
+export function renderDataDeletionScheduled({ deleteAt, endedAt, firstName: fnRaw, businessName, source, trial = false }) {
+  const fn = escapeHtml(fnRaw || 'there');
+  const biz = escapeHtml(businessName || 'your business');
+  const deleteDate = fmtDate(deleteAt);
+  if (trial) {
+    // Unpaid trial: 4 weeks to pick a plan. Continues the win-back flow.
+    const preheader = `Pick a plan before ${deleteDate} to keep everything you set up.`;
+    const html = emailShell({
+      heading: `Your trial has ended. Your workspace is kept until ${deleteDate}`,
+      preheader,
+      body: `<p>Hi ${fn},</p>
+        <p>Your Ivy trial ended${endedAt ? ` on ${fmtDate(endedAt)}` : ''}. <strong>${biz}</strong> is archived for now: your dashboard is locked and clients see a notice instead of your booking page, website and portal.</p>
+        <p><strong>Everything you set up is kept for 4 weeks.</strong> On <strong>${deleteDate}</strong> it is permanently deleted: ${WHAT_IS_DELETED}. This cannot be undone.</p>
+        <p>Pick a plan before then and it all comes back exactly as you left it. If you would rather keep a copy, sign in and use <strong>Download my data</strong> or <strong>Email me a copy</strong> on the subscription screen.</p>
+        <p>Your login stays either way, and we keep billing records and any moderation reports as required.</p>`,
+      ctaText: 'Pick a plan →',
+      ctaUrl: billingUrl(),
+      footer: `— The Ivy Team`,
+    });
+    return { subject: `Your Ivy workspace is kept until ${deleteDate}`, html, preheader };
+  }
+  const preheader = `Download your data before ${deleteDate}, or resubscribe to keep everything.`;
+  const html = emailShell({
+    heading: `Your Ivy access has ended. Your data is deleted on ${deleteDate}`,
+    preheader,
+    body: `<p>Hi ${fn},</p>
+      <p>Your Ivy subscription has ended${endedAt ? ` (your paid period finished on ${fmtDate(endedAt)})` : ''}, so <strong>${biz}</strong> is now archived: your dashboard is locked and clients see a notice instead of your booking page, website and portal.</p>
+      <p><strong>You have 7 days to download your data.</strong> On <strong>${deleteDate}</strong> everything in your workspace is permanently deleted: ${WHAT_IS_DELETED}. This cannot be undone.</p>
+      <p>To download it, sign in and use <strong>Download my data</strong> or <strong>Email me a copy</strong> on the subscription screen. You get one file with everything in it.</p>
+      <p>Changed your mind? Resubscribe before ${deleteDate} ${source === 'apple' ? 'in the app' : 'from the same screen'} and nothing is deleted. Everything is exactly as you left it.</p>
+      <p>Your login stays, so you can sign in later to start fresh or delete your account entirely. We keep billing records and any moderation reports as required.</p>`,
+    ctaText: 'Download my data →',
+    ctaUrl: `${appUrl()}/`,
+    footer: `— The Ivy Team`,
+  });
+  return { subject: `Your Ivy access has ended. Download your data before ${deleteDate}`, html, preheader };
+}
+
+export function renderDataDeletionReminder({ deleteAt, firstName: fnRaw, businessName, trial = false }) {
+  const fn = escapeHtml(fnRaw || 'there');
+  const biz = escapeHtml(businessName || 'your business');
+  const deleteDate = fmtDate(deleteAt);
+  const keepVerb = trial ? 'pick a plan' : 'resubscribe';
+  const preheader = `Last chance to download your data or ${keepVerb}.`;
+  const html = emailShell({
+    heading: `2 days left: your Ivy data is deleted on ${deleteDate}`,
+    preheader,
+    body: `<p>Hi ${fn},</p>
+      <p>A final reminder: on <strong>${deleteDate}</strong> everything in <strong>${biz}</strong> is permanently deleted: ${WHAT_IS_DELETED}. This cannot be undone.</p>
+      <p>If you want a copy, sign in now and use <strong>Download my data</strong> or <strong>Email me a copy</strong>. If you want to keep going, ${keepVerb} before then and nothing is deleted.</p>`,
+    ctaText: trial ? 'Pick a plan →' : 'Download my data →',
+    ctaUrl: trial ? billingUrl() : `${appUrl()}/`,
+    footer: `— The Ivy Team`,
+  });
+  return { subject: `2 days left to download your Ivy data`, html, preheader };
+}
+
+export function renderDataDeleted({ firstName: fnRaw }) {
+  const fn = escapeHtml(fnRaw || 'there');
+  const preheader = `Your workspace data has been permanently deleted.`;
+  const html = emailShell({
+    heading: 'Your Ivy workspace data has been deleted',
+    preheader,
+    body: `<p>Hi ${fn},</p>
+      <p>As we let you know by email, your access ended and the retention period has passed, so your workspace data has now been permanently deleted: ${WHAT_IS_DELETED}.</p>
+      <p>Your login still works. If you ever want to come back, sign in and subscribe to start a fresh workspace. If you would rather remove your account too, use <strong>Account → Delete my account</strong>.</p>
+      <p>Thank you for running your business on Ivy.</p>`,
+    ctaText: 'Open Ivy →',
+    ctaUrl: `${appUrl()}/`,
+    footer: `— The Ivy Team`,
+  });
+  return { subject: 'Your Ivy workspace data has been deleted', html, preheader };
+}
+
+export async function notifyDataDeletionScheduled({ workspaceId, deleteAt, endedAt, source, trial = false }) {
+  try {
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const rendered = renderDataDeletionScheduled({ deleteAt, endedAt, source, trial, firstName: firstName(o.name), businessName: o.biz_name });
+    // Account-critical: sent regardless of email preferences. An email
+    // outage must not stop the in-app/push notice below.
+    await sendEmail({ to: o.email, subject: rendered.subject, html: rendered.html }).catch((e) => console.error('[subscriptionNotify.dataDeletionScheduled] email failed:', e.message)); // eslint-disable-line no-console
+    await notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: {
+        title: trial ? 'Your Ivy trial has ended' : 'Your Ivy access has ended',
+        body: `Your data is kept until ${fmtDate(deleteAt)}, then permanently deleted unless you ${trial ? 'pick a plan' : 'resubscribe'}. You can download it any time before then.`,
+        url: '/account?tab=billing', tag: `data-deletion-${workspaceId}`,
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[subscriptionNotify.dataDeletionScheduled] failed:', err.message);
+  }
+}
+
+export async function notifyDataDeletionReminder({ workspaceId, deleteAt, trial = false }) {
+  try {
+    const o = await loadOwner(workspaceId);
+    if (!o?.email) return;
+    const rendered = renderDataDeletionReminder({ deleteAt, trial, firstName: firstName(o.name), businessName: o.biz_name });
+    await sendEmail({ to: o.email, subject: rendered.subject, html: rendered.html }).catch((e) => console.error('[subscriptionNotify.dataDeletionReminder] email failed:', e.message)); // eslint-disable-line no-console
+    await notifyOwnerSafe({
+      workspaceId, type: 'payments',
+      payload: {
+        title: '2 days left to download your data',
+        body: `Your Ivy data is permanently deleted on ${fmtDate(deleteAt)}.`,
+        url: '/account?tab=billing', tag: `data-deletion-reminder-${workspaceId}`,
+      },
+    });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[subscriptionNotify.dataDeletionReminder] failed:', err.message);
+  }
+}
+
+// Email only: the workspace (and its notification rows) is gone by now.
+export async function notifyDataDeleted({ email, name }) {
+  try {
+    if (!email) return;
+    const rendered = renderDataDeleted({ firstName: firstName(name) });
+    await sendEmail({ to: email, subject: rendered.subject, html: rendered.html });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[subscriptionNotify.dataDeleted] failed:', err.message);
   }
 }

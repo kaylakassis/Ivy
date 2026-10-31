@@ -32,7 +32,8 @@ export default function SubscriptionBanner() {
   const trialEndingSoon = inTrial && sub.daysRemaining != null && sub.daysRemaining <= TRIAL_WARN_DAYS;
   const pastDue    = sub.status === 'past_due';
   const suspended  = sub.status === 'suspended';
-  if (!trialEndingSoon && !pastDue && !suspended) return null;
+  const endingSoon = !!sub.cancelAtPeriodEnd && sub.isActive && sub.daysRemaining != null && sub.daysRemaining <= 7;
+  if (!trialEndingSoon && !pastDue && !suspended && !endingSoon) return null;
 
   const subscribe = async () => {
     setBusy(true); setErr(null);
@@ -82,6 +83,21 @@ export default function SubscriptionBanner() {
     );
   }
 
+  if (endingSoon) {
+    const when = sub.daysRemaining === 0 ? 'today' : sub.daysRemaining === 1 ? 'tomorrow' : `in ${sub.daysRemaining} days`;
+    return (
+      <Banner tone="warn" icon="Clock"
+        body={<>
+          <strong>Your plan ends {when}.</strong>{' '}
+          <span style={{ color: 'var(--fg-2)' }}>
+            After that your booking page, website and client portal are archived, and your data is permanently deleted 7 days later unless you resubscribe.
+          </span>
+        </>}
+        action={<Action busy={busy} err={err} onClick={openPortal} label={sub.source === 'apple' ? 'Manage in the App Store' : 'Keep my plan'}/>}
+      />
+    );
+  }
+
   // trialEndingSoon
   return (
     <Banner tone="accent" icon="Clock"
@@ -94,7 +110,7 @@ export default function SubscriptionBanner() {
               : `Your free trial ends in ${sub.daysRemaining} days.`}
         </strong>{' '}
         <span style={{ color: 'var(--fg-2)' }}>
-          Subscribe now to keep your business app - the client portal stays free either way.
+          Subscribe to keep everything running. After the trial, your booking page, website and client portal are archived until you do.
         </span>
       </>}
       action={<Action busy={busy} err={err} onClick={subscribe} label="Subscribe"/>}

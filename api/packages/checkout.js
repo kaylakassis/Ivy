@@ -17,6 +17,7 @@ import { stripeFetch, findOrCreateCustomer } from '../_lib/stripe.js';
 import { appUrl } from '../_lib/tokens.js';
 import { fetchFinanceSettings } from '../_lib/finance.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -41,6 +42,7 @@ export default async function handler(req, res) {
     const cs = await sql`SELECT workspace_id FROM calendar_settings WHERE slug = ${slug}`;
     if (cs.rows.length === 0) return notFound(res, 'No business with that handle');
     const workspaceId = cs.rows[0].workspace_id;
+    if (!(await loadWorkspaceAccess(workspaceId)).active) return archivedForbidden(res);
 
     // Fetch + verify the package belongs to this workspace AND is
     // currently buyable (active + visibility='public'). Anything else
@@ -62,9 +64,11 @@ export default async function handler(req, res) {
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }
     catch (e) {
-      return badRequest(res, e.code === 'no_stripe_connection'
-        ? 'Packages require Stripe. Ask the business to connect Stripe in Finance.'
-        : e.message);
+      // Public page: never name the payment provider or the owner's
+      // settings to a visitor.
+      return badRequest(res, e.code === 'no_stripe_connection' || e.code === 'platform_secret_missing'
+        ? "This business isn't set up to sell packages online yet. Contact them to buy one."
+        : 'Package checkout is unavailable right now. Please try again later.');
     }
 
     // Find-or-create a clients row + Stripe customer for the buyer

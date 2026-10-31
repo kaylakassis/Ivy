@@ -16,6 +16,7 @@ import { stagger } from '../../components/motion/stagger.jsx';
 import SendInvoiceModal from './SendInvoiceModal.jsx';
 import PaymentProviderCard from './PaymentProviderCard.jsx';
 import ManualMethodsCard from './ManualMethodsCard.jsx';
+import InvoiceDesignCard from './InvoiceDesignCard.jsx';
 import Expenses from './Expenses.jsx';
 import Recurring from './Recurring.jsx';
 import Time from './Time.jsx';
@@ -26,6 +27,7 @@ import Products from './Products.jsx';
 import PointOfSale from './PointOfSale.jsx';
 import FinanceServices from './Services.jsx';
 import FinancePackages from './Packages.jsx';
+import { usePullRefresh } from '../../lib/pullRefresh.js';
 
 const STATUS_META = {
   draft:    { label: 'Draft',    color: 'var(--muted)' },
@@ -41,7 +43,9 @@ export default function Finance() {
     invoices, summary, loading, error,
     create, update, remove, send, resend, markPaid, void: voidInvoice, refund, clearClaim,
     hasMore, loadMore, loadingMore,
+    reload: reloadInvoices,
   } = useInvoices();
+  usePullRefresh(reloadInvoices);
 
   const [tab, setTab]               = useState('all');
   const [section, setSection]       = useState('invoices'); // 'invoices' | 'recurring' | 'expenses'
@@ -326,6 +330,7 @@ function InvoicesSection({
     <>
       <PaymentProviderCard/>
       <ManualMethodsCard/>
+      <InvoiceDesignCard/>
 
       {/* Summary cards: rise in with a 25ms stagger; numbers count up once. */}
       <div className="grid-auto stagger">
@@ -522,7 +527,17 @@ function InvoiceRow({ invoice, first, onOpen, isMobile, index, onMarkPaid }) {
   // The client tapped "I've sent it" on a manual method and the owner has
   // not confirmed yet. Only meaningful while the invoice is still unpaid.
   const saysPaid = !!invoice.paymentClaimedAt && (invoice.status === 'sent' || invoice.status === 'overdue');
-  const saysPaidPill = saysPaid ? (
+  // A bank debit (ACH) was authorised and is settling. Shown instead of
+  // "Says paid" so the owner does not chase a payment that is on its way.
+  const processing = !!invoice.paymentProcessingAt && (invoice.status === 'sent' || invoice.status === 'overdue');
+  const saysPaidPill = processing ? (
+    <span title="A bank payment is on its way. It usually clears within 4 business days." style={{
+      display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
+      fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',
+      background: 'var(--accent-soft)', border: '1px solid var(--accent)', color: 'var(--fg)',
+      whiteSpace: 'nowrap',
+    }}>Payment processing</span>
+  ) : saysPaid ? (
     <span title="The client says they paid. Open to confirm." style={{
       display: 'inline-flex', alignItems: 'center', padding: '2px 8px', borderRadius: 99,
       fontSize: 10.5, fontWeight: 700, letterSpacing: '0.02em',

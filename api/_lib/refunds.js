@@ -21,6 +21,7 @@ import { createRefund as squareCreateRefund } from './payments/square.js';
 import { createRefund as paypalCreateRefund } from './payments/paypal.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals, fetchFinanceSettings } from './finance.js';
 import { recordWorkspaceAudit } from './audit.js';
+import { notifyInvoiceRefunded } from './invoiceNotify.js';
 
 const VALID_REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer']);
 
@@ -150,6 +151,14 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
       },
     });
   }
+
+  // Tell the client. Only on the write that actually applied (the deduped
+  // path above returns early), and never let an email failure undo or
+  // fail a refund that already moved money.
+  await notifyInvoiceRefunded({
+    workspaceId, invoiceId: inv.id, amount,
+    method: inv.stripe_payment_intent ? (inv.paid_method === 'ach' ? 'ach' : 'card') : (inv.paid_method || 'other'),
+  }).catch(() => {});
 
   return {
     invoice: serializeInvoice(updated.rows[0]),

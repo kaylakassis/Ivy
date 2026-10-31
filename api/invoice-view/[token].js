@@ -7,11 +7,13 @@
 //
 // Token is sha256-hashed before lookup.
 import { sql } from '../_lib/db.js';
+import { invoiceBusinessMeta } from '../_lib/branding.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
-import { serializeInvoicePublic, fetchEnabledManualMethods } from '../_lib/finance.js';
+import { serializeInvoicePublic, fetchEnabledManualMethods, fetchFinanceSettings } from '../_lib/finance.js';
 import { recordPaymentClaim } from '../_lib/paymentClaims.js';
 import { reconcileStripeInvoice } from '../_lib/invoicePayments.js';
+import { savedCardRowForInvoice, describeSavedCard } from '../_lib/savedCards.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import crypto from 'node:crypto';
@@ -32,12 +34,10 @@ async function fetchByToken(rawToken) {
   return rows[0] || null;
 }
 
-async function loadBusinessMeta(workspaceId) {
-  const { rows } = await sql`
-    SELECT biz_name, slug FROM calendar_settings WHERE workspace_id = ${workspaceId}
-  `;
-  return rows[0] ? { name: rows[0].biz_name, slug: rows[0].slug } : null;
-}
+// Name, logo and the owner's invoice design (font, layout, color, footer,
+// contact lines) so the client sees the invoice exactly as the owner
+// previewed it. api/_lib/branding.js owns the shape.
+const loadBusinessMeta = (workspaceId) => invoiceBusinessMeta(workspaceId);
 
 // Returns true when this workspace has Stripe wired up enough to accept a
 // card payment from a public invoice viewer (secret + webhook secret both
@@ -117,14 +117,46 @@ async function getInvoice(req, res) {
       await sql`UPDATE invoices SET activity = ${JSON.stringify(next)}::jsonb WHERE id = ${inv.id}`;
     }
 
-    const [business, paymentEnabled, manualMethods] = await Promise.all([
+    const [business, paymentEnabled, manualMethods, savedCardMeta] = await Promise.all([
       loadBusinessMeta(inv.workspace_id),
       isPaymentReady(inv.workspace_id),
       fetchEnabledManualMethods(inv.workspace_id),
+      savedCardMetaFor(inv),
     ]);
-    return ok(res, { invoice: serializeInvoicePublic(inv, { business, paymentEnabled, manualMethods }) });
+    // Re-read the processing stamp: the self-heal above may have just set it
+    // for an ACH session that completed while the client was away.
+    const fresh = await sql`SELECT payment_processing_at, payment_processing_method FROM invoices WHERE id = ${inv.id}`;
+    const invWithState = { ...inv, ...(fresh.rows[0] || {}) };
+    return ok(res, {
+      invoice: serializeInvoicePublic(invWithState, {
+        business, manualMethods,
+        paymentEnabled: paymentEnabled && !invWithState.payment_processing_at,
+        savedCard: paymentEnabled ? savedCardMeta.savedCard : null,
+        canSaveCard: paymentEnabled && savedCardMeta.canSaveCard,
+      }),
+    });
   } catch (err) {
     return serverError(res, err);
+  }
+}
+
+// Saved-card facts for the public pay page. Stripe only: the card lives on
+// the issuing workspace's connected account and is looked up through the
+// invoice's own client row in the invoice's own workspace, so another
+// business's card can never surface here. Display fragments only.
+async function savedCardMetaFor(inv) {
+  const none = { savedCard: null, canSaveCard: false };
+  try {
+    const fs = await fetchFinanceSettings(inv.workspace_id);
+    if ((fs?.paymentProvider || 'stripe') !== 'stripe') return none;
+    const client = await savedCardRowForInvoice(inv);
+    if (!client) return none;
+    return {
+      savedCard: describeSavedCard(client),
+      canSaveCard: !!client.email,
+    };
+  } catch {
+    return none;
   }
 }
 

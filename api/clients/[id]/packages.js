@@ -72,13 +72,13 @@ export default async function handler(req, res) {
 
         if (!name) return badRequest(res, 'Name is required (or pass packageId)');
         if (!Number.isInteger(sessionCount) || sessionCount < 1 || sessionCount > 1000) {
-          return badRequest(res, 'sessionCount must be 1–1000');
+          return badRequest(res, 'Sessions must be a whole number from 1 to 1000');
         }
         if (!Number.isFinite(price) || price < 0 || price > 1e7) {
           return badRequest(res, 'price must be a non-negative number');
         }
         if (expiryDays != null && (!Number.isInteger(expiryDays) || expiryDays < 1 || expiryDays > 3650)) {
-          return badRequest(res, 'expiryDays must be 1–3650');
+          return badRequest(res, 'Validity must be from 1 to 3650 days');
         }
         if (serviceIds.length > 0) {
           const { rows } = await sql.query(

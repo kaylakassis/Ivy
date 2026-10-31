@@ -17,6 +17,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { unsubscribeUrlFor } from '../_lib/unsubscribeToken.js';
 import { appUrl } from '../_lib/tokens.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -73,6 +74,7 @@ export default async function handler(req, res) {
       SELECT id, email, name FROM waitlist_signups
       WHERE notified_at IS NULL
         AND contact_consent IS DISTINCT FROM false
+        AND unsubscribed_at IS NULL
       ORDER BY created_at ASC
       LIMIT ${MAX_ANNOUNCE}
     `;
@@ -93,7 +95,7 @@ export default async function handler(req, res) {
       const slice = recipients.slice(i, i + BATCH);
       // eslint-disable-next-line no-await-in-loop
       const results = await Promise.allSettled(
-        slice.map((r) => sendEmail({ to: r.email, subject, html })),
+        slice.map((r) => sendEmail({ to: r.email, subject, html, unsubscribeUrl: unsubscribeUrlFor({ scope: 'waitlist', id: r.email, type: 'all' }) })),
       );
       for (let j = 0; j < results.length; j++) {
         if (results[j].status === 'fulfilled') { sent++; sentIds.push(slice[j].id); }

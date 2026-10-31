@@ -45,6 +45,7 @@ import {
 } from '../_lib/subscriptionNotify.js';
 import { invalidateOwnerWorkspaceByWorkspaceId } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { recordWebhookFailure, SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
 import {
   markReferralConverted, grantPendingReferralCredits, applyBankedAppleWeeks,
 } from '../_lib/referrals.js';
@@ -113,6 +114,7 @@ async function isReferralConversion(event, prev) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
   let claimedEventId = null;
+  let eventType = null;
   try {
     const secret = process.env.REVENUECAT_WEBHOOK_SECRET;
     if (!secret) {
@@ -120,6 +122,7 @@ export default async function handler(req, res) {
       return res.status(500).json({ error: 'RevenueCat webhook not configured' });
     }
     if (!bearerOk(req.headers.authorization, secret)) {
+      await recordWebhookFailure({ source: 'revenuecat', eventType: SIGNATURE_FAILURE, message: 'Invalid webhook authorization' });
       return res.status(401).json({ error: 'Invalid webhook authorization' });
     }
 
@@ -140,6 +143,7 @@ export default async function handler(req, res) {
       return ok(res, { received: true, deduped: true });
     }
     claimedEventId = event.id;
+    eventType = event.type;
 
     // Our appUserID == workspace id. RC also surfaces it as
     // app_user_id on the event payload.
@@ -161,7 +165,8 @@ export default async function handler(req, res) {
     // a first-time conversion (stamp converted_at) and whether to fire
     // the started-email side effect.
     const { rows: existingRows } = await sql`
-      SELECT id, owner_id, subscription_status, converted_at, trial_started_at
+      SELECT id, owner_id, subscription_status, converted_at, trial_started_at,
+             subscription_source, stripe_customer_id, subscription_period_end, cancel_at_period_end
       FROM workspaces
       WHERE id = ${workspaceId}
     `;
@@ -169,6 +174,18 @@ export default async function handler(req, res) {
       return ok(res, { received: true, noop: 'no workspace' });
     }
     const prev = existingRows[0];
+
+    // A workspace that pays through Stripe on the web must never be knocked
+    // out by Apple. Someone can start an Apple trial, let it lapse, then
+    // subscribe on the web; the Apple EXPIRATION that arrives later would
+    // otherwise flip their paid workspace to expired on both web and phone.
+    // Apple events that GRANT access still apply (the owner chose to pay
+    // through Apple as well); only downgrades are ignored.
+    const stripeBilled = prev.subscription_source === 'stripe' && !!prev.stripe_customer_id
+      && ['active', 'trialing', 'past_due'].includes(prev.subscription_status);
+    if (stripeBilled && nextStatus !== 'active') {
+      return ok(res, { received: true, ignored: event.type, reason: 'stripe-billed' });
+    }
 
     const periodEnd = expirationMs ? new Date(expirationMs) : null;
     const productId = event.product_id || null;
@@ -195,6 +212,16 @@ export default async function handler(req, res) {
              apple_product_id        = COALESCE(${productId}, apple_product_id),
              apple_original_transaction_id = COALESCE(${originalTxn}, apple_original_transaction_id),
              subscription_period_end = ${periodEnd},
+             cancel_at_period_end = CASE
+               WHEN ${event.type === 'CANCELLATION'} THEN TRUE
+               WHEN ${['UNCANCELLATION', 'RENEWAL', 'INITIAL_PURCHASE', 'PRODUCT_CHANGE'].includes(event.type)} THEN FALSE
+               ELSE cancel_at_period_end
+             END,
+             plan_ending_reminder_sent_at = CASE
+               WHEN ${['UNCANCELLATION', 'RENEWAL', 'INITIAL_PURCHASE', 'PRODUCT_CHANGE'].includes(event.type)} THEN NULL
+               ELSE plan_ending_reminder_sent_at
+             END,
+             data_deletion_at = CASE WHEN ${nextStatus} IN ('active', 'trialing') THEN NULL ELSE data_deletion_at END,
              subscription_past_due_since = CASE
                WHEN ${nextStatus} = 'past_due' AND subscription_past_due_since IS NULL
                  THEN NOW()
@@ -227,8 +254,13 @@ export default async function handler(req, res) {
         await notifySubscriptionStarted({ workspaceId, periodEnd, amountCents, currency });
       } else if (event.type === 'BILLING_ISSUE') {
         await notifyPaymentFailed({ workspaceId, amountCents, currency, nextAttemptAt: null });
-      } else if (event.type === 'EXPIRATION') {
+      } else if (event.type === 'CANCELLATION' && nextStatus === 'active') {
+        // Auto-renew turned off with time left: say so now, with the date.
         await notifySubscriptionCancelled({ workspaceId, endsAt: periodEnd });
+      } else if (event.type === 'EXPIRATION' && !prev.cancel_at_period_end) {
+        // Lapsed without a prior cancellation notice (billing failure ran
+        // out, or RC never sent CANCELLATION): tell them now.
+        await notifySubscriptionCancelled({ workspaceId, endsAt: null });
       }
     } catch (notifyErr) {
       // Don't fail the webhook over a side-effect; RC would retry the
@@ -274,6 +306,7 @@ export default async function handler(req, res) {
     if (claimedEventId) {
       await releaseProcessed('revenuecat', claimedEventId).catch(() => {});
     }
+    await recordWebhookFailure({ source: 'revenuecat', eventType: eventType || 'processing', message: err.message });
     return serverError(res, err);
   }
 }

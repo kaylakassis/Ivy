@@ -267,6 +267,15 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
   useEffect(() => {
     if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
   }, [messages.length, thinking]);
+  // ...and follow a reply that is still streaming in, unless the owner has
+  // scrolled up to re-read something.
+  const streamingMsg = messages.find((m) => m.streaming);
+  const streamedLength = streamingMsg ? streamingMsg.text.length : 0;
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || !streamedLength) return;
+    if (el.scrollHeight - el.scrollTop - el.clientHeight < 120) el.scrollTop = el.scrollHeight;
+  }, [streamedLength]);
 
   // Focus the composer when the panel opens - feels like a real chat.
   useEffect(() => {
@@ -608,19 +617,20 @@ function MessageList({ messages, thinking, onApprove, onDismiss }) {
     <div className="stagger-chat" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
       {messages.map((m, i) => (
         <div key={m.id} style={stagger(i)}>
-          <Bubble role={m.role} text={m.text}/>
+          <Bubble role={m.role} text={m.text} streaming={!!m.streaming}/>
           {m.pendingActions && m.pendingActions.length > 0 && (
             <PendingActionCard actions={m.pendingActions} busy={thinking}
               onApprove={() => onApprove?.(m.id)} onDismiss={() => onDismiss?.(m.id)}/>
           )}
         </div>
       ))}
-      {thinking && <ThinkingBubble/>}
+      {/* The dots give way to the bubble once the reply starts streaming. */}
+      {thinking && !messages.some((m) => m.streaming) && <ThinkingBubble/>}
     </div>
   );
 }
 
-function Bubble({ role, text }) {
+function Bubble({ role, text, streaming = false }) {
   const mine = role === 'me';
   return (
     <div style={{
@@ -638,6 +648,7 @@ function Bubble({ role, text }) {
         whiteSpace: mine ? 'pre-wrap' : 'normal', wordBreak: 'break-word',
       }}>
         {mine ? text : <MiniMarkdown text={text}/>}
+        {!mine && streaming && <span className="ivy-caret" aria-hidden="true"/>}
       </div>
     </div>
   );

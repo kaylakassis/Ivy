@@ -10,6 +10,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
+import { isInvoiceFont, isInvoiceLayout, DEFAULT_DESIGN } from '../../src/lib/invoiceDesign.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { isValidAccent, invalidateBranding } from '../_lib/branding.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
@@ -27,7 +28,7 @@ export default async function handler(req, res) {
       // Ensure a settings row exists so PATCH below has something to update.
       await sql`INSERT INTO calendar_settings (workspace_id) VALUES (${workspaceId}) ON CONFLICT DO NOTHING`;
       const r = await sql`
-        SELECT biz_name, brand_logo_url, brand_logo_blob_pathname,
+        SELECT biz_name, brand_logo_url, brand_logo_blob_pathname, brand_font, invoice_layout, invoice_footer, biz_contact,
                brand_accent_color, brand_email_signature
           FROM calendar_settings WHERE workspace_id = ${workspaceId}
       `;
@@ -39,6 +40,10 @@ export default async function handler(req, res) {
           logoPathname:    row.brand_logo_blob_pathname || null,
           accentColor:     row.brand_accent_color || null,
           emailSignature:  row.brand_email_signature || '',
+          font:            isInvoiceFont(row.brand_font) ? row.brand_font : DEFAULT_DESIGN.font,
+          invoiceLayout:   isInvoiceLayout(row.invoice_layout) ? row.invoice_layout : DEFAULT_DESIGN.layout,
+          invoiceFooter:   row.invoice_footer == null ? DEFAULT_DESIGN.footer : row.invoice_footer,
+          contact:         row.biz_contact || '',
         },
       });
     }
@@ -62,6 +67,24 @@ export default async function handler(req, res) {
       if ('logoPathname' in body) {
         push('brand_logo_blob_pathname', body.logoPathname ? String(body.logoPathname) : null);
       }
+      if ('font' in body) {
+        const v = body.font ? String(body.font) : null;
+        if (v && !isInvoiceFont(v)) return badRequest(res, 'Unknown font');
+        push('brand_font', v);
+      }
+      if ('invoiceLayout' in body) {
+        const v = body.invoiceLayout ? String(body.invoiceLayout) : null;
+        if (v && !isInvoiceLayout(v)) return badRequest(res, 'Unknown layout');
+        push('invoice_layout', v);
+      }
+      if ('invoiceFooter' in body) {
+        const v = body.invoiceFooter == null ? null : String(body.invoiceFooter).slice(0, 300);
+        push('invoice_footer', v);
+      }
+      if ('contact' in body) {
+        const v = body.contact == null ? null : String(body.contact).replace(/\r/g, '').slice(0, 400);
+        push('biz_contact', v);
+      }
       if ('accentColor' in body) {
         const v = body.accentColor ? String(body.accentColor).trim() : null;
         if (v && !isValidAccent(v)) return badRequest(res, 'accentColor must be a hex color (e.g., #2E3168)');
@@ -84,7 +107,8 @@ export default async function handler(req, res) {
         UPDATE calendar_settings SET ${sets.join(', ')}
          WHERE workspace_id = $${values.length}
          RETURNING biz_name, brand_logo_url, brand_logo_blob_pathname,
-                   brand_accent_color, brand_email_signature
+                   brand_accent_color, brand_email_signature,
+                   brand_font, invoice_layout, invoice_footer, biz_contact
       `;
       const { rows } = await sql.query(queryText, values);
       const row = rows[0] || {};
@@ -102,6 +126,10 @@ export default async function handler(req, res) {
           logoPathname:    row.brand_logo_blob_pathname || null,
           accentColor:     row.brand_accent_color || null,
           emailSignature:  row.brand_email_signature || '',
+          font:            isInvoiceFont(row.brand_font) ? row.brand_font : DEFAULT_DESIGN.font,
+          invoiceLayout:   isInvoiceLayout(row.invoice_layout) ? row.invoice_layout : DEFAULT_DESIGN.layout,
+          invoiceFooter:   row.invoice_footer == null ? DEFAULT_DESIGN.footer : row.invoice_footer,
+          contact:         row.biz_contact || '',
         },
       });
     }

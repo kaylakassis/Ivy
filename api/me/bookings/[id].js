@@ -22,6 +22,7 @@ import { notifyNewBooking, notifyBookingCancellation, notifyBookingRescheduled }
 import { attachIntakeForms } from '../../_lib/intake.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
 import { chargeOffSession } from '../../_lib/stripe.js';
+import { archivedForbidden } from '../../_lib/businessAccess.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -156,6 +157,10 @@ export default async function handler(req, res) {
       // self-exclusion so the booking's own current slot doesn't count
       // as a conflict if the user re-picks the same slot.
       if (body.rescheduleTo && typeof body.rescheduleTo === 'object') {
+        // Business no longer on Ivy: a reschedule is a new slot with an
+        // archived business. Cancelling (DELETE above) still works.
+        const membership = memberships.find((m) => m.clientId === booking.client_id);
+        if (membership?.archived) return archivedForbidden(res);
         if (booking.cancelled_at) return badRequest(res, "Can't reschedule a cancelled booking");
         if (booking.recurrence_rule) {
           return badRequest(res, 'Recurring bookings can\'t be rescheduled - cancel this occurrence and book a new one.');

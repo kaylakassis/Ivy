@@ -13,6 +13,7 @@ import { validEmail } from '../_lib/auth.js';
 import { loadStripeCreds } from '../_lib/stripeCreds.js';
 import { appUrl } from '../_lib/tokens.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
+import { loadWorkspaceAccess, archivedForbidden } from '../_lib/businessAccess.js';
 
 async function stripeCheckout({ secretKey, stripeAccount }, body) {
   const params = new URLSearchParams();
@@ -72,6 +73,7 @@ export default async function handler(req, res) {
     const cs = await sql`SELECT workspace_id FROM calendar_settings WHERE slug = ${slug}`;
     if (cs.rows.length === 0) return notFound(res, 'No business with that handle');
     const workspaceId = cs.rows[0].workspace_id;
+    if (!(await loadWorkspaceAccess(workspaceId)).active) return archivedForbidden(res);
 
     // Gift-card sales are Stripe-only by design (hosted Checkout). Square/
     // PayPal aren't wired for selling gift cards - surface that plainly
@@ -79,9 +81,11 @@ export default async function handler(req, res) {
     let creds;
     try { creds = await loadStripeCreds(workspaceId); }
     catch (e) {
-      return badRequest(res, e.code === 'no_stripe_connection'
-        ? 'Gift cards require Stripe. Connect Stripe in Finance to sell them (Square/PayPal aren’t supported for gift cards yet).'
-        : e.message);
+      // Public page: never name the payment provider or the owner's
+      // settings to a visitor.
+      return badRequest(res, e.code === 'no_stripe_connection' || e.code === 'platform_secret_missing'
+        ? "This business isn't set up to sell gift cards yet."
+        : 'Gift card checkout is unavailable right now. Please try again later.');
     }
 
     const base = appUrl();

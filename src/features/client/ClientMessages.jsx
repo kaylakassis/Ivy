@@ -21,6 +21,8 @@ import {
   AudioPlayer, RecordingBar, MicButton, isAudioAttachment, uploadVoiceMemo,
 } from '../../components/AudioMessage.jsx';
 import { MoreMenu, ReportModal, BlockedNotice, clientModeration } from '../../components/Moderation.jsx';
+import { ArchivedNotice, ArchivedBadge } from '../../components/ArchivedBusiness.jsx';
+import { haptic } from '../../lib/celebrate.js';
 
 export default function ClientMessagesPage() {
   // Deep links pick the right tab: accepting a group invite lands on
@@ -409,6 +411,7 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
     setSending(true);
     try {
       const r = await api.post('/me/threads/' + threadId, { text });
+      haptic();
       setMessages((m) => [...m, r.message]);
       setInput('');
       onUpdated?.();
@@ -462,7 +465,10 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
           fontFamily: 'var(--font-display)', fontWeight: 600, fontSize: 17,
         }}>{(thread.businessName || '?').trim()[0]?.toUpperCase() || '?'}</div>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{thread.businessName}</div>
+          <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>
+            {thread.businessName}
+            {thread.archived && <ArchivedBadge/>}
+          </div>
           <div style={{ fontSize: 12, color: 'var(--muted)' }}>
             {thread.mode === 'one-way' ? 'Announcements only - replies disabled' : 'Direct chat'}
           </div>
@@ -494,7 +500,13 @@ function ConversationPane({ threadId, onUpdated, onBack }) {
       {blockErr && (
         <div style={{ padding: '8px 20px', fontSize: 12, color: 'var(--danger)', background: 'var(--surface)' }}>{blockErr}</div>
       )}
-      {thread.blocked ? (
+      {thread.archived ? (
+        // The business's subscription lapsed: history stays readable, the
+        // composer goes away. Reverses on its own when they resubscribe.
+        <div style={{ padding: '14px 20px', borderTop: '1px solid var(--border)', background: 'var(--surface)', textAlign: 'center' }}>
+          <ArchivedNotice text="This business is no longer on Ivy, so messages can't be sent here."/>
+        </div>
+      ) : thread.blocked ? (
         thread.blockedByMe ? (
           <BlockedNotice text={`You blocked ${thread.businessName || 'this business'}.`}
             actionLabel="Unblock" onAction={unblockBusiness} busy={blockBusy}/>

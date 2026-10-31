@@ -145,11 +145,11 @@ function render(template) {
         firstName: SAMPLE.firstName, businessName: SAMPLE.businessName,
         range: { from: new Date(Date.now() - 7 * 86400000), to: new Date() },
         stats: {
-          newClients: 3, completedBookings: 8, upcomingBookings: 5,
-          revenuePaid: 2140, overdueInvoiceCount: 2, overdueInvoiceTotal: 380,
-          // Prior week lower than current so the preview shows the up-deltas.
-          prior: { newClients: 1, completedBookings: 5, revenuePaid: 1600 },
-          bestDay: { date: '2026-06-30', amount: 640 },
+          bookingsTaken: 6, completedBookings: 8, newClients: 3,
+          revenuePaid: 2140, outstandingCount: 3, outstandingTotal: 720,
+          ivyInvoices: 4, ivyMessages: 5, ivyDocuments: 1, ivyBookings: 0, ivyOtherActions: 2,
+          automationsRun: 7, remindersSent: 9, documentsSigned: 2,
+          upcomingBookings: 5, overdueInvoiceCount: 2, overdueInvoiceTotal: 380,
         },
       });
 

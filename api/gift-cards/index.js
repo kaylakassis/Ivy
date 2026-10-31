@@ -26,7 +26,11 @@ export default async function handler(req, res) {
         COUNT(*)::int AS total,
         COALESCE(SUM(original_amount_cents), 0)::bigint AS issued_cents,
         COALESCE(SUM(balance_cents), 0)::bigint AS outstanding_cents,
-        COALESCE(SUM(original_amount_cents - balance_cents), 0)::bigint AS redeemed_cents
+        -- Money that came off cards at bookings. Refunds also lower the
+        -- balance (and void the card), so they are taken out here or a
+        -- refunded card would read as "redeemed".
+        COALESCE(SUM(GREATEST(0, original_amount_cents - balance_cents - refunded_cents)), 0)::bigint AS redeemed_cents,
+        COALESCE(SUM(refunded_cents), 0)::bigint AS refunded_cents
       FROM gift_cards
       WHERE workspace_id = ${workspaceId}
     `;
@@ -37,6 +41,7 @@ export default async function handler(req, res) {
         issuedCents:     Number(agg.rows[0]?.issued_cents || 0),
         outstandingCents: Number(agg.rows[0]?.outstanding_cents || 0),
         redeemedCents:   Number(agg.rows[0]?.redeemed_cents || 0),
+        refundedCents:   Number(agg.rows[0]?.refunded_cents || 0),
       },
     });
   } catch (err) {

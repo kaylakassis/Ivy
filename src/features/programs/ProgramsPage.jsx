@@ -219,7 +219,14 @@ function ProgramDetail({ id, onBack }) {
   const archive = async () => { if (!window.confirm('Archive this program? It stops being sold. Current members keep their access.')) return; try { await api.del(`/programs/${id}`); onBack(); } catch (e) { setErr(e.message); } };
   const removeItem = async (it) => { if (!window.confirm(`Remove "${it.title}"? Members keep their access; only this content goes away.`)) return; try { await api.del(`/programs/${id}/items?itemId=${it.id}`); load(); } catch (e) { setErr(e.message); } };
   const move = async (it, dir) => { const order = items.map((x) => x.id); const i = order.indexOf(it.id); const j = i + dir; if (j < 0 || j >= order.length) return; [order[i], order[j]] = [order[j], order[i]]; try { await api.patch(`/programs/${id}/items`, { order }); load(); } catch (e) { setErr(e.message); } };
-  const revoke = async (m) => { if (!window.confirm(`Remove ${m.clientName || m.clientEmail}'s access?`)) return; try { await api.del(`/programs/${id}/members?enrollmentId=${m.id}`); load(); } catch (e) { setErr(e.message); } };
+  const revoke = async (m) => {
+    const who = m.clientName || m.clientEmail;
+    const q = m.stripeSubscriptionId && !m.cancelAtPeriodEnd
+      ? `Remove ${who}'s access? This also cancels their subscription right away, so they are not charged again.`
+      : `Remove ${who}'s access?`;
+    if (!window.confirm(q)) return;
+    try { await api.del(`/programs/${id}/members?enrollmentId=${m.id}`); load(); } catch (e) { setErr(e.message); }
+  };
   const copy = async () => { try { await navigator.clipboard.writeText(publicUrl); setCopied(true); setTimeout(() => setCopied(false), 1500); } catch { window.prompt('Copy this link', publicUrl); } };
   const activeMembers = members.filter((m) => m.status !== 'cancelled');
   return (
@@ -273,7 +280,7 @@ function ProgramDetail({ id, onBack }) {
                 <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border)', opacity: m.status === 'cancelled' ? .55 : 1 }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.clientName || m.clientEmail}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.clientEmail} · {m.source === 'manual' ? 'added by you' : m.source === 'subscription' ? `subscription${m.currentPeriodEnd ? ` · renews ${new Date(m.currentPeriodEnd).toLocaleDateString()}` : ''}` : 'purchased'}{m.expiresAt ? ` · ends ${new Date(m.expiresAt).toLocaleDateString()}` : ''} · {m.status}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.clientEmail} · {m.source === 'manual' ? 'added by you' : m.source === 'subscription' ? `subscription${m.currentPeriodEnd && m.status !== 'cancelled' ? ` · ${m.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(m.currentPeriodEnd).toLocaleDateString()}` : ''}` : 'purchased'}{m.expiresAt ? ` · ends ${new Date(m.expiresAt).toLocaleDateString()}` : ''} · {m.status === 'past_due' ? 'payment past due' : m.status}</div>
                   </div>
                   {m.status !== 'cancelled' && <button type="button" onClick={() => revoke(m)} className="btn btn-ghost" style={{ fontSize: 12.5, padding: '6px 10px', minHeight: 32 }}>Remove access</button>}
                 </div>

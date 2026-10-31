@@ -20,6 +20,7 @@ import { signSession } from '../api/_lib/auth.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../api/_lib/legal.js';
 import { HELPER_SEATS } from '../api/_lib/helpers.js';
 import { evictWorkspaceGateCache } from '../api/_lib/workspaceGate.js';
+import { purgeWorkspaceData } from '../api/_lib/dataRetention.js';
 import staffIndex from '../api/staff/index.js';
 import staffInvite from '../api/staff/[id]/invite.js';
 import staffRevoke from '../api/staff/[id]/revoke.js';
@@ -371,9 +372,17 @@ async function run() {
     assert(last === 429, `11th attempt from one IP → 429 (got ${last})`);
 
     console.log('\n[18] owner purge leaves the helper\'s own login intact');
-    await sql`DELETE FROM users WHERE id = ${A.id}`; // what db-prune does 30 days after a soft delete
+    // Data-retention purge sweeps every workspace-keyed table (staff rows
+    // and invites included) ...
+    const purged = await purgeWorkspaceData(A.workspaceId);
+    assert(purged.staff_members >= 1, `purge swept staff_members (${JSON.stringify(purged.staff_members)})`);
+    const h1AfterPurge = await sql`SELECT id, deleted_at FROM users WHERE id = ${h1.id}`;
+    assert(h1AfterPurge.rows.length === 1 && h1AfterPurge.rows[0].deleted_at === null, 'helper users row untouched by the purge');
+    // ... and the owner's hard delete (what db-prune does 30 days after a
+    // soft delete) cascades the workspace itself.
+    await sql`DELETE FROM users WHERE id = ${A.id}`;
     const h1Row = await sql`SELECT id, deleted_at FROM users WHERE id = ${h1.id}`;
-    assert(h1Row.rows.length === 1 && h1Row.rows[0].deleted_at === null, 'helper users row still there');
+    assert(h1Row.rows.length === 1 && h1Row.rows[0].deleted_at === null, 'helper users row still there after the owner is gone');
     const gone = await sql`SELECT id FROM staff_members WHERE workspace_id = ${A.workspaceId}`;
     assert(gone.rows.length === 0, 'workspace-keyed staff rows went with the workspace');
     r = await call(meHandler, { cookie: h1c });

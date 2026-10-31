@@ -27,7 +27,7 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { isIos, isNative } from '../../lib/platform.js';
 import { useAuth } from '../../lib/auth.jsx';
-import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode } from '../../lib/iap.js';
+import { getIapOfferings, purchaseIapPackage, restoreIapPurchases, identifyIapUser, redeemIapOfferCode, iapUnavailableReason } from '../../lib/iap.js';
 import { IVY_PRICE, STACK_TOTAL, IVY_PRICE_ANNUAL, ANNUAL_CYCLE_EQUIV, ANNUAL_SAVINGS_PCT, TRIAL_DAYS, MONTHLY_STACK_SAVINGS } from '../../lib/pricing.js';
 
 // Real, truthful conversion proof - mirrors the marketing pricing page.
@@ -40,17 +40,37 @@ const MONTHLY_SAVINGS = MONTHLY_STACK_SAVINGS;
 const PERKS = [
   'Unlimited clients, bookings & invoices',
   'Ivy AI assistant: 600 messages a month',
-  'Take card payments through your own Stripe',
+  'Cards, Apple Pay, Cash App Pay, ACH and more through your own Stripe',
   'Documents + legally-binding e-signatures',
   'Client messaging, all in one inbox',
   'Your own booking site + custom domain',
 ];
 
+function useCompact() {
+  const q = () => (typeof window !== 'undefined') && (window.innerWidth <= 480 || window.innerHeight <= 760);
+  const [c, setC] = useState(q);
+  useEffect(() => {
+    const on = () => setC(q());
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return c;
+}
+
+function fmtLongDate(d) {
+  try { return new Date(d).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' }); } catch { return String(d); }
+}
+
 export default function Paywall({ ctx, onRefresh }) {
   const { signOut } = useAuth();
   const sub = ctx?.subscription || null;
+  // Phones (and short windows): tighter spacing, no hero icon, and the
+  // buy button pinned below the scroll so the card never fills the screen.
+  const compact = useCompact();
   const [busy, setBusy]   = useState(null); // 'trial' | 'subscribe' | 'portal' | 'logout' | 'syncing' | null
   const [err, setErr]     = useState(null);
+  // Neutral status (not an error), e.g. after Apple's code sheet closes.
+  const [note, setNote]   = useState(null);
   const [winback, setWinback] = useState(null); // {percentOff, durationMonths, promoCode, expiresAt}
   // Billing period. Weekly is the honest default; annual is the highlighted
   // LTV option (saves ~20%). Flows into the checkout call. (The internal key
@@ -82,7 +102,7 @@ export default function Paywall({ ctx, onRefresh }) {
     const sessionId  = params.get('session_id');
     if (subscribed !== '1' || !sessionId || synced.current) return;
     synced.current = true;
-    setBusy('syncing'); setErr(null);
+    setBusy('syncing'); setErr(null); setNote(null);
     (async () => {
       try {
         await api.post('/billing/sync', { sessionId });
@@ -135,7 +155,7 @@ export default function Paywall({ ctx, onRefresh }) {
   }, [cancelled]);
 
   const subscribe = async () => {
-    setBusy('subscribe'); setErr(null);
+    setBusy('subscribe'); setErr(null); setNote(null);
     // iOS in-app purchase branch. Apple requires that subscriptions sold
     // INSIDE the app go through StoreKit - we can't redirect to a Stripe
     // checkout URL from within the WebView without violating App Store
@@ -151,7 +171,7 @@ export default function Paywall({ ctx, onRefresh }) {
         // ctx.owns.id is the workspace - the value the webhook matches on.
         const identified = await identifyIapUser(ctx?.owns?.id);
         if (!identified) {
-          setErr('We could not start a purchase on this account. Please sign out and back in, then try again.');
+          setErr(iapUnavailableReason() || 'We could not start a purchase on this account. Please sign out and back in, then try again.');
           setBusy(null);
           return;
         }
@@ -216,9 +236,10 @@ export default function Paywall({ ctx, onRefresh }) {
   // re-installs Ivy on a new device can recover their entitlements
   // without contacting support. Only shown in the iOS build.
   const restorePurchases = async () => {
-    setBusy('restore'); setErr(null);
+    setBusy('restore'); setErr(null); setNote(null);
     try {
-      await identifyIapUser(ctx?.owns?.id);
+      const identified = await identifyIapUser(ctx?.owns?.id);
+      if (!identified) { setErr(iapUnavailableReason() || 'Restore failed'); setBusy(null); return; }
       const r = await restoreIapPurchases();
       if (!r.ok) { setErr(r.error || 'Restore failed'); setBusy(null); return; }
       // Give RC's webhook a moment to land, then refresh.
@@ -235,15 +256,20 @@ export default function Paywall({ ctx, onRefresh }) {
   // Apple offer code (a free month, a discount) handed out by Ivy. Apple's
   // own sheet does the redeeming; we just refresh afterwards.
   const redeemCode = async () => {
-    setBusy('redeem'); setErr(null);
+    setBusy('redeem'); setErr(null); setNote(null);
     try {
-      await identifyIapUser(ctx?.owns?.id);
+      const identified = await identifyIapUser(ctx?.owns?.id);
+      if (!identified) { setErr(iapUnavailableReason() || 'Could not open the redemption screen.'); setBusy(null); return; }
       const r = await redeemIapOfferCode();
       if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); setBusy(null); return; }
+      // Apple's sheet returns as soon as it opens, before the person has
+      // typed a code, so "no subscription yet" here is normal, not an
+      // error. A successful redemption unlocks Ivy on its own (the
+      // purchase listener in AppShell refreshes the account).
       await new Promise((res) => setTimeout(res, 1500));
       await onRefresh?.();
       setBusy(null);
-      if (!r.hasPro) setErr('If you redeemed a code, give it a few seconds and tap Restore purchases.');
+      if (!r.hasPro) setNote('Once Apple confirms your code, Ivy unlocks on its own. If it has not after a minute, tap Restore purchases.');
     } catch (e) {
       setErr(e?.message || 'Could not redeem the code');
       setBusy(null);
@@ -251,7 +277,7 @@ export default function Paywall({ ctx, onRefresh }) {
   };
 
   const openBillingPortal = async () => {
-    setBusy('portal'); setErr(null);
+    setBusy('portal'); setErr(null); setNote(null);
     try {
       const r = await api.post('/billing/portal', {});
       if (!r.url) throw new Error('No portal URL returned');
@@ -265,7 +291,7 @@ export default function Paywall({ ctx, onRefresh }) {
   };
 
   const logout = async () => {
-    setBusy('logout'); setErr(null);
+    setBusy('logout'); setErr(null); setNote(null);
     // Go through the auth provider's signOut, never a bare /auth/logout:
     // it is what clears the native session token from the Keychain, the
     // on-device cache of /me and /dashboard, the remembered landing and
@@ -274,6 +300,23 @@ export default function Paywall({ ctx, onRefresh }) {
     // signs in on this device.
     try { await signOut(); } catch { /* clearing locally is what matters */ }
     window.location.href = isNative() ? '/welcome' : '/signin';
+  };
+
+  // "Email me a copy": POST /api/account/export mails the full JSON export.
+  // Works on the iPhone app too, where a file download does not.
+  const [exportNote, setExportNote] = useState(null);
+  const emailExport = async () => {
+    setBusy('export'); setExportNote(null);
+    try {
+      const res = await fetch('/api/account/export', { method: 'POST', credentials: 'include' });
+      const j = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(j.error || `HTTP ${res.status}`);
+      setExportNote(j.attached ? 'Sent. Check your inbox for a .json file with everything in it.' : 'Your export is large, so we emailed you a download link instead.');
+    } catch (e) {
+      setExportNote(e.message || 'Could not send the export. Please try again.');
+    } finally {
+      setBusy(null);
+    }
   };
 
   // Distinguish trial-expired from never-trialed so the copy matches.
@@ -307,10 +350,10 @@ export default function Paywall({ ctx, onRefresh }) {
       background: 'rgba(10, 12, 8, 0.62)',
       backdropFilter: 'blur(8px)',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
-      padding: 16,
+      padding: compact ? 'calc(env(safe-area-inset-top, 0px) + 10px) 12px calc(env(safe-area-inset-bottom, 0px) + 10px)' : 16,
     }}>
       <div className="card" style={{
-        width: '100%', maxWidth: 430, maxHeight: '94vh',
+        width: '100%', maxWidth: compact ? 400 : 430, maxHeight: compact ? '100%' : '94vh',
         display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden',
         boxShadow: '0 30px 70px rgba(0,0,0,0.32)',
       }}>
@@ -319,34 +362,67 @@ export default function Paywall({ ctx, onRefresh }) {
             over a colored band) but uses Ivy's accent tint, so it
             reads on-brand in both Calm + Bold themes. */}
         <div style={{
-          padding: '26px 28px 22px',
+          padding: compact ? '16px 18px 14px' : '26px 28px 22px',
           background: 'linear-gradient(160deg, var(--accent-soft), var(--accent-tint))',
           borderBottom: '1px solid var(--border)',
           textAlign: 'center',
         }}>
-          <div style={{
+          {!compact && <div style={{
             width: 52, height: 52, borderRadius: 14, margin: '0 auto 14px',
             background: 'var(--accent)', color: 'var(--accent-ink)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: 'var(--shadow)',
-          }}><Icons.Trending size={24}/></div>
+          }}><Icons.Trending size={24}/></div>}
           <h2 id="paywall-title" style={{
             margin: 0, fontFamily: 'var(--font-display)', fontWeight: 500,
-            fontSize: 25, lineHeight: 1.15, letterSpacing: '-0.02em', color: 'var(--fg)',
+            fontSize: compact ? 21 : 25, lineHeight: 1.15, letterSpacing: '-0.02em', color: 'var(--fg)',
           }}>{heading}</h2>
-          {!syncing && (
+          {!syncing && !compact && (
             <p style={{ margin: '8px auto 0', maxWidth: 320, color: 'var(--fg-2)', fontSize: 13.5, lineHeight: 1.5 }}>
               Everything you run your business on - clients, calendar, invoices,
               documents, messaging - in one place.
             </p>
           )}
+          {/* Lapsed owners (ended trial, cancelled, suspended): say plainly
+              what clients see right now, and that it is a state, not a loss. */}
+          {!syncing && !canTrial && !sub?.dataDeletionAt && (
+            <p style={{ margin: '10px auto 0', maxWidth: 340, color: 'var(--muted)', fontSize: 12.5, lineHeight: 1.5 }}>
+              While your subscription is paused, your booking page, website and client
+              portal are archived. Resubscribe and everything is exactly as you left it.
+            </p>
+          )}
+          {/* Paid subscription lapsed: the 7-day retention clock is running.
+              Say the date plainly and put the two ways to get the data right here,
+              because this screen is all a lapsed owner can reach. */}
+          {!syncing && sub?.dataDeletionAt && (
+            <div role="alert" style={{
+              margin: '12px auto 0', maxWidth: 360, textAlign: 'left',
+              padding: '10px 12px', borderRadius: 10,
+              background: 'var(--danger-soft, rgba(220,60,60,.10))', border: '1px solid var(--danger, #c0392b)',
+              color: 'var(--fg)', fontSize: 12.5, lineHeight: 1.5,
+            }}>
+              <strong>{trialExpired ? 'Your trial has ended.' : 'Your access has ended.'} Your data is permanently deleted on {fmtLongDate(sub.dataDeletionAt)}.</strong>{' '}
+              Download it before then, or {trialExpired ? 'pick a plan' : 'resubscribe'} to keep everything exactly as it is.
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 8 }}>
+                {!isNative() && (
+                  <a href="/api/account/export" download className="btn btn-ghost" style={{ padding: '5px 10px', fontSize: 12.5, textDecoration: 'none' }}>
+                    Download my data
+                  </a>
+                )}
+                <button type="button" onClick={emailExport} disabled={busy != null} className="btn btn-ghost" style={{ padding: '5px 10px', fontSize: 12.5 }}>
+                  {busy === 'export' ? 'Sending…' : 'Email me a copy'}
+                </button>
+              </div>
+              {exportNote && <div style={{ marginTop: 6, color: 'var(--fg-2)' }}>{exportNote}</div>}
+            </div>
+          )}
         </div>
 
         {/* ─── BODY (scrolls if the viewport is short) ──────────────── */}
         <div style={{
-          padding: '20px 24px 22px',
-          display: 'flex', flexDirection: 'column', gap: 14,
-          overflowY: 'auto',
+          padding: compact ? '14px 16px 12px' : '20px 24px 22px',
+          display: 'flex', flexDirection: 'column', gap: compact ? 10 : 14,
+          overflowY: 'auto', flex: '1 1 auto', minHeight: 0,
         }}>
           {syncing ? (
             <p style={{ margin: '6px 0', color: 'var(--fg-2)', fontSize: 14, lineHeight: 1.55, textAlign: 'center' }}>
@@ -377,8 +453,8 @@ export default function Paywall({ ctx, onRefresh }) {
               {/* Benefit list */}
               <ul style={{
                 margin: 0, padding: 0, listStyle: 'none',
-                display: 'flex', flexDirection: 'column', gap: 9,
-                fontSize: 13.5, color: 'var(--fg-2)',
+                display: 'flex', flexDirection: 'column', gap: compact ? 6 : 9,
+                fontSize: compact ? 13 : 13.5, color: 'var(--fg-2)', lineHeight: 1.35,
               }}>
                 {PERKS.map((p) => (
                   <li key={p} style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -437,7 +513,7 @@ export default function Paywall({ ctx, onRefresh }) {
                   border match the refs' featured-plan treatment. */}
               <div style={{
                 position: 'relative', marginTop: 2,
-                padding: '16px 16px 14px', borderRadius: 14,
+                padding: compact ? '13px 14px 11px' : '16px 16px 14px', borderRadius: 14,
                 border: '2px solid var(--accent)', background: 'var(--surface)',
               }}>
                 <div style={{
@@ -448,9 +524,9 @@ export default function Paywall({ ctx, onRefresh }) {
                 }}>{canTrial ? `${TRIAL_DAYS} days free` : (plan === 'annual' ? `Save ~${ANNUAL_SAVINGS_PCT}%` : 'Full access')}</div>
 
                 <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>Active</span>
+                  <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--fg)', flex: 1 }}>{plan === 'annual' ? 'Ivy Annual' : 'Ivy Weekly'}</span>
                   <span style={{
-                    fontFamily: 'var(--font-num)', fontSize: 28, fontWeight: 600,
+                    fontFamily: 'var(--font-num)', fontSize: compact ? 24 : 28, fontWeight: 600,
                     color: 'var(--fg)', letterSpacing: '-0.02em',
                   }}>${plan === 'annual' ? IVY_PRICE_ANNUAL : IVY_PRICE}</span>
                   <span style={{ fontSize: 13, color: 'var(--muted)' }}>{plan === 'annual' ? '/yr' : '/week'}</span>
@@ -467,7 +543,7 @@ export default function Paywall({ ctx, onRefresh }) {
                 {/* App Store rule 3.1.2: the subscription screen itself must
                     show the length, price, auto-renewal and links to the
                     Terms of Use and Privacy Policy. */}
-                <div style={{ marginTop: 8, fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+                <div style={{ marginTop: compact ? 6 : 8, fontSize: compact ? 11 : 11.5, color: 'var(--muted)', lineHeight: 1.45 }}>
                   Auto-renews {plan === 'annual' ? 'every year' : 'every week'} until cancelled. Cancel any time in
                   {isNative() && isIos() ? ' your Apple ID subscriptions' : ' Account'}. By subscribing you agree to the{' '}
                   <a href="/terms" target="_blank" rel="noreferrer" style={{ color: 'var(--accent)' }}>Terms of Use</a> and{' '}
@@ -520,7 +596,28 @@ export default function Paywall({ ctx, onRefresh }) {
                   color: 'var(--danger)', fontSize: 12.5,
                 }}>{err}</div>
               )}
+              {!err && note && (
+                <div style={{
+                  padding: '8px 12px', borderRadius: 8,
+                  background: 'var(--surface-2)', border: '1px solid var(--border)',
+                  color: 'var(--fg-2)', fontSize: 12.5,
+                }}>{note}</div>
+              )}
 
+            </>
+          )}
+        </div>
+
+        {/* ─── PINNED FOOTER: the buy button, trust line and the escape
+            links stay visible below the scrolling body, so on a phone the
+            card never hides its own call to action. */}
+        {!syncing && !showPriming && (
+          <div style={{
+            flex: '0 0 auto',
+            padding: compact ? '10px 16px 12px' : '0 24px 22px',
+            borderTop: compact ? '1px solid var(--border)' : 'none',
+            display: 'flex', flexDirection: 'column', gap: compact ? 8 : 14,
+          }}>
               {/* ─── PRIMARY CTA ─────────────────────────────────────
                   One dominant button, like every top-earner. For owners
                   who can still trial, the trial is primary (lowest
@@ -532,7 +629,7 @@ export default function Paywall({ ctx, onRefresh }) {
                       on iOS) via the same commit flow as a paid subscribe. */}
                   <button onClick={subscribe} disabled={busy != null}
                     className="btn btn-primary"
-                    style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
+                    style={{ justifyContent: 'center', padding: compact ? '12px 16px' : '14px 16px', fontSize: 15 }}>
                     {busy ? 'Starting…' : `Start ${TRIAL_DAYS}-day free trial`}
                     {!busy && <Icons.Arrow size={14} sw={2.2}/>}
                   </button>
@@ -540,7 +637,7 @@ export default function Paywall({ ctx, onRefresh }) {
               ) : (
                 <button onClick={subscribe} disabled={busy != null}
                   className="btn btn-primary"
-                  style={{ justifyContent: 'center', padding: '14px 16px', fontSize: 15 }}>
+                  style={{ justifyContent: 'center', padding: compact ? '12px 16px' : '14px 16px', fontSize: 15 }}>
                   {busy === 'subscribe' ? 'Redirecting…'
                     : winback ? `Claim ${winback.percentOff}% off - $${(IVY_PRICE * (1 - winback.percentOff / 100)).toFixed(2)}/week`
                     : `Subscribe - ${priceLabel}`}
@@ -565,14 +662,15 @@ export default function Paywall({ ctx, onRefresh }) {
                   Log out clears the session. */}
               <div style={{
                 display: 'flex', flexWrap: 'wrap', justifyContent: 'center',
-                gap: 4, marginTop: 2, paddingTop: 12, borderTop: '1px solid var(--border)',
-                fontSize: 12.5,
+                gap: compact ? 0 : 4, marginTop: compact ? 0 : 2, paddingTop: compact ? 0 : 12,
+                borderTop: compact ? 'none' : '1px solid var(--border)',
+                fontSize: compact ? 12 : 12.5,
               }}>
                 {ctx?.hasBillingRecord && !isIos() && (
                   <>
                     <button onClick={openBillingPortal} disabled={busy != null}
                       className="btn btn-ghost"
-                      style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                      style={{ padding: compact ? '3px 7px' : '5px 9px', color: 'var(--muted)' }}>
                       {busy === 'portal' ? 'Opening…' : 'Manage billing'}
                     </button>
                     <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
@@ -585,13 +683,13 @@ export default function Paywall({ ctx, onRefresh }) {
                   <>
                     <button onClick={restorePurchases} disabled={busy != null}
                       className="btn btn-ghost"
-                      style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                      style={{ padding: compact ? '3px 7px' : '5px 9px', color: 'var(--muted)' }}>
                       {busy === 'restore' ? 'Restoring…' : 'Restore purchases'}
                     </button>
                     <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
                     <button onClick={redeemCode} disabled={busy != null}
                       className="btn btn-ghost"
-                      style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                      style={{ padding: compact ? '3px 7px' : '5px 9px', color: 'var(--muted)' }}>
                       {busy === 'redeem' ? 'Opening…' : 'Have a promo code?'}
                     </button>
                     <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
@@ -599,13 +697,13 @@ export default function Paywall({ ctx, onRefresh }) {
                 )}
                 <a href="/api/account/export" download
                   className="btn btn-ghost"
-                  style={{ padding: '5px 9px', color: 'var(--muted)', textDecoration: 'none' }}>
+                  style={{ padding: compact ? '3px 7px' : '5px 9px', color: 'var(--muted)', textDecoration: 'none' }}>
                   Export my data
                 </a>
                 <span aria-hidden="true" style={{ color: 'var(--muted-2)', alignSelf: 'center' }}>·</span>
                 <button onClick={logout} disabled={busy != null}
                   className="btn btn-ghost"
-                  style={{ padding: '5px 9px', color: 'var(--muted)' }}>
+                  style={{ padding: compact ? '3px 7px' : '5px 9px', color: 'var(--muted)' }}>
                   {busy === 'logout' ? 'Signing out…' : 'Log out'}
                 </button>
               </div>
@@ -623,17 +721,17 @@ export default function Paywall({ ctx, onRefresh }) {
                 </a>
               )}
 
-              {/* Trust line - every top-earner closes with Terms/Privacy. */}
-              <div style={{
+              {/* Trust line - every top-earner closes with Terms/Privacy.
+                  On phones the plan card already links both. */}
+              {!compact && <div style={{
                 textAlign: 'center', fontSize: 11, color: 'var(--muted-2)', marginTop: 2,
               }}>
                 <a href="/terms" style={{ color: 'inherit', textDecoration: 'underline' }}>Terms</a>
                 {'  ·  '}
                 <a href="/privacy" style={{ color: 'inherit', textDecoration: 'underline' }}>Privacy</a>
-              </div>
-            </>
-          )}
-        </div>
+              </div>}
+          </div>
+        )}
       </div>
     </div>
   );

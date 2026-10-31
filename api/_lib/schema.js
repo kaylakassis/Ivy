@@ -97,6 +97,16 @@ CREATE INDEX IF NOT EXISTS idx_workspaces_subscription_status_past_due
 -- any pre-existing workspace that already has clients or services is marked
 -- onboarded so existing users don't get bumped through the wizard.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS onboarded_at TIMESTAMPTZ;
+-- Owner turned auto-renew off (Stripe cancel_at_period_end, Apple CANCELLATION)
+-- but keeps access until subscription_period_end. Lets the Account page say
+-- "Cancelled, access until <date>" instead of "Renews in N days".
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS plan_ending_reminder_sent_at TIMESTAMPTZ;
+-- 7-day data retention after a paid subscription lapses (api/_lib/dataRetention.js).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_deletion_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_deletion_notice_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_deletion_reminder_sent_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS data_purged_at TIMESTAMPTZ;
 -- Daily-return streak (habit loop). streak_last_day is the last calendar day
 -- (in the workspace timezone) the owner was active; streak_days is the current
 -- consecutive-day count. Maintained by touchStreak() on the daily dashboard
@@ -116,6 +126,28 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS setup_nudge_sent_at TIMESTAMPTZ;
 -- hour-repeat or a retried run can't double-send within one beat.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS briefing_push_last_sent_at TIMESTAMPTZ;
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS streak_push_last_sent_at   TIMESTAMPTZ;
+-- First-win flow (api/_lib/firstWin.js). After onboarding Ivy drafts the
+-- owner's booking link, website and first invoice from their real answers;
+-- first_win_prepared_at stamps that pass (idempotent), first_win_seen_at
+-- stamps the owner continuing past the "Your business is ready" cards, and
+-- first_win_invoice_id points at the draft so the ready card can reopen it.
+-- booking_link_shared_at marks the dashboard to-do done when the owner
+-- copies or shares the link (before a booking ever lands).
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_win_prepared_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_win_seen_at     TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_win_invoice_id  UUID;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS booking_link_shared_at TIMESTAMPTZ;
+-- One-time celebrations for the first REAL client booking and the first real
+-- payment. *_celebrated_at is set exactly once (compare-and-set) when the
+-- event happens, *_celebration holds what the dashboard says (client first
+-- name, time, amount) and *_celebration_shown_at records that the dashboard
+-- moment was displayed, so it can never repeat. Sample data never sets them.
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_booking_celebrated_at       TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_booking_celebration         JSONB;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_booking_celebration_shown_at TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_payment_celebrated_at       TIMESTAMPTZ;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_payment_celebration         JSONB;
+ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS first_payment_celebration_shown_at TIMESTAMPTZ;
 
 -- Business type - drives onboarding flow, sidebar (Calendar hidden
 -- for product-only), dashboard tiles (orders vs bookings), and the
@@ -415,6 +447,14 @@ ALTER TABLE users ADD COLUMN IF NOT EXISTS last_login_at TIMESTAMPTZ;
 -- re-engagement nudge fires, cleared when the owner returns (in the stamp path)
 -- so a later dormancy episode can re-fire.
 ALTER TABLE users ADD COLUMN IF NOT EXISTS last_active_at TIMESTAMPTZ;
+-- "Loving Ivy?" check-in (api/_lib/reviewPrompt.js): when we last asked,
+-- the last answer and how many asks in a row went unanswered (backs the
+-- cadence off from weekly to monthly so it never becomes noise).
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_sent_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_answer TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_answered_at TIMESTAMPTZ;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_unanswered INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS review_prompt_last_action TEXT;
 ALTER TABLE users ADD COLUMN IF NOT EXISTS dormant_nudge_sent_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_users_last_active ON users(last_active_at);
 -- Device fingerprints (sha256 of the user agent, capped) we've seen this
@@ -1140,6 +1180,13 @@ ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_url TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_logo_blob_pathname TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_accent_color TEXT;
 ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_email_signature TEXT;
+-- Invoice design (src/lib/invoiceDesign.js): font key, layout key, the
+-- footer line printed under every invoice, and the business's own contact
+-- lines (address, phone, email) shown in the From block.
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS brand_font TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS invoice_layout TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS invoice_footer TEXT;
+ALTER TABLE calendar_settings ADD COLUMN IF NOT EXISTS biz_contact TEXT;
 
 -- Coarse category for the Discover directory (Wellness / Beauty / Fitness /
 -- Health / Professional). Optional - null means "uncategorized" and the biz
@@ -1682,6 +1729,14 @@ ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_at TIMESTAMPTZ;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_method TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claimed_note TEXT;
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_claim_notified_at TIMESTAMPTZ;
+-- Delayed-settlement payments (ACH Direct Debit etc). Stripe reports the
+-- Checkout session complete while payment_status is still 'unpaid'; the
+-- debit settles (or fails) up to 4 business days later via the
+-- checkout.session.async_payment_* events. While waiting, the invoice stays
+-- 'sent'/'overdue' and carries this stamp so the owner sees "Payment
+-- processing" instead of chasing the client. Cleared on paid or failed.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_processing_at TIMESTAMPTZ;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_processing_method TEXT;
 ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_status_check;
 ALTER TABLE invoices ADD CONSTRAINT invoices_status_check
   CHECK (status IN ('draft', 'sent', 'paid', 'overdue', 'voided', 'refunded'));
@@ -2238,6 +2293,7 @@ ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS phone TEXT;
 ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS contact_consent BOOLEAN;
 ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS consent_at TIMESTAMPTZ;
 ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS invited_at TIMESTAMPTZ;
+ALTER TABLE waitlist_signups ADD COLUMN IF NOT EXISTS unsubscribed_at TIMESTAMPTZ;
 ALTER TABLE waitlist_signups DROP CONSTRAINT IF EXISTS waitlist_signups_status_check;
 ALTER TABLE waitlist_signups ADD CONSTRAINT waitlist_signups_status_check
   CHECK (status IN ('pending','invited','notified','converted'));
@@ -3112,6 +3168,20 @@ ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS stripe_session_id TEXT;
 CREATE UNIQUE INDEX IF NOT EXISTS idx_client_packages_stripe_session
   ON client_packages(stripe_session_id) WHERE stripe_session_id IS NOT NULL;
 
+-- Refund sync for purchases that have no invoice row. A refund issued from
+-- the payment dashboard arrives as charge.refunded carrying the payment
+-- intent; these columns let the webhook find the purchase it paid for.
+--   client_packages.stripe_payment_intent: a full refund cancels the bundle
+--     (credits_remaining 0) so the client cannot keep booking on money that
+--     was returned. Owner-sold / legacy rows have NULL here.
+--   gift_cards.refunded_cents: cumulative cents refunded so far, so a
+--     repeated charge.refunded (Stripe retries, a second partial refund)
+--     only takes the NEW delta off the card's balance; a full refund voids it.
+ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
+CREATE INDEX IF NOT EXISTS idx_client_packages_payment_intent
+  ON client_packages(workspace_id, stripe_payment_intent) WHERE stripe_payment_intent IS NOT NULL;
+ALTER TABLE gift_cards ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
+
 -- ─── pg_trgm GIN search indexes ──────────────────────────────────────
 -- /api/search runs LOWER(col) LIKE '%q%' against ~8 entity tables. At
 -- low scale these are sequential scans on a few thousand rows each —
@@ -3263,6 +3333,16 @@ CREATE INDEX IF NOT EXISTS idx_program_posts_program ON program_posts(program_id
 ALTER TABLE programs ADD COLUMN IF NOT EXISTS access_days INT CHECK (access_days IS NULL OR access_days > 0);
 ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS expires_at TIMESTAMPTZ;
 CREATE INDEX IF NOT EXISTS idx_program_enrollments_expiry ON program_enrollments(expires_at) WHERE status = 'active' AND expires_at IS NOT NULL;
+-- Subscription programs: the member turned auto-renew off (Stripe
+-- cancel_at_period_end) but keeps access until current_period_end. Lets the
+-- portal say "Access until <date>" instead of "Renews <date>" and hides the
+-- Cancel button once it has been used.
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS cancel_at_period_end BOOLEAN NOT NULL DEFAULT FALSE;
+-- One-time purchases: the PaymentIntent behind the Checkout session, so a
+-- refund issued from the Stripe Dashboard (charge.refunded) can find and
+-- close the matching enrollment.
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS stripe_payment_intent TEXT;
+CREATE INDEX IF NOT EXISTS idx_program_enrollments_pi ON program_enrollments(stripe_payment_intent) WHERE stripe_payment_intent IS NOT NULL;
 
 -- ─── Owner↔client messaging moderation (App Review: report + block) ──
 -- contact_blocks: either side can switch messaging off with the other.
@@ -3303,6 +3383,72 @@ CREATE TABLE IF NOT EXISTS abuse_reports (
 );
 CREATE INDEX IF NOT EXISTS idx_abuse_reports_status ON abuse_reports(status, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_abuse_reports_workspace ON abuse_reports(workspace_id);
+
+-- ─── Operator alerting (api/cron/ops-alerts.js) ──────────────────────
+-- webhook_failures: one row per webhook delivery we could not handle
+-- (signature rejected, or the handler threw). Written best-effort from
+-- the webhook catch blocks via api/_lib/webhookFailures.js; read by the
+-- hourly ops-alerts cron. Pruned by db-prune after 30 days.
+CREATE TABLE IF NOT EXISTS webhook_failures (
+  id BIGSERIAL PRIMARY KEY,
+  source TEXT NOT NULL,
+  event_type TEXT,
+  message TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_webhook_failures_created ON webhook_failures(created_at DESC);
+
+-- ops_alert_state: one row per alert condition the ops-alerts cron knows
+-- about. active flips on when the condition starts (one email), stays on
+-- while it persists (re-notified at most every 6 hours), and flips off
+-- when it clears (one "Resolved" email). The operator never gets the same
+-- condition emailed every hour.
+-- cron_schedule_seen: when the ops-alerts cron first saw each scheduled
+-- job with its CURRENT schedule. A job is only judged once it has had a
+-- full window to run since it was added or rescheduled, so a brand-new
+-- daily job (or one moved from daily to hourly) never raises a false
+-- "overdue" before its first chance to run.
+CREATE TABLE IF NOT EXISTS cron_schedule_seen (
+  name TEXT PRIMARY KEY,
+  schedule TEXT NOT NULL,
+  first_seen_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ops_alert_state (
+  key TEXT PRIMARY KEY,
+  active BOOLEAN NOT NULL DEFAULT FALSE,
+  first_seen_at TIMESTAMPTZ,
+  last_notified_at TIMESTAMPTZ,
+  last_title TEXT,
+  last_detail TEXT,
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+-- ─── Weekly recap inputs ──────────────────────────────────────────────
+-- bookings.source: who created the booking. 'client' is set by the public
+-- booking page and the package self-book path; owner- and Ivy-made rows
+-- leave it NULL. The weekly recap counts source = 'client' as "bookings
+-- taken through your booking page", so pre-existing rows (NULL) are never
+-- counted as client bookings.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS source TEXT;
+CREATE INDEX IF NOT EXISTS idx_bookings_workspace_source_created
+  ON bookings(workspace_id, created_at DESC) WHERE source = 'client';
+
+-- ivy_actions: one row per WRITE tool Ivy actually ran to completion
+-- (confirmed where a confirmation is required, no error returned). Read
+-- tools and memory are not recorded. The weekly recap and the dashboard
+-- "This week" card count these so "Ivy drafted 3 invoices" is backed by
+-- rows, never estimated. kind buckets the tool: invoice, message, booking,
+-- document, other.
+CREATE TABLE IF NOT EXISTS ivy_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  tool TEXT NOT NULL,
+  kind TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_actions_workspace_created
+  ON ivy_actions(workspace_id, created_at DESC);
 -- ── Helpers: a staff member who signs in to Ivy ──────────────────────
 -- Ivy stays one owner per business. A helper (assistant, second shooter,
 -- Saturday cover) is a staff_members row with a login attached: user_id

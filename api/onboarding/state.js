@@ -53,7 +53,7 @@ const VALID_STEPS = new Set([
   'welcome', 'business', 'about', 'services', 'availability',
   'first_product',                              // product-only flow replaces 'services' with this
   'payments', 'branding', 'first_client', 'website',
-  'impact', 'tour', 'done',
+  'impact', 'ready', 'tour', 'done',           // 'ready' = the "Your business is ready" first-win cards
 ]);
 
 const VALID_BUSINESS_TYPES = new Set(['service', 'product', 'both']);

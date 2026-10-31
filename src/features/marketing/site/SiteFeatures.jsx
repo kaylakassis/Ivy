@@ -118,6 +118,7 @@ export default function SiteFeatures() {
             <h2>Get paid without chasing.</h2>
             <p className="section-sub">Payments go straight to your Stripe account at Stripe's standard processing rate. Ivy never touches your money.</p>
             <ul className="checks">
+              <li><b>Every way clients want to pay:</b> cards, Apple Pay, Google Pay, Link, Amazon Pay, Cash App Pay, ACH bank debit, and buy now, pay later with Klarna, Affirm and Afterpay, all through your own Stripe account, wherever Stripe offers them</li>
               <li><b>Branded invoices + recurring billing</b> with line items, tax, discounts, and public pay links</li>
               <li><b>Card on file + auto-charges</b> - no more chasing checks</li>
               <li><b>Memberships, packages &amp; gift cards</b> - recurring revenue, built in</li>

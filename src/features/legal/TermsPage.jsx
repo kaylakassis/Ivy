@@ -173,11 +173,16 @@ export default function TermsPage() {
         for this purpose.</P>
 
       <H2>9. Fees and billing</H2>
-      <P>The Service is currently in free beta. When paid plans
-        launch, fees will be charged in advance on a recurring basis
-        (monthly or annual) and are non-refundable except where
-        required by law. If you cancel, you retain access until the
-        end of the then-current billing period.</P>
+      <P>Ivy is a paid subscription, billed in advance on a recurring
+        basis (weekly or annual) after any free trial, and fees are
+        non-refundable except where required by law. If you cancel, you
+        retain access until the end of the then-current billing period.
+        After that your booking page, website and client portal are
+        archived, and your workspace data is permanently deleted 7 days
+        later unless you resubscribe. A trial that ends without a
+        subscription is kept for 4 weeks, then deleted. We notify you by
+        email before this happens, and you can export your data at any
+        time until then.</P>
       <P>We may change prices with at least 30 days' notice via email.
         Price changes take effect at your next renewal. Stripe
         processing fees are charged separately by Stripe and are not

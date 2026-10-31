@@ -7,7 +7,7 @@
 // Future tabs (billing, team, notifications) will mount alongside.
 import React, { useEffect, useRef, useState } from 'react';
 import { isNative, isIos } from '../../lib/platform.js';
-import { redeemIapOfferCode, identifyIapUser } from '../../lib/iap.js';
+import { redeemIapOfferCode, identifyIapUser, iapUnavailableReason } from '../../lib/iap.js';
 import { biometryInfo, biometricUnlock, isLockEnabled, setLockEnabled } from '../../lib/biometric.js';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -20,6 +20,7 @@ import { BlockedCard, ReportsCard, ownerModeration } from '../../components/Mode
 import { hideableNav } from '../../lib/nav.js';
 import { useIntervalWhenVisible } from '../../lib/useIntervalWhenVisible.js';
 import { TRIAL_DAYS } from '../../lib/pricing.js';
+import { FLAGS } from '../../lib/featureFlags.js';
 import {
   pushSupported, permissionState, getSubscription,
   subscribePush, unsubscribePush,
@@ -117,8 +118,9 @@ export default function AccountPage() {
 
       <SubscriptionCard/>
 
-      {/* Referrals (was its own tab): refer a friend, get a free week. */}
-      {ctx?.isOwner && (
+      {/* Referrals (was its own tab): refer a friend, get a free week.
+          Tabled behind FLAGS.referrals. */}
+      {ctx?.isOwner && FLAGS.referrals && (
         <div id="referrals" style={{ scrollMarginTop: 80 }}>
           <div className="metric-label" style={{ marginBottom: 12 }}>Refer a friend</div>
           <Referrals embedded/>
@@ -565,7 +567,8 @@ function SubscriptionCard() {
   const redeemCode = async () => {
     setBusy(true); setErr(null);
     try {
-      await identifyIapUser(ctx?.owns?.id);
+      const identified = await identifyIapUser(ctx?.owns?.id);
+      if (!identified) { setErr(iapUnavailableReason() || 'Could not open the redemption screen.'); return; }
       const r = await redeemIapOfferCode();
       if (!r.ok) { setErr(r.error || 'Could not open the redemption screen.'); return; }
       await new Promise((res) => setTimeout(res, 1500));
@@ -634,7 +637,12 @@ function SubscriptionCard() {
           color: tone, fontSize: 11, fontWeight: 700, letterSpacing: '0.06em',
           textTransform: 'uppercase',
         }}>{statusLabel}</span>
-        {sub.daysRemaining != null && (sub.status === 'trialing' || sub.status === 'active') && (
+        {sub.cancelAtPeriodEnd && sub.isActive && sub.periodEndsAt && (
+          <span style={{ fontSize: 12.5, color: 'var(--warn)' }}>
+            Cancelled. Access until {new Date(sub.periodEndsAt).toLocaleDateString()}.
+          </span>
+        )}
+        {!sub.cancelAtPeriodEnd && sub.daysRemaining != null && (sub.status === 'trialing' || sub.status === 'active') && (
           <span style={{ fontSize: 12.5, color: 'var(--fg-2)' }}>
             {sub.daysRemaining === 0
               ? 'Renews today'
@@ -648,7 +656,9 @@ function SubscriptionCard() {
       </p>
 
       <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
-        {sub.status === 'active'
+        {sub.status === 'active' && sub.source === 'apple'
+          ? 'Your subscription is billed by Apple. Change or cancel it in the App Store; access runs to the end of the paid period.'
+        : sub.status === 'active'
           ? 'Open the Stripe billing portal to update your card, view past invoices, or cancel.'
         : sub.status === 'past_due'
           ? "Stripe couldn't charge your card. Open the billing portal to update it - your access will resume automatically once the next attempt succeeds."
@@ -668,7 +678,7 @@ function SubscriptionCard() {
       <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
         {sub.stripeCustomerId || sub.status === 'active' || sub.status === 'past_due' || sub.status === 'cancelled' ? (
           <button className="btn btn-outline" onClick={openPortal} disabled={busy}>
-            {busy ? 'Opening…' : 'Manage subscription'} <Icons.Arrow size={12} sw={2}/>
+            {busy ? 'Opening…' : (sub.source === 'apple' ? 'Manage in the App Store' : 'Manage subscription')} <Icons.Arrow size={12} sw={2}/>
           </button>
         ) : null}
         {isNative() && isIos() && (
@@ -1420,11 +1430,13 @@ function BrandingCard() {
 
   return (
     <div className="card" style={{ padding: 22 }}>
-      <div className="metric-label" style={{ marginBottom: 8 }}>Email branding</div>
-      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Make every email feel like yours</h3>
+      <div className="metric-label" style={{ marginBottom: 8 }}>Brand</div>
+      <h3 style={{ margin: '0 0 6px', fontSize: 16, fontWeight: 600 }}>Make every email and invoice feel like yours</h3>
       <p style={{ margin: '0 0 18px', fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.55 }}>
         Your logo and brand color appear on every invoice, document, and
         booking email your clients receive. Replies route to your inbox.
+        Fonts and layouts for invoices live in{' '}
+        <a href="/finance?design=1" style={{ color: 'var(--accent)' }}>Finance → Invoice design</a>.
       </p>
 
       {/* Logo */}

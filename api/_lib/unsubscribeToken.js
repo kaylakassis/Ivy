@@ -46,7 +46,7 @@ function b64urlDecode(s) {
 
 export function mintUnsubscribeToken({ scope, id, workspaceId, type }) {
   if (!scope || !id) return null;
-  if (!['user', 'client', 'clientEmail', 'newsletter'].includes(scope)) return null;
+  if (!['user', 'client', 'clientEmail', 'newsletter', 'waitlist'].includes(scope)) return null;
   const payload = {
     s: scope,
     i: String(id),
@@ -82,7 +82,7 @@ export function verifyUnsubscribeToken(token) {
   } catch { return null; }
   if (!payload || typeof payload !== 'object') return null;
   if (typeof payload.e !== 'number' || payload.e < Math.floor(Date.now() / 1000)) return null;
-  if (!['user', 'client', 'clientEmail', 'newsletter'].includes(payload.s)) return null;
+  if (!['user', 'client', 'clientEmail', 'newsletter', 'waitlist'].includes(payload.s)) return null;
   return payload;
 }
 

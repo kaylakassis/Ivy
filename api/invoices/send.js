@@ -13,9 +13,10 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals } from '../_lib/finance.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
-import { sendEmailToClient, emailShell } from '../_lib/email.js';
+import { sendEmailToClient } from '../_lib/email.js';
 import { notifyClientSafe } from '../_lib/push.js';
 import { fetchBranding } from '../_lib/branding.js';
+import { renderInvoiceSent } from '../_lib/emailRenderers.js';
 import { withIdempotency } from '../_lib/idempotency.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 import crypto from 'node:crypto';
@@ -104,22 +105,17 @@ export default async function handler(req, res) {
 
     // Email - best-effort; don't fail the call.
     try {
+      const rendered = renderInvoiceSent({
+        clientName: recipientName, businessName: business,
+        number: inv.number, total: totals.total, dueDate: inv.due_date,
+        items: inv.items, viewUrl: link, branding,
+      });
       await sendEmailToClient({
         clientId, type: 'invoices',
         to: recipientEmail,
-        subject: `Invoice ${inv.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
+        subject: rendered.subject,
         replyTo: branding.replyTo,
-        html: emailShell({
-          heading: `Invoice ${inv.number}`,
-          body: `<p>Hi ${escapeHtml(recipientName)},</p>
-                 <p>${business ? escapeHtml(business) + ' has' : "You've"} sent you an invoice for
-                    <b>${fmtMoney(totals.total)}</b>${inv.due_date ? ', due ' + escapeHtml(new Date(inv.due_date).toLocaleDateString()) : ''}.</p>
-                 <p>Open the invoice to review the line items.</p>`,
-          ctaText: 'View invoice',
-          ctaUrl: link,
-          footer: `Reply to this email if anything looks off.`,
-          branding,
-        }),
+        html: rendered.html,
       });
     } catch (mailErr) {
       // eslint-disable-next-line no-console

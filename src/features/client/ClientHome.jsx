@@ -10,6 +10,7 @@ import Loader from '../../components/motion/Loader.jsx';
 import { useClientPortal } from './clientContext.jsx';
 import { useAuth } from '../../lib/auth.jsx';
 import { api } from '../../lib/api.js';
+import { ArchivedBadge, ArchivedNotice } from '../../components/ArchivedBusiness.jsx';
 
 export default function ClientHome() {
   const { data, loading, error, refresh } = useClientPortal();
@@ -124,15 +125,26 @@ export default function ClientHome() {
                     fontWeight: 600, fontSize: 14,
                   }}>{(m.businessName[0] || '?').toUpperCase()}</div>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 14, fontWeight: 600 }}>{m.businessName}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
-                      They have you saved as {m.clientName}
+                    <div style={{ fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                      {m.businessName}
+                      {m.archived && <ArchivedBadge/>}
                     </div>
+                    {m.archived ? (
+                      // Subscription lapsed: booking + messaging are off for this
+                      // business. Past bookings, invoices and documents stay readable.
+                      <ArchivedNotice style={{ marginTop: 2 }}/>
+                    ) : (
+                      <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                        They have you saved as {m.clientName}
+                      </div>
+                    )}
                   </div>
-                  <Link to={`/me/messages?clientId=${encodeURIComponent(m.clientId)}`}
-                    className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>
-                    Message <Icons.Chat size={12} sw={1.8}/>
-                  </Link>
+                  {!m.archived && (
+                    <Link to={`/me/messages?clientId=${encodeURIComponent(m.clientId)}`}
+                      className="btn btn-ghost" style={{ padding: '6px 10px', fontSize: 12 }}>
+                      Message <Icons.Chat size={12} sw={1.8}/>
+                    </Link>
+                  )}
                   <button className="btn btn-ghost"
                     title="Hide this business from your portal. They keep their own records; you can ask them to re-invite you if you change your mind."
                     onClick={async () => {
@@ -320,7 +332,7 @@ function PackagesCard() {
                     transition: 'width 0.3s ease',
                   }}/>
                 </div>
-                {!isInactive && p.bookingSlug && (
+                {!isInactive && p.bookingSlug && !p.archived && (
                   <button
                     type="button"
                     onClick={() => setRedeemingPackage(p)}
@@ -328,6 +340,17 @@ function PackagesCard() {
                     style={{ marginTop: 10, fontSize: 12, padding: '6px 12px', width: '100%', justifyContent: 'center' }}>
                     Book sessions
                   </button>
+                )}
+                {/* Renewal nudge: on the last session (or two of a bigger
+                    pack) point at the booking page, where the business
+                    sells its packages. */}
+                {!isInactive && p.bookingSlug && !p.archived && p.creditsRemaining <= Math.max(1, Math.min(2, Math.floor(p.creditsTotal / 5))) && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: 'var(--fg-2)', lineHeight: 1.5 }}>
+                    Running low: {p.creditsRemaining === 1 ? 'this is your last session' : `only ${p.creditsRemaining} sessions left`}.{' '}
+                    <a href={`/book/${encodeURIComponent(p.bookingSlug)}`} style={{ color: 'var(--accent)', fontWeight: 600 }}>
+                      Buy another package
+                    </a>
+                  </div>
                 )}
               </div>
             );

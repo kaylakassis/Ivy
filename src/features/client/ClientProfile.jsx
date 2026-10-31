@@ -7,6 +7,7 @@
 // new-address flow. Documented as a TODO on the surface so users
 // aren't left guessing why the field doesn't accept edits.
 import React, { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { BlockedCard, ReportsCard, clientModeration } from '../../components/Moderation.jsx';
@@ -164,6 +165,12 @@ export default function ClientProfile() {
         </div>
       </form>
 
+      {/* Saved cards, one per business. Removing one detaches it from the
+          business's payment processor as well as from Ivy. */}
+      <div style={{ marginTop: 16 }}>
+        <PaymentMethodsCard/>
+      </div>
+
       {/* Messaging moderation: businesses you've blocked, what you've reported. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 16 }}>
         <BlockedCard id="blocked"
@@ -175,6 +182,92 @@ export default function ClientProfile() {
       </div>
     </div>
   );
+}
+
+// Profile → Payment methods. Cards a client saved while paying an invoice
+// (or from Billing) are kept per business on that business's payment
+// processor; Ivy only knows the brand and last four digits. Removing a card
+// detaches it there too, so the business can no longer charge it.
+export function PaymentMethodsCard() {
+  const [cards, setCards] = useState(null);
+  const [err, setErr] = useState(null);
+  const [busy, setBusy] = useState(null);
+
+  const load = () => api.get('/me/payment-methods')
+    .then((r) => setCards((r.cards || []).filter((c) => c.hasCard)))
+    .catch((e) => setErr(e.message || 'Could not load payment methods'));
+
+  useEffect(() => { load(); }, []);
+
+  const remove = async (c) => {
+    if (!window.confirm(`Remove the ${capitalize(c.brand) || 'card'} ending in ${c.last4} saved with ${c.businessName}?`)) return;
+    setBusy(c.clientId); setErr(null);
+    try {
+      await api.del('/me/payment-methods/' + encodeURIComponent(c.clientId));
+      await load();
+    } catch (e) {
+      setErr(e.message || 'Could not remove the card');
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <div id="payment-methods" className="card" style={{ padding: 20 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 6 }}>
+        <div style={{ fontSize: 11.5, fontWeight: 600, color: 'var(--muted)', letterSpacing: '0.04em', textTransform: 'uppercase' }}>
+          Payment methods
+        </div>
+        <Link to="/me/billing" style={{ fontSize: 12, color: 'var(--accent)' }}>Billing</Link>
+      </div>
+      <p style={{ margin: '0 0 12px', fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>
+        Cards you chose to save while paying an invoice. Each one is kept with that business only and can be removed here at any time.
+      </p>
+      {err && (
+        <div style={{
+          padding: '8px 12px', borderRadius: 8, marginBottom: 10,
+          background: 'rgba(155,44,44,0.08)', border: '1px solid rgba(155,44,44,0.25)',
+          color: 'var(--danger)', fontSize: 12.5,
+        }}>{err}</div>
+      )}
+      {cards === null ? (
+        <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>
+      ) : cards.length === 0 ? (
+        <div style={{ fontSize: 13, color: 'var(--muted)' }}>No saved cards. When you pay an invoice by card you can choose to save it for next time.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {cards.map((c, i) => (
+            <div key={c.clientId} style={{
+              display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap',
+              padding: '10px 0', borderTop: i === 0 ? 'none' : '1px solid var(--border)',
+            }}>
+              <div style={{
+                width: 32, height: 32, borderRadius: 8, flexShrink: 0,
+                background: 'var(--accent-soft)', color: 'var(--accent)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+              }}><Icons.Lock size={14} sw={1.7}/></div>
+              <div style={{ flex: 1, minWidth: 180 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{c.businessName}</div>
+                <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>
+                  {capitalize(c.brand) || 'Card'} ending in {c.last4}
+                  {c.expMonth ? ` · expires ${String(c.expMonth).padStart(2, '0')}/${String(c.expYear).slice(-2)}` : ''}
+                </div>
+              </div>
+              <button type="button" className="btn btn-ghost" disabled={busy === c.clientId} onClick={() => remove(c)}
+                style={{ fontSize: 12, padding: '6px 12px', color: 'var(--danger)' }}>
+                {busy === c.clientId ? 'Removing…' : 'Remove saved card'}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function capitalize(s) {
+  if (!s) return s;
+  return String(s).charAt(0).toUpperCase() + String(s).slice(1);
 }
 
 function Field({ label, hint, children }) {

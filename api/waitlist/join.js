@@ -67,7 +67,8 @@ export default async function handler(req, res) {
         name            = COALESCE(waitlist_signups.name,       EXCLUDED.name),
         phone           = COALESCE(waitlist_signups.phone,      EXCLUDED.phone),
         contact_consent = COALESCE(waitlist_signups.contact_consent, EXCLUDED.contact_consent),
-        consent_at      = COALESCE(waitlist_signups.consent_at, EXCLUDED.consent_at)
+        consent_at      = COALESCE(waitlist_signups.consent_at, EXCLUDED.consent_at),
+        unsubscribed_at = NULL
       RETURNING id, created_at, (xmax = 0) AS is_new
     `;
     const isFirstTime = !!inserted.rows[0]?.is_new;

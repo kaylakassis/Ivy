@@ -178,7 +178,7 @@ function renderOwnerWelcome({ name, appUrl }) {
                       </tbody>
                     </table>
                     <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ECF0F1;margin-top:32px;margin-bottom:4px">
-                      Welcome to the future of business OS,
+                      Welcome to Ivy,
                     </p>
                     <p style="margin:0;padding:0;font-size:14px;padding-top:0.5em;padding-bottom:0.5em;color:#ECF0F1;font-weight:600;margin-top:0;margin-bottom:24px">
                       Kayla Kassis, Founder of Ivy.

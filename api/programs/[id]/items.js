@@ -7,7 +7,7 @@ import { requireUser } from '../../_lib/auth.js';
 import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
-import { serializeItem, ITEM_TYPES, parseYouTubeId } from '../../_lib/programs.js';
+import { serializeItem, ITEM_TYPES, parseYouTubeId, isUuid } from '../../_lib/programs.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 function cleanItem(body, type) {
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
     const user = await requireUser(req, res); if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res); if (!workspaceId) return;
     const programId = String(req.query.id || '');
+    if (!isUuid(programId)) return notFound(res, 'Program not found');
     const p = (await sql`SELECT id FROM programs WHERE id = ${programId} AND workspace_id = ${workspaceId}`).rows[0];
     if (!p) return notFound(res, 'Program not found');
 

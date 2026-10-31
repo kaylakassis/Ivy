@@ -14,6 +14,7 @@ import { TEMPLATES } from './templates.js';
 import { FONT_PAIRS } from './sections.js';
 import { api } from '../../lib/api.js';
 import EmptyNote from '../../components/EmptyNote.jsx';
+import ArchivedBusinessCard from '../../components/ArchivedBusiness.jsx';
 
 // `byHost` mode renders the site for a business owner's connected custom
 // domain: there's no /site/:handle in the URL, so the page slug comes
@@ -28,6 +29,8 @@ export default function PublicSite({ byHost = false }) {
   const [site, setSite]       = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState(null);
+  // Owner's subscription lapsed: { archived, businessName } instead of a site.
+  const [archived, setArchived] = useState(null);
   // On a custom domain the handle isn't in the URL; use the one the
   // server resolved (for titles, nav, the pageview beacon).
   const handle = byHost ? (site?.handle || '') : params.handle;
@@ -44,7 +47,11 @@ export default function PublicSite({ byHost = false }) {
       ? `/website/by-host${qs}`
       : `/website/public/${encodeURIComponent(params.handle)}${qs}`;
     api.get(url)
-      .then((r) => live && setSite(r.site))
+      .then((r) => {
+        if (!live) return;
+        if (r.archived) { setArchived({ businessName: r.businessName }); return; }
+        setSite(r.site);
+      })
       .catch((e) => live && setError(e))
       .finally(() => live && setLoading(false));
     return () => { live = false; };
@@ -112,6 +119,16 @@ export default function PublicSite({ byHost = false }) {
       <div style={{ minHeight: '100vh', background: '#FFFFFF', color: '#85827B',
         display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13 }}>
         Loading…
+      </div>
+    );
+  }
+
+  if (archived) {
+    return (
+      <div className="app-root" style={{ minHeight: '100vh', padding: '48px 16px', background: 'var(--page)' }}>
+        <div style={{ maxWidth: 560, margin: '60px auto' }}>
+          <ArchivedBusinessCard businessName={archived.businessName}/>
+        </div>
       </div>
     );
   }

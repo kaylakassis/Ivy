@@ -47,6 +47,7 @@ export async function myClientIds(user) {
     const { rows } = await sql`
       SELECT c.id, c.workspace_id, c.name, c.email,
              w.name AS workspace_name,
+             w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
              cs.biz_name
       FROM clients c
       JOIN workspaces w ON w.id = c.workspace_id
@@ -61,6 +62,11 @@ export async function myClientIds(user) {
       clientName:   r.name,
       clientEmail:  r.email,
       businessName: r.biz_name || r.workspace_name || 'Business',
+      // The business's subscription has lapsed: the portal shows it as
+      // "No longer on Ivy" and switches off booking + messaging for it.
+      // Documents, invoices and history stay readable. Same predicate as
+      // the owner paywall, so resubscribing flips this back on its own.
+      archived: !isWorkspaceActive(r),
     }));
   } catch (err) {
     // eslint-disable-next-line no-console
@@ -136,6 +142,7 @@ async function ownsWorkspaceFromDb(userId) {
     const { rows } = await sql`
       SELECT w.id, w.onboarded_at, w.business_type,
              w.subscription_status, w.trial_ends_at, w.subscription_period_end, w.comp_until,
+             w.subscription_source, w.cancel_at_period_end, w.data_deletion_at,
              w.stripe_customer_id,
              cs.biz_name, cs.slug
       FROM workspaces w
@@ -250,6 +257,13 @@ function deriveSubscription(row) {
     trialEndsAt: row.trial_ends_at,
     periodEndsAt: row.subscription_period_end,
     daysRemaining,
+    // Where the money comes from ('stripe' | 'apple' | null) and whether the
+    // owner has already turned auto-renew off (access runs to periodEndsAt).
+    source: row.subscription_source || null,
+    cancelAtPeriodEnd: !!row.cancel_at_period_end,
+    // Set once a paid subscription has lapsed: the date the workspace's
+    // data is permanently deleted unless the owner resubscribes first.
+    dataDeletionAt: (!isActive && row.data_deletion_at) ? row.data_deletion_at : null,
     // Complimentary access (Admin → Comps). The paywall never shows for
     // comped workspaces; the Account page can label the plan accordingly.
     comped: !!(row.comp_until && new Date(row.comp_until).getTime() > now),
@@ -296,6 +310,19 @@ export async function userContext(user) {
     isClient: memberships.length > 0,
     isHelper: helps.some((h) => h.status === 'active'),
     workspaceId: workspace?.id || null,
+    // The owner's workspace as one object. Several screens read
+    // ctx.owns.<field> (the iPhone purchase identity, the notifications
+    // prompt, business-type tailoring); this key was never sent before, so
+    // all of those silently fell back. Keep every field they read.
+    owns: workspace ? {
+      id: workspace.id,
+      onboardedAt: workspace.onboardedAt || null,
+      businessType: workspace.businessType || 'both',
+      bizName: workspace.bizName || null,
+      name: workspace.bizName || null,
+      slug: workspace.slug || null,
+      hasBillingRecord: !!workspace.hasBillingRecord,
+    } : null,
     onboardedAt: workspace?.onboardedAt || null,
     bizName: workspace?.bizName || null,
     bookingSlug: workspace?.slug || null,

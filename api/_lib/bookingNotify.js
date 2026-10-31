@@ -11,9 +11,10 @@
 // reported to Sentry but don't surface to the caller.
 import { sql } from './db.js';
 import { sendEmail, sendEmailToClient, sendEmailToUser, emailShell } from './email.js';
-import { buildBookingInvite } from './ical.js';
+import { buildInviteIcs, calendarLinksFor, renderAddToCalendar } from './calendarLinks.js';
 import { sendClientSms } from './sms.js';
 import { celebrateFirstBooking, celebrateBookingMilestones } from './milestones.js';
+import { recordFirstRealBooking } from './firstWin.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
@@ -43,7 +44,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         b.id, b.client_id, b.client_name, b.client_email,
         b.date, b.start_min, b.end_min, b.notes,
         b.video_room_url, b.location_address,
-        b.client_phone, b.staff_id,
+        b.client_phone, b.staff_id, b.created_at, b.updated_at,
         c.sms_consent_at,
         s.name AS service_name, s.location_type, s.location_label,
         s.prep_instructions,
@@ -78,7 +79,12 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
 
     // 0. Booking milestones - a one-time celebration in the owner's feed for
     //    the first booking, then again at each mid-journey tier (10, 25, ...).
-    tasks.push(celebrateFirstBooking(workspaceId));
+    //    The first-win path (api/_lib/firstWin.js) owns the first booking a
+    //    CLIENT made: it flags the dashboard moment and sends its own
+    //    notification, so the generic first-booking milestone is skipped
+    //    when it fired. Owner-added and sample bookings never count there.
+    const firstWin = await recordFirstRealBooking({ workspaceId, bookingId, source });
+    if (!firstWin) tasks.push(celebrateFirstBooking(workspaceId));
     tasks.push(celebrateBookingMilestones(workspaceId));
 
     // 1. Thread + system message - only if the booking is tied to a client
@@ -107,12 +113,8 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
         serviceName,
         dateLabel,
         timeLabel,
-        // Raw fields for the add-to-calendar .ics attachment.
-        bookingId: ctx.id,
-        dateISO,
-        startMin: ctx.start_min,
-        endMin: ctx.end_min,
-        timezone: ctx.timezone || null,
+        // The raw row feeds the add-to-calendar .ics attachment + links.
+        inviteRow: ctx,
         notes: ctx.notes,
         // The service's "Prep instructions" (what to do or bring) - the
         // service editor promises these go out with the confirmation.
@@ -233,7 +235,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, bookingId, dateISO, startMin, endMin, timezone, prepInstructions }) {
+async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
   // bookers go to /signup with the email pre-filled - hitting /me
@@ -251,6 +253,23 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
   const portalCtaText = hasPortal ? 'Open my portal' : 'Claim your portal account';
 
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
+  // Add-to-calendar: a Google deep link + a signed .ics URL in the body,
+  // plus the same .ics as an attachment (METHOD:REQUEST, stable UID) so
+  // every mail client has a one-tap path. Best-effort - a bad row just
+  // means the email ships without them.
+  let calendarLinks = null;
+  let attachments;
+  if (inviteRow && inviteRow.date && inviteRow.start_min != null && inviteRow.end_min != null) {
+    try {
+      calendarLinks = calendarLinksFor(inviteRow);
+      const ics = buildInviteIcs(inviteRow);
+      attachments = [{
+        filename: 'booking.ics',
+        content: Buffer.from(ics, 'utf8').toString('base64'),
+        contentType: 'text/calendar; method=REQUEST; charset=UTF-8',
+      }];
+    } catch { /* skip the attachment + links, still send the email */ }
+  }
   const opener = source === 'public'
     ? `Your booking with <strong>${escapeHtml(businessName)}</strong> is confirmed.`
     : `<strong>${escapeHtml(businessName)}</strong> just booked you in.`;
@@ -271,6 +290,7 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
         <a href="${escapeHtml(videoRoomUrl)}" style="color:#2E3168;word-break:break-all;">${escapeHtml(videoRoomUrl)}</a>
         <br/><span style="font-size:12px;color:#85827B;">Save this - open it at the start of your session.</span>
       </p>` : ''}
+      ${renderAddToCalendar(calendarLinks)}
       ${renderPrepInstructions(prepInstructions)}
       <p>Need to reschedule or message ${escapeHtml(businessName)}? ${hasPortal
         ? 'You can view this booking and chat with them through your Ivy portal.'
@@ -280,33 +300,6 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
     footer: `If you didn't make this booking, please reach out to ${escapeHtml(businessName)} directly.`,
     branding,
   });
-  // Add-to-calendar attachment - lets the client one-tap save the booking to
-  // their own calendar (a well-established no-show reducer). Best-effort: if
-  // we're missing the raw date/time we just skip it rather than fail the send.
-  let attachments;
-  if (dateISO && startMin != null && endMin != null) {
-    try {
-      const ics = buildBookingInvite({
-        bizName: businessName,
-        serviceName,
-        date: dateISO,
-        startMin,
-        endMin,
-        bookingId,
-        timezone,
-        locationAddress: videoRoomUrl || locationAddress || null,
-        description: videoRoomUrl
-          ? `Booked with ${businessName} via Ivy. Join: ${videoRoomUrl}`
-          : `Booked with ${businessName} via Ivy.`,
-      });
-      attachments = [{
-        filename: 'booking.ics',
-        content: Buffer.from(ics, 'utf8').toString('base64'),
-        contentType: 'text/calendar; method=PUBLISH; charset=UTF-8',
-      }];
-    } catch { /* skip the attachment, still send the email */ }
-  }
-
   await sendEmailToClient({
     clientId, type: 'bookings',
     to, subject: `Booking confirmed - ${dateLabel}`, html, replyTo: branding?.replyTo,
@@ -548,8 +541,9 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
       SELECT
         b.id, b.client_id, b.client_name, b.client_email,
         b.date, b.start_min, b.end_min, b.staff_id,
-        s.name AS service_name,
-        cs.biz_name,
+        b.video_room_url, b.location_address, b.created_at, b.updated_at,
+        s.name AS service_name, s.location_type, s.location_label,
+        cs.biz_name, cs.timezone,
         w.owner_id,
         u.email AS owner_email, u.name AS owner_name
       FROM bookings b
@@ -587,6 +581,7 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
         to: ctx.client_email, clientName: ctx.client_name,
         businessName, serviceName,
         newDate, newTime, oldDate, oldTime, branding,
+        inviteRow: ctx,
       }));
     }
 
@@ -636,8 +631,23 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
   }
 }
 
-async function sendRescheduleToClient({ clientId, to, clientName, businessName, serviceName, newDate, newTime, oldDate, oldTime, branding }) {
+async function sendRescheduleToClient({ clientId, to, clientName, businessName, serviceName, newDate, newTime, oldDate, oldTime, branding, inviteRow }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
+  // Same UID as the confirmation's invite with a higher SEQUENCE, so
+  // importing this one moves the event the client already saved.
+  let calendarLinks = null;
+  let attachments;
+  if (inviteRow && inviteRow.date && inviteRow.start_min != null && inviteRow.end_min != null) {
+    try {
+      calendarLinks = calendarLinksFor(inviteRow);
+      const ics = buildInviteIcs(inviteRow);
+      attachments = [{
+        filename: 'booking.ics',
+        content: Buffer.from(ics, 'utf8').toString('base64'),
+        contentType: 'text/calendar; method=REQUEST; charset=UTF-8',
+      }];
+    } catch { /* still send the email */ }
+  }
   const html = emailShell({
     heading: 'Your appointment was rescheduled',
     branding,
@@ -649,7 +659,9 @@ async function sendRescheduleToClient({ clientId, to, clientName, businessName, 
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">New date</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(newDate)}</td></tr>
         <tr><td style="padding:6px 16px 6px 0;color:#85827B;">New time</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(newTime)}</td></tr>
         ${oldDate && oldTime ? `<tr><td style="padding:6px 16px 6px 0;color:#85827B;">Was</td><td style="padding:6px 0;color:#85827B;text-decoration:line-through;">${escapeHtml(oldDate)} · ${escapeHtml(oldTime)}</td></tr>` : ''}
-      </table>`,
+      </table>
+      ${renderAddToCalendar(calendarLinks)}
+      <p style="font-size:12.5px;color:#85827B;">Already saved the old time? Importing the attached invite updates it in place.</p>`,
     ctaText: 'Open my portal',
     ctaUrl: `${appUrl()}/me/bookings`,
     footer: `Reach out to ${escapeHtml(businessName)} if this new time doesn't work.`,
@@ -657,6 +669,7 @@ async function sendRescheduleToClient({ clientId, to, clientName, businessName, 
   await sendEmailToClient({
     clientId, type: 'bookings',
     to, subject: `Rescheduled: ${serviceName} → ${newDate}`, html, replyTo: branding?.replyTo,
+    attachments,
   });
 }
 

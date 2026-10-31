@@ -26,6 +26,7 @@ import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_
 import { ensureSchemaApplied } from '../../_lib/ensureSchema.js';
 import { fireClientCreatedWorkflows } from '../../_lib/workflows.js';
 import { notifyLeadInstantReply } from '../../_lib/leadNotify.js';
+import { loadWorkspaceAccess, archivedForbidden } from '../../_lib/businessAccess.js';
 
 function escapeHtml(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -50,6 +51,9 @@ export default async function handler(req, res) {
     `;
     if (settings.rows.length === 0) return notFound(res, 'No booking page for that handle');
     const workspaceId = settings.rows[0].workspace_id;
+    // Archived business (subscription lapsed): no new leads or messages.
+    const access = await loadWorkspaceAccess(workspaceId);
+    if (!access.active) return archivedForbidden(res);
 
     const body = await readBody(req);
     const name  = (body.name || '').toString().trim().slice(0, 200);

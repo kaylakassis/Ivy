@@ -35,4 +35,10 @@ export const FLAGS = {
   squarePaypal: envFlag('SQUARE_PAYPAL', false),
   paypal: envFlag('PAYPAL', false),
   square: envFlag('SQUARE', false),
+  // Ivy's own "refer a business owner, get a free week" program. Tabled:
+  // the dashboard card, the Account section, the sign-up code box and the
+  // tutorial mention are hidden. The backend stays on, so anyone already
+  // referred (or arriving through an old ?ref= link) still gets what was
+  // promised. Set VITE_FLAG_REFERRALS=true to bring it all back.
+  referrals: envFlag('REFERRALS', false),
 };
