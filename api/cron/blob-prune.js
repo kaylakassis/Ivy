@@ -290,6 +290,33 @@ export async function collectReferencedPathnames() {
       },
     ));
 
+    // program lessons - PDF, uploaded video / audio, gallery images and
+    // attachments (full public URLs, JSONB lists of { url }), plus any
+    // blob link inside the written body. Soft-deleted lessons included:
+    // keeping a file one day too long is fine, losing a live one is not.
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, file_url, media_url, images::text AS imgs, attachments::text AS atts, body FROM program_items
+          ${cur ? 'WHERE id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => { addUrl(r.file_url); addUrl(r.media_url); addUrlsFromText(r.imgs); addUrlsFromText(r.atts); addUrlsFromText(r.body); },
+    ));
+    // programs - cover image.
+    drained.push(await drainSource(
+      (cur) => sql.query(
+        `SELECT id, cover_url FROM programs
+          WHERE cover_url IS NOT NULL
+            ${cur ? 'AND id > $1' : ''}
+          ORDER BY id LIMIT ${COLLECT_BATCH}`,
+        cur ? [cur] : [],
+      ),
+      'id',
+      (r) => addUrl(r.cover_url),
+    ));
+
     if (drained.some((d) => d === false)) {
       // eslint-disable-next-line no-console
       console.error('[blob-prune] a ref source exceeded MAX_COLLECT_PAGES - aborting to avoid false deletes');

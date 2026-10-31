@@ -3580,4 +3580,68 @@ CREATE INDEX IF NOT EXISTS idx_ivy_pending_actions_workspace ON ivy_pending_acti
 -- Short-lived per-business lock so helper invites are seat-checked one at a
 -- time (api/_lib/helpers.js inviteHelper). Expires on its own.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS helper_invite_lock_until TIMESTAMPTZ;
+
+-- ── Programs as courses (phase 1): modules, richer lessons, progress, drip ──
+-- program_modules group lessons into sections / weeks. unlock_after_days
+-- drips a module: it opens N days after the member's anchor date
+-- (dripAnchorFor in api/_lib/programCourse.js; the enrollment's
+-- granted_at today). NULL or 0 = open from the start.
+CREATE TABLE IF NOT EXISTS program_modules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  position INT NOT NULL DEFAULT 0,
+  unlock_after_days INT CHECK (unlock_after_days IS NULL OR (unlock_after_days >= 0 AND unlock_after_days <= 3650)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_program_modules_program ON program_modules(program_id, position) WHERE deleted_at IS NULL;
+-- Lessons: optional module (NULL = top level, so older programs keep
+-- working), video links from YouTube / Vimeo / Loom or an uploaded file,
+-- audio lessons, an image gallery, downloadable attachments, and a
+-- free-preview flag for the public sales page.
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS module_id UUID REFERENCES program_modules(id) ON DELETE SET NULL;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS video_provider TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS video_ref TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS media_name TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS is_preview BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE program_items DROP CONSTRAINT IF EXISTS program_items_type_check;
+ALTER TABLE program_items ADD CONSTRAINT program_items_type_check CHECK (type IN ('pdf', 'post', 'video', 'audio')) NOT VALID;
+CREATE INDEX IF NOT EXISTS idx_program_items_module ON program_items(module_id) WHERE module_id IS NOT NULL;
+-- Lesson completions: one row per member per lesson. completed_at lets a
+-- later phase count completions per member per day (streaks, points).
+CREATE TABLE IF NOT EXISTS program_progress (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  enrollment_id UUID REFERENCES program_enrollments(id) ON DELETE SET NULL,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  item_id UUID NOT NULL REFERENCES program_items(id) ON DELETE CASCADE,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_progress_client_item ON program_progress(client_id, item_id);
+CREATE INDEX IF NOT EXISTS idx_program_progress_program ON program_progress(program_id, client_id);
+CREATE INDEX IF NOT EXISTS idx_program_progress_day ON program_progress(workspace_id, client_id, completed_at);
+-- One row per program email / push actually sent to a member, so a re-run
+-- of the drip cron (or a double click on "Notify members") never sends the
+-- same news twice. dedupe_key: '<kind>:<ref id>:<client id>'.
+CREATE TABLE IF NOT EXISTS program_notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref_id UUID,
+  dedupe_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_notifications_key ON program_notifications(dedupe_key);
+CREATE INDEX IF NOT EXISTS idx_program_notifications_program ON program_notifications(program_id, created_at DESC);
+
 `;

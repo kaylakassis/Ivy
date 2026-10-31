@@ -912,7 +912,8 @@ function NotificationPrefs() {
         setPushPrefs(r.pushPrefs || r.prefs || {});
         setEmailPrefs(r.emailPrefs || {});
         setPushTypes(r.pushTypes || r.types || []);
-        setEmailTypes(r.emailTypes || []);
+        // 'programs' emails go to clients (their own per-business switch), never to owners.
+        setEmailTypes((r.emailTypes || []).filter((t) => t !== 'programs'));
       })
       .catch((e) => { if (!cancelled) setErr(e.message); });
     return () => { cancelled = true; };

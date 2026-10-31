@@ -12,6 +12,7 @@ const EMAIL_LABELS = {
   messages:  { label: 'Messages',     hint: 'When this business sends you a chat message.' },
   marketing: { label: 'Other emails', hint: 'Review prompts and occasional updates from the business.' },
   billing:   { label: 'Billing',      hint: 'Subscription billing emails (rarely relevant to clients).' },
+  programs:  { label: 'Programs',     hint: 'New lessons and newly opened modules in programs you are part of.' },
 };
 
 export default function ClientNotifications() {
