@@ -7,6 +7,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedInvoice, serializeInvoice } from '../_lib/finance.js';
 import { restoreStock } from '../_lib/products.js';
+import { restoreGiftCardCreditForInvoice } from '../_lib/giftCards.js';
 import { recordWorkspaceAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -37,9 +38,14 @@ export default async function handler(req, res) {
     const rededucts  = activity.filter((a) => a.kind === 'stock-rededucted').length;
     const willRestock = stockItems.length > 0 && restocks <= rededucts;
 
+    const giftCreditLeft = Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0);
     const newActivity = [
       ...activity,
       { ts: new Date().toISOString(), kind: 'voided', text: 'Invoice voided' },
+      ...(giftCreditLeft > 0
+        ? [{ ts: new Date().toISOString(), kind: 'gift-card-restored',
+            text: `Gift card credit of $${(giftCreditLeft / 100).toFixed(2)} returned to the card ending ${inv.gift_card_code_last4 || '????'}` }]
+        : []),
       ...(willRestock
         ? [{ ts: new Date().toISOString(), kind: 'restocked', text: 'Stock returned to inventory' }]
         : []),
@@ -59,6 +65,14 @@ export default async function handler(req, res) {
     `;
     if (updated.rows.length === 0) {
       return badRequest(res, 'This invoice was just paid - refresh to see its current state.');
+    }
+    // A gift card the client applied goes back on the card (exactly once;
+    // the helper claims the credit atomically). Best-effort after the
+    // void itself landed - a failure here is logged, never a 500 that
+    // would leave the owner unsure whether the void happened.
+    if (giftCreditLeft > 0) {
+      await restoreGiftCardCreditForInvoice({ workspaceId, invoiceId: inv.id })
+        .catch((err) => console.error('[invoice void] gift card restore failed:', err.message));
     }
     if (willRestock) {
       for (const it of stockItems) {

@@ -9,7 +9,7 @@ export const VALID_PAID_METHOD = new Set(['card', 'ach', 'cash', 'check', 'trans
 // into copy a client sees.
 export const PAID_METHOD_LABELS = {
   card: 'card', ach: 'ACH', cash: 'cash', check: 'check', transfer: 'bank transfer',
-  zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', paypal: 'PayPal', other: 'other',
+  zelle: 'Zelle', venmo: 'Venmo', cashapp: 'Cash App', paypal: 'PayPal', gift_card: 'gift card', other: 'other',
 };
 export function paidMethodLabel(method) {
   return PAID_METHOD_LABELS[method] || (method ? String(method) : 'other');
@@ -150,6 +150,12 @@ export function serializeInvoice(row) {
     paidAmount:     row.paid_amount == null ? null : Number(row.paid_amount),
     refundedAt:   row.refunded_at,
     stripePaymentIntent: row.stripe_payment_intent || null,
+    // Gift card applied by the client on the public pay page (or the
+    // owner). The credit lowers what is left to pay; last4 is the only
+    // code fragment anyone sees. restored = handed back on void / refund.
+    giftCardCreditCents:         Number(row.gift_card_credit_cents || 0),
+    giftCardCodeLast4:           row.gift_card_code_last4 || null,
+    giftCardCreditRestoredCents: Number(row.gift_card_credit_restored_cents || 0),
     // "Client says they paid" - cleared by clear-claim, left in place on
     // confirm so the history of how it was settled survives.
     paymentClaimedAt:     row.payment_claimed_at || null,

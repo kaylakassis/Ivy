@@ -81,15 +81,20 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
 // Venmo, Cash App) are sent back by the business, so we say that.
 const ONLINE_REFUND_METHODS = new Set(['card', 'ach', 'paypal', 'square', 'stripe']);
 
-export function renderInvoiceRefunded({ business, firstName, number, amount, remaining, fullyRefunded, method, online, branding }) {
+export function renderInvoiceRefunded({ business, firstName, number, amount, remaining, fullyRefunded, method, online, branding, giftRestoredCents = 0, giftCardLast4 = null }) {
   const fn = escapeHtml(firstName || 'there');
   const biz = escapeHtml(business || 'the business');
   const amt = fmtMoney(amount);
-  const how = online
-    ? (method === 'ach'
-      ? `<p>The money is on its way back to the bank account you paid from. Most banks show it within <strong>5 to 10 business days</strong>.</p>`
-      : `<p>The money is on its way back to your original payment method. Most banks and card issuers show it within <strong>5 to 10 business days</strong>.</p>`)
-    : `<p>You paid this invoice by ${escapeHtml(paidMethodLabel(method))}, so ${biz} will send the money back to you directly. If you have not received it in a few days, just reply to this email.</p>`;
+  const giftLine = giftRestoredCents > 0
+    ? `<p>${fmtMoney(giftRestoredCents / 100)} is back on your gift card${giftCardLast4 ? ` ending <strong>${escapeHtml(giftCardLast4)}</strong>` : ''}, ready to use again with ${biz}.</p>`
+    : '';
+  const how = method === 'gift_card'
+    ? (giftLine || `<p>You paid this invoice with a gift card, so the credit has been put back on the card, ready to use again with ${biz}.</p>`)
+    : (online
+      ? (method === 'ach'
+        ? `<p>The money is on its way back to the bank account you paid from. Most banks show it within <strong>5 to 10 business days</strong>.</p>`
+        : `<p>The money is on its way back to your original payment method. Most banks and card issuers show it within <strong>5 to 10 business days</strong>.</p>`)
+      : `<p>You paid this invoice by ${escapeHtml(paidMethodLabel(method))}, so ${biz} will send the money back to you directly. If you have not received it in a few days, just reply to this email.</p>`) + giftLine;
   const scope = fullyRefunded
     ? `<p>Invoice <strong>${escapeHtml(number)}</strong> is now fully refunded.</p>`
     : `<p>This is a partial refund. ${fmtMoney(remaining)} of your payment stays applied to invoice <strong>${escapeHtml(number)}</strong>.</p>`;
@@ -106,11 +111,12 @@ export function renderInvoiceRefunded({ business, firstName, number, amount, rem
   return { subject: `Refund issued: invoice ${number} · ${amt}`, html };
 }
 
-export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, method = null }) {
+export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, method = null, giftRestoredCents = 0 }) {
   try {
     const { rows } = await sql`
       SELECT i.id, i.number, i.client_id, i.client_name, i.client_email,
-             i.paid_amount, i.refunded_amount, i.status, i.paid_method, i.stripe_payment_intent
+             i.paid_amount, i.refunded_amount, i.status, i.paid_method, i.stripe_payment_intent,
+             i.gift_card_code_last4
       FROM invoices i
       WHERE i.id = ${invoiceId} AND i.workspace_id = ${workspaceId}
     `;
@@ -118,7 +124,7 @@ export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, me
     if (!inv?.client_email || !(Number(amount) > 0)) return { sent: false };
     const branding = await fetchBranding(workspaceId);
     const m = method || inv.paid_method || (inv.stripe_payment_intent ? 'card' : 'other');
-    const online = !!inv.stripe_payment_intent || ONLINE_REFUND_METHODS.has(m);
+    const online = m !== 'gift_card' && (!!inv.stripe_payment_intent || ONLINE_REFUND_METHODS.has(m));
     const paid = Number(inv.paid_amount || 0);
     const refunded = Number(inv.refunded_amount || 0);
     const rendered = renderInvoiceRefunded({
@@ -131,6 +137,8 @@ export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, me
       method: m,
       online,
       branding,
+      giftRestoredCents: Number(giftRestoredCents || 0),
+      giftCardLast4: inv.gift_card_code_last4 || null,
     });
     const r = await sendEmailToClient({
       clientId: inv.client_id, type: 'invoices',

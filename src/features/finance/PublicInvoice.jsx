@@ -73,6 +73,15 @@ export default function PublicInvoice() {
   const [confirmState, setConfirmState] = useState(null); // null | 'paid' | 'processing' | 'unknown'
   // The saved card was declined off-session; offer the normal checkout.
   const [savedCardDeclined, setSavedCardDeclined] = useState(false);
+  // "Have a gift card?" - the code is checked (balance + what would apply)
+  // and then applied. A card that covers everything marks the invoice paid
+  // right here; otherwise the remainder stays payable below.
+  const [giftCode, setGiftCode] = useState('');
+  const [giftInfo, setGiftInfo] = useState(null);   // check result: { card, appliesCents, remainingCents }
+  const [giftBusy, setGiftBusy] = useState(false);
+  const [giftErr, setGiftErr]   = useState(null);
+  const [giftPaid, setGiftPaid] = useState(null);   // { appliedCents, codeLast4 } once a card covered the whole invoice
+  const [giftOpen, setGiftOpen] = useState(false);
 
   useEffect(() => {
     let live = true;
@@ -134,6 +143,38 @@ export default function PublicInvoice() {
       setMarkPaidErr('Could not notify the sender. Please try again.');
     }
     finally { setSubmitting(null); }
+  };
+
+  const giftPost = async (action) => {
+    const r = await fetch('/api/invoice-pay/gift-card', {
+      method: 'POST', credentials: 'omit',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, code: giftCode, action }),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(j.error || `HTTP ${r.status}`);
+    return j;
+  };
+  const checkGift = async () => {
+    if (!giftCode.trim()) return;
+    setGiftBusy(true); setGiftErr(null); setGiftInfo(null);
+    try { setGiftInfo(await giftPost('check')); }
+    catch (e) { setGiftErr(e.message || 'Could not check that code.'); }
+    finally { setGiftBusy(false); }
+  };
+  const applyGift = async () => {
+    setGiftBusy(true); setGiftErr(null);
+    try {
+      const j = await giftPost('apply');
+      if (j.paid) {
+        setGiftPaid({ appliedCents: j.appliedCents, codeLast4: j.giftCard?.codeLast4 });
+      } else if (j.invoice) {
+        setInv((cur) => ({ ...cur, ...j.invoice, savedCard: cur?.savedCard || null, canSaveCard: cur?.canSaveCard || false }));
+      }
+      setGiftInfo(null); setGiftCode(''); setGiftOpen(false);
+    } catch (e) {
+      setGiftErr(e.message || 'Could not apply that gift card.');
+    } finally { setGiftBusy(false); }
   };
 
   const copyHandle = async (type, text) => {
@@ -251,7 +292,8 @@ export default function PublicInvoice() {
   // Currency-aware formatter scoped to this invoice. Falls back to
   // USD on legacy rows that predate the invoices.currency column.
   const fmtMoney = makeFmt(inv.currency);
-  const remaining = Math.max(0, inv.total - (Number(inv.paidAmount) || 0));
+  const giftCredit = Number(inv.giftCardCreditCents || 0) / 100;
+  const remaining = Math.max(0, inv.total - (Number(inv.paidAmount) || 0) - giftCredit);
   const manualMethods = Array.isArray(inv.manualMethods) ? inv.manualMethods : [];
   const businessName = inv.business?.name || 'The business';
   const showClaimThanks = !!claimed && !changing;
@@ -281,6 +323,63 @@ export default function PublicInvoice() {
     </div>
   );
 
+  if (giftPaid) {
+    return (
+      <PageWrap tweaks={tweaks}>
+        <div className="card" style={{ padding: 36, textAlign: 'center' }} data-testid="gift-paid">
+          <div style={{
+            width: 48, height: 48, borderRadius: 99, background: 'var(--ok)', color: '#fff',
+            display: 'inline-flex', alignItems: 'center', justifyContent: 'center', marginBottom: 14,
+          }}><Icons.Check size={24} sw={2.4}/></div>
+          <div style={{ fontSize: 16, fontWeight: 600 }}>Paid with your gift card - thank you!</div>
+          <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 6 }}>
+            {fmtMoney(giftPaid.appliedCents / 100)} came off the card{giftPaid.codeLast4 ? ` ending ${giftPaid.codeLast4}` : ''}. {businessName} has been notified, invoice {inv.number} is marked paid, and your receipt is on its way.
+          </div>
+        </div>
+      </PageWrap>
+    );
+  }
+
+  const giftBlock = !paidFlag && !bankProcessing && !showClaimThanks && remaining > 0 && giftCredit === 0 ? (
+    <div className="card print-hide" style={{ padding: '16px 20px', marginTop: 16 }} data-testid="gift-card-block">
+      {!giftOpen ? (
+        <button type="button" onClick={() => setGiftOpen(true)}
+          style={{ background: 'transparent', border: 0, padding: 0, color: 'var(--accent)', fontSize: 13.5, fontWeight: 600, cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+          <Icons.Gift size={14}/> Have a gift card?
+        </button>
+      ) : (
+        <div>
+          <div style={{ fontSize: 13.5, fontWeight: 600, marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Icons.Gift size={14} stroke="var(--accent)"/> Have a gift card?
+          </div>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+            <input value={giftCode} onChange={(e) => { setGiftCode(e.target.value); setGiftInfo(null); setGiftErr(null); }}
+              onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); checkGift(); } }}
+              placeholder="Gift card code" aria-label="Gift card code" autoCapitalize="characters" autoCorrect="off" spellCheck={false}
+              className="mono-num" style={{ flex: 1, minWidth: 180, padding: '9px 12px', borderRadius: 8, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 14, letterSpacing: '0.04em' }}/>
+            <button type="button" className="btn btn-outline" onClick={checkGift} disabled={giftBusy || !giftCode.trim()} style={{ padding: '8px 14px' }}>
+              {giftBusy && !giftInfo ? 'Checking…' : 'Check balance'}
+            </button>
+          </div>
+          {giftErr && <div style={{ marginTop: 8, fontSize: 12.5, color: 'var(--danger)' }}>{giftErr}</div>}
+          {giftInfo && (
+            <div style={{ marginTop: 10, padding: '10px 12px', borderRadius: 8, background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 13, lineHeight: 1.5 }} data-testid="gift-card-info">
+              Card ending <strong className="mono-num">{giftInfo.card.codeLast4}</strong> has <strong>{fmtMoney(giftInfo.card.balanceCents / 100)}</strong>.{' '}
+              <strong>{fmtMoney(giftInfo.appliesCents / 100)}</strong> will be applied to this invoice
+              {giftInfo.remainingCents > 0 ? <>, leaving <strong>{fmtMoney(giftInfo.remainingCents / 100)}</strong> to pay.</> : ' and covers it in full.'}
+              <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+                <button type="button" className="btn btn-primary" onClick={applyGift} disabled={giftBusy} style={{ padding: '8px 14px' }}>
+                  {giftBusy ? 'Applying…' : `Apply ${fmtMoney(giftInfo.appliesCents / 100)}`}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => { setGiftInfo(null); setGiftCode(''); }} disabled={giftBusy} style={{ padding: '8px 12px' }}>Cancel</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   return (
     <PageWrap tweaks={tweaks}>
       {/* The invoice itself: same renderer as the owner's preview and the
@@ -296,8 +395,19 @@ export default function PublicInvoice() {
       </div>
       <InvoiceDocument invoice={inv} business={inv.business}/>
 
+      {giftBlock}
+
       {/* Pay action */}
       <div className="card" style={{ padding: 24, marginTop: 16, textAlign: 'center' }}>
+        {giftCredit > 0 && !paidFlag && (
+          <div data-testid="gift-card-applied" style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8, marginBottom: 14, padding: '6px 12px', borderRadius: 99,
+            background: 'var(--surface-2)', border: '1px solid var(--border)', fontSize: 12.5, color: 'var(--fg-2)',
+          }}>
+            <Icons.Gift size={13} stroke="var(--accent)"/>
+            Gift card{inv.giftCardCodeLast4 ? ` ending ${inv.giftCardCodeLast4}` : ''} applied: <strong>−{fmtMoney(giftCredit)}</strong>
+          </div>
+        )}
         {paidFlag ? (
           <div>
             <div style={{

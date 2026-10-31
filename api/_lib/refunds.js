@@ -22,6 +22,7 @@ import { createRefund as paypalCreateRefund } from './payments/paypal.js';
 import { fetchOwnedInvoice, serializeInvoice, computeTotals, fetchFinanceSettings } from './finance.js';
 import { recordWorkspaceAudit } from './audit.js';
 import { notifyInvoiceRefunded } from './invoiceNotify.js';
+import { restoreGiftCardCreditForInvoice } from './giftCards.js';
 
 const VALID_REASONS = new Set(['duplicate', 'fraudulent', 'requested_by_customer']);
 
@@ -54,6 +55,8 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
   amount = Math.round(amount * 100) / 100;
 
   const reason = reasonIn && VALID_REASONS.has(reasonIn) ? reasonIn : null;
+  // 'gift_card' = the client paid the whole invoice with a gift card: no
+  // processor took money, so a refund puts the credit back on the card.
   const method = inv.stripe_payment_intent ? 'card' : (inv.paid_method || 'manual');
 
   // Deterministic key so a retry that reads the same alreadyRefunded reuses
@@ -63,46 +66,11 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
 
   let stripeRefundId = null;
   if (inv.stripe_payment_intent) {
-    const fs = await fetchFinanceSettings(workspaceId);
-    // Route the refund to the provider that CAPTURED the payment, not
-    // whatever provider is currently selected - owners who switch
-    // providers must still be able to refund older invoices. Each
-    // capture path leaves a distinct signature: PayPal stamps
-    // paid_method='paypal'; Stripe payment ids are pi_/ch_-prefixed;
-    // Square ids are neither.
-    const provider = inv.paid_method === 'paypal' ? 'paypal'
-      : /^(pi_|ch_)/.test(inv.stripe_payment_intent) ? 'stripe'
-      : (fs?.paymentProvider === 'square' || inv.paid_method === 'card') ? 'square'
-      : (fs?.paymentProvider || 'stripe');
-    if (provider === 'square') {
-      const out = await squareCreateRefund({
-        workspaceId, settings: fs, paymentIntent: inv.stripe_payment_intent,
-        amountCents: Math.round(amount * 100), currency: fs.currency, reason, idempotencyKey: refundKey,
-      });
-      stripeRefundId = out.id;
-    } else if (provider === 'paypal') {
-      const out = await paypalCreateRefund({
-        workspaceId, settings: fs, paymentIntent: inv.stripe_payment_intent,
-        amountCents: Math.round(amount * 100), currency: fs.currency, reason, idempotencyKey: refundKey,
-      });
-      stripeRefundId = out.id;
-    } else {
-      let creds;
-      try {
-        creds = await loadStripeCreds(workspaceId);
-      } catch (err) {
-        if (err.code === 'no_stripe_connection') {
-          throw new Error('Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually.');
-        }
-        throw err;
-      }
-      const r = await createRefund({
-        secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
-        paymentIntent: inv.stripe_payment_intent, amountCents: Math.round(amount * 100),
-        reason, idempotencyKey: refundKey,
-      });
-      stripeRefundId = r.id;
-    }
+    const out = await refundThroughProvider({
+      workspaceId, paymentIntent: inv.stripe_payment_intent, paidMethod: inv.paid_method,
+      amountCents: Math.round(amount * 100), reason, idempotencyKey: refundKey,
+    });
+    stripeRefundId = out.id;
   }
 
   const newRefunded = alreadyRefunded + amount;
@@ -112,7 +80,7 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
   const activityEntry = {
     ts: new Date().toISOString(),
     kind: 'refund',
-    text: `Refunded ${fmtMoney(amount)}${method === 'card' ? ' to card' : ''}${reason ? ` (${reason.replace(/_/g, ' ')})` : ''}`,
+    text: `Refunded ${fmtMoney(amount)}${method === 'card' ? ' to card' : method === 'gift_card' ? ' to the gift card' : ''}${reason ? ` (${reason.replace(/_/g, ' ')})` : ''}`,
     ...(stripeRefundId ? { stripeRefundId } : {}),
   };
 
@@ -152,16 +120,73 @@ export async function refundInvoice({ workspaceId, id, amount: amountIn, reason:
     });
   }
 
+  // Gift card credit goes back on the card: for an invoice the card paid
+  // in full, each refund returns that much credit; for a mixed invoice
+  // (card + processor), the credit comes back once the money part is fully
+  // refunded. Exactly-once inside the helper; a failure is logged and the
+  // credit stays claimable for a later void / refund.
+  let giftRestoredCents = 0;
+  const giftLeft = Number(inv.gift_card_credit_cents || 0) - Number(inv.gift_card_credit_restored_cents || 0);
+  if (giftLeft > 0 && (method === 'gift_card' || fullyRefunded)) {
+    giftRestoredCents = await restoreGiftCardCreditForInvoice({
+      workspaceId, invoiceId: inv.id,
+      amountCents: method === 'gift_card' ? Math.round(amount * 100) : null,
+    }).catch((err) => { console.error('[refund] gift card restore failed:', err.message); return 0; });
+  }
+
   // Tell the client. Only on the write that actually applied (the deduped
   // path above returns early), and never let an email failure undo or
   // fail a refund that already moved money.
   await notifyInvoiceRefunded({
     workspaceId, invoiceId: inv.id, amount,
     method: inv.stripe_payment_intent ? (inv.paid_method === 'ach' ? 'ach' : 'card') : (inv.paid_method || 'other'),
+    giftRestoredCents,
   }).catch(() => {});
 
+  const finalRow = giftRestoredCents > 0 ? (await fetchOwnedInvoice({ id, workspaceId })) || updated.rows[0] : updated.rows[0];
   return {
-    invoice: serializeInvoice(updated.rows[0]),
-    refund: { amount, method, fullyRefunded, stripeRefundId },
+    invoice: serializeInvoice(finalRow),
+    refund: { amount, method, fullyRefunded, stripeRefundId, giftRestoredCents },
   };
+}
+
+// Send `amountCents` back through the provider that CAPTURED the payment,
+// not whatever provider is currently selected - owners who switch
+// providers must still be able to refund older sales. Each capture path
+// leaves a distinct signature: PayPal stamps paid_method='paypal'; Stripe
+// payment ids are pi_/ch_-prefixed; Square ids are neither. Shared by the
+// invoice refund above and the purchase refunds (programs, gift cards,
+// packages) in purchaseRefunds.js, so money leaves through one code path.
+// `idempotencyKey` must be deterministic per (purchase, cumulative amount)
+// so a retry returns the original refund instead of issuing a second one.
+export async function refundThroughProvider({ workspaceId, paymentIntent, paidMethod = null, amountCents, reason = null, idempotencyKey }) {
+  if (!paymentIntent) throw new Error('No online payment is attached to this purchase');
+  const fs = await fetchFinanceSettings(workspaceId);
+  const provider = paidMethod === 'paypal' ? 'paypal'
+    : /^(pi_|ch_)/.test(paymentIntent) ? 'stripe'
+    : (fs?.paymentProvider === 'square' || paidMethod === 'card') ? 'square'
+    : (fs?.paymentProvider || 'stripe');
+  if (provider === 'square') {
+    return squareCreateRefund({
+      workspaceId, settings: fs, paymentIntent, amountCents, currency: fs?.currency, reason, idempotencyKey,
+    });
+  }
+  if (provider === 'paypal') {
+    return paypalCreateRefund({
+      workspaceId, settings: fs, paymentIntent, amountCents, currency: fs?.currency, reason, idempotencyKey,
+    });
+  }
+  let creds;
+  try {
+    creds = await loadStripeCreds(workspaceId);
+  } catch (err) {
+    if (err.code === 'no_stripe_connection') {
+      throw new Error('Card refund needs your Stripe account connected. Reconnect Stripe in Finance, or refund manually.');
+    }
+    throw err;
+  }
+  return createRefund({
+    secretKey: creds.secretKey, stripeAccount: creds.stripeAccount,
+    paymentIntent, amountCents, reason, idempotencyKey,
+  });
 }

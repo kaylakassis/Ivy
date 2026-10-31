@@ -38,6 +38,10 @@ export function serializeClientPackage(row, opts = {}) {
     expiresAt,
     daysToExpiry,
     status:            row.status,
+    // Refunds: cumulative cents sent back so far, and whether the bundle
+    // was paid online (so it can be refunded from Ivy at all).
+    refundedCents:     Number(row.refunded_cents || 0),
+    paidOnline:        !!row.stripe_payment_intent,
     createdAt:         row.created_at,
     updatedAt:         row.updated_at,
   };

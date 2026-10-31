@@ -183,6 +183,12 @@ async function run() {
   assert(code && hashCode(normalizeCode(code)) === card.code_hash && card.code_last4 === normalizeCode(code).slice(-4), 'emailed code hashes to the stored card; last4 matches');
   assert(/75\.00/.test(mail?.html || '') && /Happy birthday!/.test(mail?.html || ''), 'email shows the balance and the message');
   assert(noVendor(mail?.html) && noEmDash(mail?.html), 'recipient email names no vendor and has no em dash');
+  // The buyer gets a receipt: the amount and who it went to, never the code.
+  const receipts = emails.filter((e) => (Array.isArray(e.to) ? e.to : [e.to]).includes(`pat-${STAMP}@example.com`));
+  assert(receipts.length === 1, `buyer got exactly one receipt (${receipts.length})`);
+  assert(/Receipt: gift card for Sam Recipient/.test(receipts[0]?.subject || '') && /75\.00/.test(receipts[0]?.subject || ''), `receipt subject carries recipient + amount (${receipts[0]?.subject})`);
+  assert(/75\.00/.test(receipts[0]?.html || '') && /Sam Recipient/.test(receipts[0]?.html || '') && !/[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/.test(receipts[0]?.html || ''), 'receipt shows the amount and recipient, not the code');
+  assert(noVendor(receipts[0]?.html) && noEmDash(receipts[0]?.html), 'receipt names no vendor and has no em dash');
 
   r = await fire('checkout.session.completed', paid, A.acct, `evt_gc_paid_${STAMP}`);
   assert(r.body?.deduped === true, 'same event id is deduped');
@@ -191,6 +197,7 @@ async function run() {
   r = await fire('checkout.session.async_payment_succeeded', paid, A.acct);
   assert(/already issued/.test(r.body.ignored || ''), 'async_payment_succeeded after a paid completion is a no-op');
   assert((await sql`SELECT COUNT(*)::int AS n FROM gift_cards WHERE workspace_id = ${A.wid}`).rows[0].n === 1, 'still exactly one card');
+  assert(emails.filter((e) => (Array.isArray(e.to) ? e.to : [e.to]).includes(`pat-${STAMP}@example.com`)).length === 1, 'replays sent the buyer no second receipt');
 
   console.log('\n[4] /api/gift-cards/check validates a code without leaking anything');
   r = await call(checkHandler, req({ method: 'POST', body: { slug: A.slug, code } }));
@@ -278,8 +285,12 @@ async function run() {
   assert(r.body.applied === 'gift-card-refund-synced' && r.body.fully === false, `partial refund synced (${JSON.stringify(r.body)})`);
   c = await cardRow(card2.id);
   assert(Number(c.balance_cents) === 7500 && c.status === 'active' && Number(c.refunded_cents) === 2500, 'partial refund trims the balance to $75');
+  let refundMails = emails.filter((e) => /Refund issued/.test(e.subject || '') && (Array.isArray(e.to) ? e.to : [e.to]).includes(`pat-${STAMP}@example.com`));
+  assert(refundMails.length === 1 && /25\.00/.test(refundMails[0].subject) && /partial refund/.test(refundMails[0].html), `buyer emailed once about the $25 partial refund (${refundMails.length})`);
   r = await fire('charge.refunded', { id: 'ch_gc_2', payment_intent: pi2, amount: 10000, amount_refunded: 2500 }, A.acct);
   assert(r.body.ignored === 'refund already recorded' && Number((await cardRow(card2.id)).balance_cents) === 7500, 're-delivery of the same cumulative refund is a no-op');
+  refundMails = emails.filter((e) => /Refund issued/.test(e.subject || '') && (Array.isArray(e.to) ? e.to : [e.to]).includes(`pat-${STAMP}@example.com`));
+  assert(refundMails.length === 1, 're-delivery sends no second refund email');
   r = await fire('charge.refunded', { id: 'ch_gc_2', payment_intent: pi2, amount: 10000, amount_refunded: 10000 }, A.acct);
   assert(r.body.applied === 'gift-card-refund-synced' && r.body.fully === true, 'full refund synced');
   c = await cardRow(card2.id);
@@ -294,7 +305,8 @@ async function run() {
   const pi3 = `pi_gc_3_${STAMP}`;
   r = await fire('checkout.session.completed', paidGiftSession({ id: 'cs_gc_3', pi: pi3, wid: A.wid, amount: 2500, recipientEmail: `sam3-${STAMP}@example.com` }), A.acct);
   const card3 = (await sql`SELECT * FROM gift_cards WHERE stripe_payment_intent = ${pi3}`).rows[0];
-  const code3 = (String(emails.at(-1)?.html || '').match(/[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/) || [])[0];
+  const mail3 = emails.find((e) => (Array.isArray(e.to) ? e.to : [e.to]).includes(`sam3-${STAMP}@example.com`));
+  const code3 = (String(mail3?.html || '').match(/[A-Z2-9]{4}-[A-Z2-9]{4}-[A-Z2-9]{4}/) || [])[0];
   assert(!!code3 && hashCode(normalizeCode(code3)) === card3.code_hash, 'third card issued with its emailed code');
   await sql`UPDATE gift_cards SET expires_at = NOW() - INTERVAL '1 day' WHERE id = ${card3.id}`;
   r = await call(checkHandler, req({ method: 'POST', body: { slug: A.slug, code: code3 } }));

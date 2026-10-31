@@ -41,7 +41,13 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
   const fmtMoney = (n) => fmtMoneyShared(n, invoice.currency || 'USD');
   const isLocked = invoice.status === 'paid' || invoice.status === 'voided' || invoice.status === 'refunded';
   const refundedAmount = Number(invoice.refundedAmount || 0);
-  const remaining = Math.max(0, Number(invoice.total || 0) - refundedAmount);
+  // What can still be refunded is what was actually collected (paidAmount),
+  // which excludes any gift card credit the client applied - that credit
+  // goes back on the card when the invoice is refunded.
+  const refundBasis = invoice.paidAmount != null ? Number(invoice.paidAmount) : Number(invoice.total || 0);
+  const remaining = Math.max(0, refundBasis - refundedAmount);
+  const giftCredit = Number(invoice.giftCardCreditCents || 0) / 100;
+  const giftRestored = Number(invoice.giftCardCreditRestoredCents || 0) / 100;
   const refundable = (invoice.status === 'paid' || invoice.status === 'refunded') && remaining > 0;
   const [items, setItems]         = useState(invoice.items || []);
   const [taxRate, setTaxRate]     = useState(invoice.taxRate ?? 0);
@@ -206,6 +212,20 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
                   Restore to draft
                 </button>
               )}
+            </div>
+          )}
+
+          {giftCredit > 0 && (
+            <div data-testid="gift-card-applied" style={{
+              padding: '10px 14px', borderRadius: 10,
+              background: 'var(--surface-2)', border: '1px solid var(--border)',
+              fontSize: 12.5, color: 'var(--fg-2)', display: 'flex', alignItems: 'center', gap: 8,
+            }}>
+              <Icons.Gift size={13} stroke="var(--accent)"/>
+              <span style={{ flex: 1 }}>
+                Gift card applied: <strong>${giftCredit.toFixed(2)}</strong>{invoice.giftCardCodeLast4 ? ` (code ending ${invoice.giftCardCodeLast4})` : ''}
+                {giftRestored > 0 && <span style={{ color: 'var(--muted)' }}> · ${giftRestored.toFixed(2)} returned to the card</span>}
+              </span>
             </div>
           )}
 
@@ -396,7 +416,12 @@ export default function InvoiceEditor({ invoice, onClose: onCloseNow, onSave, on
             </>
           ) : confirm === 'refund' ? (
             <>
-              {invoice.paidMethod !== 'cash' && (
+              {invoice.paidMethod === 'gift_card' && (
+                <span style={{ fontSize: 11.5, color: 'var(--muted)', width: '100%', lineHeight: 1.5 }}>
+                  This invoice was paid with a gift card, so the refund goes back on the card as credit. No money moves.
+                </span>
+              )}
+              {invoice.paidMethod !== 'cash' && invoice.paidMethod !== 'gift_card' && (
                 <span style={{ fontSize: 11.5, color: 'var(--muted)', width: '100%', lineHeight: 1.5 }}>
                   Card fees from the original payment aren't returned by the processor -
                   a full refund costs you the original ~2.9% + 30¢.

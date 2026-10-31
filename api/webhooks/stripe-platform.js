@@ -30,6 +30,7 @@ import {
   syncRefundToPurchases,
 } from '../_lib/checkoutFulfillment.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
+import { restoreGiftCardCreditForInvoice } from '../_lib/giftCards.js';
 import { markProcessed, releaseProcessed } from '../_lib/webhookDedup.js';
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -367,8 +368,15 @@ export default async function handler(req, res) {
         RETURNING id
       `;
       if (applied.rowCount > 0) {
+        // A gift card the client applied comes back on the card once the
+        // money part is fully refunded (exactly-once inside the helper).
+        let giftRestoredCents = 0;
+        if (fully) {
+          giftRestoredCents = await restoreGiftCardCreditForInvoice({ workspaceId, invoiceId: i.id })
+            .catch((err) => { console.error('[stripe-platform] gift card restore failed:', err.message); return 0; });
+        }
         const { notifyInvoiceRefunded } = await import('../_lib/invoiceNotify.js');
-        await notifyInvoiceRefunded({ workspaceId, invoiceId: i.id, amount: Math.round((refundedTotal - already) * 100) / 100 }).catch(() => {});
+        await notifyInvoiceRefunded({ workspaceId, invoiceId: i.id, amount: Math.round((refundedTotal - already) * 100) / 100, giftRestoredCents }).catch(() => {});
       }
       notifyOwnerSafe({
         workspaceId, type: 'payments',

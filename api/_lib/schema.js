@@ -3449,4 +3449,25 @@ CREATE TABLE IF NOT EXISTS ivy_actions (
 );
 CREATE INDEX IF NOT EXISTS idx_ivy_actions_workspace_created
   ON ivy_actions(workspace_id, created_at DESC);
+
+-- ─── Gift cards on invoices ───────────────────────────────────────────
+-- A client can apply a gift card to a sent invoice from the public pay
+-- page. invoices.gift_card_credit_cents (above) holds what came off the
+-- card; these columns point back at the card for the owner's drawer and
+-- the invoice document ("code ending 1234"), and track how much of that
+-- credit has been handed back when the invoice is voided or refunded, so
+-- a void followed by a refund (or a retried request) never restores twice.
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gift_card_id UUID REFERENCES gift_cards(id) ON DELETE SET NULL;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gift_card_code_last4 TEXT;
+ALTER TABLE invoices ADD COLUMN IF NOT EXISTS gift_card_credit_restored_cents INT NOT NULL DEFAULT 0;
+
+-- ─── In-app refunds for purchases without an invoice row ──────────────
+-- Programs (one-time purchases) and packages bought from the public page
+-- are refunded from inside Ivy as well as from the payment dashboard.
+-- refunded_cents is the CUMULATIVE amount sent back so far, the same
+-- shape gift_cards.refunded_cents already has: the in-app path and the
+-- charge.refunded webhook both compare against it, so whichever lands
+-- second is a no-op instead of a second state change.
+ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS refunded_cents INT NOT NULL DEFAULT 0;
 `;

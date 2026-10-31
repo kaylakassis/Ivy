@@ -65,7 +65,10 @@ export default function InvoiceDocument({ invoice, business, design, compact: co
   const paid = inv.status === 'paid';
   const refunded = inv.status === 'refunded';
   const paidSoFar = Number(inv.paidAmount || 0);
-  const remaining = Math.max(0, t.total - paidSoFar);
+  // A gift card the client applied: shown as its own line so the document
+  // adds up, and taken off what is still due.
+  const giftCredit = Number(inv.giftCardCreditCents || 0) / 100;
+  const remaining = Math.max(0, t.total - paidSoFar - giftCredit);
   const fontFamily = fontCss(d.font);
   const isSerif = /serif/.test(fontFamily) && !/sans-serif/.test(fontFamily.split(',')[0]);
   const pad = compact ? 22 : 40;
@@ -167,6 +170,7 @@ export default function InvoiceDocument({ invoice, business, design, compact: co
             <Row label="Subtotal" value={fmtMoney(t.subtotal, inv.currency)}/>
             {t.discount > 0 && <Row label="Discount" value={'− ' + fmtMoney(t.discount, inv.currency)}/>}
             {t.taxRate > 0 && <Row label={`Tax (${t.taxRate}%)`} value={fmtMoney(t.tax, inv.currency)}/>}
+            {giftCredit > 0 && <Row label={`Gift card${inv.giftCardCodeLast4 ? ` (ending ${inv.giftCardCodeLast4})` : ''}`} value={'− ' + fmtMoney(giftCredit, inv.currency)}/>}
             <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px 10px', marginTop: 4, borderTop: `2px solid ${d.layout === 'minimal' ? P.ink : d.accent}`, fontSize: compact ? 15 : 17, fontWeight: 700, color: d.layout === 'minimal' ? d.accent : P.ink }}>
               <span>{paid ? 'Total paid' : refunded ? 'Total (refunded)' : 'Total due'}</span>
               <span>{fmtMoney(paid ? t.total : remaining, inv.currency)}</span>

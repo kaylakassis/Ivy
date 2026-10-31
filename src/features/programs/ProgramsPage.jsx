@@ -209,6 +209,8 @@ function ProgramDetail({ id, onBack }) {
   const [data, setData] = useState(null); const [tab, setTab] = useState('content');
   const [editing, setEditing] = useState(false); const [adding, setAdding] = useState(false); const [editItem, setEditItem] = useState(null);
   const [addMember, setAddMember] = useState(false); const [err, setErr] = useState(null); const [copied, setCopied] = useState(false);
+  const [refunding, setRefunding] = useState(null); const [refundAmount, setRefundAmount] = useState(''); const [refundReason, setRefundReason] = useState('');
+  const [refundBusy, setRefundBusy] = useState(false); const [refundNote, setRefundNote] = useState(null);
   const load = async () => { try { setData(await api.get(`/programs/${id}`)); } catch (e) { setErr(e.message); } };
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
   if (err) return <div className="page-pad" style={{ color: 'var(--danger)' }}>{err}</div>;
@@ -219,6 +221,18 @@ function ProgramDetail({ id, onBack }) {
   const archive = async () => { if (!window.confirm('Archive this program? It stops being sold. Current members keep their access.')) return; try { await api.del(`/programs/${id}`); onBack(); } catch (e) { setErr(e.message); } };
   const removeItem = async (it) => { if (!window.confirm(`Remove "${it.title}"? Members keep their access; only this content goes away.`)) return; try { await api.del(`/programs/${id}/items?itemId=${it.id}`); load(); } catch (e) { setErr(e.message); } };
   const move = async (it, dir) => { const order = items.map((x) => x.id); const i = order.indexOf(it.id); const j = i + dir; if (j < 0 || j >= order.length) return; [order[i], order[j]] = [order[j], order[i]]; try { await api.patch(`/programs/${id}/items`, { order }); load(); } catch (e) { setErr(e.message); } };
+  const startRefund = (m) => { setRefunding(m.id); setRefundAmount(''); setRefundReason(''); setErr(null); setRefundNote(null); };
+  const refund = async (m) => {
+    setRefundBusy(true); setErr(null);
+    try {
+      const amountCents = refundAmount === '' ? null : Math.round(Number(refundAmount) * 100);
+      const r = await api.post('/programs/refund', { enrollmentId: m.id, amountCents, reason: refundReason || null });
+      setRefundNote(`Refunded ${fmtPrice(r.refund.amountCents)} to ${m.clientName || m.clientEmail}${r.refund.fullyRefunded ? '; their access has ended.' : '; they keep access.'}`);
+      setRefunding(null);
+      load();
+    } catch (e) { setErr(e.message || 'Refund failed'); }
+    finally { setRefundBusy(false); }
+  };
   const revoke = async (m) => {
     const who = m.clientName || m.clientEmail;
     const q = m.stripeSubscriptionId && !m.cancelAtPeriodEnd
@@ -274,17 +288,41 @@ function ProgramDetail({ id, onBack }) {
       {tab === 'members' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn btn-primary" onClick={() => setAddMember(true)}><Icons.Plus size={13} sw={2}/> Add member</button></div>
+          {refundNote && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>{refundNote}</div>}
           {members.length === 0 ? <EmptyNote icon="Users" title="No members yet" hint="Share the sales page, or add someone by hand."/> : (
             <div className="card">
-              {members.map((m) => (
-                <div key={m.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', borderBottom: '1px solid var(--border)', opacity: m.status === 'cancelled' ? .55 : 1 }}>
+              {members.map((m) => {
+                const refundLeftCents = Math.max(0, Number(m.priceCents || 0) - Number(m.refundedCents || 0));
+                const confirming = refunding === m.id;
+                return (
+                <div key={m.id} style={{ borderBottom: '1px solid var(--border)', opacity: m.status === 'cancelled' && !confirming ? .55 : 1 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px' }}>
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.clientName || m.clientEmail}</div>
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.clientEmail} · {m.source === 'manual' ? 'added by you' : m.source === 'subscription' ? `subscription${m.currentPeriodEnd && m.status !== 'cancelled' ? ` · ${m.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(m.currentPeriodEnd).toLocaleDateString()}` : ''}` : 'purchased'}{m.expiresAt ? ` · ends ${new Date(m.expiresAt).toLocaleDateString()}` : ''} · {m.status === 'past_due' ? 'payment past due' : m.status}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.clientEmail} · {m.source === 'manual' ? 'added by you' : m.source === 'subscription' ? `subscription${m.currentPeriodEnd && m.status !== 'cancelled' ? ` · ${m.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(m.currentPeriodEnd).toLocaleDateString()}` : ''}` : 'purchased'}{m.expiresAt ? ` · ends ${new Date(m.expiresAt).toLocaleDateString()}` : ''} · {m.status === 'past_due' ? 'payment past due' : m.status}{Number(m.refundedCents) > 0 ? ` · ${fmtPrice(m.refundedCents)} refunded` : ''}</div>
                   </div>
+                  {m.refundable && !confirming && <button type="button" onClick={() => startRefund(m)} className="btn btn-ghost" style={{ fontSize: 12.5, padding: '6px 10px', minHeight: 32, color: 'var(--danger)' }}>Refund{Number(m.refundedCents) > 0 ? ` (${fmtPrice(refundLeftCents)} left)` : ''}</button>}
                   {m.status !== 'cancelled' && <button type="button" onClick={() => revoke(m)} className="btn btn-ghost" style={{ fontSize: 12.5, padding: '6px 10px', minHeight: 32 }}>Remove access</button>}
                 </div>
-              ))}
+                {confirming && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap', padding: '0 16px 12px', fontSize: 12 }}>
+                    <span style={{ color: 'var(--muted)', width: '100%' }}>Refund up to {fmtPrice(refundLeftCents)} through the card they paid with. A full refund ends their access.</span>
+                    <input type="number" min="0.01" step="0.01" max={(refundLeftCents / 100).toFixed(2)} value={refundAmount} onChange={(e) => setRefundAmount(e.target.value)} placeholder={(refundLeftCents / 100).toFixed(2)} aria-label="Refund amount" className="input" style={{ width: 100, padding: '5px 8px', fontSize: 12 }}/>
+                    <select value={refundReason} onChange={(e) => setRefundReason(e.target.value)} aria-label="Refund reason" className="input" style={{ padding: '5px 8px', fontSize: 12, width: 'auto' }}>
+                      <option value="">Reason (optional)</option>
+                      <option value="requested_by_customer">Customer requested</option>
+                      <option value="duplicate">Charged twice</option>
+                      <option value="fraudulent">Fraudulent</option>
+                    </select>
+                    <button type="button" className="btn btn-ghost" disabled={refundBusy} onClick={() => setRefunding(null)} style={{ fontSize: 12, padding: '4px 10px', minHeight: 30 }}>Cancel</button>
+                    <button type="button" className="btn btn-primary" disabled={refundBusy} onClick={() => refund(m)} style={{ fontSize: 12, padding: '4px 12px', minHeight: 30, background: 'var(--danger)' }}>
+                      {refundBusy ? 'Refunding…' : (refundAmount && Math.round(Number(refundAmount) * 100) < refundLeftCents ? 'Refund partial' : 'Refund full amount')}
+                    </button>
+                  </div>
+                )}
+                </div>
+                );
+              })}
             </div>
           )}
         </div>

@@ -34,8 +34,19 @@ export default async function handler(req, res) {
       FROM gift_cards
       WHERE workspace_id = ${workspaceId}
     `;
+    // Where the money went: redemptions at bookings vs on invoices, so the
+    // tab can say "applied to 4 bookings and 2 invoices".
+    const reds = await sql`
+      SELECT applied_to_kind AS kind, COUNT(*)::int AS n, COALESCE(SUM(amount_cents), 0)::bigint AS cents
+        FROM gift_card_redemptions WHERE workspace_id = ${workspaceId} GROUP BY applied_to_kind
+    `;
+    const byKind = Object.fromEntries(reds.rows.map((x) => [x.kind, { count: Number(x.n || 0), cents: Number(x.cents || 0) }]));
     return ok(res, {
       cards: r.rows.map(serializeGiftCard),
+      redemptions: {
+        bookings: byKind.booking || { count: 0, cents: 0 },
+        invoices: byKind.invoice || { count: 0, cents: 0 },
+      },
       summary: {
         total:           Number(agg.rows[0]?.total || 0),
         issuedCents:     Number(agg.rows[0]?.issued_cents || 0),

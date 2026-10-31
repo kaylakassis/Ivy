@@ -25,7 +25,12 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
   if (inv.status === 'paid' || inv.status === 'refunded') return 'already-paid';
 
   const totals = computeTotals(inv.items || [], inv.tax_rate, inv.discount);
-  const paidAmount = amountCents != null ? Math.round(Number(amountCents)) / 100 : totals.total;
+  // A gift card applied on the public pay page already covers part of the
+  // total, so a card payment only has to cover the remainder (and a
+  // 'gift_card' payment is the credit itself covering everything).
+  const giftCredit = Number(inv.gift_card_credit_cents || 0) / 100;
+  const dueAfterCredit = Math.max(0, Math.round((totals.total - giftCredit) * 100) / 100);
+  const paidAmount = amountCents != null ? Math.round(Number(amountCents)) / 100 : dueAfterCredit;
 
   // Guard against an UNDER-payment flipping the invoice to fully paid (e.g. the
   // invoice amount was edited up after the Checkout session was created for the
@@ -33,11 +38,11 @@ export async function markInvoicePaid({ workspaceId, invoiceId, paymentIntent, a
   // partial payment but leave the invoice open. Stripe-Tax can make the charged
   // amount EXCEED the base total — that's expected, so only under-payment is a
   // problem (1¢ tolerance for rounding).
-  if (amountCents != null && paidAmount < totals.total - 0.01) {
+  if (amountCents != null && method !== 'gift_card' && paidAmount < dueAfterCredit - 0.01) {
     const partialActivity = [
       ...(inv.activity || []),
       { ts: new Date().toISOString(), kind: 'partial-payment',
-        text: `Partial card payment · ${fmtMoney(paidAmount)} of ${fmtMoney(totals.total)}` },
+        text: `Partial card payment · ${fmtMoney(paidAmount)} of ${fmtMoney(dueAfterCredit)}` },
     ];
     await sql`
       UPDATE invoices SET

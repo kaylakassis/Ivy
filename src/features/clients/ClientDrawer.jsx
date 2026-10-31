@@ -526,6 +526,12 @@ function ClientPackages({ client }) {
   const [busy, setBusy] = useState(false);
   const [err, setErr]   = useState(null);
   const [showSell, setShowSell] = useState(false);
+  // Refund flow for a bundle bought online: confirm step with an amount
+  // (dollars, blank = everything left) and a reason, like the invoice editor.
+  const [refundId, setRefundId] = useState(null);
+  const [refundAmount, setRefundAmount] = useState('');
+  const [refundReason, setRefundReason] = useState('');
+  const [refundNote, setRefundNote] = useState(null);
 
   const load = async () => {
     try {
@@ -564,6 +570,18 @@ function ClientPackages({ client }) {
     } catch (e) { setErr(e.message); }
   };
 
+  const refund = async (p) => {
+    setBusy(true); setErr(null);
+    try {
+      const amountCents = refundAmount === '' ? null : Math.round(Number(refundAmount) * 100);
+      const r = await api.post('/packages/refund', { id: p.id, amountCents, reason: refundReason || null });
+      setRefundNote(`Refunded $${(r.refund.amountCents / 100).toFixed(2)} on ${p.name}${r.refund.fullyRefunded ? '; the remaining sessions were cancelled.' : '.'}`);
+      setRefundId(null); setRefundAmount(''); setRefundReason('');
+      await load();
+    } catch (e) { setErr(e.message || 'Refund failed'); }
+    finally { setBusy(false); }
+  };
+
   return (
     <div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
@@ -581,6 +599,8 @@ function ClientPackages({ client }) {
           color: 'var(--danger)', fontSize: 12,
         }}>{err}</div>
       )}
+
+      {refundNote && <div style={{ fontSize: 12, color: 'var(--ok)', marginBottom: 10 }}>{refundNote}</div>}
 
       {showSell && templates !== null && (
         <SellPackageForm templates={templates} busy={busy}
@@ -601,6 +621,10 @@ function ClientPackages({ client }) {
               p.status === 'exhausted' ? 'var(--muted)' :
               p.status === 'expired'   ? 'var(--warn)' :
                                          'var(--danger)';
+            const priceCents = Math.round(Number(p.price || 0) * 100);
+            const refundLeftCents = Math.max(0, priceCents - Number(p.refundedCents || 0));
+            const refundable = p.paidOnline && refundLeftCents > 0;
+            const confirming = refundId === p.id;
             return (
               <div key={p.id} style={{
                 padding: 12, borderRadius: 10,
@@ -615,7 +639,7 @@ function ClientPackages({ client }) {
                     letterSpacing: '0.06em', textTransform: 'uppercase',
                   }}>{p.status}</span>
                   <span style={{ marginLeft: 'auto', fontSize: 12, color: 'var(--muted)' }}>
-                    ${Number(p.price).toFixed(0)}
+                    ${Number(p.price).toFixed(0)}{Number(p.refundedCents) > 0 ? ` · $${(Number(p.refundedCents) / 100).toFixed(2)} refunded` : ''}
                   </span>
                 </div>
                 <div style={{
@@ -646,6 +670,36 @@ function ClientPackages({ client }) {
                       style={{ fontSize: 11.5, padding: '3px 8px', color: 'var(--danger)', marginLeft: 'auto' }}>
                       Cancel
                     </button>
+                  </div>
+                )}
+                {(refundable || confirming) && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap', marginTop: 8, fontSize: 11.5 }}>
+                    {confirming ? (
+                      <>
+                        <span style={{ color: 'var(--muted)', width: '100%' }}>
+                          Refund up to ${(refundLeftCents / 100).toFixed(2)} through the card they paid with. A full refund cancels the remaining sessions.
+                        </span>
+                        <input type="number" min="0.01" step="0.01" max={(refundLeftCents / 100).toFixed(2)} value={refundAmount}
+                          onChange={(e) => setRefundAmount(e.target.value)} placeholder={(refundLeftCents / 100).toFixed(2)}
+                          aria-label="Refund amount" style={{ width: 90, padding: '4px 8px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 11.5 }}/>
+                        <select value={refundReason} onChange={(e) => setRefundReason(e.target.value)} aria-label="Refund reason"
+                          style={{ padding: '4px 6px', borderRadius: 6, border: '1px solid var(--border)', background: 'var(--surface)', color: 'var(--fg)', fontSize: 11.5 }}>
+                          <option value="">Reason (optional)</option>
+                          <option value="requested_by_customer">Customer requested</option>
+                          <option value="duplicate">Charged twice</option>
+                          <option value="fraudulent">Fraudulent</option>
+                        </select>
+                        <button type="button" className="btn btn-ghost" disabled={busy} onClick={() => setRefundId(null)} style={{ fontSize: 11.5, padding: '3px 8px' }}>Cancel</button>
+                        <button type="button" className="btn btn-primary" disabled={busy} onClick={() => refund(p)} style={{ fontSize: 11.5, padding: '3px 10px', background: 'var(--danger)' }}>
+                          {busy ? 'Refunding…' : (refundAmount && Math.round(Number(refundAmount) * 100) < refundLeftCents ? 'Refund partial' : 'Refund full amount')}
+                        </button>
+                      </>
+                    ) : (
+                      <button type="button" className="btn btn-ghost" onClick={() => { setRefundId(p.id); setRefundAmount(''); setRefundReason(''); setErr(null); setRefundNote(null); }}
+                        style={{ fontSize: 11.5, padding: '3px 8px', color: 'var(--danger)', marginLeft: 'auto' }}>
+                        Refund{Number(p.refundedCents) > 0 ? ` ($${(refundLeftCents / 100).toFixed(2)} left)` : ''}
+                      </button>
+                    )}
                   </div>
                 )}
               </div>

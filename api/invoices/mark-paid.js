@@ -36,9 +36,15 @@ export default async function handler(req, res) {
     if (inv.status === 'voided') return badRequest(res, 'Voided - restore first');
 
     const totals = computeTotals(inv.items, inv.tax_rate, inv.discount);
+    // A gift card the client applied already covers part of the total; the
+    // owner only received the remainder, and that is what a refund can
+    // give back through the payment method (the credit goes back on the
+    // card separately).
+    const giftCredit = Number(inv.gift_card_credit_cents || 0) / 100;
+    const received = Math.max(0, Math.round((totals.total - giftCredit) * 100) / 100);
     const newActivity = [
       ...(inv.activity || []),
-      { ts: new Date().toISOString(), kind: 'paid', text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(totals.total)}` },
+      { ts: new Date().toISOString(), kind: 'paid', text: `Paid by ${paidMethodLabel(method)} · ${fmtMoney(received)}` },
     ];
 
     // Race-safe flip: two concurrent owner clicks ("did the second click
@@ -54,7 +60,7 @@ export default async function handler(req, res) {
         status = 'paid',
         paid_at = NOW(),
         paid_method = ${method},
-        paid_amount = ${totals.total},
+        paid_amount = ${received},
         view_token_hash = NULL,
         activity = ${JSON.stringify(newActivity)}::jsonb,
         updated_at = NOW()

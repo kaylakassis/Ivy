@@ -20,6 +20,7 @@ import { computeTotals } from './finance.js';
 import { storeCardFromPaymentIntent } from './savedCards.js';
 import { grantEnrollment, expiryFor } from './programs.js';
 import { reportError } from './monitoring.js';
+import { notifyPurchaseRefunded, clientContact } from './purchaseRefundNotify.js';
 
 function fmtMoney(n) {
   return '$' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -108,6 +109,18 @@ export async function issueGiftCardFromSession({ workspaceId, session }) {
     // eslint-disable-next-line no-console
     console.error('[fulfillment] gift card email failed:', mailErr.message);
   }
+  // The buyer gets a receipt (the code itself only ever goes to the
+  // recipient). Skipped when the buyer is also the recipient - that one
+  // email already shows the amount. Once per purchase: this runs only on
+  // the INSERT that issued the card.
+  if (senderEmail && String(senderEmail).toLowerCase() !== String(recipEmail || '').toLowerCase()) {
+    try {
+      await sendGiftCardBuyerReceipt({ workspaceId, senderName, senderEmail, recipName, recipEmail, amountCents });
+    } catch (mailErr) {
+      // eslint-disable-next-line no-console
+      console.error('[fulfillment] gift card receipt failed:', mailErr.message);
+    }
+  }
   notifyOwnerSafe({
     workspaceId,
     type: 'payments',
@@ -119,6 +132,30 @@ export async function issueGiftCardFromSession({ workspaceId, session }) {
     },
   });
   return { marked: 'gift-card-issued' };
+}
+
+async function sendGiftCardBuyerReceipt({ workspaceId, senderName, senderEmail, recipName, recipEmail, amountCents }) {
+  const branding = await fetchBranding(workspaceId);
+  const business = branding.businessName || 'the business';
+  const who = recipName || recipEmail || 'the recipient';
+  await sendEmailToClientByAddress({
+    workspaceId, email: senderEmail, type: 'invoices',
+    subject: `Receipt: gift card for ${who} · ${fmtMoney(amountCents / 100)}`,
+    replyTo: branding.replyTo,
+    html: emailShell({
+      heading: 'Thanks for your gift card purchase',
+      branding,
+      body: `<p>Hi ${escapeHtml((senderName || '').split(/\s+/)[0] || 'there')},</p>
+        <p>Your payment of <strong>${fmtMoney(amountCents / 100)}</strong> to <strong>${escapeHtml(business)}</strong> went through, and a gift card for that amount is on its way.</p>
+        <table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
+          <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Gift card</td><td style="padding:6px 0;font-weight:600;">${fmtMoney(amountCents / 100)}</td></tr>
+          <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Sent to</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(who)}${recipEmail && recipName ? ` (${escapeHtml(recipEmail)})` : ''}</td></tr>
+        </table>
+        <p>${escapeHtml(who)} has been emailed the code and can apply it when booking with ${escapeHtml(business)}. For their privacy the code is only in their email.</p>
+        <p>This email is your receipt.</p>`,
+      footer: `Questions about this purchase? Reply to this email to reach ${escapeHtml(business)}.`,
+    }),
+  });
 }
 
 // Mark a storefront order paid + decrement tracked stock, from a
@@ -555,7 +592,61 @@ async function fulfillPackageSession({ workspaceId, session }) {
     payload: { title: 'Package sold 🎟️', body: `${p.name} (${credits} sessions) - $${priceCharged.toFixed(0)}`,
       url: '/clients', tag: `package-${session.id}` },
   });
+  // The buyer's confirmation + receipt. Runs only on the INSERT that
+  // provisioned the bundle, so a replayed webhook never sends a second one.
+  try {
+    await sendPackagePurchaseEmail({ workspaceId, clientId, pkg: p, credits, priceCharged, expiresAt });
+  } catch (mailErr) {
+    // eslint-disable-next-line no-console
+    console.error('[fulfillment] package confirmation email failed:', mailErr.message);
+  }
   return { applied: 'package-provisioned' };
+}
+
+function fmtLongDate(d) {
+  return new Date(d).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+// "Your package is ready": what they bought, what it cost, when it runs
+// out and how to use it (the booking page, and the client portal where the
+// credits show). Clients without a portal account yet get the claim link
+// the other client emails use.
+async function sendPackagePurchaseEmail({ workspaceId, clientId, pkg, credits, priceCharged, expiresAt }) {
+  const cli = (await sql`SELECT id, name, email, user_id FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`).rows[0];
+  if (!cli?.email) return;
+  const branding = await fetchBranding(workspaceId);
+  const business = branding.businessName || 'the business';
+  const base = appUrl();
+  const bookUrl = branding.slug ? `${base}/book/${encodeURIComponent(branding.slug)}` : base;
+  const hasPortal = !!cli.user_id;
+  const portalUrl = hasPortal ? `${base}/me` : `${base}/signup?mode=client&email=${encodeURIComponent(cli.email)}`;
+  const first = (cli.name || '').split(/\s+/)[0] || 'there';
+  const sessionsLabel = `${credits} session${credits === 1 ? '' : 's'}`;
+  const html = emailShell({
+    heading: `Your ${escapeHtml(pkg.name)} is ready`,
+    branding,
+    body: `<p>Hi ${escapeHtml(first)},</p>
+      <p>Thanks for your purchase from <strong>${escapeHtml(business)}</strong>. Your sessions are ready to book.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" style="margin:18px 0;border-collapse:collapse;font-size:14px;line-height:1.55;">
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Package</td><td style="padding:6px 0;font-weight:600;">${escapeHtml(pkg.name)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Sessions included</td><td style="padding:6px 0;font-weight:600;">${sessionsLabel}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Paid</td><td style="padding:6px 0;font-weight:600;">${fmtMoney(priceCharged)}</td></tr>
+        <tr><td style="padding:6px 16px 6px 0;color:#85827B;">Use by</td><td style="padding:6px 0;font-weight:600;">${expiresAt ? escapeHtml(fmtLongDate(expiresAt)) : 'No expiry'}</td></tr>
+      </table>
+      <p><strong>How to book:</strong> open the booking page at <a href="${escapeHtml(bookUrl)}" style="color:#2E3168;">${escapeHtml(bookUrl)}</a> and pick a time. Sign in to your client portal first and a session is taken from this package instead of being charged.</p>
+      <p>${hasPortal
+        ? `Your remaining sessions are always in your portal at <a href="${escapeHtml(portalUrl)}" style="color:#2E3168;">${escapeHtml(portalUrl)}</a>.`
+        : `<a href="${escapeHtml(portalUrl)}" style="color:#2E3168;">Claim your portal account</a> to see your remaining sessions, book with them and keep every receipt from ${escapeHtml(business)} in one place.`}</p>
+      <p>This email is your receipt.</p>`,
+    ctaText: 'Book a session',
+    ctaUrl: bookUrl,
+    footer: `Questions about your package? Reply to this email to reach ${escapeHtml(business)}.`,
+  });
+  await sendEmailToClient({
+    clientId: cli.id, type: 'invoices', to: cli.email,
+    subject: `Receipt: ${pkg.name} · ${fmtMoney(priceCharged)}`,
+    html, replyTo: branding.replyTo,
+  });
 }
 
 // The one dispatcher both webhooks call for a mode='payment' Checkout
@@ -612,7 +703,7 @@ export async function syncRefundToPurchases({ workspaceId, charge }) {
   // Gift card: take the newly refunded cents off the balance; a full
   // refund voids the card outright so findActiveByCode never matches it.
   const card = (await sql`
-    SELECT id, balance_cents, refunded_cents, status, code_last4
+    SELECT id, balance_cents, refunded_cents, status, code_last4, original_amount_cents, sender_email, sender_name
       FROM gift_cards
      WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi}
      LIMIT 1
@@ -644,48 +735,66 @@ export async function syncRefundToPurchases({ workspaceId, charge }) {
         tag: `gc-refund-${card.id}`,
       },
     });
+    // The buyer paid, so the buyer hears about the refund. Only on the
+    // write that applied, so the provider's echo of an in-app refund (same
+    // cumulative amount, returned above) never sends a second email.
+    if (card.sender_email) {
+      await notifyPurchaseRefunded({
+        workspaceId, kind: 'gift_card', label: `gift card ending ${card.code_last4}`,
+        amountCents: delta, remainingCents: Math.max(0, Number(card.original_amount_cents || 0) - refundedCents), fully,
+        to: card.sender_email, name: card.sender_name,
+      });
+    }
     return { applied: 'gift-card-refund-synced', fully, balanceCents: left };
   }
 
   // Package: a full refund cancels the bundle. A partial refund is left
   // to the owner (they can trim credits from the client's page); the
   // push tells them it happened.
+  // refunded_cents is the cumulative amount recorded so far: a re-delivery
+  // (or the provider's echo of a refund made in Ivy) compares equal and is
+  // a no-op; a second partial refund applies only its delta.
   const cp = (await sql`
-    SELECT id, name, client_id, status, credits_remaining
+    SELECT id, name, client_id, status, credits_remaining, refunded_cents, price
       FROM client_packages
      WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi}
      LIMIT 1
   `).rows[0];
   if (cp) {
-    if (!fully) {
-      notifyOwnerSafe({
-        workspaceId, type: 'payments',
-        payload: {
-          title: 'Package partly refunded',
-          body: `${cp.name}: ${fmtMoney(refundedCents / 100)} refunded. Adjust the client's remaining sessions if needed.`,
-          url: `/clients?id=${encodeURIComponent(cp.client_id)}`,
-          tag: `pkg-refund-${cp.id}`,
-        },
-      });
-      return { applied: 'package-refund-noted', fully: false };
-    }
+    const already = Number(cp.refunded_cents || 0);
+    if (refundedCents <= already) return { ignored: 'refund already recorded' };
+    const delta = refundedCents - already;
     const upd = await sql`
-      UPDATE client_packages SET status = 'cancelled', credits_remaining = 0, updated_at = NOW()
-       WHERE id = ${cp.id} AND workspace_id = ${workspaceId} AND status <> 'cancelled'
+      UPDATE client_packages SET
+        refunded_cents    = ${refundedCents},
+        status            = CASE WHEN ${fully} THEN 'cancelled' ELSE status END,
+        credits_remaining = CASE WHEN ${fully} THEN 0 ELSE credits_remaining END,
+        updated_at        = NOW()
+       WHERE id = ${cp.id} AND workspace_id = ${workspaceId} AND refunded_cents = ${already}
        RETURNING id
     `;
     if (upd.rows.length === 0) return { ignored: 'refund already recorded' };
     const n = Number(cp.credits_remaining || 0);
+    const paidCents = Math.round(Number(cp.price || 0) * 100);
     notifyOwnerSafe({
       workspaceId, type: 'payments',
-      payload: {
-        title: 'Package refunded',
-        body: `${cp.name} was refunded in full; its ${n} remaining session${n === 1 ? '' : 's'} were cancelled.`,
-        url: `/clients?id=${encodeURIComponent(cp.client_id)}`,
-        tag: `pkg-refund-${cp.id}`,
-      },
+      payload: fully
+        ? { title: 'Package refunded',
+            body: `${cp.name} was refunded in full; its ${n} remaining session${n === 1 ? '' : 's'} were cancelled.`,
+            url: `/clients?id=${encodeURIComponent(cp.client_id)}`, tag: `pkg-refund-${cp.id}` }
+        : { title: 'Package partly refunded',
+            body: `${cp.name}: ${fmtMoney(delta / 100)} refunded. Adjust the client's remaining sessions if needed.`,
+            url: `/clients?id=${encodeURIComponent(cp.client_id)}`, tag: `pkg-refund-${cp.id}` },
     });
-    return { applied: 'package-refund-synced', fully: true };
+    const buyer = await clientContact({ workspaceId, clientId: cp.client_id }).catch(() => null);
+    if (buyer?.email) {
+      await notifyPurchaseRefunded({
+        workspaceId, kind: 'package', label: cp.name, amountCents: delta,
+        remainingCents: Math.max(0, paidCents - refundedCents), fully,
+        clientId: buyer.id, to: buyer.email, name: buyer.name,
+      });
+    }
+    return fully ? { applied: 'package-refund-synced', fully: true } : { applied: 'package-refund-noted', fully: false };
   }
   return { ignored: 'no purchase for payment_intent' };
 }

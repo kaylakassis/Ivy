@@ -101,11 +101,13 @@ export default async function handler(req, res) {
       let amountCents = (name === 'stripe' && settings?.stripeTaxEnabled)
         ? Math.round((totals.total - totals.tax) * 100)
         : totalCents;
-      // Partial payments already recorded reduce what this link collects -
-      // charging the full recomputed total again over-collected.
+      // Partial payments already recorded and a gift card the client
+      // applied both reduce what this link collects - charging the full
+      // recomputed total again over-collected.
       const alreadyPaidCents = Math.round(Number(inv.paid_amount || 0) * 100);
-      if (alreadyPaidCents > 0) {
-        amountCents = Math.max(0, amountCents - alreadyPaidCents);
+      const giftCreditCents  = Math.max(0, Number(inv.gift_card_credit_cents || 0));
+      if (alreadyPaidCents > 0 || giftCreditCents > 0) {
+        amountCents = Math.max(0, amountCents - alreadyPaidCents - giftCreditCents);
         if (amountCents === 0) return badRequest(res, 'Nothing left to pay on this invoice.');
       }
       const currency = (inv.currency || settings?.currency || 'USD').toUpperCase();

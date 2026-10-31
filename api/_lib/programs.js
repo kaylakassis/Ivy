@@ -3,6 +3,8 @@ import { sql } from './db.js';
 import { myClientIds, ids } from './clientPortal.js';
 import { mapSubStatus } from './memberships.js';
 import { notifyClientSubscriptionPastDue } from './clientSubscriptionNotify.js';
+import { notifyPurchaseRefunded, clientContact } from './purchaseRefundNotify.js';
+import { notifyOwnerSafe } from './push.js';
 
 export const BILLING = new Set(['one_time', 'month', 'year']);
 
@@ -33,6 +35,12 @@ export function serializeEnrollment(r) {
     priceCents: Number(r.price_cents) || 0, currentPeriodEnd: r.current_period_end, expiresAt: r.expires_at || null, grantedAt: r.granted_at,
     cancelledAt: r.cancelled_at, stripeSubscriptionId: r.stripe_subscription_id || null,
     cancelAtPeriodEnd: !!r.cancel_at_period_end,
+    // Refunds: cumulative cents sent back so far, and whether the purchase
+    // can be refunded from Ivy at all (a one-time purchase that was paid
+    // online; subscriptions and manual grants cannot).
+    refundedCents: Number(r.refunded_cents || 0),
+    refundable: r.source === 'purchase' && r.billing === 'one_time' && !!r.stripe_payment_intent && !r.stripe_subscription_id
+      && Number(r.refunded_cents || 0) < Number(r.price_cents || 0),
   };
 }
 export function serializePost(r) {
@@ -131,6 +139,7 @@ export async function grantEnrollment({ programId, workspaceId, clientId, source
         stripe_session_id = COALESCE(${stripeSessionId}, stripe_session_id),
         stripe_payment_intent = COALESCE(${stripePaymentIntent}, stripe_payment_intent),
         cancel_at_period_end = ${!!cancelAtPeriodEnd},
+        refunded_cents = 0,
         current_period_end = ${currentPeriodEnd}, expires_at = ${expiresAt}, cancelled_at = CASE WHEN ${status} = 'cancelled' THEN NOW() ELSE NULL END, updated_at = NOW()
        WHERE id = ${existing.rows[0].id}`;
     return { id: existing.rows[0].id, previousStatus: existing.rows[0].status };
@@ -167,31 +176,70 @@ export async function applyProgramSubscription({ workspaceId, sub }) {
   return 'applied';
 }
 
-// Dashboard refund of a one-time program purchase (charge.refunded). A full
-// refund closes the enrollment; a partial refund leaves access alone. The
-// charge is matched by the PaymentIntent stamped at grant time, falling back
-// to the metadata Stripe copies from payment_intent_data onto the charge.
-// Returns 'revoked' | 'partial' | 'not-found' | 'already-cancelled'.
+// Refund of a one-time program purchase: from the payment dashboard
+// (charge.refunded) or from Ivy's Refund button (purchaseRefunds.js hands
+// in a synthetic charge with the new cumulative amount). A full refund
+// closes the enrollment; a partial refund leaves access alone. The charge
+// is matched by the PaymentIntent stamped at grant time, falling back to
+// the metadata the provider copies from payment_intent_data onto the charge.
+//
+// charge.amount_refunded is CUMULATIVE, recorded on refunded_cents with a
+// guarded UPDATE, so a re-delivery, the provider's echo of an in-app
+// refund, or two racing requests apply once; only a genuinely new delta
+// tells the owner and emails the client.
+// Returns 'revoked' | 'partial' | 'not-found' | 'already-cancelled' | 'already-recorded'.
 export async function revokeProgramPurchaseForRefund({ workspaceId, charge }) {
   const pi = typeof charge?.payment_intent === 'string' ? charge.payment_intent : charge?.payment_intent?.id || null;
   const md = charge?.metadata || {};
   let e = null;
   if (pi) {
-    e = (await sql`SELECT id, status FROM program_enrollments WHERE workspace_id = ${workspaceId} AND stripe_payment_intent = ${pi} LIMIT 1`).rows[0] || null;
+    e = (await sql`
+      SELECT e.id, e.status, e.client_id, e.price_cents, e.refunded_cents, p.title
+        FROM program_enrollments e JOIN programs p ON p.id = e.program_id
+       WHERE e.workspace_id = ${workspaceId} AND e.stripe_payment_intent = ${pi} LIMIT 1`).rows[0] || null;
   }
   if (!e && md.purpose === 'program' && md.program_id && md.client_id) {
     e = (await sql`
-      SELECT id, status FROM program_enrollments
-       WHERE workspace_id = ${workspaceId} AND program_id = ${md.program_id} AND client_id = ${md.client_id}
-         AND source = 'purchase' ORDER BY granted_at DESC LIMIT 1`).rows[0] || null;
+      SELECT e.id, e.status, e.client_id, e.price_cents, e.refunded_cents, p.title
+        FROM program_enrollments e JOIN programs p ON p.id = e.program_id
+       WHERE e.workspace_id = ${workspaceId} AND e.program_id = ${md.program_id} AND e.client_id = ${md.client_id}
+         AND e.source = 'purchase' ORDER BY e.granted_at DESC LIMIT 1`).rows[0] || null;
   }
   if (!e) return 'not-found';
-  const fully = Number(charge.amount_refunded || 0) >= Number(charge.amount || 0) && Number(charge.amount || 0) > 0;
-  if (!fully) return 'partial';
-  if (e.status === 'cancelled') return 'already-cancelled';
-  await sql`UPDATE program_enrollments SET status = 'cancelled', cancelled_at = NOW(), updated_at = NOW()
-             WHERE id = ${e.id} AND workspace_id = ${workspaceId}`;
-  return 'revoked';
+  const chargedCents = Math.max(0, Math.round(Number(charge.amount || 0)));
+  const refundedCents = Math.max(0, Math.round(Number(charge.amount_refunded || 0)));
+  const fully = chargedCents > 0 && refundedCents >= chargedCents;
+  if (fully && e.status === 'cancelled') return 'already-cancelled';
+  const already = Number(e.refunded_cents || 0);
+  if (refundedCents <= already) return 'already-recorded';
+  const upd = await sql`
+    UPDATE program_enrollments SET
+      refunded_cents = ${refundedCents},
+      status         = CASE WHEN ${fully} THEN 'cancelled' ELSE status END,
+      cancelled_at   = CASE WHEN ${fully} THEN NOW() ELSE cancelled_at END,
+      updated_at     = NOW()
+     WHERE id = ${e.id} AND workspace_id = ${workspaceId} AND refunded_cents = ${already}
+     RETURNING id`;
+  if (upd.rows.length === 0) return 'already-recorded';
+  const delta = refundedCents - already;
+  const basis = chargedCents || Number(e.price_cents || 0);
+  notifyOwnerSafe({
+    workspaceId, type: 'payments',
+    payload: {
+      title: fully ? 'Program purchase refunded' : 'Program purchase partly refunded',
+      body: `${e.title}: $${(delta / 100).toFixed(2)} refunded${fully ? '; the client\'s access has ended.' : '; the client keeps access.'}`,
+      url: '/programs', tag: `program-refund-${e.id}`,
+    },
+  });
+  const buyer = await clientContact({ workspaceId, clientId: e.client_id }).catch(() => null);
+  if (buyer?.email) {
+    await notifyPurchaseRefunded({
+      workspaceId, kind: 'program', label: e.title, amountCents: delta,
+      remainingCents: Math.max(0, basis - refundedCents), fully,
+      clientId: buyer.id, to: buyer.email, name: buyer.name,
+    });
+  }
+  return fully ? 'revoked' : 'partial';
 }
 
 // One-time access window → expiry timestamp (null = forever).
