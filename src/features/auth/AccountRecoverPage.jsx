@@ -12,6 +12,7 @@ import { useAuth } from '../../lib/auth.jsx';
 export default function AccountRecoverPage() {
   const [params] = useSearchParams();
   const nav = useNavigate();
+  const { beginMfa } = useAuth();
   const token = params.get('token') || '';
 
   const [state, setState] = useState(token ? 'working' : 'no-token');
