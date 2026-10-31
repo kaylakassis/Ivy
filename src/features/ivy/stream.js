@@ -3,6 +3,7 @@
 //
 //   delta  → onDelta(text)   a chunk of the reply, in order
 //   reset  → onReset()       forget the text shown so far (a tool turn's preamble)
+//   replace → onReplace(text) show this text instead of what has streamed so far
 //   done   → resolves { event: 'done', payload }   the plain endpoint's body
 //   error  → resolves { event: 'error', payload }  message + (usually) that body
 //
@@ -18,7 +19,7 @@
 // err.textArrived so the caller knows whether the owner saw anything.
 import { apiFetch, httpError } from '../../lib/api.js';
 
-export async function streamReply(body, { onDelta, onReset, signal } = {}) {
+export async function streamReply(body, { onDelta, onReset, onReplace, signal } = {}) {
   let textArrived = false;
   const tag = (err) => Object.assign(err, { textArrived });
 
@@ -48,6 +49,13 @@ export async function streamReply(body, { onDelta, onReset, signal } = {}) {
     } else if (event === 'reset') {
       textArrived = false;
       onReset?.();
+    } else if (event === 'replace') {
+      // The server swapped the reply (content guard): show its text instead
+      // of whatever has streamed so far.
+      if (data && typeof data.text === 'string') {
+        textArrived = true;
+        onReplace?.(data.text);
+      }
     } else if (event === 'done' || event === 'error') {
       terminal = { event, payload: data || {} };
     }

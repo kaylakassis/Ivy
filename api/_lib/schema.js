@@ -3537,4 +3537,27 @@ CREATE OR REPLACE VIEW admin_real_reviews AS
   SELECT r.* FROM reviews r WHERE r.workspace_id IN (SELECT id FROM admin_real_workspaces);
 CREATE OR REPLACE VIEW admin_real_workspace_profile AS
   SELECT p.* FROM workspace_profile p WHERE p.workspace_id IN (SELECT id FROM admin_real_workspaces);
+
+-- Ivy's server-side approval queue. When the model calls an outbound or
+-- irreversible tool (send, cancel, refund, publish, memory...), the tool
+-- does NOT run: the call is parked here with its arguments and a plain-
+-- English summary, and the owner approves it with a tap (POST
+-- /api/ivy/approve). Only that endpoint executes the stored args, so a
+-- model that is talked into "confirm: true" by text hidden in client data
+-- still cannot send anything. Rows expire after 15 minutes; a declined row
+-- is expired early. Rows go with their workspace (ON DELETE CASCADE).
+CREATE TABLE IF NOT EXISTS ivy_pending_actions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  session_id UUID,
+  tool TEXT NOT NULL,
+  args JSONB NOT NULL,
+  summary TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  expires_at TIMESTAMPTZ NOT NULL,
+  approved_at TIMESTAMPTZ,
+  executed_at TIMESTAMPTZ,
+  result JSONB
+);
+CREATE INDEX IF NOT EXISTS idx_ivy_pending_actions_workspace ON ivy_pending_actions(workspace_id, created_at DESC);
 `;

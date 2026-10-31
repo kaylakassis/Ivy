@@ -6,6 +6,9 @@
 //     event: reset   data: {}             forget the text shown so far (the
 //                                         turn went on to call a tool; the
 //                                         reply is the next turn's text)
+//     event: replace data: { text }       show this text instead of what has
+//                                         streamed so far (the content guard
+//                                         swapped the reply for its fixed line)
 //     event: done    data: { ...payload } the exact body POST /api/ivy returns
 //                                         (session, messages, context, mode,
 //                                         modeError, usage)
@@ -28,6 +31,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { generateReply } from '../_lib/ivy.js';
 import { beginTurn, finishTurn } from '../_lib/ivyTurn.js';
+import { screenOwnerPrompt, screenReply, guardedReply } from '../_lib/ivyGuard.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { reportError } from '../_lib/monitoring.js';
@@ -79,10 +83,29 @@ export default async function handler(req, res) {
     res.write(': connected\n\n');
     ping = setInterval(() => { try { res.write(': ping\n\n'); } catch { /* client gone */ } }, PING_MS);
 
-    const reply = await generateReply(turn.text, turn.ctx, turn.history, workspaceId, turn.attachment, user.id, {
-      onDelta: (text) => sse('delta', { text }),
-      onReset: () => sse('reset', {}),
-    });
+    // Content guard (api/_lib/ivyGuard.js): an obviously disallowed request
+    // gets the fixed line without a model call; a streamed reply that trips
+    // the screen is swapped with a `replace` event and the fixed line is what
+    // gets stored. The model's own refusal is the primary layer; this is
+    // defence in depth.
+    let reply;
+    const screened = screenOwnerPrompt(turn.text);
+    if (screened.blocked) {
+      reply = guardedReply(screened.reason);
+      sse('delta', { text: reply.text });
+    } else {
+      // sessionId rides along so approval-gated tool calls are recorded
+      // against this chat (see executeIvyTool / api/ivy/approve.js).
+      reply = await generateReply(turn.text, { ...turn.ctx, sessionId: turn.session.id }, turn.history, workspaceId, turn.attachment, user.id, {
+        onDelta: (text) => sse('delta', { text }),
+        onReset: () => sse('reset', {}),
+      });
+      const out = screenReply(reply.text);
+      if (out.blocked) {
+        reply = guardedReply(out.reason);
+        sse('replace', { text: reply.text });
+      }
+    }
     const payload = await finishTurn({ ...turn, reply, workspaceId });
     if (reply.failed) sse('error', { message: reply.text, ...payload });
     else sse('done', payload);

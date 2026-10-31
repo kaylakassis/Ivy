@@ -48,6 +48,7 @@ function liveBubble(setMessages) {
   return {
     id,
     append(chunk) { text += chunk; schedule(); },
+    set(whole) { text = whole; schedule(); },
     clear() { text = ''; setMessages((xs) => xs.filter((m) => m.id !== id)); },
   };
 }
@@ -156,7 +157,7 @@ function useIvyState({ enabled = true } = {}) {
     try {
       let result;
       try {
-        result = await streamReply(payload, { onDelta: live.append, onReset: live.clear });
+        result = await streamReply(payload, { onDelta: live.append, onReset: live.clear, onReplace: live.set });
       } catch (e) {
         live.clear();
         // The stream never started (network, a 5xx, a runtime that cannot
@@ -218,21 +219,56 @@ function useIvyState({ enabled = true } = {}) {
     if (activeId === id) { setActiveId(null); setMessages([]); }
   }, [activeId]);
 
-  // One-tap approval for a confirm-gated action Ivy surfaced (send message,
-  // send invoice, change settings…). We clear the card first (so it can't be
-  // double-tapped), then send the owner's OWN explicit approval through the
-  // normal send() path — the model re-issues the tool with confirm:true,
-  // identical to the owner typing "yes". The confirm-gate's security model is
-  // therefore unchanged: prompt-injection can't self-approve because approval
-  // still requires this out-of-band owner action.
-  const approvePending = useCallback((messageId) => {
-    setMessages((xs) => xs.map((m) => (m.id === messageId ? { ...m, pendingActions: null } : m)));
-    return send('Yes, go ahead and do it.');
-  }, [send]);
+  // One-tap approval for an action Ivy proposed (send a message, send an
+  // invoice, change settings…). The server recorded each proposed call in
+  // ivy_pending_actions; POST /api/ivy/approve runs the stored call once and
+  // returns the chat message recording the outcome. The model never runs
+  // these itself, so text hidden in client data cannot approve anything.
+  // The card is cleared first so it cannot be double-tapped; the server also
+  // refuses a second run (409).
+  const appendServerMessage = useCallback((msg) => {
+    if (!msg) return;
+    setMessages((xs) => {
+      const next = [...xs, msg];
+      if (activeId) msgCacheRef.current.set(activeId, next);
+      return next;
+    });
+  }, [activeId]);
 
-  const dismissPending = useCallback((messageId) => {
+  const settlePending = useCallback(async (messageId, ids, method) => {
     setMessages((xs) => xs.map((m) => (m.id === messageId ? { ...m, pendingActions: null } : m)));
-  }, []);
+    setError(null);
+    for (const id of ids) {
+      if (!id) continue;
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        const r = method === 'approve'
+          ? await api.post('/ivy/approve', { id })
+          : await api.del('/ivy/approve', { id });
+        appendServerMessage(r?.message);
+      } catch (e) {
+        if (method === 'approve') {
+          setError(e?.status === 409
+            ? new Error(e.message || 'That action already ran or has expired.')
+            : e);
+        }
+      }
+    }
+  }, [appendServerMessage]);
+
+  const pendingIdsFor = useCallback((messageId, pendingId) => {
+    if (pendingId) return [pendingId];
+    const m = messages.find((x) => x.id === messageId);
+    return (m?.pendingActions || []).map((a) => a.id).filter(Boolean);
+  }, [messages]);
+
+  const approvePending = useCallback((messageId, pendingId) => (
+    settlePending(messageId, pendingIdsFor(messageId, pendingId), 'approve')
+  ), [settlePending, pendingIdsFor]);
+
+  const dismissPending = useCallback((messageId, pendingId) => (
+    settlePending(messageId, pendingIdsFor(messageId, pendingId), 'dismiss')
+  ), [settlePending, pendingIdsFor]);
 
   return {
     sessions, activeId, messages, context, briefing,

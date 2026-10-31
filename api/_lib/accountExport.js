@@ -69,7 +69,17 @@ export async function buildAccountExport(user) {
     sql`SELECT m.* FROM ivy_messages m
         JOIN ivy_sessions s ON s.id = m.session_id
         WHERE s.workspace_id = ${workspaceId}`,
-    sql`SELECT * FROM ivy_usage        WHERE workspace_id = ${workspaceId}`,
+    // Usage counts per day only. The `model` column (which provider model
+    // served the day) is internal and never leaves the server; rows that
+    // differ only by model are summed into one day.
+    sql`SELECT day,
+               SUM(request_count)::int          AS request_count,
+               SUM(input_tokens)::bigint        AS input_tokens,
+               SUM(output_tokens)::bigint       AS output_tokens,
+               SUM(cache_read_tokens)::bigint   AS cache_read_tokens,
+               SUM(cache_creation_tokens)::bigint AS cache_creation_tokens
+          FROM ivy_usage WHERE workspace_id = ${workspaceId}
+         GROUP BY day ORDER BY day`,
     sql`SELECT * FROM websites         WHERE workspace_id = ${workspaceId}`,
   ]);
 

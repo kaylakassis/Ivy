@@ -9,7 +9,7 @@
 
 import { ensureSchemaApplied } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
-import { executeIvyTool, SENSITIVE_TOOLS } from '../api/_lib/ivyTools.js';
+import { executeIvyTool, runApprovedTool, SENSITIVE_TOOLS } from '../api/_lib/ivyTools.js';
 
 let pass = 0, fail = 0;
 const assert = (c, l) => { if (c) { pass++; console.log('  ✓', l); } else { fail++; console.log('  ✗', l); } };
@@ -35,8 +35,7 @@ async function run() {
     assert(typeof r.summary === 'string' && r.summary.includes('New Name'), 'human-readable summary present');
 
     console.log('\n[3] confirmed update_settings writes only supplied fields');
-    r = await executeIvyTool('update_settings', {
-      confirm: true, business_name: 'New Name', tagline: 'Faster bookings', accent_color: '#CFFF50',
+    r = await runApprovedTool('update_settings', { business_name: 'New Name', tagline: 'Faster bookings', accent_color: '#CFFF50',
     }, { workspaceId });
     assert(r.ok === true, 'returns ok');
     const row = (await sql`SELECT biz_name, slug, tagline, brand_accent_color, slot_minutes FROM calendar_settings WHERE workspace_id = ${workspaceId}`).rows[0];
@@ -48,11 +47,11 @@ async function run() {
     console.log('\n[4] validation rejects bogus inputs');
     // executeIvyTool catches and returns { error: msg } rather than throwing,
     // so the model can self-correct on the next turn.
-    let res = await executeIvyTool('update_settings', { confirm: true, slug: 'NOT-OK!' }, { workspaceId });
+    let res = await runApprovedTool('update_settings', { slug: 'NOT-OK!' }, { workspaceId });
     assert(res?.error && /slug must be/i.test(res.error), 'invalid slug rejected');
-    res = await executeIvyTool('update_settings', { confirm: true, accent_color: 'red' }, { workspaceId });
+    res = await runApprovedTool('update_settings', { accent_color: 'red' }, { workspaceId });
     assert(res?.error && /accent_color must be/i.test(res.error), 'invalid accent_color rejected');
-    res = await executeIvyTool('update_settings', { confirm: true, slot_minutes: 7 }, { workspaceId });
+    res = await runApprovedTool('update_settings', { slot_minutes: 7 }, { workspaceId });
     assert(res?.error && /slot.?minutes must be/i.test(res.error), 'invalid slot_minutes rejected');
 
     console.log('\n[5] block_calendar_time without confirm is gated');
@@ -61,8 +60,7 @@ async function run() {
     assert(typeof r.summary === 'string' && /Block off/.test(r.summary), 'summary mentions block');
 
     console.log('\n[6] confirmed block_calendar_time inserts the row');
-    r = await executeIvyTool('block_calendar_time', {
-      confirm: true, date: '2099-01-15', all_day: true, label: 'Vacation',
+    r = await runApprovedTool('block_calendar_time', { date: '2099-01-15', all_day: true, label: 'Vacation',
     }, { workspaceId });
     assert(r.ok === true && r.block_id, 'returns ok + block_id');
     const blocks = (await sql`SELECT date, all_day, label FROM calendar_blocks WHERE workspace_id = ${workspaceId}`).rows;
@@ -71,7 +69,7 @@ async function run() {
     assert(blocks[0].label === 'Vacation', 'label stored');
 
     console.log('\n[7] block_calendar_time validates the date format');
-    res = await executeIvyTool('block_calendar_time', { confirm: true, date: 'tomorrow', all_day: true }, { workspaceId });
+    res = await runApprovedTool('block_calendar_time', { date: 'tomorrow', all_day: true }, { workspaceId });
     assert(res?.error && /YYYY-MM-DD/.test(res.error), 'bad date rejected');
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
