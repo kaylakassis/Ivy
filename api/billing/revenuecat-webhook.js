@@ -138,12 +138,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing event.id or event.type' });
     }
 
-    // Sandbox (TestFlight / Xcode) purchases must never flip a production
-    // workspace: anyone with a sandbox Apple ID can "buy" for free. RC tags
-    // every event with its environment. REVENUECAT_ALLOW_SANDBOX=1 lets a
-    // QA deploy accept them.
-    if (event.environment && String(event.environment).toUpperCase() !== 'PRODUCTION'
-        && process.env.REVENUECAT_ALLOW_SANDBOX !== '1') {
+    // Sandbox (TestFlight, Xcode, and Apple's own App Review) purchases.
+    // App Review buys in the sandbox and expects the app to unlock, so these
+    // still apply, but only to a workspace its owner identified from the
+    // app (the binding check below), never count as a paid conversion, and
+    // never trigger referral rewards. Apple's sandbox subscriptions lapse
+    // on their own within hours, and the EXPIRATION event closes access.
+    // REVENUECAT_BLOCK_SANDBOX=1 ignores them completely.
+    const isSandbox = !!event.environment && String(event.environment).toUpperCase() !== 'PRODUCTION';
+    if (isSandbox && process.env.REVENUECAT_BLOCK_SANDBOX === '1') {
       return ok(res, { received: true, ignored: 'sandbox' });
     }
 
@@ -230,7 +233,7 @@ export default async function handler(req, res) {
 
     // First real paid period → stamp converted_at once. Subsequent renewals
     // keep the original stamp so funnel metrics don't drift.
-    const shouldStampConverted = !prev.converted_at && nextStatus === 'active' && !isTrialPeriod;
+    const shouldStampConverted = !isSandbox && !prev.converted_at && nextStatus === 'active' && !isTrialPeriod;
 
     await sql`
       UPDATE workspaces
@@ -307,7 +310,7 @@ export default async function handler(req, res) {
     //      renewal is exactly when an extension slot may have reopened.
     // All of it is best-effort: a referral hiccup must never fail the
     // webhook, or RevenueCat would retry and we would re-run the status flip.
-    if (nextStatus === 'active' && !isTrialPeriod
+    if (!isSandbox && nextStatus === 'active' && !isTrialPeriod
         && (event.type === 'INITIAL_PURCHASE' || event.type === 'RENEWAL')) {
       try {
         const convert = await isReferralConversion(event, prev);

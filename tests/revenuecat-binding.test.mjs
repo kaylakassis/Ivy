@@ -1,7 +1,8 @@
 // RevenueCat webhook: only events for a workspace the owner actually
 // identified (POST /api/billing/iap-identify) or whose Apple original
-// transaction we already know are applied. Sandbox events are ignored
-// unless REVENUECAT_ALLOW_SANDBOX=1.
+// transaction we already know are applied. Sandbox events (TestFlight and
+// App Review) apply only to a bound workspace, never stamp a paid
+// conversion, and are ignored entirely with REVENUECAT_BLOCK_SANDBOX=1.
 //
 // Run: node --import ./tests/bootstrap.mjs ./tests/revenuecat-binding.test.mjs
 
@@ -11,7 +12,7 @@ import { signSession } from '../api/_lib/auth.js';
 
 const SECRET = 'rc_binding_test_secret_long_enough';
 process.env.REVENUECAT_WEBHOOK_SECRET = SECRET;
-delete process.env.REVENUECAT_ALLOW_SANDBOX;
+delete process.env.REVENUECAT_BLOCK_SANDBOX;
 
 const { default: rcHandler } = await import('../api/billing/revenuecat-webhook.js');
 const { default: identifyHandler } = await import('../api/billing/iap-identify.js');
@@ -58,11 +59,16 @@ try {
   const owner = await mkOwner('owner');
   const other = await mkOwner('other');
 
-  console.log('\n[1] sandbox events are ignored');
+  console.log('\n[1] a sandbox event for an unbound workspace changes nothing');
   let r = mkRes();
   await rcHandler(rcReq(evt('INITIAL_PURCHASE', owner.wid, { environment: 'SANDBOX' })), r);
-  assert(r.statusCode === 200 && r.body?.ignored === 'sandbox', `SANDBOX → 200 ignored:sandbox (${JSON.stringify(r.body)})`);
+  assert(r.statusCode === 200 && r.body?.ignored === 'unbound app_user_id', `unbound SANDBOX → ignored (${JSON.stringify(r.body)})`);
   assert((await row(owner.wid)).subscription_status === 'incomplete', 'workspace untouched by a sandbox purchase');
+  process.env.REVENUECAT_BLOCK_SANDBOX = '1';
+  r = mkRes();
+  await rcHandler(rcReq(evt('INITIAL_PURCHASE', owner.wid, { environment: 'SANDBOX' })), r);
+  assert(r.body?.ignored === 'sandbox', `REVENUECAT_BLOCK_SANDBOX=1 → ignored:sandbox (${JSON.stringify(r.body)})`);
+  delete process.env.REVENUECAT_BLOCK_SANDBOX;
 
   console.log('\n[2] an event for a workspace the owner never identified is ignored and recorded');
   const beforeFailures = await unboundFailures();
@@ -92,6 +98,19 @@ try {
   const s = await row(owner.wid);
   assert(s.subscription_status === 'active' && s.subscription_source === 'apple', 'workspace active on Apple');
 
+  console.log('\n[4b] the App Store build (no identify call) binds through /api/me from the app');
+  const { default: meHandler } = await import('../api/me/index.js');
+  const legacy = await mkOwner('legacy-app');
+  r = mkRes();
+  await meHandler({ method: 'GET', query: {}, headers: { host: 'localhost:3000', cookie: legacy.cookie } }, r);
+  assert((await row(legacy.wid)).revenuecat_user_id === null, 'web /api/me does not stamp');
+  r = mkRes();
+  await meHandler({ method: 'GET', query: {}, headers: { host: 'localhost:3000', cookie: legacy.cookie, 'x-client-platform': 'ios' } }, r);
+  assert(r.statusCode === 200 && (await row(legacy.wid)).revenuecat_user_id === legacy.wid, 'native /api/me stamps the owner\'s own workspace');
+  r = mkRes();
+  await rcHandler(rcReq(evt('INITIAL_PURCHASE', legacy.wid, { period_type: 'NORMAL', original_transaction_id: `${TAG}-legacy` })), r);
+  assert(r.statusCode === 200 && r.body?.status === 'active', `legacy-app purchase applies (${JSON.stringify(r.body)})`);
+
   console.log('\n[5] a known Apple original_transaction_id also binds (identify stamp missing)');
   await sql`UPDATE workspaces SET revenuecat_user_id = NULL, apple_original_transaction_id = ${`${TAG}-txn2`} WHERE id = ${other.wid}`;
   r = mkRes();
@@ -101,12 +120,14 @@ try {
   await rcHandler(rcReq(evt('RENEWAL', other.wid, { original_transaction_id: `${TAG}-txn2` })), r);
   assert(r.body?.status === 'active' && (await row(other.wid)).subscription_status === 'active', 'matching transaction id → applied');
 
-  console.log('\n[6] REVENUECAT_ALLOW_SANDBOX=1 lets QA deploys accept sandbox events');
-  process.env.REVENUECAT_ALLOW_SANDBOX = '1';
+  console.log('\n[6] App Review: a sandbox purchase unlocks a bound workspace but is never a paid conversion');
+  const reviewer = await mkOwner('reviewer');
+  await sql`UPDATE workspaces SET revenuecat_user_id = ${reviewer.wid} WHERE id = ${reviewer.wid}`;
   r = mkRes();
-  await rcHandler(rcReq(evt('RENEWAL', owner.wid, { environment: 'SANDBOX' })), r);
-  assert(r.body?.status === 'active', `sandbox applied when allowed (${JSON.stringify(r.body)})`);
-  delete process.env.REVENUECAT_ALLOW_SANDBOX;
+  await rcHandler(rcReq(evt('INITIAL_PURCHASE', reviewer.wid, { environment: 'SANDBOX', period_type: 'NORMAL' })), r);
+  assert(r.body?.status === 'active' && (await row(reviewer.wid)).subscription_status === 'active', `bound sandbox purchase unlocks (${JSON.stringify(r.body)})`);
+  const conv = (await sql`SELECT converted_at FROM workspaces WHERE id = ${reviewer.wid}`).rows[0].converted_at;
+  assert(conv === null, 'sandbox purchase does not stamp converted_at');
 } catch (err) {
   console.error('Fatal:', err.message, err.stack);
   fail++;

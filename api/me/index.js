@@ -3,7 +3,7 @@
 // the client home dashboard renders (counts of unread messages, upcoming
 // bookings, pending invoices/docs).
 import { sql } from '../_lib/db.js';
-import { requireUser } from '../_lib/auth.js';
+import { requireUser, isNativeClient } from '../_lib/auth.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { userContext, ids } from '../_lib/clientPortal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -16,6 +16,20 @@ export default async function handler(req, res) {
     if (!user) return;
 
     const ctx = await userContext(user);
+
+    // The RevenueCat webhook only applies Apple purchases to a workspace
+    // its owner has identified from the iPhone app. Newer builds call
+    // /api/billing/iap-identify; builds already in the App Store do not,
+    // but every launch of the app calls this endpoint as the signed-in
+    // owner with the native platform marker, which is the same proof.
+    // Stamp once (IS NULL) so it costs one indexed no-op afterwards.
+    if (isNativeClient(req) && ctx.owns?.id) {
+      await sql`
+        UPDATE workspaces SET revenuecat_user_id = ${ctx.owns.id}
+         WHERE id = ${ctx.owns.id} AND owner_id = ${user.id} AND revenuecat_user_id IS NULL
+      `.catch(() => { /* never block /me on the stamp */ });
+    }
+
     if (!ctx.isClient) {
       // Owner-only - return context with empty summary.
       return ok(res, { ...ctx, summary: emptySummary() });
