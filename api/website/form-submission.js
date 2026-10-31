@@ -25,34 +25,16 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { notifyLeadInstantReply, extractLeadContact } from '../_lib/leadNotify.js';
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
+import { assertPublicHttpsUrl } from '../_lib/safeUrl.js';
 import { fireClientCreatedWorkflows } from '../_lib/workflows.js';
 
 // SSRF guard for owner-configured form-webhook delivery. This endpoint is
 // PUBLIC (any visitor triggers it), so a delivery URL pointing at the cloud
 // metadata endpoint or an internal host would let someone probe our network.
-// Require https and reject loopback / link-local / RFC-1918 literals. (Full
-// DNS-rebinding protection would need resolve-then-pin; the 5s timeout on the
-// call below bounds the blast radius of anything that slips past.)
-function assertPublicHttpsUrl(raw) {
-  let u;
-  try { u = new URL(String(raw)); } catch { throw new Error('Invalid webhook URL'); }
-  if (u.protocol !== 'https:') throw new Error('Webhook URL must use https');
-  const host = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (host === 'localhost' || host.endsWith('.localhost') || host === '::1') {
-    throw new Error('Webhook URL not allowed');
-  }
-  const m = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const a = Number(m[1]), b = Number(m[2]);
-    if (a === 0 || a === 127 || a === 10 || a >= 224
-        || (a === 169 && b === 254)              // link-local incl. 169.254.169.254 metadata
-        || (a === 192 && b === 168)
-        || (a === 172 && b >= 16 && b <= 31)) {
-      throw new Error('Webhook URL not allowed');
-    }
-  }
-  return u.toString();
-}
+// assertPublicHttpsUrl requires https, refuses private / loopback /
+// link-local literals AND resolves the hostname so a public-looking name
+// that answers with a private address is refused too. The 5s timeout on
+// the call below bounds the blast radius of anything that slips past.
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -108,7 +90,7 @@ export default async function handler(req, res) {
     let delivered  = false;
     try {
       if (dest && dest.type === 'webhook' && dest.config?.url) {
-        const safeUrl = assertPublicHttpsUrl(dest.config.url);
+        const safeUrl = await assertPublicHttpsUrl(dest.config.url, { what: 'Webhook URL' });
         const r = await fetchWithTimeout(safeUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

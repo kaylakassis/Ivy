@@ -15,8 +15,10 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { buildAuthorizeUrl, squareRedirectUri, squareEnv } from '../_lib/payments/square.js';
 import { appUrl } from '../_lib/tokens.js';
 import { methodNotAllowed, ok, badRequest } from '../_lib/json.js';
-import { wantsJson, fromApp } from '../_lib/connectReturn.js';
+import { wantsJson, fromApp, SQ_STATE_COOKIE, SQ_STATE_TTL_SECONDS } from '../_lib/connectReturn.js';
 import jwt from 'jsonwebtoken';
+import cookie from 'cookie';
+import crypto from 'node:crypto';
 
 function back(res, msg) {
   const u = new URL(`${appUrl()}/finance`);
@@ -56,8 +58,34 @@ export default async function handler(req, res) {
 
     // Short-lived signed state - Square echoes this back; we verify it
     // in the callback so a man-in-the-middle can't swap tokens.
+    //
+    // Web flow: the state alone names a workspace but says nothing about
+    // WHO completes Square's consent screen. A victim tricked into opening
+    // an attacker's init URL would get a state for the attacker's
+    // workspace, and the victim's Square merchant would end up bound to it
+    // (or the reverse: the attacker completes consent against a state
+    // minted for the victim). So we also drop a random nonce in an
+    // HttpOnly cookie on this browser and put its hash in the state; the
+    // callback only accepts the pair together, which ties the whole round
+    // trip to the browser that clicked Connect.
+    //
+    // App flow (?from=app): the iOS shell opens Safari, which has none of
+    // our cookies, so the state stays the only credential there. It is
+    // the owner's own device and the state lives 15 minutes.
+    const isApp = fromApp(req);
+    let nonceHash = null;
+    if (!isApp) {
+      const nonce = crypto.randomBytes(32).toString('base64url');
+      nonceHash = crypto.createHash('sha256').update(nonce).digest('hex');
+      res.setHeader('Set-Cookie', cookie.serialize(SQ_STATE_COOKIE, nonce, {
+        httpOnly: true, secure: true, sameSite: 'lax', path: '/', maxAge: SQ_STATE_TTL_SECONDS,
+      }));
+    }
     const state = jwt.sign(
-      { wid: workspaceId, uid: user.id, kind: 'square_oauth', ...(fromApp(req) ? { from: 'app' } : {}) },
+      {
+        wid: workspaceId, uid: user.id, kind: 'square_oauth',
+        ...(isApp ? { from: 'app' } : { nonce: nonceHash }),
+      },
       process.env.JWT_SECRET,
       { expiresIn: '15m', algorithm: 'HS256' },
     );

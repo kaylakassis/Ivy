@@ -77,8 +77,12 @@ async function run() {
       VALUES (${`rc-${Date.now()}@test.local`}, 'x', 'RC Owner', 'v1', NOW())
       RETURNING id`;
     const ownerId = u.rows[0].id;
+    // The owner identified this workspace in the app (what
+    // /api/billing/iap-identify stamps); the webhook ignores events for a
+    // workspace that never did (tests/revenuecat-binding.test.mjs).
     const w = await sql`INSERT INTO workspaces (owner_id) VALUES (${ownerId}) RETURNING id`;
     const wid = w.rows[0].id;
+    await sql`UPDATE workspaces SET revenuecat_user_id = id WHERE id = ${wid}`;
 
     console.log('\n[1] auth: missing / wrong bearer is rejected');
     const noAuth = mkRes();
@@ -145,6 +149,7 @@ async function run() {
     const w9 = await sql`INSERT INTO workspaces (owner_id, subscription_status, subscription_source, stripe_customer_id, subscription_period_end)
                           VALUES (${ownerId}, 'active', 'stripe', 'cus_web_9', NOW() + INTERVAL '20 days') RETURNING id`;
     const wid9 = w9.rows[0].id;
+    await sql`UPDATE workspaces SET revenuecat_user_id = id WHERE id = ${wid9}`;
     let r9 = mkRes();
     await rcHandler(rcReq(mkEvent('EXPIRATION', wid9, { expiration_at_ms: Date.now() - 1000 })), r9);
     let s9 = await statusOf(wid9);
@@ -162,6 +167,7 @@ async function run() {
     console.log('\n[10] CANCELLATION remembers auto-renew is off; RENEWAL clears it');
     const w10 = await sql`INSERT INTO workspaces (owner_id) VALUES (${ownerId}) RETURNING id`;
     const wid10 = w10.rows[0].id;
+    await sql`UPDATE workspaces SET revenuecat_user_id = id WHERE id = ${wid10}`;
     let r10 = mkRes();
     await rcHandler(rcReq(mkEvent('INITIAL_PURCHASE', wid10, { period_type: 'NORMAL', expiration_at_ms: Date.now() + 7 * 86400000 })), r10);
     r10 = mkRes();

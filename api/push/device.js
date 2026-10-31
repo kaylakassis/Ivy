@@ -1,7 +1,8 @@
 // /api/push/device - native (APNs) device-token registry.
 //   POST   { token, platform? }  → register/refresh this device for the
-//                                  signed-in user (upsert; a device that
-//                                  switches accounts moves to the new user)
+//                                  signed-in user (upsert; a token moves
+//                                  to a new user only once the old row is
+//                                  stale, see below)
 //   DELETE { token }             → unregister (sign-out, toggle off)
 //
 // The web-push sibling is /api/push/subscribe. Sends fan out from
@@ -35,14 +36,31 @@ export default async function handler(req, res) {
     }
 
     const platform = body.platform === 'android' ? 'android' : 'ios';
-    await sql`
+    // A token that is already registered only moves to another account
+    // when it is STALE (no registration or delivery for 30 days). A live
+    // token stays with its owner: otherwise anyone who learned a token
+    // could register it under their own account and receive that person's
+    // notifications. Legitimate account switches on one device are
+    // unaffected because sign-out unregisters the token first
+    // (src/lib/nativePush.js unregisterNativePush → DELETE below).
+    const { rows } = await sql`
       INSERT INTO push_device_tokens (user_id, token, platform, last_used_at)
       VALUES (${user.id}, ${token}, ${platform}, NOW())
       ON CONFLICT (token) DO UPDATE SET
         user_id = EXCLUDED.user_id,
         platform = EXCLUDED.platform,
         last_used_at = NOW()
+      WHERE push_device_tokens.user_id = EXCLUDED.user_id
+         OR push_device_tokens.last_used_at IS NULL
+         OR push_device_tokens.last_used_at < NOW() - INTERVAL '30 days'
+      RETURNING id
     `;
+    if (rows.length === 0) {
+      // Live token owned by another account. Not an error for the caller
+      // (the OS may hand two accounts the same token on one device during
+      // a switch); it simply is not theirs until the owner signs out.
+      return ok(res, { registered: false, reason: 'token-in-use' });
+    }
     return ok(res, { registered: true });
   } catch (err) {
     return serverError(res, err);

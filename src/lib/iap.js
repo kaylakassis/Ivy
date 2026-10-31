@@ -26,6 +26,7 @@
 //     recurring one), not by product id, so renaming products in App
 //     Store Connect can't break the paywall.
 import { isIos } from './platform.js';
+import { api } from './api.js';
 
 const PUBLIC_KEY = import.meta.env.VITE_REVENUECAT_PUBLIC_KEY_IOS || '';
 
@@ -125,7 +126,17 @@ export async function initIAP() {
 }
 
 // Tie the RevenueCat customer to OUR workspace. Safe to call repeatedly;
-// the SDK call is skipped when the id is already current.
+// both calls are skipped when the id is already current.
+//
+// Two halves, and a purchase needs both before it starts:
+//   1. SDK logIn so the webhook event carries our workspace id as
+//      app_user_id.
+//   2. POST /api/billing/iap-identify so the SERVER knows this owner
+//      identified this workspace. The webhook ignores events for a
+//      workspace that was never identified (anyone could otherwise feed
+//      the SDK a guessed id), so skipping this half would mean paying for
+//      nothing. The id is only cached once both have succeeded, so a
+//      failed server call is retried on the next attempt.
 export async function identifyIapUser(workspaceId) {
   const id = workspaceId ? String(workspaceId) : '';
   if (!iapAvailable() || !id) return false;
@@ -134,13 +145,20 @@ export async function identifyIapUser(workspaceId) {
   try {
     const { Purchases: P } = await purchases();
     await P.logIn({ appUserID: id });
-    currentAppUserId = id;
-    return true;
   } catch (err) {
     // eslint-disable-next-line no-console
     console.error('[iap] logIn failed:', err?.message || err);
     return false;
   }
+  try {
+    await api.post('/billing/iap-identify');
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error('[iap] server identify failed:', err?.message || err);
+    return false;
+  }
+  currentAppUserId = id;
+  return true;
 }
 
 // Sign-out: drop the RevenueCat identity so the next account on this

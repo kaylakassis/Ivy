@@ -2,7 +2,8 @@
 // Owner-only. Asks PayPal Partner Referrals API for an action_url and
 // redirects the owner there. PayPal handles the merchant onboarding
 // flow (sign in / sign up + grant permissions) and bounces back to
-// /api/finance/paypal-onboard-callback with merchantIdInPayPal.
+// /api/finance/paypal-onboard-callback with merchantIdInPayPal plus the
+// signed state we put in the return URL.
 //
 // Reached via a top-level <a href> click, so we redirect back to
 // /finance with a query-string error on failure rather than returning
@@ -45,10 +46,17 @@ export default async function handler(req, res) {
       return back(res, 'PayPal is not configured on this deploy yet - admin needs to set PAYPAL_CLIENT_ID, PAYPAL_CLIENT_SECRET, and PAYPAL_PARTNER_ID.');
     }
 
-    const stateParam = fromApp(req)
-      ? `&state=${encodeURIComponent(signReturnState({ workspaceId, userId: user.id, kind: 'paypal_return' }))}`
-      : '';
-    const returnUrl = `${appUrl()}/api/finance/paypal-onboard-callback?wid=${encodeURIComponent(workspaceId)}${stateParam}`;
+    // ALWAYS carry a signed state through PayPal's return URL, on the web
+    // too. The callback is a top-level GET that the browser sends the
+    // session cookie with, so without state anyone who onboarded their own
+    // PayPal merchant could mail an owner a callback link carrying THEIR
+    // merchant id and have the owner's session attach it (login CSRF: the
+    // owner's clients would then pay the attacker). The state pins the
+    // callback to this workspace + this user + this init.
+    const from = fromApp(req) ? 'app' : 'web';
+    const state = signReturnState({ workspaceId, userId: user.id, kind: 'paypal_return', from });
+    const returnUrl = `${appUrl()}/api/finance/paypal-onboard-callback`
+      + `?from=${from}&state=${encodeURIComponent(state)}`;
     const url = await buildOnboardingUrl({
       workspaceId, returnUrl, trackingId: workspaceId,
     });
