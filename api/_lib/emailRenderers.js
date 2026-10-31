@@ -184,7 +184,7 @@ function renderAdminInvite({ kind, firstName: fnRaw, name }) {
   return {
     subject: subjects[kind] || subjects.regular,
     html: emailShell({
-      heading: greet,
+      heading: name ? `Hi ${firstName(fnRaw)},` : 'Hi,',
       body: bodies[kind] || bodies.regular,
       ctaText: 'Set my password',
       ctaUrl: `${appUrl()}/reset-password?token=PREVIEW_TOKEN_xxxxxxxx`,
@@ -297,7 +297,7 @@ export function renderInvoiceSent({
   return {
     subject: `Invoice ${number || 'INV-1042'} from ${businessName || SAMPLE_BRANDING.businessName} · ${fmtMoney(total)}`,
     html: emailShell({
-      heading: `Invoice ${escapeHtml(number || 'INV-1042')}`,
+      heading: `Invoice ${number || 'INV-1042'}`,
       body: `<p>${greeting}</p>
         <p>You have a new invoice from <strong>${biz}</strong> for <strong>${fmtMoney(total)}</strong>${dueDate ? `, due <strong>${escapeHtml(fmtDateShort(dueDate))}</strong>` : ''}.</p>
         ${invoiceLineItemsTable(items)}
@@ -336,7 +336,7 @@ export function renderInvoiceOverdue({
   return {
     subject: `Reminder: invoice ${number || 'INV-1042'} is overdue`,
     html: emailShell({
-      heading: `Invoice ${escapeHtml(number || 'INV-1042')} is overdue`,
+      heading: `Invoice ${number || 'INV-1042'} is overdue`,
       body: `<p>${greeting}</p>
         <p>This is a friendly reminder that invoice <strong>${escapeHtml(number || 'INV-1042')}</strong> for <strong>${fmtMoney(total)}</strong> is${dueDate ? ` past due (was due ${escapeHtml(fmtDateShort(dueDate))}, ${daysOverdue || 5} day${daysOverdue === 1 ? '' : 's'} overdue)` : ' overdue'}.</p>
         <p>If you've already paid, please ignore - it can take a day or two to clear.</p>`,
@@ -359,7 +359,7 @@ export function renderInvoiceDueSoon({
   return {
     subject: `Reminder: invoice ${number || 'INV-1042'} is due ${whenLabel}`,
     html: emailShell({
-      heading: `A quick heads-up on invoice ${escapeHtml(number || 'INV-1042')}`,
+      heading: `A quick heads-up on invoice ${number || 'INV-1042'}`,
       body: `<p>${greeting}</p>
         <p>Just a friendly reminder that invoice <strong>${escapeHtml(number || 'INV-1042')}</strong> for <strong>${fmtMoney(total)}</strong> is due <strong>${whenLabel}</strong>${dueDate ? ` (${escapeHtml(fmtDateShort(dueDate))})` : ''}.</p>
         <p>You can pay it in a couple of taps using the button below. If you've already taken care of it, thank you - no need to do anything.</p>`,

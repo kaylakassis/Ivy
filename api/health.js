@@ -18,7 +18,7 @@ export default async function handler(req, res) {
   return res.status(healthy ? 200 : 503).json({
     status: healthy ? 'ok' : 'degraded',
     db,
-    service: 'ivy-business-os',
+    service: 'ivy',
     time: new Date().toISOString(),
   });
 }

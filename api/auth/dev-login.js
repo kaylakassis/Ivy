@@ -20,6 +20,12 @@
 //   • OFF by default. Without DEV_LOGIN_SECRET set (and >= 16 chars) the
 //     endpoint returns 404 - invisible. A wrong token also returns 404, so
 //     the route can't be probed for existence.
+//   • Hard-off in production (VERCEL_ENV=production) unless the operator
+//     explicitly sets DEV_LOGIN_ALLOW_PRODUCTION=1.
+//   • 10 attempts / hour / IP, so the secret cannot be brute-forced.
+//   • The token is read from the `x-dev-login-token` header. The `?token=`
+//     query form still works but is DEPRECATED: query strings land in
+//     access logs and browser history, headers do not.
 //   • Timing-safe token comparison.
 //   • Only ever touches the dedicated QA account, resolved by a fixed
 //     email - the `state` param cannot address any other workspace.
@@ -32,6 +38,7 @@ import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { evictWorkspaceGateCache } from '../_lib/workspaceGate.js';
 import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../_lib/legal.js';
 import { TRIAL_DAYS } from '../_lib/billing.js';
+import { rateLimit, getClientIp } from '../_lib/rate-limit.js';
 import { serverError } from '../_lib/json.js';
 
 const QA_EMAIL = (process.env.QA_USER_EMAIL || 'qa@joinivy.ai').toLowerCase();
@@ -131,7 +138,14 @@ async function applyState(workspaceId, userId, state) {
   return true;
 }
 
+export function devLoginAllowedHere(env = process.env) {
+  if (env.VERCEL_ENV === 'production' && env.DEV_LOGIN_ALLOW_PRODUCTION !== '1') return false;
+  return true;
+}
+
 export default async function handler(req, res) {
+  // Hard-off in production unless explicitly opted in.
+  if (!devLoginAllowedHere()) return res.status(404).json({ error: 'Not found' });
   const secret = process.env.DEV_LOGIN_SECRET;
   // Disabled unless explicitly configured with a non-trivial secret.
   // 404 (not 403) keeps the endpoint invisible when off.
@@ -139,8 +153,16 @@ export default async function handler(req, res) {
     if (secret) console.warn('[dev-login] DEV_LOGIN_SECRET is too short (<16 chars); endpoint stays disabled.');
     return res.status(404).json({ error: 'Not found' });
   }
-  const token = req.query?.token;
-  if (!token || !timingSafeEqual(token, secret)) {
+  // 10 / hour / IP, counted before the token compare so guessing is capped.
+  const rl = await rateLimit({ key: `dev-login:${getClientIp(req)}`, max: 10, windowSeconds: 3600 });
+  if (!rl.allowed) {
+    res.setHeader('Retry-After', String(rl.retryAfterSeconds));
+    return res.status(429).json({ error: 'Too many attempts. Try again later.', retryAfterSeconds: rl.retryAfterSeconds });
+  }
+  // Header first; `?token=` kept for existing bookmarks (deprecated).
+  const headerToken = req.headers?.['x-dev-login-token'];
+  const token = (typeof headerToken === 'string' && headerToken) ? headerToken : req.query?.token;
+  if (!token || typeof token !== 'string' || !timingSafeEqual(token, secret)) {
     return res.status(404).json({ error: 'Not found' });
   }
 

@@ -122,6 +122,44 @@ async function main() {
   console.log('\n[6] a purged workspace cannot claim a second free trial (checkout eligibility rule)');
   assert(!!W.trial_started_at || !!W.converted_at, 'trial_started_at/converted_at survive the reset');
 
+  console.log('\n[6b] sponsored / beta / super-admin owners are never on the clock');
+  const exempt = [];
+  for (const type of ['sponsored', 'beta', 'super_admin']) {
+    // eslint-disable-next-line no-await-in-loop
+    const w = await ws(`ex-${type}`, { subscription_status: 'trialing', trial_ends_at: d(-3), trial_started_at: d(-17) });
+    // eslint-disable-next-line no-await-in-loop
+    await sql`UPDATE users SET user_type = ${type} WHERE id = ${w.ownerId}`;
+    exempt.push({ ...w, type });
+  }
+  const exPaid = await ws('ex-paid', { subscription_status: 'cancelled', subscription_period_end: d(-1), converted_at: d(-60) });
+  await sql`UPDATE users SET user_type = 'sponsored' WHERE id = ${exPaid.ownerId}`;
+  await scheduleDeletions();
+  for (const w of exempt) {
+    // eslint-disable-next-line no-await-in-loop
+    assert(!(await row(w.id)).data_deletion_at, `${w.type} owner's lapsed trial: not scheduled`);
+  }
+  assert(!(await row(exPaid.id)).data_deletion_at, "sponsored owner's lapsed paid workspace: not scheduled");
+  // Even a stale deletion date (set before the owner was comped) must not purge.
+  const sp = exempt[0];
+  await sql`INSERT INTO clients (workspace_id, name) VALUES (${sp.id}, 'Keep Me Too')`;
+  await sql`UPDATE workspaces SET data_deletion_at = NOW() - INTERVAL '1 hour', data_deletion_notice_sent_at = NOW() WHERE id = ${sp.id}`;
+  assert((await sendReminders()) === 0 || !(await row(sp.id)).data_deletion_reminder_sent_at, 'no reminder for the sponsored owner');
+  await purgeDue();
+  const SP = await row(sp.id);
+  assert(await count(sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${sp.id}`) === 1, "sponsored owner's data untouched by purge");
+  assert(!SP.data_purged_at && !SP.data_deletion_at && !SP.data_deletion_notice_sent_at, 'stale deletion date cleared instead of purged');
+
+  console.log('\n[6c] purge re-reads the row right before deleting');
+  const late = await ws('late', { subscription_status: 'cancelled', subscription_period_end: d(-1), converted_at: d(-60), data_deletion_at: d(-1) });
+  await sql`INSERT INTO clients (workspace_id, name) VALUES (${late.id}, 'Paid Just Now')`;
+  // Simulate a payment landing after the batch SELECT: isWorkspaceActive is
+  // evaluated on the fresh row, so a workspace that is active by the time
+  // its turn comes is rescued, not purged.
+  await sql`UPDATE workspaces SET subscription_status = 'active', subscription_period_end = NOW() + INTERVAL '30 days' WHERE id = ${late.id}`;
+  await purgeDue();
+  const LT = await row(late.id);
+  assert(await count(sql`SELECT COUNT(*)::int n FROM clients WHERE workspace_id = ${late.id}`) === 1 && !LT.data_purged_at && !LT.data_deletion_at, 'active-again workspace rescued, data kept');
+
   console.log('\n[7] the whole runner');
   const r = await runDataRetention();
   assert(typeof r.scheduled === 'number' && typeof r.purged === 'number', `runner returns counts ${JSON.stringify(r)}`);

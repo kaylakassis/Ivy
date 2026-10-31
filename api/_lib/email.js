@@ -255,6 +255,7 @@ function injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl) {
 // applies the workspace owner's chosen presentation. accentColor (if
 // set) overrides the default green; we compute a contrasting ink color
 // for button text via relative-luminance.
+// `heading` is plain text and is escaped here - pass it raw.
 export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, preheader, unsubscribeUrl }) {
   // Brand tokens - the Ivy green palette the website uses (site/Chrome.jsx). Hard-coded
   // because email clients can't read CSS variables.
@@ -371,7 +372,7 @@ export function emailShell({ heading, body, ctaText, ctaUrl, footer, branding, p
           <tr>
             <td style="padding:36px 32px 28px;">
               <h1 style="margin:0 0 18px;font-family:${fontDisplay};font-size:26px;letter-spacing:-0.025em;font-weight:500;line-height:1.2;color:${C.fg};">
-                ${heading}
+                ${escapeHeading(heading)}
               </h1>
               <div style="font-size:15px;line-height:1.7;color:${C.fg};">
                 ${body}
@@ -451,6 +452,13 @@ function sanitizeUrl(u) {
 }
 function escapeText(s) {
   return String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+// The heading is plain text supplied by callers (often from user data:
+// a business name, an invoice number, a first name). It is rendered as
+// element text, so `&<>"` is all that needs escaping; apostrophes stay
+// readable. Callers pass RAW text - never pre-escape a heading.
+function escapeHeading(s) {
+  return String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 }
 function escapeAttr(s) { return escapeText(s); }
 

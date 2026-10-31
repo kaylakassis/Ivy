@@ -18,7 +18,7 @@
 // rotates both the secret + backup codes. Useful for "I think someone
 // saw my codes" recovery without going through a password reset.
 import { sql } from '../../_lib/db.js';
-import { requireUser, invalidateUserCache } from '../../_lib/auth.js';
+import { requireUser, invalidateUserCache, refuseImpersonated } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { encrypt } from '../../_lib/secrets.js';
 import {
@@ -34,6 +34,7 @@ export default async function handler(req, res) {
   try {
     const user = await requireUser(req, res);
     if (!user) return;
+    if (refuseImpersonated(req, res)) return;
 
     // Generate fresh secret + backup codes. The secret is what the
     // authenticator app stores; backup codes are emergency-only

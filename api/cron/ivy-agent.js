@@ -11,7 +11,7 @@
 // dedupe keys make an already-processed workspace a fast no-op, so repeat
 // runs just skim past them.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { runIvyAgentForWorkspace } from '../_lib/ivyAgent.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -21,12 +21,7 @@ const BATCH_SIZE = 100;
 const BUDGET_MS = 250_000; // under the api/cron/** 300s function cap
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     let scanned = 0, created = 0, batches = 0, complete = false;

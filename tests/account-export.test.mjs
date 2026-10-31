@@ -26,6 +26,9 @@ async function run() {
     await sql`INSERT INTO finance_settings (workspace_id, currency) VALUES (${workspaceId}, 'USD')`.catch(() => {});
     await sql`UPDATE finance_settings SET stripe_secret_encrypted = 'enc::LIVE-SECRET' WHERE workspace_id = ${workspaceId}`.catch(() => {});
 
+    // Invoice view tokens are stored hashed; the hash must never be exported.
+    await sql`INSERT INTO invoices (workspace_id, client_name, number, status, view_token_hash)
+      VALUES (${workspaceId}, 'A Client', ${'EXP-' + Date.now()}, 'sent', ${'hash-of-a-live-view-token-' + Date.now()})`;
     const payload = await buildAccountExport({ id: ownerId, email: EMAIL });
 
     console.log('\n[1] payload shape');
@@ -41,6 +44,8 @@ async function run() {
     assert(!json.includes('super-secret-bcrypt-hash'), 'password hash value absent from export');
     assert(!json.includes('LIVE-SECRET'), 'encrypted stripe secret absent from export');
     assert(!json.includes('stripe_secret_encrypted'), 'sensitive key name absent from export');
+    assert(payload.invoices.length >= 1, 'the invoice is exported');
+    assert(!json.includes('hash-of-a-live-view-token') && !/_token_hash"/.test(json), 'no *_token_hash key or value in the export');
 
     console.log('\n[3] filename helper');
     assert(/^ivy-export-\d{4}-\d{2}-\d{2}\.json$/.test(exportFilename()), 'filename is dated json');
@@ -50,6 +55,7 @@ async function run() {
   } finally {
     if (workspaceId) {
       await sql`DELETE FROM finance_settings WHERE workspace_id = ${workspaceId}`.catch(() => {});
+      await sql`DELETE FROM invoices WHERE workspace_id = ${workspaceId}`.catch(() => {});
       await sql`DELETE FROM clients WHERE workspace_id = ${workspaceId}`.catch(() => {});
       await sql`DELETE FROM workspaces WHERE id = ${workspaceId}`.catch(() => {});
       await sql`DELETE FROM users WHERE id = ${ownerId}`.catch(() => {});

@@ -17,7 +17,7 @@
 // super-admin clicking the in-app trigger.
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyOwnerSafe, notifyClientSafe } from '../_lib/push.js';
 import { sendEmailToClient, emailShell } from '../_lib/email.js';
 import { makeBrandingCache } from '../_lib/branding.js';
@@ -34,12 +34,7 @@ const REPEAT_AFTER_HOURS = 24 * 7;  // then once a week
 const MAX_PER_RUN = 1000;
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

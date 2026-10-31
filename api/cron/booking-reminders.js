@@ -18,7 +18,7 @@ import { makeBrandingCache } from '../_lib/branding.js';
 import { sendClientSms } from '../_lib/sms.js';
 import { appUrl } from '../_lib/tokens.js';
 import { reportError } from '../_lib/monitoring.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyClientSafe, notifyHelperSafe } from '../_lib/push.js';
 import { renderPrepInstructions } from '../_lib/bookingNotify.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -108,13 +108,7 @@ export async function fetchDueBookings(cursor, shardFilter = '') {
 }
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  // Third path: signed-in super-admin clicking the in-app trigger button.
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

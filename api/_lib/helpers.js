@@ -409,7 +409,7 @@ export async function inviteHelper({ workspaceId, owner, staff }) {
     subject: `${bizName} invited you to help out on Ivy`,
     replyTo: branding.replyTo,
     html: emailShell({
-      heading: `Help out at ${escapeHtml(bizName)}`,
+      heading: `Help out at ${bizName}`,
       branding,
       body: `<p>Hi${first ? ` ${escapeHtml(first)}` : ''},</p>
         <p><strong>${escapeHtml(bizName)}</strong> uses Ivy to run their business and invited you to help out.

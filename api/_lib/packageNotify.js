@@ -57,7 +57,7 @@ export async function notifyPackageExhausted({ workspaceId, clientPackageId, cli
     if (r.owner_email) {
       const greeting = r.owner_name ? `Hi ${escapeHtml(r.owner_name.split(/\s+/)[0])},` : 'Hi,';
       const html = emailShell({
-        heading: `${escapeHtml(clientName)} is out of sessions`,
+        heading: `${clientName} is out of sessions`,
         branding,
         body: `<p>${greeting}</p>
           <p><strong>${escapeHtml(clientName)}</strong> just used the last credit on <strong>${escapeHtml(r.package_name)}</strong>.</p>

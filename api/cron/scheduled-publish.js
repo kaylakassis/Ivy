@@ -11,7 +11,7 @@
 
 import { sql } from '../_lib/db.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 
@@ -24,12 +24,7 @@ async function handler(req, res) {
     return res.end('Method Not Allowed');
   }
 
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

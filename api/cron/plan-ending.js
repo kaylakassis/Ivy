@@ -5,7 +5,7 @@
 // archived. Stamp-first so retries and shards never double-send; the
 // stamp is cleared by the billing webhooks when renewal is turned back on.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyPlanEnding } from '../_lib/subscriptionNotify.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -14,12 +14,7 @@ import { shardFromReq, shardClause, withDeadline, terminationReason } from '../_
 const BATCH_SIZE = 500;
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
   try {
     const { shard, shards } = shardFromReq(req);
     const shardFilter = shardClause({ shard, shards }, 'w.id');

@@ -58,7 +58,7 @@ export default async function handler(req, res) {
       subject: `Reminder: claim your account with ${bizName}`,
       replyTo: branding.replyTo,
       html: emailShell({
-        heading: `Claim your account with ${escapeHtml(bizName)}`,
+        heading: `Claim your account with ${bizName}`,
         branding,
         body: `<p>Hi${firstName(client.name) ? ` ${escapeHtml(firstName(client.name))}` : ''},</p>
           <p>This is a quick reminder that <strong>${escapeHtml(bizName)}</strong> set you up with a

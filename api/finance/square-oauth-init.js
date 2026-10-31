@@ -9,7 +9,7 @@
 // - returning raw JSON would just appear as a blank-looking page in the
 // browser (the "Square stuck loading" symptom). Mirrors the same error
 // pattern as stripe-oauth-init.
-import { requireUser } from '../_lib/auth.js';
+import { requireUser, refuseImpersonated } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { buildAuthorizeUrl, squareRedirectUri, squareEnv } from '../_lib/payments/square.js';
@@ -45,6 +45,7 @@ export default async function handler(req, res) {
     }
     const user = await requireUser(req, res);
     if (!user) return;
+    if (refuseImpersonated(req, res)) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
 

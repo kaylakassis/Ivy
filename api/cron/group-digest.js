@@ -7,7 +7,7 @@
 // US east coast). Idempotent: stamps users.digest_last_sent_at so a
 // re-run in the same calendar day is a no-op.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { sendEmailToUser, emailShell } from '../_lib/email.js';
 import { fetchBranding } from '../_lib/branding.js';
 import { appUrl } from '../_lib/tokens.js';
@@ -20,12 +20,7 @@ function escapeHtml(s) {
 }
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     // Find candidate users: those with at least one unread group as a

@@ -24,7 +24,7 @@
 //                      IVY_STRIPE_SECRET / STRIPE_PLATFORM_SECRET).
 //   APP_URL            used to build refresh + return URLs.
 import { sql } from '../_lib/db.js';
-import { requireUser } from '../_lib/auth.js';
+import { requireUser, refuseImpersonated } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { appUrl } from '../_lib/tokens.js';
 import {
@@ -66,6 +66,7 @@ export default async function handler(req, res) {
       }
       user = await requireUser(req, res);
       if (!user) return;
+      if (refuseImpersonated(req, res)) return;
       step = 'workspace';
       workspaceId = await ensureActiveWorkspace(user, req, res);
       if (!workspaceId) return;

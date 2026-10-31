@@ -107,14 +107,15 @@ export default async function handler(req, res) {
         await deliverByEmail({ to: dest.config.to, site, formId, payload });
         delivered = true;
       } else {
-        // Default: email the workspace owner. We fetch their email
-        // through the users table joined via memberships.
+        // Default: email the workspace owner, resolved through
+        // workspaces.owner_id. (memberships is the client-subscription
+        // table and has no user_id; the old join threw every time, so no
+        // site without an explicit destination ever delivered a lead.)
         const owner = await sql`
           SELECT u.email
-          FROM users u
-          JOIN memberships m ON m.user_id = u.id
-          WHERE m.workspace_id = ${site.workspace_id}
-          ORDER BY u.created_at ASC
+          FROM workspaces w
+          JOIN users u ON u.id = w.owner_id
+          WHERE w.id = ${site.workspace_id} AND u.deleted_at IS NULL
           LIMIT 1
         `;
         const to = owner.rows[0]?.email;

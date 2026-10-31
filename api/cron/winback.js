@@ -26,7 +26,7 @@
 //                        if a huge backfill candidate set appears at
 //                        once (e.g. after migration).
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { platformStripeSecret } from '../_lib/stripe.js';
 import { ensureWinbackOffer, WINBACK } from '../_lib/winback.js';
 import { notifyWinbackOffer } from '../_lib/subscriptionNotify.js';
@@ -38,12 +38,7 @@ async function handler(req, res) {
   // Same three-path auth as subscription-dunning: Vercel cron header,
   // an admin secret for manual kicks, or a super-admin session for the
   // in-app trigger button.
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     const secretKey = platformStripeSecret();

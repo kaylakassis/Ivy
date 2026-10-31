@@ -17,7 +17,7 @@
 // one "Resolved" email when it clears. Recipient: OPS_ALERT_EMAIL, else
 // SUPER_ADMIN_EMAIL. Documented in docs/ops-alerts.md.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
 import { SIGNATURE_FAILURE } from '../_lib/webhookFailures.js';
@@ -213,12 +213,7 @@ export async function runOpsChecks({ now = new Date() } = {}) {
 }
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
   try {
     const now = new Date();
     const firing = await runOpsChecks({ now });

@@ -21,7 +21,7 @@
 // Reuses notifyWeeklyRecap from api/_lib/weeklyRecap.js so the cron AND
 // the admin preview render byte-identical email.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { reportError } from '../_lib/monitoring.js';
 import { notifyWeeklyRecap } from '../_lib/weeklyRecap.js';
 import { isWorkspaceActive } from '../_lib/clientPortal.js';
@@ -40,12 +40,7 @@ const BATCH_SIZE = 250;
 const REPEAT_AFTER_HOURS = 6 * 24; // 6 days
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

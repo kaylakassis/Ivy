@@ -33,12 +33,22 @@ export const TRIAL_RETENTION_DAYS = 28;
 export const MIN_NOTICE_DAYS = 7;
 export const REMINDER_DAYS_BEFORE = 2;
 
-// SQL mirror of isWorkspaceActive(). Keep the two in step.
+// Owners whose data is never on the retention clock: comped accounts and
+// the operator. isWorkspaceActive() does not know about user_type (the
+// workspaceGate bypass does), so the exemption is spelled out here.
+export const EXEMPT_OWNER_TYPES = ['sponsored', 'beta', 'super_admin'];
+const EXEMPT_OWNER_SQL = `
+  EXISTS (SELECT 1 FROM users ou WHERE ou.id = w.owner_id
+            AND ou.user_type IN ('sponsored', 'beta', 'super_admin'))`;
+
+// SQL mirror of isWorkspaceActive() (keep the two in step), plus the owner
+// exemption: "inactive AND eligible for the retention clock".
 const INACTIVE_SQL = `
   NOT (w.comp_until IS NOT NULL AND w.comp_until > NOW())
   AND NOT (w.subscription_status = 'trialing' AND w.trial_ends_at IS NOT NULL AND w.trial_ends_at > NOW())
   AND NOT (w.subscription_status = 'active' AND w.subscription_period_end IS NOT NULL AND w.subscription_period_end > NOW())
-  AND COALESCE(w.subscription_status, 'inactive') <> 'past_due'`;
+  AND COALESCE(w.subscription_status, 'inactive') <> 'past_due'
+  AND NOT ${EXEMPT_OWNER_SQL}`;
 
 // Tables keyed by workspace_id that survive a purge: operator records
 // with no business content (billing/reward ledgers, moderation reports,
@@ -158,18 +168,28 @@ export async function purgeWorkspaceData(workspaceId) {
   return deleted;
 }
 
-// 4. Due and still inactive → purge. Re-checks the live row with the same
-//    predicate the paywall uses, right before deleting.
+// 4. Due and still inactive → purge. Re-reads each workspace row FRESH
+//    (not the batch snapshot) immediately before deleting, with the same
+//    predicate the paywall uses plus the owner exemption. A payment, a comp
+//    or a role change that lands between the batch SELECT and this row's
+//    turn cancels the purge.
 export async function purgeDue() {
   const { rows } = await sql.query(`
-    SELECT w.id, w.owner_id, w.data_deletion_at, w.subscription_status, w.trial_ends_at,
-           w.subscription_period_end, w.comp_until, u.email, u.name
+    SELECT w.id, w.owner_id
       FROM workspaces w JOIN users u ON u.id = w.owner_id
      WHERE w.data_deletion_at IS NOT NULL AND w.data_deletion_at <= NOW() AND w.data_purged_at IS NULL
      ORDER BY w.data_deletion_at ASC LIMIT 200`);
   let purged = 0;
-  for (const w of rows) {
-    if (isWorkspaceActive(w)) {
+  for (const due of rows) {
+    // eslint-disable-next-line no-await-in-loop
+    const fresh = await sql`
+      SELECT w.id, w.owner_id, w.data_deletion_at, w.data_purged_at, w.subscription_status, w.trial_ends_at,
+             w.subscription_period_end, w.comp_until, u.email, u.name, u.user_type AS owner_type
+        FROM workspaces w JOIN users u ON u.id = w.owner_id
+       WHERE w.id = ${due.id}`;
+    const w = fresh.rows[0];
+    if (!w || w.data_purged_at || !w.data_deletion_at || new Date(w.data_deletion_at).getTime() > Date.now()) continue;
+    if (isWorkspaceActive(w) || EXEMPT_OWNER_TYPES.includes(w.owner_type)) {
       // eslint-disable-next-line no-await-in-loop
       await sql`UPDATE workspaces SET data_deletion_at = NULL, data_deletion_notice_sent_at = NULL, data_deletion_reminder_sent_at = NULL WHERE id = ${w.id}`;
       continue;

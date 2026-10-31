@@ -125,7 +125,11 @@ async function patchUser(u, req, res) {
     const pw = String(body.password);
     if (pw.length < 8) return badRequest(res, 'Password too short');
     const hash = await hashPassword(pw);
-    await sql`UPDATE users SET password_hash = ${hash} WHERE id = ${u.id}`;
+    // Stamp password_changed_at one second in the past so every session
+    // issued up to now (iat is whole seconds) is revoked by requireUser,
+    // and bust the cached user row so the revocation is immediate.
+    await sql`UPDATE users SET password_hash = ${hash}, password_changed_at = NOW() - INTERVAL '1 second' WHERE id = ${u.id}`;
+    invalidateUserCache(u.id);
     await recordAudit(req, {
       actor, targetUserId: u.id, action: 'user.set_password',
       meta: { method: 'manual' },

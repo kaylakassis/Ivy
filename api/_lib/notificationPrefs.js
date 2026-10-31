@@ -52,19 +52,23 @@ export const CRITICAL_EMAIL_TYPES = new Set([
 ]);
 
 // Read users.notification_prefs, return true if the `email_<type>` key
-// is not explicitly false. Critical types always return true.
+// is not explicitly false. Critical types always return true - except for
+// a deleted account, which gets nothing at all, critical or not.
 export async function userAllowsEmail(userId, type) {
-  if (!type) return true;
-  if (CRITICAL_EMAIL_TYPES.has(type)) return true;
-  if (!EMAIL_NOTIFY_TYPES.includes(type)) return true;
   if (!userId) return true;
+  let row;
   try {
-    const { rows } = await sql`SELECT notification_prefs FROM users WHERE id = ${userId}`;
-    const prefs = rows[0]?.notification_prefs || {};
-    return prefs[`email_${type}`] !== false;
+    const { rows } = await sql`SELECT notification_prefs, deleted_at FROM users WHERE id = ${userId}`;
+    row = rows[0];
   } catch {
     return true;
   }
+  if (row?.deleted_at) return false;
+  if (!type) return true;
+  if (CRITICAL_EMAIL_TYPES.has(type)) return true;
+  if (!EMAIL_NOTIFY_TYPES.includes(type)) return true;
+  const prefs = row?.notification_prefs || {};
+  return prefs[`email_${type}`] !== false;
 }
 
 // Read clients.notification_prefs. Critical types always return true.

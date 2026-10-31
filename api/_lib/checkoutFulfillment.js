@@ -623,7 +623,7 @@ async function sendPackagePurchaseEmail({ workspaceId, clientId, pkg, credits, p
   const first = (cli.name || '').split(/\s+/)[0] || 'there';
   const sessionsLabel = `${credits} session${credits === 1 ? '' : 's'}`;
   const html = emailShell({
-    heading: `Your ${escapeHtml(pkg.name)} is ready`,
+    heading: `Your ${pkg.name} is ready`,
     branding,
     body: `<p>Hi ${escapeHtml(first)},</p>
       <p>Thanks for your purchase from <strong>${escapeHtml(business)}</strong>. Your sessions are ready to book.</p>

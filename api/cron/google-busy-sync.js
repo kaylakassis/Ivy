@@ -10,7 +10,8 @@
 // - one workspace's bad token never breaks sync for everyone else.
 import { sql } from '../_lib/db.js';
 import { pullBusyTimes } from '../_lib/googleSync.js';
-import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
+import { methodNotAllowed, ok, serverError, unauthorized } from '../_lib/json.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { withDeadline, terminationReason } from '../_lib/cronShard.js';
@@ -28,10 +29,7 @@ async function handler(req, res) {
   // open made sense in early-stage deploys but production must always
   // require auth, otherwise anyone can trigger a sync of every
   // workspace's Google calendar on demand.
-  const expected = process.env.CRON_SECRET;
-  if (!expected) return res.status(500).json({ error: 'CRON_SECRET not configured' });
-  const got = (req.headers.authorization || '').replace(/^Bearer\s+/i, '');
-  if (got !== expected) return res.status(401).json({ error: 'Unauthorized' });
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

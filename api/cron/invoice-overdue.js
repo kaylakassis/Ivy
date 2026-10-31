@@ -11,7 +11,7 @@
 import crypto from 'node:crypto';
 import { sql } from '../_lib/db.js';
 import { reportError } from '../_lib/monitoring.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyClientSafe, notifyOwnerSafe } from '../_lib/push.js';
 import { notifyInvoiceOverdue } from '../_lib/invoiceNotify.js';
 import { generateRawToken, appUrl } from '../_lib/tokens.js';
@@ -28,12 +28,7 @@ const REPEAT_AFTER_HOURS = 24 * 7;
 const BATCH_SIZE = 250;
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     await ensureSchemaApplied();

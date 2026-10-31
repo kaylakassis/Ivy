@@ -31,7 +31,11 @@ function mockRes() {
     end(s) { this.body = s ?? this.body; return this; },
   };
 }
-const req = (query = {}) => ({ method: 'GET', headers: {}, query });
+// Unique client IP per request so the 10/hour/IP limit (shared DB, repeated
+// runs) never trips the functional cases below.
+let ipN = 0;
+const RUN = Math.floor(Math.random() * 200) + 20;
+const req = (query = {}, headers = {}) => ({ method: 'GET', headers: { 'x-forwarded-for': `100.${RUN}.${Math.floor(ipN / 250)}.${(ipN++ % 250) + 1}`, ...headers }, query });
 
 async function wsRow() {
   const r = await sql`
@@ -128,6 +132,50 @@ async function run() {
     r = mockRes();
     await devLogin(req({ token: SECRET, state: 'bogus' }), r);
     assert(r.statusCode === 400, 'unknown state rejected');
+
+    console.log('\n[11] token in the x-dev-login-token header works (query is deprecated)');
+    r = mockRes();
+    await devLogin(req({}, { 'x-dev-login-token': SECRET }), r);
+    assert(r.statusCode === 302, `header token → 302 (${r.statusCode})`);
+    r = mockRes();
+    await devLogin(req({}, { 'x-dev-login-token': 'nope-wrong-token-1234567' }), r);
+    assert(r.statusCode === 404, 'wrong header token → 404');
+
+    console.log('\n[12] hard-off in production unless explicitly allowed');
+    process.env.VERCEL_ENV = 'production';
+    r = mockRes();
+    await devLogin(req({ token: SECRET }), r);
+    assert(r.statusCode === 404, `production → 404 even with the right token (${r.statusCode})`);
+    process.env.DEV_LOGIN_ALLOW_PRODUCTION = 'true';
+    r = mockRes();
+    await devLogin(req({ token: SECRET }), r);
+    assert(r.statusCode === 404, 'DEV_LOGIN_ALLOW_PRODUCTION must be exactly "1"');
+    process.env.DEV_LOGIN_ALLOW_PRODUCTION = '1';
+    r = mockRes();
+    await devLogin(req({ token: SECRET }), r);
+    assert(r.statusCode === 302, `explicit opt-in → 302 (${r.statusCode})`);
+    delete process.env.DEV_LOGIN_ALLOW_PRODUCTION;
+    process.env.VERCEL_ENV = 'preview';
+    r = mockRes();
+    await devLogin(req({ token: SECRET }), r);
+    assert(r.statusCode === 302, `preview deploys still work (${r.statusCode})`);
+    delete process.env.VERCEL_ENV;
+
+    console.log('\n[13] 10 attempts / hour / IP');
+    const ip = `100.${RUN}.250.${Math.floor(Math.random() * 250) + 1}`;
+    await sql`DELETE FROM rate_limits WHERE key = ${'dev-login:' + ip}`;
+    const codes = [];
+    for (let i = 0; i < 11; i++) {
+      const rr = mockRes();
+      // eslint-disable-next-line no-await-in-loop
+      await devLogin({ method: 'GET', headers: { 'x-forwarded-for': ip }, query: { token: 'guess-' + i + '-xxxxxxxxxxxxxxxx' } }, rr);
+      codes.push(rr.statusCode);
+    }
+    assert(codes.slice(0, 10).every((c) => c === 404) && codes[10] === 429, `ten guesses 404, the eleventh 429 (${codes.join(',')})`);
+    r = mockRes();
+    await devLogin({ method: 'GET', headers: { 'x-forwarded-for': ip }, query: { token: SECRET } }, r);
+    assert(r.statusCode === 429, 'even the right token is refused once the IP is limited');
+    await sql`DELETE FROM rate_limits WHERE key = ${'dev-login:' + ip}`;
   } catch (err) {
     console.error('Fatal:', err.message, err.stack);
     fail++;
@@ -135,6 +183,8 @@ async function run() {
     await sql`DELETE FROM workspaces WHERE owner_id IN (SELECT id FROM users WHERE email = ${QA_EMAIL})`.catch(() => {});
     await sql`DELETE FROM users WHERE email = ${QA_EMAIL}`.catch(() => {});
     delete process.env.DEV_LOGIN_SECRET;
+    delete process.env.VERCEL_ENV;
+    delete process.env.DEV_LOGIN_ALLOW_PRODUCTION;
   }
   console.log(`\n${pass} passed, ${fail} failed`);
   process.exit(fail > 0 ? 1 : 0);

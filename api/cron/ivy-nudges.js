@@ -16,7 +16,7 @@
 // Hard caps per run keep a misconfigured workspace from blowing the
 // cron's notification budget.
 import { sql } from '../_lib/db.js';
-import { isSuperAdminBySession } from '../_lib/admin.js';
+import { cronAuthorized } from '../_lib/cronAuth.js';
 import { notifyOwnerSafe } from '../_lib/push.js';
 import { trackCron } from '../_lib/cronMetrics.js';
 import { ok, serverError, unauthorized } from '../_lib/json.js';
@@ -33,12 +33,7 @@ const COOLDOWN_DAYS     = 7;     // don't re-fire the same nudge for COOLDOWN_DA
 const BATCH_SIZE        = 200;
 
 async function handler(req, res) {
-  const cronAuth = !!process.env.CRON_SECRET
-    && req.headers.authorization === `Bearer ${process.env.CRON_SECRET}`;
-  const adminAuth = process.env.ADMIN_SECRET
-    && req.headers['x-admin-secret'] === process.env.ADMIN_SECRET;
-  const userAuth = !cronAuth && !adminAuth ? await isSuperAdminBySession(req) : false;
-  if (!cronAuth && !adminAuth && !userAuth) return unauthorized(res);
+  if (!(await cronAuthorized(req))) return unauthorized(res);
 
   try {
     // Clear cooldowns past COOLDOWN_DAYS so the same kind can re-fire

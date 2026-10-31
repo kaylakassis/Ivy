@@ -175,7 +175,7 @@ export async function notifyInvoiceDueSoon({ workspaceId, invoiceId, daysUntilDu
       : daysUntilDue === 1 ? 'tomorrow'
       : `in ${daysUntilDue} days`;
     const html = emailShell({
-      heading: `A quick heads-up on invoice ${escapeHtml(inv.number)}`,
+      heading: `A quick heads-up on invoice ${inv.number}`,
       branding,
       body: `<p>Hi ${escapeHtml((inv.client_name || '').split(/\s+/)[0] || 'there')},</p>
         <p>Just a friendly reminder that invoice <strong>${escapeHtml(inv.number)}</strong>
@@ -214,7 +214,7 @@ export async function notifyInvoiceOverdue({ workspaceId, invoiceId, daysOverdue
     const branding = await fetchBranding(workspaceId);
     const business = branding.businessName || 'your business';
     const html = emailShell({
-      heading: `Invoice ${escapeHtml(inv.number)} is overdue`,
+      heading: `Invoice ${inv.number} is overdue`,
       branding,
       body: `<p>Hi ${escapeHtml((inv.client_name || '').split(/\s+/)[0] || 'there')},</p>
         <p>This is a friendly reminder that invoice <strong>${escapeHtml(inv.number)}</strong>
