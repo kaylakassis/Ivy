@@ -3580,4 +3580,62 @@ CREATE INDEX IF NOT EXISTS idx_ivy_pending_actions_workspace ON ivy_pending_acti
 -- Short-lived per-business lock so helper invites are seat-checked one at a
 -- time (api/_lib/helpers.js inviteHelper). Expires on its own.
 ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS helper_invite_lock_until TIMESTAMPTZ;
+
+-- ─── Revenue each business has collected through Ivy (admin view) ─────
+-- One row per workspace, in the business's own money. Used by Admin →
+-- Users (operator-only, see the Privacy Policy "Business totals"). Each
+-- source is net of refunds, counts only money that actually changed hands
+-- through Ivy, and never double-counts:
+--   invoices          paid invoices, minus refunds and minus the part paid
+--                     with a gift card (that money was counted when the
+--                     card was sold). Same basis as the owner's Finance page.
+--   store_orders      paid online-store orders.
+--   programs          one-time program purchases.
+--   packages          session packages bought online.
+--   gift_cards        gift cards bought online.
+--   booking_payments  booking deposits, tips and late / no-show fees charged.
+-- Not included yet: renewals of memberships and subscription programs
+-- (no per-payment record is kept for those).
+CREATE OR REPLACE VIEW workspace_revenue AS
+  SELECT w.id AS workspace_id,
+         COALESCE(inv.amt, 0)::numeric(14,2) AS invoices,
+         COALESCE(ord.amt, 0)::numeric(14,2) AS store_orders,
+         COALESCE(prog.amt, 0)::numeric(14,2) AS programs,
+         COALESCE(pkg.amt, 0)::numeric(14,2) AS packages,
+         COALESCE(gc.amt, 0)::numeric(14,2) AS gift_cards,
+         COALESCE(bk.amt, 0)::numeric(14,2) AS booking_payments,
+         (COALESCE(inv.amt, 0) + COALESCE(ord.amt, 0) + COALESCE(prog.amt, 0)
+          + COALESCE(pkg.amt, 0) + COALESCE(gc.amt, 0) + COALESCE(bk.amt, 0))::numeric(14,2) AS total,
+         COALESCE(inv.currencies, 0) AS invoice_currencies
+    FROM workspaces w
+    LEFT JOIN (
+      SELECT workspace_id,
+             SUM(GREATEST(total - COALESCE(refunded_amount, 0) - COALESCE(gift_card_credit_cents, 0) / 100.0, 0)) AS amt,
+             COUNT(DISTINCT currency)::int AS currencies
+        FROM invoices WHERE status = 'paid' GROUP BY workspace_id
+    ) inv ON inv.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(total) AS amt FROM orders WHERE status = 'paid' GROUP BY workspace_id
+    ) ord ON ord.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(GREATEST(price_cents - COALESCE(refunded_cents, 0), 0)) / 100.0 AS amt
+        FROM program_enrollments WHERE source = 'purchase' GROUP BY workspace_id
+    ) prog ON prog.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(GREATEST(price - COALESCE(refunded_cents, 0) / 100.0, 0)) AS amt
+        FROM client_packages
+       WHERE stripe_payment_intent IS NOT NULL OR stripe_session_id IS NOT NULL
+       GROUP BY workspace_id
+    ) pkg ON pkg.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id, SUM(GREATEST(original_amount_cents - COALESCE(refunded_cents, 0), 0)) / 100.0 AS amt
+        FROM gift_cards WHERE stripe_payment_intent IS NOT NULL GROUP BY workspace_id
+    ) gc ON gc.workspace_id = w.id
+    LEFT JOIN (
+      SELECT workspace_id,
+             SUM(CASE WHEN deposit_paid_at IS NOT NULL THEN deposit_paid ELSE 0 END
+               + CASE WHEN tip_charged_at IS NOT NULL THEN tip_amount ELSE 0 END
+               + CASE WHEN fee_charged_at IS NOT NULL THEN fee_charged_amount ELSE 0 END) AS amt
+        FROM bookings GROUP BY workspace_id
+    ) bk ON bk.workspace_id = w.id;
 `;

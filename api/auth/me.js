@@ -2,7 +2,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser, readSession } from '../_lib/auth.js';
 import { emailIsSuperAdmin, ensureSuperAdminPromotion } from '../_lib/admin.js';
-import { CURRENT_TERMS_VERSION, hasAcceptedCurrentTerms } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, hasAcceptedCurrentTerms, hasAcceptedCurrentPrivacy } from '../_lib/legal.js';
 import { methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -44,6 +44,15 @@ export default async function handler(req, res) {
         acceptedVersion: user.terms_version || null,
         acceptedAt: user.terms_accepted_at || null,
         needsAcceptance: needsTermsAcceptance,
+      },
+      // Privacy Policy updates are shown as a notice the person
+      // acknowledges (src/components/PrivacyUpdateNotice.jsx), not a gate.
+      // Older iPhone builds ignore this field.
+      privacy: {
+        currentVersion: CURRENT_PRIVACY_VERSION,
+        acceptedVersion: user.privacy_version || null,
+        acceptedAt: user.privacy_accepted_at || null,
+        needsAcknowledgement: !hasAcceptedCurrentPrivacy(user),
       },
     });
   } catch (err) {

@@ -1247,18 +1247,20 @@ function UsersTab() {
   const [err, setErr]       = useState(null);
   const [creating, setCreating] = useState(false);
   const [active, setActive] = useState(null);
+  const [sort, setSort]     = useState('');
 
   const reload = () => {
     setData(null); setErr(null);
     const qs = new URLSearchParams();
     if (q) qs.set('q', q);
     if (filter) qs.set('type', filter);
+    if (sort) qs.set('sort', sort);
     if (page > 1) qs.set('page', String(page));
     api.get(`/admin/users?${qs.toString()}`)
       .then((r) => setData(r))
       .catch((e) => setErr(e.message));
   };
-  useEffect(reload, [filter, page]);
+  useEffect(reload, [filter, page, sort]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -1275,6 +1277,16 @@ function UsersTab() {
         <button className="btn btn-primary" onClick={() => setCreating(true)}>
           <Icons.Plus size={13} sw={2}/> New user
         </button>
+      </div>
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+        <span style={{ fontSize: 11.5, color: 'var(--muted)', marginRight: 2 }}>Sort</span>
+        {[['', 'Newest'], ['revenue', 'Top revenue']].map(([id, label]) => (
+          <button key={id || 'newest'} onClick={() => { setSort(id); setPage(1); }}
+            className={`btn ${sort === id ? 'btn-primary' : 'btn-outline'}`}
+            style={{ padding: '4px 10px', fontSize: 11.5 }}>
+            {label}
+          </button>
+        ))}
       </div>
       <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
         {USER_FILTERS.map((f) => (
@@ -1297,7 +1309,7 @@ function UsersTab() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead style={{ background: 'var(--surface-2)' }}>
                 <tr style={{ textAlign: 'left' }}>
-                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Joined</Th><Th>Last active</Th><Th>Verified</Th><Th></Th>
+                  <Th>Email</Th><Th>Name</Th><Th>Type</Th><Th>Revenue in Ivy</Th><Th>Joined</Th><Th>Last active</Th><Th>Verified</Th><Th></Th>
                 </tr>
               </thead>
               <tbody>
@@ -1321,6 +1333,7 @@ function UsersTab() {
                         }}>Comp</span>
                       )}
                     </Td>
+                    <Td><RevenueCell revenue={u.revenue}/></Td>
                     <Td>{u.createdAt ? new Date(u.createdAt).toLocaleDateString() : '-'}</Td>
                     <Td><span style={{ color: (u.lastActiveAt || u.lastLoginAt) ? 'inherit' : 'var(--muted)' }} title={(u.lastActiveAt || u.lastLoginAt) ? `Last active ${new Date(u.lastActiveAt || u.lastLoginAt).toLocaleString()}` : 'No activity recorded'}>{lastLoginLabel(u.lastActiveAt || u.lastLoginAt)}</span></Td>
                     <Td>{u.emailVerifiedAt ? '✓' : <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
@@ -1333,7 +1346,7 @@ function UsersTab() {
                   </tr>
                 ))}
                 {data.users.length === 0 && (
-                  <tr><td colSpan={7} style={{ padding: 28 }}>
+                  <tr><td colSpan={8} style={{ padding: 28 }}>
                     <EmptyNote icon="Users" title="No users match" hint="Try a different filter or search."/>
                   </td></tr>
                 )}
@@ -1594,6 +1607,7 @@ function UserDetailModal({ user, onClose, onChanged }) {
         <Row k="Last active" v={(user.lastActiveAt || user.lastLoginAt) ? new Date(user.lastActiveAt || user.lastLoginAt).toLocaleString() : 'No activity recorded'}/>
         <Row k="Last password sign-in" v={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not since this was tracked'}/>
         <Row k="Email verified" v={user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString() : 'No'}/>
+        {user.revenue && <Row k="Revenue in Ivy" v={<RevenueBreakdown revenue={user.revenue}/>}/>}
         <Row k="Classification" v={<><Pill text={user.classification}/>{user.excludedFromAnalytics && <TesterPill flagged={user.isTester}/>}</>}/>
         <Row k="Analytics" v={user.excludedFromAnalytics
           ? (user.isTester ? 'Excluded: marked as a test account' : 'Excluded automatically (beta, sponsored, super admin or comped)')
@@ -2412,6 +2426,40 @@ function Th({ children }) {
 function Td({ children }) {
   return <td style={{ padding: '10px 12px', verticalAlign: 'top' }}>{children}</td>;
 }
+// Revenue a business has collected through Ivy (workspace_revenue view).
+// Operator-only. Covered by the Privacy Policy "Business totals" section.
+
+function RevenueCell({ revenue }) {
+  if (!revenue) return <span style={{ color: 'var(--muted)' }}>-</span>;
+  if (!revenue.total) return <span style={{ color: 'var(--muted)' }}>$0</span>;
+  return (
+    <span style={{ fontVariantNumeric: 'tabular-nums', fontWeight: 600 }} title="Collected through Ivy, net of refunds. Membership and subscription renewals are not included yet.">
+      {fmtMoney(revenue.total)}{revenue.mixedCurrencies ? ' *' : ''}
+    </span>
+  );
+}
+
+function RevenueBreakdown({ revenue }) {
+  const parts = [
+    ['Invoices', revenue.invoices], ['Online store', revenue.storeOrders], ['Programs', revenue.programs],
+    ['Session packages', revenue.packages], ['Gift cards', revenue.giftCards], ['Deposits, tips and fees', revenue.bookingPayments],
+  ].filter(([, v]) => v > 0);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      <div style={{ fontSize: 15, fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(revenue.total)}</div>
+      {parts.map(([label, v]) => (
+        <div key={label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, fontSize: 12.5, color: 'var(--fg-2)' }}>
+          <span>{label}</span><span style={{ fontVariantNumeric: 'tabular-nums' }}>{fmtMoney(v)}</span>
+        </div>
+      ))}
+      <div style={{ fontSize: 11.5, color: 'var(--muted)', lineHeight: 1.45 }}>
+        Net of refunds. Invoices paid with a gift card count once. Membership and subscription renewals are not included yet.
+        {revenue.mixedCurrencies ? ' This business invoices in more than one currency; amounts are added as recorded.' : ''}
+      </div>
+    </div>
+  );
+}
+
 function Row({ k, v }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0' }}>

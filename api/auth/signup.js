@@ -16,7 +16,7 @@ import { createToken, KIND_VERIFY, appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
 import { renderWelcome } from '../_lib/welcome-content.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
-import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersion } from '../_lib/legal.js';
 import { recordReferralSignup } from '../_lib/referrals.js';
 import { badRequest, created, methodNotAllowed, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
@@ -85,7 +85,8 @@ export default async function handler(req, res) {
     if (acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
       return badRequest(res, `You must accept the current Terms (${CURRENT_TERMS_VERSION}) to create an account.`);
     }
-    if (acceptedPrivacyVersion !== CURRENT_PRIVACY_VERSION) {
+    const privacyVersionAccepted = acceptablePrivacyVersion(acceptedPrivacyVersion);
+    if (!privacyVersionAccepted) {
       return badRequest(res, `You must accept the current Privacy Policy (${CURRENT_PRIVACY_VERSION}) to create an account.`);
     }
     // 'owner' (default) creates a workspace; 'client' does not - they're
@@ -147,7 +148,7 @@ export default async function handler(req, res) {
       VALUES (
         ${emailKey}, ${password_hash}, ${cleanName},
         ${CURRENT_TERMS_VERSION}, NOW(),
-        ${CURRENT_PRIVACY_VERSION}, NOW(),
+        ${privacyVersionAccepted}, NOW(),
         NOW(), NOW()
       )
       RETURNING id, email, name, created_at, email_verified_at
@@ -172,7 +173,7 @@ export default async function handler(req, res) {
         INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
         VALUES
           (${user.id}, 'terms',   ${CURRENT_TERMS_VERSION},   ${ip}, ${ua}),
-          (${user.id}, 'privacy', ${CURRENT_PRIVACY_VERSION}, ${ip}, ${ua})
+          (${user.id}, 'privacy', ${privacyVersionAccepted}, ${ip}, ${ua})
       `;
 
       if (role === 'owner') {

@@ -21,6 +21,7 @@ import Walkthrough from '../../features/onboarding/Walkthrough.jsx';
 import ImpersonationBanner from '../ImpersonationBanner.jsx';
 import CommandPalette from '../CommandPalette.jsx';
 import TermsAcceptModal from '../TermsAcceptModal.jsx';
+import PrivacyUpdateNotice from '../PrivacyUpdateNotice.jsx';
 import IvyDock from '../../features/ivy/IvyDock.jsx';
 import { IvyProvider } from '../../features/ivy/state.jsx';
 import TutorialOverlay from '../TutorialOverlay.jsx';
@@ -289,6 +290,7 @@ function AppShellInner() {
 
       <CommandPalette/>
       <TermsAcceptModal/>
+      <PrivacyUpdateNotice/>
       {/* Ivy bubble - only render once the user is past the paywall and
           (when applicable) the walkthrough overlay isn't covering the
           screen. Otherwise the FAB peeks through the modal scrim. */}

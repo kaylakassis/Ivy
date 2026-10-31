@@ -6,4 +6,4 @@ export const CURRENT_TERMS_VERSION = '2026-05-05';
 // Privacy Policy gets the same separate-from-terms versioning so a
 // material change to data-handling practices can re-prompt acceptance
 // independently of any terms change.
-export const CURRENT_PRIVACY_VERSION = '2026-05-25';
+export const CURRENT_PRIVACY_VERSION = '2026-10-31';

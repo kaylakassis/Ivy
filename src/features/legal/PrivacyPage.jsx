@@ -9,11 +9,11 @@
 import React from 'react';
 import LegalPage, { H2, P, UL } from './LegalPage.jsx';
 
-export const PRIVACY_VERSION = '2026-05-25';
+export const PRIVACY_VERSION = '2026-10-31';
 
 export default function PrivacyPage() {
   return (
-    <LegalPage title="Privacy Policy" lastUpdated="May 25, 2026">
+    <LegalPage title="Privacy Policy" lastUpdated="October 31, 2026">
       <P><strong>Effective version: {PRIVACY_VERSION}.</strong>
         This Privacy Policy explains what information Ivy ("we", "us", "the
         Service") collects from you, how we use it, and what choices you have.
@@ -41,6 +41,20 @@ export default function PrivacyPage() {
         like "client booked" / "invoice paid") so we can improve
         Ivy, prioritize features, and inform our marketing and
         growth efforts.</P>
+      <P><strong>Business totals.</strong> Ivy works out totals from your
+        workspace, such as how much revenue you have collected through Ivy,
+        how many clients and bookings you have, and which features you use.
+        A small number of authorized Ivy team members can see these totals
+        for your account so we can support you, keep the service healthy,
+        and understand how Ivy is helping the businesses that use it. These
+        totals stay inside Ivy. We never publish or share them in a way that
+        identifies you, your business, or your clients.</P>
+      <P><strong>Combined, anonymous statistics.</strong> We may share
+        statistics about Ivy as a whole in our marketing, for example the
+        total amount businesses have collected through Ivy, or how much time
+        a typical business saves. These figures combine many businesses,
+        never name or identify anyone, and are only published when enough
+        businesses are included that no single business can be picked out.</P>
       <P><strong>What we will never do.</strong> We do not sell, rent,
         or trade your personal information or your business data to
         third parties for their own marketing purposes. Period. Your
@@ -58,6 +72,9 @@ export default function PrivacyPage() {
             translates into outcomes, what our churn looks like - so
             we can build a better product and focus our marketing on
             the audiences it's working for.</li>
+        <li>To publish combined, anonymous statistics about Ivy as a whole
+            (see "Combined, anonymous statistics" above). These never
+            identify you, your business, or your clients.</li>
         <li>To send you product updates, tips, and growth content via
             email. You can opt out of marketing email at any time
             from Account Settings; we'll still send transactional

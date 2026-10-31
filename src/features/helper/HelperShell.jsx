@@ -10,6 +10,7 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import TermsAcceptModal from '../../components/TermsAcceptModal.jsx';
+import PrivacyUpdateNotice from '../../components/PrivacyUpdateNotice.jsx';
 import { SkelLine, SkelRowList } from '../../components/Skeleton.jsx';
 import { useTweaks } from '../../lib/tweaks.js';
 import { useViewport } from '../../lib/viewport.js';
@@ -110,6 +111,7 @@ function HelperShellInner() {
           helps={helps} workspaceId={workspaceId} onSwitchBusiness={switchBusiness}/>
       )}
       <TermsAcceptModal/>
+      <PrivacyUpdateNotice/>
     </div>
   );
 }

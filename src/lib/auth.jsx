@@ -26,6 +26,7 @@ export function AuthProvider({ children }) {
   const [user, setUser]                 = useState(null);
   const [impersonating, setImpersonating] = useState(null);
   const [terms, setTerms]               = useState(null);
+  const [privacy, setPrivacy]           = useState(null);
   const [loading, setLoading]           = useState(true);
 
   useEffect(() => {
@@ -35,7 +36,7 @@ export function AuthProvider({ children }) {
         if (!live) return;
         setUser(r.user);
         setImpersonating(r.impersonating || null);
-        setTerms(r.terms || null);
+        setTerms(r.terms || null); setPrivacy(r.privacy || null);
         stampSessionHint(!!r.user);
       })
       .catch(() => { if (live) { setUser(null); stampSessionHint(false); } })
@@ -126,7 +127,7 @@ export function AuthProvider({ children }) {
       // Drop the RevenueCat customer as well, so the next account on this
       // device cannot inherit this owner's subscription.
       await logOutIap().catch(() => {});
-      setUser(null); setImpersonating(null); setTerms(null);
+      setUser(null); setImpersonating(null); setTerms(null); setPrivacy(null);
       stampSessionHint(false);
       // Forget this account's role answer and remembered landing so the next
       // sign-in on this device starts from a clean slate.
@@ -143,7 +144,7 @@ export function AuthProvider({ children }) {
       const r = await api.get('/auth/me');
       setUser(r.user);
       setImpersonating(r.impersonating || null);
-      setTerms(r.terms || null);
+      setTerms(r.terms || null); setPrivacy(r.privacy || null);
       // Local session hint: lets RootRouter render the marketing home
       // instantly for cold signed-out visitors (no hint) instead of a
       // blank "Loading…" while /auth/me round-trips. Purely a UX hint -
@@ -156,7 +157,7 @@ export function AuthProvider({ children }) {
     } catch {
       setUser(null);
       setImpersonating(null);
-      setTerms(null);
+      setTerms(null); setPrivacy(null);
       return null;
     }
   }, []);
@@ -196,11 +197,20 @@ export function AuthProvider({ children }) {
     await refresh();
   }, [refresh]);
 
+  // Acknowledges the current Privacy Policy after an update notice.
+  const acknowledgePrivacy = useCallback(async () => {
+    await api.post('/me/accept-terms', { document: 'privacy', version: CURRENT_PRIVACY_VERSION });
+    await refresh();
+  }, [refresh]);
+
   return (
     <Ctx.Provider value={{
       user, loading, signIn, mfaChallenge, beginMfa, signUp, signOut, refresh, impersonating,
       terms,
       mustAcceptTerms: !!(user && terms?.needsAcceptance),
+      privacy,
+      privacyUpdatePending: !!(user && privacy?.needsAcknowledgement && !terms?.needsAcceptance),
+      acknowledgePrivacy,
       acceptCurrentTerms,
     }}>
       {children}

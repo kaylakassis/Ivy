@@ -83,6 +83,10 @@ async function listUsers(req, res) {
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
+  // Fixed ORDER BY choices only; never built from the request text.
+  const sortSql = String(req.query.sort || '') === 'revenue'
+    ? 'COALESCE(wr.total, 0) DESC, u.created_at DESC'
+    : 'u.created_at DESC';
 
   params.push(PAGE_SIZE, offset);
   const queryText = `
@@ -101,12 +105,16 @@ async function listUsers(req, res) {
       EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id) AS is_helper,
       u.is_tester,
       NOT EXISTS (SELECT 1 FROM admin_real_users ru WHERE ru.id = u.id) AS excluded_from_analytics,
-      af.code AS affiliate_code
+      af.code AS affiliate_code,
+      wr.total AS rev_total, wr.invoices AS rev_invoices, wr.store_orders AS rev_store_orders,
+      wr.programs AS rev_programs, wr.packages AS rev_packages, wr.gift_cards AS rev_gift_cards,
+      wr.booking_payments AS rev_booking_payments, wr.invoice_currencies AS rev_invoice_currencies
     FROM users u
     LEFT JOIN workspaces w ON w.owner_id = u.id
     LEFT JOIN affiliates af ON af.user_id = u.id
+    LEFT JOIN workspace_revenue wr ON wr.workspace_id = w.id
     ${whereSql}
-    ORDER BY u.created_at DESC
+    ORDER BY ${sortSql}
     LIMIT $${params.length - 1} OFFSET $${params.length}
   `;
   const totalText = `SELECT COUNT(*)::int AS n FROM users u ${whereSql}`;
@@ -150,6 +158,18 @@ async function listUsers(req, res) {
     // comped). Excluded accounts never count in Admin → Overview.
     isTester: !!row.is_tester,
     excludedFromAnalytics: !!row.excluded_from_analytics,
+    // Revenue this business has collected through Ivy (workspace_revenue
+    // view). Operator-only; see Privacy Policy "Business totals".
+    revenue: row.workspace_id ? {
+      total: Number(row.rev_total || 0),
+      invoices: Number(row.rev_invoices || 0),
+      storeOrders: Number(row.rev_store_orders || 0),
+      programs: Number(row.rev_programs || 0),
+      packages: Number(row.rev_packages || 0),
+      giftCards: Number(row.rev_gift_cards || 0),
+      bookingPayments: Number(row.rev_booking_payments || 0),
+      mixedCurrencies: Number(row.rev_invoice_currencies || 0) > 1,
+    } : null,
   }));
 
   return ok(res, {

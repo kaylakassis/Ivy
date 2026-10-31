@@ -22,7 +22,7 @@ import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION, acceptablePrivacyVersion } from '../_lib/legal.js';
 import { findLiveInvite, acceptInvite, invalidateHelperCache } from '../_lib/helpers.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
@@ -90,7 +90,7 @@ export default async function handler(req, res) {
       if (body.acceptedTermsVersion !== CURRENT_TERMS_VERSION) {
         return badRequest(res, `You must accept the current Terms (${CURRENT_TERMS_VERSION}) to create a sign-in.`);
       }
-      if (body.acceptedPrivacyVersion !== CURRENT_PRIVACY_VERSION) {
+      if (!acceptablePrivacyVersion(body.acceptedPrivacyVersion)) {
         return badRequest(res, `You must accept the current Privacy Policy (${CURRENT_PRIVACY_VERSION}) to create a sign-in.`);
       }
       const passwordHash = await hashPassword(body.password);
@@ -101,7 +101,7 @@ export default async function handler(req, res) {
           last_login_at, last_active_at
         ) VALUES (
           ${email}, ${passwordHash}, ${name}, NOW(),
-          ${CURRENT_TERMS_VERSION}, NOW(), ${CURRENT_PRIVACY_VERSION}, NOW(),
+          ${CURRENT_TERMS_VERSION}, NOW(), ${acceptablePrivacyVersion(body.acceptedPrivacyVersion)}, NOW(),
           NOW(), NOW()
         )
         RETURNING id
@@ -114,7 +114,7 @@ export default async function handler(req, res) {
           INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
           VALUES
             (${userId}, 'terms',   ${CURRENT_TERMS_VERSION},   ${ip}, ${ua}),
-            (${userId}, 'privacy', ${CURRENT_PRIVACY_VERSION}, ${ip}, ${ua})
+            (${userId}, 'privacy', ${acceptablePrivacyVersion(body.acceptedPrivacyVersion) || CURRENT_PRIVACY_VERSION}, ${ip}, ${ua})
         `;
       } catch (legalErr) {
         // Same compensation as signup: never strand an account without

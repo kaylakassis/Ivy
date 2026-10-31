@@ -12,11 +12,11 @@
 // IMPORTANT - never delete legal_acceptances rows. They're our proof
 // the user agreed to the version of the terms in effect at that time.
 import { sql } from '../_lib/db.js';
-import { requireUser } from '../_lib/auth.js';
+import { requireUser, invalidateUserCache } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { getClientIp } from '../_lib/rate-limit.js';
-import { CURRENT_TERMS_VERSION } from '../_lib/legal.js';
+import { CURRENT_TERMS_VERSION, CURRENT_PRIVACY_VERSION } from '../_lib/legal.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -28,6 +28,26 @@ export default async function handler(req, res) {
 
     const body = await readBody(req);
     const version = (body.version || '').toString().trim();
+    const ip0 = getClientIp(req);
+    const ua0 = req.headers['user-agent']?.toString().slice(0, 500) || null;
+
+    // { document: 'privacy', version } acknowledges a Privacy Policy update.
+    if (body.document === 'privacy') {
+      if (version !== CURRENT_PRIVACY_VERSION) {
+        return badRequest(res, `Version mismatch. Server expects ${CURRENT_PRIVACY_VERSION}.`);
+      }
+      await sql`
+        INSERT INTO legal_acceptances (user_id, document, version, ip, user_agent)
+        VALUES (${user.id}, 'privacy', ${version}, ${ip0}, ${ua0})
+      `;
+      await sql`
+        UPDATE users SET privacy_version = ${version}, privacy_accepted_at = NOW()
+         WHERE id = ${user.id}
+      `;
+      invalidateUserCache(user.id);
+      return ok(res, { ok: true, document: 'privacy', version, acceptedAt: new Date().toISOString() });
+    }
+
     if (version !== CURRENT_TERMS_VERSION) {
       return badRequest(res, `Version mismatch. Server expects ${CURRENT_TERMS_VERSION}.`);
     }
@@ -46,6 +66,9 @@ export default async function handler(req, res) {
       SET terms_version = ${version}, terms_accepted_at = NOW()
       WHERE id = ${user.id}
     `;
+    // Drop the cached user row so the next /api/auth/me sees the new
+    // acceptance and the prompt does not reappear for the cache's lifetime.
+    invalidateUserCache(user.id);
 
     return ok(res, {
       ok: true,
