@@ -9,6 +9,7 @@
 import { requireUser } from '../../_lib/auth.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { communityAccess, myKey, activeMembers, profilesFor, coachIdentity, mentionTargets } from '../../_lib/programCommunity.js';
+import { badgesFor } from '../../_lib/programEngagement.js';
 import { forbidden, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 const httpsOrNull = (u) => (typeof u === 'string' && /^https:\/\//i.test(u) ? u : null);
@@ -56,6 +57,9 @@ export default async function handler(req, res) {
         avatarUrl: p?.avatar_url || httpsOrNull(m.photo_url), joinedAt: m.granted_at,
       });
     }
+    // Badges a member earned in this program, shown on their card.
+    const badges = await badgesFor(program.id, out.filter((m) => !m.isOwner).map((m) => m.key));
+    for (const m of out) if (!m.isOwner) m.badges = (badges.get(m.key) || []).map((b) => ({ badge: b.badge, label: b.label, emoji: b.emoji }));
     return ok(res, { enabled, members: out, meHidden, role: access.role });
   } catch (err) { return serverError(res, err); }
 }

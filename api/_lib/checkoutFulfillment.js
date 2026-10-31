@@ -525,29 +525,66 @@ async function fulfillDepositSession({ workspaceId, session }) {
   return { applied: 'booking-deposit', bookingId };
 }
 
+// One-time program purchase. price_cents on the enrollment is what the
+// buyer actually paid in this checkout (session.amount_total: after any
+// coupon, including an add-on package bought with it), so refunds and the
+// revenue totals use real money. A package that came with the purchase
+// (included, or the add-on line) is granted once per session and points
+// back at the enrollment; a full refund of the purchase cancels it.
 async function fulfillProgramSession({ workspaceId, session }) {
-  const programId = session.metadata?.program_id;
-  const clientId = session.metadata?.client_id;
+  const md = session.metadata || {};
+  const programId = md.program_id;
+  const clientId = md.client_id;
   if (!programId || !clientId) return { ignored: 'program metadata incomplete' };
   const prog = (await sql`SELECT id, title, billing, price_cents, access_days FROM programs WHERE id = ${programId} AND workspace_id = ${workspaceId}`).rows[0];
   const cli = (await sql`SELECT id, name, email FROM clients WHERE id = ${clientId} AND workspace_id = ${workspaceId}`).rows[0];
   if (!prog || !cli) return { ignored: 'program or client not found' };
-  const already = (await sql`SELECT id FROM program_enrollments WHERE stripe_session_id = ${session.id}`).rows[0];
-  if (already) return { applied: 'program-purchase', duplicate: true };
-  // The PaymentIntent lets a Dashboard refund (charge.refunded) find and
-  // close this enrollment later.
-  await grantEnrollment({
-    programId, workspaceId, clientId, source: 'purchase', billing: 'one_time', priceCents: prog.price_cents,
-    stripeSessionId: session.id, stripePaymentIntent: sessionPaymentIntentId(session), expiresAt: expiryFor(prog),
-  });
-  const paidCents = Number.isFinite(session.amount_total) ? session.amount_total : Number(prog.price_cents || 0);
+  const paidCents = Number.isFinite(session.amount_total) ? Math.max(0, Math.round(session.amount_total)) : Number(prog.price_cents || 0);
+  const discountCents = Math.max(0, Math.round(Number(session.total_details?.amount_discount || 0)));
+  let enrollmentId = (await sql`SELECT id FROM program_enrollments WHERE stripe_session_id = ${session.id}`).rows[0]?.id || null;
+  const duplicate = !!enrollmentId;
+  if (!enrollmentId) {
+    const cohortId = isUuidLike(md.cohort_id)
+      ? (await sql`SELECT id FROM program_cohorts WHERE id = ${md.cohort_id} AND program_id = ${programId} AND workspace_id = ${workspaceId} AND deleted_at IS NULL`).rows[0]?.id || null
+      : null;
+    const couponId = isUuidLike(md.coupon_id)
+      ? (await sql`SELECT id FROM program_coupons WHERE id = ${md.coupon_id} AND workspace_id = ${workspaceId}`).rows[0]?.id || null
+      : null;
+    // The PaymentIntent lets a Dashboard refund (charge.refunded) find and
+    // close this enrollment later.
+    const g = await grantEnrollment({
+      programId, workspaceId, clientId, source: 'purchase', billing: 'one_time', priceCents: paidCents,
+      stripeSessionId: session.id, stripePaymentIntent: sessionPaymentIntentId(session), expiresAt: expiryFor(prog),
+      cohortId, commerce: { couponId, discountCents },
+    });
+    enrollmentId = g.id || (await sql`SELECT id FROM program_enrollments WHERE stripe_session_id = ${session.id}`).rows[0]?.id || null;
+    if (couponId) {
+      await sql`INSERT INTO program_coupon_redemptions (workspace_id, coupon_id, program_id, client_id, ref, discount_cents)
+                VALUES (${workspaceId}, ${couponId}, ${programId}, ${clientId}, ${session.id}, ${discountCents})
+                ON CONFLICT (coupon_id, ref) DO NOTHING`;
+    }
+  }
+  // Bundled package: idempotent on the session id, so a retry after a
+  // half-finished first delivery still grants it, and never twice.
+  let bundle = null;
+  if (enrollmentId && isUuidLike(md.bundle_package_id) && (md.bundle_mode === 'included' || (md.bundle_mode === 'addon' && md.addon === '1'))) {
+    const { grantBundlePackage } = await import('./programCommerce.js');
+    const pkgPrice = (await sql`SELECT price FROM packages WHERE id = ${md.bundle_package_id} AND workspace_id = ${workspaceId}`).rows[0]?.price;
+    bundle = await grantBundlePackage({
+      workspaceId, clientId, packageId: md.bundle_package_id, sessionId: session.id, enrollmentId,
+      priceCents: md.bundle_mode === 'addon' ? Math.round(Number(pkgPrice || 0) * 100) : 0,
+    });
+  }
+  if (duplicate) return { applied: 'program-purchase', duplicate: true, bundleGranted: !!bundle?.granted };
   notifyOwnerSafe({
     workspaceId, type: 'payments',
-    payload: { title: 'Program sold', body: `${cli.name || cli.email || 'A client'} bought ${prog.title} · ${fmtMoney(paidCents / 100)}`,
+    payload: { title: 'Program sold', body: `${cli.name || cli.email || 'A client'} bought ${prog.title}${bundle?.granted ? ` with ${bundle.name}` : ''} · ${fmtMoney(paidCents / 100)}${discountCents ? ' (code used)' : ''}`,
       url: '/programs', tag: `program-${session.id}` },
   });
-  return { applied: 'program-purchase' };
+  return { applied: 'program-purchase', bundleGranted: !!bundle?.granted };
 }
+
+const isUuidLike = (s) => /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/.test(String(s || ''));
 
 async function fulfillPackageSession({ workspaceId, session }) {
   const packageId = session.metadata?.package_id;
@@ -662,7 +699,9 @@ export async function fulfillCheckoutSession({ workspaceId, session, creds = nul
   const invoiceId = session.metadata?.invoice_id || null;
   const isDeposit = (invoiceId && String(invoiceId).startsWith('bookdep_')) || (!invoiceId && !purpose);
 
-  if (!isPaidSession(session)) {
+  // A program bought with a 100% coupon completes with nothing to pay.
+  const freeProgram = purpose === 'program' && session.payment_status === 'no_payment_required';
+  if (!isPaidSession(session) && !freeProgram) {
     if (invoiceId && !isDeposit && !purpose) {
       const r = await markInvoiceProcessing({ workspaceId, invoiceId, session });
       return { applied: 'invoice-processing', result: r };

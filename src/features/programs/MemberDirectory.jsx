@@ -41,6 +41,13 @@ export function MemberDirectory({ programId, showProfileButton = true }) {
                 {m.isMe && <span style={{ fontSize: 11, color: 'var(--muted)' }}>(you)</span>}
               </div>
               {m.bio && <div style={{ fontSize: 13, color: 'var(--fg-2)', lineHeight: 1.45, marginTop: 3, overflowWrap: 'anywhere' }}>{m.bio}</div>}
+              {m.badges?.length > 0 && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 6 }} aria-label="Badges">
+                  {m.badges.map((b) => (
+                    <span key={b.badge} title={b.label} style={{ fontSize: 11.5, padding: '2px 8px', borderRadius: 999, background: 'var(--surface-2)', color: 'var(--fg-2)', whiteSpace: 'nowrap' }}>{b.emoji} {b.label}</span>
+                  ))}
+                </div>
+              )}
               {m.joinedAt && <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: 3 }}>Joined {new Date(m.joinedAt).toLocaleDateString(undefined, { month: 'short', year: 'numeric' })}</div>}
             </div>
           </div>

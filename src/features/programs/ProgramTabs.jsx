@@ -1,11 +1,15 @@
-// Tabs of a program page: Content, Community, Live and Members. Live shows
-// for members once the coach has scheduled something; Members shows when
-// the community and its directory are on. The coach always sees Live.
+// Tabs of a program page: Content, Community, Live, Members, Leaderboard
+// and Check-ins. Live shows for members once the coach has scheduled
+// something; Members shows when the community and its directory are on;
+// Leaderboard when the coach left it on; Check-ins once there is one.
+// The coach always sees Live, Leaderboard and Check-ins.
 import React, { useEffect, useState } from 'react';
 import { api } from '../../lib/api.js';
 import { Community } from './CommunityFeed.jsx';
 import { LiveSessions } from './LiveSessions.jsx';
 import { MemberDirectory } from './MemberDirectory.jsx';
+import { Leaderboard } from './Engagement.jsx';
+import { MemberCheckins, OwnerCheckins } from './Checkins.jsx';
 
 // The community summary (role, what is switched on). null while loading
 // or when the API is older than this screen.
@@ -15,10 +19,12 @@ export function useProgramExtras(programId) {
   return extras;
 }
 
-export function memberTabs({ contentLabel, communityEnabled, extras }) {
+export function memberTabs({ contentLabel, communityEnabled, extras, checkinsDue = 0 }) {
   const tabs = [['content', contentLabel]];
   if (communityEnabled) tabs.push(['community', 'Community']);
+  if (extras?.hasCheckins) tabs.push(['checkins', checkinsDue ? `Check-ins (${checkinsDue})` : 'Check-ins']);
   if (extras?.hasEvents) tabs.push(['live', extras.upcomingEvents ? `Live (${extras.upcomingEvents})` : 'Live']);
+  if (extras?.leaderboardEnabled) tabs.push(['leaderboard', 'Leaderboard']);
   if (communityEnabled && extras?.directoryEnabled) tabs.push(['members', 'Members']);
   return tabs;
 }
@@ -34,9 +40,11 @@ export function TabBar({ tabs, tab, setTab }) {
 }
 
 // Body of the non-content tabs, shared by the coach and member pages.
-export function ProgramTabBody({ tab, programId, role, communityEnabled }) {
+export function ProgramTabBody({ tab, programId, role, communityEnabled, onCheckinsChange }) {
   if (tab === 'community') return <Community programId={programId} enabled={communityEnabled}/>;
   if (tab === 'live') return <LiveSessions programId={programId} role={role}/>;
   if (tab === 'members' && role !== 'owner') return <MemberDirectory programId={programId}/>;
+  if (tab === 'leaderboard') return <Leaderboard programId={programId} role={role}/>;
+  if (tab === 'checkins') return role === 'owner' ? <OwnerCheckins programId={programId}/> : <MemberCheckins programId={programId} onChange={onCheckinsChange}/>;
   return null;
 }

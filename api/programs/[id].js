@@ -6,7 +6,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeProgram, serializeEnrollment, cleanProgramInput, isUuid } from '../_lib/programs.js';
+import { serializeProgram, serializeEnrollment, cleanProgramInput, checkProgramExtras, isUuid } from '../_lib/programs.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 import { loadModules, serializeModule, serializeLesson, courseOrder } from '../_lib/programCourse.js';
 
@@ -24,8 +24,11 @@ export default async function handler(req, res) {
       const modules = await loadModules(id, workspaceId);
       const items = courseOrder(modules, (await sql`SELECT * FROM program_items WHERE program_id = ${id} AND workspace_id = ${workspaceId} AND deleted_at IS NULL ORDER BY position ASC, created_at ASC`).rows);
       const members = (await sql`
-        SELECT e.*, c.name AS client_name, c.email AS client_email FROM program_enrollments e
-        JOIN clients c ON c.id = e.client_id WHERE e.program_id = ${id} AND e.workspace_id = ${workspaceId} ORDER BY e.granted_at DESC`).rows;
+        SELECT e.*, c.name AS client_name, c.email AS client_email, co.name AS cohort_name, pc.code AS coupon_code FROM program_enrollments e
+        JOIN clients c ON c.id = e.client_id
+        LEFT JOIN program_cohorts co ON co.id = e.cohort_id AND co.deleted_at IS NULL
+        LEFT JOIN program_coupons pc ON pc.id = e.coupon_id
+        WHERE e.program_id = ${id} AND e.workspace_id = ${workspaceId} ORDER BY e.granted_at DESC`).rows;
       // Owner insight: completions per lesson, and each member's progress.
       const perItem = new Map((await sql`
         SELECT pp.item_id, COUNT(*)::int AS n FROM program_progress pp
@@ -58,9 +61,16 @@ export default async function handler(req, res) {
       if (!v.ok) return badRequest(res, v.errors[0]);
       if (v.value.status === 'published' && p.status === 'archived') return badRequest(res, 'This program is archived.');
       const f = { ...p, ...v.value };
+      const extra = await checkProgramExtras(f, workspaceId);
+      if (extra) return badRequest(res, extra);
+      const oneTime = f.billing === 'one_time';
       const { rows } = await sql`
         UPDATE programs SET title = ${f.title}, description = ${f.description}, cover_url = ${f.cover_url}, price_cents = ${f.price_cents},
-          billing = ${f.billing}, community_enabled = ${f.community_enabled}, access_days = ${f.access_days}, status = ${f.status}, updated_at = NOW()
+          billing = ${f.billing}, community_enabled = ${f.community_enabled}, access_days = ${f.access_days}, status = ${f.status},
+          leaderboard_enabled = ${!!f.leaderboard_enabled}, streak_mode = ${f.streak_mode || 'daily'}, delivery = ${f.delivery || 'evergreen'},
+          trial_days = ${oneTime ? null : (f.trial_days || null)},
+          bundle_package_id = ${oneTime ? (f.bundle_package_id || null) : null}, bundle_mode = ${oneTime && f.bundle_package_id ? (f.bundle_mode || null) : null},
+          updated_at = NOW()
         WHERE id = ${id} AND workspace_id = ${workspaceId} RETURNING *`;
       return ok(res, { program: serializeProgram(rows[0]) });
     }

@@ -61,7 +61,9 @@ export default function ModuleEditor({ programId, program, items, modules, activ
                   <div style={{ fontSize: 15, fontWeight: 600 }}>{m.title}</div>
                   {m.description && <div style={{ fontSize: 12.5, color: 'var(--muted)', marginTop: 2 }}>{m.description}</div>}
                   <div style={{ fontSize: 12, color: m.unlockAfterDays ? 'var(--fg-2)' : 'var(--muted)', marginTop: 4, display: 'inline-flex', alignItems: 'center', gap: 5 }}>
-                    {m.unlockAfterDays ? <><Icons.Lock size={12}/> Opens {m.unlockAfterDays} day{m.unlockAfterDays === 1 ? '' : 's'} after a member joins</> : 'Open from the start'}
+                    {program?.delivery === 'cohort' && m.availableBeforeStart ? 'Open before the cohort starts'
+                      : m.unlockAfterDays ? <><Icons.Lock size={12}/> Opens {m.unlockAfterDays} day{m.unlockAfterDays === 1 ? '' : 's'} after {program?.delivery === 'cohort' ? 'the cohort starts' : 'a member joins'}</>
+                      : program?.delivery === 'cohort' ? 'Opens on the start date' : 'Open from the start'}
                   </div>
                 </> : (
                   <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: 'var(--muted)', paddingTop: 2 }}>{modules.length ? 'Not in a module' : 'Lessons'}</div>
@@ -106,19 +108,19 @@ export default function ModuleEditor({ programId, program, items, modules, activ
           </section>
         );
       })}
-      {moduleForm && <ModuleForm programId={programId} module={moduleForm.id ? moduleForm : null} onClose={() => setModuleForm(null)} onSaved={() => { setModuleForm(null); reload(); }}/>}
+      {moduleForm && <ModuleForm programId={programId} cohort={program?.delivery === 'cohort'} module={moduleForm.id ? moduleForm : null} onClose={() => setModuleForm(null)} onSaved={() => { setModuleForm(null); reload(); }}/>}
       {lessonForm && <LessonForm programId={programId} program={program} modules={modules} item={lessonForm.item} moduleId={lessonForm.moduleId}
         activeMembers={activeMembers} onClose={() => setLessonForm(null)} onSaved={() => { setLessonForm(null); reload(); }}/>}
     </div>
   );
 }
 
-function ModuleForm({ programId, module, onClose, onSaved }) {
-  const [f, setF] = useState({ title: module?.title || '', description: module?.description || '', unlockAfterDays: module?.unlockAfterDays ? String(module.unlockAfterDays) : '' });
+function ModuleForm({ programId, module, cohort = false, onClose, onSaved }) {
+  const [f, setF] = useState({ title: module?.title || '', description: module?.description || '', unlockAfterDays: module?.unlockAfterDays ? String(module.unlockAfterDays) : '', availableBeforeStart: !!module?.availableBeforeStart });
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr(null);
-    const payload = { title: f.title, description: f.description, unlockAfterDays: f.unlockAfterDays === '' ? null : Number(f.unlockAfterDays) };
+    const payload = { title: f.title, description: f.description, unlockAfterDays: f.unlockAfterDays === '' ? null : Number(f.unlockAfterDays), availableBeforeStart: !!f.availableBeforeStart };
     try {
       if (module) await api.patch(`/programs/${programId}/modules`, { moduleId: module.id, ...payload });
       else await api.post(`/programs/${programId}/modules`, payload);
@@ -130,9 +132,17 @@ function ModuleForm({ programId, module, onClose, onSaved }) {
       <form onSubmit={submit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <Field label="Title"><input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder="Week 1: Getting started" autoFocus required maxLength={140}/></Field>
         <Field label="Description (optional)"><textarea className="input" rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} style={{ resize: 'vertical' }}/></Field>
-        <Field label="Unlocks after (days)" hint="Leave blank to open it right away. Otherwise it opens this many days after each member joins, and they get an email when it does.">
-          <input className="input" type="number" min="0" max="3650" inputMode="numeric" value={f.unlockAfterDays} onChange={(e) => setF({ ...f, unlockAfterDays: e.target.value })} placeholder="Right away"/>
-        </Field>
+        {!(cohort && f.availableBeforeStart) && (
+          <Field label="Unlocks after (days)" hint={cohort ? 'Leave blank to open it on the cohort start date. Otherwise it opens this many days after the cohort starts, and members get an email when it does.' : 'Leave blank to open it right away. Otherwise it opens this many days after each member joins, and they get an email when it does.'}>
+            <input className="input" type="number" min="0" max="3650" inputMode="numeric" value={f.unlockAfterDays} onChange={(e) => setF({ ...f, unlockAfterDays: e.target.value })} placeholder={cohort ? 'On the start date' : 'Right away'}/>
+          </Field>
+        )}
+        {cohort && (
+          <label style={{ display: 'flex', alignItems: 'flex-start', gap: 10, fontSize: 14 }}>
+            <input type="checkbox" checked={f.availableBeforeStart} onChange={(e) => setF({ ...f, availableBeforeStart: e.target.checked })} style={{ marginTop: 3 }}/>
+            <span>Open before the cohort starts<span style={{ display: 'block', fontSize: 12, color: 'var(--muted)', marginTop: 2 }}>For welcome or getting-ready content members can see as soon as they join.</span></span>
+          </label>
+        )}
         {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy || !f.title.trim()}>{busy ? 'Saving…' : 'Save'}</button></div>
       </form>

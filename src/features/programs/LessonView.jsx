@@ -7,6 +7,7 @@ import { Icons } from '../../components/Icons.jsx';
 import LessonContent from './LessonContent.jsx';
 import { lessonMeta } from './courseUi.jsx';
 import { LessonComments } from './CommunityFeed.jsx';
+import { celebrateBadges } from './Engagement.jsx';
 
 // Loads the course for a member (or the owner previewing) and keeps the
 // completed flags and progress in sync after each mark / undo.
@@ -23,6 +24,7 @@ export function useCourse(programId) {
       lessons: d.lessons.map((l) => (l.id === itemId ? { ...l, completed: r.done } : l)),
       items: (d.items || []).map((l) => (l.id === itemId ? { ...l, completed: r.done } : l)),
     }));
+    if (r.newBadges?.length) celebrateBadges(programId, r.newBadges);
     return r;
   };
   return { data, setData, err, reload: load, setDone };

@@ -34,6 +34,9 @@ async function summary(access, user) {
     hasEvents: (ev?.total || 0) > 0,
     upcomingEvents: ev?.upcoming || 0,
     muted: !isOwner && await isMuted(program.id, access.clientId),
+    // Phase 3 tabs: the leaderboard (when the owner left it on) and check-ins.
+    leaderboardEnabled: !!program.leaderboard_enabled,
+    hasCheckins: !!(await sql`SELECT 1 FROM program_checkin_forms WHERE program_id = ${program.id} AND archived_at IS NULL LIMIT 1`).rows[0],
     profile: { ...serializeProfile(prof), defaultName: isOwner ? (user.name || '') : ((await sql`SELECT name FROM clients WHERE id = ${access.clientId}`).rows[0]?.name || user.name || '') },
   };
   if (isOwner) {

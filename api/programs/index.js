@@ -5,7 +5,7 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeProgram, cleanProgramInput } from '../_lib/programs.js';
+import { serializeProgram, cleanProgramInput, checkProgramExtras } from '../_lib/programs.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -26,9 +26,15 @@ export default async function handler(req, res) {
       const body = await readBody(req);
       const v = cleanProgramInput(body);
       if (!v.ok) return badRequest(res, v.errors[0]);
+      const f = v.value;
+      const extra = await checkProgramExtras(f, workspaceId);
+      if (extra) return badRequest(res, extra);
       const { rows } = await sql`
-        INSERT INTO programs (workspace_id, title, description, cover_url, price_cents, billing, community_enabled, access_days)
-        VALUES (${workspaceId}, ${v.value.title}, ${v.value.description}, ${v.value.cover_url}, ${v.value.price_cents}, ${v.value.billing}, ${v.value.community_enabled}, ${v.value.access_days})
+        INSERT INTO programs (workspace_id, title, description, cover_url, price_cents, billing, community_enabled, access_days,
+          leaderboard_enabled, streak_mode, delivery, trial_days, bundle_package_id, bundle_mode)
+        VALUES (${workspaceId}, ${f.title}, ${f.description}, ${f.cover_url}, ${f.price_cents}, ${f.billing}, ${f.community_enabled}, ${f.access_days},
+          ${f.leaderboard_enabled}, ${f.streak_mode}, ${f.delivery}, ${f.billing === 'one_time' ? null : f.trial_days},
+          ${f.billing === 'one_time' ? f.bundle_package_id : null}, ${f.billing === 'one_time' ? f.bundle_mode : null})
         RETURNING *`;
       return created(res, { program: serializeProgram(rows[0], { members: 0, items: 0 }) });
     }

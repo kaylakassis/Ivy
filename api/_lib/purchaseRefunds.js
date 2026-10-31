@@ -70,6 +70,10 @@ async function loadPurchase({ kind, id, workspaceId }) {
     const r = await sql`SELECT * FROM client_packages WHERE id = ${id} AND workspace_id = ${workspaceId} LIMIT 1`;
     const cp = r.rows[0];
     if (!cp) return null;
+    // Sessions that came with a program purchase were paid as part of it.
+    if (cp.program_enrollment_id || cp.bundle_session_id) {
+      throw new Error('These sessions came with a program purchase. Refund the program purchase instead; a full refund cancels these sessions too.');
+    }
     return { row: cp, basisCents: Math.round(Number(cp.price || 0) * 100), refundedCents: Number(cp.refunded_cents || 0),
       paymentIntent: cp.stripe_payment_intent || null, label: cp.name };
   }

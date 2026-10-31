@@ -9,6 +9,7 @@ import { serializeProgram, isUuid } from '../../_lib/programs.js';
 import { loadModules, loadLessons, courseOrder, serializeLesson } from '../../_lib/programCourse.js';
 import { methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 import { loadWorkspaceAccess, archivedPayload } from '../../_lib/businessAccess.js';
+import { openCohorts, bundleFor, serializeBundle } from '../../_lib/programCommerce.js';
 
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
@@ -43,6 +44,13 @@ export default async function handler(req, res) {
       }),
       business: { name: p.biz_name || p.workspace_name || 'Business', slug: p.slug || null },
       currency: (fin?.currency || 'USD').toUpperCase(),
+      // Phase 3: what the buy box offers. Whether a trial is still open to
+      // a given buyer is decided at checkout (one per person).
+      trialDays: p.billing !== 'one_time' && p.trial_days ? Number(p.trial_days) : null,
+      cohorts: p.delivery === 'cohort'
+        ? (await openCohorts(p)).map((c) => ({ id: c.id, name: c.name, startDate: c.startDate, closesOn: c.closesOn, spotsLeft: c.spotsLeft }))
+        : null,
+      bundle: serializeBundle(await bundleFor(p)),
     });
   } catch (err) { return serverError(res, err); }
 }

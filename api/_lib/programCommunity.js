@@ -37,12 +37,12 @@ export async function communityAccess(user, programId) {
 export const myKey = (access) => (access.role === 'owner' ? 'owner' : access.clientId);
 
 // Comments on a lesson are refused while that lesson is still locked for
-// this member (drip). Same rule the course API uses: lessonOpenForMember
-// with the member's enrollment, anchored by dripAnchorFor. Owners always
-// see everything.
+// this member (drip, or a cohort that has not started). Same rule the
+// course API uses: lessonOpenForMember with the member's enrollment,
+// anchored by dripAnchorFor. Owners always see everything.
 export async function isItemUnlockedFor(access, item) {
   if (access.role === 'owner') return true;
-  if (!item || !item.module_id) return true;
+  if (!item) return true;
   const enrollment = await memberEnrollment(access.program.id, access.clientId);
   if (!enrollment) return false;
   return lessonOpenForMember({ program: access.program, item, enrollment });

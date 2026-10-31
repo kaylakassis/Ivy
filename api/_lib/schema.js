@@ -3590,12 +3590,27 @@ ALTER TABLE workspaces ADD COLUMN IF NOT EXISTS helper_invite_lock_until TIMESTA
 --                     with a gift card (that money was counted when the
 --                     card was sold). Same basis as the owner's Finance page.
 --   store_orders      paid online-store orders.
---   programs          one-time program purchases.
---   packages          session packages bought online.
+--   programs          one-time program purchases. price_cents on a
+--                     purchase is what the buyer actually paid in that
+--                     checkout (after any coupon, including an optional
+--                     add-on package bought in the same checkout).
+--   packages          session packages bought online on their own. A
+--                     package that came with a program purchase (included
+--                     or add-on: bundle_session_id set) is already inside
+--                     that program purchase, so it is left out here.
 --   gift_cards        gift cards bought online.
 --   booking_payments  booking deposits, tips and late / no-show fees charged.
 -- Not included yet: renewals of memberships and subscription programs
--- (no per-payment record is kept for those).
+-- (no per-payment record is kept for those). A program subscription in a
+-- free trial has paid nothing and is never counted.
+-- Program bundles (phase 3): the package granted with a program purchase
+-- points back at that enrollment and at the checkout session (unique, so
+-- a re-delivered webhook grants the credits once). It carries no
+-- stripe_payment_intent / stripe_session_id of its own.
+ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS program_enrollment_id UUID REFERENCES program_enrollments(id) ON DELETE SET NULL;
+ALTER TABLE client_packages ADD COLUMN IF NOT EXISTS bundle_session_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_client_packages_bundle_session ON client_packages(bundle_session_id) WHERE bundle_session_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_client_packages_enrollment ON client_packages(program_enrollment_id) WHERE program_enrollment_id IS NOT NULL;
 CREATE OR REPLACE VIEW workspace_revenue AS
   SELECT w.id AS workspace_id,
          COALESCE(inv.amt, 0)::numeric(14,2) AS invoices,
@@ -3624,7 +3639,8 @@ CREATE OR REPLACE VIEW workspace_revenue AS
     LEFT JOIN (
       SELECT workspace_id, SUM(GREATEST(price - COALESCE(refunded_cents, 0) / 100.0, 0)) AS amt
         FROM client_packages
-       WHERE stripe_payment_intent IS NOT NULL OR stripe_session_id IS NOT NULL
+       WHERE (stripe_payment_intent IS NOT NULL OR stripe_session_id IS NOT NULL)
+         AND bundle_session_id IS NULL AND program_enrollment_id IS NULL
        GROUP BY workspace_id
     ) pkg ON pkg.workspace_id = w.id
     LEFT JOIN (
@@ -3645,6 +3661,62 @@ CREATE OR REPLACE VIEW workspace_revenue AS
 -- (dripAnchorFor in api/_lib/programCourse.js; the enrollment's
 -- granted_at today). NULL or 0 = open from the start.
 CREATE TABLE IF NOT EXISTS program_modules (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  description TEXT,
+  position INT NOT NULL DEFAULT 0,
+  unlock_after_days INT CHECK (unlock_after_days IS NULL OR (unlock_after_days >= 0 AND unlock_after_days <= 3650)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_program_modules_program ON program_modules(program_id, position) WHERE deleted_at IS NULL;
+-- Lessons: optional module (NULL = top level, so older programs keep
+-- working), video links from YouTube / Vimeo / Loom or an uploaded file,
+-- audio lessons, an image gallery, downloadable attachments, and a
+-- free-preview flag for the public sales page.
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS module_id UUID REFERENCES program_modules(id) ON DELETE SET NULL;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS video_provider TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS video_ref TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS media_url TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS media_name TEXT;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE program_items ADD COLUMN IF NOT EXISTS is_preview BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE program_items DROP CONSTRAINT IF EXISTS program_items_type_check;
+ALTER TABLE program_items ADD CONSTRAINT program_items_type_check CHECK (type IN ('pdf', 'post', 'video', 'audio')) NOT VALID;
+CREATE INDEX IF NOT EXISTS idx_program_items_module ON program_items(module_id) WHERE module_id IS NOT NULL;
+-- Lesson completions: one row per member per lesson. completed_at lets a
+-- later phase count completions per member per day (streaks, points).
+CREATE TABLE IF NOT EXISTS program_progress (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  enrollment_id UUID REFERENCES program_enrollments(id) ON DELETE SET NULL,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  item_id UUID NOT NULL REFERENCES program_items(id) ON DELETE CASCADE,
+  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_progress_client_item ON program_progress(client_id, item_id);
+CREATE INDEX IF NOT EXISTS idx_program_progress_program ON program_progress(program_id, client_id);
+CREATE INDEX IF NOT EXISTS idx_program_progress_day ON program_progress(workspace_id, client_id, completed_at);
+-- One row per program email / push actually sent to a member, so a re-run
+-- of the drip cron (or a double click on "Notify members") never sends the
+-- same news twice. dedupe_key: '<kind>:<ref id>:<client id>'.
+CREATE TABLE IF NOT EXISTS program_notifications (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref_id UUID,
+  dedupe_key TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_notifications_key ON program_notifications(dedupe_key);
+CREATE INDEX IF NOT EXISTS idx_program_notifications_program ON program_notifications(program_id, created_at DESC);
 
 -- ─── Programs phase 2: community + live sessions ──────────────────────
 -- Feed upgrades on program_posts. item_id set = a comment under a lesson
@@ -3713,58 +3785,6 @@ CREATE TABLE IF NOT EXISTS program_events (
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
   title TEXT NOT NULL,
   description TEXT,
-  position INT NOT NULL DEFAULT 0,
-  unlock_after_days INT CHECK (unlock_after_days IS NULL OR (unlock_after_days >= 0 AND unlock_after_days <= 3650)),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-  deleted_at TIMESTAMPTZ
-);
-CREATE INDEX IF NOT EXISTS idx_program_modules_program ON program_modules(program_id, position) WHERE deleted_at IS NULL;
--- Lessons: optional module (NULL = top level, so older programs keep
--- working), video links from YouTube / Vimeo / Loom or an uploaded file,
--- audio lessons, an image gallery, downloadable attachments, and a
--- free-preview flag for the public sales page.
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS module_id UUID REFERENCES program_modules(id) ON DELETE SET NULL;
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS video_provider TEXT;
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS video_ref TEXT;
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS media_url TEXT;
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS media_name TEXT;
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS attachments JSONB NOT NULL DEFAULT '[]'::jsonb;
-ALTER TABLE program_items ADD COLUMN IF NOT EXISTS is_preview BOOLEAN NOT NULL DEFAULT FALSE;
-ALTER TABLE program_items DROP CONSTRAINT IF EXISTS program_items_type_check;
-ALTER TABLE program_items ADD CONSTRAINT program_items_type_check CHECK (type IN ('pdf', 'post', 'video', 'audio')) NOT VALID;
-CREATE INDEX IF NOT EXISTS idx_program_items_module ON program_items(module_id) WHERE module_id IS NOT NULL;
--- Lesson completions: one row per member per lesson. completed_at lets a
--- later phase count completions per member per day (streaks, points).
-CREATE TABLE IF NOT EXISTS program_progress (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
-  enrollment_id UUID REFERENCES program_enrollments(id) ON DELETE SET NULL,
-  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  item_id UUID NOT NULL REFERENCES program_items(id) ON DELETE CASCADE,
-  completed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_program_progress_client_item ON program_progress(client_id, item_id);
-CREATE INDEX IF NOT EXISTS idx_program_progress_program ON program_progress(program_id, client_id);
-CREATE INDEX IF NOT EXISTS idx_program_progress_day ON program_progress(workspace_id, client_id, completed_at);
--- One row per program email / push actually sent to a member, so a re-run
--- of the drip cron (or a double click on "Notify members") never sends the
--- same news twice. dedupe_key: '<kind>:<ref id>:<client id>'.
-CREATE TABLE IF NOT EXISTS program_notifications (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
-  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
-  client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL,
-  ref_id UUID,
-  dedupe_key TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-CREATE UNIQUE INDEX IF NOT EXISTS uq_program_notifications_key ON program_notifications(dedupe_key);
-CREATE INDEX IF NOT EXISTS idx_program_notifications_program ON program_notifications(program_id, created_at DESC);
-
   starts_at TIMESTAMPTZ NOT NULL,
   duration_min INT NOT NULL DEFAULT 60 CHECK (duration_min > 0 AND duration_min <= 1440),
   location_type TEXT NOT NULL DEFAULT 'video' CHECK (location_type IN ('video', 'in_person', 'link')),
@@ -3827,4 +3847,156 @@ BEGIN
       CHECK (target_type IN ('client', 'business', 'message', 'group_message', 'review', 'program_post'));
   END IF;
 END $$;
+
+-- ─── Programs phase 3: points, streaks, check-ins, cohorts, trials, coupons, bundles ──
+-- Leaderboard switch: ON for programs created from now on, OFF for the
+-- programs that already exist (ADD COLUMN fills existing rows with FALSE,
+-- then the default flips to TRUE for new rows) so nobody is surprised.
+ALTER TABLE programs ADD COLUMN IF NOT EXISTS leaderboard_enabled BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE programs ALTER COLUMN leaderboard_enabled SET DEFAULT TRUE;
+-- Streaks count days (daily) or weeks (weekly, for weekly check-in programs).
+ALTER TABLE programs ADD COLUMN IF NOT EXISTS streak_mode TEXT NOT NULL DEFAULT 'daily' CHECK (streak_mode IN ('daily', 'weekly'));
+-- 'evergreen' drips from each member's join date; 'cohort' from the start
+-- date of the member's cohort (dripAnchorFor in api/_lib/programCourse.js).
+ALTER TABLE programs ADD COLUMN IF NOT EXISTS delivery TEXT NOT NULL DEFAULT 'evergreen' CHECK (delivery IN ('evergreen', 'cohort'));
+-- Free trial for subscription programs (Checkout subscription_data[trial_period_days]).
+ALTER TABLE programs ADD COLUMN IF NOT EXISTS trial_days INT CHECK (trial_days IS NULL OR (trial_days >= 1 AND trial_days <= 30));
+-- One package of sessions attached to a one-time program: 'included'
+-- (buying the program grants the credits) or 'addon' (an optional second
+-- line item on the same checkout).
+ALTER TABLE programs ADD COLUMN IF NOT EXISTS bundle_package_id UUID REFERENCES packages(id) ON DELETE SET NULL;
+ALTER TABLE programs ADD COLUMN IF NOT EXISTS bundle_mode TEXT CHECK (bundle_mode IS NULL OR bundle_mode IN ('included', 'addon'));
+-- Cohort programs: a module the owner opens before the cohort starts (welcome / module 0).
+ALTER TABLE program_modules ADD COLUMN IF NOT EXISTS available_before_start BOOLEAN NOT NULL DEFAULT FALSE;
+-- A member can keep earning points without being listed on the leaderboard (per business).
+ALTER TABLE program_member_profiles ADD COLUMN IF NOT EXISTS hide_from_leaderboard BOOLEAN NOT NULL DEFAULT FALSE;
+CREATE INDEX IF NOT EXISTS idx_program_event_rsvps_program ON program_event_rsvps(program_id, client_id);
+
+-- Cohorts: a group that starts together. starts_at is midnight of
+-- start_date in the business's timezone, computed when the cohort is saved.
+-- Enrollment closes at the end of enrollment_closes_on (or of start_date
+-- when that is blank) or when capacity is reached.
+CREATE TABLE IF NOT EXISTS program_cohorts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  start_date DATE NOT NULL,
+  starts_at TIMESTAMPTZ NOT NULL,
+  enrollment_closes_on DATE,
+  capacity INT CHECK (capacity IS NULL OR (capacity > 0 AND capacity <= 100000)),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  deleted_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_program_cohorts_program ON program_cohorts(program_id, starts_at) WHERE deleted_at IS NULL;
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS cohort_id UUID REFERENCES program_cohorts(id) ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_program_enrollments_cohort ON program_enrollments(cohort_id) WHERE cohort_id IS NOT NULL;
+
+-- Coupons: per program (program_id) or every program of the business
+-- (program_id NULL). Mirrored as a coupon on the business's own connected
+-- payment account (stripe_coupon_id + the account it lives on) so the
+-- owner's dashboard shows the same discount; the code itself is checked
+-- server-side and the coupon passed as discounts[0][coupon] on Checkout.
+CREATE TABLE IF NOT EXISTS program_coupons (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID REFERENCES programs(id) ON DELETE CASCADE,
+  code TEXT NOT NULL,
+  kind TEXT NOT NULL CHECK (kind IN ('percent', 'amount')),
+  percent_off INT CHECK (percent_off IS NULL OR (percent_off >= 1 AND percent_off <= 100)),
+  amount_off_cents INT CHECK (amount_off_cents IS NULL OR amount_off_cents > 0),
+  currency TEXT,
+  duration TEXT NOT NULL DEFAULT 'once' CHECK (duration IN ('once', 'forever')),
+  expires_at TIMESTAMPTZ,
+  max_redemptions INT CHECK (max_redemptions IS NULL OR max_redemptions > 0),
+  stripe_coupon_id TEXT,
+  stripe_account TEXT,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_coupons_code ON program_coupons(workspace_id, code) WHERE active;
+CREATE INDEX IF NOT EXISTS idx_program_coupons_program ON program_coupons(program_id);
+-- One row per paid checkout (or subscription) that used a coupon. ref is
+-- the Checkout session id (one-time) or the subscription id, unique per
+-- coupon, so a re-delivered webhook counts once.
+CREATE TABLE IF NOT EXISTS program_coupon_redemptions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  coupon_id UUID NOT NULL REFERENCES program_coupons(id) ON DELETE CASCADE,
+  program_id UUID REFERENCES programs(id) ON DELETE SET NULL,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  ref TEXT NOT NULL,
+  discount_cents INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_coupon_redemptions_ref ON program_coupon_redemptions(coupon_id, ref);
+-- What the buyer used: the coupon, how much it took off, and whether a
+-- subscription is still in its free trial (a trial has paid nothing).
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS coupon_id UUID REFERENCES program_coupons(id) ON DELETE SET NULL;
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS discount_cents INT NOT NULL DEFAULT 0;
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS trialing BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE program_enrollments ADD COLUMN IF NOT EXISTS trial_ends_at TIMESTAMPTZ;
+-- One free trial per person per program, keyed by lower-cased email.
+CREATE TABLE IF NOT EXISTS program_trials (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  email TEXT NOT NULL,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  stripe_subscription_id TEXT,
+  started_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_trials ON program_trials(program_id, email);
+
+-- Check-ins: owner-built forms (up to 10 questions) a member fills in once
+-- per period (daily, weekly on a weekday, or once). Answers are private to
+-- the member and the owner. period_key: local date for daily, the local
+-- date the week starts for weekly, 'once' for a one-off.
+CREATE TABLE IF NOT EXISTS program_checkin_forms (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  title TEXT NOT NULL,
+  frequency TEXT NOT NULL CHECK (frequency IN ('daily', 'weekly', 'once')),
+  weekday INT CHECK (weekday IS NULL OR (weekday >= 0 AND weekday <= 6)),
+  questions JSONB NOT NULL DEFAULT '[]'::jsonb,
+  remind BOOLEAN NOT NULL DEFAULT TRUE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  archived_at TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_program_checkin_forms_program ON program_checkin_forms(program_id) WHERE archived_at IS NULL;
+CREATE TABLE IF NOT EXISTS program_checkin_responses (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  form_id UUID NOT NULL REFERENCES program_checkin_forms(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  period_key TEXT NOT NULL,
+  answers JSONB NOT NULL DEFAULT '{}'::jsonb,
+  replies JSONB NOT NULL DEFAULT '[]'::jsonb,
+  replies_seen_at TIMESTAMPTZ,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_checkin_responses_period ON program_checkin_responses(form_id, client_id, period_key);
+CREATE INDEX IF NOT EXISTS idx_program_checkin_responses_program ON program_checkin_responses(program_id, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_program_checkin_responses_client ON program_checkin_responses(program_id, client_id, submitted_at);
+
+-- Badges a member earned in a program: kept once earned (unique), with
+-- seen_at so the app celebrates each one exactly once. Points themselves
+-- are computed from the activity rows (progress, posts, reactions, RSVPs,
+-- check-ins), never stored twice.
+CREATE TABLE IF NOT EXISTS program_badges (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  badge TEXT NOT NULL,
+  earned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  seen_at TIMESTAMPTZ
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_badges ON program_badges(program_id, client_id, badge);
 `;

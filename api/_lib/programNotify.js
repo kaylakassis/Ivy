@@ -19,7 +19,7 @@ import { sendEmailToClient, emailShell } from './email.js';
 import { notifyClientSafe, notifyOwnerSafe } from './push.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
-import { dripAnchorFor, moduleUnlocksAt, isModuleOpen } from './programCourse.js';
+import { dripAnchorFor, moduleUnlocksAt, lessonUnlocksAt, courseGateFor } from './programCourse.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const firstName = (n) => String(n || '').trim().split(/\s+/)[0] || 'there';
@@ -37,9 +37,10 @@ async function claim({ workspaceId, programId, clientId, kind, refId }) {
 
 async function activeMembers(programId, workspaceId) {
   return (await sql`
-    SELECT DISTINCT ON (e.client_id) e.*, c.name AS client_name, c.email AS client_email
+    SELECT DISTINCT ON (e.client_id) e.*, c.name AS client_name, c.email AS client_email, co.starts_at AS cohort_starts_at
       FROM program_enrollments e
       JOIN clients c ON c.id = e.client_id AND c.workspace_id = e.workspace_id
+      LEFT JOIN program_cohorts co ON co.id = e.cohort_id AND co.deleted_at IS NULL
      WHERE e.program_id = ${programId} AND e.workspace_id = ${workspaceId}
        AND e.status IN ('active','past_due') AND (e.expires_at IS NULL OR e.expires_at > NOW())
      ORDER BY e.client_id, e.granted_at ASC`).rows;
@@ -79,7 +80,7 @@ export async function notifyNewLesson({ workspaceId, programId, itemId, now = ne
   await eachLimited(members, 5, async (m) => {
     // A lesson in a module that is still locked for this member is
     // announced by the drip cron when the module opens, not now.
-    if (module && !isModuleOpen(module, dripAnchorFor(m, program), now)) return;
+    if (lessonUnlocksAt(module, { anchor: dripAnchorFor(m, program), gate: courseGateFor(m, program), now })) return;
     if (!(await claim({ workspaceId, programId, clientId: m.client_id, kind: 'lesson', refId: item.id }))) return;
     const subject = `New lesson in ${program.title}: ${item.title}`;
     await sendMember({
@@ -100,13 +101,14 @@ export async function notifyNewLesson({ workspaceId, programId, itemId, now = ne
 export async function runDripNotifications({ now = new Date(), workspaceId = null } = {}) {
   const rows = (await sql`
     SELECT m.id AS module_id, m.title AS module_title, m.unlock_after_days, m.workspace_id,
-           p.id AS program_id, p.title AS program_title, p.status AS program_status,
-           e.id AS enrollment_id, e.client_id, e.granted_at, e.status, e.expires_at,
+           p.id AS program_id, p.title AS program_title, p.status AS program_status, p.delivery,
+           e.id AS enrollment_id, e.client_id, e.granted_at, e.status, e.expires_at, co.starts_at AS cohort_starts_at,
            c.name AS client_name, c.email AS client_email
       FROM program_modules m
       JOIN programs p ON p.id = m.program_id AND p.workspace_id = m.workspace_id AND p.status IN ('published','archived')
       JOIN program_enrollments e ON e.program_id = p.id AND e.workspace_id = p.workspace_id
            AND e.status IN ('active','past_due') AND (e.expires_at IS NULL OR e.expires_at > ${now.toISOString()})
+      LEFT JOIN program_cohorts co ON co.id = e.cohort_id AND co.deleted_at IS NULL
       JOIN clients c ON c.id = e.client_id AND c.workspace_id = p.workspace_id
      WHERE m.deleted_at IS NULL AND m.unlock_after_days > 0
        AND (${workspaceId}::uuid IS NULL OR m.workspace_id = ${workspaceId}::uuid)
@@ -119,7 +121,7 @@ export async function runDripNotifications({ now = new Date(), workspaceId = nul
   const groups = new Map();
   let recordedOnly = 0;
   for (const r of rows) {
-    const at = moduleUnlocksAt(r, dripAnchorFor(r, { id: r.program_id }));
+    const at = moduleUnlocksAt(r, dripAnchorFor(r, { id: r.program_id, delivery: r.delivery }));
     if (!at || at.getTime() > now.getTime()) continue;
      
     const mine = await claim({ workspaceId: r.workspace_id, programId: r.program_id, clientId: r.client_id, kind: 'unlock', refId: r.module_id });
@@ -149,9 +151,45 @@ export async function runDripNotifications({ now = new Date(), workspaceId = nul
 }
 
 // Owner push when a member joins through a subscription checkout.
-export function notifyOwnerProgramJoin({ workspaceId, programTitle, clientName, enrollmentId }) {
+export function notifyOwnerProgramJoin({ workspaceId, programTitle, clientName, enrollmentId, trial = false }) {
   return notifyOwnerSafe({
     workspaceId, type: 'payments',
-    payload: { title: 'New program member', body: `${clientName || 'Someone'} joined ${programTitle}.`, url: '/programs', tag: `program-join-${enrollmentId}` },
+    payload: trial
+      ? { title: 'Free trial started', body: `${clientName || 'Someone'} started a free trial of ${programTitle}.`, url: '/programs', tag: `program-join-${enrollmentId}` }
+      : { title: 'New program member', body: `${clientName || 'Someone'} joined ${programTitle}.`, url: '/programs', tag: `program-join-${enrollmentId}` },
   });
+}
+
+// Daily, cohort programs: the day a cohort starts, each of its members is
+// told once that the program is open. Starts older than 48 hours (a
+// cohort created with a past date) are recorded without a send.
+export async function runCohortStartNotifications({ now = new Date(), workspaceId = null } = {}) {
+  const rows = (await sql`
+    SELECT co.id AS cohort_id, co.name AS cohort_name, co.starts_at, p.id AS program_id, p.title AS program_title, p.workspace_id,
+           e.client_id, c.name AS client_name, c.email AS client_email
+      FROM program_cohorts co
+      JOIN programs p ON p.id = co.program_id AND p.workspace_id = co.workspace_id AND p.delivery = 'cohort' AND p.status IN ('published','archived')
+      JOIN program_enrollments e ON e.cohort_id = co.id AND e.program_id = p.id AND e.workspace_id = p.workspace_id
+           AND e.status IN ('active','past_due') AND (e.expires_at IS NULL OR e.expires_at > ${now.toISOString()})
+      JOIN clients c ON c.id = e.client_id AND c.workspace_id = p.workspace_id
+     WHERE co.deleted_at IS NULL AND co.starts_at <= ${now.toISOString()}
+       AND (${workspaceId}::uuid IS NULL OR co.workspace_id = ${workspaceId}::uuid)
+       AND NOT EXISTS (SELECT 1 FROM program_notifications n WHERE n.dedupe_key = 'cohort_start:' || co.id::text || ':' || e.client_id::text)
+     LIMIT 5000`).rows;
+  let sent = 0; let recordedOnly = 0;
+  const brandingCache = new Map();
+  await eachLimited(rows, 5, async (r) => {
+    if (!(await claim({ workspaceId: r.workspace_id, programId: r.program_id, clientId: r.client_id, kind: 'cohort_start', refId: r.cohort_id }))) return;
+    if (now.getTime() - new Date(r.starts_at).getTime() > DRIP_WINDOW_MS) { recordedOnly++; return; }
+    if (!brandingCache.has(r.workspace_id)) brandingCache.set(r.workspace_id, fetchBranding(r.workspace_id));
+    const branding = await brandingCache.get(r.workspace_id);
+    await sendMember({
+      member: r, branding, subject: `${r.program_title} starts today`, heading: 'Your program starts today',
+      bodyHtml: `<p>Hi ${esc(firstName(r.client_name))},</p><p><strong>${esc(r.program_title)}</strong> (${esc(r.cohort_name)}) is open. Your first lessons are ready.</p>`,
+      ctaText: 'Start now', path: `/me/programs/${r.program_id}`,
+      push: { title: `${r.program_title} starts today`, body: 'Your first lessons are ready.', tag: `program-cohort-${r.cohort_id}` },
+    });
+    sent++;
+  });
+  return { candidates: rows.length, sent, recordedOnly };
 }

@@ -1,5 +1,5 @@
 // Modules (sections / weeks) inside a program (owner only).
-//   POST   { title, description?, unlockAfterDays? }          → add (goes last)
+//   POST   { title, description?, unlockAfterDays?, availableBeforeStart? } → add (goes last)
 //   PATCH  { moduleId, title?, description?, unlockAfterDays? } → edit
 //          { order: [moduleId, ...] }                          → reorder
 //   DELETE ?moduleId=                                          → soft delete; its lessons move to the top level
@@ -31,8 +31,8 @@ export default async function handler(req, res) {
                                WHERE program_id = ${programId} AND workspace_id = ${workspaceId} AND deleted_at IS NULL`).rows[0];
       if (count.n >= MAX_MODULES) return badRequest(res, `A program can have up to ${MAX_MODULES} modules.`);
       const { rows } = await sql`
-        INSERT INTO program_modules (program_id, workspace_id, title, description, unlock_after_days, position)
-        VALUES (${programId}, ${workspaceId}, ${v.value.title}, ${v.value.description}, ${v.value.unlock_after_days}, ${count.next})
+        INSERT INTO program_modules (program_id, workspace_id, title, description, unlock_after_days, available_before_start, position)
+        VALUES (${programId}, ${workspaceId}, ${v.value.title}, ${v.value.description}, ${v.value.unlock_after_days}, ${v.value.available_before_start}, ${count.next})
         RETURNING *`;
       return created(res, { module: serializeModule(rows[0]) });
     }
@@ -54,7 +54,8 @@ export default async function handler(req, res) {
       const v = cleanModuleInput(body, true); if (v.error) return badRequest(res, v.error);
       const f = { ...m, ...v.value };
       const { rows } = await sql`
-        UPDATE program_modules SET title = ${f.title}, description = ${f.description}, unlock_after_days = ${f.unlock_after_days}, updated_at = NOW()
+        UPDATE program_modules SET title = ${f.title}, description = ${f.description}, unlock_after_days = ${f.unlock_after_days},
+          available_before_start = ${!!f.available_before_start}, updated_at = NOW()
          WHERE id = ${moduleId} AND program_id = ${programId} AND workspace_id = ${workspaceId} RETURNING *`;
       return ok(res, { module: serializeModule(rows[0]) });
     }

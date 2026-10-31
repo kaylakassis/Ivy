@@ -10,6 +10,10 @@ import ModuleEditor from './ModuleEditor.jsx';
 import CoursePreview from './CoursePreview.jsx';
 import { LiveSessions } from './LiveSessions.jsx';
 import { DirectorySettings } from './MemberDirectory.jsx';
+import { Leaderboard } from './Engagement.jsx';
+import { OwnerCheckins } from './Checkins.jsx';
+import { CohortsPanel, CohortSelect, useCohorts } from './Cohorts.jsx';
+import CouponsSheet from './Coupons.jsx';
 
 export default function ProgramsPage() {
   return <Builder/>;
@@ -20,6 +24,7 @@ function Builder() {
   const [programs, setPrograms] = useState(null);
   const [openId, setOpenId] = useState(() => { try { return new URLSearchParams(window.location.search).get('program'); } catch { return null; } });
   const [creating, setCreating] = useState(false);
+  const [coupons, setCoupons] = useState(false);
   const [err, setErr] = useState(null);
   const load = async () => { try { const r = await api.get('/programs'); setPrograms(r.programs || []); } catch (e) { setErr(e.message); setPrograms([]); } };
   useEffect(() => { load(); }, []);
@@ -32,6 +37,7 @@ function Builder() {
           <div style={{ color: 'var(--muted)', fontSize: 13, marginTop: 4 }}>Courses, plans and paid communities your clients can buy.</div>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
+          {programs?.length > 0 && <button className="btn btn-outline" onClick={() => setCoupons(true)}><Icons.Gift size={13}/> Coupons</button>}
           <button className="btn btn-primary" onClick={() => setCreating(true)}><Icons.Plus size={13} sw={2}/> New program</button>
         </div>
       </div>
@@ -57,6 +63,7 @@ function Builder() {
           </div>
         )}
       {creating && <ProgramForm onClose={() => setCreating(false)} onSaved={(p) => { setCreating(false); setOpenId(p.id); }}/>}
+      {coupons && <CouponsSheet programs={programs || []} onClose={() => setCoupons(false)}/>}
     </div>
   );
 }
@@ -81,11 +88,23 @@ function Sheet({ title, onClose, children, width = 520 }) {
 }
 
 function ProgramForm({ program, onClose, onSaved }) {
-  const [f, setF] = useState({ title: program?.title || '', description: program?.description || '', price: program ? (program.priceCents / 100).toString() : '', billing: program?.billing || 'one_time', accessDays: program?.accessDays ? String(program.accessDays) : '', communityEnabled: program ? program.communityEnabled : true });
+  const [f, setF] = useState({
+    title: program?.title || '', description: program?.description || '', price: program ? (program.priceCents / 100).toString() : '', billing: program?.billing || 'one_time', accessDays: program?.accessDays ? String(program.accessDays) : '', communityEnabled: program ? program.communityEnabled : true,
+    delivery: program?.delivery || 'evergreen', leaderboardEnabled: program ? !!program.leaderboardEnabled : true, streakMode: program?.streakMode || 'daily',
+    trialDays: program?.trialDays ? String(program.trialDays) : '', bundleMode: program?.bundleMode || '', bundlePackageId: program?.bundlePackageId || '',
+  });
+  const [packages, setPackages] = useState([]);
+  useEffect(() => { api.get('/packages').then((r) => setPackages((r.packages || []).filter((p) => p.active !== false))).catch(() => {}); }, []);
   const [busy, setBusy] = useState(false); const [err, setErr] = useState(null);
   const submit = async (e) => {
     e.preventDefault(); setBusy(true); setErr(null);
-    const payload = { title: f.title, description: f.description, priceCents: Math.round(Number(f.price || 0) * 100), billing: f.billing, accessDays: f.billing === 'one_time' && f.accessDays ? Number(f.accessDays) : null, communityEnabled: f.communityEnabled };
+    const oneTime = f.billing === 'one_time';
+    const payload = {
+      title: f.title, description: f.description, priceCents: Math.round(Number(f.price || 0) * 100), billing: f.billing, accessDays: oneTime && f.accessDays ? Number(f.accessDays) : null, communityEnabled: f.communityEnabled,
+      delivery: f.delivery, leaderboardEnabled: f.leaderboardEnabled, streakMode: f.streakMode,
+      trialDays: !oneTime && f.trialDays ? Number(f.trialDays) : null,
+      bundleMode: oneTime && f.bundleMode && f.bundlePackageId ? f.bundleMode : null, bundlePackageId: oneTime && f.bundleMode ? f.bundlePackageId || null : null,
+    };
     try { const r = program ? await api.patch(`/programs/${program.id}`, payload) : await api.post('/programs', payload); onSaved(r.program); }
     catch (ex) { setErr(ex.message); } finally { setBusy(false); }
   };
@@ -105,7 +124,33 @@ function ProgramForm({ program, onClose, onSaved }) {
         ) : (
           <div style={{ fontSize: 12.5, color: 'var(--muted)', lineHeight: 1.5 }}>Members keep access while their subscription is active and lose it automatically when it ends or a payment fails.</div>
         )}
+        {f.billing !== 'one_time' && (
+          <Field label="Free trial" hint="Days before the first payment (1 to 30). One trial per person. Blank for none.">
+            <input className="input" type="number" min="1" max="30" inputMode="numeric" value={f.trialDays} onChange={(e) => setF({ ...f, trialDays: e.target.value })} placeholder="No trial" style={{ maxWidth: 160 }}/>
+          </Field>
+        )}
+        <Field label="How members start" hint={f.delivery === 'cohort' ? 'Buyers join the next cohort and lessons open from its start date. Add cohorts on the Members tab.' : 'Lessons open counting from the day each member joins.'}>
+          <select className="input" value={f.delivery} onChange={(e) => setF({ ...f, delivery: e.target.value })}>
+            <option value="evergreen">Anytime (evergreen)</option>
+            <option value="cohort">In cohorts with start dates</option>
+          </select>
+        </Field>
+        {f.billing === 'one_time' && packages.length > 0 && (
+          <Field label="Sessions package" hint={f.bundleMode === 'included' ? 'Buying the program also gives these sessions. One payment.' : f.bundleMode === 'addon' ? 'Buyers can tick a box to add these sessions at checkout.' : 'Attach one of your session packages.'}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <select className="input" value={f.bundleMode} onChange={(e) => setF({ ...f, bundleMode: e.target.value, bundlePackageId: e.target.value ? (f.bundlePackageId || packages[0]?.id || '') : '' })} aria-label="Package option">
+                <option value="">None</option><option value="included">Included</option><option value="addon">Optional add-on</option>
+              </select>
+              {f.bundleMode && (
+                <select className="input" value={f.bundlePackageId} onChange={(e) => setF({ ...f, bundlePackageId: e.target.value })} aria-label="Package">
+                  {packages.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                </select>
+              )}
+            </div>
+          </Field>
+        )}
         <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}><input type="checkbox" checked={f.communityEnabled} onChange={(e) => setF({ ...f, communityEnabled: e.target.checked })}/> Enable the members-only community</label>
+        <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14 }}><input type="checkbox" checked={f.leaderboardEnabled} onChange={(e) => setF({ ...f, leaderboardEnabled: e.target.checked })}/> Show a points leaderboard to members</label>
         {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
         <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}><button type="button" className="btn btn-ghost" onClick={onClose}>Cancel</button><button type="submit" className="btn btn-primary" disabled={busy || !f.title.trim()}>{busy ? 'Saving…' : program ? 'Save' : 'Create'}</button></div>
       </form>
@@ -114,13 +159,15 @@ function ProgramForm({ program, onClose, onSaved }) {
 }
 
 function ProgramDetail({ id, onBack }) {
-  const [data, setData] = useState(null); const [tab, setTab] = useState(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); return ['content', 'members', 'community', 'live'].includes(t) ? t : 'content'; } catch { return 'content'; } });
+  const [data, setData] = useState(null); const [tab, setTab] = useState(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); return ['content', 'members', 'community', 'live', 'leaderboard', 'checkins'].includes(t) ? t : 'content'; } catch { return 'content'; } });
   const [editing, setEditing] = useState(false); const [previewing, setPreviewing] = useState(false);
   const [addMember, setAddMember] = useState(false); const [err, setErr] = useState(null); const [copied, setCopied] = useState(false);
   const [refunding, setRefunding] = useState(null); const [refundAmount, setRefundAmount] = useState(''); const [refundReason, setRefundReason] = useState('');
   const [refundBusy, setRefundBusy] = useState(false); const [refundNote, setRefundNote] = useState(null);
   const load = async () => { try { setData(await api.get(`/programs/${id}`)); } catch (e) { setErr(e.message); } };
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const cohortMode = data?.program?.delivery === 'cohort';
+  const cohorts = useCohorts(id, cohortMode);
   if (err) return <div className="page-pad" style={{ color: 'var(--danger)' }}>{err}</div>;
   if (!data) return <div className="page-pad" style={{ color: 'var(--muted)', fontSize: 13 }}>Loading…</div>;
   if (previewing) return <CoursePreview programId={id} onClose={() => { setPreviewing(false); load(); }}/>;
@@ -159,7 +206,7 @@ function ProgramDetail({ id, onBack }) {
             <div style={{ fontSize: 10.5, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase', color: program.status === 'published' ? 'var(--ok)' : 'var(--muted)' }}>{program.status}</div>
             <h2 className="page-title" style={{ margin: '4px 0 0', fontSize: 26 }}>{program.title}</h2>
             <div style={{ fontSize: 13.5, color: 'var(--fg-2)', marginTop: 6, lineHeight: 1.5 }}>{program.description || 'No description yet.'}</div>
-            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}><b style={{ color: 'var(--fg)' }}>{program.priceCents ? fmtPrice(program.priceCents) : 'Free'}</b> {program.priceCents ? billingLabel(program.billing) : ''}{program.billing === 'one_time' ? ` · access ${program.accessDays ? `${program.accessDays} days` : 'forever'}` : ''} · {activeMembers.length} member{activeMembers.length === 1 ? '' : 's'} · community {program.communityEnabled ? 'on' : 'off'}</div>
+            <div style={{ fontSize: 13, color: 'var(--muted)', marginTop: 8 }}><b style={{ color: 'var(--fg)' }}>{program.priceCents ? fmtPrice(program.priceCents) : 'Free'}</b> {program.priceCents ? billingLabel(program.billing) : ''}{program.billing === 'one_time' ? ` · access ${program.accessDays ? `${program.accessDays} days` : 'forever'}` : ''} · {activeMembers.length} member{activeMembers.length === 1 ? '' : 's'} · community {program.communityEnabled ? 'on' : 'off'}{program.trialDays ? ` · ${program.trialDays}-day free trial` : ''}{program.delivery === 'cohort' ? ' · cohorts' : ''}{program.bundleMode ? ` · sessions ${program.bundleMode === 'included' ? 'included' : 'add-on'}` : ''}</div>
           </div>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             <button className="btn btn-outline" onClick={() => setPreviewing(true)}><Icons.Eye size={13}/> Preview as member</button>
@@ -176,7 +223,7 @@ function ProgramDetail({ id, onBack }) {
         )}
       </div>
       <div className="scroll-x" style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, alignSelf: 'flex-start', maxWidth: '100%' }}>
-        {[['content', `Content (${items.length})`], ['members', `Members (${activeMembers.length})`], ['community', 'Community'], ['live', 'Live']].map(([t, l]) => (
+        {[['content', `Content (${items.length})`], ['members', `Members (${activeMembers.length})`], ['community', 'Community'], ['live', 'Live'], ['checkins', 'Check-ins'], ['leaderboard', 'Leaderboard']].map(([t, l]) => (
           <button key={t} type="button" onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 550, whiteSpace: 'nowrap', background: tab === t ? 'var(--surface-2)' : 'transparent', color: tab === t ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
         ))}
       </div>
@@ -185,6 +232,7 @@ function ProgramDetail({ id, onBack }) {
       )}
       {tab === 'members' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {cohortMode && <CohortsPanel programId={id} data={cohorts.data} reload={cohorts.reload} onChanged={load}/>}
           <DirectorySettings programId={id}/>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn btn-primary" onClick={() => setAddMember(true)}><Icons.Plus size={13} sw={2}/> Add member</button></div>
           {refundNote && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>{refundNote}</div>}
@@ -199,7 +247,10 @@ function ProgramDetail({ id, onBack }) {
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <div style={{ fontSize: 14, fontWeight: 600, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{m.clientName || m.clientEmail}</div>
                     {m.status !== 'cancelled' && items.length > 0 && <MemberProgress m={m}/>}
-                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.clientEmail} · {m.source === 'manual' ? 'added by you' : m.source === 'subscription' ? `subscription${m.currentPeriodEnd && m.status !== 'cancelled' ? ` · ${m.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(m.currentPeriodEnd).toLocaleDateString()}` : ''}` : 'purchased'}{m.expiresAt ? ` · ends ${new Date(m.expiresAt).toLocaleDateString()}` : ''} · {m.status === 'past_due' ? 'payment past due' : m.status}{Number(m.refundedCents) > 0 ? ` · ${fmtPrice(m.refundedCents)} refunded` : ''}</div>
+                    <div style={{ fontSize: 12, color: 'var(--muted)' }}>{m.clientEmail} · {m.source === 'manual' ? 'added by you' : m.source === 'subscription' ? (m.trialing && m.status !== 'cancelled' ? `free trial${m.trialEndsAt ? ` until ${new Date(m.trialEndsAt).toLocaleDateString()}` : ''}` : `subscription${m.currentPeriodEnd && m.status !== 'cancelled' ? ` · ${m.cancelAtPeriodEnd ? 'ends' : 'renews'} ${new Date(m.currentPeriodEnd).toLocaleDateString()}` : ''}`) : `paid ${fmtPrice(m.priceCents)}`}{m.couponCode ? ` with ${m.couponCode}` : ''}{m.expiresAt ? ` · ends ${new Date(m.expiresAt).toLocaleDateString()}` : ''} · {m.status === 'past_due' ? 'payment past due' : m.status}{Number(m.refundedCents) > 0 ? ` · ${fmtPrice(m.refundedCents)} refunded` : ''}</div>
+                    {cohortMode && m.status !== 'cancelled' && cohorts.data && (
+                      <div style={{ marginTop: 6 }}><CohortSelect programId={id} member={m} cohorts={cohorts.data.cohorts} onMoved={() => { load(); cohorts.reload(); }} onError={setErr}/></div>
+                    )}
                   </div>
                   {m.refundable && !confirming && <button type="button" onClick={() => startRefund(m)} className="btn btn-ghost" style={{ fontSize: 12.5, padding: '6px 10px', minHeight: 32, color: 'var(--danger)' }}>Refund{Number(m.refundedCents) > 0 ? ` (${fmtPrice(refundLeftCents)} left)` : ''}</button>}
                   {m.status !== 'cancelled' && <button type="button" onClick={() => revoke(m)} className="btn btn-ghost" style={{ fontSize: 12.5, padding: '6px 10px', minHeight: 32 }}>Remove access</button>}
@@ -229,8 +280,10 @@ function ProgramDetail({ id, onBack }) {
       )}
       {tab === 'community' && <Community programId={id} enabled={program.communityEnabled}/>}
       {tab === 'live' && <LiveSessions programId={id} role="owner"/>}
+      {tab === 'checkins' && <OwnerCheckins programId={id}/>}
+      {tab === 'leaderboard' && <Leaderboard programId={id} role="owner"/>}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="button" onClick={archive} style={{ fontSize: 12.5, color: 'var(--muted)' }}>Archive program</button></div>
-      {editing && <ProgramForm program={program} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }}/>}
+      {editing && <ProgramForm program={program} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); cohorts.reload(); }}/>}
       {addMember && <AddMember programId={id} onClose={() => setAddMember(false)} onSaved={() => { setAddMember(false); load(); }}/>}
     </div>
   );

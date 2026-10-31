@@ -175,7 +175,8 @@ export function lessonOutline(r, extra = {}) {
 export function serializeModule(m, extra = {}) {
   return {
     id: m.id, title: m.title, description: m.description || '', position: m.position,
-    unlockAfterDays: m.unlock_after_days == null ? null : Number(m.unlock_after_days), ...extra,
+    unlockAfterDays: m.unlock_after_days == null ? null : Number(m.unlock_after_days),
+    availableBeforeStart: !!m.available_before_start, ...extra,
   };
 }
 
@@ -194,6 +195,7 @@ export function cleanModuleInput(body, partial = false) {
     if (d != null && (!Number.isFinite(d) || d < 0 || d > 3650)) return { error: 'Unlock day must be between 0 and 3650, or blank to open right away.' };
     out.unlock_after_days = d === 0 ? null : d;
   }
+  if (!partial || body.availableBeforeStart !== undefined) out.available_before_start = !!body.availableBeforeStart;
   return { value: out };
 }
 
@@ -218,12 +220,25 @@ export function courseOrder(modules, items) {
 }
 
 // ── drip ────────────────────────────────────────────────────────────
-// THE anchor for drip schedules. Today: when the member got access. A
-// later cohort feature can return the cohort's start date here instead;
-// every unlock date in the product goes through this one function.
-export function dripAnchorFor(enrollment /* , program */) {
+// THE anchor for drip schedules: when the member got access, or for a
+// cohort program the start of the member's cohort (memberEnrollment and
+// the drip cron attach cohort_starts_at to the enrollment row). Every
+// unlock date in the product goes through this one function.
+export function dripAnchorFor(enrollment, program) {
+  if (program?.delivery === 'cohort' && enrollment?.cohort_starts_at) {
+    const c = new Date(enrollment.cohort_starts_at);
+    if (!Number.isNaN(c.getTime())) return c;
+  }
   const t = enrollment?.granted_at ? new Date(enrollment.granted_at) : null;
   return t && !Number.isNaN(t.getTime()) ? t : null;
+}
+// Cohort programs: nothing opens before the cohort starts except modules
+// the owner marked "available before start". Null for evergreen programs
+// (and for a member who is not in a cohort).
+export function courseGateFor(enrollment, program) {
+  if (program?.delivery !== 'cohort' || !enrollment?.cohort_starts_at) return null;
+  const c = new Date(enrollment.cohort_starts_at);
+  return Number.isNaN(c.getTime()) ? null : c;
 }
 export function moduleUnlocksAt(module, anchor) {
   const days = Number(module?.unlock_after_days || 0);
@@ -235,22 +250,35 @@ export function isModuleOpen(module, anchor, now = new Date()) {
   const at = moduleUnlocksAt(module, anchor);
   return !at || at.getTime() <= now.getTime();
 }
+// When a lesson (in `module`, or top level when null) opens for a member:
+// null = open now. Combines the cohort gate with the module's drip day.
+export function lessonUnlocksAt(module, { anchor, gate, now = new Date() }) {
+  if (module?.available_before_start && gate) return null;
+  const dripAt = module ? moduleUnlocksAt(module, anchor) : null;
+  const at = gate && (!dripAt || gate.getTime() > dripAt.getTime()) ? gate : dripAt;
+  return at && at.getTime() > now.getTime() ? at : null;
+}
 
-// The member's active enrollment for a program (the one access rides on).
+// The member's active enrollment for a program (the one access rides on),
+// with its cohort's name and start when the member is in one.
 export async function memberEnrollment(programId, clientId) {
   if (!clientId) return null;
   return (await sql`
-    SELECT * FROM program_enrollments
-     WHERE program_id = ${programId} AND client_id = ${clientId} AND status IN ('active','past_due')
-       AND (expires_at IS NULL OR expires_at > NOW())
-     ORDER BY granted_at ASC LIMIT 1`).rows[0] || null;
+    SELECT e.*, c.name AS cohort_name, c.starts_at AS cohort_starts_at, c.start_date::text AS cohort_start_date
+      FROM program_enrollments e
+      LEFT JOIN program_cohorts c ON c.id = e.cohort_id AND c.program_id = e.program_id AND c.deleted_at IS NULL
+     WHERE e.program_id = ${programId} AND e.client_id = ${clientId} AND e.status IN ('active','past_due')
+       AND (e.expires_at IS NULL OR e.expires_at > NOW())
+     ORDER BY e.granted_at ASC LIMIT 1`).rows[0] || null;
 }
 
 // Whether one lesson is open for a member right now.
 export async function lessonOpenForMember({ program, item, enrollment, now = new Date() }) {
-  if (!item.module_id) return true;
-  const m = (await sql`SELECT * FROM program_modules WHERE id = ${item.module_id} AND program_id = ${program.id} AND deleted_at IS NULL`).rows[0];
-  return isModuleOpen(m, dripAnchorFor(enrollment, program), now);
+  const gate = courseGateFor(enrollment, program);
+  const m = item.module_id
+    ? (await sql`SELECT * FROM program_modules WHERE id = ${item.module_id} AND program_id = ${program.id} AND deleted_at IS NULL`).rows[0] || null
+    : null;
+  return !lessonUnlocksAt(m, { anchor: dripAnchorFor(enrollment, program), gate, now });
 }
 
 // ── progress ────────────────────────────────────────────────────────
@@ -266,20 +294,27 @@ export async function completedItemIds(programId, clientId) {
 // legacy `items` field (read by the iPhone app already in the store)
 // holds only the lessons the viewer may open, in course order.
 export function buildCourse({ program, modules, items, role, enrollment = null, completed = new Set(), now = new Date() }) {
-  const anchor = role === 'owner' ? null : dripAnchorFor(enrollment, program);
+  const owner = role === 'owner';
+  const anchor = owner ? null : dripAnchorFor(enrollment, program);
+  const gate = owner ? null : courseGateFor(enrollment, program);
   const byId = new Map(modules.map((m) => [m.id, m]));
   const modOut = modules.map((m) => {
-    const at = role === 'owner' ? null : moduleUnlocksAt(m, anchor);
-    const locked = role !== 'owner' && !!at && at.getTime() > now.getTime();
-    return serializeModule(m, { unlocksAt: at ? at.toISOString() : null, locked });
+    const drip = owner ? null : moduleUnlocksAt(m, anchor);
+    const at = owner ? null : lessonUnlocksAt(m, { anchor, gate, now });
+    return serializeModule(m, { unlocksAt: (at || drip) ? (at || drip).toISOString() : null, locked: !!at });
   });
   const lockedMods = new Set(modOut.filter((m) => m.locked).map((m) => m.id));
+  // Cohort not started yet: top-level lessons wait for the start too.
+  const topLockedUntil = owner ? null : lessonUnlocksAt(null, { anchor, gate, now });
   const ordered = courseOrder(modules, items);
   const lessons = ordered.map((it) => {
     const modId = it.module_id && byId.has(it.module_id) ? it.module_id : null;
     if (modId && lockedMods.has(modId)) {
       const mod = modOut.find((m) => m.id === modId);
       return lessonOutline(it, { moduleId: modId, locked: true, unlocksAt: mod.unlocksAt, completed: false });
+    }
+    if (!modId && topLockedUntil) {
+      return lessonOutline(it, { moduleId: null, locked: true, unlocksAt: topLockedUntil.toISOString(), completed: false });
     }
     return { ...serializeLesson(it), moduleId: modId, completed: completed.has(it.id) };
   });

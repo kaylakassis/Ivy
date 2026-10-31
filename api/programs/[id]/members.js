@@ -1,5 +1,6 @@
 // Members of a program (owner only).
-//   POST   { clientId } | { name, email }  → grant access by hand (free / paid elsewhere)
+//   POST   { clientId } | { name, email }, cohortId?  → grant access by hand (free / paid elsewhere);
+//                                          a cohort program puts them in cohortId or the next open cohort
 //   DELETE ?enrollmentId=                  → revoke access. A subscription enrollment also
 //                                            cancels the Stripe subscription right away, so the
 //                                            client stops being charged and the next renewal
@@ -11,6 +12,7 @@ import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { grantEnrollment, expiryFor, isUuid } from '../../_lib/programs.js';
 import { loadStripeCreds } from '../../_lib/stripeCreds.js';
+import { pickCohort } from '../../_lib/programCommerce.js';
 import { cancelSubscription } from '../../_lib/stripe.js';
 import { badRequest, created, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
@@ -38,8 +40,21 @@ export default async function handler(req, res) {
         clientId = existing?.id || (await sql`
           INSERT INTO clients (workspace_id, name, email, stage, source) VALUES (${workspaceId}, ${name}, ${email}, 'active', 'program') RETURNING id`).rows[0].id;
       }
-      const granted = await grantEnrollment({ programId, workspaceId, clientId, source: 'manual', billing: p.billing, priceCents: 0, expiresAt: expiryFor(p) });
-      return created(res, { enrollmentId: granted.id, clientId });
+      // Cohort programs: the cohort the owner picked, else the next open one.
+      let cohortId = null;
+      if (p.delivery === 'cohort') {
+        if (body.cohortId) {
+          const want = String(body.cohortId);
+          cohortId = isUuid(want)
+            ? (await sql`SELECT id FROM program_cohorts WHERE id = ${want} AND program_id = ${programId} AND workspace_id = ${workspaceId} AND deleted_at IS NULL`).rows[0]?.id || null
+            : null;
+          if (!cohortId) return notFound(res, 'Cohort not found');
+        } else {
+          cohortId = (await pickCohort(p)).cohort?.id || null;
+        }
+      }
+      const granted = await grantEnrollment({ programId, workspaceId, clientId, source: 'manual', billing: p.billing, priceCents: 0, expiresAt: expiryFor(p), cohortId });
+      return created(res, { enrollmentId: granted.id, clientId, cohortId });
     }
     if (req.method === 'DELETE') {
       const enrollmentId = String(req.query.enrollmentId || '');

@@ -38,6 +38,12 @@ export default async function handler(req, res) {
       program: serializeProgram(program, { businessName: biz?.biz_name || biz?.name || 'Business', lessons: course.lessons.length }),
       items: course.items, lessons: course.lessons, modules: course.modules, progress: course.progress,
       role: access.role, joinedAt: enrollment?.granted_at || null,
+      // Cohort programs: the member's cohort and whether it has started
+      // (before the start only "available before start" modules are open).
+      cohort: program.delivery === 'cohort' && enrollment?.cohort_starts_at
+        ? { name: enrollment.cohort_name, startDate: enrollment.cohort_start_date, startsAt: enrollment.cohort_starts_at, started: new Date(enrollment.cohort_starts_at).getTime() <= Date.now() }
+        : null,
+      trialEndsAt: enrollment?.trialing ? (enrollment.trial_ends_at || null) : null,
     });
   } catch (err) { return serverError(res, err); }
 }

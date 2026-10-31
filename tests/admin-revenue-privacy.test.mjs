@@ -60,6 +60,22 @@ async function run() {
     await sql`INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, price_cents, refunded_cents) VALUES (${prog}, ${w}, ${c}, 'purchase', 9900, 900)`;
     const c2 = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${w}, 'Lee', ${`lee-${S}@example.com`}, 'active') RETURNING id`).rows[0].id;
     await sql`INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, price_cents) VALUES (${prog}, ${w}, ${c2}, 'manual', 9900)`;
+    // Programs phase 3: a purchase with a 20% code stores what was actually
+    // paid ($79.20); a bundle purchase ($99 program + $120 add-on package in
+    // one checkout = $219) is counted once on the program side, and its
+    // package rows (even one carrying a session id) never add to packages;
+    // a subscription in its free trial is not revenue.
+    const c3 = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${w}, 'Kim', ${`kim-${S}@example.com`}, 'active') RETURNING id`).rows[0].id;
+    await sql`INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, price_cents, discount_cents, stripe_session_id) VALUES (${prog}, ${w}, ${c3}, 'purchase', 7920, 1980, ${`cs_${S}_coupon`})`;
+    const c4 = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${w}, 'Bo', ${`bo-${S}@example.com`}, 'active') RETURNING id`).rows[0].id;
+    const bundleE = (await sql`INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, price_cents, stripe_session_id, stripe_payment_intent)
+      VALUES (${prog}, ${w}, ${c4}, 'purchase', 21900, ${`cs_${S}_bundle`}, ${`pi_${S}_bundle`}) RETURNING id`).rows[0].id;
+    await sql`INSERT INTO client_packages (workspace_id, client_id, name, credits_total, credits_remaining, price, program_enrollment_id, bundle_session_id)
+      VALUES (${w}, ${c4}, 'Add-on pack', 5, 5, 120, ${bundleE}, ${`cs_${S}_bundle`})`;
+    await sql`INSERT INTO client_packages (workspace_id, client_id, name, credits_total, credits_remaining, price, program_enrollment_id, bundle_session_id, stripe_session_id)
+      VALUES (${w}, ${c4}, 'Included pack', 3, 3, 0, ${bundleE}, ${`cs_${S}_bundle2`}, ${`cs_${S}_bundle2`})`;
+    const c5 = (await sql`INSERT INTO clients (workspace_id, name, email, stage) VALUES (${w}, 'Tia', ${`tia-${S}@example.com`}, 'active') RETURNING id`).rows[0].id;
+    await sql`INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, billing, price_cents, trialing, stripe_subscription_id) VALUES (${prog}, ${w}, ${c5}, 'subscription', 'month', 2900, TRUE, ${`sub_${S}_trial`})`;
     // Package bought online $120; a manual package grant ignored.
     await sql`INSERT INTO client_packages (workspace_id, client_id, name, credits_total, credits_remaining, price, stripe_payment_intent) VALUES (${w}, ${c}, 'Five pack', 5, 5, 120, ${`pi_${S}_pkg`})`;
     await sql`INSERT INTO client_packages (workspace_id, client_id, name, credits_total, credits_remaining, price) VALUES (${w}, ${c}, 'Comped pack', 5, 5, 300)`;
@@ -74,17 +90,17 @@ async function run() {
     const rev = (await sql`SELECT * FROM workspace_revenue WHERE workspace_id = ${w}`).rows[0];
     assert(Number(rev.invoices) === 150, `invoices net of refund and gift card credit (${rev.invoices})`);
     assert(Number(rev.store_orders) === 40, `paid store orders only (${rev.store_orders})`);
-    assert(Number(rev.programs) === 90, `one-time program purchases net of refund (${rev.programs})`);
+    assert(Number(rev.programs) === 388.2, `one-time program purchases: what was actually paid, net of refund, bundles once, no trials (${rev.programs})`);
     assert(Number(rev.packages) === 120, `packages bought online only (${rev.packages})`);
     assert(Number(rev.gift_cards) === 50, `gift cards sold online only (${rev.gift_cards})`);
     assert(Number(rev.booking_payments) === 50, `deposits, tips and fees actually charged (${rev.booking_payments})`);
-    assert(Number(rev.total) === 500, `total ${rev.total} = 500`);
+    assert(Number(rev.total) === 798.2, `total ${rev.total} = 798.20`);
 
     console.log('\n[2] admin users list: operator only, carries revenue, sorts by it');
     const adminH = { 'x-admin-secret': process.env.ADMIN_SECRET };
     let r = await call(usersList, { query: { q: `rev-${S}` }, headers: adminH });
     const row = r.body?.users?.find((x) => x.id === u);
-    assert(r.statusCode === 200 && row?.revenue?.total === 500 && row.revenue.invoices === 150 && row.revenue.bookingPayments === 50, 'list returns the breakdown');
+    assert(r.statusCode === 200 && row?.revenue?.total === 798.2 && row.revenue.invoices === 150 && row.revenue.bookingPayments === 50, 'list returns the breakdown');
     r = await call(usersList, { query: { sort: 'revenue' }, headers: adminH });
     const totals = (r.body?.users || []).map((x) => x.revenue?.total || 0);
     assert(r.statusCode === 200 && totals.every((v, i) => i === 0 || totals[i - 1] >= v), 'sort=revenue orders highest first');

@@ -18,7 +18,14 @@ export function serializeProgram(r, extra = {}) {
   return {
     id: r.id, title: r.title, description: r.description || '', coverUrl: r.cover_url || null,
     priceCents: Number(r.price_cents) || 0, billing: r.billing, accessDays: r.access_days == null ? null : Number(r.access_days), communityEnabled: !!r.community_enabled,
-    status: r.status, createdAt: r.created_at, updatedAt: r.updated_at, ...extra,
+    status: r.status, createdAt: r.created_at, updatedAt: r.updated_at,
+    // Phase 3 (new fields only; older app builds ignore them).
+    leaderboardEnabled: !!r.leaderboard_enabled, streakMode: r.streak_mode === 'weekly' ? 'weekly' : 'daily',
+    delivery: r.delivery === 'cohort' ? 'cohort' : 'evergreen',
+    trialDays: r.billing !== 'one_time' && r.trial_days ? Number(r.trial_days) : null,
+    bundleMode: r.billing === 'one_time' && r.bundle_package_id && r.bundle_mode ? r.bundle_mode : null,
+    bundlePackageId: r.billing === 'one_time' && r.bundle_mode ? (r.bundle_package_id || null) : null,
+    ...extra,
   };
 }
 export function serializeItem(r) {
@@ -35,6 +42,9 @@ export function serializeEnrollment(r) {
     priceCents: Number(r.price_cents) || 0, currentPeriodEnd: r.current_period_end, expiresAt: r.expires_at || null, grantedAt: r.granted_at,
     cancelledAt: r.cancelled_at, stripeSubscriptionId: r.stripe_subscription_id || null,
     cancelAtPeriodEnd: !!r.cancel_at_period_end,
+    cohortId: r.cohort_id || null, cohortName: r.cohort_name || null,
+    trialing: !!r.trialing, trialEndsAt: r.trialing ? (r.trial_ends_at || null) : null,
+    discountCents: Number(r.discount_cents || 0), couponCode: r.coupon_code || null,
     // Refunds: cumulative cents sent back so far, and whether the purchase
     // can be refunded from Ivy at all (a one-time purchase that was paid
     // online; subscriptions and manual grants cannot).
@@ -92,12 +102,46 @@ export function cleanProgramInput(body, partial = false) {
     if (d != null && (!Number.isFinite(d) || d < 1 || d > 3650)) errors.push('Access length must be between 1 and 3650 days, or blank for forever.');
     out.access_days = d;
   }
+  if (!partial || body.leaderboardEnabled !== undefined) out.leaderboard_enabled = body.leaderboardEnabled !== false;
+  if (!partial || body.streakMode !== undefined) {
+    const m = String(body.streakMode || 'daily');
+    if (!['daily', 'weekly'].includes(m)) errors.push('Streaks count days or weeks.');
+    out.streak_mode = m;
+  }
+  if (!partial || body.delivery !== undefined) {
+    const d = String(body.delivery || 'evergreen');
+    if (!['evergreen', 'cohort'].includes(d)) errors.push('Choose evergreen or cohorts.');
+    out.delivery = d;
+  }
+  if (!partial || body.trialDays !== undefined) {
+    const t = body.trialDays == null || body.trialDays === '' || Number(body.trialDays) === 0 ? null : Math.round(Number(body.trialDays));
+    if (t != null && (!Number.isFinite(t) || t < 1 || t > 30)) errors.push('A free trial can be 1 to 30 days.');
+    out.trial_days = t;
+  }
+  if (!partial || body.bundleMode !== undefined || body.bundlePackageId !== undefined) {
+    const mode = body.bundleMode == null || body.bundleMode === '' ? null : String(body.bundleMode);
+    if (mode != null && !['included', 'addon'].includes(mode)) errors.push('A package is either included or an optional add-on.');
+    const pkg = mode && body.bundlePackageId ? String(body.bundlePackageId) : null;
+    if (mode && !isUuid(pkg)) errors.push('Pick the package to attach.');
+    out.bundle_mode = mode && pkg ? mode : null;
+    out.bundle_package_id = mode && pkg ? pkg : null;
+  }
   if (partial && body.status !== undefined) {
     const st = String(body.status);
     if (!['draft', 'published'].includes(st)) errors.push('Status must be draft or published.');
     out.status = st;
   }
   return { ok: errors.length === 0, errors, value: out };
+}
+
+// Settings that need the database: the attached package must be one of
+// this business's packages. Returns an error message or null.
+export async function checkProgramExtras(f, workspaceId) {
+  if (f.billing === 'one_time' && f.bundle_mode && f.bundle_package_id) {
+    const pkg = (await sql`SELECT id FROM packages WHERE id = ${f.bundle_package_id} AND workspace_id = ${workspaceId}`).rows[0];
+    if (!pkg) return 'That package was not found.';
+  }
+  return null;
 }
 
 // Who is this user to this program? 'owner' (the workspace owner),
@@ -126,7 +170,17 @@ export async function activeMemberCount(programId) {
 
 // Grants or refreshes access for a client. Idempotent on the Stripe ids.
 // Returns { id, previousStatus } (previousStatus null on a fresh insert).
-export async function grantEnrollment({ programId, workspaceId, clientId, source, billing, priceCents, stripeSubscriptionId = null, stripeSessionId = null, stripePaymentIntent = null, status = 'active', currentPeriodEnd = null, expiresAt = null, cancelAtPeriodEnd = false }) {
+//
+// cohortId is set on a new enrollment, and on an existing one only when it
+// has no cohort yet (an owner's move between cohorts is never undone by a
+// renewal webhook). commerce ({ couponId, discountCents }) is written when
+// given (a purchase); trial ({ trialing, trialEndsAt }) mirrors Stripe.
+export async function grantEnrollment({ programId, workspaceId, clientId, source, billing, priceCents, stripeSubscriptionId = null, stripeSessionId = null, stripePaymentIntent = null, status = 'active', currentPeriodEnd = null, expiresAt = null, cancelAtPeriodEnd = false, cohortId = null, commerce = null, trial = null }) {
+  const setCommerce = !!commerce;
+  const couponId = commerce?.couponId || null;
+  const discountCents = Math.max(0, Math.round(Number(commerce?.discountCents || 0)));
+  const trialing = !!trial?.trialing;
+  const trialEndsAt = trial?.trialing ? (trial.trialEndsAt || null) : null;
   const existing = await sql`
     SELECT id, status FROM program_enrollments
      WHERE program_id = ${programId} AND client_id = ${clientId}
@@ -140,13 +194,19 @@ export async function grantEnrollment({ programId, workspaceId, clientId, source
         stripe_payment_intent = COALESCE(${stripePaymentIntent}, stripe_payment_intent),
         cancel_at_period_end = ${!!cancelAtPeriodEnd},
         refunded_cents = 0,
+        cohort_id = COALESCE(cohort_id, ${cohortId}::uuid),
+        coupon_id = CASE WHEN ${setCommerce} THEN ${couponId}::uuid ELSE coupon_id END,
+        discount_cents = CASE WHEN ${setCommerce} THEN ${discountCents}::int ELSE discount_cents END,
+        trialing = ${trialing}, trial_ends_at = ${trialEndsAt},
         current_period_end = ${currentPeriodEnd}, expires_at = ${expiresAt}, cancelled_at = CASE WHEN ${status} = 'cancelled' THEN NOW() ELSE NULL END, updated_at = NOW()
        WHERE id = ${existing.rows[0].id}`;
     return { id: existing.rows[0].id, previousStatus: existing.rows[0].status };
   }
   const ins = await sql`
-    INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, billing, price_cents, stripe_subscription_id, stripe_session_id, stripe_payment_intent, status, current_period_end, expires_at, cancel_at_period_end, cancelled_at)
-    VALUES (${programId}, ${workspaceId}, ${clientId}, ${source}, ${billing}, ${priceCents}, ${stripeSubscriptionId}, ${stripeSessionId}, ${stripePaymentIntent}, ${status}, ${currentPeriodEnd}, ${expiresAt}, ${!!cancelAtPeriodEnd}, CASE WHEN ${status} = 'cancelled' THEN NOW() ELSE NULL END)
+    INSERT INTO program_enrollments (program_id, workspace_id, client_id, source, billing, price_cents, stripe_subscription_id, stripe_session_id, stripe_payment_intent, status, current_period_end, expires_at, cancel_at_period_end, cancelled_at,
+      cohort_id, coupon_id, discount_cents, trialing, trial_ends_at)
+    VALUES (${programId}, ${workspaceId}, ${clientId}, ${source}, ${billing}, ${priceCents}, ${stripeSubscriptionId}, ${stripeSessionId}, ${stripePaymentIntent}, ${status}, ${currentPeriodEnd}, ${expiresAt}, ${!!cancelAtPeriodEnd}, CASE WHEN ${status} = 'cancelled' THEN NOW() ELSE NULL END,
+      ${cohortId}::uuid, ${couponId}::uuid, ${discountCents}, ${trialing}, ${trialEndsAt})
     ON CONFLICT DO NOTHING RETURNING id`;
   return { id: ins.rows[0]?.id || null, previousStatus: null };
 }
@@ -163,18 +223,40 @@ export async function applyProgramSubscription({ workspaceId, sub }) {
   const p = (await sql`SELECT id, title, billing, price_cents FROM programs WHERE id = ${md.program_id} AND workspace_id = ${workspaceId}`).rows[0];
   const c = (await sql`SELECT id FROM clients WHERE id = ${md.client_id} AND workspace_id = ${workspaceId}`).rows[0];
   if (!p || !c) return 'missing';
+  // trialing maps to 'active' (access during the trial); a trial that ends
+  // unpaid arrives as canceled or incomplete_expired and closes access.
   const mapped = mapSubStatus(sub.status);
   const status = mapped === 'incomplete' ? 'cancelled' : mapped;
   const cpe = sub.current_period_end ? new Date(sub.current_period_end * 1000).toISOString() : null;
+  const trialing = sub.status === 'trialing';
+  const trialEndsAt = trialing && sub.trial_end ? new Date(sub.trial_end * 1000).toISOString() : null;
+  // Only a cohort of THIS program, and a coupon of this business, are honoured.
+  const cohortId = isUuid(md.cohort_id)
+    ? (await sql`SELECT id FROM program_cohorts WHERE id = ${md.cohort_id} AND program_id = ${p.id} AND workspace_id = ${workspaceId} AND deleted_at IS NULL`).rows[0]?.id || null
+    : null;
+  const coupon = isUuid(md.coupon_id)
+    ? (await sql`SELECT id FROM program_coupons WHERE id = ${md.coupon_id} AND workspace_id = ${workspaceId}`).rows[0] || null
+    : null;
   const r = await grantEnrollment({
     programId: p.id, workspaceId, clientId: c.id, source: 'subscription', billing: p.billing, priceCents: p.price_cents,
     stripeSubscriptionId: sub.id, status, currentPeriodEnd: cpe, cancelAtPeriodEnd: !!sub.cancel_at_period_end,
+    cohortId, commerce: coupon ? { couponId: coupon.id, discountCents: 0 } : null, trial: { trialing, trialEndsAt },
   });
+  const who = (await sql`SELECT name, email FROM clients WHERE id = ${c.id}`).rows[0];
+  if (trialing && who?.email) {
+    // One free trial per person per program (checked at checkout).
+    await sql`INSERT INTO program_trials (workspace_id, program_id, email, client_id, stripe_subscription_id)
+              VALUES (${workspaceId}, ${p.id}, ${String(who.email).toLowerCase()}, ${c.id}, ${sub.id})
+              ON CONFLICT (program_id, email) DO NOTHING`;
+  }
+  if (coupon) {
+    await sql`INSERT INTO program_coupon_redemptions (workspace_id, coupon_id, program_id, client_id, ref)
+              VALUES (${workspaceId}, ${coupon.id}, ${p.id}, ${c.id}, ${sub.id}) ON CONFLICT (coupon_id, ref) DO NOTHING`;
+  }
   // A fresh (or returning) subscriber: tell the owner once per enrollment.
   if (status === 'active' && (r.previousStatus == null || r.previousStatus === 'cancelled') && r.id) {
-    const who = (await sql`SELECT name, email FROM clients WHERE id = ${c.id}`).rows[0];
     const { notifyOwnerProgramJoin } = await import('./programNotify.js');
-    notifyOwnerProgramJoin({ workspaceId, programTitle: p.title, clientName: who?.name || who?.email, enrollmentId: r.id });
+    notifyOwnerProgramJoin({ workspaceId, programTitle: p.title, clientName: who?.name || who?.email, enrollmentId: r.id, trial: trialing });
   }
   if (status === 'past_due' && r.previousStatus !== 'past_due') {
     notifyClientSubscriptionPastDue({ workspaceId, clientId: c.id, kind: 'program', label: p.title }).catch(() => {});
@@ -229,11 +311,22 @@ export async function revokeProgramPurchaseForRefund({ workspaceId, charge }) {
   if (upd.rows.length === 0) return 'already-recorded';
   const delta = refundedCents - already;
   const basis = chargedCents || Number(e.price_cents || 0);
+  // A package that came with this purchase (included or add-on) goes with
+  // the money on a full refund, so its sessions cannot keep being booked.
+  // A partial refund leaves the credits for the owner to adjust.
+  let bundleNote = '';
+  if (fully) {
+    const pk = await sql`
+      UPDATE client_packages SET status = 'cancelled', credits_remaining = 0, updated_at = NOW()
+       WHERE program_enrollment_id = ${e.id} AND workspace_id = ${workspaceId} AND status <> 'cancelled'
+       RETURNING name`;
+    if (pk.rows.length) bundleNote = ` The ${pk.rows[0].name} sessions that came with it were cancelled.`;
+  }
   notifyOwnerSafe({
     workspaceId, type: 'payments',
     payload: {
       title: fully ? 'Program purchase refunded' : 'Program purchase partly refunded',
-      body: `${e.title}: $${(delta / 100).toFixed(2)} refunded${fully ? '; the client\'s access has ended.' : '; the client keeps access.'}`,
+      body: `${e.title}: $${(delta / 100).toFixed(2)} refunded${fully ? '; the client\'s access has ended.' : '; the client keeps access.'}${bundleNote}`,
       url: '/programs', tag: `program-refund-${e.id}`,
     },
   });

@@ -1,7 +1,7 @@
 // Client portal: the programs this person has access to, and the
 // program itself (content + community). Same renderers the coach sees.
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
@@ -9,6 +9,7 @@ import CourseOutline, { CourseProgress } from '../programs/CourseOutline.jsx';
 import LessonView, { useCourse } from '../programs/LessonView.jsx';
 import { ProgressBar } from '../programs/courseUi.jsx';
 import { useProgramExtras, memberTabs, TabBar, ProgramTabBody } from '../programs/ProgramTabs.jsx';
+import { BadgeCelebration, EngagementStrip, useEngagement } from '../programs/Engagement.jsx';
 
 // "Access until <date>" for a fixed window or a subscription the member has
 // already cancelled, "Renews <date>" while a subscription is still live,
@@ -59,7 +60,9 @@ export default function ClientPrograms() {
 export function ClientProgram() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { data, err } = useCourse(id); const [tab, setTab] = useState('content');
+  const [params] = useSearchParams();
+  const { data, err } = useCourse(id); const [tab, setTab] = useState(() => params.get('tab') || 'content');
+  const engagement = useEngagement(id, data?.role);
   const [mine, setMine] = useState(null); const [cancelMsg, setCancelMsg] = useState(null);
   const extras = useProgramExtras(id);
   useEffect(() => { api.get('/me/programs').then((r) => setMine((r.programs || []).find((p) => p.id === id) || null)).catch(() => {}); }, [id]);
@@ -91,13 +94,15 @@ export function ClientProgram() {
           </div>
         )}
       </div>
-      {(() => { const tabs = memberTabs({ contentLabel: 'Course', communityEnabled: program.communityEnabled, extras }); return tabs.length > 1 && <TabBar tabs={tabs} tab={tab} setTab={setTab}/>; })()}
+      {data.role === 'member' && <EngagementStrip data={engagement.data} onOpenCheckins={() => setTab('checkins')}/>}
+      {(() => { const tabs = memberTabs({ contentLabel: 'Course', communityEnabled: program.communityEnabled, extras, checkinsDue: engagement.data?.checkins?.due || 0 }); return tabs.length > 1 && <TabBar tabs={tabs} tab={tabs.some(([t]) => t === tab) ? tab : 'content'} setTab={setTab}/>; })()}
       {tab === 'content' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 820 }}>
           {data.progress && lessons.length > 0 && <CourseProgress progress={data.progress} lessons={lessons} onOpen={openLesson}/>}
           <CourseOutline lessons={lessons} modules={data.modules || []} onOpen={openLesson}/>
         </div>
-      ) : <ProgramTabBody tab={tab} programId={id} role="member" communityEnabled={program.communityEnabled}/>}
+      ) : <ProgramTabBody tab={tab} programId={id} role="member" communityEnabled={program.communityEnabled} onCheckinsChange={engagement.reload}/>}
+      <BadgeCelebration programId={id}/>
     </div>
   );
 }
@@ -113,6 +118,7 @@ export function ClientLesson() {
     <div className="page-pad">
       <LessonView data={data} itemId={itemId} setDone={setDone}
         onNavigate={(next) => navigate(`/me/programs/${id}/lessons/${next}`)} onBack={() => navigate(`/me/programs/${id}`)}/>
+      <BadgeCelebration programId={id}/>
     </div>
   );
 }
