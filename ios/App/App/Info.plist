@@ -43,7 +43,9 @@
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>Ivy uses your location to autofill your business address when setting up your booking site.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>Ivy uses the microphone so you can send voice messages from the inbox.</string>
+	<string>Ivy uses the microphone so you can talk instead of typing and send voice messages from the inbox.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Ivy turns what you say into text so you can talk to Ivy and type messages by voice.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Ivy accesses your photo library so you can attach images to client notes and services.</string>
 	<!-- UIScene life cycle (required by the iOS 27 SDK; Capacitor 8 drives
