@@ -91,7 +91,11 @@ async function mkUser(label) {
   return r.rows[0].id;
 }
 async function mkWorkspace(ownerId) {
+  // revenuecat_user_id = id: the owner identified the workspace in the app
+  // (POST /api/billing/iap-identify); the RevenueCat webhook ignores events
+  // for a workspace that never did.
   const w = await sql`INSERT INTO workspaces (owner_id) VALUES (${ownerId}) RETURNING id`;
+  await sql`UPDATE workspaces SET revenuecat_user_id = id WHERE id = ${w.rows[0].id}`;
   return w.rows[0].id;
 }
 // An Apple-billed, paying owner (trial already converted).

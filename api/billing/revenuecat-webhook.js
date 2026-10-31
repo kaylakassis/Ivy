@@ -138,6 +138,15 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing event.id or event.type' });
     }
 
+    // Sandbox (TestFlight / Xcode) purchases must never flip a production
+    // workspace: anyone with a sandbox Apple ID can "buy" for free. RC tags
+    // every event with its environment. REVENUECAT_ALLOW_SANDBOX=1 lets a
+    // QA deploy accept them.
+    if (event.environment && String(event.environment).toUpperCase() !== 'PRODUCTION'
+        && process.env.REVENUECAT_ALLOW_SANDBOX !== '1') {
+      return ok(res, { received: true, ignored: 'sandbox' });
+    }
+
     // Dedup - RC retries on non-2xx with the same event.id.
     if (!(await markProcessed('revenuecat', event.id, null))) {
       return ok(res, { received: true, deduped: true });
@@ -166,7 +175,8 @@ export default async function handler(req, res) {
     // the started-email side effect.
     const { rows: existingRows } = await sql`
       SELECT id, owner_id, subscription_status, converted_at, trial_started_at,
-             subscription_source, stripe_customer_id, subscription_period_end, cancel_at_period_end
+             subscription_source, stripe_customer_id, subscription_period_end, cancel_at_period_end,
+             revenuecat_user_id, apple_original_transaction_id
       FROM workspaces
       WHERE id = ${workspaceId}
     `;
@@ -174,6 +184,24 @@ export default async function handler(req, res) {
       return ok(res, { received: true, noop: 'no workspace' });
     }
     const prev = existingRows[0];
+
+    // The app_user_id is whatever the RevenueCat SDK was told. Only honour
+    // it for a workspace whose OWNER identified it from inside the app
+    // (POST /api/billing/iap-identify stamps revenuecat_user_id), or whose
+    // Apple subscription we already know by its original transaction id.
+    // Otherwise anyone who can call the RC SDK with a guessed workspace id
+    // could flip (or expire) somebody else's subscription. Recorded as a
+    // webhook failure so ops sees it; 200 so RC does not retry forever.
+    const eventTxn = event.original_transaction_id ? String(event.original_transaction_id) : null;
+    const bound = (prev.revenuecat_user_id && prev.revenuecat_user_id === String(workspaceId))
+      || (prev.apple_original_transaction_id && eventTxn && prev.apple_original_transaction_id === eventTxn);
+    if (!bound) {
+      await recordWebhookFailure({
+        source: 'revenuecat', eventType: 'unbound',
+        message: `${event.type} ${event.id} for app_user_id ${workspaceId} ignored: workspace has not identified this RevenueCat customer`,
+      });
+      return ok(res, { received: true, ignored: 'unbound app_user_id' });
+    }
 
     // A workspace that pays through Stripe on the web must never be knocked
     // out by Apple. Someone can start an Apple trial, let it lapse, then

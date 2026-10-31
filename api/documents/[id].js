@@ -10,6 +10,7 @@ import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { fetchOwnedDoc, serializeDoc, cleanFields, fetchSigners } from '../_lib/documents.js';
 import { badRequest, methodNotAllowed, noContent, notFound, ok, serverError } from '../_lib/json.js';
+import { isPlatformBlobUrl } from '../_lib/safeUrl.js';
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -79,8 +80,11 @@ export default async function handler(req, res) {
         push('kind', k);
       }
       if ('fileUrl' in body) {
+        // The server later fetches this URL to stamp the signed PDF
+        // (api/_lib/pdfStamp.js), so it must point at a file WE uploaded
+        // (the platform blob store), never an arbitrary host.
         const url = body.fileUrl ? String(body.fileUrl) : null;
-        if (url && !/^https?:\/\//.test(url)) return badRequest(res, 'Invalid fileUrl');
+        if (url && !isPlatformBlobUrl(url)) return badRequest(res, 'Invalid fileUrl: upload the PDF first');
         push('file_url', url);
       }
       if ('pageCount' in body) {

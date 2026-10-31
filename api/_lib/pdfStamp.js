@@ -20,12 +20,16 @@
 // document_signers rows + completion_hash.
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
 import { put } from '@vercel/blob';
+import { assertPlatformBlobUrl } from './safeUrl.js';
 
 const SIG_TEXT_FALLBACK_FONT_SIZE = 14;
 
 export async function stampCompletedPdf({ pdfUrl, fields, signers, doc, hash }) {
   if (!pdfUrl) return null;
-  const buf = await fetch(pdfUrl).then((r) => {
+  // Only ever fetch from the platform blob store: file_url is owner-supplied
+  // and this runs server side, so an arbitrary host would be an SSRF hole.
+  const safePdfUrl = assertPlatformBlobUrl(pdfUrl, { what: 'PDF URL' });
+  const buf = await fetch(safePdfUrl).then((r) => {
     if (!r.ok) throw new Error(`fetch original PDF failed: ${r.status}`);
     return r.arrayBuffer();
   });

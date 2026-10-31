@@ -95,10 +95,17 @@ async function run() {
   const count = await sql`SELECT COUNT(*)::int AS n FROM push_device_tokens WHERE token = ${TOKEN_A}`;
   assert(count.rows[0].n === 1, 're-register upserts, no duplicate row');
 
+  // A LIVE token stays with its owner (tests/push-token-binding.test.mjs
+  // covers the stale-token reclaim); account switches go through DELETE.
   r = mockRes();
   await deviceHandler(req({ cookie: cookie2, body: { token: TOKEN_A } }), r);
-  const owner = await sql`SELECT user_id FROM push_device_tokens WHERE token = ${TOKEN_A}`;
-  assert(owner.rows[0].user_id === userId2, 'device switching accounts moves to the new user');
+  let owner = await sql`SELECT user_id FROM push_device_tokens WHERE token = ${TOKEN_A}`;
+  assert(r.body?.registered === false && owner.rows[0].user_id === userId, 'another account cannot take over a live token');
+  await sql`UPDATE push_device_tokens SET last_used_at = NOW() - INTERVAL '31 days' WHERE token = ${TOKEN_A}`;
+  r = mockRes();
+  await deviceHandler(req({ cookie: cookie2, body: { token: TOKEN_A } }), r);
+  owner = await sql`SELECT user_id FROM push_device_tokens WHERE token = ${TOKEN_A}`;
+  assert(owner.rows[0].user_id === userId2, 'a stale token moves to the new user');
 
   r = mockRes();
   await deviceHandler(req({ cookie, method: 'DELETE', body: { token: TOKEN_A } }), r);

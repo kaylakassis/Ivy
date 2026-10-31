@@ -95,6 +95,8 @@ async function run() {
     createdUsers.push(u2.rows[0].id);
     const wid2 = (await sql`INSERT INTO workspaces (owner_id, subscription_status, trial_ends_at)
       VALUES (${u2.rows[0].id}, 'incomplete', NULL) RETURNING id`).rows[0].id;
+    // Owner identified the workspace in the app (see /api/billing/iap-identify).
+    await sql`UPDATE workspaces SET revenuecat_user_id = id WHERE id = ${wid2}`;
     const rcReq = (event) => ({ method: 'POST', url: '/api/billing/revenuecat-webhook',
       body: JSON.stringify({ event }), headers: { authorization: `Bearer ${RC_SECRET}`, 'content-type': 'application/json' } });
     const rcEvent = (type, periodType) => ({ id: `rc_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,

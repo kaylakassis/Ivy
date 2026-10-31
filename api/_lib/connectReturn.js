@@ -15,6 +15,12 @@
 import jwt from 'jsonwebtoken';
 import { appUrl } from './tokens.js';
 
+// Square web flow: a random nonce lives in this HttpOnly cookie for the
+// length of the OAuth round trip and its sha256 rides in the state JWT.
+// The callback accepts the pair only together (see square-oauth-init.js).
+export const SQ_STATE_COOKIE = 'sq_state';
+export const SQ_STATE_TTL_SECONDS = 10 * 60;
+
 export function wantsJson(req) {
   return req.query?.mode === 'json';
 }
@@ -24,15 +30,21 @@ export function fromApp(req) {
 
 // One hour is plenty for an onboarding form and short enough that a leaked
 // link is useless the next day. The kind pins the token to one flow.
-export function signReturnState({ workspaceId, userId, kind }) {
-  return jwt.sign({ wid: workspaceId, uid: userId, kind, from: 'app' }, process.env.JWT_SECRET, { expiresIn: '1h', algorithm: 'HS256' });
+//
+// `from` records which surface started the connect ('app' = the iOS shell
+// opened Safari, 'web' = a browser tab with a session). Callbacks that mint
+// state for BOTH surfaces (PayPal) read it to pick the landing page and to
+// decide whether a session must also be present. Callers that only sign
+// state for the phone flow (Stripe) can leave it out.
+export function signReturnState({ workspaceId, userId, kind, from = 'app' }) {
+  return jwt.sign({ wid: workspaceId, uid: userId, kind, from }, process.env.JWT_SECRET, { expiresIn: '1h', algorithm: 'HS256' });
 }
 export function verifyReturnState(token, kind) {
   if (!token || !process.env.JWT_SECRET) return null;
   try {
     const p = jwt.verify(String(token), process.env.JWT_SECRET, { algorithms: ['HS256'] });
     if (p.kind !== kind || !p.wid) return null;
-    return { workspaceId: p.wid, userId: p.uid || null };
+    return { workspaceId: p.wid, userId: p.uid || null, from: p.from === 'web' ? 'web' : 'app' };
   } catch {
     return null;
   }
