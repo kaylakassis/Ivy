@@ -369,7 +369,7 @@ function AppealsTab() {
 // gets marked reviewed or dismissed, with an optional note.
 const REPORT_TARGET_LABELS = {
   client: 'Contact', business: 'Business', message: 'Message',
-  group_message: 'Group message', review: 'Review',
+  group_message: 'Group message', review: 'Review', program_post: 'Program post',
 };
 
 function ReportsTab({ onChanged }) {

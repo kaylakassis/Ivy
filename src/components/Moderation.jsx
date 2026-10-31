@@ -23,6 +23,7 @@ const TARGET_LABELS = {
   message: 'Message',
   group_message: 'Group message',
   review: 'Review',
+  program_post: 'Program post',
 };
 
 // "⋯" button that opens a small menu. items: [{ label, onClick, danger }]

@@ -6,6 +6,7 @@ import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import LessonContent from './LessonContent.jsx';
 import { lessonMeta } from './courseUi.jsx';
+import { LessonComments } from './CommunityFeed.jsx';
 
 // Loads the course for a member (or the owner previewing) and keeps the
 // completed flags and progress in sync after each mark / undo.
@@ -97,6 +98,14 @@ export default function LessonView({ data, itemId, onNavigate, onBack, setDone, 
           <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{next ? next.title : 'Next'}</span> <Icons.Arrow size={13}/>
         </button>
       </nav>
+      {/* Lesson discussion: members and the coach, scoped to this lesson.
+          Off when the program's community is off; not in the owner preview. */}
+      {!preview && data.program?.communityEnabled !== false && data.program?.id && (
+        <section aria-label="Lesson discussion" style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div style={{ fontSize: 15, fontWeight: 600 }}>Discussion</div>
+          <LessonComments programId={data.program.id} itemId={lesson.id}/>
+        </section>
+      )}
     </div>
   );
 }

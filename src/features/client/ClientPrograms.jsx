@@ -5,10 +5,10 @@ import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../lib/api.js';
 import { Icons } from '../../components/Icons.jsx';
 import EmptyNote from '../../components/EmptyNote.jsx';
-import { Community } from '../programs/ProgramContent.jsx';
 import CourseOutline, { CourseProgress } from '../programs/CourseOutline.jsx';
 import LessonView, { useCourse } from '../programs/LessonView.jsx';
 import { ProgressBar } from '../programs/courseUi.jsx';
+import { useProgramExtras, memberTabs, TabBar, ProgramTabBody } from '../programs/ProgramTabs.jsx';
 
 // "Access until <date>" for a fixed window or a subscription the member has
 // already cancelled, "Renews <date>" while a subscription is still live,
@@ -61,6 +61,7 @@ export function ClientProgram() {
   const navigate = useNavigate();
   const { data, err } = useCourse(id); const [tab, setTab] = useState('content');
   const [mine, setMine] = useState(null); const [cancelMsg, setCancelMsg] = useState(null);
+  const extras = useProgramExtras(id);
   useEffect(() => { api.get('/me/programs').then((r) => setMine((r.programs || []).find((p) => p.id === id) || null)).catch(() => {}); }, [id]);
   const openLesson = (itemId) => navigate(`/me/programs/${id}/lessons/${itemId}`);
   const cancel = async () => {
@@ -90,19 +91,13 @@ export function ClientProgram() {
           </div>
         )}
       </div>
-      {program.communityEnabled && (
-        <div style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, alignSelf: 'flex-start' }}>
-          {[['content', 'Course'], ['community', 'Community']].map(([t, l]) => (
-            <button key={t} type="button" onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 550, background: tab === t ? 'var(--surface-2)' : 'transparent', color: tab === t ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
-          ))}
-        </div>
-      )}
+      {(() => { const tabs = memberTabs({ contentLabel: 'Course', communityEnabled: program.communityEnabled, extras }); return tabs.length > 1 && <TabBar tabs={tabs} tab={tab} setTab={setTab}/>; })()}
       {tab === 'content' ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 820 }}>
           {data.progress && lessons.length > 0 && <CourseProgress progress={data.progress} lessons={lessons} onOpen={openLesson}/>}
           <CourseOutline lessons={lessons} modules={data.modules || []} onOpen={openLesson}/>
         </div>
-      ) : <Community programId={id} enabled={program.communityEnabled}/>}
+      ) : <ProgramTabBody tab={tab} programId={id} role="member" communityEnabled={program.communityEnabled}/>}
     </div>
   );
 }

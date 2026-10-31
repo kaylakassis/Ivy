@@ -23,7 +23,7 @@ export const REPORT_REASON_LABELS = {
   scam:          'Scam or fraud',
   other:         'Other',
 };
-export const REPORT_TARGET_TYPES = ['client', 'business', 'message', 'group_message', 'review'];
+export const REPORT_TARGET_TYPES = ['client', 'business', 'message', 'group_message', 'review', 'program_post'];
 export const REPORT_STATUSES = ['open', 'reviewed', 'dismissed'];
 export const MAX_DETAILS_CHARS = 2000;
 

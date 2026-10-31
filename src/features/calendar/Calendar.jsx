@@ -235,7 +235,12 @@ export default function Calendar() {
     if (next === 'week') setAnchor(startOfWeek(anchor));
   };
 
-  const openEvent = (ev) => { setSelectedEvent(ev); setDrawer('event'); };
+  // Program live sessions ride along as read-only blocks; they are edited
+  // from the program itself.
+  const openEvent = (ev) => {
+    if (ev?.readOnly && ev.programId) { navigate(`/programs?program=${encodeURIComponent(ev.programId)}&tab=live`); return; }
+    setSelectedEvent(ev); setDrawer('event');
+  };
 
   const upcoming = (cal?.bookings || [])
     .filter((b) => b && b.date && b.date >= todayISO)

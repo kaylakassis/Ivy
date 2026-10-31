@@ -8,6 +8,8 @@ import EmptyNote from '../../components/EmptyNote.jsx';
 import { Community, fmtPrice, billingLabel } from './ProgramContent.jsx';
 import ModuleEditor from './ModuleEditor.jsx';
 import CoursePreview from './CoursePreview.jsx';
+import { LiveSessions } from './LiveSessions.jsx';
+import { DirectorySettings } from './MemberDirectory.jsx';
 
 export default function ProgramsPage() {
   return <Builder/>;
@@ -16,7 +18,7 @@ export default function ProgramsPage() {
 // ── Builder ───────────────────────────────────────────────────────────
 function Builder() {
   const [programs, setPrograms] = useState(null);
-  const [openId, setOpenId] = useState(null);
+  const [openId, setOpenId] = useState(() => { try { return new URLSearchParams(window.location.search).get('program'); } catch { return null; } });
   const [creating, setCreating] = useState(false);
   const [err, setErr] = useState(null);
   const load = async () => { try { const r = await api.get('/programs'); setPrograms(r.programs || []); } catch (e) { setErr(e.message); setPrograms([]); } };
@@ -112,7 +114,7 @@ function ProgramForm({ program, onClose, onSaved }) {
 }
 
 function ProgramDetail({ id, onBack }) {
-  const [data, setData] = useState(null); const [tab, setTab] = useState('content');
+  const [data, setData] = useState(null); const [tab, setTab] = useState(() => { try { const t = new URLSearchParams(window.location.search).get('tab'); return ['content', 'members', 'community', 'live'].includes(t) ? t : 'content'; } catch { return 'content'; } });
   const [editing, setEditing] = useState(false); const [previewing, setPreviewing] = useState(false);
   const [addMember, setAddMember] = useState(false); const [err, setErr] = useState(null); const [copied, setCopied] = useState(false);
   const [refunding, setRefunding] = useState(null); const [refundAmount, setRefundAmount] = useState(''); const [refundReason, setRefundReason] = useState('');
@@ -174,7 +176,7 @@ function ProgramDetail({ id, onBack }) {
         )}
       </div>
       <div className="scroll-x" style={{ display: 'flex', gap: 4, padding: 4, background: 'var(--surface)', border: '1px solid var(--border)', borderRadius: 10, alignSelf: 'flex-start', maxWidth: '100%' }}>
-        {[['content', `Content (${items.length})`], ['members', `Members (${activeMembers.length})`], ['community', 'Community']].map(([t, l]) => (
+        {[['content', `Content (${items.length})`], ['members', `Members (${activeMembers.length})`], ['community', 'Community'], ['live', 'Live']].map(([t, l]) => (
           <button key={t} type="button" onClick={() => setTab(t)} style={{ padding: '7px 14px', borderRadius: 8, fontSize: 13, fontWeight: 550, whiteSpace: 'nowrap', background: tab === t ? 'var(--surface-2)' : 'transparent', color: tab === t ? 'var(--fg)' : 'var(--muted)' }}>{l}</button>
         ))}
       </div>
@@ -183,6 +185,7 @@ function ProgramDetail({ id, onBack }) {
       )}
       {tab === 'members' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <DirectorySettings programId={id}/>
           <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button className="btn btn-primary" onClick={() => setAddMember(true)}><Icons.Plus size={13} sw={2}/> Add member</button></div>
           {refundNote && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>{refundNote}</div>}
           {members.length === 0 ? <EmptyNote icon="Users" title="No members yet" hint="Share the sales page, or add someone by hand."/> : (
@@ -225,6 +228,7 @@ function ProgramDetail({ id, onBack }) {
         </div>
       )}
       {tab === 'community' && <Community programId={id} enabled={program.communityEnabled}/>}
+      {tab === 'live' && <LiveSessions programId={id} role="owner"/>}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}><button type="button" onClick={archive} style={{ fontSize: 12.5, color: 'var(--muted)' }}>Archive program</button></div>
       {editing && <ProgramForm program={program} onClose={() => setEditing(false)} onSaved={() => { setEditing(false); load(); }}/>}
       {addMember && <AddMember programId={id} onClose={() => setAddMember(false)} onSaved={() => { setAddMember(false); load(); }}/>}

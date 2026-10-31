@@ -3645,6 +3645,69 @@ CREATE OR REPLACE VIEW workspace_revenue AS
 -- (dripAnchorFor in api/_lib/programCourse.js; the enrollment's
 -- granted_at today). NULL or 0 = open from the start.
 CREATE TABLE IF NOT EXISTS program_modules (
+
+-- ─── Programs phase 2: community + live sessions ──────────────────────
+-- Feed upgrades on program_posts. item_id set = a comment under a lesson
+-- (never part of the main feed, which always filters item_id IS NULL).
+-- images: up to 6 server-checked https Blob URLs. mentions: [{key,name}]
+-- where key is 'owner' or a clients.id of an active member.
+ALTER TABLE program_posts ADD COLUMN IF NOT EXISTS item_id UUID REFERENCES program_items(id) ON DELETE CASCADE;
+ALTER TABLE program_posts ADD COLUMN IF NOT EXISTS images JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE program_posts ADD COLUMN IF NOT EXISTS mentions JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE program_posts ADD COLUMN IF NOT EXISTS pinned_at TIMESTAMPTZ;
+ALTER TABLE program_posts ADD COLUMN IF NOT EXISTS is_announcement BOOLEAN NOT NULL DEFAULT FALSE;
+ALTER TABLE program_posts ADD COLUMN IF NOT EXISTS edited_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_program_posts_feed ON program_posts(program_id, created_at DESC, id DESC) WHERE item_id IS NULL AND parent_id IS NULL AND deleted_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_program_posts_item ON program_posts(item_id, created_at) WHERE item_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_program_posts_parent ON program_posts(parent_id) WHERE parent_id IS NOT NULL;
+-- Points later count posts per member per day off created_at.
+CREATE INDEX IF NOT EXISTS idx_program_posts_author_day ON program_posts(program_id, author_client_id, created_at);
+
+-- The owner can switch the member directory off per program.
+ALTER TABLE programs ADD COLUMN IF NOT EXISTS directory_enabled BOOLEAN NOT NULL DEFAULT TRUE;
+
+-- Reactions: one row per (post, person, emoji). Toggled on and off.
+CREATE TABLE IF NOT EXISTS program_post_reactions (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  post_id UUID NOT NULL REFERENCES program_posts(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  emoji TEXT NOT NULL CHECK (emoji IN ('heart', 'clap', 'fire', 'laugh', '100')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_post_reactions ON program_post_reactions(post_id, user_id, emoji);
+CREATE INDEX IF NOT EXISTS idx_program_post_reactions_program ON program_post_reactions(program_id, created_at);
+
+-- A person's community profile PER BUSINESS (the owner too): display
+-- name, short bio, avatar, and whether they appear in the directory.
+CREATE TABLE IF NOT EXISTS program_member_profiles (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  display_name TEXT,
+  bio TEXT CHECK (bio IS NULL OR char_length(bio) <= 280),
+  avatar_url TEXT,
+  hide_from_directory BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_member_profiles ON program_member_profiles(workspace_id, user_id);
+
+-- Members the owner muted in one program: they can read, not post.
+CREATE TABLE IF NOT EXISTS program_member_mutes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_member_mutes ON program_member_mutes(program_id, client_id);
+
+-- Live sessions. video_url is minted (or pasted) for 'video'; members
+-- only receive it from 15 minutes before the start until the end.
+CREATE TABLE IF NOT EXISTS program_events (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
   workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
@@ -3702,4 +3765,66 @@ CREATE TABLE IF NOT EXISTS program_notifications (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_program_notifications_key ON program_notifications(dedupe_key);
 CREATE INDEX IF NOT EXISTS idx_program_notifications_program ON program_notifications(program_id, created_at DESC);
 
+  starts_at TIMESTAMPTZ NOT NULL,
+  duration_min INT NOT NULL DEFAULT 60 CHECK (duration_min > 0 AND duration_min <= 1440),
+  location_type TEXT NOT NULL DEFAULT 'video' CHECK (location_type IN ('video', 'in_person', 'link')),
+  video_url TEXT,
+  location_text TEXT,
+  external_url TEXT,
+  recording_url TEXT,
+  remind_everyone BOOLEAN NOT NULL DEFAULT FALSE,
+  cancelled_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_program_events_program ON program_events(program_id, starts_at);
+CREATE INDEX IF NOT EXISTS idx_program_events_workspace ON program_events(workspace_id, starts_at);
+CREATE INDEX IF NOT EXISTS idx_program_events_upcoming ON program_events(starts_at) WHERE cancelled_at IS NULL;
+
+-- RSVPs (and, later, attendance for points: attended_at).
+CREATE TABLE IF NOT EXISTS program_event_rsvps (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  event_id UUID NOT NULL REFERENCES program_events(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  status TEXT NOT NULL CHECK (status IN ('going', 'not_going')),
+  attended_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_event_rsvps ON program_event_rsvps(event_id, client_id);
+
+-- One row per (what happened, to whom). The unique key is what makes every
+-- community and live-session notification fire once; email_sent_at lets
+-- reply emails batch to one per thread per hour (api/cron/program-events.js
+-- flushes what was held back).
+CREATE TABLE IF NOT EXISTS program_community_notices (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  program_id UUID NOT NULL REFERENCES programs(id) ON DELETE CASCADE,
+  kind TEXT NOT NULL,
+  ref_id UUID NOT NULL,
+  thread_id UUID,
+  recipient_key TEXT NOT NULL,
+  recipient_user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+  recipient_client_id UUID REFERENCES clients(id) ON DELETE CASCADE,
+  email_sent_at TIMESTAMPTZ,
+  email_done BOOLEAN NOT NULL DEFAULT FALSE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_program_community_notices ON program_community_notices(kind, ref_id, recipient_key);
+CREATE INDEX IF NOT EXISTS idx_program_community_notices_pending ON program_community_notices(created_at) WHERE email_done = FALSE;
+CREATE INDEX IF NOT EXISTS idx_program_community_notices_thread ON program_community_notices(recipient_key, thread_id, email_sent_at);
+
+-- Reports on community posts reuse the operator queue (abuse_reports).
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'abuse_reports_target_type_check'
+              AND pg_get_constraintdef(oid) NOT LIKE '%program_post%') THEN
+    ALTER TABLE abuse_reports DROP CONSTRAINT abuse_reports_target_type_check;
+    ALTER TABLE abuse_reports ADD CONSTRAINT abuse_reports_target_type_check
+      CHECK (target_type IN ('client', 'business', 'message', 'group_message', 'review', 'program_post'));
+  END IF;
+END $$;
 `;
