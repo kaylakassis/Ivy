@@ -269,9 +269,26 @@ export async function requireUser(req, res) {
 // with a partial unique index on (owner_id) WHERE row_count=1 - but
 // that's expensive to maintain, so instead we just catch the
 // duplicate and re-read. Cheap, correct, no schema change.
+//
+// Helper-only accounts (someone's assistant, api/_lib/helpers.js) never
+// get a workspace minted as a side effect of hitting an owner endpoint
+// (Ivy chat, dashboard, billing, onboarding...). We throw a tagged error
+// that serverError() turns into a plain 403 instead of a 500. The one
+// explicit path to their own business is POST /api/helper/start-business.
+export class HelperOnlyError extends Error {
+  constructor() {
+    super('Helper accounts can only see their own schedule.');
+    this.code = 'helper-only';
+    this.status = 403;
+  }
+}
+
 export async function ensureWorkspace(userId) {
   const existing = await sql`SELECT id FROM workspaces WHERE owner_id = ${userId} LIMIT 1`;
   if (existing.rows.length > 0) return existing.rows[0].id;
+  // Lazy import: helpers.js imports this module.
+  const { isHelperUser } = await import('./helpers.js');
+  if (await isHelperUser(userId)) throw new HelperOnlyError();
   try {
     const created = await sql`
       INSERT INTO workspaces (owner_id) VALUES (${userId}) RETURNING id

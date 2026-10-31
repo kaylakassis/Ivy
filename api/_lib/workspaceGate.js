@@ -32,6 +32,7 @@
 // checkout doesn't get stuck on a stale "blocked".
 import { ensureWorkspace } from './auth.js';
 import { isWorkspaceActive } from './clientPortal.js';
+import { isHelperUser } from './helpers.js';
 import { sql } from './db.js';
 import { stampRequestId } from './monitoring.js';
 
@@ -95,18 +96,34 @@ export async function ensureActiveWorkspace(user, req, res) {
     res.status(401).json({ error: 'Unauthorized' });
     return null;
   }
+  // Helper-only accounts (someone's assistant, api/_lib/helpers.js) own
+  // nothing and must never get a workspace minted for them by hitting an
+  // owner endpoint. Refuse with a plain 403 before ensureWorkspace's
+  // auto-create runs. Owners who also help elsewhere are unaffected:
+  // they already have a workspace row, so this branch is skipped.
+  const owned = await sql`SELECT id FROM workspaces WHERE owner_id = ${user.id} LIMIT 1`;
+  if (owned.rows.length === 0 && await isHelperUser(user.id)) {
+    stampRequestId(undefined, res);
+    res.status(403).json({
+      error: 'helper-only',
+      message: 'Helper accounts can only see their own schedule.',
+    });
+    return null;
+  }
+
   // Sponsored AND beta accounts skip the gate - they're comp'd by the
   // platform (sponsored = permanent comp, beta = beta-program access).
   // We never want a billing read to lock them out.
   if (user.user_type === 'sponsored' || user.user_type === 'beta') {
-    return ensureWorkspace(user.id);
+    return owned.rows[0]?.id || ensureWorkspace(user.id);
   }
 
   // ensureWorkspace itself is required for shape (we need the id even
   // on a freshly-created row). If THAT throws, the request can't make
   // any progress anyway, so we surface a 500 by re-throwing - this is
-  // not a paywall denial.
-  const workspaceId = await ensureWorkspace(user.id);
+  // not a paywall denial. The row we just read saves the re-SELECT for
+  // every existing owner.
+  const workspaceId = owned.rows[0]?.id || await ensureWorkspace(user.id);
 
   if (cacheHit(workspaceId)) return workspaceId;
 

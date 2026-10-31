@@ -16,6 +16,7 @@
 import { sql } from '../_lib/db.js';
 import { requireUser, clearSessionCookie, invalidateUserCache } from '../_lib/auth.js';
 import { invalidateOwnerWorkspace } from '../_lib/clientPortal.js';
+import { invalidateHelperCache } from '../_lib/helpers.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
@@ -103,6 +104,17 @@ export default async function handler(req, res) {
     const mangledEmail = userEmail
       ? userEmail.replace(/^([^@]+)@(.+)$/, `$1+deleted-${user.id}@$2`)
       : `deleted-${user.id}@invalid.local`;
+    // Helper at someone else's business: detach the login from the
+    // owner's staff record first. The record (name, colour, every past
+    // booking assignment) belongs to the business and stays; only the
+    // sign-in goes. Best-effort - the account deletion must not depend
+    // on it.
+    await sql`
+      UPDATE staff_members
+         SET user_id = NULL, accepted_at = NULL, revoked_at = NOW(), updated_at = NOW()
+       WHERE user_id = ${user.id}
+    `.catch((e) => console.warn('[account/delete] helper detach failed:', e.message));
+    invalidateHelperCache(user.id);
     const r = await sql`
       UPDATE users SET
         deleted_at = NOW(),

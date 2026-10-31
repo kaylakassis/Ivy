@@ -69,6 +69,7 @@ export default function RootRouter() {
   const landing = decision || ((user || (native && hasSessionHint)) ? remembered : null);
   if (landing === 'onboarding') return <Navigate to={{ pathname: '/onboarding', search: window.location.search }} replace/>;
   if (landing === 'client')     return <Navigate to={{ pathname: '/me', search: window.location.search }} replace/>;
+  if (landing === 'helper')     return <Navigate to={{ pathname: '/helper', search: window.location.search }} replace/>;
   if (landing === 'business')   return <Navigate to={{ pathname: '/dashboard', search: window.location.search }} replace/>;
 
   // Likely-signed-in (hint present) → keep a neutral frame until we know

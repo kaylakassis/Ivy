@@ -3,13 +3,19 @@
 //   POST → create a staff member
 //
 // Staff are scoped to the workspace. user_id is optional and only
-// populated if the staff member has claimed their own portal login.
+// populated once the owner invited the staff member to Ivy as a HELPER
+// and they accepted (api/_lib/helpers.js). GET also returns the helper
+// seat usage; POST { invite: true } creates the record and sends the
+// invite in one step ("Add helper").
 import { sql } from '../_lib/db.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { serializeStaff } from '../_lib/staff.js';
+import {
+  HELPER_SEATS, helperFieldsFor, helperSeatUsage, inviteHelper, pendingInvitesByStaff, HelperError,
+} from '../_lib/helpers.js';
 import { badRequest, created, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
 export default async function handler(req, res) {
@@ -33,11 +39,18 @@ export default async function handler(req, res) {
                WHERE workspace_id = ${workspaceId} AND active = TRUE
                ORDER BY created_at DESC
             `;
-        return ok(res, { staff: rows.map(serializeStaff) });
+        const [pending, seats] = await Promise.all([
+          pendingInvitesByStaff(workspaceId),
+          helperSeatUsage(workspaceId).catch(() => ({ attached: 0, pending: 0, used: 0, seats: HELPER_SEATS })),
+        ]);
+        return ok(res, {
+          staff: rows.map((r) => serializeStaff(r, helperFieldsFor(r, pending.get(r.id)))),
+          helperSeats: seats,
+        });
       } catch (e) {
         // eslint-disable-next-line no-console
         console.error('[staff GET] failed (returning empty):', e.message);
-        return ok(res, { staff: [] });
+        return ok(res, { staff: [], helperSeats: { attached: 0, pending: 0, used: 0, seats: HELPER_SEATS } });
       }
     }
 
@@ -60,6 +73,21 @@ export default async function handler(req, res) {
         return badRequest(res, 'commissionRate must be between 0 and 100');
       }
 
+      // "Add helper": create + invite in one step. Check what inviteHelper
+      // would refuse BEFORE inserting so a full roster or the owner's own
+      // email doesn't leave a stray record behind.
+      const wantInvite = body.invite === true;
+      if (wantInvite) {
+        if (!email) return badRequest(res, 'An email is required to invite a helper.');
+        if (user.email && email === user.email.toLowerCase()) {
+          return badRequest(res, 'That is your own email. Helpers need their own sign-in.');
+        }
+        const usage = await helperSeatUsage(workspaceId);
+        if (usage.used >= HELPER_SEATS) {
+          return res.status(409).json({ error: `Ivy includes ${HELPER_SEATS} helpers. Revoke one to invite another.` });
+        }
+      }
+
       const ins = await sql`
         INSERT INTO staff_members (
           workspace_id, name, email, phone, role, color,
@@ -70,7 +98,20 @@ export default async function handler(req, res) {
         )
         RETURNING *
       `;
-      return created(res, { staff: serializeStaff(ins.rows[0]) });
+      let row = ins.rows[0];
+      let invite = null;
+      if (wantInvite) {
+        try {
+          invite = await inviteHelper({ workspaceId, owner: user, staff: row });
+          row = (await sql`SELECT * FROM staff_members WHERE id = ${row.id} AND workspace_id = ${workspaceId}`).rows[0] || row;
+        } catch (e) {
+          if (!(e instanceof HelperError)) throw e;
+          // Record exists, invite didn't go out - say so plainly.
+          return res.status(e.status).json({ error: e.message, staff: serializeStaff(row, helperFieldsFor(row, null)) });
+        }
+      }
+      const pending = invite ? { expiresAt: invite.expiresAt } : null;
+      return created(res, { staff: serializeStaff(row, helperFieldsFor(row, pending)), invite });
     }
 
     return methodNotAllowed(res, ['GET', 'POST']);

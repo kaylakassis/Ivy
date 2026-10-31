@@ -70,6 +70,8 @@ async function listUsers(req, res) {
   } else if (filter === 'client-only') {
     where.push(`NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`);
     where.push(`EXISTS    (SELECT 1 FROM clients c WHERE c.user_id = u.id)`);
+  } else if (filter === 'helper') {
+    where.push(`EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id)`);
   }
 
   const whereSql = where.length ? `WHERE ${where.join(' AND ')}` : '';
@@ -86,6 +88,7 @@ async function listUsers(req, res) {
       w.subscription_period_end,
       w.comp_until,
       EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id) AS is_client,
+      EXISTS (SELECT 1 FROM staff_members sm WHERE sm.user_id = u.id) AS is_helper,
       af.code AS affiliate_code
     FROM users u
     LEFT JOIN workspaces w ON w.owner_id = u.id
@@ -119,6 +122,8 @@ async function listUsers(req, res) {
       comped: !!(row.comp_until && new Date(row.comp_until) > new Date()),
     } : null,
     isClient: !!row.is_client,
+    // Helper at someone else's business (api/_lib/helpers.js).
+    isHelper: !!row.is_helper,
     affiliateCode: row.affiliate_code,
     // Combined classification used by the admin UI.
     classification: classify(row),
@@ -140,6 +145,7 @@ function classify(row) {
   if (row.subscription_status === 'trialing'
     && row.trial_ends_at && new Date(row.trial_ends_at) > new Date()) return 'Business-Trial';
   if (row.workspace_id) return 'Business-Inactive';
+  if (row.is_helper) return 'Helper';
   if (row.is_client) return 'Client-only';
   return 'Unclaimed';
 }

@@ -53,6 +53,14 @@ export function serviceUnavailable(res, message = 'The service is warming up. Pl
   return res.status(503).json({ error: message, retryable: true });
 }
 export function serverError(res, err, req) {
+  // A helper-only account reached an owner surface (see
+  // auth.js ensureWorkspace). Not a bug: answer the plain 403 the gate
+  // would have sent, without the error report.
+  if (err?.code === 'helper-only') {
+    // eslint-disable-next-line no-console
+    console.warn('[api] 403: helper-only ·', res.req?.method, res.req?.url);
+    return res.status(403).json({ error: 'helper-only', message: err.message });
+  }
   // Log the error server-side (Vercel captures console.error in logs) but
   // redact PII first - Postgres errors + stacks can carry query params
   // (emails, phones, tokens) into third-party log aggregators. Sentry's

@@ -127,7 +127,7 @@ export default function Sidebar({ variant = 'full' }) {
 
       {/* Business ↔ Client view switch — moved here from the floating pill so
           it lives under the brand instead of hovering over the composer. */}
-      <ViewSwitch />
+      <ViewSwitch showHelper={!!ctx?.isHelper}/>
 
       <button onClick={() => nav('/calendar')} style={{
         display: 'flex', alignItems: 'center', gap: 10,

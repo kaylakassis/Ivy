@@ -29,6 +29,7 @@ import { ensureActiveWorkspace } from '../../_lib/workspaceGate.js';
 import { readBody } from '../../_lib/body.js';
 import { requireSameOrigin } from '../../_lib/security.js';
 import { serializeBooking } from '../../_lib/calendar.js';
+import { markComplete, undoComplete, assertCompletable, completionLogOf, CompletionError } from '../../_lib/completion.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../../_lib/json.js';
 
 const MAX_ATTACHMENTS = 20;
@@ -100,21 +101,6 @@ export default async function handler(req, res) {
     `;
     const booking = r.rows[0];
     if (!booking) return notFound(res, 'Booking not found');
-    if (booking.cancelled_at) return badRequest(res, "Can't complete a cancelled booking");
-    if (booking.no_show_at && req.method === 'POST') {
-      return badRequest(res, "Can't complete a no-show booking - undo the no-show first");
-    }
-
-    const cancelledOccs = (booking.cancelled_occurrences || []).map((d) =>
-      d instanceof Date ? d.toISOString().slice(0, 10) : String(d),
-    );
-    if (cancelledOccs.includes(occurrenceDate)) {
-      return badRequest(res, "Can't complete a cancelled occurrence");
-    }
-
-    const log = booking.completion_log && typeof booking.completion_log === 'object'
-      ? { ...booking.completion_log } : {};
-    const existing = log[occurrenceDate] || null;
 
     // Look up staff_id for attribution display. Owner may not have a
     // staff_members row; that's fine - completedByStaffId stays null
@@ -131,22 +117,34 @@ export default async function handler(req, res) {
       staffId = sm.rows[0]?.id || null;
     }
 
-    if (req.method === 'POST') {
-      if (existing) return badRequest(res, "This booking is already marked complete - edit or remove the completed entry instead");
-      const notes = body.completionNotes == null
-        ? '' : String(body.completionNotes).slice(0, 8000);
-      const attachments = sanitizeAttachments(body.completionAttachments);
-      const visibleToClient = body.completionVisibleToClient !== false;
+    try {
+      if (req.method === 'POST') {
+        // The shared helper (api/_lib/completion.js) owns the refusals
+        // (cancelled, no-show, already complete) so the helper endpoint
+        // behaves identically.
+        const row = await markComplete({
+          booking, occurrenceDate, userId: user.id, staffId,
+          notes: body.completionNotes,
+          attachments: sanitizeAttachments(body.completionAttachments),
+          visibleToClient: body.completionVisibleToClient !== false,
+        });
+        return ok(res, { booking: serializeBooking(row) });
+      }
 
-      log[occurrenceDate] = {
-        completedAt: new Date().toISOString(),
-        completedByUserId: user.id,
-        completedByStaffId: staffId,
-        notes,
-        attachments,
-        visibleToClient,
-      };
-    } else if (req.method === 'PATCH') {
+      if (req.method === 'DELETE') {
+        const { booking: row, removed } = await undoComplete({ booking, occurrenceDate });
+        if (removed) {
+          const prevPaths = Array.isArray(removed.attachments)
+            ? removed.attachments.map((a) => a.blobPathname).filter(Boolean) : [];
+          bestEffortDelete(prevPaths);
+        }
+        return ok(res, { booking: serializeBooking(row) });
+      }
+
+      // PATCH: edit an existing occurrence's completion.
+      assertCompletable(booking, occurrenceDate);
+      const log = completionLogOf(booking);
+      const existing = log[occurrenceDate] || null;
       if (!existing) return badRequest(res, 'No completion to edit - use POST to mark complete');
       const next = { ...existing };
       if ('completionNotes' in body) {
@@ -165,22 +163,18 @@ export default async function handler(req, res) {
         next.visibleToClient = !!body.completionVisibleToClient;
       }
       log[occurrenceDate] = next;
-    } else if (req.method === 'DELETE') {
-      if (!existing) return ok(res, { booking: serializeBooking(booking) });
-      const prevPaths = Array.isArray(existing.attachments)
-        ? existing.attachments.map((a) => a.blobPathname).filter(Boolean) : [];
-      bestEffortDelete(prevPaths);
-      delete log[occurrenceDate];
+      const upd = await sql`
+        UPDATE bookings
+           SET completion_log = ${JSON.stringify(log)}::jsonb,
+               updated_at = NOW()
+         WHERE id = ${id} AND workspace_id = ${workspaceId}
+        RETURNING *
+      `;
+      return ok(res, { booking: serializeBooking(upd.rows[0]) });
+    } catch (e) {
+      if (e instanceof CompletionError) return res.status(e.status).json({ error: e.message });
+      throw e;
     }
-
-    const upd = await sql`
-      UPDATE bookings
-         SET completion_log = ${JSON.stringify(log)}::jsonb,
-             updated_at = NOW()
-       WHERE id = ${id} AND workspace_id = ${workspaceId}
-      RETURNING *
-    `;
-    return ok(res, { booking: serializeBooking(upd.rows[0]) });
   } catch (err) {
     return serverError(res, err);
   }

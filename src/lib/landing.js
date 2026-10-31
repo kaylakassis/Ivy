@@ -34,8 +34,8 @@ export function fetchMe({ force = false } = {}) {
 
 export function clearMeCache() { cache = null; }
 
-// 'onboarding' | 'business' | 'client' from a /api/me payload. Shared by
-// RootRouter and RoleRouter so they can never disagree.
+// 'onboarding' | 'business' | 'client' | 'helper' from a /api/me payload.
+// Shared by RootRouter and RoleRouter so they can never disagree.
 export function decideLanding(r, user) {
   // Owner who hasn't finished onboarding → wizard, UNLESS they used the
   // "Save & exit" escape hatch (ivy_skip_onboarding_until, self-expiring).
@@ -47,6 +47,10 @@ export function decideLanding(r, user) {
   const isSuperAdmin = !!(user?.isSuperAdmin || r?.isSuperAdmin);
   if (r?.isOwner || isSuperAdmin) return 'business';
   if (r?.isClient) return 'client';
+  // Someone's helper (owner-invited staff login, including one whose
+  // access was revoked - the helper shell explains that). They own no
+  // workspace and the business shell would only refuse them.
+  if (r?.isHelper || (Array.isArray(r?.helps) && r.helps.length > 0)) return 'helper';
   return 'business'; // workspace got auto-created on signup; empty shell is harmless
 }
 
@@ -54,7 +58,7 @@ export function decideLanding(r, user) {
 // are kept - 'onboarding' is transient and must always be re-checked.
 export function rememberLanding(d) {
   try {
-    if (d === 'business' || d === 'client') localStorage.setItem(LANDING_KEY, d);
+    if (d === 'business' || d === 'client' || d === 'helper') localStorage.setItem(LANDING_KEY, d);
     else localStorage.removeItem(LANDING_KEY);
   } catch { /* private mode */ }
 }
@@ -62,7 +66,7 @@ export function rememberLanding(d) {
 export function rememberedLanding() {
   try {
     const v = localStorage.getItem(LANDING_KEY);
-    return v === 'business' || v === 'client' ? v : null;
+    return v === 'business' || v === 'client' || v === 'helper' ? v : null;
   } catch { return null; }
 }
 

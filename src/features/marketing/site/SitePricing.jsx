@@ -146,6 +146,7 @@ export default function SitePricing() {
               <li>Unlimited clients + pipeline</li>
               <li>Ivy AI assistant: 600 messages a month</li>
               <li>Online booking + calendar sync</li>
+              <li>Bring your assistant along: up to 2 helpers can sign in to see their schedule and mark sessions done. Included.</li>
               <li>Branded invoices + recurring billing</li>
               <li>Card on file + auto-charges</li>
               <li>Memberships, packages & gift cards</li>

@@ -39,6 +39,7 @@ const HIDE_PREFIXES = [
   '/onboarding',
   '/book/', '/sign/', '/invoice/', '/quote/', '/review/', '/site/', '/embed/',
   '/privacy', '/terms', '/support',
+  '/helper/invite',  // accept page: no shell yet
   '/tour', '/features', '/compare', '/waitlist', '/account-recover', '/do-not-sell',
   // Marketing pages: the floating pill overlapped page content (e.g. the
   // pricing card) and confused logged-out visitors. The Business/Client
@@ -91,12 +92,19 @@ export default function ViewToggle() {
 // The Business ↔ Client switch itself, position-free. Reused by the floating
 // pill above and rendered inline in the sidebar (under the brand). `floating`
 // adds the drop shadow the corner pill wants.
-export function ViewSwitch({ floating }) {
+// `showHelper` adds a third option for someone who is also a helper at
+// another business (api/_lib/helpers.js). Callers pass it from /api/me's
+// isHelper; the helper shell always passes it.
+export function ViewSwitch({ floating, showHelper = false }) {
   const navigate = useNavigate();
   const location = useLocation();
   const onClient = location.pathname === '/me' || location.pathname.startsWith('/me/');
-  const view = onClient ? 'client' : 'business';
-  const go = (target) => { if (target !== view) navigate(target === 'client' ? '/me' : '/'); };
+  const onHelper = location.pathname === '/helper' || location.pathname.startsWith('/helper/');
+  const view = onClient ? 'client' : onHelper ? 'helper' : 'business';
+  const go = (target) => {
+    if (target === view) return;
+    navigate(target === 'client' ? '/me' : target === 'helper' ? '/helper' : '/');
+  };
   return (
     <div role="group" aria-label="View switcher" style={{
       display: 'inline-flex', gap: 4, padding: 4,
@@ -106,6 +114,9 @@ export function ViewSwitch({ floating }) {
     }}>
       <ToggleButton active={view === 'business'} onClick={() => go('business')} icon="Trending" label="Business" />
       <ToggleButton active={view === 'client'} onClick={() => go('client')} icon="Users" label="Client" sub="free" />
+      {(showHelper || onHelper) && (
+        <ToggleButton active={view === 'helper'} onClick={() => go('helper')} icon="Calendar" label="Helper" />
+      )}
     </div>
   );
 }
