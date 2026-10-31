@@ -634,6 +634,9 @@ function Overview() {
       {!data && !err && <div style={{ fontSize: 13, color: 'var(--muted)' }}>Loading…</div>}
       {data && (
         <>
+          <div style={{ fontSize: 12, color: 'var(--muted)', marginBottom: 10 }}>
+            Real customers only: beta, comped, super-admin and flagged test accounts are left out of every number here. Manage those under Users → "Testers · excluded".
+          </div>
           <div className="grid-auto" style={{ gap: 12 }}>
             <Stat label="Total users"            value={fmtN(data.totals.users)}/>
             <Stat label="New signups (window)"   value={fmtN(data.totals.newSignups)} accent/>
@@ -1232,6 +1235,8 @@ const USER_FILTERS = [
   { id: 'beta',             label: 'Beta' },
   { id: 'affiliate',        label: 'Affiliate' },
   { id: 'client-only',      label: 'Client-only' },
+  { id: 'real',             label: 'Real users' },
+  { id: 'testers',          label: 'Testers · excluded' },
 ];
 
 function UsersTab() {
@@ -1302,6 +1307,7 @@ function UsersTab() {
                     <Td>{u.name || <span style={{ color: 'var(--muted)' }}>-</span>}</Td>
                     <Td>
                       <Pill text={u.classification}/>
+                      {u.excludedFromAnalytics && <TesterPill flagged={u.isTester}/>}
                       {u.workspace && u.workspace.active === false && <ArchivedPill/>}
                       {u.workspace?.dataDeletionAt && <DeletionPill at={u.workspace.dataDeletionAt}/>}
                       {u.workspace?.dataPurgedAt && !u.workspace?.dataDeletionAt && u.workspace.active === false && <DeletionPill purged/>}
@@ -1588,7 +1594,10 @@ function UserDetailModal({ user, onClose, onChanged }) {
         <Row k="Last active" v={(user.lastActiveAt || user.lastLoginAt) ? new Date(user.lastActiveAt || user.lastLoginAt).toLocaleString() : 'No activity recorded'}/>
         <Row k="Last password sign-in" v={user.lastLoginAt ? new Date(user.lastLoginAt).toLocaleString() : 'Not since this was tracked'}/>
         <Row k="Email verified" v={user.emailVerifiedAt ? new Date(user.emailVerifiedAt).toLocaleString() : 'No'}/>
-        <Row k="Classification" v={<Pill text={user.classification}/>}/>
+        <Row k="Classification" v={<><Pill text={user.classification}/>{user.excludedFromAnalytics && <TesterPill flagged={user.isTester}/>}</>}/>
+        <Row k="Analytics" v={user.excludedFromAnalytics
+          ? (user.isTester ? 'Excluded: marked as a test account' : 'Excluded automatically (beta, sponsored, super admin or comped)')
+          : 'Counted as a real user'}/>
         {user.workspace && (
           <>
             <Row k="Subscription" v={<>{user.workspace.status}{user.workspace.active === false && <ArchivedPill/>}</>}/>
@@ -1664,6 +1673,16 @@ function UserDetailModal({ user, onClose, onChanged }) {
               () => api.patch(`/admin/users/${user.id}`, { resendWelcome: true }),
               { keepOpen: true })}>
             {busy === 'Welcome email sent' ? '…' : 'Resend welcome email'}
+          </button>
+          {/* Test account: leaves every Admin → Overview number. Beta,
+              sponsored, super-admin and comped accounts are excluded
+              automatically; this flag is for real-looking accounts that are
+              yours or your testers'. */}
+          <button disabled={!!busy} className="btn btn-outline" style={{ padding: '5px 12px', fontSize: 12 }}
+            title={user.isTester ? 'Count this account in analytics again' : 'Exclude this account from every analytics number'}
+            onClick={() => action(user.isTester ? 'Counted again' : 'Marked as test account',
+              () => api.patch(`/admin/users/${user.id}`, { isTester: !user.isTester }))}>
+            {busy === 'Marked as test account' || busy === 'Counted again' ? '…' : (user.isTester ? 'Count in analytics' : 'Mark as test account')}
           </button>
           {/* Complimentary access: bypasses the paywall with no card and no
               Stripe object. Grant asks for a duration (blank = permanent);
@@ -2410,6 +2429,15 @@ function DeletionPill({ at, purged }) {
       marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
       padding: '2px 8px', borderRadius: 99, background: 'var(--danger-soft, rgba(220,60,60,.12))', color: 'var(--danger, #c0392b)',
     }}>{label}</span>
+  );
+}
+
+function TesterPill({ flagged }) {
+  return (
+    <span title={flagged ? 'Marked as a test account: excluded from analytics' : 'Excluded from analytics automatically (beta, sponsored, super admin or comped)'} style={{
+      marginLeft: 6, fontSize: 10, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase',
+      padding: '2px 8px', borderRadius: 99, background: 'var(--surface-2)', color: 'var(--muted)', border: '1px solid var(--border)',
+    }}>{flagged ? 'Test' : 'Excluded'}</span>
   );
 }
 

@@ -130,10 +130,14 @@ export async function sendReminders() {
 // Delete every business row for one workspace and reset the shell.
 // Idempotent: safe to re-run if an earlier attempt died halfway.
 export async function purgeWorkspaceData(workspaceId) {
+  // Base tables only: the admin_real_* analytics views also expose a
+  // workspace_id column and must never be deleted through.
   const { rows: cols } = await sql.query(
-    `SELECT table_name FROM information_schema.columns
-      WHERE table_schema = 'public' AND column_name = 'workspace_id' AND table_name <> 'workspaces'
-      ORDER BY table_name`);
+    `SELECT c.table_name FROM information_schema.columns c
+      JOIN information_schema.tables t ON t.table_schema = c.table_schema AND t.table_name = c.table_name
+      WHERE c.table_schema = 'public' AND c.column_name = 'workspace_id' AND c.table_name <> 'workspaces'
+        AND t.table_type = 'BASE TABLE'
+      ORDER BY c.table_name`);
   const deleted = {};
   for (const { table_name: t } of cols) {
     if (RETAINED_TABLES.has(t)) continue;

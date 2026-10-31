@@ -109,6 +109,18 @@ async function patchUser(u, req, res) {
     await sql`UPDATE users SET name = ${n} WHERE id = ${u.id}`;
   }
 
+  // Test account: excluded from every admin analytics number. The cached
+  // rollups are dropped so Overview reflects the change on its next load.
+  if ('isTester' in body) {
+    const flag = body.isTester === true;
+    await sql`UPDATE users SET is_tester = ${flag} WHERE id = ${u.id}`;
+    await sql`DELETE FROM admin_analytics_cache WHERE key IN ('totals', 'platformImpact')`.catch(() => {});
+    await recordAudit(req, {
+      actor, targetUserId: u.id, action: flag ? 'user.mark_tester' : 'user.unmark_tester',
+      meta: { email: u.email },
+    });
+  }
+
   if ('password' in body && body.password) {
     const pw = String(body.password);
     if (pw.length < 8) return badRequest(res, 'Password too short');

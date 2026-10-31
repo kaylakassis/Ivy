@@ -47,32 +47,32 @@ async function handler(req, res) {
       revenueAllRow,
       dauRow, wauRow, mauRow,
     ] = await Promise.all([
-      sql`SELECT COUNT(*)::int AS n FROM users`,
-      sql`SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'`,
-      sql`SELECT COUNT(*)::int AS n FROM workspaces
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_users`,
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_workspaces WHERE subscription_status = 'active'`,
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_workspaces
             WHERE subscription_status = 'trialing'
               AND trial_ends_at IS NOT NULL
               AND trial_ends_at > NOW()`,
-      sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'sponsored'`,
-      sql`SELECT COUNT(*)::int AS n FROM users WHERE user_type = 'affiliate'`,
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_users WHERE user_type = 'sponsored'`,
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_users WHERE user_type = 'affiliate'`,
       sql`SELECT COUNT(DISTINCT u.id)::int AS n
-            FROM users u
-            WHERE NOT EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)
-              AND EXISTS (SELECT 1 FROM clients c WHERE c.user_id = u.id)`,
+            FROM admin_real_users u
+            WHERE NOT EXISTS (SELECT 1 FROM admin_real_workspaces w WHERE w.owner_id = u.id)
+              AND EXISTS (SELECT 1 FROM admin_real_clients c WHERE c.user_id = u.id)`,
       sql`SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-            FROM invoices WHERE status = 'paid'`,
+            FROM admin_real_invoices WHERE status = 'paid'`,
       // Owner usage-recency (real DAU/WAU/MAU) from last_active_at. Owner = a
       // user who owns a workspace. UTC windows are correct for a platform
       // cross-tenant rollup (see api/admin/analytics.js note).
-      sql`SELECT COUNT(*)::int AS n FROM users u
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_users u
             WHERE u.last_active_at >= NOW() - INTERVAL '1 day'
-              AND EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`,
-      sql`SELECT COUNT(*)::int AS n FROM users u
+              AND EXISTS (SELECT 1 FROM admin_real_workspaces w WHERE w.owner_id = u.id)`,
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_users u
             WHERE u.last_active_at >= NOW() - INTERVAL '7 days'
-              AND EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`,
-      sql`SELECT COUNT(*)::int AS n FROM users u
+              AND EXISTS (SELECT 1 FROM admin_real_workspaces w WHERE w.owner_id = u.id)`,
+      sql`SELECT COUNT(*)::int AS n FROM admin_real_users u
             WHERE u.last_active_at >= NOW() - INTERVAL '30 days'
-              AND EXISTS (SELECT 1 FROM workspaces w WHERE w.owner_id = u.id)`,
+              AND EXISTS (SELECT 1 FROM admin_real_workspaces w WHERE w.owner_id = u.id)`,
     ]);
 
     const totals = {
@@ -109,7 +109,7 @@ async function handler(req, res) {
            COUNT(*)::int                                        AS total,
            COUNT(*) FILTER (WHERE no_show_at IS NOT NULL)::int  AS no_shows,
            COUNT(*) FILTER (WHERE cancelled_at IS NOT NULL)::int AS cancelled
-           FROM bookings
+           FROM admin_real_bookings
           WHERE date >= CURRENT_DATE - ($1::int || ' days')::interval`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
@@ -124,18 +124,18 @@ async function handler(req, res) {
                AND no_show_at IS NULL
                AND date < CURRENT_DATE
            )::int AS past_attendable
-           FROM bookings
+           FROM admin_real_bookings
           WHERE date >= CURRENT_DATE - ($1::int || ' days')::interval
             AND date < CURRENT_DATE`,
         [PLATFORM_LOOKBACK_DAYS],
       ),
       sql.query(
         `WITH active AS (
-           SELECT COUNT(*)::int AS n FROM workspaces WHERE subscription_status = 'active'
+           SELECT COUNT(*)::int AS n FROM admin_real_workspaces WHERE subscription_status = 'active'
          ),
          rev AS (
            SELECT COALESCE(SUM(total - COALESCE(refunded_amount, 0)), 0)::numeric AS total
-             FROM invoices
+             FROM admin_real_invoices
             WHERE status = 'paid'
               AND paid_at >= NOW() - ($1::int || ' days')::interval
          )
@@ -146,12 +146,12 @@ async function handler(req, res) {
       ),
       sql`
         WITH active_ws AS (
-          SELECT id FROM workspaces WHERE subscription_status = 'active'
+          SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active'
         ),
         counts AS (
           SELECT w.id, COUNT(c.id) AS n
             FROM active_ws w
-            LEFT JOIN clients c ON c.workspace_id = w.id
+            LEFT JOIN admin_real_clients c ON c.workspace_id = w.id
            GROUP BY w.id
         )
         SELECT
@@ -161,12 +161,12 @@ async function handler(req, res) {
       `,
       sql.query(
         `WITH active_ws AS (
-           SELECT id FROM workspaces WHERE subscription_status = 'active'
+           SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active'
          ),
          counts AS (
            SELECT w.id, COUNT(b.id) AS n
              FROM active_ws w
-             LEFT JOIN bookings b
+             LEFT JOIN admin_real_bookings b
                ON b.workspace_id = w.id
               AND b.date >= CURRENT_DATE - ($1::int || ' days')::interval
             GROUP BY w.id
@@ -178,39 +178,39 @@ async function handler(req, res) {
       sql`
         SELECT
           (SELECT COUNT(DISTINCT workspace_id)::int
-             FROM workflows
+             FROM admin_real_workflows
             WHERE enabled = TRUE
-              AND workspace_id IN (SELECT id FROM workspaces WHERE subscription_status = 'active')
+              AND workspace_id IN (SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active')
           ) AS adopters,
-          (SELECT COUNT(*)::int FROM workspaces WHERE subscription_status = 'active') AS denom
+          (SELECT COUNT(*)::int FROM admin_real_workspaces WHERE subscription_status = 'active') AS denom
       `,
       sql`
         SELECT
           (SELECT COUNT(DISTINCT workspace_id)::int
-             FROM ivy_sessions
-            WHERE workspace_id IN (SELECT id FROM workspaces WHERE subscription_status = 'active')
+             FROM admin_real_ivy_sessions
+            WHERE workspace_id IN (SELECT id FROM admin_real_workspaces WHERE subscription_status = 'active')
           ) AS adopters,
-          (SELECT COUNT(*)::int FROM workspaces WHERE subscription_status = 'active') AS denom
+          (SELECT COUNT(*)::int FROM admin_real_workspaces WHERE subscription_status = 'active') AS denom
       `,
       sql`
         SELECT
           COUNT(*)::int                       AS count,
           COALESCE(AVG(rating)::numeric(3,2), 0) AS avg_rating
-          FROM reviews
+          FROM admin_real_reviews
          WHERE status = 'visible'
       `,
       sql.query(
         `WITH first_booking AS (
            SELECT b.workspace_id, MIN(b.created_at) AS first_at
-             FROM bookings b
+             FROM admin_real_bookings b
             GROUP BY b.workspace_id
          )
          SELECT
            (SELECT COUNT(*)::int FROM first_booking f
-              JOIN workspaces w ON w.id = f.workspace_id
+              JOIN admin_real_workspaces w ON w.id = f.workspace_id
              WHERE f.first_at <= w.created_at + INTERVAL '7 days'
           ) AS activated,
-          (SELECT COUNT(*)::int FROM workspaces WHERE created_at < NOW() - INTERVAL '7 days') AS eligible`,
+          (SELECT COUNT(*)::int FROM admin_real_workspaces WHERE created_at < NOW() - INTERVAL '7 days') AS eligible`,
       ),
     ]);
 
