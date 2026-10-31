@@ -84,7 +84,8 @@ export default async function handler(req, res) {
           settings: serializeSettings(settings),
           services: services.rows.map(serializeService),
           blocks:   blocks.rows.map(serializeBlock),
-          bookings: bookings.rows.map((r) => serializeBooking(r)),
+          // Helper mode (schedule permission): the calendar without revenue.
+          bookings: bookings.rows.map((r) => serializeBooking(r, { redactMoney: !!req.helper })),
         },
       });
     }

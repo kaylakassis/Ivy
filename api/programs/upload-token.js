@@ -2,6 +2,7 @@
 // program files (PDFs, images) - same two-request dance as
 // /api/clients/upload-token (see the comment there). 25 MB cap.
 import { handleUpload } from '@vercel/blob/client';
+import { assertUploadPathname, UploadScopeError } from '../_lib/blobScope.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
@@ -27,10 +28,14 @@ export default async function handler(req, res) {
     const workspaceId = await ensureActiveWorkspace(user, req, res); if (!workspaceId) return;
     const result = await handleUpload({ body, request: req,
       onBeforeGenerateToken: async (pathname) => {
-        if (!pathname.startsWith(`programs/${workspaceId}/`)) throw new Error('Invalid upload path');
+        // Must sit under this workspace's blob prefix (api/_lib/blobScope.js).
+        assertUploadPathname(pathname, workspaceId);
         return { allowedContentTypes: ALLOWED, maximumSizeInBytes: MAX_BYTES, addRandomSuffix: true, tokenPayload: JSON.stringify({ workspaceId }) };
       },
       onUploadCompleted: async () => {} });
     return ok(res, result);
-  } catch (err) { return serverError(res, err); }
+  } catch (err) {
+    if (err instanceof UploadScopeError) return badRequest(res, err.message);
+    return serverError(res, err);
+  }
 }

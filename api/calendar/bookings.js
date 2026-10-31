@@ -267,7 +267,7 @@ export default async function handler(req, res) {
     if (packageExhaustionEvent) {
       notifyPackageExhausted({ workspaceId, ...packageExhaustionEvent });
     }
-    return created(res, { booking: serializeBooking(insert.rows[0]) });
+    return created(res, { booking: serializeBooking(insert.rows[0], { redactMoney: !!req.helper }) });
   } catch (err) {
     return serverError(res, err);
   }

@@ -22,6 +22,7 @@
 //      `upload()` promise hangs forever ("Uploading..." spinner that
 //      never resolves) even though the blob uploaded successfully.
 import { handleUpload } from '@vercel/blob/client';
+import { assertUploadPathname, UploadScopeError } from '../_lib/blobScope.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
@@ -63,12 +64,18 @@ export default async function handler(req, res) {
     const result = await handleUpload({
       body,
       request: req,
-      onBeforeGenerateToken: async () => ({
-        allowedContentTypes: ALLOWED_CONTENT_TYPES,
-        maximumSizeInBytes: MAX_BYTES,
-        addRandomSuffix: true,
-        tokenPayload: JSON.stringify({ workspaceId }),
-      }),
+      onBeforeGenerateToken: async (pathname) => {
+        // The browser picks the pathname; it must sit under this
+        // workspace's prefix (api/_lib/blobScope.js) or no token is
+        // minted. The prefix is what later scopes deletes per workspace.
+        assertUploadPathname(pathname, workspaceId);
+        return {
+          allowedContentTypes: ALLOWED_CONTENT_TYPES,
+          maximumSizeInBytes: MAX_BYTES,
+          addRandomSuffix: true,
+          tokenPayload: JSON.stringify({ workspaceId }),
+        };
+      },
       onUploadCompleted: async () => {
         // No-op: the PATCH that ties the URL to the document row does the
         // bookkeeping. If that PATCH never lands, the orphan blob can be
@@ -78,6 +85,7 @@ export default async function handler(req, res) {
 
     return ok(res, result);
   } catch (err) {
+    if (err instanceof UploadScopeError) return badRequest(res, err.message);
     return serverError(res, err);
   }
 }

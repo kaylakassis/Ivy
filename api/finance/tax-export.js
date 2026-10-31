@@ -14,15 +14,10 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { SCHEDULE_C_CATEGORIES } from '../_lib/expenses.js';
+import { csvRow } from '../_lib/csv.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 
-function csvCell(v) {
-  if (v == null) return '';
-  const s = String(v);
-  if (/[",\r\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-  return s;
-}
-function row(...cells) { return cells.map(csvCell).join(','); }
+function row(...cells) { return csvRow(...cells); }
 function n(num) { return Number(num || 0).toFixed(2); }
 
 export default async function handler(req, res) {

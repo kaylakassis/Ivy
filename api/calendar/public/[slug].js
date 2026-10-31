@@ -117,9 +117,19 @@ async function getCalendar(req, res) {
         AND blocks_bookings = TRUE
       ORDER BY date, start_min
     `;
+    // Only what the slot grid can still use: from yesterday on, plus
+    // recurring masters whose series is still running (their first
+    // occurrence may be long past). History never leaves the server.
     const bookings = await sql`
-      SELECT * FROM bookings WHERE workspace_id = ${s.workspace_id} AND cancelled_at IS NULL
-      ORDER BY date, start_min
+      SELECT id, service_id, staff_id, date, start_min, end_min, cancelled_at,
+             recurrence_rule, recurrence_until, cancelled_occurrences
+        FROM bookings
+       WHERE workspace_id = ${s.workspace_id} AND cancelled_at IS NULL
+         AND (
+           date >= CURRENT_DATE - 1
+           OR (recurrence_rule IS NOT NULL AND (recurrence_until IS NULL OR recurrence_until >= CURRENT_DATE - 1))
+         )
+       ORDER BY date, start_min
     `;
     // External busy times (e.g. Google Cal personal events) are merged
     // into the blocks list with a label of "Busy" so the slot picker
@@ -530,19 +540,26 @@ async function createBooking(req, res) {
     if (existing.rows.length > 0) {
       const ec = existing.rows[0];
       clientId = ec.id;
-      const newPhone   = clientPhone || ec.phone;
-      const newConsent = smsConsent ? (ec.sms_consent_at || new Date().toISOString()) : ec.sms_consent_at;
-      // Persist the address from a mobile booking onto the client row so
-      // the next time they book, the field pre-fills. Falls back to the
-      // existing saved address if the form didn't supply one.
+      // Anyone who knows a client's email can submit this form, so a
+      // booking only ever FILLS blanks on the existing record: a phone,
+      // address or consent the owner already holds is never replaced.
+      // SMS consent is stamped only when the record has no phone yet or
+      // the submitted phone is the one on file - consent given for some
+      // other number does not cover the stored one. The submitted phone
+      // still rides on the booking row (client_phone) for its reminders.
+      // Every SET expression reads the pre-update row, so `phone` below
+      // is the stored value.
       const newAddress = locationAddress || null;
       await sql`
         UPDATE clients SET
           last_seen_at   = NOW(),
-          phone          = ${newPhone},
-          sms_consent_at = ${newConsent},
-          address        = COALESCE(${newAddress}, address)
-        WHERE id = ${clientId}
+          phone          = COALESCE(phone, ${clientPhone}),
+          sms_consent_at = CASE
+            WHEN ${smsConsent}::boolean AND sms_consent_at IS NULL
+                 AND (phone IS NULL OR phone = ${clientPhone}) THEN NOW()
+            ELSE sms_consent_at END,
+          address        = COALESCE(address, ${newAddress})
+        WHERE id = ${clientId} AND workspace_id = ${workspaceId}
       `;
     } else {
       const newClient = await sql`

@@ -13,6 +13,7 @@
 // Requires BLOB_READ_WRITE_TOKEN env var (auto-set when a Blob store is
 // linked to the Vercel project).
 import { handleUpload } from '@vercel/blob/client';
+import { assertUploadPathname, UploadScopeError } from '../_lib/blobScope.js';
 import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
@@ -57,9 +58,11 @@ export default async function handler(req, res) {
       body,
       request: req,
       onBeforeGenerateToken: async (pathname, clientPayload) => {
-        // pathname comes from the browser as `<workspaceId>/messages/<filename>`.
-        // We rebuild it server-side to guarantee the workspace prefix is correct,
-        // and add a random suffix so users can't overwrite each other's files.
+        // The browser picks the pathname; it must sit under this
+        // workspace's prefix (api/_lib/blobScope.js) or no token is
+        // minted. addRandomSuffix keeps users from overwriting each
+        // other's files inside the prefix.
+        assertUploadPathname(pathname, workspaceId);
         return {
           allowedContentTypes: ALLOWED_CONTENT_TYPES,
           maximumSizeInBytes: MAX_BYTES,
@@ -74,6 +77,7 @@ export default async function handler(req, res) {
 
     return ok(res, result);
   } catch (err) {
+    if (err instanceof UploadScopeError) return badRequest(res, err.message);
     return serverError(res, err);
   }
 }

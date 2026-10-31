@@ -91,6 +91,9 @@ export default async function handler(req, res) {
         await sql`UPDATE staff_members SET active = FALSE, updated_at = NOW()
                    WHERE id = ${id} AND workspace_id = ${workspaceId}`;
       }
+      // An attached helper loses access with the row (deleted or
+      // inactive) - drop their cached memberships so it lands now.
+      if (existing.user_id) invalidateHelperCache(existing.user_id);
       return noContent(res);
     }
 

@@ -218,50 +218,77 @@ export function computeBookingPayment(row) {
   };
 }
 
+// Serializer modes:
+//   • default            - the owner's full view.
+//   • redactClient: true - the PUBLIC slot grid. Only what the grid
+//                          needs to grey out taken slots: id, service,
+//                          staff, date, window, recurrence, status.
+//                          No client identity, no meeting link, no
+//                          money, no notes, no completion/no-show state.
+//   • redactMoney: true  - helper mode on the owner endpoints. Helpers
+//                          see the schedule but never revenue: every
+//                          money field is null and the payment summary
+//                          is omitted.
 export function serializeBooking(row, opts = {}) {
   if (!row) return null;
-  const { redactClient = false } = opts;
+  const { redactClient = false, redactMoney = false } = opts;
   const dateStr = row.date instanceof Date ? row.date.toISOString().slice(0, 10) : row.date;
   const cancelledOccurrences = (row.cancelled_occurrences || []).map((d) =>
     d instanceof Date ? d.toISOString().slice(0, 10) : d,
   );
+  const recurrenceUntil = row.recurrence_until instanceof Date
+    ? row.recurrence_until.toISOString().slice(0, 10)
+    : (row.recurrence_until || null);
+  if (redactClient) {
+    return {
+      id:                  row.id,
+      serviceId:           row.service_id,
+      staffId:             row.staff_id || null,
+      date:                dateStr,
+      startMin:            row.start_min,
+      endMin:              row.end_min,
+      cancelledOccurrences,
+      recurrenceRule:      row.recurrence_rule || null,
+      recurrenceUntil,
+      status:              row.cancelled_at ? 'cancelled' : 'booked',
+    };
+  }
+  const money = (v) => (redactMoney ? null : v);
   return {
     id:                  row.id,
     serviceId:           row.service_id,
     clientId:            row.client_id,
-    clientName:          redactClient ? null : row.client_name,
-    clientEmail:         redactClient ? null : row.client_email,
+    clientName:          row.client_name,
+    clientEmail:         row.client_email,
     date:                dateStr,
     startMin:            row.start_min,
     endMin:              row.end_min,
-    notes:               redactClient ? null : row.notes,
+    notes:               row.notes,
     cancelledAt:         row.cancelled_at,
     recurrenceRule:      row.recurrence_rule || null,
-    recurrenceUntil:     row.recurrence_until instanceof Date
-      ? row.recurrence_until.toISOString().slice(0, 10)
-      : (row.recurrence_until || null),
+    recurrenceUntil,
     cancelledOccurrences,
-    clientPackageId:     row.client_package_id || null,
+    clientPackageId:     money(row.client_package_id || null),
     staffId:             row.staff_id || null,
     depositRequired:     Number(row.deposit_required || 0),
-    depositPaid:         Number(row.deposit_paid || 0),
-    depositPaidAt:       row.deposit_paid_at || null,
-    locationAddress:     redactClient ? null : (row.location_address || null),
+    depositPaid:         money(Number(row.deposit_paid || 0)),
+    depositPaidAt:       money(row.deposit_paid_at || null),
+    locationAddress:     row.location_address || null,
     videoRoomUrl:        row.video_room_url || null,
-    customFieldValues:   redactClient ? null : (row.custom_field_values || {}),
+    customFieldValues:   row.custom_field_values || {},
     addOnIds:            row.add_on_ids || [],
-    bookingTotal:        Number(row.booking_total || 0),
-    giftCardCreditCents: Number(row.gift_card_credit_cents || 0),
+    bookingTotal:        money(Number(row.booking_total || 0)),
+    giftCardCreditCents: money(Number(row.gift_card_credit_cents || 0)),
     noShowAt:            row.no_show_at || null,
-    feeChargedAmount:    Number(row.fee_charged_amount || 0),
-    feeChargedKind:      row.fee_charged_kind || null,
-    feeChargedAt:        row.fee_charged_at || null,
-    tipAmount:           Number(row.tip_amount || 0),
-    tipChargedAt:        row.tip_charged_at || null,
-    completionLog:       redactClient ? {} : (row.completion_log || {}),
-    // Unified deposit + balance payment status. Omitted on the public
-    // (redacted) slot grid, which must never reveal revenue.
-    payment:             redactClient ? undefined : computeBookingPayment(row),
+    feeChargedAmount:    money(Number(row.fee_charged_amount || 0)),
+    feeChargedKind:      money(row.fee_charged_kind || null),
+    feeChargedAt:        money(row.fee_charged_at || null),
+    tipAmount:           money(Number(row.tip_amount || 0)),
+    tipChargedAt:        money(row.tip_charged_at || null),
+    completionLog:       row.completion_log || {},
+    // Unified deposit + balance payment status. Omitted in helper mode -
+    // helpers never see revenue.
+    payment:             redactMoney ? undefined : computeBookingPayment(row),
   };
 }
 

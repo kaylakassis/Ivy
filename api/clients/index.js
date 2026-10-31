@@ -7,7 +7,8 @@ import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { serializeClient, VALID_STAGES } from '../_lib/clients.js';
+import { serializeClient, serializeClientMinimal, helperSeesMinimalClients, VALID_STAGES } from '../_lib/clients.js';
+import { helperClientScope } from '../_lib/helpers.js';
 import { normalizePhone } from '../_lib/sms.js';
 import { sendClientInvite } from '../_lib/clientNotify.js';
 import { celebrateFirstClient } from '../_lib/milestones.js';
@@ -31,14 +32,29 @@ export default async function handler(req, res) {
       // Email lookup is exact-match - used by AddBookingModal to find
       // the matching client without making the owner pick from a list.
       try {
+        // Helper mode without the clients permission (i.e. schedule
+        // only): a minimal projection (id, name, email, phone) and, when
+        // they lack schedule too, only the clients they are booked with.
+        // helperClientScope returns null for "no restriction".
+        const minimal = helperSeesMinimalClients(req);
+        const scope = minimal ? await helperClientScope(req.helper) : null;
+        const scopeIds = scope === null ? null : scope; // [] = sees nobody
+        const project = minimal ? serializeClientMinimal : serializeClient;
         const email = (req.query.email || '').toString().trim().toLowerCase();
         if (email) {
-          const r = await sql`
-            SELECT * FROM clients
-            WHERE workspace_id = ${workspaceId} AND email = ${email}
-            LIMIT 1
-          `;
-          return ok(res, { clients: r.rows.map(serializeClient) });
+          const r = scopeIds
+            ? await sql`
+                SELECT * FROM clients
+                WHERE workspace_id = ${workspaceId} AND email = ${email}
+                  AND id = ANY(${scopeIds}::uuid[])
+                LIMIT 1
+              `
+            : await sql`
+                SELECT * FROM clients
+                WHERE workspace_id = ${workspaceId} AND email = ${email}
+                LIMIT 1
+              `;
+          return ok(res, { clients: r.rows.map(project) });
         }
 
         // Bounded pagination guardrail: previously this endpoint
@@ -63,28 +79,21 @@ export default async function handler(req, res) {
         const probeLimit = limit + 1;
 
         const { stage } = req.query;
-        let rows;
-        if (stage && VALID_STAGES.has(stage)) {
-          const r = await sql`
-            SELECT * FROM clients
-            WHERE workspace_id = ${workspaceId} AND stage = ${stage}
-            ORDER BY COALESCE(last_seen_at, joined_at) DESC
-            LIMIT ${probeLimit} OFFSET ${offset}
-          `;
-          rows = r.rows;
-        } else {
-          const r = await sql`
-            SELECT * FROM clients
-            WHERE workspace_id = ${workspaceId}
-            ORDER BY COALESCE(last_seen_at, joined_at) DESC
-            LIMIT ${probeLimit} OFFSET ${offset}
-          `;
-          rows = r.rows;
-        }
+        const stageFilter = stage && VALID_STAGES.has(stage) ? stage : null;
+        // One query; the optional filters collapse to TRUE when unset.
+        const r = await sql`
+          SELECT * FROM clients
+          WHERE workspace_id = ${workspaceId}
+            AND (${stageFilter}::text IS NULL OR stage = ${stageFilter})
+            AND (${scopeIds}::uuid[] IS NULL OR id = ANY(${scopeIds}::uuid[]))
+          ORDER BY COALESCE(last_seen_at, joined_at) DESC
+          LIMIT ${probeLimit} OFFSET ${offset}
+        `;
+        const rows = r.rows;
         const hasMore = rows.length > limit;
         const page = hasMore ? rows.slice(0, limit) : rows;
         return ok(res, {
-          clients: page.map(serializeClient),
+          clients: page.map(project),
           hasMore,
           nextOffset: hasMore ? offset + limit : null,
         });
