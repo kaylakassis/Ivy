@@ -4,10 +4,10 @@
 // (api/**/upload-token.js, photo-token.js, branding-logo-token.js). The
 // browser picks the pathname, the server signs a token for it, and the
 // browser PUTs straight to Blob storage. Because the pathname is chosen
-// client-side, the token routes REQUIRE it to start with the uploading
-// workspace's prefix (uploadPrefix) and refuse anything else. That makes
-// the prefix a proof of origin: a pathname under ws/<id>/ was uploaded
-// with a token minted for workspace <id>.
+// client-side, the token routes refuse any ws/<id>/ prefix that is not the
+// uploader's own (see assertUploadPathname). That makes the prefix a proof
+// of origin: a pathname under ws/<id>/ was uploaded with a token minted for
+// workspace <id>.
 //
 // Delete paths (completion attachments, gallery photos, orphan prune)
 // must therefore only ever del() pathnames that carry the caller's own
@@ -86,12 +86,24 @@ export function scopedBlobPathnames(pathnames, workspaceId) {
   return out;
 }
 
-// Token-route guard: the browser-chosen pathname must sit under the
-// uploading workspace's prefix. Throws UploadScopeError (400) otherwise.
+// Token-route guard for the browser-chosen pathname.
+//   • Under this workspace's prefix: allowed (and later deletable by it).
+//   • Under ANY other ws/ prefix: refused, so nobody can plant a file in
+//     another workspace's folder and later make it look like theirs.
+//   • Unprefixed (the iPhone app builds already in the App Store upload
+//     this way): allowed, so those uploads keep working until people
+//     update. blobPathnameForWorkspace() never matches these, so no user
+//     action can ever delete one; they are left in storage.
+// Schemes, protocol-relative paths, traversal and empty segments: refused.
 export function assertUploadPathname(pathname, workspaceId) {
-  const ok = blobPathnameForWorkspace(pathname, workspaceId);
-  if (!ok || /^[a-z][a-z0-9+.-]*:\/\//i.test(String(pathname))) {
+  const raw = String(pathname || '');
+  if (!raw || raw.length > 1024 || /^[a-z][a-z0-9+.-]*:/i.test(raw) || /^\/\//.test(raw)) {
     throw new UploadScopeError();
   }
-  return ok;
+  const ok = blobPathnameForWorkspace(raw, workspaceId);
+  if (ok) return ok;
+  const p = raw.replace(/^\/+/, '');
+  if (p.includes('\0') || p.split('/').some((seg) => seg === '..' || seg === '')) throw new UploadScopeError();
+  if (p === UPLOAD_ROOT || p.startsWith(`${UPLOAD_ROOT}/`)) throw new UploadScopeError();
+  return p;
 }

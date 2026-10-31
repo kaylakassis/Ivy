@@ -17,7 +17,7 @@ import { sql } from '../_lib/db.js';
 import { requireUser, ensureWorkspace } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { runApprovedTool } from '../_lib/ivyTools.js';
+import { executePendingAction } from '../_lib/ivyApproval.js';
 import { serializeMessage, stripInlineMarkdown, sanitizeIvyReply } from '../_lib/ivy.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
@@ -56,29 +56,12 @@ export default async function handler(req, res) {
     if (row.executed_at) return conflict(res, 'This action has already run.');
     if (new Date(row.expires_at).getTime() <= Date.now()) return conflict(res, 'This approval has expired. Ask Ivy again if you still want it.');
 
-    // Claim the row atomically. Whoever gets a row back runs it; a second
-    // tap, a retry or another tab gets nothing and answers 409.
-    const claimed = await sql`
-      UPDATE ivy_pending_actions
-         SET approved_at = COALESCE(approved_at, NOW()), executed_at = NOW()
-       WHERE id = ${id} AND workspace_id = ${workspaceId}
-         AND executed_at IS NULL AND expires_at > NOW()
-       RETURNING id`;
-    if (claimed.rows.length === 0) return conflict(res, 'This action has already run or expired.');
-
-    let result;
-    try {
-      result = await runApprovedTool(row.tool, row.args || {}, { workspaceId, userId: user.id, sessionId: row.session_id });
-    } catch (err) {
-      result = { error: err?.message || String(err) };
-    }
-    await sql`
-      UPDATE ivy_pending_actions SET result = ${JSON.stringify(result ?? null)}::jsonb
-       WHERE id = ${id} AND workspace_id = ${workspaceId}`;
-
-    const text = result && result.error
-      ? `That didn't work: ${result.error}`
-      : `Done. ${row.summary}`;
+    // Claim-and-run is shared with the legacy path (api/_lib/ivyApproval.js):
+    // whoever claims the row runs it; a second tap, a retry or another tab
+    // gets nothing and answers 409.
+    const out = await executePendingAction({ row, workspaceId, userId: user.id });
+    if (!out.claimed) return conflict(res, 'This action has already run or expired.');
+    const { result, text } = out;
     const message = await appendIvyMessage(workspaceId, row.session_id, text);
     return ok(res, { ok: !(result && result.error), result, message });
   } catch (err) {

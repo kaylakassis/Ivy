@@ -32,6 +32,7 @@ import { requireSameOrigin } from '../_lib/security.js';
 import { generateReply } from '../_lib/ivy.js';
 import { beginTurn, finishTurn } from '../_lib/ivyTurn.js';
 import { screenOwnerPrompt, screenReply, guardedReply } from '../_lib/ivyGuard.js';
+import { legacyApprovalReply } from '../_lib/ivyApproval.js';
 import { badRequest, methodNotAllowed, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { reportError } from '../_lib/monitoring.js';
@@ -89,8 +90,14 @@ export default async function handler(req, res) {
     // gets stored. The model's own refusal is the primary layer; this is
     // defence in depth.
     let reply;
-    const screened = screenOwnerPrompt(turn.text);
-    if (screened.blocked) {
+    // iPhone builds in the App Store approve a card by sending a fixed
+    // message; run this chat's waiting actions instead of asking the model.
+    const legacy = await legacyApprovalReply({ text: turn.text, sessionId: turn.session?.id, workspaceId, userId: user.id });
+    const screened = legacy ? { blocked: false } : screenOwnerPrompt(turn.text);
+    if (legacy) {
+      reply = { text: legacy, mode: 'live', error: null };
+      sse('delta', { text: reply.text });
+    } else if (screened.blocked) {
       reply = guardedReply(screened.reason);
       sse('delta', { text: reply.text });
     } else {

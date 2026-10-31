@@ -15,6 +15,7 @@ import {
 } from '../_lib/ivy.js';
 import { beginTurn, finishTurn } from '../_lib/ivyTurn.js';
 import { screenOwnerPrompt, screenReply, guardedReply } from '../_lib/ivyGuard.js';
+import { legacyApprovalReply } from '../_lib/ivyApproval.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 
@@ -84,8 +85,13 @@ export default async function handler(req, res) {
       // screen is replaced before it is stored. The model's own refusal is
       // the primary layer; this is defence in depth.
       let reply;
-      const screened = screenOwnerPrompt(turn.text);
-      if (screened.blocked) {
+      // iPhone builds in the App Store approve a card by sending a fixed
+      // message; run this chat's waiting actions instead of asking the model.
+      const legacy = await legacyApprovalReply({ text: turn.text, sessionId: turn.session?.id, workspaceId, userId: user.id });
+      const screened = legacy ? { blocked: false } : screenOwnerPrompt(turn.text);
+      if (legacy) {
+        reply = { text: legacy, mode: 'live', error: null };
+      } else if (screened.blocked) {
         reply = guardedReply(screened.reason);
       } else {
         // sessionId rides along so approval-gated tool calls are recorded

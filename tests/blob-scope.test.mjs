@@ -106,15 +106,21 @@ async function run() {
   try { assertUploadPathname(`${pB}x.png`, A.workspaceId); } catch (e) { threw = e.status === 400; }
   assert(threw, 'assertUploadPathname refuses a foreign prefix with 400');
 
-  console.log('\n[2] upload-token routes only mint tokens inside the workspace prefix');
+  console.log('\n[2] upload-token routes never mint a token for another workspace\'s folder');
   const tokenBody = (pathname) => ({ type: 'blob.generate-client-token', payload: { pathname, clientPayload: null, multipart: false } });
   for (const [label, handler] of [['bookings', bookingUploadToken], ['clients', clientUploadToken], ['programs', programsUploadToken]]) {
     let r = await call(handler, { cookie: A.cookie, body: tokenBody(`${pA}${label}/f.png`) });
     assert(r.statusCode === 200 && typeof r.body?.clientToken === 'string', `${label}: own prefix → token (${r.statusCode} ${JSON.stringify(r.body).slice(0, 60)})`);
     r = await call(handler, { cookie: A.cookie, body: tokenBody(`${pB}${label}/f.png`) });
     assert(r.statusCode === 400 && !r.body?.clientToken, `${label}: B's prefix → 400 (${r.statusCode})`);
+    // The iPhone build already in the App Store uploads unprefixed; it must
+    // keep working. Such files can never be deleted by a user action.
     r = await call(handler, { cookie: A.cookie, body: tokenBody(`${label}/legacy-${STAMP}.png`) });
-    assert(r.statusCode === 400, `${label}: unprefixed pathname → 400 (${r.statusCode})`);
+    assert(r.statusCode === 200 && typeof r.body?.clientToken === 'string', `${label}: legacy unprefixed pathname still uploads (${r.statusCode})`);
+    r = await call(handler, { cookie: A.cookie, body: tokenBody(`ws/${label}-not-a-workspace/f.png`) });
+    assert(r.statusCode === 400, `${label}: any other ws/ folder → 400 (${r.statusCode})`);
+    r = await call(handler, { cookie: A.cookie, body: tokenBody(`${label}/../${pB}x.png`) });
+    assert(r.statusCode === 400, `${label}: traversal → 400 (${r.statusCode})`);
   }
 
   console.log('\n[3] completion attachments: pathname derived from URL, foreign ones never deleted');
