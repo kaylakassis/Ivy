@@ -23,6 +23,15 @@ import { useEffect, useRef, useState, useCallback } from 'react';
 const SR = (typeof window !== 'undefined')
   ? (window.SpeechRecognition || window.webkitSpeechRecognition)
   : null;
+// Inside the iPhone app the web view has no SpeechRecognition at all, so
+// dictation there goes through Apple's own speech engine via the
+// @capacitor-community/speech-recognition plugin (loaded on demand).
+const NATIVE = (typeof window !== 'undefined') && !!window.Capacitor?.isNativePlatform?.();
+let nativePluginPromise = null;
+function nativeSpeech() {
+  if (!nativePluginPromise) nativePluginPromise = import('@capacitor-community/speech-recognition').then((m) => m.SpeechRecognition);
+  return nativePluginPromise;
+}
 const MR = (typeof window !== 'undefined') ? window.MediaRecorder : null;
 
 // Pick the first MIME type the browser actually supports. webm/opus is
@@ -62,11 +71,46 @@ function newRecognition() {
 //                        has actually started.
 export function useDictation() {
   const recRef = useRef(null);
+  const nativeRef = useRef(null); // { plugin, listener } while native dictation runs
   const [listening, setListening] = useState(false);
   const [error, setError] = useState(null);
   const [transcript, setTranscript] = useState('');
 
+  // iPhone app: Apple's speech recognizer. Partial results stream in as the
+  // person talks; stop() ends the session. Permission is asked on first use.
+  const startNative = useCallback(async (onTranscript) => {
+    setError(null);
+    setTranscript('');
+    try {
+      const plugin = await nativeSpeech();
+      const { available } = await plugin.available();
+      if (!available) { setError('Voice input is not available on this device'); return; }
+      const perm = await plugin.requestPermissions();
+      if (perm?.speechRecognition && perm.speechRecognition !== 'granted') {
+        setError('Allow microphone and speech recognition for Ivy in Settings to talk instead of typing');
+        return;
+      }
+      await plugin.removeAllListeners().catch(() => {});
+      const listener = await plugin.addListener('partialResults', (data) => {
+        const best = Array.isArray(data?.matches) ? data.matches[0] : '';
+        const all = String(best || '').replace(/\s+/g, ' ').trim();
+        setTranscript(all);
+        onTranscript?.(all);
+      });
+      const stateListener = await plugin.addListener('listeningState', (data) => {
+        if (data?.status === 'stopped') setListening(false);
+      });
+      nativeRef.current = { plugin, listeners: [listener, stateListener] };
+      await plugin.start({ language: (navigator.language || 'en-US'), partialResults: true, popup: false });
+      setListening(true);
+    } catch (e) {
+      setError(e?.message || 'Could not start voice input');
+      setListening(false);
+    }
+  }, []);
+
   const start = useCallback((onTranscript) => {
+    if (NATIVE) { startNative(onTranscript); return; }
     if (!SR) {
       setError('Voice input not supported in this browser');
       return;
@@ -101,13 +145,26 @@ export function useDictation() {
   }, []);
 
   const stop = useCallback(() => {
+    if (NATIVE) {
+      const n = nativeRef.current; nativeRef.current = null;
+      if (n) {
+        n.plugin.stop().catch(() => {});
+        for (const l of n.listeners) { try { l.remove(); } catch { /* gone */ } }
+      }
+      setListening(false);
+      return;
+    }
     try { recRef.current?.stop(); } catch { /* already stopped */ }
     setListening(false);
   }, []);
 
-  useEffect(() => () => { try { recRef.current?.abort(); } catch {} }, []);
+  useEffect(() => () => {
+    try { recRef.current?.abort(); } catch { /* ignore */ }
+    const n = nativeRef.current;
+    if (n) { n.plugin.stop().catch(() => {}); for (const l of n.listeners) { try { l.remove(); } catch { /* gone */ } } }
+  }, []);
 
-  return { supported: !!SR, listening, error, start, stop, transcript };
+  return { supported: NATIVE || !!SR, listening, error, start, stop, transcript };
 }
 
 // ── useVoiceMemo - audio blob + parallel transcript ─────────────────
