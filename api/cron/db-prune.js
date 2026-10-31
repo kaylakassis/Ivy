@@ -86,6 +86,12 @@ async function handler(req, res) {
     results.cronRuns = await prune('cron_runs',
       `finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '30 days'`);
 
+    // Ivy approval cards: each lives 15 minutes. Keep a week of history
+    // (approved, declined or lapsed) for support questions, then drop it;
+    // the stored arguments can contain client details.
+    results.ivyPendingActions = await prune('ivy_pending_actions',
+      `created_at < NOW() - INTERVAL '7 days'`);
+
     // Webhook deliveries we could not handle; the ops-alerts cron only
     // reads the last hour.
     results.webhookFailures = await prune('webhook_failures',
