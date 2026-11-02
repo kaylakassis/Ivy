@@ -29,7 +29,15 @@ export async function executePendingAction({ row, workspaceId, userId }) {
   await sql`
     UPDATE ivy_pending_actions SET result = ${JSON.stringify(result ?? null)}::jsonb
      WHERE id = ${row.id} AND workspace_id = ${workspaceId}`;
-  const text = result && result.error ? `That didn't work: ${result.error}` : `Done. ${row.summary}`;
+  let text = result && result.error ? `That didn't work: ${result.error}` : `Done. ${row.summary}`;
+  // Appointments added from a photo: say who still needs an email, with a
+  // link to the Clients list filtered to them.
+  if (!result?.error && Array.isArray(result?.missing_email) && result.missing_email.length) {
+    const names = result.missing_email.map((c) => c.name);
+    const shown = names.length > 5 ? `${names.slice(0, 5).join(', ')} and ${names.length - 5} more` : names.join(', ');
+    const n = names.length;
+    text += `\n\n${n === 1 ? '1 client has' : `${n} clients have`} no email yet, so they won't get booking reminders: ${shown}. [Add ${n === 1 ? 'their email' : 'their emails'}](/clients?filter=missing-email)`;
+  }
   return { claimed: true, result, text };
 }
 

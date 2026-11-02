@@ -7,11 +7,13 @@
 // dangerouslySetInnerHTML, so model output can never inject markup.
 //
 // Supported: **bold** / __bold__, *italic* / _italic_, `inline code`,
-// "- " / "* " bullet lines, and newline -> <br/>. Anything else passes
-// through verbatim. Deliberately minimal: no links, images, tables, or
-// headings (Ivy is instructed not to emit those, and the server sanitizer
-// strips stray headings/rules).
+// "- " / "* " bullet lines, and newline -> <br/>, plus [label](/path)
+// links to pages INSIDE Ivy only (the path must start with a single "/";
+// anything else, including outside sites, renders as plain text). No
+// images, tables, or headings (Ivy is instructed not to emit those, and
+// the server sanitizer strips stray headings/rules).
 import React from 'react';
+import { Link } from 'react-router-dom';
 
 // Split one line of text into bold/italic/code spans. Greedy, left-to-
 // right, non-nested - enough for chat copy and safe against unmatched
@@ -19,23 +21,25 @@ import React from 'react';
 function renderInline(text, keyPrefix) {
   const out = [];
   // Order matters: ** and __ before single * and _ so bold wins over italic.
-  const pattern = /(\*\*|__)(.+?)\1|(\*|_)(.+?)\3|`([^`]+?)`/g;
+  const pattern = /\[([^\]\n]{1,80})\]\((\/(?!\/)[A-Za-z0-9/_\-?=&%.]{0,200})\)|(\*\*|__)(.+?)\3|(\*|_)(.+?)\5|`([^`]+?)`/g;
   let last = 0;
   let m;
   let i = 0;
   while ((m = pattern.exec(text)) !== null) {
     if (m.index > last) out.push(text.slice(last, m.index));
-    if (m[1]) {
-      out.push(<strong key={`${keyPrefix}-b${i}`}>{m[2]}</strong>);
+    if (m[1] != null) {
+      out.push(<Link key={`${keyPrefix}-l${i}`} to={m[2]} style={{ color: 'var(--accent)', fontWeight: 600, textDecoration: 'underline' }}>{m[1]}</Link>);
     } else if (m[3]) {
-      out.push(<em key={`${keyPrefix}-i${i}`}>{m[4]}</em>);
-    } else if (m[5] != null) {
+      out.push(<strong key={`${keyPrefix}-b${i}`}>{m[4]}</strong>);
+    } else if (m[5]) {
+      out.push(<em key={`${keyPrefix}-i${i}`}>{m[6]}</em>);
+    } else if (m[7] != null) {
       out.push(
         <code key={`${keyPrefix}-c${i}`} style={{
           fontFamily: 'var(--font-mono, ui-monospace, monospace)',
           fontSize: '0.92em', background: 'var(--surface-2)',
           padding: '1px 5px', borderRadius: 5,
-        }}>{m[5]}</code>,
+        }}>{m[7]}</code>,
       );
     }
     last = pattern.lastIndex;

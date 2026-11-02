@@ -87,6 +87,40 @@ async function run() {
     assert(again.added === 0 && again.skipped.length === 2, 'running it again adds nothing (duplicates skipped)');
     const bCount = (await sql`SELECT COUNT(*)::int n FROM bookings WHERE workspace_id = ${B.workspaceId}`).rows[0].n;
     assert(bCount === 0, "another workspace's same-named client is untouched");
+    assert(Array.isArray(r.missing_email) && r.missing_email.length === 1 && r.missing_email[0].name === 'Sam Lee', 'result lists clients with no email');
+
+    console.log('\n[4] owners are told who needs an email, and adding one reaches upcoming appointments');
+    const { executePendingAction } = await import('../api/_lib/ivyApproval.js');
+    const args2 = { bookings: [{ client_name: 'Nia Park', date: '2030-03-06', start_time: '11:00' }, { client_name: 'Jane Doe', date: '2030-03-06', start_time: '12:00' }] };
+    const gate2 = await executeIvyTool('add_bookings_from_list', args2, { workspaceId: A.workspaceId, userId: A.userId });
+    const row2 = (await sql`SELECT id, session_id, tool, args, summary FROM ivy_pending_actions WHERE id = ${gate2.pending_id}`).rows[0];
+    const done = await executePendingAction({ row: row2, workspaceId: A.workspaceId, userId: A.userId });
+    assert(done.claimed && /1 client has no email yet/.test(done.text) && /Nia Park/.test(done.text) && !/Jane Doe\./.test(done.text.split('no email yet')[1] || ''), `Done message names only the client without an email (${done.text.split('\n\n')[1]})`);
+    assert(/\[Add their email\]\(\/clients\?filter=missing-email\)/.test(done.text), 'Done message links to the Missing email list');
+
+    const { default: clientById } = await import('../api/clients/[id].js');
+    const { signSession } = await import('../api/_lib/auth.js');
+    const { default: dashboard } = await import('../api/dashboard.js');
+    const cookie = `ivy_session=${signSession(A.userId)}`;
+    const mkRes = () => ({ statusCode: 200, body: null, headers: {}, status(c) { this.statusCode = c; return this; }, json(o) { this.body = o; return this; }, setHeader(k, v) { this.headers[k] = v; }, getHeader() {}, end() { return this; } });
+    const callH = async (h, { method = 'GET', query = {}, body = {} } = {}) => { const res = mkRes(); await h({ method, url: '/t', query, body, headers: { cookie, origin: 'http://localhost:3000', host: 'localhost:3000', 'content-type': 'application/json' } }, res); return res; };
+    // A near-term appointment for Sam (no email) so the dashboard counts it.
+    await sql`INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min)
+      VALUES (${A.workspaceId}, ${sam[0].id}, 'Sam Lee', '', (NOW() AT TIME ZONE 'America/Los_Angeles')::date + 2, 600, 660)`;
+    await sql`INSERT INTO bookings (workspace_id, client_id, client_name, client_email, date, start_min, end_min)
+      VALUES (${A.workspaceId}, ${sam[0].id}, 'Sam Lee', '', CURRENT_DATE - 30, 600, 660)`;
+    let dres = await callH(dashboard);
+    assert(dres.statusCode === 200 && dres.body?.missingEmail?.clients >= 1, `dashboard counts this week's clients with no email (${JSON.stringify(dres.body?.missingEmail)})`);
+    const pres = await callH(clientById, { method: 'PATCH', query: { id: sam[0].id }, body: { email: `sam-${S}@example.com` } });
+    assert(pres.statusCode === 200, `client email saved (${pres.statusCode})`);
+    const samBookings = (await sql`SELECT date, client_email FROM bookings WHERE client_id = ${sam[0].id} ORDER BY date`).rows;
+    const past = samBookings.filter((x) => new Date(x.date) < new Date(Date.now() - 3 * 86400000));
+    const future = samBookings.filter((x) => new Date(x.date) >= new Date(Date.now() - 86400000));
+    assert(future.length >= 2 && future.every((x) => x.client_email === `sam-${S}@example.com`), 'upcoming appointments got the new email (reminders will reach them)');
+    assert(past.length === 1 && past[0].client_email === '', 'old appointments are left as they were');
+    dres = await callH(dashboard);
+    assert((dres.body?.missingEmail?.clients || 0) === 0, 'dashboard reminder clears once the email is added');
+
     let res3; let threw = false;
     try { res3 = await runApprovedTool('add_bookings_from_list', { bookings: [{ client_name: 'X', date: 'tomorrow', start_time: '9' }] }, { workspaceId: A.workspaceId }); } catch { threw = true; }
     assert(threw || /Nothing to add/.test(res3?.error || ''), 'nothing readable → clear error');

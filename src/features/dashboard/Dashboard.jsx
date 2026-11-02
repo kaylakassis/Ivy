@@ -515,6 +515,7 @@ export default function Dashboard() {
             )}
           </div>
         )}
+        <MissingEmailCard info={data?.missingEmail}/>
         <IvyNoticedCard />
         <TodayWithIvyCard items={data?.briefing?.items}/>
         {data?.workflowSuggestion && (
@@ -711,3 +712,25 @@ function relTime(ts) {
   if (hrs < 24) return `${hrs}h`;
   return `${Math.round(hrs / 24)}d`;
 }
+
+// Shown only when appointments in the next 7 days belong to clients with no
+// email on file: those clients get no reminder until one is added.
+function MissingEmailCard({ info }) {
+  if (!info || !info.clients) return null;
+  const n = info.clients;
+  const a = info.appointments;
+  return (
+    <Link to="/clients?filter=missing-email" className="card" style={{
+      display: 'flex', alignItems: 'center', gap: 12, padding: '12px 16px', textDecoration: 'none', color: 'inherit',
+      border: '1px solid color-mix(in srgb, var(--warn) 35%, var(--border))',
+      background: 'color-mix(in srgb, var(--warn) 8%, var(--surface))',
+    }}>
+      <span style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'color-mix(in srgb, var(--warn) 18%, transparent)', color: 'var(--warn)' }}><Icons.Mail size={16}/></span>
+      <span style={{ flex: 1, minWidth: 0, fontSize: 13.5, lineHeight: 1.45 }}>
+        <b>{n === 1 ? '1 client' : `${n} clients`} with {a === 1 ? 'an appointment' : 'appointments'} this week {n === 1 ? 'has' : 'have'} no email</b>, so no reminder will go out. Add {n === 1 ? 'it' : 'them'} in a minute.
+      </span>
+      <Icons.Arrow size={14} stroke="var(--muted)"/>
+    </Link>
+  );
+}
+

@@ -176,6 +176,17 @@ export default async function handler(req, res) {
         RETURNING *
       `;
       const { rows } = await sql.query(queryText, values);
+      // Booking reminders read the email stored on each booking. When a
+      // client who had none gets one (often after an import from a photo),
+      // give it to their upcoming appointments that were booked without one.
+      const newEmail = rows[0]?.email;
+      if ('email' in body && newEmail) {
+        await sql`
+          UPDATE bookings SET client_email = ${newEmail}
+           WHERE workspace_id = ${workspaceId} AND client_id = ${id}
+             AND (client_email IS NULL OR client_email = '')
+             AND cancelled_at IS NULL AND date >= CURRENT_DATE - 1`;
+      }
       return ok(res, { client: serializeClient(rows[0]) });
     }
 

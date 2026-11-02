@@ -134,10 +134,26 @@ export default async function handler(req, res) {
     // first-payment moment waiting to be shown. Never throws.
     const firstWin = await firstWinForDashboard(workspaceId);
 
+    // Upcoming appointments (next 7 days, business time zone) whose client
+    // has no email: those clients get no reminder. Counted per client so
+    // the dashboard can say "3 clients" and link to the Missing email list.
+    let missingEmail = { clients: 0, appointments: 0 };
+    try {
+      const me = await sql`
+        SELECT COUNT(DISTINCT b.client_id)::int AS clients, COUNT(*)::int AS appointments
+          FROM bookings b JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
+         WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL
+           AND (c.email IS NULL OR c.email = '')
+           AND b.date >= (NOW() AT TIME ZONE ${tz})::date
+           AND b.date <  (NOW() AT TIME ZONE ${tz})::date + 7`;
+      missingEmail = { clients: me.rows[0]?.clients || 0, appointments: me.rows[0]?.appointments || 0 };
+    } catch { /* card simply does not show */ }
+
     return ok(res, {
       currency,
       week,
       firstWin,
+      missingEmail,
       streak: { days: streak.days, best: streak.best, milestone: streak.milestone },
       workflowSuggestion,
       briefing,

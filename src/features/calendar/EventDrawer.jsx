@@ -111,7 +111,9 @@ function BookingView({ event, services, onUpdateBooking, onCancelOccurrence, onC
   return (
     <Drawer title="Booking details" subtitle={isRecurring ? 'Part of a recurring series.' : null} onClose={onClose}>
       <InfoRow label="Client"  value={event.clientName}/>
-      <InfoRow label="Email"   value={event.clientEmail}/>
+      {(event.clientEmail || '').trim()
+        ? <InfoRow label="Email" value={event.clientEmail}/>
+        : <MissingEmail event={event}/>}
       <InfoRow label="Service" value={svc?.name || '-'}/>
       <InfoRow label="Date"    value={parseISO(occurrenceISO).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}/>
       <InfoRow label="Time"    value={`${minToHM(event.startMin)} – ${minToHM(event.endMin)}`}/>
@@ -1125,5 +1127,41 @@ function InfoRow({ label, value }) {
       <div style={{ width: 100, fontSize: 12, color: 'var(--muted)' }}>{label}</div>
       <div style={{ flex: 1, fontSize: 14, fontWeight: 500, wordBreak: 'break-word' }}>{value}</div>
     </div>
+  );
+}
+
+// Shown instead of the Email row when a booking has no client email (common
+// for appointments Ivy added from a photo). Without one, this client gets
+// no reminder. Saving here updates the client, and the server copies the
+// email onto their upcoming appointments.
+function MissingEmail({ event }) {
+  const [email, setEmail] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState(null);
+  const [saved, setSaved] = useState(false);
+  if (saved) return <InfoRow label="Email" value={email}/>;
+  const save = async (e) => {
+    e.preventDefault();
+    const v = email.trim().toLowerCase();
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v)) { setErr('Enter a valid email address.'); return; }
+    if (!event.clientId) { setErr('Open this client in Clients to add their email.'); return; }
+    setBusy(true); setErr(null);
+    try {
+      await api.patch(`/clients/${event.clientId}`, { email: v });
+      setSaved(true);
+    } catch (ex) { setErr(ex.message || 'Could not save that email.'); }
+    finally { setBusy(false); }
+  };
+  return (
+    <form onSubmit={save} style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: '10px 12px', margin: '6px 0', borderRadius: 10, background: 'color-mix(in srgb, var(--warn) 10%, transparent)', border: '1px solid color-mix(in srgb, var(--warn) 30%, transparent)' }}>
+      <div style={{ fontSize: 13, color: 'var(--fg)', lineHeight: 1.45 }}>
+        <b>No email, so no reminder.</b> Add {event.clientName ? `${event.clientName}'s` : 'their'} email and they'll get reminders for this and future appointments.
+      </div>
+      <div style={{ display: 'flex', gap: 8 }}>
+        <input type="email" inputMode="email" autoComplete="off" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="client@example.com" aria-label="Client email" style={{ ...inputSty, flex: 1, minWidth: 0 }}/>
+        <button type="submit" className="btn btn-primary" disabled={busy || !email.trim()} style={{ flexShrink: 0 }}>{busy ? 'Saving…' : 'Add email'}</button>
+      </div>
+      {err && <div style={{ fontSize: 12, color: 'var(--danger)' }}>{err}</div>}
+    </form>
   );
 }

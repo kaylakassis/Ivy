@@ -1965,14 +1965,21 @@ async function add_bookings_from_list({ workspaceId, args }) {
       INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, client_phone, date, start_min, end_min, notes, source)
       VALUES (${workspaceId}, ${svc?.id || null}, ${client.id}, ${client.name}, ${client.email || ''}, ${r.phone},
               ${r.date}, ${r.startMin}, ${endMin}, ${notes}, 'import')
-      RETURNING id, date, start_min, end_min, client_name`;
+      RETURNING id, client_id, date, start_min, end_min, client_name`;
     created.push(b.rows[0]);
     /* eslint-enable no-await-in-loop */
   }
+  // Clients on the new appointments who have no email: they get no reminders
+  // until the owner adds one (the approval message links to that list).
+  const ids = [...new Set(created.map((b) => b.client_id).filter(Boolean))];
+  const missingEmail = ids.length ? (await sql`
+    SELECT id, name FROM clients WHERE workspace_id = ${workspaceId} AND id = ANY(${ids}::uuid[])
+       AND (email IS NULL OR email = '') ORDER BY name`).rows : [];
   return {
     ok: true,
     added: created.length,
     bookings: created,
+    missing_email: missingEmail.map((c) => ({ id: c.id, name: c.name })),
     new_clients: newClients,
     skipped,
     problems,

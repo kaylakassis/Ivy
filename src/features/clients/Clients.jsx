@@ -112,6 +112,13 @@ export default function Clients() {
       params.delete('add');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
+    // ?filter=missing-email opens the "Missing email" list (linked from
+    // Ivy after an import and from the dashboard reminder).
+    if (params.get('filter') === 'missing-email') {
+      setTab('noemail');
+      params.delete('filter');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
     if (params.get('id')) {
       setOpenId(params.get('id'));
       params.delete('id');
@@ -150,12 +157,15 @@ export default function Clients() {
     };
   }, [clients, leadWindow, analyticsWindow]);
 
-  const counts = { all: clients.length, active: active.length, leads: leads.length, paused: paused.length };
+  // Clients with no email get no booking reminders or other emails.
+  const noEmail = clients.filter((c) => !(c.email || '').trim());
+  const counts = { all: clients.length, active: active.length, leads: leads.length, paused: paused.length, noemail: noEmail.length };
 
   let rows = clients;
   if (tab === 'active') rows = active;
   if (tab === 'leads')  rows = leads;
   if (tab === 'paused') rows = paused;
+  if (tab === 'noemail') rows = noEmail;
   if (query.trim()) {
     const q = query.trim().toLowerCase();
     rows = rows.filter((c) =>
@@ -241,7 +251,7 @@ export default function Clients() {
       {/* Filter + search */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
         <div className="tab-row">
-          {[['all','All'],['active','Active'],['leads','Leads'],['paused','Paused']].map(([id, label]) => (
+          {[['all','All'],['active','Active'],['leads','Leads'],['paused','Paused'], ...(noEmail.length || tab === 'noemail' ? [['noemail', 'Missing email']] : [])].map(([id, label]) => (
             <button key={id} onClick={() => setTab(id)} style={{
               padding: '6px 14px', borderRadius: 8, border: 0, fontSize: 12.5, fontWeight: 550, cursor: 'pointer',
               background: tab === id ? 'var(--surface)' : 'transparent',
@@ -292,10 +302,10 @@ export default function Clients() {
           <div style={{ padding: 48 }}>
             <EmptyNote
               icon="Users"
-              title={tab === 'all' ? 'No clients yet' : `No ${tab} match`}
+              title={tab === 'all' ? 'No clients yet' : tab === 'noemail' ? 'Every client has an email' : `No ${tab} match`}
               hint={tab === 'all'
                 ? 'Add your first client or lead to start your book of business.'
-                : 'Try a different tab or clear your search.'}
+                : tab === 'noemail' ? 'Booking reminders can reach everyone.' : 'Try a different tab or clear your search.'}
             />
           </div>
         ) : rows.map((c, i) => (
