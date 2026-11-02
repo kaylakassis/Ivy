@@ -310,6 +310,12 @@ async function runFullLocked() {
 
 export async function ensureSchemaApplied() {
   if (applied) return;
+  // Preview deployments never change the database (see scripts/migrate.mjs):
+  // a preview may run unfinished code against the production database.
+  if (process.env.VERCEL_ENV === 'preview' && process.env.PREVIEW_MIGRATIONS !== '1') {
+    applied = true;
+    return;
+  }
   if (inFlight) return inFlight;
 
   inFlight = (async () => {

@@ -39,6 +39,16 @@
 import { runSchemaMigration } from '../api/_lib/ensureSchema.js';
 import { sql } from '../api/_lib/db.js';
 
+// Preview builds never change the database. A preview can be built from an
+// unfinished branch, and a preview environment may point at the production
+// database: one such build once created a production table in the wrong
+// shape. Production deploys (CI, `vercel deploy --prod`) migrate as normal.
+// Set PREVIEW_MIGRATIONS=1 only for a preview that has its own database.
+if (process.env.VERCEL_ENV === 'preview' && process.env.PREVIEW_MIGRATIONS !== '1') {
+  console.warn('[migrate] preview build - skipping database migration (set PREVIEW_MIGRATIONS=1 if this preview has its own database).');
+  process.exit(0);
+}
+
 if (!process.env.DATABASE_URL && !process.env.POSTGRES_URL) {
   console.warn('[migrate] DATABASE_URL not set - skipping deploy-step migration (frontend-only build).');
   process.exit(0);

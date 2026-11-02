@@ -3797,6 +3797,33 @@ CREATE TABLE IF NOT EXISTS program_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+-- Repair: a preview build of an unfinished merge once created this table
+-- with the course-module columns (position, unlock_after_days, deleted_at)
+-- instead of the session columns. CREATE TABLE IF NOT EXISTS cannot fix an
+-- existing table, so reshape it here. That shape has no starts_at, so no
+-- session could ever have been saved in it; nothing is lost.
+DO $$
+BEGIN
+  IF EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = current_schema() AND table_name = 'program_events' AND column_name = 'unlock_after_days')
+     AND NOT EXISTS (SELECT 1 FROM information_schema.columns
+              WHERE table_schema = current_schema() AND table_name = 'program_events' AND column_name = 'starts_at') THEN
+    ALTER TABLE program_events ADD COLUMN starts_at TIMESTAMPTZ;
+    ALTER TABLE program_events ADD COLUMN duration_min INT NOT NULL DEFAULT 60 CHECK (duration_min > 0 AND duration_min <= 1440);
+    ALTER TABLE program_events ADD COLUMN location_type TEXT NOT NULL DEFAULT 'video' CHECK (location_type IN ('video', 'in_person', 'link'));
+    ALTER TABLE program_events ADD COLUMN video_url TEXT;
+    ALTER TABLE program_events ADD COLUMN location_text TEXT;
+    ALTER TABLE program_events ADD COLUMN external_url TEXT;
+    ALTER TABLE program_events ADD COLUMN recording_url TEXT;
+    ALTER TABLE program_events ADD COLUMN remind_everyone BOOLEAN NOT NULL DEFAULT FALSE;
+    ALTER TABLE program_events ADD COLUMN cancelled_at TIMESTAMPTZ;
+    DELETE FROM program_events WHERE starts_at IS NULL;
+    ALTER TABLE program_events ALTER COLUMN starts_at SET NOT NULL;
+    ALTER TABLE program_events DROP COLUMN IF EXISTS position;
+    ALTER TABLE program_events DROP COLUMN IF EXISTS unlock_after_days;
+    ALTER TABLE program_events DROP COLUMN IF EXISTS deleted_at;
+  END IF;
+END $$;
 CREATE INDEX IF NOT EXISTS idx_program_events_program ON program_events(program_id, starts_at);
 CREATE INDEX IF NOT EXISTS idx_program_events_workspace ON program_events(workspace_id, starts_at);
 CREATE INDEX IF NOT EXISTS idx_program_events_upcoming ON program_events(starts_at) WHERE cancelled_at IS NULL;
