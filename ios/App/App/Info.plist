@@ -37,7 +37,7 @@
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>Ivy uses your camera so you can attach photos to client notes and upload service images.</string>
+	<string>Ivy uses your camera so you can take photos for the Ivy assistant to read, such as a schedule or a client list, and attach photos to client notes and services.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Ivy uses Face ID to unlock the app without typing your password.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
@@ -47,7 +47,7 @@
 	<key>NSSpeechRecognitionUsageDescription</key>
 	<string>Ivy turns what you say into text so you can talk to Ivy and type messages by voice.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>Ivy accesses your photo library so you can attach images to client notes and services.</string>
+	<string>Ivy accesses your photo library so you can share photos and screenshots with the Ivy assistant, and attach images to client notes and services.</string>
 	<!-- UIScene life cycle (required by the iOS 27 SDK; Capacitor 8 drives
 	     the WebView from SceneDelegate.swift). -->
 	<key>UIApplicationSceneManifest</key>

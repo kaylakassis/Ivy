@@ -27,6 +27,7 @@ import PendingActionCard from './PendingActionCard.jsx';
 import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
 import { stagger } from '../../components/motion/stagger.jsx';
 import Loader from '../../components/motion/Loader.jsx';
+import { usePhotoAttach, PhotoButton, PhotoTray } from './PhotoAttach.jsx';
 import DictationButton from '../../components/DictationButton.jsx';
 
 const HIDE_PREFIXES = [
@@ -283,12 +284,19 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
     return () => clearTimeout(t);
   }, []);
 
+  const photoAttach = usePhotoAttach();
   const submit = useCallback((textOverride) => {
     const t = (textOverride ?? draft).trim();
-    if (!t || thinking) return;
+    const hasPhotos = photoAttach.pieces.length > 0;
+    if ((!t && !hasPhotos) || thinking || photoAttach.busy) return;
     setDraft('');
-    send(t);
-  }, [draft, thinking, send]);
+    if (hasPhotos) {
+      send(t, { photos: photoAttach.photos.length, pieces: photoAttach.pieces });
+      photoAttach.clear();
+    } else {
+      send(t);
+    }
+  }, [draft, thinking, send, photoAttach]);
 
   const onKeyDown = (e) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -425,6 +433,7 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
         borderTop: '1px solid var(--border)',
         background: 'var(--surface)',
       }}>
+        <PhotoTray attach={photoAttach}/>
         <div style={{
           display: 'flex', alignItems: 'flex-end', gap: 8,
           background: 'var(--surface-2)',
@@ -438,7 +447,7 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
             onChange={(e) => setDraft(e.target.value)}
             onKeyDown={onKeyDown}
             rows={1}
-            placeholder={thinking ? 'Ivy is thinking…' : listening ? 'Listening…' : 'Ask Ivy anything…'}
+            placeholder={thinking ? 'Ivy is thinking…' : listening ? 'Listening…' : photoAttach.photos.length ? 'Add a note, or just send' : 'Ask Ivy anything…'}
             disabled={thinking}
             style={{
               flex: 1, resize: 'none', minHeight: 22, maxHeight: 120,
@@ -447,18 +456,19 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
               fontFamily: 'inherit',
             }}
           />
+          <PhotoButton attach={photoAttach} disabled={thinking}/>
           <DictationButton value={draft} onChange={setDraft} onListening={setListening} disabled={thinking}/>
           <button
             type="button"
             onClick={() => submit()}
-            disabled={!draft.trim() || thinking}
+            disabled={(!draft.trim() && !photoAttach.pieces.length) || thinking || photoAttach.busy}
             aria-label="Send"
             style={{
               flex: '0 0 auto',
               width: 34, height: 34, borderRadius: 999,
-              border: 'none', cursor: draft.trim() && !thinking ? 'pointer' : 'default',
-              background: draft.trim() && !thinking ? 'var(--accent)' : 'var(--border)',
-              color: draft.trim() && !thinking ? 'var(--accent-ink)' : 'var(--muted)',
+              border: 'none', cursor: (draft.trim() || photoAttach.pieces.length) && !thinking ? 'pointer' : 'default',
+              background: (draft.trim() || photoAttach.pieces.length) && !thinking ? 'var(--accent)' : 'var(--border)',
+              color: (draft.trim() || photoAttach.pieces.length) && !thinking ? 'var(--accent-ink)' : 'var(--muted)',
               display: 'flex', alignItems: 'center', justifyContent: 'center',
               transition: 'background .15s ease',
             }}

@@ -13,6 +13,8 @@ import { MiniMarkdown } from '../../lib/miniMarkdown.jsx';
 import PendingActionCard from './PendingActionCard.jsx';
 import Loader from '../../components/motion/Loader.jsx';
 import { stagger } from '../../components/motion/stagger.jsx';
+import { usePhotoAttach, PhotoButton, PhotoTray } from './PhotoAttach.jsx';
+import { preparePhotosForIvy } from '../../lib/ivyImage.js';
 import DictationButton from '../../components/DictationButton.jsx';
 
 export default function IvyPro() {
@@ -88,11 +90,18 @@ export default function IvyPro() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, location.search]);
 
+  const photoAttach = usePhotoAttach();
   const submit = (text) => {
     const t = (text ?? draft).trim();
-    if (!t || thinking) return;
+    const hasPhotos = photoAttach.pieces.length > 0;
+    if ((!t && !hasPhotos) || thinking || photoAttach.busy) return;
     setDraft('');
-    send(t);
+    if (hasPhotos) {
+      send(t, { photos: photoAttach.photos.length, pieces: photoAttach.pieces });
+      photoAttach.clear();
+    } else {
+      send(t);
+    }
   };
 
   if (loading) {
@@ -205,6 +214,7 @@ export default function IvyPro() {
         {/* Composer */}
         <div style={{ padding: isMobile ? '6px 12px 10px' : '16px 24px 24px', background: 'var(--surface-2)' }}>
           <div style={{ maxWidth: 720, margin: '0 auto' }}>
+            <PhotoTray attach={photoAttach}/>
             <div style={{
               display: 'flex', alignItems: 'flex-end', gap: 8,
               padding: 10, borderRadius: 16,
@@ -214,16 +224,17 @@ export default function IvyPro() {
               <textarea value={draft}
                 onChange={(e) => setDraft(e.target.value)}
                 onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); submit(); } }}
-                placeholder={listening ? 'Listening… tap the mic again when you are done' : isMobile ? 'Ask Ivy anything…' : 'Ask Ivy about revenue, retention, pricing, content…'}
+                placeholder={listening ? 'Listening… tap the mic again when you are done' : photoAttach.photos.length ? 'Add a note, or just send' : isMobile ? 'Ask Ivy anything…' : 'Ask Ivy about revenue, retention, pricing, content…'}
                 rows={1}
                 style={{
                   flex: 1, border: 0, outline: 0, resize: 'none',
                   background: 'transparent', fontFamily: 'inherit', fontSize: 14,
                   lineHeight: 1.5, color: 'var(--fg)', maxHeight: 140, padding: '6px 8px',
                 }}/>
+              <PhotoButton attach={photoAttach} disabled={thinking}/>
               <DictationButton value={draft} onChange={setDraft} onListening={setListening} disabled={thinking}/>
               <button className="btn btn-primary" onClick={() => submit()}
-                disabled={!draft.trim() || thinking}
+                disabled={(!draft.trim() && !photoAttach.pieces.length) || thinking || photoAttach.busy}
                 style={{ padding: '8px 12px' }}>
                 <Icons.Arrow size={13} sw={2.4}/>
               </button>
@@ -644,8 +655,22 @@ function UploadAnalyzer({ onAnalyze, busy }) {
   const handle = async (file) => {
     if (!file) return;
     setErr(null);
+    // Photos (up to 25 MB) are shrunk on the device first, like the camera
+    // button in the message box (src/lib/ivyImage.js).
+    if (/^image\//i.test(file.type || '')) {
+      setPickedName(file.name);
+      try {
+        const r = await preparePhotosForIvy([file]);
+        if (!r.pieces.length) { setErr(r.errors[0] || 'Could not read that photo.'); setPickedName(null); return; }
+        await onAnalyze({ photos: 1, pieces: r.pieces });
+      } catch (e) {
+        setErr(e?.message || 'Could not read that photo.');
+      }
+      setPickedName(null);
+      return;
+    }
     if (file.size > MAX_BYTES) {
-      setErr(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB - cap is 3.5 MB.`);
+      setErr(`That file is ${(file.size / 1024 / 1024).toFixed(1)} MB. Files other than photos can be up to 3.5 MB.`);
       return;
     }
     try {
@@ -702,7 +727,7 @@ function UploadAnalyzer({ onAnalyze, busy }) {
           {busy ? `Analyzing ${pickedName || 'file'}…` : 'Click or drop a file'}
         </div>
         <div style={{ fontSize: 11, color: 'var(--muted)', lineHeight: 1.45 }}>
-          CSV, PDF, image, JSON, or plain text. Up to 3.5 MB. Ivy will read it and post the takeaways into your chat.
+          Photos up to 25 MB, or a CSV, PDF, JSON or text file up to 3.5 MB. Ivy reads it and posts the takeaways into your chat.
         </div>
       </button>
       <input ref={inputRef} type="file" hidden accept={ACCEPT}

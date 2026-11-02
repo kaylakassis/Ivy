@@ -282,6 +282,34 @@ export const IVY_TOOLS = [
     },
   },
   {
+    name: 'add_bookings_from_list',
+    description: "Add several appointments to the calendar at once, usually read from a photo or screenshot of the owner's schedule, an old app, or a paper book. One call with every appointment you read. Use the business time zone and today's date to turn days like 'Tuesday' into real dates (the next upcoming one unless the picture says otherwise). Never invent emails or phone numbers: leave them out if they are not shown. Clients are matched by email, then by exact name; anyone new is added as a client. Needs the owner's approval before anything is added.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        bookings: {
+          type: 'array',
+          maxItems: 60,
+          items: {
+            type: 'object',
+            properties: {
+              client_name:      { type: 'string' },
+              client_email:     { type: 'string', description: 'Only if shown.' },
+              client_phone:     { type: 'string', description: 'Only if shown.' },
+              service_name:     { type: 'string', description: 'As written; matched to an existing service by name when possible.' },
+              date:             { type: 'string', description: 'YYYY-MM-DD' },
+              start_time:       { type: 'string', description: '24-hour HH:MM, e.g. 09:30 or 14:00' },
+              duration_minutes: { type: 'integer', description: 'If shown or obvious; otherwise the matched service length, else 60.' },
+              notes:            { type: 'string' },
+            },
+            required: ['client_name', 'date', 'start_time'],
+          },
+        },
+      },
+      required: ['bookings'],
+    },
+  },
+  {
     name: 'create_booking',
     description: 'Schedule a booking for a client. Resolve the client_id via search_clients first if you only have a name. Date format YYYY-MM-DD; start/end in minutes-from-midnight (e.g. 540 = 9:00 AM).',
     input_schema: {
@@ -805,6 +833,7 @@ export const HANDLERS = {
   // Writes - creates
   create_service,
   create_booking,
+  add_bookings_from_list,
   create_invoice,
   create_task,
   create_project,
@@ -852,6 +881,8 @@ export const HANDLERS = {
 export const SENSITIVE_TOOLS = new Set([
   // Website: a template build replaces the draft; publishing goes public.
   ...WEBSITE_SENSITIVE,
+  // Many appointments (and possibly new clients) at once, read from a photo.
+  'add_bookings_from_list',
   'send_message_to_client',
   'send_invoice',
   'cancel_booking',
@@ -1002,6 +1033,8 @@ async function describeSensitiveAction(name, a, ctx = {}) {
   const web = describeWebsiteAction(name, a || {});
   if (web) return web;
   switch (name) {
+    case 'add_bookings_from_list':
+      return describeBulkBookings(a, ctx);
     case 'send_message_to_client':
       return `Send a portal message to ${await clientLabel(ctx, a.client_id)}: "${String(a.text || '').slice(0, 160)}"`;
     case 'send_invoice':
@@ -1110,6 +1143,27 @@ async function describeSensitiveAction(name, a, ctx = {}) {
   }
 }
 
+async function describeBulkBookings(a, ctx = {}) {
+  const { rows, problems } = cleanBulkBookings(a);
+  if (!rows.length) return 'Add appointments to your calendar (none could be read)';
+  const fmtDate = (d) => { try { return new Date(`${d}T12:00:00Z`).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }); } catch { return d; } };
+  let newCount = 0;
+  const seen = new Set();
+  if (ctx.workspaceId) {
+    for (const r of rows) {
+      const key = (r.email || r.name).toLowerCase();
+      if (seen.has(key)) continue; seen.add(key);
+      // eslint-disable-next-line no-await-in-loop
+      if (!(await findClientForBulk(ctx.workspaceId, r))) newCount++;
+    }
+  }
+  const lines = rows.slice(0, 8).map((r) => `${fmtDate(r.date)} ${fmtMinAsTime(r.startMin)}: ${r.name}${r.serviceName ? ` (${r.serviceName})` : ''}`);
+  const more = rows.length > 8 ? `; and ${rows.length - 8} more` : '';
+  const newBit = newCount ? ` Adds ${newCount} new client${newCount === 1 ? '' : 's'}.` : '';
+  const probBit = problems.length ? ` Skipped ${problems.length} unreadable ${problems.length === 1 ? 'entry' : 'entries'}.` : '';
+  return `Add ${rows.length} appointment${rows.length === 1 ? '' : 's'} to your calendar: ${lines.join('; ')}${more}.${newBit}${probBit} No emails go to clients.`;
+}
+
 function fmtMinAsTime(m) {
   const n = Number(m);
   if (!Number.isFinite(n)) return '?';
@@ -1196,6 +1250,7 @@ const READ_ONLY_TOOLS = new Set([
   'get_website',
 ]);
 const ACTION_KINDS = {
+  add_bookings_from_list: 'booking',
   create_invoice: 'invoice', send_invoice: 'invoice', create_recurring_invoice: 'invoice',
   mark_invoice_paid: 'invoice', void_invoice: 'invoice', refund_invoice: 'invoice',
   create_quote: 'invoice', send_quote: 'invoice',
@@ -1827,6 +1882,102 @@ async function create_service({ workspaceId, args }) {
     RETURNING id, name, duration_minutes, price
   `;
   return { service: rows[0] };
+}
+
+// ── Bulk appointments (from a photo of a schedule, an old app, a paper book) ──
+const BULK_BOOKINGS_MAX = 60;
+
+function parseClockTime(raw) {
+  const s = String(raw || '').trim().toLowerCase().replace(/\s+/g, '');
+  const m = s.match(/^(\d{1,2})(?::?(\d{2}))?(am|pm|a|p)?$/);
+  if (!m) return null;
+  let h = Number(m[1]); const min = Number(m[2] || 0);
+  const ap = m[3];
+  if (ap) { if (h < 1 || h > 12) return null; if (ap.startsWith('p') && h !== 12) h += 12; if (ap.startsWith('a') && h === 12) h = 0; }
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+// Normalizes and validates the list. Returns { rows, problems }.
+function cleanBulkBookings(args) {
+  const list = Array.isArray(args?.bookings) ? args.bookings.slice(0, BULK_BOOKINGS_MAX) : [];
+  const rows = []; const problems = [];
+  list.forEach((b, i) => {
+    const name = String(b?.client_name || '').trim().slice(0, 200);
+    const date = String(b?.date || '').trim();
+    const start = parseClockTime(b?.start_time);
+    if (!name) { problems.push(`#${i + 1}: no client name`); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || Number.isNaN(Date.parse(`${date}T00:00:00Z`))) { problems.push(`#${i + 1} ${name}: date must be YYYY-MM-DD`); return; }
+    if (start == null) { problems.push(`#${i + 1} ${name}: unreadable start time "${b?.start_time ?? ''}"`); return; }
+    const email = b?.client_email && /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(String(b.client_email).trim()) ? String(b.client_email).trim().toLowerCase().slice(0, 200) : null;
+    const dur = Number.isFinite(Number(b?.duration_minutes)) ? clampInt(b.duration_minutes, 60, 5, 12 * 60) : null;
+    rows.push({
+      name, email, phone: b?.client_phone ? String(b.client_phone).trim().slice(0, 40) : null,
+      serviceName: b?.service_name ? String(b.service_name).trim().slice(0, 200) : null,
+      date, startMin: start, duration: dur, notes: b?.notes ? String(b.notes).slice(0, 1000) : null,
+    });
+  });
+  return { rows, problems };
+}
+
+async function findClientForBulk(workspaceId, r) {
+  if (r.email) {
+    const byEmail = await sql`SELECT id, name, email FROM clients WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${r.email} LIMIT 1`;
+    if (byEmail.rows[0]) return byEmail.rows[0];
+  }
+  const byName = await sql`SELECT id, name, email FROM clients WHERE workspace_id = ${workspaceId} AND LOWER(name) = LOWER(${r.name}) ORDER BY created_at ASC LIMIT 1`;
+  return byName.rows[0] || null;
+}
+
+async function findServiceForBulk(workspaceId, serviceName) {
+  if (!serviceName) return null;
+  const r = await sql`SELECT id, name, duration_minutes FROM services WHERE workspace_id = ${workspaceId} AND LOWER(name) = LOWER(${serviceName}) LIMIT 1`;
+  return r.rows[0] || null;
+}
+
+async function add_bookings_from_list({ workspaceId, args }) {
+  const { rows, problems } = cleanBulkBookings(args);
+  if (!rows.length) throw new Error(problems.length ? `Nothing to add: ${problems.join('; ')}` : 'No appointments were given.');
+  const created = []; const skipped = []; const newClients = [];
+  for (const r of rows) {
+    /* eslint-disable no-await-in-loop */
+    let client = await findClientForBulk(workspaceId, r);
+    if (!client) {
+      const ins = await sql`
+        INSERT INTO clients (workspace_id, name, email, phone, stage, source)
+        VALUES (${workspaceId}, ${r.name}, ${r.email}, ${r.phone}, 'active', 'import')
+        RETURNING id, name, email`;
+      client = ins.rows[0];
+      newClients.push(client.name);
+    }
+    const svc = await findServiceForBulk(workspaceId, r.serviceName);
+    const duration = r.duration || Number(svc?.duration_minutes) || 60;
+    const endMin = Math.min(24 * 60, r.startMin + duration);
+    const dup = await sql`
+      SELECT 1 FROM bookings
+       WHERE workspace_id = ${workspaceId} AND client_id = ${client.id} AND date = ${r.date}
+         AND start_min = ${r.startMin} AND cancelled_at IS NULL LIMIT 1`;
+    if (dup.rows.length) { skipped.push(`${client.name} on ${r.date} at ${fmtMinAsTime(r.startMin)} (already on the calendar)`); continue; }
+    const notes = [r.serviceName && !svc ? `Service: ${r.serviceName}` : null, r.notes].filter(Boolean).join('\n') || null;
+    // bookings.client_email is required; an empty string means "no email",
+    // and reminders, review requests and other client emails skip it.
+    const b = await sql`
+      INSERT INTO bookings (workspace_id, service_id, client_id, client_name, client_email, client_phone, date, start_min, end_min, notes, source)
+      VALUES (${workspaceId}, ${svc?.id || null}, ${client.id}, ${client.name}, ${client.email || ''}, ${r.phone},
+              ${r.date}, ${r.startMin}, ${endMin}, ${notes}, 'import')
+      RETURNING id, date, start_min, end_min, client_name`;
+    created.push(b.rows[0]);
+    /* eslint-enable no-await-in-loop */
+  }
+  return {
+    ok: true,
+    added: created.length,
+    bookings: created,
+    new_clients: newClients,
+    skipped,
+    problems,
+    note: 'No emails were sent to clients. Clients without an email on file will not get reminders until one is added.',
+  };
 }
 
 async function create_booking({ workspaceId, args }) {

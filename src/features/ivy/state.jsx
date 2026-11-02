@@ -133,14 +133,18 @@ function useIvyState({ enabled = true } = {}) {
   // that as an implicit "analyze this file" prompt.
   const send = useCallback(async (text, attachment = null) => {
     const t = (text || '').trim();
+    // attachment: one file { filename, mediaType, base64 } or, for photos,
+    // { photos: n, pieces: [...] } (several image pieces from src/lib/ivyImage.js).
+    const photoSet = attachment && Array.isArray(attachment.pieces) ? attachment : null;
     if ((!t && !attachment) || thinking) return;
     setError(null);
 
     // Optimistic append of the user's own bubble. Show a paperclip line
     // when an attachment is included so the chat doesn't look empty.
-    const optimisticText = attachment
-      ? (t ? `${t}\n\n📎 ${attachment.filename || 'file'}` : `📎 ${attachment.filename || 'file'}`)
-      : t;
+    const label = photoSet
+      ? `📷 ${photoSet.photos === 1 ? '1 photo' : `${photoSet.photos} photos`}`
+      : attachment ? `📎 ${attachment.filename || 'file'}` : '';
+    const optimisticText = label ? (t ? `${t}\n\n${label}` : label) : t;
     const optimistic = { id: 'tmp-' + Date.now(), role: 'me', text: optimisticText, createdAt: new Date().toISOString() };
     setMessages((xs) => [...xs, optimistic]);
     setThinking(true);
@@ -148,7 +152,9 @@ function useIvyState({ enabled = true } = {}) {
     const payload = {
       text: t,
       sessionId: activeId || undefined,
-      attachment: attachment || undefined,
+      ...(photoSet
+        ? { attachments: photoSet.pieces, photoCount: photoSet.photos }
+        : { attachment: attachment || undefined }),
     };
     // Ivy's bubble while the reply streams: appears with the first chunk and
     // grows from there; gone once the real message replaces it.

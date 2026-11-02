@@ -17,6 +17,13 @@ export const MAX_MESSAGE_CHARS = 4000;
 // ~3.5 MB of raw file bytes (≈4.7 MB of base64) and add a server-side
 // belt-and-braces check so a malformed client can't OOM us.
 const MAX_ATTACHMENT_BYTES = 3.5 * 1024 * 1024;
+// Photos: the app shrinks each photo on the device (src/lib/ivyImage.js) and
+// may cut a tall screenshot into a few stacked pieces, so one message can
+// carry several images. Cap the count and the combined size so the request
+// stays under the platform's body limit.
+export const MAX_PHOTO_PIECES = 12;
+const MAX_PHOTO_TOTAL_BYTES = 3.2 * 1024 * 1024;
+const PHOTO_MIME = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 const ALLOWED_MIME = new Set([
   'application/pdf',
   'image/png', 'image/jpeg', 'image/gif', 'image/webp',
@@ -36,8 +43,13 @@ export async function beginTurn(body, workspaceId) {
   const text = sanitizeUserText((body.text || '').toString()).trim();
   // Validate + normalize attachment if present. Allow an empty text
   // when an attachment is attached - "analyze this" is implicit.
-  const attachment = parseAttachment(body.attachment);
+  let attachment = parseAttachment(body.attachment);
   if (attachment instanceof Error) return { error: attachment.message };
+  // A set of photo pieces arrives as body.attachments (newer app builds).
+  const photos = parsePhotoPieces(body.attachments);
+  if (photos instanceof Error) return { error: photos.message };
+  const photoCount = photos ? Math.max(1, Math.min(10, Number(body.photoCount) || 1)) : 0;
+  if (photos) attachment = photos;
   if (!text && !attachment) return { error: 'Message is required' };
   if (text.length > MAX_MESSAGE_CHARS) return { error: 'Message too long' };
 
@@ -69,9 +81,10 @@ export async function beginTurn(body, workspaceId) {
   // The persisted user message includes a one-line note about the
   // attachment so it shows up in chat history. The actual file
   // bytes are NOT stored - they only live in the API call.
-  const persistedText = attachment
-    ? (text ? `${text}\n\n📎 ${attachment.filename || 'file'}` : `📎 ${attachment.filename || 'file'}`)
-    : text;
+  const note = Array.isArray(attachment)
+    ? `📷 ${photoCount === 1 ? '1 photo' : `${photoCount} photos`}`
+    : attachment ? `📎 ${attachment.filename || 'file'}` : '';
+  const persistedText = note ? (text ? `${text}\n\n${note}` : note) : text;
   const userMsg = await sql`
     INSERT INTO ivy_messages (session_id, role, text)
     VALUES (${session.id}, 'me', ${persistedText})
@@ -124,6 +137,28 @@ export async function finishTurn({ session, userMsg, reply, ctx, workspaceId }) 
 // Returns a normalized { filename, mediaType, base64 } on success, null
 // when no attachment is present, or an Error with a user-readable
 // message when the payload is invalid.
+// Photo pieces: [{ filename, mediaType, base64 }, ...]. Images only. Returns
+// null (none), an Error with an owner-readable message, or the list.
+export function parsePhotoPieces(raw) {
+  if (raw == null) return null;
+  if (!Array.isArray(raw)) return new Error('Photos must be a list');
+  if (raw.length === 0) return null;
+  if (raw.length > MAX_PHOTO_PIECES) return new Error('Too many photos in one message. Send fewer at a time.');
+  let total = 0;
+  const out = [];
+  for (const p of raw) {
+    if (!p || typeof p !== 'object') return new Error('Photo is malformed');
+    const mediaType = String(p.mediaType || '').toLowerCase();
+    if (!PHOTO_MIME.has(mediaType)) return new Error('Only photos can be sent this way (JPEG, PNG, WEBP or GIF).');
+    const base64 = String(p.base64 || '');
+    if (!base64 || !/^[A-Za-z0-9+/]+={0,2}$/.test(base64)) return new Error('Photo data is malformed');
+    total += Math.floor(base64.length * 0.75);
+    if (total > MAX_PHOTO_TOTAL_BYTES) return new Error('Those photos are too large for one message. Send fewer at a time.');
+    out.push({ filename: String(p.filename || 'photo.jpg').slice(0, 200), mediaType, base64 });
+  }
+  return out;
+}
+
 export function parseAttachment(raw) {
   if (raw == null || raw === '') return null;
   if (typeof raw !== 'object') return new Error('Attachment must be an object');
