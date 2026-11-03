@@ -170,6 +170,12 @@
     },
     "api/auth/signup.js": {
       "maxDuration": 30
+    },
+    "api/import/*.js": {
+      "maxDuration": 60
+    },
+    "api/clients/announce-move.js": {
+      "maxDuration": 300
     }
   },
   "rewrites": [

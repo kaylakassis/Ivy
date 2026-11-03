@@ -30,6 +30,8 @@ export function serializeClient(row) {
     // already claimed their account.
     inviteSentAt:  row.invite_sent_at || null,
     hasClaimedPortal: !!row.user_id,
+    // When the owner's "new booking link" email went to them (null = never).
+    moveAnnouncedAt: row.move_announced_at || null,
   };
 }
 

@@ -28,7 +28,7 @@ export default function PendingActionCard({ actions, onApprove, onDismiss, busy 
       </div>
       <ul style={{ margin: 0, paddingLeft: 16, display: 'flex', flexDirection: 'column', gap: 4 }}>
         {actions.map((a, i) => (
-          <li key={i} style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.4 }}>
+          <li key={i} style={{ fontSize: 12.5, color: 'var(--fg)', lineHeight: 1.4, whiteSpace: 'pre-line', overflowWrap: 'anywhere' }}>
             {a.summary || a.action}
           </li>
         ))}

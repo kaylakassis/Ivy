@@ -1,32 +1,32 @@
-// POST /api/clients/import - bulk-create clients from a parsed CSV.
-// Body: { rows: [{ name, email?, stage?, notes?, source?, tags? }, ...] }
-// Behavior:
-//   • De-dupes by email within the workspace. Existing rows are SKIPPED
-//     (not updated) so import can never silently mutate hand-curated data.
-//   • Without an email, every row is treated as a new client (no dedupe).
-//   • Returns a summary: { created, skipped, invalid, errors[] }.
+// POST /api/clients/import - bulk-create clients from a parsed CSV, a
+// contacts file (.vcf) or the phone's contact picker.
+// Body: {
+//   rows: [{ name, email?, phone?, stage?, notes?, source?, tags? }, ...],
+//   sendInvites?: boolean   (default false: portal invites are opt-in)
+//   quiet?: boolean         (default false; true = nothing is sent and no
+//                            client_created / lead_created automation fires,
+//                            whatever sendInvites says)
+// }
+// Behavior (shared with Ivy's import_clients_from_list, api/_lib/clientImport.js):
+//   • De-dupes within the workspace by email first, then by normalized
+//     phone. Existing rows are SKIPPED (not updated) so import can never
+//     silently mutate hand-curated data. Rows with only a phone are fine.
+//   • A row with neither email nor phone is still imported (name only).
+//   • Returns { summary: { created, skipped, invalid, total, workflowsFired,
+//     workflowsSkipped? }, errors[], inserted[], importedIds[] }.
+//     importedIds lists the ids of the new clients in row order.
 //
 // All inserts are scoped to the authenticated user's workspace - nothing
 // in the request body can override that.
-import { sql } from '../_lib/db.js';
-import { requireUser, validEmail } from '../_lib/auth.js';
+import { requireUser } from '../_lib/auth.js';
 import { ensureActiveWorkspace } from '../_lib/workspaceGate.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
-import { VALID_STAGES, serializeClient } from '../_lib/clients.js';
-import { sendClientInvite } from '../_lib/clientNotify.js';
-import { fireClientCreatedWorkflows, hasClientCreatedWorkflows } from '../_lib/workflows.js';
+import { enforce } from '../_lib/rate-limit.js';
+import {
+  prepareClientImport, insertPreparedClients, CLIENT_IMPORT_MAX_ROWS, CLIENT_IMPORT_WORKFLOW_SKIP_REASON,
+} from '../_lib/clientImport.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
-
-const MAX_ROWS = 2000;
-const NAME_MAX = 120;
-const NOTES_MAX = 4000;
-// client_created / lead_created workflows fire per imported row up to
-// this many new clients. Past it the import is a book migration, not
-// "new leads arriving" - auto-emailing 2,000 historical contacts from a
-// welcome workflow would be a disaster - so we skip and say so in the
-// response (summary.workflowsSkipped).
-const WORKFLOW_FIRE_MAX = 200;
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return methodNotAllowed(res, ['POST']);
@@ -36,130 +36,37 @@ export default async function handler(req, res) {
     if (!user) return;
     const workspaceId = await ensureActiveWorkspace(user, req, res);
     if (!workspaceId) return;
+    if (await enforce(req, res, [{ key: `clients-import:ws:${workspaceId}`, max: 60, windowSeconds: 3600 }])) return;
     const body = await readBody(req);
     if (!Array.isArray(body.rows)) return badRequest(res, 'rows[] is required');
     if (body.rows.length === 0) return badRequest(res, 'No rows to import');
-    if (body.rows.length > MAX_ROWS) {
-      return badRequest(res, `Too many rows - split into batches of ${MAX_ROWS}`);
+    if (body.rows.length > CLIENT_IMPORT_MAX_ROWS) {
+      return badRequest(res, `Too many rows - split into batches of ${CLIENT_IMPORT_MAX_ROWS}`);
     }
 
-    // Pre-fetch existing emails in this workspace so the dedupe check is
-    // O(N) instead of O(N) round-trips. Lower-cased for case-insensitive
-    // match - same convention the auth code uses.
-    const existing = await sql`
-      SELECT LOWER(email) AS email FROM clients
-      WHERE workspace_id = ${workspaceId} AND email IS NOT NULL
-    `;
-    const existingEmails = new Set(existing.rows.map((r) => r.email));
+    const plan = await prepareClientImport(workspaceId, body.rows, { onBadPhone: 'reject', defaultSource: 'CSV import' });
+    const out = await insertPreparedClients(workspaceId, plan, {
+      quiet: body.quiet === true,
+      sendInvites: body.sendInvites === true,
+      workflowSource: 'csv-import',
+    });
 
-    let created = 0;
-    let skipped = 0;
-    let invalid = 0;
-    const errors = [];
-    const inserted = [];
-    const createdRows = [];
-
-    // Validate + dedupe in memory (no per-row DB round trips), collecting the
-    // survivors. The actual inserts happen in batches below.
-    const toInsert = [];
-    for (let i = 0; i < body.rows.length; i++) {
-      const r = body.rows[i] || {};
-      const name = (r.name || '').toString().trim();
-      const emailRaw = (r.email || '').toString().trim();
-      const email = emailRaw ? emailRaw.toLowerCase() : null;
-      const stage = VALID_STAGES.has(r.stage) ? r.stage : 'lead';
-      const source = r.source ? String(r.source).slice(0, 60) : 'CSV import';
-      const notes = r.notes ? String(r.notes).slice(0, NOTES_MAX) : null;
-      const tags = Array.isArray(r.tags)
-        ? r.tags.map((t) => String(t).trim()).filter(Boolean).slice(0, 20)
-        : [];
-
-      if (!name || name.length > NAME_MAX) {
-        invalid++;
-        errors.push({ row: i + 1, error: 'Name is required (max 120 chars)' });
-        continue;
-      }
-      if (email && !validEmail(email)) {
-        invalid++;
-        errors.push({ row: i + 1, error: `Invalid email: ${emailRaw}` });
-        continue;
-      }
-      if (email && existingEmails.has(email)) {
-        skipped++;
-        continue;
-      }
-      if (email) existingEmails.add(email); // prevent duplicate within same batch
-      toInsert.push({ name, email, stage, tags, notes, source });
-    }
-
-    // Bulk-insert in chunks: one multi-row INSERT per chunk instead of one
-    // round trip per row. A 2,000-row CSV used to mean 2,000 serial Neon
-    // HTTP calls (function-timeout territory during bulk onboarding); now
-    // it's ~4 round trips. Chunked so the parameter count per statement
-    // stays well under Postgres's 65,535 limit (500 rows * 7 cols = 3,500).
-    const CHUNK = 500;
-    for (let c = 0; c < toInsert.length; c += CHUNK) {
-      const chunk = toInsert.slice(c, c + CHUNK);
-      const valuesSql = [];
-      const params = [];
-      let p = 0;
-      for (const row of chunk) {
-        valuesSql.push(`($${++p}, $${++p}, $${++p}, $${++p}, $${++p}::text[], $${++p}, $${++p})`);
-        params.push(workspaceId, row.name, row.email, row.stage, row.tags, row.notes, row.source);
-      }
-      const text = `
-        INSERT INTO clients (workspace_id, name, email, stage, tags, notes, source)
-        VALUES ${valuesSql.join(', ')}
-        RETURNING *
-      `;
-      try {
-        // eslint-disable-next-line no-await-in-loop
-        const result = await sql.query(text, params);
-        created += result.rows.length;
-        for (const cr of result.rows) {
-          if (inserted.length < 50) inserted.push(serializeClient(cr));
-          if (createdRows.length <= WORKFLOW_FIRE_MAX) createdRows.push(cr);
-          // Invite emails on bulk import are EXPLICIT OPT-IN
-          // (body.sendInvites === true). The old always-on behavior
-          // cold-emailed an owner's entire imported book "«Business»
-          // added you on Ivy" the moment they tried the importer -
-          // unrecallable, and never disclosed in the UI.
-          if (cr.email && body.sendInvites === true) {
-            sendClientInvite({ workspaceId, clientId: cr.id })
-              .catch((e) => console.error('[import] sendClientInvite failed:', e?.message));
-          }
-        }
-      } catch (err) {
-        // A chunk failure shouldn't sink the whole import.
-        invalid += chunk.length;
-        errors.push({ row: `${c + 1}-${c + chunk.length}`, error: err.message?.slice(0, 200) || 'Bulk insert failed' });
-      }
-    }
-
-    // Workflows: one pre-check so a workspace with no client_created /
-    // lead_created automations pays nothing; otherwise fire per new row
-    // (sequential - the runtime dedupes per client per day). Skipped
-    // wholesale above WORKFLOW_FIRE_MAX.
-    let workflowsSkipped = false;
-    let workflowsFired = 0;
-    if (createdRows.length > WORKFLOW_FIRE_MAX) {
-      workflowsSkipped = true;
-    } else if (createdRows.length > 0 && await hasClientCreatedWorkflows(workspaceId).catch(() => false)) {
-      for (const cr of createdRows) {
-        // eslint-disable-next-line no-await-in-loop
-        const out = await fireClientCreatedWorkflows({ workspaceId, client: cr, source: 'csv-import' });
-        workflowsFired += out.fired;
-      }
-    }
-
+    const errors = [
+      ...plan.invalid.map((x) => ({ row: x.index + 1, error: x.error })),
+      ...out.errors,
+    ];
     return ok(res, {
       summary: {
-        created, skipped, invalid, total: body.rows.length,
-        workflowsFired,
-        ...(workflowsSkipped ? { workflowsSkipped: true, workflowsSkippedReason: `Automations don't run for imports of more than ${WORKFLOW_FIRE_MAX} new clients` } : {}),
+        created: out.created,
+        skipped: plan.duplicates.length,
+        invalid: plan.invalid.length + out.invalid,
+        total: body.rows.length,
+        workflowsFired: out.workflowsFired,
+        ...(out.workflowsSkipped ? { workflowsSkipped: true, workflowsSkippedReason: CLIENT_IMPORT_WORKFLOW_SKIP_REASON } : {}),
       },
       errors: errors.slice(0, 50), // cap so the response stays small
-      inserted, // first 50 fully serialized, for optimistic UI
+      inserted: out.inserted, // first 50 fully serialized, for optimistic UI
+      importedIds: out.importedIds,
     });
   } catch (err) {
     return serverError(res, err);

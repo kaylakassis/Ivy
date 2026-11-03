@@ -9,15 +9,32 @@
 // import across each other); keep the two in sync — tests/tz.test.mjs covers the
 // server one and the same cases should hold for both.
 
+// Building an Intl.DateTimeFormat is far more expensive than using one, and
+// bulk callers (a calendar file with hundreds of events) convert thousands of
+// times, so formatters and zone checks are memoized per zone (bounded).
+const MEMO_MAX = 500;
+const offsetFormatters = new Map();
+const partsFormatters = new Map();
+const validZones = new Map();
+function memo(map, key, make) {
+  let v = map.get(key);
+  if (v === undefined) {
+    v = make();
+    if (map.size >= MEMO_MAX) map.delete(map.keys().next().value);
+    map.set(key, v);
+  }
+  return v;
+}
+
 // Offset (ms) of `tz` from UTC at the given absolute instant. Positive east of
 // UTC. Works by formatting the instant AS IF in `tz`, reading the wall-clock
 // fields back, and diffing against the same fields interpreted as UTC.
 function tzOffsetMs(utcMs, tz) {
-  const dtf = new Intl.DateTimeFormat('en-US', {
+  const dtf = memo(offsetFormatters, tz, () => new Intl.DateTimeFormat('en-US', {
     timeZone: tz, hour12: false,
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit', second: '2-digit',
-  });
+  }));
   const p = {};
   for (const part of dtf.formatToParts(new Date(utcMs))) p[part.type] = part.value;
   // Intl emits hour "24" at midnight in some engines — normalize to 0.
@@ -29,9 +46,11 @@ function tzOffsetMs(utcMs, tz) {
 // Validate/normalize an IANA name; returns null when unusable so callers fall
 // back to UTC (never throw on bad owner input).
 export function isValidTimeZone(tz) {
-  if (!tz || typeof tz !== 'string') return false;
-  try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; }
-  catch { return false; }
+  if (!tz || typeof tz !== 'string' || tz.length > 100) return false;
+  return memo(validZones, tz, () => {
+    try { new Intl.DateTimeFormat('en-US', { timeZone: tz }); return true; }
+    catch { return false; }
+  });
 }
 
 // Absolute epoch-ms of a wall-clock time (dateISO 'YYYY-MM-DD' + minutes from
@@ -55,11 +74,11 @@ export function zonedTimeToUtcMs(dateISO, minutes, tz) {
 // but in the workspace zone.
 export function zonedParts(tz, date = new Date()) {
   const useTz = isValidTimeZone(tz) ? tz : 'UTC';
-  const dtf = new Intl.DateTimeFormat('en-US', {
+  const dtf = memo(partsFormatters, useTz, () => new Intl.DateTimeFormat('en-US', {
     timeZone: useTz, hour12: false, weekday: 'short',
     year: 'numeric', month: '2-digit', day: '2-digit',
     hour: '2-digit', minute: '2-digit',
-  });
+  }));
   const p = {};
   for (const part of dtf.formatToParts(date)) p[part.type] = part.value;
   const WD = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };

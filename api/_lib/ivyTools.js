@@ -22,7 +22,10 @@ import { appUrl, generateRawToken } from './tokens.js';
 import { sendPushToUser, notifyClientSafe } from './push.js';
 import { addMemory, listMemories, forgetMemoryMatching } from './ivyMemory.js';
 import { fireClientCreatedWorkflows } from './workflows.js';
+import { findClientForBulk, findServiceForBulk } from './bookingImport.js';
+import { prepareClientImport, insertPreparedClients, CLIENT_IMPORT_MAX_ROWS } from './clientImport.js';
 import { blockState, BLOCKED_MESSAGE } from './moderation.js';
+import { validEmail } from './auth.js';
 import crypto from 'node:crypto';
 
 // ── Tool schema (passed to Anthropic on every call) ──────────────────
@@ -307,6 +310,31 @@ export const IVY_TOOLS = [
         },
       },
       required: ['bookings'],
+    },
+  },
+  {
+    name: 'import_clients_from_list',
+    description: "Add many clients at once from a list the owner gave you: a CSV or spreadsheet, a contacts file (.vcf), a screenshot of their phone contacts or another app's client list, or a photo of a paper book. One call with every person you read (at most about 25 per call because of reply length; for a longer list make several calls in a row). Copy names, emails and phone numbers exactly as written; never invent or guess an email or phone. When something is hard to read or you are unsure, still include the person and say why in `uncertain` (for example 'name hard to read' or 'last digit of phone unclear'). Existing clients (same email, or same phone) are skipped, never changed. Nothing is sent to anyone and no automations run. Needs the owner's approval before anything is added.",
+    input_schema: {
+      type: 'object',
+      properties: {
+        clients: {
+          type: 'array',
+          maxItems: CLIENT_IMPORT_MAX_ROWS,
+          items: {
+            type: 'object',
+            properties: {
+              name:      { type: 'string' },
+              email:     { type: 'string', description: 'Only if shown.' },
+              phone:     { type: 'string', description: 'Only if shown, as written.' },
+              notes:     { type: 'string', description: 'Anything else written next to them (birthday, preferences, last visit).' },
+              uncertain: { type: 'string', description: 'Why this row needs a second look, if it does.' },
+            },
+            required: ['name'],
+          },
+        },
+      },
+      required: ['clients'],
     },
   },
   {
@@ -834,6 +862,7 @@ export const HANDLERS = {
   create_service,
   create_booking,
   add_bookings_from_list,
+  import_clients_from_list,
   create_invoice,
   create_task,
   create_project,
@@ -883,6 +912,8 @@ export const SENSITIVE_TOOLS = new Set([
   ...WEBSITE_SENSITIVE,
   // Many appointments (and possibly new clients) at once, read from a photo.
   'add_bookings_from_list',
+  // Many clients at once, read from a file, a screenshot or a photo.
+  'import_clients_from_list',
   'send_message_to_client',
   'send_invoice',
   'cancel_booking',
@@ -1035,6 +1066,8 @@ async function describeSensitiveAction(name, a, ctx = {}) {
   switch (name) {
     case 'add_bookings_from_list':
       return describeBulkBookings(a, ctx);
+    case 'import_clients_from_list':
+      return describeClientImport(a, ctx);
     case 'send_message_to_client':
       return `Send a portal message to ${await clientLabel(ctx, a.client_id)}: "${String(a.text || '').slice(0, 160)}"`;
     case 'send_invoice':
@@ -1251,6 +1284,7 @@ const READ_ONLY_TOOLS = new Set([
 ]);
 const ACTION_KINDS = {
   add_bookings_from_list: 'booking',
+  import_clients_from_list: 'other',
   create_invoice: 'invoice', send_invoice: 'invoice', create_recurring_invoice: 'invoice',
   mark_invoice_paid: 'invoice', void_invoice: 'invoice', refund_invoice: 'invoice',
   create_quote: 'invoice', send_quote: 'invoice',
@@ -1920,21 +1954,6 @@ function cleanBulkBookings(args) {
   return { rows, problems };
 }
 
-async function findClientForBulk(workspaceId, r) {
-  if (r.email) {
-    const byEmail = await sql`SELECT id, name, email FROM clients WHERE workspace_id = ${workspaceId} AND LOWER(email) = ${r.email} LIMIT 1`;
-    if (byEmail.rows[0]) return byEmail.rows[0];
-  }
-  const byName = await sql`SELECT id, name, email FROM clients WHERE workspace_id = ${workspaceId} AND LOWER(name) = LOWER(${r.name}) ORDER BY created_at ASC LIMIT 1`;
-  return byName.rows[0] || null;
-}
-
-async function findServiceForBulk(workspaceId, serviceName) {
-  if (!serviceName) return null;
-  const r = await sql`SELECT id, name, duration_minutes FROM services WHERE workspace_id = ${workspaceId} AND LOWER(name) = LOWER(${serviceName}) LIMIT 1`;
-  return r.rows[0] || null;
-}
-
 async function add_bookings_from_list({ workspaceId, args }) {
   const { rows, problems } = cleanBulkBookings(args);
   if (!rows.length) throw new Error(problems.length ? `Nothing to add: ${problems.join('; ')}` : 'No appointments were given.');
@@ -1984,6 +2003,99 @@ async function add_bookings_from_list({ workspaceId, args }) {
     skipped,
     problems,
     note: 'No emails were sent to clients. Clients without an email on file will not get reminders until one is added.',
+  };
+}
+
+// ── Bulk clients (a CSV, a contacts file, a screenshot, a photo of a paper book) ──
+// Always quiet: no invites, no texts, no client_created automations. The
+// insert path is the CSV importer's (api/_lib/clientImport.js).
+const CLIENT_IMPORT_OPTS = { onBadPhone: 'note', defaultSource: 'Ivy import', defaultStage: 'active' };
+const CARD_ROWS = 20;
+
+function cleanClientImportArgs(args) {
+  const list = Array.isArray(args?.clients) ? args.clients.slice(0, CLIENT_IMPORT_MAX_ROWS) : [];
+  return list.map((c) => {
+    const name = String(c?.name ?? '').replace(/\s+/g, ' ').trim().slice(0, 200);
+    let notes = c?.notes ? String(c.notes).slice(0, 1000) : null;
+    let email = c?.email ? String(c.email).trim().toLowerCase().slice(0, 254) : null;
+    // A misread email must not lose the person: keep what was written in
+    // their notes and add them without it.
+    if (email && !validEmail(email)) {
+      const line = `Email as written: ${email}`;
+      notes = notes ? `${notes}\n${line}` : line;
+      email = null;
+    }
+    return {
+      name, email, notes,
+      phone: c?.phone ? String(c.phone).trim().slice(0, 40) : null,
+      uncertain: c?.uncertain ? String(c.uncertain).replace(/\s+/g, ' ').trim().slice(0, 120) : null,
+    };
+  });
+}
+
+function clientImportRows(list) {
+  return list.map((c) => ({ name: c.name, email: c.email, phone: c.phone, notes: c.notes, stage: 'active' }));
+}
+
+function moreBit(n) {
+  return n > 0 ? ` and ${n} more` : '';
+}
+
+// The approval card: one line per person (first CARD_ROWS), then who needs a
+// second look and who will be skipped. Plain text, one item per line; the
+// lines also read fine run together on app builds that show it as one line.
+async function describeClientImport(a, ctx = {}) {
+  const list = cleanClientImportArgs(a);
+  if (!list.length) return 'Add clients to your Clients list (none could be read)';
+  let plan = null;
+  if (ctx.workspaceId) {
+    try { plan = await prepareClientImport(ctx.workspaceId, clientImportRows(list), CLIENT_IMPORT_OPTS); } catch { plan = null; }
+  }
+  const dup = new Map((plan?.duplicates || []).map((d) => [d.index, d]));
+  const bad = new Map((plan?.invalid || []).map((d) => [d.index, d]));
+  const adding = list.map((c, i) => ({ ...c, i })).filter((c) => !dup.has(c.i) && !bad.has(c.i));
+  const label = (c) => [c.name || '(no name)', c.email, c.phone].filter(Boolean).join(' · ');
+  const lines = [];
+  lines.push(`Add ${adding.length} client${adding.length === 1 ? '' : 's'} to your Clients list. No emails or texts go out and no automations run.`);
+  for (const c of adding.slice(0, CARD_ROWS)) {
+    lines.push(`• ${label(c)}${c.uncertain ? ` (check: ${c.uncertain})` : ''};`);
+  }
+  if (adding.length > CARD_ROWS) lines.push(`…${moreBit(adding.length - CARD_ROWS)}.`);
+  const unsureLater = adding.slice(CARD_ROWS).filter((c) => c.uncertain);
+  if (unsureLater.length) {
+    lines.push(`Also check: ${unsureLater.slice(0, 10).map((c) => `${c.name} (${c.uncertain})`).join(', ')}${moreBit(unsureLater.length - 10)}.`);
+  }
+  const unsureCount = adding.filter((c) => c.uncertain).length;
+  if (unsureCount) lines.push(`${unsureCount === 1 ? '1 entry was' : `${unsureCount} entries were`} hard to read (marked "check"). You can fix them in Clients after adding.`);
+  const dups = [...dup.values()];
+  if (dups.length) {
+    const shown = dups.slice(0, 10).map((d) => `${d.name} (same ${d.reason}${d.existingName && d.existingName.toLowerCase() !== d.name.toLowerCase() ? ` as ${d.existingName}` : ''})`);
+    lines.push(`Already in your clients, will be skipped: ${shown.join(', ')}${moreBit(dups.length - 10)}.`);
+  }
+  const bads = [...bad.values()];
+  if (bads.length) lines.push(`Can't be added: ${bads.slice(0, 5).map((b) => `#${b.index + 1} (${b.error})`).join(', ')}${moreBit(bads.length - 5)}.`);
+  return lines.join('\n');
+}
+
+async function import_clients_from_list({ workspaceId, args }) {
+  const list = cleanClientImportArgs(args);
+  if (!list.length) throw new Error('No clients were given.');
+  const plan = await prepareClientImport(workspaceId, clientImportRows(list), CLIENT_IMPORT_OPTS);
+  const out = await insertPreparedClients(workspaceId, plan, { quiet: true });
+  const noEmail = out.createdRows.filter((c) => !c.email);
+  return {
+    ok: true,
+    added: out.created,
+    skipped_existing: plan.duplicates.length,
+    skipped: plan.duplicates.slice(0, 50).map((d) => `${d.name} (already in your clients)`),
+    problems: [
+      ...plan.invalid.map((x) => `#${x.index + 1}: ${x.error}`),
+      ...out.errors.map((x) => `rows ${x.row}: ${x.error}`),
+    ].slice(0, 50),
+    missing_email: noEmail.slice(0, 200).map((c) => ({ id: c.id, name: c.name })),
+    missing_email_count: noEmail.length,
+    with_email_count: out.created - noEmail.length,
+    note: 'No emails or texts were sent and no automations ran.',
   };
 }
 
