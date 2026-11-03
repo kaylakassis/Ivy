@@ -43,7 +43,7 @@ function makeRes() {
     status(c) { this.statusCode = c; return this; },
     setHeader(k, v) {
       const key = k.toLowerCase();
-      if (key === 'set-cookie') { (this.headers[key] ||= []).push(v); }
+      if (key === 'set-cookie') { (this.headers[key] ||= []).push(...(Array.isArray(v) ? v : [v])); }
       else this.headers[key] = v;
     },
     getHeader(k) { return this.headers[k.toLowerCase()]; },

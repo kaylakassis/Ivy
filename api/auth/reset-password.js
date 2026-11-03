@@ -2,9 +2,9 @@
 // Verifies the reset token, sets a new password, signs the user in.
 import { sql } from '../_lib/db.js';
 import {
-  hashPassword, signSession, setSessionCookie, invalidateUserCache,
-  signMfaToken, setMfaCookie, isNativeClient,
+  hashPassword, signSession, setSessionCookie, invalidateUserCache, isNativeClient,
 } from '../_lib/auth.js';
+import { beginMfaStep, hasTwoStep } from '../_lib/mfaEmail.js';
 import { validatePassword } from '../_lib/passwordPolicy.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     // Burn any other live reset tokens for the user.
     await invalidateUserTokens({ userId: valid.userId, kind: KIND_RESET });
 
-    const { rows } = await sql`SELECT id, email, name, created_at, totp_enrolled_at FROM users WHERE id = ${valid.userId}`;
+    const { rows } = await sql`SELECT id, email, name, created_at, totp_enrolled_at, mfa_email_enabled_at FROM users WHERE id = ${valid.userId}`;
     recordAudit(req, { actor: rows[0], action: 'auth.password_reset', meta: {} });
     // "Your password was changed" security alert. Fire-and-forget.
     notifyPasswordChanged({ userId: valid.userId, ip, userAgent: req.headers['user-agent'] });
@@ -70,18 +70,14 @@ export default async function handler(req, res) {
     // Control of the inbox proves the email, not the second factor. An
     // account with 2FA enrolled gets the same MFA-pending step as login
     // instead of a session.
-    if (rows[0]?.totp_enrolled_at) {
-      const mfaToken = signMfaToken(valid.userId);
-      setMfaCookie(res, mfaToken);
-      const out = { mfaRequired: true };
-      if (isNativeClient(req)) out.mfaToken = mfaToken;
-      return ok(res, out);
+    if (hasTwoStep(rows[0])) {
+      return ok(res, await beginMfaStep(req, res, rows[0]));
     }
 
     // Sign them in immediately - they just proved control of the email.
     const sessionToken = signSession(valid.userId);
     setSessionCookie(res, sessionToken);
-    const { totp_enrolled_at: _t, ...user } = rows[0];
+    const { totp_enrolled_at: _t, mfa_email_enabled_at: _m, ...user } = rows[0];
     const payload = { user };
     if (isNativeClient(req)) payload.token = sessionToken;
     return ok(res, payload);

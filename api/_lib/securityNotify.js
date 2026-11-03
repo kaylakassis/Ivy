@@ -56,7 +56,7 @@ async function loadUser(userId) {
 // returns the wire-shape { subject, html, preheader }. Used by both the
 // real notify path AND the admin preview endpoint, so the preview an
 // operator sees is byte-for-byte what real users get.
-export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, enabled, supportEmail }) {
+export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, enabled, supportEmail, method, stillOn }) {
   const fn = escapeHtml(fnRaw || 'there');
   const supportAddr = supportEmail || process.env.EMAIL_REPLY_TO || 'hello@joinivy.ai';
 
@@ -75,12 +75,22 @@ export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, 
     intro = `The password for your Ivy account was just changed:`;
     decided = `<p><strong>If you made this change</strong>, no action is needed.</p>
       <p><strong>If you didn't</strong>, your account may be at risk. Reset your password immediately and contact us at <a href="mailto:${escapeHtml(supportAddr)}" style="color:#5CC98E;text-decoration:underline;">${escapeHtml(supportAddr)}</a>.</p>`;
+  } else if (kind === 'two_factor' && !enabled && stillOn) {
+    // One 2-step method was removed but another still guards sign-in.
+    const label = method === 'email' ? 'Email codes' : 'Your authenticator app';
+    subject = 'A 2-step verification method was removed';
+    preheader = 'Sign-in still asks for a code.';
+    heading = 'A 2-step verification method was removed';
+    intro = `${label} ${method === 'email' ? 'were' : 'was'} removed from 2-step verification on your Ivy account. Sign-in still asks for a code from your other method.`;
+    decided = `<p>If you didn't make this change, secure your account right away.</p>`;
   } else if (kind === 'two_factor') {
     subject = enabled ? 'Two-factor authentication is on' : 'Two-factor authentication was turned off';
     preheader = enabled ? 'Your Ivy account just got more secure.' : 'Your account is now protected by your password alone.';
     heading = enabled ? 'Two-factor authentication is on' : 'Two-factor authentication was turned off';
     intro = enabled
-      ? `Two-factor authentication was turned on for your Ivy account. From now on, you'll confirm a code when you sign in — nice work locking things down.`
+      ? (method === 'email'
+        ? `Two-factor authentication was turned on for your Ivy account. From now on, we'll email you a code to confirm when you sign in. Nice work locking things down.`
+        : `Two-factor authentication was turned on for your Ivy account. From now on, you'll confirm a code when you sign in. Nice work locking things down.`)
       : `Two-factor authentication was turned off for your Ivy account. It is now protected by your password alone.`;
     decided = `<p>If you didn't make this change, secure your account right away.</p>`;
   } else {
@@ -92,6 +102,7 @@ export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, 
       <tr><td style="color:#93A3A0;padding-right:16px;vertical-align:top;">Device</td><td style="color:#ECF0F1;">${escapeHtml(device || 'an unknown device')}</td></tr>
       <tr><td style="color:#93A3A0;padding-right:16px;vertical-align:top;">Time</td><td style="color:#ECF0F1;">${escapeHtml(when || fmtWhen())}</td></tr>
       ${ip ? `<tr><td style="color:#93A3A0;padding-right:16px;vertical-align:top;">IP</td><td style="color:#ECF0F1;">${escapeHtml(ip)}</td></tr>` : ''}
+      ${kind === 'two_factor' && method ? `<tr><td style="color:#93A3A0;padding-right:16px;vertical-align:top;">Method</td><td style="color:#ECF0F1;">${method === 'email' ? 'Email codes' : 'Authenticator app'}</td></tr>` : ''}
     </table>`;
 
   const html = emailShell({
@@ -107,7 +118,7 @@ export function renderSecurityAlert({ kind, firstName: fnRaw, device, ip, when, 
   return { subject, html, preheader };
 }
 
-async function sendSecurityAlert({ userId, kind, ip, userAgent, enabled }) {
+async function sendSecurityAlert({ userId, kind, ip, userAgent, enabled, method, stillOn }) {
   try {
     const u = await loadUser(userId);
     if (!u?.email) return;
@@ -118,6 +129,8 @@ async function sendSecurityAlert({ userId, kind, ip, userAgent, enabled }) {
       when: fmtWhen(),
       ip,
       enabled,
+      method,
+      stillOn,
     });
     if (!rendered) return;
     await sendEmailToUser({
@@ -137,9 +150,48 @@ export async function notifyPasswordChanged({ userId, ip, userAgent } = {}) {
   return sendSecurityAlert({ userId, kind: 'password_changed', ip, userAgent });
 }
 
-export async function notifyTwoFactorChanged({ userId, enabled, ip, userAgent } = {}) {
-  return sendSecurityAlert({ userId, kind: 'two_factor', ip, userAgent, enabled });
+// method: 'totp' | 'email' (optional, shown in the email). stillOn: true when
+// one method was removed but another still guards sign-in.
+export async function notifyTwoFactorChanged({ userId, enabled, ip, userAgent, method, stillOn } = {}) {
+  return sendSecurityAlert({ userId, kind: 'two_factor', ip, userAgent, enabled, method, stillOn });
 }
+
+// The 6-digit sign-in (or setup) code for email 2-step verification. Pure
+// renderer; api/_lib/mfaEmail.js sends it with the raw sendEmail (a security
+// email: no unsubscribe link, never held back by preferences).
+export function renderMfaCodeEmail({ firstName: fnRaw, code, purpose = 'login', device, ip, when }) {
+  const fn = escapeHtml(fnRaw || 'there');
+  const c = escapeHtml(String(code || ''));
+  const setup = purpose === 'setup';
+  const subject = setup
+    ? `${code} is your Ivy code to turn on 2-step verification`
+    : `${code} is your Ivy sign-in code`;
+  const preheader = 'This code works for 10 minutes.';
+  const heading = setup ? 'Confirm 2-step verification' : 'Your sign-in code';
+  const intro = setup
+    ? 'Enter this code in Ivy to finish turning on 2-step verification:'
+    : 'Enter this code to finish signing in to Ivy:';
+  const warn = setup
+    ? `<p>If you didn't ask for this, you can ignore this email. Nothing changes until the code is entered.</p>`
+    : `<p><strong>Didn't try to sign in?</strong> Someone may know your password. Change it right away; they still can't get in without this code.</p>`;
+  const html = emailShell({
+    heading, preheader,
+    body: `<p>Hi ${fn},</p>
+      <p>${intro}</p>
+      <p style="margin:18px 0;font-size:32px;line-height:1.2;font-weight:700;letter-spacing:8px;color:#ECF0F1;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;">${c}</p>
+      <p>It works for 10 minutes. Never share it: Ivy will never ask you for it by phone, text or chat.</p>
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:14px 0 6px;font-size:13.5px;line-height:1.8;">
+        <tr><td style="color:#93A3A0;padding-right:16px;vertical-align:top;">Device</td><td style="color:#ECF0F1;">${escapeHtml(device || 'an unknown device')}</td></tr>
+        <tr><td style="color:#93A3A0;padding-right:16px;vertical-align:top;">Time</td><td style="color:#ECF0F1;">${escapeHtml(when || fmtWhen())}</td></tr>
+        ${ip ? `<tr><td style="color:#93A3A0;padding-right:16px;vertical-align:top;">IP</td><td style="color:#ECF0F1;">${escapeHtml(ip)}</td></tr>` : ''}
+      </table>
+      ${warn}`,
+    footer: `You're getting this because a code was requested for your Ivy account. For your protection, these emails can't be turned off. The Ivy Team`,
+  });
+  return { subject, html, preheader };
+}
+
+export { prettyDevice, fmtWhen };
 
 // New-device sign-in. Tracks a per-user set of device fingerprints (a hash
 // of the user agent) and only alerts on a sign-in from a fingerprint we

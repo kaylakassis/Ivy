@@ -110,6 +110,18 @@ export function clearMfaCookie(res) {
   res.setHeader('Set-Cookie', cookie.serialize(MFA_COOKIE, '', { ...COOKIE_BASE, maxAge: 0 }));
 }
 
+// The 2-step challenge's success path: the real session cookie AND the
+// cleared mfa cookie in ONE Set-Cookie array. Calling setSessionCookie then
+// clearMfaCookie would not work: the second setHeader('Set-Cookie') replaces
+// the first, so the browser never got the session and fell back to signed out
+// on the next request.
+export function setSessionCookieClearingMfa(res, token) {
+  setCookies(res,
+    cookie.serialize(COOKIE, token, { ...COOKIE_BASE, maxAge: MAX_AGE }),
+    cookie.serialize(MFA_COOKIE, '', { ...COOKIE_BASE, maxAge: 0 }),
+  );
+}
+
 export function readMfaCookie(req) {
   const parsed = cookie.parse(req.headers.cookie || '');
   return parsed[MFA_COOKIE] || null;
@@ -226,7 +238,7 @@ export async function requireUser(req, res) {
   const row = await hotCacheGetOrSet(`user:${session.sub}`, USER_ROW_TTL_MS, async () => {
     const { rows } = await sql`
       SELECT id, email, name, created_at, email_verified_at,
-             walkthrough_completed_at, user_type, totp_enrolled_at,
+             walkthrough_completed_at, user_type, totp_enrolled_at, mfa_email_enabled_at,
              terms_accepted_at, terms_version,
              privacy_version, privacy_accepted_at,
              password_changed_at, deleted_at, last_active_at, ui_prefs

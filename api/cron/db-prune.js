@@ -63,6 +63,9 @@ async function handler(req, res) {
 
     results.rateLimits = await prune('rate_limits',
       `attempted_at < NOW() - INTERVAL '7 days'`);
+    // 2-step email codes live 10 minutes; a day covers the hourly send cap.
+    results.mfaEmailCodes = await prune('mfa_email_codes',
+      `created_at < NOW() - INTERVAL '1 day'`);
     // Failed Ivy replies: the readiness page only reads the last 24h.
     results.ivyFailures = await prune('ivy_failures',
       `created_at < NOW() - INTERVAL '30 days'`);

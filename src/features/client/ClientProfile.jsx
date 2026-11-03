@@ -1,6 +1,6 @@
 // /me/profile - lets a client update the name on their account plus
 // the phone / address / photo they share with the businesses they're
-// connected to.
+// connected to, and turn on 2-step verification for their sign-in.
 //
 // Email is read-only - changing it is auth-critical (it's the login
 // identity + the workspace-link key) and would need its own verify-
@@ -11,6 +11,7 @@ import { Link } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { BlockedCard, ReportsCard, clientModeration } from '../../components/Moderation.jsx';
+import TwoFactor from '../account/TwoFactor.jsx';
 
 export default function ClientProfile() {
   const [profile, setProfile] = useState(null);
@@ -164,6 +165,11 @@ export default function ClientProfile() {
           )}
         </div>
       </form>
+
+      {/* Sign-in security: 2-step verification, same as business owners. */}
+      <div id="security" className="card" style={{ padding: 20, marginTop: 16, scrollMarginTop: 80 }}>
+        <TwoFactor bare/>
+      </div>
 
       {/* Saved cards, one per business. Removing one detaches it from the
           business's payment processor as well as from Ivy. */}

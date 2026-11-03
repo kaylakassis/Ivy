@@ -47,6 +47,17 @@ export function AuthProvider({ children }) {
   // Holds the native-only mfa token between /auth/login and the challenge.
   // (Web carries it in an httpOnly cookie the server sets on login.)
   const mfaTokenRef = useRef(null);
+  // What the code step should offer: { methods: ['totp'|'email'], emailSent,
+  // email (masked), emailError, retryAfterSeconds }. null = unknown (e.g. the
+  // page was reloaded on /signin?mfa=1), and the step offers both.
+  const [mfaInfo, setMfaInfo] = useState(null);
+  const pickMfaInfo = (r) => (r ? {
+    methods: Array.isArray(r.mfaMethods) ? r.mfaMethods : null,
+    emailSent: !!r.mfaEmailSent,
+    email: r.mfaEmail || null,
+    emailError: r.mfaEmailError || null,
+    retryAfterSeconds: r.mfaRetryAfterSeconds || null,
+  } : null);
 
   const signIn = useCallback(async (email, password) => {
     const r = await api.post('/auth/login', { email, password });
@@ -57,7 +68,9 @@ export function AuthProvider({ children }) {
       // Password OK but this account has 2FA on — hold here; the caller shows a
       // code screen and calls mfaChallenge().
       mfaTokenRef.current = r.mfaToken || null;
-      return { mfaRequired: true };
+      const info = pickMfaInfo(r);
+      setMfaInfo(info);
+      return { mfaRequired: true, ...info };
     }
     clearMeCache(); clearDeviceCache();
     setUser(r.user);
@@ -68,11 +81,25 @@ export function AuthProvider({ children }) {
   // A password reset on a 2FA account ends at the same code step as login.
   // The reset page hands over the native-only token here before routing to
   // the sign-in screen with ?mfa=1.
-  const beginMfa = useCallback((mfaToken) => {
+  // `response` is the whole reset/restore reply, so the code step knows
+  // whether a code was already emailed.
+  const beginMfa = useCallback((mfaToken, response = null) => {
     mfaTokenRef.current = mfaToken || null;
+    setMfaInfo(pickMfaInfo(response));
   }, []);
 
-  // Second factor: exchange a 6-digit TOTP or a backup code for a real session.
+  // "Send a new code" / "Email me a code instead" on the code step. Throws
+  // the server's error (429 carries retryAfterSeconds in err.details).
+  const mfaSendEmailCode = useCallback(async () => {
+    const r = await api.post('/auth/mfa/send-code', {
+      ...(mfaTokenRef.current ? { mfaToken: mfaTokenRef.current } : {}),
+    });
+    setMfaInfo((prev) => ({ ...(prev || { methods: null }), emailSent: true, email: r.email || prev?.email || null, emailError: null }));
+    return r;
+  }, []);
+
+  // Second factor: exchange a 6-digit code (authenticator app or emailed) or
+  // a backup code for a real session.
   const mfaChallenge = useCallback(async (code) => {
     const r = await api.post('/auth/totp/challenge', {
       code,
@@ -80,6 +107,7 @@ export function AuthProvider({ children }) {
     });
     if (isNative() && r?.token) await setNativeAuthToken(r.token);
     mfaTokenRef.current = null;
+    setMfaInfo(null);
     clearMeCache(); clearDeviceCache();
     setUser(r.user);
     stampSessionHint(true);
@@ -205,7 +233,7 @@ export function AuthProvider({ children }) {
 
   return (
     <Ctx.Provider value={{
-      user, loading, signIn, mfaChallenge, beginMfa, signUp, signOut, refresh, impersonating,
+      user, loading, signIn, mfaChallenge, beginMfa, mfaInfo, mfaSendEmailCode, signUp, signOut, refresh, impersonating,
       terms,
       mustAcceptTerms: !!(user && terms?.needsAcceptance),
       privacy,

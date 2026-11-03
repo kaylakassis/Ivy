@@ -32,7 +32,7 @@ export default function AccountRecoverPage() {
         if (cancelled) return;
         if (r.mfaRequired) {
           // 2FA account: the account is back, the session waits for the code.
-          beginMfa(r.mfaToken);
+          beginMfa(r.mfaToken, r);
           nav('/signin?mfa=1', { replace: true });
           return;
         }

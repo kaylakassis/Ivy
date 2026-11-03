@@ -1,7 +1,8 @@
 // POST /api/auth/login  { email, password }
 import bcrypt from 'bcryptjs';
 import { sql, warmupDb, isConnectionError } from '../_lib/db.js';
-import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient, signMfaToken, setMfaCookie } from '../_lib/auth.js';
+import { verifyPassword, signSession, setSessionCookie, validEmail, isNativeClient } from '../_lib/auth.js';
+import { beginMfaStep, hasTwoStep } from '../_lib/mfaEmail.js';
 import { emailIsSuperAdmin } from '../_lib/admin.js';
 import { readBody } from '../_lib/body.js';
 import { countRecent, recordAttempt, clearRateLimit, isAdminBypass, getClientIp } from '../_lib/rate-limit.js';
@@ -110,7 +111,8 @@ export default async function handler(req, res) {
     };
 
     const { rows } = await sql`
-      SELECT id, email, name, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at
+      SELECT id, email, name, password_hash, created_at, email_verified_at, user_type, totp_enrolled_at,
+             mfa_email_enabled_at
       FROM users WHERE email = ${emailKey}
     `;
     // Always run a bcrypt compare so the timing of the no-user branch
@@ -132,17 +134,16 @@ export default async function handler(req, res) {
     await clearRateLimit(emailIpFailKey);
     await clearRateLimit(emailFailKey);
 
-    // 2FA gate: if this user has TOTP enrolled, DON'T issue a session yet.
-    // Hand back a short-lived MFA-pending token; they must clear
-    // /api/auth/totp/challenge with a 6-digit or backup code before they get a
-    // real session. (readSession refuses the mfa-pending token as a session,
-    // so it can't be replayed to bypass this.)
-    if (user.totp_enrolled_at) {
-      const mfaToken = signMfaToken(user.id);
-      setMfaCookie(res, mfaToken);
-      recordAudit(req, { actor: user, action: 'auth.mfa_required', meta: {} });
-      const out = { mfaRequired: true };
-      if (isNativeClient(req)) out.mfaToken = mfaToken; // native can't use the cookie
+    // 2-step gate (every account type: owner, client portal, helper): if this
+    // user has an authenticator app or email codes on, DON'T issue a session
+    // yet. Hand back a short-lived MFA-pending token; they must clear
+    // /api/auth/totp/challenge with an app, email or backup code before they
+    // get a real session. (readSession refuses the mfa-pending token as a
+    // session, so it can't be replayed to bypass this.) Email-only accounts
+    // get their first code sent here.
+    if (hasTwoStep(user)) {
+      const out = await beginMfaStep(req, res, user);
+      recordAudit(req, { actor: user, action: 'auth.mfa_required', meta: { methods: out.mfaMethods } });
       return ok(res, out);
     }
 
