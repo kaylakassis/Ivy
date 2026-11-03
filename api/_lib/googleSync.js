@@ -24,8 +24,16 @@ async function loadConnection(workspaceId) {
   `;
   const r = rows[0];
   if (!r?.google_refresh_token_encrypted || !r?.google_calendar_id) return null;
+  const accessToken = await freshAccessToken(workspaceId, r.google_refresh_token_encrypted);
+  if (!accessToken) return null;
+  return { accessToken, calendarId: r.google_calendar_id };
+}
+
+// Decrypts the stored refresh token and trades it for an access token.
+// Returns null when that is not possible (and forgets a revoked token).
+async function freshAccessToken(workspaceId, encrypted) {
   let refreshToken;
-  try { refreshToken = decrypt(r.google_refresh_token_encrypted); }
+  try { refreshToken = decrypt(encrypted); }
   catch { return null; }
   let accessToken;
   try { accessToken = await refreshAccessToken(refreshToken); }
@@ -49,7 +57,29 @@ async function loadConnection(workspaceId) {
     }
     return null;
   }
-  return { accessToken, calendarId: r.google_calendar_id };
+  return accessToken;
+}
+
+// For importing the owner's Google events into Ivy: read access to their
+// primary calendar. Returns { connected: false } when Google is not
+// connected (or the connection was revoked), else { connected: true,
+// accessToken }.
+export async function loadGoogleImportAccess(workspaceId) {
+  const { rows } = await sql`
+    SELECT google_refresh_token_encrypted FROM calendar_settings WHERE workspace_id = ${workspaceId}
+  `;
+  const enc = rows[0]?.google_refresh_token_encrypted;
+  if (!enc) return { connected: false };
+  const accessToken = await freshAccessToken(workspaceId, enc);
+  return accessToken ? { connected: true, accessToken } : { connected: false };
+}
+
+// A booking imported from one of the owner's own Google events (import_uid
+// 'google:<id>') keeps that event's id in google_event_id. The event lives in
+// the owner's calendar, not in the Ivy Bookings calendar, so the sync must
+// never push, rewrite or delete it.
+function isGoogleImported(booking) {
+  return typeof booking?.import_uid === 'string' && booking.import_uid.startsWith('google:');
 }
 
 async function lookupServiceName(serviceId) {
@@ -71,15 +101,11 @@ export async function syncOnBookingCreated({ workspaceId, bookingId }) {
     `;
     const booking = rows[0];
     if (!booking || booking.cancelled_at) return;
+    // Already linked to a Google event (a retry, or a booking imported from
+    // the owner's own Google Calendar): never insert a second copy.
+    if (booking.google_event_id || isGoogleImported(booking)) return;
 
     const serviceName = await lookupServiceName(booking.service_id);
-    if (booking.google_event_id) {
-      await updateEvent({
-        accessToken: conn.accessToken, calendarId: conn.calendarId,
-        eventId: booking.google_event_id, booking, serviceName,
-      });
-      return;
-    }
     const eventId = await insertEvent({
       accessToken: conn.accessToken, calendarId: conn.calendarId,
       booking, serviceName,
@@ -107,6 +133,7 @@ export async function syncOnBookingUpdated({ workspaceId, bookingId }) {
     `;
     const booking = rows[0];
     if (!booking) return;
+    if (isGoogleImported(booking)) return;
 
     if (booking.cancelled_at) {
       if (booking.google_event_id) {
@@ -218,6 +245,12 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
 
   const seenIds = [];
   let kept = 0, skipped = 0;
+  // Events the owner already brought into Ivy as bookings: the booking
+  // blocks that time, so mirroring the event too would block it twice.
+  const importedRows = await sql`
+    SELECT import_uid FROM bookings
+     WHERE workspace_id = ${workspaceId} AND import_uid LIKE 'google:%'`;
+  const importedIds = new Set(importedRows.rows.map((b) => b.import_uid.slice('google:'.length)));
 
   for (const ev of events) {
     if (ev.status === 'cancelled') continue;
@@ -230,6 +263,7 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
     // calendarId), so in primary-calendar mode our own bookings were mirrored
     // back as busy blocks and self-blocked their own future slots.
     if (ev.extendedProperties?.private?.ivy_booking_id) continue;
+    if (importedIds.has(ev.id)) continue;
     // FreeBusy-style: only need start + end.
     const start = ev.start?.dateTime;
     const end = ev.end?.dateTime;
@@ -257,7 +291,7 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
         ${workspaceId}, 'google', ${ev.id}, ${dateA}, ${startMin}, ${endMin},
         ${ev.summary?.slice(0, 200) || null}, NOW()
       )
-      ON CONFLICT (workspace_id, source, source_event_id) DO UPDATE SET
+      ON CONFLICT (workspace_id, source, source_event_id) WHERE source_event_id IS NOT NULL DO UPDATE SET
         date = EXCLUDED.date,
         start_min = EXCLUDED.start_min,
         end_min = EXCLUDED.end_min,
@@ -293,6 +327,13 @@ export async function pullBusyTimes({ workspaceId, daysAhead = 60 }) {
 export async function syncOnBookingDeleted({ workspaceId, googleEventId }) {
   if (!googleEventId) return;
   try {
+    // Never delete the owner's own event that a booking was imported from.
+    const imported = await sql`
+      SELECT 1 FROM bookings
+       WHERE workspace_id = ${workspaceId} AND google_event_id = ${googleEventId}
+         AND import_uid LIKE 'google:%'
+       LIMIT 1`;
+    if (imported.rows.length) return;
     const conn = await loadConnection(workspaceId);
     if (!conn) return;
     await deleteEvent({

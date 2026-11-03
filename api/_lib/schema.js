@@ -4068,4 +4068,18 @@ CREATE TABLE IF NOT EXISTS mfa_email_codes (
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 CREATE INDEX IF NOT EXISTS idx_mfa_email_codes_user ON mfa_email_codes(user_id, created_at DESC);
+-- The switch: moving into Ivy from another app.
+-- bookings.import_uid: where an imported booking came from, so the same
+-- calendar file or Google event is never imported twice. 'ics:<sha256 of
+-- the event uid>' for a calendar file, 'google:<event id>' for a Google
+-- Calendar event (whose id is also kept in google_event_id so the sync does
+-- not push a second copy). Unique per business.
+ALTER TABLE bookings ADD COLUMN IF NOT EXISTS import_uid TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_bookings_workspace_import_uid
+  ON bookings(workspace_id, import_uid) WHERE import_uid IS NOT NULL;
+-- clients.move_announced_at: when the owner's "I have a new booking link"
+-- email went to this client. Set once; a client is never sent it twice.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS move_announced_at TIMESTAMPTZ;
+CREATE INDEX IF NOT EXISTS idx_clients_workspace_move_announced
+  ON clients(workspace_id, move_announced_at) WHERE move_announced_at IS NOT NULL;
 `;

@@ -655,7 +655,7 @@ function UploadAnalyzer({ onAnalyze, busy }) {
   const [err, setErr]   = useState(null);
   const [pickedName, setPickedName] = useState(null);
 
-  const ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.csv,.tsv,.txt,.md,.json,application/pdf,image/png,image/jpeg,image/gif,image/webp,text/csv,text/plain,text/tab-separated-values,text/markdown,application/json';
+  const ACCEPT = '.pdf,.png,.jpg,.jpeg,.gif,.webp,.csv,.tsv,.txt,.md,.json,.ics,.vcf,application/pdf,image/png,image/jpeg,image/gif,image/webp,text/csv,text/plain,text/tab-separated-values,text/markdown,application/json,text/calendar,text/vcard,text/x-vcard';
   const MAX_BYTES = 3.5 * 1024 * 1024;
 
   const handle = async (file) => {
@@ -753,8 +753,12 @@ function UploadAnalyzer({ onAnalyze, busy }) {
 // `type` for CSVs uploaded from Excel; sniff the suffix instead.
 function normalizeMime(file) {
   const t = (file.type || '').toLowerCase();
-  if (t) return t;
   const ext = ((file?.name || '').split('.').pop() || '').toLowerCase();
+  // Calendar and contacts files arrive with many different types (or none)
+  // depending on the phone or computer; go by the file name for those.
+  if (ext === 'ics') return 'text/calendar';
+  if (ext === 'vcf' || ext === 'vcard') return 'text/vcard';
+  if (t) return t;
   return {
     csv: 'text/csv', tsv: 'text/tab-separated-values',
     txt: 'text/plain', md: 'text/markdown',

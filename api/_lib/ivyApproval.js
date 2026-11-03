@@ -30,15 +30,32 @@ export async function executePendingAction({ row, workspaceId, userId }) {
     UPDATE ivy_pending_actions SET result = ${JSON.stringify(result ?? null)}::jsonb
      WHERE id = ${row.id} AND workspace_id = ${workspaceId}`;
   let text = result && result.error ? `That didn't work: ${result.error}` : `Done. ${row.summary}`;
-  // Appointments added from a photo: say who still needs an email, with a
-  // link to the Clients list filtered to them.
+  // A client list: counts, not the whole approval card again.
+  if (!result?.error && row.tool === 'import_clients_from_list') text = clientImportDoneText(result);
+  // Appointments added from a photo, or clients from a list: say who still
+  // needs an email, with a link to the Clients list filtered to them.
   if (!result?.error && Array.isArray(result?.missing_email) && result.missing_email.length) {
     const names = result.missing_email.map((c) => c.name);
-    const shown = names.length > 5 ? `${names.slice(0, 5).join(', ')} and ${names.length - 5} more` : names.join(', ');
-    const n = names.length;
+    const n = Math.max(names.length, Number(result.missing_email_count) || 0);
+    const shown = n > 5 ? `${names.slice(0, 5).join(', ')} and ${n - 5} more` : names.join(', ');
     text += `\n\n${n === 1 ? '1 client has' : `${n} clients have`} no email yet, so they won't get booking reminders: ${shown}. [Add ${n === 1 ? 'their email' : 'their emails'}](/clients?filter=missing-email)`;
   }
+  // New clients with an email can be told about the move when the owner is
+  // ready (nothing was sent to them by the import itself).
+  if (!result?.error && row.tool === 'import_clients_from_list' && Number(result?.with_email_count) > 0) {
+    text += '\n\nWhen you are ready, you can email them your new booking link: [Let them know you moved](/clients?announce=1)';
+  }
   return { claimed: true, result, text };
+}
+
+function clientImportDoneText(r) {
+  const added = Number(r?.added) || 0;
+  const skipped = Number(r?.skipped_existing) || 0;
+  const problems = Array.isArray(r?.problems) ? r.problems.length : 0;
+  let t = `Done. Added ${added} client${added === 1 ? '' : 's'} to your Clients list`;
+  if (skipped) t += `, skipped ${skipped} already there`;
+  if (problems) t += `, and ${problems} couldn't be added`;
+  return `${t}. No emails or texts went out.`;
 }
 
 // iPhone builds released before server-side approval approve a card by

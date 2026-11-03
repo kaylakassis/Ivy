@@ -254,3 +254,42 @@ export async function listEvents({ accessToken, calendarId = 'primary', timeMin,
   });
   return r?.items || [];
 }
+
+// Events from the owner's own calendar with the detail an import needs
+// (title, times, attendees, organizer), for "bring my appointments into
+// Ivy". Recurring events come back as single instances. Pages through at
+// most `maxPages` pages of 250.
+const IMPORT_EVENT_FIELDS = 'id,status,summary,description,location,start,end,transparency,'
+  + 'attendees(email,displayName,self,organizer,resource),organizer(email,displayName,self),'
+  + 'extendedProperties,recurringEventId,eventType';
+export async function listEventsForImport({ accessToken, calendarId = 'primary', timeMin, timeMax, maxPages = 8 }) {
+  const items = [];
+  let pageToken = null;
+  for (let page = 0; page < maxPages; page++) {
+    const params = new URLSearchParams({
+      timeMin, timeMax,
+      singleEvents: 'true',
+      orderBy: 'startTime',
+      maxResults: '250',
+      fields: `nextPageToken,items(${IMPORT_EVENT_FIELDS})`,
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const r = await calApi(`/calendars/${encodeURIComponent(calendarId)}/events?${params.toString()}`, { method: 'GET', accessToken });
+    for (const it of (r?.items || [])) items.push(it);
+    pageToken = r?.nextPageToken || null;
+    if (!pageToken) break;
+  }
+  return { items, more: !!pageToken };
+}
+
+// One event by id from the owner's calendar (same fields), or null when it
+// no longer exists.
+export async function getEventForImport({ accessToken, calendarId = 'primary', eventId }) {
+  const params = new URLSearchParams({ fields: IMPORT_EVENT_FIELDS });
+  try {
+    return await calApi(`/calendars/${encodeURIComponent(calendarId)}/events/${encodeURIComponent(eventId)}?${params.toString()}`, { method: 'GET', accessToken });
+  } catch (err) {
+    if (err.status === 404 || err.status === 410) return null;
+    throw err;
+  }
+}

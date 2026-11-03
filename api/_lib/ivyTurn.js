@@ -30,6 +30,10 @@ const ALLOWED_MIME = new Set([
   'text/csv', 'text/plain', 'text/tab-separated-values',
   'text/markdown',
   'application/csv', 'application/json',
+  // Switching to Ivy: a calendar file (.ics) and a contacts file (.vcf)
+  // reach Ivy as text (attachmentToBlock in api/_lib/ivy.js).
+  'text/calendar', 'text/x-vcalendar',
+  'text/vcard', 'text/x-vcard', 'text/directory',
 ]);
 
 // Validates the body, finds or creates the session, loads the history the
@@ -167,7 +171,7 @@ export function parseAttachment(raw) {
   const base64 = (raw.base64 || raw.data || '').toString();
   if (!mediaType) return new Error('Attachment missing mediaType');
   if (!ALLOWED_MIME.has(mediaType)) {
-    return new Error(`Unsupported file type: ${mediaType}. Allowed: PDF, PNG/JPEG/GIF/WEBP image, CSV, JSON, plain text.`);
+    return new Error(`Unsupported file type: ${mediaType}. Allowed: PDF, PNG/JPEG/GIF/WEBP image, CSV, JSON, plain text, calendar (.ics) or contacts (.vcf) file.`);
   }
   if (!base64) return new Error('Attachment missing data');
   // base64-decoded byte length ≈ ceil(len * 3 / 4) − padding, close enough.
