@@ -890,6 +890,12 @@ const ONB_LABELS = {
     starting: 'Just starting out', side_hustle: 'Side hustle',
     established: 'Established & steady', scaling: 'Ready to scale',
   },
+  switchFrom: {
+    square: 'Square Appointments', acuity: 'Acuity', vagaro: 'Vagaro', glossgenius: 'GlossGenius',
+    booksy: 'Booksy', calendly: 'Calendly', mindbody: 'Mindbody', fresha: 'Fresha',
+    spreadsheet: 'A spreadsheet', phone: 'Phone contacts', paper: 'Paper book or notes',
+    google: 'Google Calendar', other: 'Somewhere else', new: 'Just getting started',
+  },
 };
 
 function OnboardingInsightsCard({ onboarding }) {
@@ -900,6 +906,7 @@ function OnboardingInsightsCard({ onboarding }) {
     { key: 'challenge', title: 'Biggest challenge' },
     { key: 'heardFrom', title: 'How they heard about us' },
     { key: 'stage',     title: 'Business stage' },
+    { key: 'switchFrom', title: 'Switching from' },
   ];
   return (
     <div className="card" style={{ padding: 22 }}>

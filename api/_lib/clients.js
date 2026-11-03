@@ -30,6 +30,9 @@ export function serializeClient(row) {
     // already claimed their account.
     inviteSentAt:  row.invite_sent_at || null,
     hasClaimedPortal: !!row.user_id,
+    // When the owner's "I've moved to Ivy" email went to this client
+    // (POST /api/clients/announce-move), so the sheet can leave them out.
+    moveAnnouncedAt: row.move_announced_at || null,
   };
 }
 

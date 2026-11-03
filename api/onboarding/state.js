@@ -16,6 +16,7 @@
 //     skippedSteps: [],
 //     dismissedChecklistItems: [],
 //     stepTimestamps: { welcome: '<ISO>', business: '<ISO>', ... },  // funnel drop-off
+//     switchFrom: 'square' | 'acuity' | ... | null,   // "Switching to Ivy?" answer
 //     lastActiveAt: '<ISO>',
 //   }
 //
@@ -52,11 +53,20 @@ async function healColumn() {
 const VALID_STEPS = new Set([
   'welcome', 'business', 'about', 'services', 'availability',
   'first_product',                              // product-only flow replaces 'services' with this
+  'switch',                                     // "Switching to Ivy?" - bring clients over from another app
   'payments', 'branding', 'first_client', 'website',
   'impact', 'ready', 'tour', 'done',           // 'ready' = the "Your business is ready" first-win cards
 ]);
 
 const VALID_BUSINESS_TYPES = new Set(['service', 'product', 'both']);
+
+// "Where are your clients today?" answers on the 'switch' step. Whitelisted
+// so we can count which apps owners move from without storing free text.
+// Keep in sync with SWITCH_SOURCES in src/features/onboarding/switchSources.js.
+export const VALID_SWITCH_FROM = new Set([
+  'square', 'acuity', 'vagaro', 'glossgenius', 'booksy', 'calendly', 'mindbody', 'fresha',
+  'spreadsheet', 'phone', 'paper', 'google', 'other', 'new',
+]);
 
 function normalizeState(raw) {
   const s = (raw && typeof raw === 'object') ? raw : {};
@@ -83,6 +93,7 @@ function normalizeState(raw) {
     skippedSteps,
     dismissedChecklistItems,
     stepTimestamps,
+    switchFrom: VALID_SWITCH_FROM.has(s.switchFrom) ? s.switchFrom : null,
     lastActiveAt: s.lastActiveAt || null,
   };
 }
@@ -171,6 +182,9 @@ export default async function handler(req, res) {
           ? body.dismissedChecklistItems
           : current.dismissedChecklistItems,
         stepTimestamps,
+        // Only touched when the PATCH carries it (null clears); the wizard's
+        // other PATCHes leave the stored answer alone.
+        switchFrom: body.switchFrom !== undefined ? body.switchFrom : current.switchFrom,
         lastActiveAt: nowIso,
       };
       const normalized = normalizeState(next);

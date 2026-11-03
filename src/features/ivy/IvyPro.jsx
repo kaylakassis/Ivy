@@ -77,16 +77,22 @@ export default function IvyPro() {
   const location = useLocation();
   const navigate = useNavigate();
   const consumedRef = useRef(false);
+  // ?photo=1 (from "Send Ivy a screenshot", src/features/ivy/openIvy.js)
+  // opens the photo menu so the owner picks the picture in one tap.
+  const [photoSignal, setPhotoSignal] = useState(0);
   useEffect(() => {
     if (loading || consumedRef.current) return;
     const params = new URLSearchParams(location.search);
     const prompt = params.get('prompt');
-    if (!prompt) return;
+    const photo = params.get('photo') === '1';
+    if (!prompt && !photo) return;
     consumedRef.current = true;
     params.delete('prompt');
     params.delete('send');
+    params.delete('photo');
     navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
-    setDraft(prompt);
+    if (prompt) setDraft(prompt.slice(0, 2000));
+    if (photo) setPhotoSignal(Date.now());
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, location.search]);
 
@@ -231,7 +237,7 @@ export default function IvyPro() {
                   background: 'transparent', fontFamily: 'inherit', fontSize: 14,
                   lineHeight: 1.5, color: 'var(--fg)', maxHeight: 140, padding: '6px 8px',
                 }}/>
-              <PhotoButton attach={photoAttach} disabled={thinking}/>
+              <PhotoButton attach={photoAttach} disabled={thinking} openSignal={photoSignal}/>
               <DictationButton value={draft} onChange={setDraft} onListening={setListening} disabled={thinking}/>
               <button className="btn btn-primary" onClick={() => submit()}
                 disabled={(!draft.trim() && !photoAttach.pieces.length) || thinking || photoAttach.busy}

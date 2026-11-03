@@ -382,7 +382,7 @@ export default async function handler(req, res) {
          ),
          steps(id) AS (
            VALUES ('welcome'), ('business'), ('about'), ('services'),
-                  ('availability'), ('first_product'), ('payments'),
+                  ('availability'), ('first_product'), ('switch'), ('payments'),
                   ('branding'), ('first_client'), ('website'),
                   ('tour'), ('done')
          )
@@ -419,6 +419,20 @@ export default async function handler(req, res) {
       onbDist('heard_from', 'heard_from_other', fromIso, toIso),
       onbDist('stage', null, fromIso, toIso),
     ]);
+
+    // "Switching to Ivy?" answers (onboarding_state.switchFrom, whitelisted
+    // ids only) for the same signup cohort: which apps owners move from.
+    // Aggregate counts only. Best-effort: never breaks the dashboard.
+    const switchFromRows = await sql.query(
+      `SELECT u.onboarding_state->>'switchFrom' AS k, COUNT(*)::int AS n
+         FROM admin_real_workspaces w
+         JOIN admin_real_users u ON u.id = w.owner_id
+        WHERE w.created_at >= $1 AND w.created_at < $2
+          AND u.onboarding_state ? 'switchFrom'
+          AND jsonb_typeof(u.onboarding_state->'switchFrom') = 'string'
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 20`,
+      [fromIso, toIso],
+    ).catch(() => ({ rows: [] }));
 
     const cancelled = churnCancelledRow.rows[0]?.n || 0;
     const denom = churnActiveAtStartRow.rows[0]?.n || 0;
@@ -627,6 +641,7 @@ export default async function handler(req, res) {
         challenge: onbChallengeRows.rows.map((r) => ({ k: r.k, n: r.n })),
         heardFrom: onbHeardRows.rows.map((r) => ({ k: r.k, n: r.n })),
         stage:     onbStageRows.rows.map((r) => ({ k: r.k, n: r.n })),
+        switchFrom: switchFromRows.rows.map((r) => ({ k: r.k, n: r.n })),
       },
     });
   } catch (err) {

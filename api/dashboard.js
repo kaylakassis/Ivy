@@ -170,10 +170,31 @@ export default async function handler(req, res) {
       }
     } catch { /* no nudge this load */ }
 
+    // "Switching from another app?" card: a new-looking book (fewer than 3
+    // real clients, no bookings at all, sample data ignored) gets a nudge to
+    // bring their clients over. Dismissed on the device. Best-effort.
+    let switchPrompt = false;
+    try {
+      const sp = await sql`
+        SELECT
+          (SELECT COUNT(*)::int FROM (
+             SELECT 1 FROM clients
+              WHERE workspace_id = ${workspaceId} AND source IS DISTINCT FROM 'demo'
+              LIMIT 3) x) AS clients,
+          EXISTS (
+            SELECT 1 FROM bookings b
+              LEFT JOIN clients c ON c.id = b.client_id AND c.workspace_id = b.workspace_id
+             WHERE b.workspace_id = ${workspaceId} AND b.cancelled_at IS NULL
+               AND c.source IS DISTINCT FROM 'demo') AS has_bookings`;
+      const row = sp.rows[0] || {};
+      switchPrompt = (row.clients || 0) < 3 && !row.has_bookings;
+    } catch { /* no card this load */ }
+
     return ok(res, {
       currency,
       week,
       twoStepPrompt,
+      switchPrompt,
       firstWin,
       missingEmail,
       streak: { days: streak.days, best: streak.best, milestone: streak.milestone },

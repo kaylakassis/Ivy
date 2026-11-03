@@ -28,6 +28,7 @@ import { useExitAnimation } from '../../components/motion/useExitAnimation.js';
 import { stagger } from '../../components/motion/stagger.jsx';
 import Loader from '../../components/motion/Loader.jsx';
 import { usePhotoAttach, PhotoButton, PhotoTray } from './PhotoAttach.jsx';
+import { IVY_OPEN_EVENT } from './openIvy.js';
 import DictationButton from '../../components/DictationButton.jsx';
 
 const HIDE_PREFIXES = [
@@ -93,6 +94,24 @@ export default function IvyDock() {
     return () => { document.body.style.overflow = prev; };
   }, [open, isMobile]);
 
+  // openIvy() (src/features/ivy/openIvy.js) opens the dock with a prefilled
+  // message and, for "Send Ivy a screenshot", the photo menu already open.
+  const [launch, setLaunch] = useState(null);
+  useEffect(() => {
+    if (hidden) return undefined;
+    window.__ivyDockMounted = true;
+    const onOpen = (e) => {
+      const d = e?.detail || {};
+      setLaunch({ prompt: typeof d.prompt === 'string' ? d.prompt.slice(0, 500) : '', photo: !!d.photo, key: Date.now() });
+      setOpen(true);
+    };
+    window.addEventListener(IVY_OPEN_EVENT, onOpen);
+    return () => {
+      window.__ivyDockMounted = false;
+      window.removeEventListener(IVY_OPEN_EVENT, onOpen);
+    };
+  }, [hidden]);
+
   const suggestions = useMemo(() => buildSuggestions(context), [context]);
   const hasNudge = suggestions.length > 0 && messages.length === 0;
 
@@ -111,11 +130,12 @@ export default function IvyDock() {
         <Panel
           isMobile={isMobile}
           closing={panelExit.closing}
-          onClose={() => setOpen(false)}
+          onClose={() => { setOpen(false); setLaunch(null); }}
           onExpand={() => { setOpen(false); navigate('/ivy'); }}
           onNewChat={() => { newChat(); }}
           ivy={ivy}
           suggestions={suggestions}
+          launch={launch}
         />
       )}
     </>
@@ -257,9 +277,29 @@ function IvyMark({ size = 22 }) {
 
 // ── Panel ──────────────────────────────────────────────────────────
 
-function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, suggestions }) {
+// A standalone Ivy panel for places outside the app shell (the onboarding
+// wizard has no dock): same chat, approvals and photo button, opened with
+// an optional prefilled message and the photo menu ready.
+export function IvyQuickPanel({ onClose, prompt = '', photo = false }) {
+  const { isMobile } = useViewport();
+  const ivy = useIvy();
+  const [launch] = useState(() => ({ prompt, photo, key: Date.now() }));
+  return (
+    <Panel isMobile={isMobile} onClose={onClose} onExpand={null}
+      onNewChat={() => ivy.newChat()} ivy={ivy} suggestions={[]} launch={launch}/>
+  );
+}
+
+function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, suggestions, launch }) {
   const { messages, thinking, send, mode, modeError, context, briefing, activeId, approvePending, dismissPending, usage } = ivy;
-  const [draft, setDraft] = useState('');
+  const [draft, setDraft] = useState(() => launch?.prompt || '');
+  const [photoSignal, setPhotoSignal] = useState(() => (launch?.photo ? launch.key : 0));
+  // A later openIvy() while the panel is already open: refill + reopen menu.
+  useEffect(() => {
+    if (!launch) return;
+    if (launch.prompt) setDraft(launch.prompt);
+    if (launch.photo) setPhotoSignal(launch.key);
+  }, [launch]);
   const [listening, setListening] = useState(false);
   const scrollRef = useRef(null);
   const inputRef = useRef(null);
@@ -354,7 +394,7 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
           </div>
         </div>
         <IconBtn label="New chat" onClick={onNewChat} icon="Plus"/>
-        <IconBtn label="Open in full"  onClick={onExpand}  icon="Arrow"/>
+        {onExpand && <IconBtn label="Open in full"  onClick={onExpand}  icon="Arrow"/>}
         <IconBtn label="Close"  onClick={onClose}  render={<XGlyph/>}/>
       </div>
 
@@ -456,7 +496,7 @@ function Panel({ isMobile, closing = false, onClose, onExpand, onNewChat, ivy, s
               fontFamily: 'inherit',
             }}
           />
-          <PhotoButton attach={photoAttach} disabled={thinking}/>
+          <PhotoButton attach={photoAttach} disabled={thinking} openSignal={photoSignal}/>
           <DictationButton value={draft} onChange={setDraft} onListening={setListening} disabled={thinking}/>
           <button
             type="button"

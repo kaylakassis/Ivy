@@ -12,9 +12,11 @@
 //   about        → goals + pain points (with instant validation payoff)
 //   services     → at least one service to be bookable
 //   availability → weekday windows
+//   switch       → "Switching to Ivy?" bring clients over from another app (optional)
 //   payments     → Stripe Connect (optional, can skip)
 //   branding     → logo + accent color (optional)
-//   first_client → manual add OR import (optional)
+//   first_client → manual add OR import (optional; counts as done when
+//                  clients were imported on the switch step)
 //   website      → pick template + publish (optional)
 //   impact       → "here's what Ivy sees for you" personalized proof
 //   done         → celebrate + route to dashboard
@@ -37,6 +39,7 @@ import IvyGuidedSetup from './IvyGuidedSetup.jsx';
 import ReadyStep from './ReadyStep.jsx';
 import { TRIAL_DAYS, IVY_PRICE, STACK_TOTAL, IVY_PRICE_MONTHLY_EQUIV } from '../../lib/pricing.js';
 import { computeImpact } from './impact.js';
+import SwitchStep from './SwitchStep.jsx';
 
 // Step set per business type. 'both' keeps every step so existing
 // workspaces aren't affected; 'service' removes the first_product
@@ -54,11 +57,16 @@ function stepsFor(businessType) {
     { id: 'business',     label: 'Business',        optional: false },
     { id: 'about',        label: 'About you',       optional: false },
   ];
+  // "Switching to Ivy?" sits right after services exist, so imported
+  // appointments can be matched to a service.
+  const SWITCH = { id: 'switch', label: 'Switching to Ivy?', optional: true };
   if (businessType === 'product') {
     base.push({ id: 'first_product', label: 'First product', optional: false });
+    base.push(SWITCH);
   } else {
     base.push({ id: 'services',     label: 'Services',     optional: false });
     base.push({ id: 'availability', label: 'Availability', optional: false });
+    base.push(SWITCH);
     if (businessType === 'both') {
       base.push({ id: 'first_product', label: 'First product', optional: true });
     }
@@ -155,6 +163,10 @@ export default function OnboardingPage() {
   const [branding, setBranding] = useState({ logoUrl: '', accent: '' });
   const [clientDraft, setClientDraft] = useState({ name: '', email: '', phone: '' });
   const [clientsCount, setClientsCount] = useState(0);
+  // "Switching to Ivy?" answer (whitelisted server-side) and a line about
+  // what was imported on that step, if anything.
+  const [switchFrom, setSwitchFrom] = useState(null);
+  const [switchImported, setSwitchImported] = useState(null);
   const [websiteStatus, setWebsiteStatus] = useState(null);
   const [websiteTemplate, setWebsiteTemplate] = useState('');
   // "About you" answers - preset ids + free text. Persisted to
@@ -194,6 +206,7 @@ export default function OnboardingPage() {
         setCurrentStep(isReplay ? 'welcome' : (st.currentStep || 'welcome'));
         setCompletedSteps(st.completedSteps || []);
         setSkippedSteps(st.skippedSteps || []);
+        if (st.switchFrom) setSwitchFrom(st.switchFrom);
       } else if (isReplay) {
         setCurrentStep('welcome');
       }
@@ -296,7 +309,11 @@ export default function OnboardingPage() {
     const nextSkipped = markSkipped
       ? Array.from(new Set([...skippedSteps, currentStep]))
       : skippedSteps.filter((s) => s !== currentStep);
-    const next = steps[stepIdx + 1];
+    // Clients imported on the switch step already cover "Add your first
+    // client", so the wizard walks past it.
+    let nextIdx = stepIdx + 1;
+    while (steps[nextIdx]?.id === 'first_client' && nextCompleted.includes('first_client') && clientsCount > 0) nextIdx++;
+    const next = steps[nextIdx];
     const nextStepId = next ? next.id : currentStep;
 
     setBusy(true); setErr(null);
@@ -337,6 +354,35 @@ export default function OnboardingPage() {
   };
 
   const goNext = () => flushAndAdvance({ markCompleted: true,  markSkipped: false });
+
+  // Switch step: store the answer right away (whitelisted server-side) so
+  // we learn which apps owners move from even if they skip the import.
+  const pickSwitchFrom = (id) => {
+    setSwitchFrom(id);
+    api.patch('/onboarding/state', { switchFrom: id }).catch((e) => {
+      // eslint-disable-next-line no-console
+      console.error('[onboarding] switchFrom save failed (non-blocking):', e);
+    });
+  };
+  // An import finished inside the hub. Clients count as the first_client
+  // step being done (the dashboard checklist counts real clients too).
+  const onSwitchImported = (r) => {
+    if (!r) return;
+    if (r.kind === 'clients') {
+      const n = r.summary?.created || 0;
+      if (n > 0) {
+        setClientsCount((c) => c + n);
+        setSwitchImported(`${n} client${n === 1 ? '' : 's'} added. Nobody was emailed.`);
+        const nextCompleted = Array.from(new Set([...completedSteps, 'first_client']));
+        const nextSkipped = skippedSteps.filter((x) => x !== 'first_client');
+        setCompletedSteps(nextCompleted);
+        setSkippedSteps(nextSkipped);
+        api.patch('/onboarding/state', { completedSteps: nextCompleted, skippedSteps: nextSkipped }).catch(() => {});
+      }
+    } else if (r.kind === 'bookings' && r.created > 0) {
+      setSwitchImported(`${r.created} appointment${r.created === 1 ? '' : 's'} added. Nobody was emailed.`);
+    }
+  };
   const skipStep = () => flushAndAdvance({ markCompleted: false, markSkipped: true });
   const goBack = () => {
     const prev = steps[stepIdx - 1];
@@ -674,6 +720,10 @@ export default function OnboardingPage() {
           productCreated={productCreated} setProductCreated={setProductCreated}/>}
         {currentStep === 'availability' && <AvailabilityStep
           availability={availability} setAvailability={setAvailability}/>}
+        {currentStep === 'switch'       && <SwitchStep
+          switchFrom={switchFrom} onPick={pickSwitchFrom}
+          imported={switchImported} onImported={onSwitchImported}
+          onJustStarting={() => goNext()}/>}
         {currentStep === 'payments'     && <PaymentsStep stripeStatus={stripeStatus} setStripeStatus={setStripeStatus}/>}
         {currentStep === 'branding'     && <BrandingStep branding={branding} setBranding={setBranding}/>}
         {currentStep === 'first_client' && <FirstClientStep clientDraft={clientDraft} setClientDraft={setClientDraft}
@@ -726,6 +776,7 @@ export default function OnboardingPage() {
               if (currentStep === 'services')     return saveServices();
               if (currentStep === 'first_product') return saveFirstProduct();
               if (currentStep === 'availability') return saveAvailability();
+              if (currentStep === 'switch')       return goNext();
               if (currentStep === 'payments')     return goNext();
               if (currentStep === 'branding')     return saveBranding();
               if (currentStep === 'first_client') return saveFirstClient();
@@ -1579,6 +1630,7 @@ function PrimaryCTA({ currentStep, onContinue, busy }) {
               : currentStep === 'tour'    ? 'Almost there'
               : currentStep === 'impact'  ? 'Continue'
               : currentStep === 'ready'   ? 'Continue'
+              : currentStep === 'switch'  ? 'Continue'
               : 'Save & continue';
   return (
     <button onClick={onContinue} className="btn btn-primary" disabled={busy}>

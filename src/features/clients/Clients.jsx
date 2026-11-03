@@ -9,6 +9,7 @@ import { useClients } from './state.js';
 import ClientDrawer from './ClientDrawer.jsx';
 import AddClientModal from './AddClientModal.jsx';
 import ImportClientsModal from './ImportClientsModal.jsx';
+import AnnounceMoveSheet from './AnnounceMoveSheet.jsx';
 import FolderDrawer from './FolderDrawer.jsx';
 import Loader from '../../components/motion/Loader.jsx';
 import { stagger, useFreshKeys, GrowIn } from '../../components/motion/stagger.jsx';
@@ -40,6 +41,9 @@ export default function Clients() {
   const [openId, setOpenId] = useState(null);
   const [addOpen, setAddOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  // "Let your clients know" (the "I've moved to Ivy" email), opened by
+  // /clients?announce=1 - Ivy's import "Done" message links there.
+  const [announceOpen, setAnnounceOpen] = useState(false);
   const { isMobile } = useViewport();
 
   // Folders (stored as projects). Any client can become a folder: their
@@ -110,6 +114,18 @@ export default function Clients() {
     if (params.get('add') === '1') {
       setAddOpen(true);
       params.delete('add');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+    // ?import=1 opens the import hub (dashboard "Switching from another
+    // app?" card); ?announce=1 opens the "Let your clients know" sheet.
+    if (params.get('import') === '1') {
+      setImportOpen(true);
+      params.delete('import');
+      navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
+    }
+    if (params.get('announce') === '1') {
+      setAnnounceOpen(true);
+      params.delete('announce');
       navigate({ pathname: location.pathname, search: params.toString() }, { replace: true });
     }
     // ?filter=missing-email opens the "Missing email" list (linked from
@@ -205,7 +221,7 @@ export default function Clients() {
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           <button className="btn btn-outline" onClick={() => setImportOpen(true)}>
-            <Icons.Doc size={13}/> Import CSV
+            <Icons.Doc size={13}/> Import
           </button>
           <button className="btn btn-primary" onClick={() => setAddOpen(true)}>
             <Icons.Plus size={13} sw={2}/> Add client
@@ -392,6 +408,7 @@ export default function Clients() {
           onComplete={() => refresh?.()}
         />
       )}
+      {announceOpen && <AnnounceMoveSheet onClose={() => setAnnounceOpen(false)}/>}
     </div>
   );
 }

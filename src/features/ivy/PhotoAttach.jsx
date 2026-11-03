@@ -36,10 +36,15 @@ export function usePhotoAttach() {
   return { photos: items, pieces: items.flatMap((i) => i.pieces), busy, errors, add, remove, clear };
 }
 
-export function PhotoButton({ attach, disabled, size = 34 }) {
+// openSignal: bump it (any new truthy value) to open the menu from outside,
+// e.g. when Ivy is opened from "Send Ivy a screenshot" on the import hub.
+// The file pickers still open from the owner's own tap on a menu item, which
+// is what phone browsers require.
+export function PhotoButton({ attach, disabled, size = 34, openSignal }) {
   const pickRef = useRef(null);
   const camRef = useRef(null);
   const [menu, setMenu] = useState(false);
+  useEffect(() => { if (openSignal) setMenu(true); }, [openSignal]);
   useEffect(() => {
     if (!menu) return undefined;
     const k = (e) => { if (e.key === 'Escape') setMenu(false); };
