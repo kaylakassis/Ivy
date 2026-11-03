@@ -23,6 +23,15 @@ export function trackCron(name, handler) {
   return async function trackedCronHandler(req, res) {
     const startedAt = new Date();
     const t0 = Date.now();
+    // Record the run as it STARTS, then complete the row at the end. A run
+    // the platform cuts off at its time limit (or one that hangs) leaves a
+    // started-but-unfinished row, so the ops alert can say so instead of
+    // only "no success lately". Best effort: never block the cron on it.
+    let runId = null;
+    try {
+      const r = await sql`INSERT INTO cron_runs (name, started_at) VALUES (${name}, ${startedAt.toISOString()}::timestamptz) RETURNING id`;
+      runId = r.rows[0]?.id ?? null;
+    } catch { /* fall back to a single insert at the end */ }
 
     // Tap the response to capture the body the handler sends back. We
     // wrap res.json + res.end so we see whatever shape the handler
@@ -67,16 +76,22 @@ export function trackCron(name, handler) {
       // Strip non-metric fields (like { ok: true } scaffolding) and
       // keep numeric/scalar fields that look like counts.
       const metrics = extractMetrics(capturedBody);
-      await sql`
-        INSERT INTO cron_runs (
-          name, started_at, finished_at, duration_ms, ok, metrics, error_message
-        ) VALUES (
-          ${name}, ${startedAt.toISOString()}::timestamptz, NOW(), ${duration},
-          ${capturedOk === null ? true : capturedOk},
-          ${JSON.stringify(metrics)}::jsonb,
-          ${handlerErr ? String(handlerErr.message || handlerErr).slice(0, 1000) : null}
-        )
-      `;
+      const okFlag = capturedOk === null ? true : capturedOk;
+      const errMsg = handlerErr ? String(handlerErr.message || handlerErr).slice(0, 1000) : null;
+      const updated = runId == null ? { rowCount: 0 } : await sql`
+        UPDATE cron_runs SET finished_at = NOW(), duration_ms = ${duration}, ok = ${okFlag},
+               metrics = ${JSON.stringify(metrics)}::jsonb, error_message = ${errMsg}
+         WHERE id = ${runId}`;
+      if (!updated.rowCount) {
+        await sql`
+          INSERT INTO cron_runs (
+            name, started_at, finished_at, duration_ms, ok, metrics, error_message
+          ) VALUES (
+            ${name}, ${startedAt.toISOString()}::timestamptz, NOW(), ${duration},
+            ${okFlag}, ${JSON.stringify(metrics)}::jsonb, ${errMsg}
+          )
+        `;
+      }
     } catch (metricsErr) {
       // eslint-disable-next-line no-console
       console.error(`[cronMetrics] write failed for ${name}:`, metricsErr.message);

@@ -69,6 +69,15 @@ export async function checkIvyFailures() {
   }];
 }
 
+// True when any run of this cron (finished or not) started after `since`.
+async function startedSince(name, since) {
+  if (!since) return false;
+  // One second of slack: the last success itself started at (almost) that
+  // instant, and timestamps lose sub-millisecond precision on the way.
+  const r = await sql`SELECT 1 FROM cron_runs WHERE name = ${name} AND started_at > ${since}::timestamptz + INTERVAL '1 second' LIMIT 1`;
+  return r.rows.length > 0;
+}
+
 export async function checkCronHealth({ now = new Date() } = {}) {
   const schedules = loadCronSchedules().filter((c) => c.name !== OPS_ALERT_CRON);
   const { rows: stats } = await sql`
@@ -82,6 +91,22 @@ export async function checkCronHealth({ now = new Date() } = {}) {
     SELECT DISTINCT ON (name) name, ok, error_message, finished_at
       FROM cron_runs WHERE finished_at IS NOT NULL
      ORDER BY name, finished_at DESC`;
+  // The latest run that STARTED but never finished (older than the 5-minute
+  // function limit plus slack): the platform cut it off, or it hung.
+  const { rows: hung } = await sql`
+    SELECT DISTINCT ON (name) name, started_at
+      FROM cron_runs
+     WHERE finished_at IS NULL AND started_at < ${now.toISOString()}::timestamptz - INTERVAL '7 minutes'
+       AND started_at > ${now.toISOString()}::timestamptz - INTERVAL '2 days'
+     ORDER BY name, started_at DESC`;
+  const hungByName = new Map(hung.map((h) => [h.name, h]));
+  const hungNote = (name, lastOkAt) => {
+    const h = hungByName.get(name);
+    if (!h) return '';
+    if (lastOkAt && new Date(h.started_at).getTime() < new Date(lastOkAt).getTime()) return '';
+    return ` A run started at ${fmt(h.started_at)} never finished: it was cut off at the 5-minute limit or got stuck.`;
+  };
+  const neverStarted = (name) => (hungByName.has(name) ? '' : ` No run has started since then, so the scheduler may not be calling it.`);
   // Record when each job was first seen with its current schedule. A new
   // job, or one whose schedule changed, starts its clock from that moment.
   const seenByName = new Map();
@@ -127,7 +152,7 @@ export async function checkCronHealth({ now = new Date() } = {}) {
       out.push({
         key: `cron:${c.name}`, severity: 'critical',
         title: `Cron overdue: ${c.name}`,
-        detail: `Scheduled ${cadence} (${c.schedule}); last success ${fmt(s.last_ok_at)}, more than ${windowH} hours ago.${l && l.ok === false ? ` Last run at ${fmt(l.finished_at)} failed: ${String(l.error_message || 'no error message').slice(0, 200)}.` : ''}`,
+        detail: `Scheduled ${cadence} (${c.schedule}); last success ${fmt(s.last_ok_at)}, more than ${windowH} hours ago.${l && l.ok === false ? ` Last run at ${fmt(l.finished_at)} failed: ${String(l.error_message || 'no error message').slice(0, 200)}.` : (hungNote(c.name, s.last_ok_at) || (await startedSince(c.name, s.last_ok_at) ? '' : neverStarted(c.name)))}`,
         where: `${READINESS_PAGE} (CRON_SECRET), then the cron health report at /api/admin/cron-health and the Vercel cron logs`,
       });
     } else if (l && l.ok === false) {

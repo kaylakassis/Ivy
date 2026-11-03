@@ -79,7 +79,7 @@ async function handler(req, res) {
       `day < CURRENT_DATE - 90`);
 
     results.cronRuns = await prune('cron_runs',
-      `finished_at IS NOT NULL AND finished_at < NOW() - INTERVAL '30 days'`);
+      `COALESCE(finished_at, started_at) < NOW() - INTERVAL '30 days'`);
 
     // Ivy approval cards: each lives 15 minutes. Keep a week of history
     // (approved, declined or lapsed) for support questions, then drop it;

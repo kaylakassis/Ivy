@@ -565,7 +565,7 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
     // a Resend outage doesn't silently lose every invoice receipt /
     // booking confirmation / etc.
     // eslint-disable-next-line no-console
-    console.error('[email/sendEmailToClient] send failed:', err.message, '(to', to, 'subject', JSON.stringify(subject).slice(0, 80) + ')');
+    console.error('[email/sendEmailToClient] send failed:', err.message, '(to', redactEmail(to), 'subject', JSON.stringify(subject).slice(0, 80) + ')');
     return { ok: false, sent: false, reason: err.message };
   }
 }

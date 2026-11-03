@@ -22,7 +22,7 @@ import { sql } from '../_lib/db.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { requireSuperAdmin, getAdminActor } from '../_lib/admin.js';
-import { sendEmailToUser, emailShell } from '../_lib/email.js';
+import { sendEmailToUser, emailShell, redactEmail } from '../_lib/email.js';
 import { recordAudit } from '../_lib/audit.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 
@@ -126,7 +126,7 @@ export default async function handler(req, res) {
         } else {
           failed++;
           // eslint-disable-next-line no-console
-          console.warn('[email-blast] failed for', slice[j].email, r.reason?.message || r.reason);
+          console.warn('[email-blast] failed for', redactEmail(slice[j].email), r.reason?.message || r.reason);
         }
       }
     }

@@ -138,10 +138,17 @@ export async function sendApnsToTokens({ tokens, payload }) {
     req.end(body);
   });
 
+  // Overall ceiling for the batch: a connection that never opens fires no
+  // per-request timeout, and a stalled send must not hang the caller.
+  const ceiling = new Promise((resolve) => {
+    const t = setTimeout(() => resolve({ connectionError: new Error('APNs did not answer within 15s') }), 15_000);
+    if (typeof t.unref === 'function') t.unref();
+  });
   try {
     const results = await Promise.race([
       Promise.all(tokens.map(sendOne)),
       clientError,
+      ceiling,
     ]);
     if (results?.connectionError) {
       // eslint-disable-next-line no-console

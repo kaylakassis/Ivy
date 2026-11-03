@@ -1,6 +1,7 @@
 // Program live sessions: validation, the member-safe shape (the join link
 // only inside its window), calendar files and the reminder sweep.
 import { sql } from './db.js';
+import { makeDeadline, withTimeout } from './timeBudget.js';
 import { mintVideoRoomUrl } from './calendar.js';
 import { buildBookingInvite, buildGoogleCalendarUrl } from './ical.js';
 import { appUrl } from './tokens.js';
@@ -133,13 +134,16 @@ export async function sendDueReminders() {
        AND e.starts_at > NOW() AND e.starts_at <= NOW() + INTERVAL '24 hours'
      ORDER BY e.starts_at ASC LIMIT 200`;
   let sent = 0;
+  const deadline = makeDeadline();
   for (const ev of rows) {
+    // Stay inside the platform's time limit; the next run continues.
+    if (deadline.passed()) break;
     const program = (await sql`SELECT * FROM programs WHERE id = ${ev.program_id}`).rows[0];
     const kind = new Date(ev.starts_at).getTime() - Date.now() <= 3600000 ? 'event_1h' : 'event_24h';
     const keys = await reminderRecipients(ev);
     if (!keys.length) continue;
-    const r = await notify({ program, kind, refId: ev.id, keys });
-    sent += r.pushed;
+    const r = await withTimeout(notify({ program, kind, refId: ev.id, keys }), 60_000, { pushed: 0 });
+    sent += r?.pushed || 0;
   }
   return sent;
 }

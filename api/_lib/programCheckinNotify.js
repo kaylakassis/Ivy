@@ -10,6 +10,7 @@
 // Every send is claimed first in program_notifications (unique
 // dedupe_key), so a retry or a second cron run never sends twice.
 import { sql } from './db.js';
+import { makeDeadline, withTimeout } from './timeBudget.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { notifyClientSafe, notifyOwnerSafe } from './push.js';
 import { fetchBranding } from './branding.js';
@@ -92,7 +93,11 @@ export async function runCheckinReminders({ now = new Date(), workspaceId = null
     }
   }
   let sent = 0;
+  let stoppedEarly = false;
+  const deadline = makeDeadline();
   for (const d of due.values()) {
+    // Stay inside the platform's time limit; the next hourly run continues.
+    if (deadline.passed()) { stoppedEarly = true; break; }
     const fresh = [];
     for (const f of d.forms) {
       if (await claimKey({ workspaceId: f.workspace_id, programId: f.program_id, clientId: d.clientId, kind: 'checkin_due', refId: f.id, key: `checkin_due:${f.id}:${d.periodKey}:${d.clientId}` })) fresh.push(f);
@@ -100,15 +105,15 @@ export async function runCheckinReminders({ now = new Date(), workspaceId = null
     if (!fresh.length) continue;
     const f = d.form;
     const one = fresh.length === 1;
-    await sendToMember({
+    await withTimeout(sendToMember({
       workspaceId: f.workspace_id, clientId: d.clientId,
       subject: one ? `Check-in due today: ${fresh[0].title}` : `${fresh.length} check-ins due today in ${f.program_title}`,
       heading: 'Time for your check-in',
       bodyHtml: `<p>Hi {first},</p><p>${one ? `Your <strong>${esc(fresh[0].title)}</strong> check-in` : 'These check-ins'} for <strong>${esc(f.program_title)}</strong> ${one ? 'is' : 'are'} due today.</p>${one ? '' : `<ul>${fresh.map((x) => `<li>${esc(x.title)}</li>`).join('')}</ul>`}<p>It only takes a minute.</p>`,
       ctaText: 'Check in', path: `/me/programs/${f.program_id}?tab=checkins`,
       push: { title: 'Check-in due', body: one ? `${fresh[0].title} (${f.program_title})` : `${fresh.length} check-ins in ${f.program_title}`, tag: `checkin-due-${f.program_id}-${d.periodKey}` },
-    });
+    }), 30_000);
     sent++;
   }
-  return { forms: forms.length, sent };
+  return { forms: forms.length, sent, stoppedEarly };
 }

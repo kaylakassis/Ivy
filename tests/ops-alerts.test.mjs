@@ -245,6 +245,37 @@ async function main() {
   assert(/A &lt;b&gt;title&lt;\/b&gt;/.test(e.html) && /x &amp; y/.test(e.html), 'detail is HTML-escaped');
   assert(/business platform/.test(e.html) && !/business OS/i.test(e.html), 'shell says business platform');
 
+  console.log('\n[13] runs are recorded when they start; alerts say whether a run hung or never started');
+  const { trackCron } = await import('../api/_lib/cronMetrics.js');
+  const { withTimeout } = await import('../api/_lib/timeBudget.js');
+  const { checkCronHealth } = await import('../api/cron/ops-alerts.js');
+  const probeName = `probe-${Date.now()}`;
+  let midRun = null;
+  const wrapped = trackCron(probeName, async (_req, res) => {
+    midRun = (await sql`SELECT finished_at, ok FROM cron_runs WHERE name = ${probeName}`).rows;
+    res.status(200).json({ ok: true, sent: 2 });
+  });
+  await wrapped({ method: 'GET', headers: {}, query: {} }, mkRes());
+  assert(midRun?.length === 1 && midRun[0].finished_at === null, 'a row exists while the run is still going');
+  const after = (await sql`SELECT finished_at, ok, metrics FROM cron_runs WHERE name = ${probeName}`).rows;
+  assert(after.length === 1 && after[0].finished_at && after[0].ok === true && after[0].metrics?.sent === 2, 'the same row is completed at the end (one row per run)');
+  await sql`DELETE FROM cron_runs WHERE name = ${probeName}`;
+  assert((await withTimeout(new Promise(() => {}), 50, 'gave up')) === 'gave up', 'withTimeout stops waiting for a send that never answers');
+
+  const target = 'program-checkins';
+  await sql`DELETE FROM cron_runs WHERE name = ${target}`;
+  await sql`INSERT INTO cron_schedule_seen (name, schedule, first_seen_at) VALUES (${target}, '47 * * * *', NOW() - INTERVAL '2 days')
+            ON CONFLICT (name) DO UPDATE SET first_seen_at = NOW() - INTERVAL '2 days', schedule = '47 * * * *'`;
+  await seedHealthyCron(target, '4 hours');
+  await sql`INSERT INTO cron_runs (name, started_at) VALUES (${target}, NOW() - INTERVAL '30 minutes')`;
+  let found = (await checkCronHealth()).find((a) => a.key === `cron:${target}`);
+  assert(found && /never finished/.test(found.detail), `a run that started and never finished is named (${found?.detail})`);
+  await sql`DELETE FROM cron_runs WHERE name = ${target} AND finished_at IS NULL`;
+  found = (await checkCronHealth()).find((a) => a.key === `cron:${target}`);
+  assert(found && /No run has started since then/.test(found.detail), `no runs at all since the last success says so (${found?.detail})`);
+  await sql`DELETE FROM cron_runs WHERE name = ${target}`;
+  await seedHealthyCron(target);
+
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
   process.exit(fail === 0 ? 0 : 1);
 }

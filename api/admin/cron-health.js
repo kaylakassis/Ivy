@@ -43,12 +43,14 @@ export default async function handler(req, res) {
       SELECT name, started_at, finished_at, duration_ms, ok, metrics, error_message
       FROM (
         SELECT name, started_at, finished_at, duration_ms, ok, metrics, error_message,
-               ROW_NUMBER() OVER (PARTITION BY name ORDER BY finished_at DESC NULLS LAST) AS rn
+               ROW_NUMBER() OVER (PARTITION BY name ORDER BY COALESCE(finished_at, started_at) DESC) AS rn
         FROM cron_runs
-        WHERE finished_at >= NOW() - INTERVAL '7 days'
+        -- Unfinished rows are runs that started and never completed
+        -- (cut off at the time limit, or hung): show those too.
+        WHERE COALESCE(finished_at, started_at) >= NOW() - INTERVAL '7 days'
       ) x
       WHERE rn <= 20
-      ORDER BY name, finished_at DESC
+      ORDER BY name, COALESCE(finished_at, started_at) DESC
     `;
 
     // Group recent runs by cron name for the UI.
@@ -60,6 +62,8 @@ export default async function handler(req, res) {
         finishedAt:  r.finished_at,
         durationMs:  r.duration_ms,
         ok:          r.ok,
+        // Started but never finished: cut off at the time limit, or hung.
+        unfinished:  !r.finished_at,
         metrics:     r.metrics || {},
         errorMessage: r.error_message,
       });

@@ -15,6 +15,7 @@
 // same news twice. Emails use the client 'programs' type, so a member can
 // switch them off (and the one-click unsubscribe link handles it).
 import { sql } from './db.js';
+import { withTimeout } from './timeBudget.js';
 import { sendEmailToClient, emailShell } from './email.js';
 import { notifyClientSafe, notifyOwnerSafe } from './push.js';
 import { fetchBranding } from './branding.js';
@@ -139,12 +140,12 @@ export async function runDripNotifications({ now = new Date(), workspaceId = nul
     const one = modules.length === 1;
     const subject = one ? `New in ${r.program_title}: ${modules[0]} is now open` : `${modules.length} new modules are open in ${r.program_title}`;
     const list = modules.map((t) => `<li>${esc(t)}</li>`).join('');
-    await sendMember({
+    await withTimeout(sendMember({
       workspaceId: r.workspace_id, member: r, branding, subject, heading: one ? 'A new module is open' : 'New modules are open',
       bodyHtml: `<p>Hi ${esc(firstName(r.client_name))},</p><p>New content just opened for you in <strong>${esc(r.program_title)}</strong>:</p><ul>${list}</ul>`,
       ctaText: 'Keep going', path: `/me/programs/${r.program_id}`,
       push: { title: `New in ${r.program_title}`, body: one ? `${modules[0]} is now open` : `${modules.length} new modules are open`, tag: `program-unlock-${r.program_id}` },
-    });
+    }), 30_000);
     sent++;
   });
   return { candidates: rows.length, sent, recordedOnly };

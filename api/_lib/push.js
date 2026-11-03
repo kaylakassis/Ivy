@@ -223,7 +223,9 @@ export async function sendPushToUser({ userId, payload, type }) {
     webpush.sendNotification(
       { endpoint: r.endpoint, keys: { p256dh: r.p256dh_key, auth: r.auth_key } },
       body,
-      { TTL: 60 * 60 * 24 },
+      // A push service that never answers must not stall the caller (a
+      // cron run that hangs is cut off by the platform and records nothing).
+      { TTL: 60 * 60 * 24, timeout: 10_000 },
     ).then(() => ({ kind: 'sent', id: r.id }))
      .catch((err) => {
        const status = err?.statusCode;

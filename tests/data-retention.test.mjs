@@ -95,6 +95,12 @@ async function main() {
   const neighbour = await ws('neighbour', { subscription_status: 'cancelled', subscription_period_end: d(-1), converted_at: d(-60), data_deletion_at: d(3) });
   await sql`INSERT INTO clients (workspace_id, name) VALUES (${neighbour.id}, 'Keep Me')`;
 
+  // purgeDue sweeps the whole database. Earlier runs of this suite left
+  // businesses scheduled a few days out that are now due; settle them so
+  // the count below only sees this run's workspace.
+  await sql`UPDATE workspaces w SET data_deletion_at = NULL FROM users u
+             WHERE u.id = w.owner_id AND u.email LIKE 'dr-%' AND u.email NOT LIKE ${`%-${S}@example.com`}
+               AND w.data_purged_at IS NULL AND w.data_deletion_at <= NOW()`;
   const purged = await purgeDue();
   assert(purged === 1, `purged exactly one (${purged})`);
   const count = async (q) => Number((await q).rows[0].n);
@@ -181,6 +187,10 @@ async function main() {
   assert(/7 days/.test(pe.html) && /permanently deleted/.test(pe.html) && !/Nothing is deleted/.test(pe.html), 'plan-ending email states the 7-day deletion');
   assert(/7 days/.test(sc.html) && /permanently deleted/.test(sc.html) && !/Nothing is deleted|free account/.test(sc.html), 'cancellation email states the 7-day deletion');
   assert(!/<script|claude|anthropic/i.test(e1.html + e2.html + e3.html), 'no scripts, no vendor names');
+
+  // Leave nothing behind for later runs to trip over.
+  await sql`DELETE FROM workspaces WHERE owner_id IN (SELECT id FROM users WHERE email LIKE ${`dr-%-${S}@example.com`})`.catch(() => {});
+  await sql`DELETE FROM users WHERE email LIKE ${`dr-%-${S}@example.com`}`.catch(() => {});
 
   console.log(`\n${fail === 0 ? 'PASS' : 'FAIL'}: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);
