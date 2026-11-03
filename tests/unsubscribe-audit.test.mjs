@@ -397,6 +397,25 @@ async function main() {
   const smsRow = (await sql`SELECT sms_consent_at FROM clients WHERE id = ${smsClient}`).rows[0];
   assert(res.statusCode === 200 && smsRow.sms_consent_at === null, `STOP cleared consent (${res.statusCode})`);
 
+  console.log('\n[8] after STOP only the client can turn texts back on');
+  const stopRow = (await sql`SELECT sms_stopped_at FROM clients WHERE id = ${smsClient}`).rows[0];
+  assert(!!stopRow.sms_stopped_at, 'STOP is recorded');
+  const { default: clientById } = await import('../api/clients/[id].js');
+  const ownerUser = (await sql`SELECT owner_id FROM workspaces WHERE id = ${A.ws}`).rows[0].owner_id;
+  res = mkRes();
+  await clientById({ method: 'PATCH', url: '/t', query: { id: smsClient }, body: { smsConsent: true },
+    headers: { cookie: `ivy_session=${signSession(ownerUser)}`, origin: 'http://localhost:3000', host: 'localhost:3000', 'content-type': 'application/json' } }, res);
+  const afterOwner = (await sql`SELECT sms_consent_at FROM clients WHERE id = ${smsClient}`).rows[0];
+  assert(res.statusCode === 400 && /texted STOP/.test(res.body?.error || '') && afterOwner.sms_consent_at === null, `owner cannot switch texts back on (${res.statusCode})`);
+  const startParams = { From: '+15550104477', Body: 'START' };
+  const startSorted = Object.keys(startParams).sort().map((k) => k + startParams[k]).join('');
+  const startSig = crypto.createHmac('sha1', process.env.IVY_TWILIO_AUTH_TOKEN).update(url + startSorted).digest('base64');
+  res = mkRes();
+  await smsInbound({ method: 'POST', url: '/api/sms/inbound', body: new URLSearchParams(startParams).toString(),
+    headers: { host: 'localhost:3000', 'x-forwarded-proto': 'https', 'x-twilio-signature': startSig } }, res);
+  const afterStart = (await sql`SELECT sms_consent_at, sms_stopped_at FROM clients WHERE id = ${smsClient}`).rows[0];
+  assert(afterStart.sms_consent_at && afterStart.sms_stopped_at === null, 'texting START turns texts back on and lifts the STOP');
+
   // ─────────────────────────────────────────────────────────────────
   for (const w of created.workspaces) await sql`DELETE FROM workspaces WHERE id = ${w}`;
   for (const u of created.users) await sql`DELETE FROM users WHERE id = ${u}`;

@@ -63,6 +63,8 @@ export default async function handler(req, res) {
           // re-confirmed (audit trail clarity).
           values.push(new Date().toISOString());
           sets.push(`sms_consent_at = COALESCE(sms_consent_at, $${values.length})`);
+          // The client turning texts back on themselves lifts an earlier STOP.
+          sets.push('sms_stopped_at = NULL');
         } else {
           push('sms_consent_at', null);
         }

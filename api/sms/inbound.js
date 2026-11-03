@@ -86,12 +86,12 @@ export default async function handler(req, res) {
       // Wipe consent for EVERY client row matching this number, across
       // every workspace this number is associated with. Compliance > UX
       // here - one number = one consent state at the platform layer.
-      await sql`UPDATE clients SET sms_consent_at = NULL
+      await sql`UPDATE clients SET sms_consent_at = NULL, sms_stopped_at = NOW()
                  WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10(from)}`;
       return ok(res, { ok: true, action: 'opt-out', phone: from });
     }
     if (START_WORDS.has(body)) {
-      await sql`UPDATE clients SET sms_consent_at = NOW()
+      await sql`UPDATE clients SET sms_consent_at = NOW(), sms_stopped_at = NULL
                  WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10(from)}`;
       return ok(res, { ok: true, action: 'opt-in', phone: from });
     }

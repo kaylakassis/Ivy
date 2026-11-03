@@ -67,6 +67,11 @@ export default async function handler(req, res) {
         // intake form). Setting to false also nulls the consent
         // timestamp; setting to true stamps NOW() if not already set.
         if (body.smsConsent) {
+          // A client who texted STOP can only be turned back on by
+          // themselves (texting START, or their own portal setting).
+          if (existing.sms_stopped_at) {
+            return badRequest(res, 'This client texted STOP, so only they can turn texts back on, by texting START or in their own Ivy settings.');
+          }
           // Use IS NULL guard via separate path - do it inline:
           const cur = existing.sms_consent_at;
           if (!cur) push('sms_consent_at', new Date().toISOString());

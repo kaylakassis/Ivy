@@ -76,12 +76,12 @@ export default async function handler(req, res) {
     // Twilio auto-replies to STOP/START, so we just record + ack.
     const keyword = (params.Body || '').trim().toUpperCase();
     if (STOP_WORDS.has(keyword)) {
-      await sql`UPDATE clients SET sms_consent_at = NULL
+      await sql`UPDATE clients SET sms_consent_at = NULL, sms_stopped_at = NOW()
                  WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10}`;
       return twiml(res);
     }
     if (START_WORDS.has(keyword)) {
-      await sql`UPDATE clients SET sms_consent_at = NOW()
+      await sql`UPDATE clients SET sms_consent_at = NOW(), sms_stopped_at = NULL
                  WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10}`;
       return twiml(res);
     }

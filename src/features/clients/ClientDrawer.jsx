@@ -130,6 +130,7 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
               {client.phone && (
                 <SmsConsentToggle
                   consentAt={client.smsConsentAt}
+                  stoppedAt={client.smsStoppedAt}
                   onToggle={(next) => safeUpdate({ smsConsent: next })}
                 />
               )}
@@ -497,8 +498,23 @@ function Notes({ client, onSave }) {
 // Clicking flips smsConsent on the parent. Owners use this to record
 // consent collected on paper / verbally; the public booking form sets
 // it at booking time too.
-function SmsConsentToggle({ consentAt, onToggle }) {
+function SmsConsentToggle({ consentAt, stoppedAt, onToggle }) {
   const on = !!consentAt;
+  // The client texted STOP: only they can turn texts back on.
+  if (!on && stoppedAt) {
+    return (
+      <span title={`Texted STOP on ${new Date(stoppedAt).toLocaleDateString([], { dateStyle: 'medium' })}. Only the client can turn texts back on, by texting START or in their own Ivy settings.`}
+        style={{
+          display: 'inline-flex', alignItems: 'center', gap: 5,
+          padding: '2px 8px', borderRadius: 99, background: 'var(--surface-2)',
+          border: '1px solid var(--border)', color: 'var(--muted)',
+          fontSize: 10.5, fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase',
+        }}>
+        <span style={{ width: 6, height: 6, borderRadius: 99, background: 'var(--danger)' }}/>
+        Texted STOP
+      </span>
+    );
+  }
   return (
     <button type="button" onClick={() => onToggle(!on)}
       title={on

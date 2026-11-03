@@ -4047,4 +4047,8 @@ CREATE TABLE IF NOT EXISTS client_email_optouts (
 CREATE INDEX IF NOT EXISTS idx_client_email_optouts_addr ON client_email_optouts(workspace_id, email) WHERE cleared_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_client_email_optouts_client ON client_email_optouts(client_id, created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS uq_client_email_optouts_notice ON client_email_optouts(workspace_id, notice_key) WHERE notice_key IS NOT NULL;
+
+-- A client who texted STOP. Only the client can lift it (texting START or
+-- their own portal setting); the owner's consent switch cannot.
+ALTER TABLE clients ADD COLUMN IF NOT EXISTS sms_stopped_at TIMESTAMPTZ;
 `;

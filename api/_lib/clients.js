@@ -9,6 +9,8 @@ export function serializeClient(row) {
     email:         row.email,
     phone:         row.phone || null,
     smsConsentAt:  row.sms_consent_at || null,
+    // Client texted STOP: only they can turn texts back on.
+    smsStoppedAt:  row.sms_stopped_at || null,
     stage:         row.stage,
     tags:          row.tags || [],
     notes:         row.notes,
