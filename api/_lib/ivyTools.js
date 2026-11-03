@@ -314,7 +314,7 @@ export const IVY_TOOLS = [
   },
   {
     name: 'import_clients_from_list',
-    description: "Add many clients at once from a list the owner gave you: a CSV or spreadsheet, a contacts file (.vcf), a screenshot of their phone contacts or another app's client list, or a photo of a paper book. One call with every person you read (at most about 25 per call because of reply length; for a longer list make several calls in a row). Copy names, emails and phone numbers exactly as written; never invent or guess an email or phone. When something is hard to read or you are unsure, still include the person and say why in `uncertain` (for example 'name hard to read' or 'last digit of phone unclear'). Existing clients (same email, or same phone) are skipped, never changed. Nothing is sent to anyone and no automations run. Needs the owner's approval before anything is added.",
+    description: "Add many clients at once from a list the owner gave you: a CSV or spreadsheet, a contacts file (.vcf), a screenshot of their phone contacts or another app's client list, or a photo of a paper book. One call with every person you read (at most about 80 per call because of reply length; for a longer list make several calls in a row). Copy names, emails and phone numbers exactly as written; never invent or guess an email or phone. When something is hard to read or you are unsure, still include the person and say why in `uncertain` (for example 'name hard to read' or 'last digit of phone unclear'). Existing clients (same email, or same phone) are skipped, never changed. Nothing is sent to anyone and no automations run. Needs the owner's approval before anything is added.",
     input_schema: {
       type: 'object',
       properties: {

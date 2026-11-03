@@ -121,6 +121,10 @@ function redactText(t) {
 }
 
 const IVY_MAX_TOKENS = 1024;
+// A turn that carries a file or photo is usually a list to read in (clients,
+// appointments). Those tool calls are long, so they get a bigger reply budget.
+// Output is billed only when produced, so ordinary chat costs the same.
+const IVY_MAX_TOKENS_WITH_FILE = 4096;
 // Six turns (12 messages) is enough context for a conversation and keeps
 // the uncached part of every request small. Each turn is also trimmed to
 // IVY_HISTORY_CHARS so one long reply (a site draft, a report) does not ride
@@ -884,9 +888,9 @@ create DRAFTS or internal records; nothing leaves the building):
 - import_clients_from_list - many clients at once, read from a list the owner sends you.
 
 Switching to Ivy from another app (moving their clients and appointments in): this should take them minutes, so do the work for them.
-- Client lists: when the owner sends a client list in any form (CSV or spreadsheet text, a .vcf contacts file, a screenshot of their phone contacts or another app's client list, or a photo of a paper book), read every person and call import_clients_from_list with all of them, at most about 25 per call (for a longer list, call it again for the next 25 until everyone is in; each call gets its own Approve card). Copy names, emails and phone numbers exactly; never invent one. If a row is hard to read, still include it and say why in its "uncertain" field. Before the call, say in one or two sentences how many people you found and which ones need a second look. Nothing is sent to the clients, and existing clients are skipped. For a CSV with more than about 100 rows, also mention that the import on the Clients page takes the whole file at once.
+- Client lists: when the owner sends a client list in any form (CSV or spreadsheet text, a .vcf contacts file, a screenshot of their phone contacts or another app's client list, or a photo of a paper book), read every person and call import_clients_from_list with all of them, at most about 80 per call (for a longer list, call it again for the next 80 until everyone is in; each call gets its own Approve card). Copy names, emails and phone numbers exactly; never invent one. If a row is hard to read, still include it and say why in its "uncertain" field. Before the call, say in one or two sentences how many people you found and which ones need a second look. Nothing is sent to the clients, and existing clients are skipped. For a CSV or contacts file with more than about 100 people, also mention that [Import on the Clients page](/clients?import=1) takes the whole file at once.
 - Appointment lists: a screenshot, photo or text list of upcoming appointments goes to add_bookings_from_list.
-- A calendar file (.ics): either point them to the app's calendar file import, which reads every event including repeats and skips ones already on the calendar, or read the upcoming appointments yourself and call add_bookings_from_list.
+- A calendar file (.ics): either point them to the calendar file import ([Import](/clients?import=1) on the Clients page), which reads every event including repeats and skips ones already on the calendar, or read the upcoming appointments yourself and call add_bookings_from_list.
 - After clients are in, they can email their clients the new booking link from Clients ("Let them know you moved"). Nothing goes out until they choose to send it.
 - Never offer to log in to their old app or copy data from it for them; work only from what they send you.
 
@@ -1190,6 +1194,8 @@ async function streamModel(client, params, { timeout, relay, deadlineAt }) {
 }
 
 async function claudeReply(client, model, text, ctx, history, attachment, workspaceId, userId = null, relay = null, sessionId = null) {
+  const hasFile = Array.isArray(attachment) ? attachment.length > 0 : !!attachment;
+  const maxTokens = hasFile ? IVY_MAX_TOKENS_WITH_FILE : IVY_MAX_TOKENS;
   const messages = buildMessages(text, ctx, history, attachment);
 
   let response = null;
@@ -1217,7 +1223,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
     // eslint-disable-next-line no-await-in-loop
     ({ response, model } = await callModel(client, {
       model,
-      max_tokens: IVY_MAX_TOKENS,
+      max_tokens: maxTokens,
       output_config: { effort: 'low' },
       system: [
         {
@@ -1284,7 +1290,7 @@ async function claudeReply(client, model, text, ctx, history, attachment, worksp
       && (HARD_DEADLINE_MS - (Date.now() - startedAt)) >= 4000) {
     const { response: final } = await callModel(client, {
       model,
-      max_tokens: IVY_MAX_TOKENS,
+      max_tokens: maxTokens,
       output_config: { effort: 'low' },
       system: [{ type: 'text', text: IVY_SYSTEM, cache_control: { type: 'ephemeral', ttl: '1h' } }],
       tools: IVY_TOOLS,
