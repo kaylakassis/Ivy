@@ -32,7 +32,7 @@ export default function ResetPasswordPage() {
       // 2FA account: the password is saved, but the session waits for the
       // authenticator code, exactly like signing in.
       if (r?.mfaRequired) {
-        beginMfa(r.mfaToken);
+        beginMfa(r.mfaToken, r);
         nav('/signin?mfa=1', { replace: true });
         return;
       }

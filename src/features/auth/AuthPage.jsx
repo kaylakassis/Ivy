@@ -1,5 +1,5 @@
 // Shared Sign In / Sign Up screen. `mode` prop toggles between them.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import LegalLink from '../../components/LegalLink.jsx';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { Icons } from '../../components/Icons.jsx';
@@ -8,7 +8,7 @@ import AuthShell from './AuthShell.jsx';
 import { FLAGS } from '../../lib/featureFlags.js';
 
 export default function AuthPage({ mode = 'signin' }) {
-  const { signIn, signUp, mfaChallenge } = useAuth();
+  const { signIn, signUp } = useAuth();
   const nav       = useNavigate();
   const location  = useLocation();
   // Post-auth destination. RequireAuth passes state.from; invite links pass
@@ -41,7 +41,6 @@ export default function AuthPage({ mode = 'signin' }) {
   const [busy, setBusy]   = useState(false);
   // ?mfa=1: a password reset on a 2FA account lands here for the code step.
   const [mfaStep, setMfaStep] = useState(params.get('mfa') === '1');
-  const [mfaCode, setMfaCode] = useState('');
   const [err,  setErr]    = useState(null);
   // When signup succeeds but the welcome / verification email failed to
   // send, we hold the user on this screen with an explicit notice +
@@ -82,7 +81,7 @@ export default function AuthPage({ mode = 'signin' }) {
         nav(nextTarget || (role === 'client' ? '/me' : '/'), { replace: true });
       } else {
         const res = await signIn(email, password);
-        // 2FA on this account → show the code step instead of landing.
+        // 2-step on this account → show the code step instead of landing.
         if (res?.mfaRequired) { setMfaStep(true); return; }
         // For sign-in we let RoleRouter (in AppShell entry) figure out where
         // to land - pushing to '/' triggers it - unless the user arrived
@@ -103,52 +102,12 @@ export default function AuthPage({ mode = 'signin' }) {
     }
   };
 
-  const mfaSubmit = async (e) => {
-    e.preventDefault();
-    setErr(null);
-    const c = mfaCode.replace(/\s+/g, '');
-    if (!c) { setErr('Enter your 6-digit code, or a backup code.'); return; }
-    setBusy(true);
-    try {
-      await mfaChallenge(c);
-      nav(nextTarget || '/', { replace: true });
-    } catch (ex) {
-      setErr(ex.message || "That code didn't match.");
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  // Second-factor step: shown after a correct password for a 2FA account.
+  // Second-factor step: shown after a correct password for a 2-step account.
   if (mfaStep) {
     return (
-      <AuthShell>
-        <form onSubmit={mfaSubmit} className="card auth-card" style={{
-          width: '100%', maxWidth: 420, padding: 32,
-          display: 'flex', flexDirection: 'column', gap: 18,
-        }}>
-          <div>
-            <h1 className="page-title" style={{ margin: 0, fontSize: 24 }}>Two-factor verification</h1>
-            <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)' }}>
-              Enter the 6-digit code from your authenticator app. Lost your device? Enter a backup code instead.
-            </p>
-          </div>
-          <Field label="Authentication code">
-            <input value={mfaCode} onChange={(e) => setMfaCode(e.target.value)}
-              autoFocus inputMode="text" autoComplete="one-time-code"
-              placeholder="123 456" style={inputS} />
-          </Field>
-          {err && <div style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
-          <button type="submit" className="btn btn-primary" disabled={busy}
-            style={{ justifyContent: 'center' }}>
-            {busy ? 'Verifying…' : 'Verify & sign in'}
-          </button>
-          <button type="button" onClick={() => { setMfaStep(false); setMfaCode(''); setErr(null); }}
-            className="btn btn-ghost" style={{ justifyContent: 'center' }}>
-            Back
-          </button>
-        </form>
-      </AuthShell>
+      <MfaStep
+        onDone={() => nav(nextTarget || '/', { replace: true })}
+        onBack={() => { setMfaStep(false); setErr(null); }}/>
     );
   }
 
@@ -318,6 +277,140 @@ export default function AuthPage({ mode = 'signin' }) {
             )}
           </div>
         )}
+      </form>
+    </AuthShell>
+  );
+}
+
+// The code step after a correct password (or a password reset / restore) on
+// an account with 2-step verification. Accounts with an authenticator app
+// start on the app; email-only accounts already have a code in their inbox
+// (the server sent it at sign-in). Both can switch, and a backup code works
+// in the same box.
+const RESEND_COOLDOWN = 30;
+
+function MfaStep({ onDone, onBack }) {
+  const { mfaChallenge, mfaInfo, mfaSendEmailCode } = useAuth();
+  const methods = mfaInfo?.methods || null; // null = unknown (page reloaded)
+  const hasApp = !methods || methods.includes('totp');
+  const hasEmail = !methods || methods.includes('email');
+  const [mode, setMode] = useState(() => (methods && !methods.includes('totp') ? 'email' : 'app'));
+  const [code, setCode] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [sending, setSending] = useState(false);
+  const [err, setErr] = useState(mfaInfo?.emailError || null);
+  const [note, setNote] = useState(null);
+  const [emailTo, setEmailTo] = useState(mfaInfo?.email || null);
+  const [sentOnce, setSentOnce] = useState(!!mfaInfo?.emailSent);
+  // Seconds until "Send a new code" is allowed again.
+  const [wait, setWait] = useState(() => {
+    if (mfaInfo?.emailSent) return RESEND_COOLDOWN;
+    const ra = mfaInfo?.retryAfterSeconds;
+    return ra && ra < 120 ? ra : 0;
+  });
+
+  useEffect(() => {
+    if (wait <= 0) return undefined;
+    const t = setTimeout(() => setWait((w) => Math.max(0, w - 1)), 1000);
+    return () => clearTimeout(t);
+  }, [wait]);
+
+  const send = async () => {
+    if (sending || wait > 0) return;
+    setErr(null); setNote(null); setSending(true);
+    try {
+      const r = await mfaSendEmailCode();
+      setEmailTo(r.email || emailTo);
+      setSentOnce(true);
+      setMode('email');
+      setCode('');
+      setNote(r.email ? `New code sent to ${r.email}.` : 'New code sent.');
+      setWait(r.cooldownSeconds || RESEND_COOLDOWN);
+    } catch (ex) {
+      const ra = ex.details?.retryAfterSeconds;
+      if (ex.status === 429 && ra && ra < 120) setWait(ra);
+      setErr(ex.message || 'Could not send a code.');
+    } finally { setSending(false); }
+  };
+
+  const submit = async (e) => {
+    e.preventDefault();
+    setErr(null); setNote(null);
+    const c = code.replace(/\s+/g, '');
+    if (!c) { setErr('Enter your 6-digit code, or a backup code.'); return; }
+    setBusy(true);
+    try {
+      await mfaChallenge(c);
+      onDone();
+    } catch (ex) {
+      setErr(ex.message || "That code didn't match.");
+      setBusy(false);
+    }
+  };
+
+  let intro;
+  if (mode === 'email') {
+    intro = sentOnce
+      ? <>We emailed a 6-digit code{emailTo ? <> to <strong style={{ color: 'var(--fg)' }}>{emailTo}</strong></> : null}. It works for 10 minutes. If you do not see it, check your spam folder.</>
+      : <>We will email a 6-digit code to the address on your account. Enter it here.</>;
+  } else {
+    intro = methods
+      ? <>Enter the 6-digit code from your authenticator app.</>
+      : <>Enter the 6-digit code from your authenticator app, or ask for one by email.</>;
+  }
+
+  const linkBtn = {
+    color: 'var(--accent)', fontWeight: 550, padding: '4px 0', font: 'inherit', fontSize: 13,
+    cursor: 'pointer', textDecoration: 'underline', textUnderlineOffset: 3, background: 'none', border: 0,
+  };
+  const linkOff = { color: 'var(--muted)', cursor: 'default', textDecoration: 'none' };
+  const cooling = sending || wait > 0;
+
+  return (
+    <AuthShell>
+      <form onSubmit={submit} className="card auth-card" style={{
+        width: '100%', maxWidth: 420, padding: 32,
+        display: 'flex', flexDirection: 'column', gap: 18,
+      }}>
+        <div>
+          <h1 className="page-title" style={{ margin: 0, fontSize: 24 }}>2-step verification</h1>
+          <p style={{ margin: '6px 0 0', fontSize: 13, color: 'var(--muted)', lineHeight: 1.55 }}>{intro}</p>
+        </div>
+        <Field label={mode === 'email' ? 'Code from your email' : 'Verification code'}>
+          <input value={code} onChange={(e) => setCode(e.target.value)}
+            autoFocus inputMode={mode === 'email' ? 'numeric' : 'text'} autoComplete="one-time-code"
+            placeholder="123456" style={{ ...inputS, letterSpacing: 2 }} />
+        </Field>
+        <div style={{ fontSize: 12, color: 'var(--muted)', marginTop: -10 }}>
+          Lost access? A backup code works here too.
+        </div>
+        {note && !err && <div style={{ fontSize: 12.5, color: 'var(--ok)' }}>{note}</div>}
+        {err && <div role="alert" style={{ fontSize: 12.5, color: 'var(--danger)' }}>{err}</div>}
+        <button type="submit" className="btn btn-primary" disabled={busy}
+          style={{ justifyContent: 'center' }}>
+          {busy ? 'Verifying…' : 'Verify and sign in'}
+        </button>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+          {mode === 'email' && (
+            <button type="button" onClick={send} disabled={cooling} style={{ ...linkBtn, ...(cooling ? linkOff : {}) }}>
+              {sending ? 'Sending…' : wait > 0 ? `Send a new code in ${wait}s` : (sentOnce ? 'Send a new code' : 'Email me a code')}
+            </button>
+          )}
+          {mode === 'app' && hasEmail && (
+            <button type="button" onClick={send} disabled={cooling} style={{ ...linkBtn, ...(cooling ? linkOff : {}) }}>
+              {sending ? 'Sending…' : wait > 0 ? `Email me a code instead (${wait}s)` : 'Email me a code instead'}
+            </button>
+          )}
+          {mode === 'email' && hasApp && (
+            <button type="button" onClick={() => { setMode('app'); setErr(null); setNote(null); setCode(''); }} style={linkBtn}>
+              Use my authenticator app instead
+            </button>
+          )}
+        </div>
+        <button type="button" onClick={onBack}
+          className="btn btn-ghost" style={{ justifyContent: 'center' }}>
+          Back
+        </button>
       </form>
     </AuthShell>
   );

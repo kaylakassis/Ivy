@@ -13,6 +13,8 @@ import { buildWeekStats, recapHasActivity, recapIvyRows, ivyTaskCount, timeSaved
 import { firstWinForDashboard } from './_lib/firstWin.js';
 import { ok, methodNotAllowed, serverError } from './_lib/json.js';
 
+const TWO_STEP_PROMPT_AFTER_DAYS = 3;
+
 export default async function handler(req, res) {
   if (req.method !== 'GET') return methodNotAllowed(res, ['GET']);
   try {
@@ -149,9 +151,29 @@ export default async function handler(req, res) {
       missingEmail = { clients: me.rows[0]?.clients || 0, appointments: me.rows[0]?.appointments || 0 };
     } catch { /* card simply does not show */ }
 
+    // "Turn on 2-step verification" nudge: once the owner has used Ivy for a
+    // few days or connected card payments, until they turn it on or dismiss
+    // it (ui_prefs.twoStepPromptDismissedAt, per user).
+    let twoStepPrompt = false;
+    try {
+      if (!user.totp_enrolled_at && !user.mfa_email_enabled_at && !user.ui_prefs?.twoStepPromptDismissedAt) {
+        const ageDays = (Date.now() - new Date(user.created_at).getTime()) / 86400000;
+        if (ageDays >= TWO_STEP_PROMPT_AFTER_DAYS) twoStepPrompt = true;
+        else {
+          const fs = await sql`
+            SELECT stripe_secret_encrypted, stripe_connect_user_id, stripe_onboarding_status
+              FROM finance_settings WHERE workspace_id = ${workspaceId}`;
+          const f = fs.rows[0] || {};
+          twoStepPrompt = !!f.stripe_secret_encrypted
+            || (!!f.stripe_connect_user_id && f.stripe_onboarding_status === 'complete');
+        }
+      }
+    } catch { /* no nudge this load */ }
+
     return ok(res, {
       currency,
       week,
+      twoStepPrompt,
       firstWin,
       missingEmail,
       streak: { days: streak.days, best: streak.best, milestone: streak.milestone },

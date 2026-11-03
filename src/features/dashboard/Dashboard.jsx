@@ -527,6 +527,7 @@ export default function Dashboard() {
         <FirstWinMoment celebrations={data?.firstWin?.celebrations}/>
         <FirstWinReadyCard show={!!data?.firstWin?.showReady} onDone={loadDashboard}/>
         <SetupChecklist/>
+        <TwoStepCard show={!!data?.twoStepPrompt}/>
         <NotifyPrompt/>
         <SampleDataCard empty={empty} onChanged={loadDashboard}/>
         {FLAGS.referrals && <InviteFriendCard/>}
@@ -711,6 +712,40 @@ function relTime(ts) {
   const hrs = Math.round(mins / 60);
   if (hrs < 24) return `${hrs}h`;
   return `${Math.round(hrs / 24)}d`;
+}
+
+// "Turn on 2-step verification": shown once the owner has used Ivy for a few
+// days or connected card payments (server decides, api/dashboard.js), until
+// 2-step is on or the owner dismisses it. Dismiss is saved on the account, so
+// it stays gone on every device.
+function TwoStepCard({ show }) {
+  const [gone, setGone] = useState(false);
+  if (!show || gone) return null;
+  const dismiss = () => {
+    setGone(true);
+    api.post('/me/two-step-prompt', { dismiss: true }).catch(() => { /* hidden for this visit anyway */ });
+  };
+  return (
+    <div className="card" style={{ display: 'flex', alignItems: 'flex-start', gap: 12, padding: '14px 16px', flexWrap: 'wrap' }}>
+      <span style={{ width: 34, height: 34, borderRadius: 10, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'var(--accent-soft)', color: 'var(--accent)' }}>
+        <Icons.Lock size={16}/>
+      </span>
+      <div style={{ flex: '1 1 220px', minWidth: 0 }}>
+        <div style={{ fontSize: 14.5, fontWeight: 600 }}>Turn on 2-step verification</div>
+        <div style={{ fontSize: 13, color: 'var(--fg-2)', marginTop: 3, lineHeight: 1.5 }}>
+          Ivy asks for a 6-digit code when you sign in, so a stolen password is not enough to get into your business. Email codes need no extra app.
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginLeft: 'auto' }}>
+        <button type="button" onClick={dismiss} className="btn btn-ghost" style={{ padding: '7px 12px', fontSize: 12.5, color: 'var(--muted)' }}>
+          Dismiss
+        </button>
+        <Link to="/account?tab=security" className="btn btn-primary" style={{ padding: '7px 14px', fontSize: 12.5 }}>
+          Turn on <Icons.Arrow size={11} sw={2}/>
+        </Link>
+      </div>
+    </div>
+  );
 }
 
 // Shown only when appointments in the next 7 days belong to clients with no

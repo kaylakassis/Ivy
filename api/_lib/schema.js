@@ -4026,4 +4026,21 @@ CREATE TABLE IF NOT EXISTS program_badges (
   seen_at TIMESTAMPTZ
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_program_badges ON program_badges(program_id, client_id, badge);
+
+-- 2-step verification by email. mfa_email_enabled_at set = sign-in asks for
+-- a 6-digit code sent to the account's verified email (alongside, or instead
+-- of, the authenticator app in totp_enrolled_at). Codes are stored only as an
+-- HMAC, live 10 minutes, and burn after 5 wrong tries.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS mfa_email_enabled_at TIMESTAMPTZ;
+CREATE TABLE IF NOT EXISTS mfa_email_codes (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL CHECK (purpose IN ('login', 'setup')),
+  code_hash TEXT NOT NULL,
+  attempts INT NOT NULL DEFAULT 0,
+  expires_at TIMESTAMPTZ NOT NULL,
+  consumed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_mfa_email_codes_user ON mfa_email_codes(user_id, created_at DESC);
 `;

@@ -1,5 +1,5 @@
 // /helper/account - the whole of a helper's settings: name, password
-// (reset by email, same as owners), notifications, sign out, and
+// (reset by email, same as owners), 2-step verification, notifications, sign out, and
 // deleting their own sign-in (which detaches them from the business and
 // leaves the owner's staff record in place).
 import React, { useEffect, useState } from 'react';
@@ -8,12 +8,14 @@ import { Icons } from '../../components/Icons.jsx';
 import { api } from '../../lib/api.js';
 import { useAuth } from '../../lib/auth.jsx';
 import { useHelper } from './helperContext.jsx';
+import TwoFactor from '../account/TwoFactor.jsx';
 
 export default function HelperAccount() {
   return (
     <div className="page-pad" style={{ display: 'flex', flexDirection: 'column', gap: 14, maxWidth: 600 }}>
       <ProfileCard/>
       <PasswordCard/>
+      <div className="card" style={{ padding: 18 }}><TwoFactor bare/></div>
       <NotificationsCard/>
       <SignOutCard/>
       <DeleteCard/>

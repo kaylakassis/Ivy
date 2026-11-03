@@ -21,8 +21,8 @@
 import { sql } from '../_lib/db.js';
 import {
   signSession, setSessionCookie, isNativeClient, invalidateUserCache,
-  signMfaToken, setMfaCookie,
 } from '../_lib/auth.js';
+import { beginMfaStep, hasTwoStep } from '../_lib/mfaEmail.js';
 import { readBody } from '../_lib/body.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
@@ -66,7 +66,7 @@ export default async function handler(req, res) {
     // Load the soft-deleted row. requireUser would reject it (deleted_at),
     // but we're operating on a token + raw SQL so we can see it.
     const { rows } = await sql`
-      SELECT id, email, name, deleted_at, totp_enrolled_at FROM users WHERE id = ${valid.userId}
+      SELECT id, email, name, deleted_at, totp_enrolled_at, mfa_email_enabled_at FROM users WHERE id = ${valid.userId}
     `;
     const u = rows[0];
     if (!u) {
@@ -131,11 +131,8 @@ export default async function handler(req, res) {
 
     // Sign them in so the redirect lands on a working app. A 2FA account
     // gets the code step instead (same as login and password reset).
-    if (u.totp_enrolled_at) {
-      const mfaToken = signMfaToken(u.id);
-      setMfaCookie(res, mfaToken);
-      payload.mfaRequired = true;
-      if (isNativeClient(req)) payload.mfaToken = mfaToken;
+    if (hasTwoStep(u)) {
+      Object.assign(payload, await beginMfaStep(req, res, u));
       return ok(res, payload);
     }
     const sessionToken = signSession(u.id);

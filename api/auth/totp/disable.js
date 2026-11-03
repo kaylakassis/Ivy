@@ -41,7 +41,7 @@ export default async function handler(req, res) {
     // users.password_hash. Not pulled into requireUser by default,
     // so we re-fetch.
     const { rows } = await sql`
-      SELECT password_hash, totp_enrolled_at FROM users WHERE id = ${user.id}
+      SELECT password_hash, totp_enrolled_at, mfa_email_enabled_at FROM users WHERE id = ${user.id}
     `;
     const row = rows[0];
     if (!row?.password_hash || !(await verifyPassword(password, row.password_hash))) {
@@ -53,22 +53,35 @@ export default async function handler(req, res) {
       return unauthorized(res, 'Wrong password.');
     }
 
-    await sql`
-      UPDATE users SET
-        totp_secret_encrypted    = NULL,
-        totp_backup_codes_hashed = NULL,
-        totp_enrolled_at         = NULL,
-        updated_at               = NOW()
-       WHERE id = ${user.id}
-    `;
+    // Email codes still on → keep the backup codes (they're shared); the
+    // account is still 2-step protected.
+    const emailStays = !!row.mfa_email_enabled_at;
+    if (emailStays) {
+      await sql`
+        UPDATE users SET
+          totp_secret_encrypted = NULL,
+          totp_enrolled_at      = NULL,
+          updated_at            = NOW()
+         WHERE id = ${user.id}
+      `;
+    } else {
+      await sql`
+        UPDATE users SET
+          totp_secret_encrypted    = NULL,
+          totp_backup_codes_hashed = NULL,
+          totp_enrolled_at         = NULL,
+          updated_at               = NOW()
+         WHERE id = ${user.id}
+      `;
+    }
 
     recordAudit(req, {
       actor: user, targetUserId: user.id,
       action: 'totp.disabled',
-      meta: { was_enrolled_at: row.totp_enrolled_at },
+      meta: { was_enrolled_at: row.totp_enrolled_at, email_stays: emailStays },
     });
     // "2FA turned off" security alert. Fire-and-forget.
-    notifyTwoFactorChanged({ userId: user.id, enabled: false, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
+    notifyTwoFactorChanged({ userId: user.id, enabled: false, method: 'totp', stillOn: emailStays, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
 
     invalidateUserCache(user.id); // /auth/me shows the new 2FA state at once
 

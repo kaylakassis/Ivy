@@ -87,7 +87,7 @@ export default async function handler(req, res) {
          WHERE id = ${user.id}
       `;
       // "2FA turned on" security alert (only on the transition). Fire-and-forget.
-      notifyTwoFactorChanged({ userId: user.id, enabled: true, ip: getClientIp(req), userAgent: req.headers['user-agent'] });
+      notifyTwoFactorChanged({ userId: user.id, enabled: true, method: 'totp', ip: getClientIp(req), userAgent: req.headers['user-agent'] });
     }
 
     recordAudit(req, {
