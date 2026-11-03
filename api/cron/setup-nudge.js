@@ -116,7 +116,7 @@ async function handler(req, res) {
             .catch((e) => console.error('[setup-nudge] email failed:', r.workspace_id, e?.message));
           // eslint-disable-next-line no-await-in-loop
           await notifyOwnerSafe({
-            workspaceId: r.workspace_id,
+            workspaceId: r.workspace_id, type: 'engagement', // owner nudge: muted by the Daily nudges push switch
             payload: { title: 'One step left to take bookings', body: `Finish: ${miss.label}.`, url: miss.href, tag: 'setup-nudge' },
           });
           if (Date.now() >= deadline) break;

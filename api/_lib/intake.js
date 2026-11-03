@@ -100,7 +100,7 @@ async function cloneAndSend({
   const link = `${appUrl()}/sign/${encodeURIComponent(rawToken)}`;
   const branding = await fetchBranding(workspaceId);
   await sendEmailToClient({
-    clientId: recipientClientId, type: 'documents',
+    clientId: recipientClientId, workspaceId, type: 'documents',
     to: recipientEmail,
     subject: `Before your appointment - please complete "${template.name}"`,
     replyTo: branding.replyTo,

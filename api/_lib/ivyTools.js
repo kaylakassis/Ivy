@@ -1533,7 +1533,7 @@ async function send_invoice({ workspaceId, args }) {
   // notification opt-outs and the per-workspace daily send cap.
   const { sendEmailToClient, sendEmailToClientByAddress } = await import('./email.js');
   const emailPayload = {
-    type: 'invoices',
+    type: 'receipts',
     subject: `Invoice ${invoiceNumber} from ${bizName}`,
     html: emailShell({
       heading: `Invoice ${invoiceNumber}`,
@@ -2532,7 +2532,7 @@ async function send_quote({ workspaceId, args }) {
   const business = branding.businessName;
   try {
     await sendEmailToClient({
-      clientId, type: 'invoices', to: recipientEmail,
+      clientId, workspaceId, type: 'invoices', to: recipientEmail,
       subject: `Estimate ${q.number}${business ? ' from ' + business : ''}`,
       replyTo: branding.replyTo,
       html: emailShell({
@@ -2675,7 +2675,7 @@ async function send_document({ workspaceId, args }) {
   const branding = await fetchBranding(workspaceId).catch(() => ({}));
   try {
     await sendEmailToClient({
-      clientId, type: 'documents', to: signerEmail,
+      clientId, workspaceId, type: 'documents', to: signerEmail,
       subject: `Action needed: sign "${doc.name}"`,
       replyTo: branding.replyTo,
       html: emailShell({
@@ -2724,7 +2724,7 @@ async function send_review_request({ workspaceId, args }) {
 
   try {
     await sendEmailToClient({
-      clientId: row.client_id, type: 'marketing', to: row.client_email,
+      clientId: row.client_id, workspaceId, type: 'marketing', to: row.client_email,
       subject: `How was your ${row.service_name || 'session'}?`,
       replyTo: branding.replyTo,
       html: emailShell({

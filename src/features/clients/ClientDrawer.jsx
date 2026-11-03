@@ -178,6 +178,9 @@ export default function ClientDrawer({ client, onClose: onCloseNow, onUpdate, on
             <PortalInviteRow client={client}/>
           )}
 
+          {/* Email opt-outs (read-only; only the client can resubscribe). */}
+          <EmailOptOutRow clientId={client.id}/>
+
           {/* KPIs - lifetime value editable, others read-only */}
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(110px, 1fr))', gap: 10 }}>
             <EditableMoneyStat
@@ -1165,6 +1168,45 @@ function PortalInviteRow({ client }) {
       {msg && (
         <div style={{ width: '100%', fontSize: 11.5, color: 'var(--muted)' }}>{msg}</div>
       )}
+    </div>
+  );
+}
+
+// "Email preferences" line: shows when this client unsubscribed from
+// some or all of the business's emails (link, one-click, or their own
+// portal). Read-only by design: only the client can turn their emails
+// back on, so there is no toggle here. Renders nothing when the client
+// never opted out.
+function EmailOptOutRow({ clientId }) {
+  const [data, setData] = useState(null);
+  useEffect(() => {
+    let live = true;
+    setData(null);
+    api.get('/clients/' + clientId + '/email-optouts')
+      .then((r) => { if (live) setData(r); })
+      .catch(() => { /* quiet: the drawer works without it */ });
+    return () => { live = false; };
+  }, [clientId]);
+  const active = (data?.history || []).filter((h) => h.active);
+  if (active.length === 0) return null;
+  const fmt = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  const all = active.find((h) => h.type === 'all');
+  const lines = all
+    ? [`Unsubscribed from all emails on ${fmt(all.createdAt)}`]
+    : active.map((h) => `Unsubscribed from ${h.label} on ${fmt(h.createdAt)}`);
+  return (
+    <div>
+      <Section label="Email preferences"/>
+      <div style={{
+        padding: '10px 12px', borderRadius: 10,
+        background: 'var(--surface-2)', border: '1px solid var(--border)',
+        fontSize: 12.5, color: 'var(--fg-2)', lineHeight: 1.5,
+      }}>
+        {lines.map((l) => <div key={l} style={{ color: 'var(--fg)' }}>{l}</div>)}
+        <div style={{ fontSize: 11.5, color: 'var(--muted)', marginTop: 4 }}>
+          Only the client can resubscribe, from their own notification settings. Receipts still reach them, and you can still message them in Ivy.
+        </div>
+      </div>
     </div>
   );
 }

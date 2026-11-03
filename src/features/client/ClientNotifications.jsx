@@ -7,7 +7,7 @@ import { api } from '../../lib/api.js';
 
 const EMAIL_LABELS = {
   bookings:  { label: 'Bookings',     hint: 'Confirmations, reminders, cancellations, reschedules.' },
-  invoices:  { label: 'Invoices',     hint: 'Invoices sent to you, plus paid receipts.' },
+  invoices:  { label: 'Invoice reminders', hint: 'Quotes, due-date and overdue reminders, payment problems. Invoices and receipts always arrive.' },
   documents: { label: 'Documents',    hint: 'Signature requests + reminders.' },
   messages:  { label: 'Messages',     hint: 'When this business sends you a chat message.' },
   marketing: { label: 'Other emails', hint: 'Review prompts and occasional updates from the business.' },
@@ -80,7 +80,7 @@ export default function ClientNotifications() {
         </h1>
         <p style={{ fontSize: 13.5, color: 'var(--muted)', marginTop: 4, lineHeight: 1.55 }}>
           Choose which emails you want to receive from each business you're a client of.
-          Account-critical emails (verification, password reset) always send.
+          Account-critical emails (verification, password reset) and your receipts and invoices always send. Turning a category off here tells the business you unsubscribed.
         </p>
       </header>
 

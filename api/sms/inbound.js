@@ -38,6 +38,12 @@ export const config = { api: { bodyParser: false } };
 const STOP_WORDS  = new Set(['STOP', 'STOPALL', 'UNSUBSCRIBE', 'CANCEL', 'END', 'QUIT']);
 const START_WORDS = new Set(['START', 'YES', 'UNSTOP']);
 
+// Match stored numbers by their last 10 digits, like the Twilio webhook
+// (api/webhooks/twilio/sms.js). Owners type phones as "(555) 123-4567",
+// so an exact match on the E.164 From would miss them and a STOP would
+// silently leave consent on.
+export const last10 = (e164) => (String(e164 || '').match(/\d/g) || []).join('').slice(-10);
+
 function parseForm(raw) {
   const out = {};
   for (const part of String(raw || '').split('&')) {
@@ -80,11 +86,13 @@ export default async function handler(req, res) {
       // Wipe consent for EVERY client row matching this number, across
       // every workspace this number is associated with. Compliance > UX
       // here - one number = one consent state at the platform layer.
-      await sql`UPDATE clients SET sms_consent_at = NULL WHERE phone = ${from}`;
+      await sql`UPDATE clients SET sms_consent_at = NULL
+                 WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10(from)}`;
       return ok(res, { ok: true, action: 'opt-out', phone: from });
     }
     if (START_WORDS.has(body)) {
-      await sql`UPDATE clients SET sms_consent_at = NOW() WHERE phone = ${from}`;
+      await sql`UPDATE clients SET sms_consent_at = NOW()
+                 WHERE right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${last10(from)}`;
       return ok(res, { ok: true, action: 'opt-in', phone: from });
     }
     // Anything else (HELP, freeform, etc.) - ack with no state change.

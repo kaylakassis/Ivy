@@ -45,7 +45,7 @@ export async function celebrateFirstPayment(workspaceId) {
     `;
     if (Number(rows[0]?.n) !== 1) return;
     await notifyOwnerSafe({
-      workspaceId, type: 'invoices',
+      workspaceId, type: 'payments', // a push type the owner can mute ('invoices' is email-only)
       payload: {
         title: '💰 You got paid!',
         body: 'Your first payment just landed. Onwards.',
@@ -170,7 +170,7 @@ export async function celebrateRevenueMonthMilestone(workspaceId) {
     if (reached.length === 0) return;
     const top = reached[reached.length - 1];
     await notifyOwnerSafe({
-      workspaceId, type: 'invoices',
+      workspaceId, type: 'payments', // a push type the owner can mute ('invoices' is email-only)
       payload: {
         title: `💰 Your first $${top.toLocaleString()} month!`,
         body: `You crossed $${top.toLocaleString()} collected in a single month. That's a real business.`,

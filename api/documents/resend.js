@@ -111,7 +111,7 @@ export default async function handler(req, res) {
     let emailWarning = null;
     try {
       await sendEmailToClient({
-        clientId: target.client_id || null,
+        clientId: target.client_id || null, workspaceId,
         type: 'documents',
         to: target.email,
         subject: `Reminder: please sign "${doc.name}"`,

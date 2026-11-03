@@ -14,7 +14,7 @@
 //   3. Set EMAIL_REPLY_TO='support@your-domain.com'.
 //   4. Hit /account → Admin → "Check email-domain status" to confirm
 //      Resend reports the domain as verified.
-import { userAllowsEmail, clientAllowsEmail, clientAllowsEmailByAddress, CRITICAL_EMAIL_TYPES } from './notificationPrefs.js';
+import { userAllowsEmail, clientAllowsEmail, clientAllowsEmailByAddress, CRITICAL_EMAIL_TYPES, EMAIL_NOTIFY_TYPES } from './notificationPrefs.js';
 import { tryConsumeQuota, DEFAULT_EMAIL_CAP_PER_DAY } from './usageCounters.js';
 import { unsubscribeUrlFor } from './unsubscribeToken.js';
 import { sql } from './db.js';
@@ -88,7 +88,7 @@ export function redactEmail(addr) {
   return `${a[0]}***${a.slice(at)}`;
 }
 
-export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, unsubscribeUrl, unsubscribeAllUrl, timeoutMs = 8000 }) {
+export async function sendEmail({ to, subject, html, text, replyTo, headers, attachments, unsubscribeUrl, unsubscribeAllUrl, prefsUrl, timeoutMs = 8000 }) {
   // HARD STOP for deleted accounts. Deletion mangles the address to
   // user+deleted-<id>@domain to free it for re-signup - but Gmail-style
   // plus-addressing still DELIVERS that to the original inbox. Every
@@ -115,7 +115,7 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   // render it — recipients there need a clickable link in the body or
   // they have no opt-out at all. Done at send-time so we don't have to
   // thread unsubscribeUrl through every emailShell call site.
-  const finalHtml = unsubscribeUrl ? injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl) : html;
+  const finalHtml = unsubscribeUrl ? injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl, prefsUrl) : html;
   const body = {
     from: fromAddress(),
     to: Array.isArray(to) ? to : [to],
@@ -147,12 +147,18 @@ export async function sendEmail({ to, subject, html, text, replyTo, headers, att
   // requiring login. Fall back to the generic prefs page + mailto for
   // bare sendEmail() callers (system-critical, no recipient lookup
   // possible) so the header is never missing.
+  //
+  // List-Unsubscribe-Post is only sent with a signed URL: RFC 8058 says
+  // the one-click POST must actually unsubscribe, and the generic prefs
+  // page cannot (it needs a login), so advertising one-click there would
+  // be a button that silently does nothing.
   const httpsUnsub = unsubscribeUrl
+    || prefsUrl
     || `${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications`;
   const mailtoUnsub = `mailto:${replyToAddress() || 'hello@joinivy.ai'}?subject=unsubscribe`;
   const defaultHeaders = {
     'List-Unsubscribe': `<${httpsUnsub}>, <${mailtoUnsub}>`,
-    'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click',
+    ...(unsubscribeUrl ? { 'List-Unsubscribe-Post': 'List-Unsubscribe=One-Click' } : {}),
   };
   body.headers = { ...defaultHeaders, ...(headers && typeof headers === 'object' ? headers : {}) };
 
@@ -209,10 +215,10 @@ function stripHtml(s = '') {
 // document, we tack it on the end. Idempotent on the marker so a
 // double-call (test wrappers, retries) doesn't double-print the line.
 const UNSUB_MARKER = 'data-ivy-unsub="1"';
-function injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl) {
+function injectUnsubFooter(html, unsubscribeUrl, unsubscribeAllUrl, prefsUrlIn) {
   if (!html || typeof html !== 'string') return html;
   if (html.includes(UNSUB_MARKER)) return html;
-  const prefsUrl = `${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications`;
+  const prefsUrl = prefsUrlIn || `${process.env.APP_URL || 'https://joinivy.ai'}/account?tab=notifications`;
   const allLink = unsubscribeAllUrl && unsubscribeAllUrl !== unsubscribeUrl
     ? `&nbsp;·&nbsp;<a href="${unsubscribeAllUrl}" style="color:#93A3A0;text-decoration:underline;">Unsubscribe from all emails</a>`
     : '';
@@ -511,6 +517,19 @@ async function workspaceForClient(clientId) {
   } catch { return null; }
 }
 
+// An unsubscribe link is minted only for a category the recipient can
+// actually turn off. A critical type has no opt-out, and an unknown type
+// would mint a link that flips a key nothing reads (a dead unsubscribe).
+function isOptional(type) {
+  return !!type && !CRITICAL_EMAIL_TYPES.has(type) && EMAIL_NOTIFY_TYPES.includes(type);
+}
+
+// Clients manage their per-business switches in the client portal, not
+// on the owner Account page.
+function clientPrefsUrl() {
+  return `${process.env.APP_URL || 'https://joinivy.ai'}/me/notifications`;
+}
+
 // Send a categorized email to a workspace owner (lookup by userId).
 export async function sendEmailToUser({ userId, type, to, subject, html, text, replyTo, headers, attachments, timeoutMs }) {
   if (type && !(await userAllowsEmail(userId, type))) {
@@ -524,7 +543,7 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
   // opt-out by design. Without a known userId we also skip; the generic
   // fallback in sendEmail still attaches a header pointing to the prefs
   // page so the email is never headerless.
-  const unsubscribeUrl = (userId && type && !CRITICAL_EMAIL_TYPES.has(type))
+  const unsubscribeUrl = (userId && isOptional(type))
     ? unsubscribeUrlFor({ scope: 'user', id: userId, type })
     : null;
   const unsubscribeAllUrl = unsubscribeUrl ? unsubscribeUrlFor({ scope: 'user', id: userId, type: 'all' }) : null;
@@ -546,19 +565,28 @@ export async function sendEmailToUser({ userId, type, to, subject, html, text, r
 // Send a categorized email to a client (lookup by clients.id). The
 // workspace scoping is baked into clients.id (clients are workspace-
 // scoped), so prefs are naturally per-workspace.
-export async function sendEmailToClient({ clientId, type, to, subject, html, text, replyTo, headers, attachments, timeoutMs }) {
+//
+// `workspaceId` (optional) covers sends whose clients row is missing: a
+// public booking or a document signer with no clients.id, or a row that
+// was deleted. Without it such a send could not honor an opt-out made by
+// address and would carry no working unsubscribe link, so it is routed
+// through sendEmailToClientByAddress instead.
+export async function sendEmailToClient({ clientId, workspaceId: workspaceHint, type, to, subject, html, text, replyTo, headers, attachments, timeoutMs }) {
+  const workspaceId = await workspaceForClient(clientId);
+  if (!workspaceId && workspaceHint && to && !Array.isArray(to)) {
+    return sendEmailToClientByAddress({ workspaceId: workspaceHint, email: to, type, subject, html, text, replyTo, headers, attachments, timeoutMs });
+  }
   if (type && !(await clientAllowsEmail(clientId, type))) {
     return { ok: true, sent: false, reason: 'muted' };
   }
-  const workspaceId = await workspaceForClient(clientId);
   const q = await gateByQuota(workspaceId, type);
   if (!q.ok) return { ok: true, sent: false, reason: 'workspace-quota-exceeded' };
-  const unsubscribeUrl = (clientId && type && !CRITICAL_EMAIL_TYPES.has(type))
+  const unsubscribeUrl = (clientId && isOptional(type))
     ? unsubscribeUrlFor({ scope: 'client', id: clientId, type })
     : null;
   const unsubscribeAllUrl = unsubscribeUrl ? unsubscribeUrlFor({ scope: 'client', id: clientId, type: 'all' }) : null;
   try {
-    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl, unsubscribeAllUrl });
+    const result = await sendEmail({ to, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl, unsubscribeAllUrl, prefsUrl: clientPrefsUrl() });
     return { ok: true, sent: true, result };
   } catch (err) {
     // Same rationale as sendEmailToUser above - log loud on failure so
@@ -573,7 +601,7 @@ export async function sendEmailToClient({ clientId, type, to, subject, html, tex
 // Send a categorized email to a (workspace, email) pair when the
 // caller doesn't have a clients.id handy (e.g. public booking flow).
 // Looks up the client by email + workspace; if none exists, sends.
-export async function sendEmailToClientByAddress({ workspaceId, email, type, subject, html, text, replyTo, headers, timeoutMs }) {
+export async function sendEmailToClientByAddress({ workspaceId, email, type, subject, html, text, replyTo, headers, attachments, timeoutMs }) {
   if (type && !(await clientAllowsEmailByAddress({ email, workspaceId, type }))) {
     return { ok: true, sent: false, reason: 'muted' };
   }
@@ -582,12 +610,12 @@ export async function sendEmailToClientByAddress({ workspaceId, email, type, sub
   // Token is keyed on (workspaceId, email) — the public endpoint then
   // updates every clients row in this workspace matching that address,
   // so the opt-out sticks whether or not a clients record exists today.
-  const unsubscribeUrl = (workspaceId && email && type && !CRITICAL_EMAIL_TYPES.has(type))
+  const unsubscribeUrl = (workspaceId && email && isOptional(type))
     ? unsubscribeUrlFor({ scope: 'clientEmail', id: email, workspaceId, type })
     : null;
   const unsubscribeAllUrl = unsubscribeUrl ? unsubscribeUrlFor({ scope: 'clientEmail', id: email, workspaceId, type: 'all' }) : null;
   try {
-    const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, timeoutMs, unsubscribeUrl, unsubscribeAllUrl });
+    const result = await sendEmail({ to: email, subject, html, text, replyTo, headers, attachments, timeoutMs, unsubscribeUrl, unsubscribeAllUrl, prefsUrl: clientPrefsUrl() });
     return { ok: true, sent: true, result };
   } catch (err) {
     return { ok: false, sent: false, reason: err.message };

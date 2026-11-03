@@ -111,7 +111,7 @@ export default async function handler(req, res) {
         items: inv.items, viewUrl: link, branding,
       });
       await sendEmailToClient({
-        clientId, type: 'invoices',
+        clientId, type: 'receipts',
         to: recipientEmail,
         subject: rendered.subject,
         replyTo: branding.replyTo,

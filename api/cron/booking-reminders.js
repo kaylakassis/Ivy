@@ -191,7 +191,7 @@ async function handler(req, res) {
             const branding = await getBranding(r.workspace_id);
             await sendReminder({
               to: r.client_email,
-              clientId: r.client_id,
+              clientId: r.client_id, workspaceId: r.workspace_id,
               clientName: r.client_name,
               serviceName: r.service_name || 'Session',
               businessName: r.biz_name || 'Your business',
@@ -328,7 +328,7 @@ function describeWindow(mins) {
   return `in ${mins} minute${mins === 1 ? '' : 's'}`;
 }
 
-async function sendReminder({ to, clientId, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes, prepInstructions, branding }) {
+async function sendReminder({ to, clientId, workspaceId, clientName, serviceName, businessName, dateISO, startMin, endMin, reminderMinutes, notes, prepInstructions, branding }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const when = describeWindow(reminderMinutes);
   const html = emailShell({
@@ -352,7 +352,7 @@ async function sendReminder({ to, clientId, clientName, serviceName, businessNam
     branding,
   });
   return sendEmailToClient({
-    clientId, type: 'bookings',
+    clientId, workspaceId, type: 'bookings',
     to,
     subject: `Reminder: ${serviceName} ${when} - ${fmtDay(dateISO)}`,
     html,

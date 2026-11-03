@@ -160,7 +160,7 @@ async function handler(req, res) {
         ).join('<br/>');
 
         const sendRes = await sendEmailToClient({
-          clientId: r.client_id, type: 'marketing',
+          clientId: r.client_id, workspaceId: r.workspace_id, type: 'marketing',
           to: r.client_email,
           subject: `How was your ${r.service_name || 'session'}?`,
           replyTo: branding.replyTo,

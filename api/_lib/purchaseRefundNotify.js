@@ -59,7 +59,7 @@ export async function notifyPurchaseRefunded({ workspaceId, kind, label, amountC
       business: branding.businessName, firstName: (name || '').split(/\s+/)[0],
       kind, label, amountCents: Number(amountCents), remainingCents: Math.max(0, Number(remainingCents || 0)), fully: !!fully, branding,
     });
-    const common = { type: 'invoices', subject: rendered.subject, html: rendered.html, replyTo: branding.replyTo };
+    const common = { type: 'receipts', subject: rendered.subject, html: rendered.html, replyTo: branding.replyTo };
     const r = clientId
       ? await sendEmailToClient({ clientId, to, ...common })
       : await sendEmailToClientByAddress({ workspaceId, email: to, ...common });

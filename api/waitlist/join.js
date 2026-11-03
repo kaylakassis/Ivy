@@ -15,6 +15,7 @@ import { enforce, getClientIp } from '../_lib/rate-limit.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { validEmail } from '../_lib/auth.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { unsubscribeUrlFor } from '../_lib/unsubscribeToken.js';
 import { mirrorToSheet } from '../_lib/waitlistSheet.js';
 
 export default async function handler(req, res) {
@@ -82,12 +83,15 @@ export default async function handler(req, res) {
     if (isFirstTime) {
       try {
         await sendEmail({
+          // Ivy's own list: a signed one-click link that stamps
+          // waitlist_signups.unsubscribed_at, honored by every waitlist send.
+          unsubscribeUrl: unsubscribeUrlFor({ scope: 'waitlist', id: email, type: 'all' }),
           to: email,
           subject: "You're on the Ivy waitlist 🎉",
           html: emailShell({
             heading: "You're on the list!",
             body: `<p>Thanks for joining the Ivy waitlist${name ? `, ${escapeHtml(name.split(/\s+/)[0])}` : ''}.</p>
-                   <p>We'll email you the moment we launch — and because you're an early supporter, you'll get <b>20% off for your first 12 months</b> when you sign up with this email address.</p>
+                   <p>We'll email you the moment we launch, and because you're an early supporter, you'll get <b>20% off for your first 12 months</b> when you sign up with this email address.</p>
                    <p>Talk soon 👋</p>`,
             footer: 'You received this because you joined the Ivy waitlist.',
           }),

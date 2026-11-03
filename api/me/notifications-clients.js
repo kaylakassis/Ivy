@@ -3,18 +3,26 @@
 //           workspace email notification preferences.
 //   PATCH → update one client's prefs. Body: { clientId, prefs: { bookings: false, ... } }
 //
-// Preferences live on clients.notification_prefs (per-workspace because
-// the clients table is workspace-scoped). The user can opt out of
+// Preferences are per business and per address: a switch here applies to
+// every clients row of that business holding the same email, and reads
+// OFF whenever any unsubscribe (link, one-click, an earlier switch) has
+// muted it (api/_lib/notificationPrefs.js). The user can opt out of
 // bookings emails from business A while keeping them on for business B.
-import { sql } from '../_lib/db.js';
+//
+// Turning a category OFF records the opt-out and tells the business owner
+// (api/_lib/clientOptouts.js). Turning it back ON is the only way an
+// opt-out is ever cleared: owners cannot re-enable a client's emails.
 import { requireUser } from '../_lib/auth.js';
 import { readBody } from '../_lib/body.js';
 import { requireSameOrigin } from '../_lib/security.js';
 import { myClientIds, ids } from '../_lib/clientPortal.js';
 import {
-  EMAIL_NOTIFY_TYPES, EMAIL_NOTIFY_LABELS, defaultEmailPrefs,
+  CLIENT_EMAIL_TYPES, EMAIL_NOTIFY_LABELS, effectiveClientEmailPrefs,
 } from '../_lib/notificationPrefs.js';
+import { applyPortalEmailPrefs } from '../_lib/clientOptouts.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
+
+const LABELS = Object.fromEntries(CLIENT_EMAIL_TYPES.map((t) => [t, EMAIL_NOTIFY_LABELS[t]]));
 
 export default async function handler(req, res) {
   if (!requireSameOrigin(req, res)) return;
@@ -27,27 +35,27 @@ export default async function handler(req, res) {
     if (myIds.length === 0) {
       return ok(res, {
         memberships: [],
-        emailTypes: EMAIL_NOTIFY_TYPES,
-        emailLabels: EMAIL_NOTIFY_LABELS,
+        emailTypes: CLIENT_EMAIL_TYPES,
+        emailLabels: LABELS,
       });
     }
 
     if (req.method === 'GET') {
-      const { rows } = await sql.query(
-        `SELECT id, workspace_id, notification_prefs FROM clients WHERE id = ANY($1)`,
-        [myIds],
-      );
-      const prefsById = new Map(rows.map((r) => [r.id, r.notification_prefs || {}]));
-      const out = memberships.map((m) => ({
-        clientId: m.clientId,
-        workspaceId: m.workspaceId,
-        businessName: m.businessName,
-        prefs: defaultEmailPrefs(prefsById.get(m.clientId) || {}),
-      }));
+      const out = [];
+      for (const m of memberships) {
+        // eslint-disable-next-line no-await-in-loop
+        const prefs = await effectiveClientEmailPrefs(m.clientId);
+        out.push({
+          clientId: m.clientId,
+          workspaceId: m.workspaceId,
+          businessName: m.businessName,
+          prefs,
+        });
+      }
       return ok(res, {
         memberships: out,
-        emailTypes: EMAIL_NOTIFY_TYPES,
-        emailLabels: EMAIL_NOTIFY_LABELS,
+        emailTypes: CLIENT_EMAIL_TYPES,
+        emailLabels: LABELS,
       });
     }
 
@@ -59,20 +67,14 @@ export default async function handler(req, res) {
       if (!prefs) return badRequest(res, 'prefs is required');
       if (!myIds.includes(clientId)) return badRequest(res, 'Not your client membership');
 
-      const r = await sql`SELECT notification_prefs FROM clients WHERE id = ${clientId}`;
-      const next = { ...(r.rows[0]?.notification_prefs || {}) };
-      for (const t of EMAIL_NOTIFY_TYPES) {
-        if (t in prefs) next[t] = !!prefs[t];
-      }
-      await sql`
-        UPDATE clients SET notification_prefs = ${JSON.stringify(next)}::jsonb
-        WHERE id = ${clientId}
-      `;
+      const wanted = {};
+      for (const t of CLIENT_EMAIL_TYPES) if (t in prefs) wanted[t] = !!prefs[t];
+      await applyPortalEmailPrefs({ clientId, prefs: wanted });
       return ok(res, {
         clientId,
-        prefs: defaultEmailPrefs(next),
-        emailTypes: EMAIL_NOTIFY_TYPES,
-        emailLabels: EMAIL_NOTIFY_LABELS,
+        prefs: await effectiveClientEmailPrefs(clientId),
+        emailTypes: CLIENT_EMAIL_TYPES,
+        emailLabels: LABELS,
       });
     }
 

@@ -13,6 +13,7 @@ import { readBody } from '../_lib/body.js';
 import { makeInviteToken } from '../_lib/earlyAccess.js';
 import { appUrl } from '../_lib/tokens.js';
 import { sendEmail, emailShell } from '../_lib/email.js';
+import { unsubscribeUrlFor } from '../_lib/unsubscribeToken.js';
 import { badRequest, methodNotAllowed, notFound, ok, serverError } from '../_lib/json.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -37,6 +38,7 @@ export default async function handler(req, res) {
     let emailed = false;
     try {
       await sendEmail({
+        unsubscribeUrl: unsubscribeUrlFor({ scope: 'waitlist', id: row.email, type: 'all' }),
         to: row.email,
         subject: "You're in: your Ivy invite",
         html: emailShell({

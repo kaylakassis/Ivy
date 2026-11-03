@@ -180,7 +180,7 @@ export default async function handler(req, res) {
               <td align="right" style="padding:6px 0;color:#3F3D38;font-size:13px;white-space:nowrap">${fmtMoney(Number(it.rate) * Number(it.quantity))}</td></tr>`
           ).join('');
           await sendEmailToClient({
-            clientId: body.clientId || null, type: 'payments',
+            clientId: body.clientId || null, type: 'receipts',
             to: clientEmail,
             subject: `Receipt from ${business} · ${fmtMoney(invoice.total)}`,
             replyTo: branding.replyTo,

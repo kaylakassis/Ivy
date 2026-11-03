@@ -182,7 +182,7 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
       branding,
     });
     await sendEmailToClient({
-      clientId: entry.client_id, type: 'bookings',
+      clientId: entry.client_id, workspaceId, type: 'bookings',
       to: entry.client_email,
       subject: `You're in - ${serviceName} on ${dateLabel}`,
       html,
@@ -191,8 +191,14 @@ async function notifyPromotion({ workspaceId, entry, booking }) {
   }
 
   if (entry.client_phone) {
-    // Lookup consent - same one-number-one-consent pattern as reminders.
-    const c = await sql`SELECT sms_consent_at FROM clients WHERE phone = ${entry.client_phone} LIMIT 1`;
+    // Consent must be THIS business's client consenting (another business's
+    // consent for the same number does not count), matched by the last 10
+    // digits like the STOP handler so formatting differences cannot hide it.
+    const digits = (String(entry.client_phone).match(/\d/g) || []).join('').slice(-10);
+    const c = await sql`
+      SELECT MAX(sms_consent_at) AS sms_consent_at FROM clients
+       WHERE workspace_id = ${entry.workspace_id}
+         AND right(regexp_replace(phone, '\\D', '', 'g'), 10) = ${digits}`;
     await sendClientSms({
       phone:       entry.client_phone,
       consentAt:   c.rows[0]?.sms_consent_at || null,

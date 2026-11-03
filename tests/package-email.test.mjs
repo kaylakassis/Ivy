@@ -7,7 +7,8 @@
 //       unpaid session sends nothing
 //   [2] a buyer without a portal account gets the claim-your-portal line
 //   [3] a template without expiry says so
-//   [4] a muted client is provisioned but not emailed; copy rules
+//   [4] a client who unsubscribed from everything still gets the receipt
+//       (receipts are account essentials); copy rules
 //
 // Run with: node --import ./tests/bootstrap.mjs ./tests/package-email.test.mjs
 import crypto from 'node:crypto';
@@ -126,10 +127,11 @@ async function run() {
   mails = mailsTo(claimedEmail);
   assert(mails.length === 2 && /No expiry/.test(mails[1].html) && /1 session</.test(mails[1].html) && /\$60\.00/.test(mails[1].html), 'no expiry, singular session, right price');
 
-  console.log('\n[4] muted client; copy rules');
-  await sql`UPDATE clients SET notification_prefs = '{"invoices": false}'::jsonb WHERE id = ${newbie}`;
+  console.log('\n[4] unsubscribed client still gets the receipt; copy rules');
+  await sql`UPDATE clients SET notification_prefs = '{"invoices": false, "marketing": false, "bookings": false}'::jsonb WHERE id = ${newbie}`;
   r = await fire('checkout.session.completed', paidSession({ id: `cs_pm_4_${STAMP}`, pi: `pi_pm_4_${STAMP}`, wid, pkgId: forever, clientId: newbie, amount: 6000 }), acct);
-  assert(r.body.applied === 'package-provisioned' && mailsTo(newEmail).length === 1, 'muted client: provisioned, no email');
+  assert(r.body.applied === 'package-provisioned' && mailsTo(newEmail).length === 2, 'unsubscribed client: provisioned, receipt still sent');
+  assert(!/api\/unsubscribe/.test(mailsTo(newEmail)[1].html), 'a receipt carries no unsubscribe link');
   assert((await sql`SELECT COUNT(*)::int AS n FROM client_packages WHERE workspace_id = ${wid}`).rows[0].n === 4, 'four bundles provisioned in all');
   const everything = emails.map((e) => e.subject + e.html).join('\n');
   assert(noVendor(everything) && noEmDash(everything), 'no vendor names, no em dashes, never "business OS"');

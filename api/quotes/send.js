@@ -89,7 +89,7 @@ export default async function handler(req, res) {
 
     try {
       await sendEmailToClient({
-        clientId, type: 'invoices',
+        clientId, workspaceId, type: 'invoices',
         to: recipientEmail,
         subject: `Estimate ${q.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
         replyTo: branding.replyTo,

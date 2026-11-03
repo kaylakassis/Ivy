@@ -106,7 +106,7 @@ export async function notifyNewBooking({ workspaceId, bookingId, source = 'publi
     //    overlapping confirmations for the same seat.
     if (ctx.client_email && source !== 'waitlist') {
       tasks.push(sendClientConfirm({
-        clientId: ctx.client_id,
+        clientId: ctx.client_id, workspaceId,
         to: ctx.client_email,
         clientName: ctx.client_name,
         businessName,
@@ -235,7 +235,7 @@ async function upsertThreadAndSystemMessage({ workspaceId, clientId, text, meta 
   `;
 }
 
-async function sendClientConfirm({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions }) {
+async function sendClientConfirm({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, notes, source, branding, videoRoomUrl, locationAddress, inviteRow, prepInstructions }) {
   // Portal CTA: claimed clients (clients.user_id IS NOT NULL) land
   // straight at /me. Unclaimed walk-ins or never-signed-up public
   // bookers go to /signup with the email pre-filled - hitting /me
@@ -301,7 +301,7 @@ async function sendClientConfirm({ clientId, to, clientName, businessName, servi
     branding,
   });
   await sendEmailToClient({
-    clientId, type: 'bookings',
+    clientId, workspaceId, type: 'bookings',
     to, subject: `Booking confirmed - ${dateLabel}`, html, replyTo: branding?.replyTo,
     attachments,
   });
@@ -405,7 +405,7 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
     // Client-facing email + push (when the owner cancelled)
     if (source === 'owner' && ctx.client_email) {
       tasks.push(sendCancellationToClient({
-        clientId: ctx.client_id,
+        clientId: ctx.client_id, workspaceId,
         to: ctx.client_email,
         clientName: ctx.client_name,
         businessName, serviceName, dateLabel, timeLabel, branding,
@@ -479,7 +479,7 @@ export async function notifyBookingCancellation({ workspaceId, bookingId, occurr
   }
 }
 
-async function sendCancellationToClient({ clientId, to, clientName, businessName, serviceName, dateLabel, timeLabel, branding }) {
+async function sendCancellationToClient({ clientId, workspaceId, to, clientName, businessName, serviceName, dateLabel, timeLabel, branding }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   const html = emailShell({
     heading: 'Your appointment was cancelled',
@@ -498,7 +498,7 @@ async function sendCancellationToClient({ clientId, to, clientName, businessName
     footer: `Reach out to ${escapeHtml(businessName)} if this was unexpected.`,
   });
   await sendEmailToClient({
-    clientId, type: 'bookings',
+    clientId, workspaceId, type: 'bookings',
     to, subject: `Cancelled: ${serviceName} on ${dateLabel}`, html, replyTo: branding?.replyTo,
   });
 }
@@ -577,7 +577,7 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
 
     if (source === 'owner' && ctx.client_email) {
       tasks.push(sendRescheduleToClient({
-        clientId: ctx.client_id,
+        clientId: ctx.client_id, workspaceId,
         to: ctx.client_email, clientName: ctx.client_name,
         businessName, serviceName,
         newDate, newTime, oldDate, oldTime, branding,
@@ -631,7 +631,7 @@ export async function notifyBookingRescheduled({ workspaceId, bookingId, oldDate
   }
 }
 
-async function sendRescheduleToClient({ clientId, to, clientName, businessName, serviceName, newDate, newTime, oldDate, oldTime, branding, inviteRow }) {
+async function sendRescheduleToClient({ clientId, workspaceId, to, clientName, businessName, serviceName, newDate, newTime, oldDate, oldTime, branding, inviteRow }) {
   const greeting = clientName ? `Hi ${escapeHtml(clientName.split(/\s+/)[0])},` : 'Hi,';
   // Same UID as the confirmation's invite with a higher SEQUENCE, so
   // importing this one moves the event the client already saved.
@@ -667,7 +667,7 @@ async function sendRescheduleToClient({ clientId, to, clientName, businessName, 
     footer: `Reach out to ${escapeHtml(businessName)} if this new time doesn't work.`,
   });
   await sendEmailToClient({
-    clientId, type: 'bookings',
+    clientId, workspaceId, type: 'bookings',
     to, subject: `Rescheduled: ${serviceName} → ${newDate}`, html, replyTo: branding?.replyTo,
     attachments,
   });

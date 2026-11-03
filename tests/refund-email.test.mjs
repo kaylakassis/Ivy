@@ -111,13 +111,14 @@ async function main() {
   await refundInvoice({ workspaceId: wid, id: iA });
   assert(emails.length === 1 && /bank account you paid from/.test(emails[0].html), 'ACH copy');
 
-  console.log('\n[5] client who muted invoice emails: refund still happens, no email');
+  console.log('\n[5] client who muted invoice emails still gets the refund receipt (an account essential)');
   const cM = await client('Mo Quiet', `mo-${tag}@example.com`);
   await sql`UPDATE clients SET notification_prefs = '{"invoices": false}'::jsonb WHERE id = ${cM}`;
   const iM = await invoice({ cid: cM, email: `mo-${tag}@example.com`, name: 'Mo Quiet', number: 'INV-M1', method: 'cash' });
   emails.length = 0;
   const rm = await refundInvoice({ workspaceId: wid, id: iM });
-  assert(rm.refund.fullyRefunded && emails.length === 0, 'refunded, no email');
+  assert(rm.refund.fullyRefunded && emails.length === 1, 'refunded, receipt still sent');
+  assert(!/api\/unsubscribe/.test(emails[0]?.html || ''), 'the refund receipt carries no unsubscribe link');
 
   console.log('\n[6] no client email on file: refund still succeeds');
   const iN = await invoice({ cid: null, email: null, name: 'Walk-in', number: 'INV-N1', method: 'cash' });

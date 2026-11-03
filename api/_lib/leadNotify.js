@@ -11,7 +11,7 @@
 //
 // Best-effort: catches internally, never throws.
 import { sql } from './db.js';
-import { sendEmail, emailShell } from './email.js';
+import { sendEmailToClientByAddress, emailShell } from './email.js';
 import { fetchBranding } from './branding.js';
 import { appUrl } from './tokens.js';
 import { reportError } from './monitoring.js';
@@ -89,12 +89,18 @@ export async function notifyLeadInstantReply({ workspaceId, toEmail, leadName })
       footer: `This is an automatic confirmation that ${escapeHtml(business)} received your message. Replying goes straight to them.`,
     });
 
-    await sendEmail({
-      to: toEmail,
+    // Optional auto-reply, not something the person must get: an address
+    // that unsubscribed from this business's message emails (or from all
+    // of them) gets nothing, and every reply carries an unsubscribe link.
+    const r = await sendEmailToClientByAddress({
+      workspaceId,
+      email: toEmail,
+      type: 'messages',
       subject: `Thanks for reaching out to ${business}`,
       html,
       replyTo: branding.replyTo,
     });
+    if (!r.sent) return { sent: false, reason: r.reason };
     return { sent: true };
   } catch (err) {
     // eslint-disable-next-line no-console

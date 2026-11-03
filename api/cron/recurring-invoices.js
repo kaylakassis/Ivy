@@ -178,7 +178,7 @@ async function autoSendInvoice({ schedule, invoice, getBranding = fetchBranding 
   const business = branding.businessName;
   try {
     await sendEmailToClient({
-    clientId: invoice.client_id, type: 'invoices',
+    clientId: invoice.client_id, type: 'receipts',
     to: invoice.client_email,
     subject: `Invoice ${invoice.number}${business ? ' from ' + business : ''} · ${fmtMoney(totals.total)}`,
     replyTo: branding.replyTo,

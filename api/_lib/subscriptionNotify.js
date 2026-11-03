@@ -228,7 +228,7 @@ export async function notifyDormantOwner({ workspaceId }) {
     });
     // Push + bell, so it lands even without an open tab.
     notifyOwnerSafe({
-      workspaceId,
+      workspaceId, type: 'engagement', // owner nudge: muted by the Daily nudges push switch
       payload: {
         title: 'Things are waiting for you',
         body: bits.length === 2

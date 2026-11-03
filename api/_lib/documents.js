@@ -259,7 +259,7 @@ export async function sendDocumentForSigning({ workspaceId, doc, recipients, bra
   let emailWarning = null;
   try {
     await sendEmailToClient({
-      clientId: first.clientId || null,
+      clientId: first.clientId || null, workspaceId,
       type: 'documents',
       to: first.email,
       subject: `Action needed: sign "${doc.name}"`,

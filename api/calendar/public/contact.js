@@ -18,7 +18,7 @@ import { sql } from '../../_lib/db.js';
 import { readBody } from '../../_lib/body.js';
 import { enforce, getClientIp } from '../../_lib/rate-limit.js';
 import { validEmail } from '../../_lib/auth.js';
-import { sendEmail, emailShell } from '../../_lib/email.js';
+import { sendEmailToUser, emailShell } from '../../_lib/email.js';
 import { fetchBranding } from '../../_lib/branding.js';
 import { notifyOwnerSafe } from '../../_lib/push.js';
 import { appUrl } from '../../_lib/tokens.js';
@@ -143,7 +143,7 @@ export default async function handler(req, res) {
        WHERE id = ${threadId}
     `;
 
-    // Notify the owner - push (if subscribed) + email (always).
+    // Notify the owner - push (if subscribed) + email (unless the owner muted message emails).
     notifyOwnerSafe({
       workspaceId,
       type: 'messages',
@@ -159,11 +159,11 @@ export default async function handler(req, res) {
       const branding = await fetchBranding(workspaceId);
       // Owner's email is on workspaces.owner_id → users.
       const owner = await sql`
-        SELECT u.email, u.name FROM workspaces w JOIN users u ON u.id = w.owner_id WHERE w.id = ${workspaceId}
+        SELECT u.id, u.email, u.name FROM workspaces w JOIN users u ON u.id = w.owner_id AND u.deleted_at IS NULL WHERE w.id = ${workspaceId}
       `;
       const ownerEmail = owner.rows[0]?.email;
       if (ownerEmail) {
-        await sendEmail({
+        await sendEmailToUser({ userId: owner.rows[0].id, type: 'messages',
           to: ownerEmail,
           subject: `New message from ${name}: question about booking`,
           // Set replyTo to the prospect - owner can hit Reply in their

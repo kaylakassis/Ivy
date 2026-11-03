@@ -131,7 +131,7 @@ async function handler(req, res) {
             const branding = await getBranding(d.workspace_id);
             const link = `${appUrl()}/sign/${encodeURIComponent(raw)}`;
             await sendEmailToClient({
-              clientId: target.clientId,
+              clientId: target.clientId, workspaceId: d.workspace_id,
               type: 'documents',
               to: target.email,
               subject: `Reminder: please sign "${d.name}"`,

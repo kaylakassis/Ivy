@@ -4026,4 +4026,25 @@ CREATE TABLE IF NOT EXISTS program_badges (
   seen_at TIMESTAMPTZ
 );
 CREATE UNIQUE INDEX IF NOT EXISTS uq_program_badges ON program_badges(program_id, client_id, badge);
+
+-- Client email opt-outs from a business (unsubscribe link, one-click
+-- header, or the client portal switches). History for the owner's client
+-- drawer AND part of enforcement: an active row (cleared_at NULL) mutes
+-- that type (or 'all') for that business + address even when no clients
+-- row exists yet. Only the client can clear it, by resubscribing in their
+-- portal. notice_key claims the one owner email per client per day.
+CREATE TABLE IF NOT EXISTS client_email_optouts (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  workspace_id UUID NOT NULL REFERENCES workspaces(id) ON DELETE CASCADE,
+  client_id UUID REFERENCES clients(id) ON DELETE SET NULL,
+  email TEXT,
+  type TEXT NOT NULL,
+  source TEXT NOT NULL CHECK (source IN ('link', 'one_click', 'portal', 'owner')),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  cleared_at TIMESTAMPTZ,
+  notice_key TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_client_email_optouts_addr ON client_email_optouts(workspace_id, email) WHERE cleared_at IS NULL;
+CREATE INDEX IF NOT EXISTS idx_client_email_optouts_client ON client_email_optouts(client_id, created_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_client_email_optouts_notice ON client_email_optouts(workspace_id, notice_key) WHERE notice_key IS NOT NULL;
 `;

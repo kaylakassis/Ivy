@@ -886,6 +886,7 @@ const PUSH_LABELS = {
   payments:  { label: 'Payments',  hint: 'Invoices paid by clients via Stripe.' },
   support:   { label: 'Support',   hint: 'When Ivy Support replies to your conversation.' },
   engagement: { label: 'Daily nudges', hint: 'Your morning briefing (today\'s sessions, unpaid invoices, quiet clients) and an evening reminder to keep your streak going.' },
+  client_optouts: { label: 'Client email opt-outs', hint: 'When a client unsubscribes from your emails.' },
 };
 const EMAIL_LABELS = {
   bookings:  { label: 'Booking alerts',  hint: 'Whether confirmation / reminder / cancellation emails are sent. (Reminder timing is per service in Calendar → Services.)' },
@@ -894,6 +895,8 @@ const EMAIL_LABELS = {
   messages:  { label: 'Messages',  hint: 'When the other side of a chat thread replies.' },
   marketing: { label: 'Reviews & announcements', hint: 'Review prompts after sessions, occasional product updates.' },
   billing:   { label: 'Subscription billing', hint: 'Renewal reminders + cancellation confirmations. Payment failures always send.' },
+  reports:   { label: 'Weekly business recap', hint: 'Your weekly recap of bookings and revenue, plus setup reminders.' },
+  client_optouts: { label: 'Client email opt-outs', hint: 'An email when a client unsubscribes from your emails, at most one per client per day. Only the client can turn their emails back on.' },
 };
 
 function NotificationPrefs() {

@@ -285,7 +285,7 @@ async function signDoc(req, res) {
         try {
           const branding = await fetchBranding(doc.workspace_id);
           await sendEmailToClient({
-            clientId: n.client_id || null,
+            clientId: n.client_id || null, workspaceId: doc.workspace_id,
             type: 'documents',
             to: n.email,
             subject: `Action needed: sign "${doc.name}"`,
@@ -371,7 +371,7 @@ async function signDoc(req, res) {
           if (s.email) {
             try {
               await sendEmailToClient({
-                clientId: s.client_id || null,
+                clientId: s.client_id || null, workspaceId: doc.workspace_id,
                 type: 'documents',
                 to: s.email,
                 subject: `Signed: "${doc.name}" is complete`,
@@ -440,7 +440,7 @@ async function signDoc(req, res) {
       try {
         const branding = await fetchBranding(doc.workspace_id);
         await sendEmailToClient({
-          clientId: doc.recipient_client_id || null,
+          clientId: doc.recipient_client_id || null, workspaceId: doc.workspace_id,
           type: 'documents',
           to: doc.recipient_email,
           subject: `Signed: "${doc.name}" is complete`,

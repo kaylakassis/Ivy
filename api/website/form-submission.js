@@ -22,7 +22,7 @@ import { readBody } from '../_lib/body.js';
 import { badRequest, methodNotAllowed, ok, serverError } from '../_lib/json.js';
 import { ensureSchemaApplied } from '../_lib/ensureSchema.js';
 import { enforce, getClientIp } from '../_lib/rate-limit.js';
-import { sendEmail, emailShell } from '../_lib/email.js';
+import { sendEmail, sendEmailToUser, emailShell } from '../_lib/email.js';
 import { notifyLeadInstantReply, extractLeadContact } from '../_lib/leadNotify.js';
 import { fetchWithTimeout } from '../_lib/fetchTimeout.js';
 import { assertPublicHttpsUrl } from '../_lib/safeUrl.js';
@@ -112,7 +112,7 @@ export default async function handler(req, res) {
         // table and has no user_id; the old join threw every time, so no
         // site without an explicit destination ever delivered a lead.)
         const owner = await sql`
-          SELECT u.email
+          SELECT u.id, u.email
           FROM workspaces w
           JOIN users u ON u.id = w.owner_id
           WHERE w.id = ${site.workspace_id} AND u.deleted_at IS NULL
@@ -120,8 +120,11 @@ export default async function handler(req, res) {
         `;
         const to = owner.rows[0]?.email;
         if (to) {
-          await deliverByEmail({ to, site, formId, payload });
-          delivered = true;
+          const outcome = await deliverByEmail({ to, site, formId, payload, ownerUserId: owner.rows[0].id });
+          // Muted: the owner turned off message emails. The submission is
+          // stored and visible in Ivy; record why no email went out.
+          if (outcome === 'muted') deliveryErr = 'Owner turned off message emails';
+          else delivered = true;
         } else {
           deliveryErr = 'No destination configured + no workspace owner email';
         }
@@ -182,7 +185,7 @@ async function recordWebsiteLead({ workspaceId, email, name, handle }) {
   }
 }
 
-async function deliverByEmail({ to, site, formId, payload }) {
+async function deliverByEmail({ to, site, formId, payload, ownerUserId = null }) {
   const subject = `New ${formId} submission - ${site.business_name || site.handle}`;
   // Link to the site the way the owner brands it: their verified custom
   // domain when connected, the platform URL otherwise.
@@ -201,7 +204,17 @@ async function deliverByEmail({ to, site, formId, payload }) {
       <table style="margin-top:18px;border-collapse:collapse;width:100%">${rows}</table>`,
     footer: 'You can change where these go in Editor → Forms.',
   });
+  // Owner's own inbox (no explicit destination): a lead notice the owner
+  // can mute under Messages emails, so it goes through the preference
+  // gate. An explicit destination is an address the owner typed in
+  // Editor → Forms for exactly this, so it is delivered as configured.
+  if (ownerUserId) {
+    const r = await sendEmailToUser({ userId: ownerUserId, type: 'messages', to, subject, html });
+    if (r.ok === false) throw new Error(r.reason || 'Email failed');
+    return r.sent ? 'sent' : 'muted';
+  }
   await sendEmail({ to, subject, html });
+  return 'sent';
 }
 
 function escapeHtml(s) {

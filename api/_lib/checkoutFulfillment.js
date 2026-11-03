@@ -139,7 +139,7 @@ async function sendGiftCardBuyerReceipt({ workspaceId, senderName, senderEmail, 
   const business = branding.businessName || 'the business';
   const who = recipName || recipEmail || 'the recipient';
   await sendEmailToClientByAddress({
-    workspaceId, email: senderEmail, type: 'invoices',
+    workspaceId, email: senderEmail, type: 'receipts',
     subject: `Receipt: gift card for ${who} · ${fmtMoney(amountCents / 100)}`,
     replyTo: branding.replyTo,
     html: emailShell({
@@ -680,7 +680,7 @@ async function sendPackagePurchaseEmail({ workspaceId, clientId, pkg, credits, p
     footer: `Questions about your package? Reply to this email to reach ${escapeHtml(business)}.`,
   });
   await sendEmailToClient({
-    clientId: cli.id, type: 'invoices', to: cli.email,
+    clientId: cli.id, type: 'receipts', to: cli.email,
     subject: `Receipt: ${pkg.name} · ${fmtMoney(priceCharged)}`,
     html, replyTo: branding.replyTo,
   });

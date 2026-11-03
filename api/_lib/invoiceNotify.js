@@ -58,7 +58,7 @@ export async function notifyInvoicePaid({ workspaceId, invoiceId, totalAmount, m
       footer: `Need anything? Reply to this email to reach ${escapeHtml(business)}.`,
     });
     await sendEmailToClient({
-      clientId: inv.client_id, type: 'invoices',
+      clientId: inv.client_id, type: 'receipts',
       to: inv.client_email,
       subject: `Receipt: invoice ${inv.number} · ${fmtMoney(amount)}`,
       html,
@@ -141,7 +141,7 @@ export async function notifyInvoiceRefunded({ workspaceId, invoiceId, amount, me
       giftCardLast4: inv.gift_card_code_last4 || null,
     });
     const r = await sendEmailToClient({
-      clientId: inv.client_id, type: 'invoices',
+      clientId: inv.client_id, type: 'receipts',
       to: inv.client_email,
       subject: rendered.subject,
       html: rendered.html,
